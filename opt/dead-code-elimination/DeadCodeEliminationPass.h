@@ -18,15 +18,20 @@ class DeadCodeEliminationPass final : public Pass {
   DeadCodeEliminationPass() : Pass("DeadCodeEliminationPass") {}
 
   virtual void configure_pass(const JsonWrapper& jw) override {
-    std::string external_summaries_file;
-    jw.get("external_summaries", "", external_summaries_file);
-    if (external_summaries_file != "") {
-      m_external_summaries_file = external_summaries_file;
+    std::string s;
+    jw.get("side_effect_summaries", "", s);
+    if (s != "") {
+      m_external_side_effect_summaries_file = s;
+    }
+    jw.get("escape_summaries", "", s);
+    if (s != "") {
+      m_external_escape_summaries_file = s;
     }
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  boost::optional<std::string> m_external_summaries_file;
+  boost::optional<std::string> m_external_side_effect_summaries_file;
+  boost::optional<std::string> m_external_escape_summaries_file;
 };

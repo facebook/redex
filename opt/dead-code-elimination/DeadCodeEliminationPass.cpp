@@ -98,11 +98,20 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
   });
 
   auto call_graph = call_graph::Graph(CallGraphStrategy(scope));
-  auto ptrs_fp_iter_map = ptrs::analyze_scope(scope, call_graph);
+
+  ptrs::SummaryMap escape_summaries;
+  if (m_external_escape_summaries_file) {
+    std::ifstream file_input(*m_external_escape_summaries_file);
+    summary_serialization::read(file_input, &escape_summaries);
+  }
+  ptrs::SummaryCMap escape_summaries_cmap(escape_summaries.begin(),
+                                          escape_summaries.end());
+  auto ptrs_fp_iter_map =
+      ptrs::analyze_scope(scope, call_graph, &escape_summaries_cmap);
 
   side_effects::SummaryMap effect_summaries;
-  if (m_external_summaries_file) {
-    std::ifstream file_input(*m_external_summaries_file);
+  if (m_external_side_effect_summaries_file) {
+    std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
   side_effects::analyze_scope(

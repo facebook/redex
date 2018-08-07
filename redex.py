@@ -605,7 +605,12 @@ def prepare_redex(args):
 
     if args.side_effect_summaries is not None:
         args.passthru_json.append(
-            'DeadCodeEliminationPass.external_summaries="%s"' % args.side_effect_summaries
+            'DeadCodeEliminationPass.side_effect_summaries="%s"' % args.side_effect_summaries
+        )
+
+    if args.escape_summaries is not None:
+        args.passthru_json.append(
+            'DeadCodeEliminationPass.escape_summaries="%s"' % args.escape_summaries
         )
 
     for key_value_str in args.passthru_json:
