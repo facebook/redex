@@ -66,7 +66,7 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
     size_t num_args,
     std::vector<IRInstruction*>* dead_insns) {
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);

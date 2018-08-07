@@ -78,7 +78,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg();
+    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
   auto fp_iter = std::make_unique<FixpointIterator>(cg, analyze_procedure);

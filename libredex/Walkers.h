@@ -326,7 +326,7 @@ class walk {
                                             MatchingInBlockWalkerFn walker) {
     std::vector<std::pair<cfg::Block*, std::vector<IRInstruction*>>>
         block_matches;
-    ir_code.build_cfg();
+    ir_code.build_cfg(/* editable */ false);
     for (cfg::Block* block : ir_code.cfg().blocks()) {
       std::vector<std::vector<IRInstruction*>> method_matches;
       std::vector<IRInstruction*> insns;

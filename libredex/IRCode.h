@@ -160,7 +160,7 @@ class IRCode {
   //    MethodItemEntries taken from IRCode)
   // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
   // called
-  void build_cfg(bool editable = false);
+  void build_cfg(bool editable = true);
 
   // if the cfg was editable, linearize it back into m_ir_list
   void clear_cfg();

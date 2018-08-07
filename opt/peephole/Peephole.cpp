@@ -1513,7 +1513,7 @@ class PeepholeOptimizer {
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
 
     // do optimizations one at a time
     // so they can match on the same pattern without interfering

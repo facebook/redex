@@ -21,7 +21,7 @@ void StringSimplificationPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   walk::code(scope, [&](DexMethod* m, IRCode& code) {
     TRACE(STR_SIMPLE, 8, "Method: %s\n", SHOW(m));
-    code.build_cfg();
+    code.build_cfg(/* editable */ false);
     StringIterator iter(&code, code.cfg().entry_block());
     iter.run(StringProdEnvironment());
     iter.simplify();

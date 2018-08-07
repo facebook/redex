@@ -73,7 +73,7 @@ TEST_F(RemoveGotosTest, simplifySinglePath) {
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(1, m_method->get_code()->cfg().blocks().size());
 
   auto ins = InstructionIterable(m_method->get_code());
@@ -107,13 +107,13 @@ TEST_F(RemoveGotosTest, simplifyForwardsGoto) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->set_registers_size(3);
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(2, m_method->get_code()->cfg().blocks().size());
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(1, m_method->get_code()->cfg().blocks().size());
   EXPECT_EQ(3, m_method->get_code()->count_opcodes());
 }
@@ -141,13 +141,13 @@ TEST_F(RemoveGotosTest, simplifyBackwardsGoto) {
   code->push_back(*gt2.first);
   code->set_registers_size(3);
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(3, m_method->get_code()->cfg().blocks().size());
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   auto iter = m_method->get_code()->begin();
   for (auto i = 0; i < 3; ++i) {
     EXPECT_EQ(iter->insn->opcode(), OPCODE_ADD_INT);

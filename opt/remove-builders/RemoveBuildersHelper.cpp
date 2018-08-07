@@ -416,7 +416,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     return false;
   }
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
 
@@ -626,7 +626,7 @@ bool params_change_regs(DexMethod* method) {
   auto args = proto->get_args()->get_type_list();
 
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();

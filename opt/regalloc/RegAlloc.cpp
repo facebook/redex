@@ -46,7 +46,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
         try {
           // The transformations below all require a CFG. Build it once
           // here instead of requiring each transform to build it.
-          code.build_cfg();
+          code.build_cfg(/* editable */ false);
           // It doesn't make sense to try to allocate registers in
           // unreachable code. Remove it so that the allocator doesn't
           // get confused.

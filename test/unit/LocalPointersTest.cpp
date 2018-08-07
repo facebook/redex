@@ -72,7 +72,7 @@ TEST_F(LocalPointersTest, simple) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
@@ -120,7 +120,7 @@ TEST_F(LocalPointersTest, aliasEscape) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
@@ -158,7 +158,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   ptrs::FixpointIterator fp_iter(cfg);
@@ -190,7 +190,7 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
     )
   )");
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   ptrs::FixpointIterator fp_iter(cfg);

@@ -283,7 +283,7 @@ TEST(StringSimplification, testBranching) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
 
   code->set_registers_size(9001);
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   runner.run(new StringSimplificationPass());
 
   std::vector<DexString*> arr;
@@ -322,9 +322,9 @@ TEST(StringSimplification, testBeginningOfBlockToString) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
 
   code->set_registers_size(9001);
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   runner.run(new StringSimplificationPass());
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
 }
 
@@ -367,7 +367,7 @@ TEST(StringSimplification, passStringBuilderInMethod) {
       EXPECT_TRUE(false);
     }
   }
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
 }
 
@@ -406,7 +406,7 @@ TEST(StringSimplification, oneKnownOneUnkownBuilder) {
 
   code->set_registers_size(9001);
   runner.run(new StringSimplificationPass());
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
 
   std::vector<DexString*> arr;
@@ -469,11 +469,11 @@ TEST(StringSimplification, modificationOfBaseVariable) {
 
   code->set_registers_size(9001);
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Initial Cfg: %s\n", SHOW(code->cfg()));
   runner.run(new StringSimplificationPass());
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
   EXPECT_EQ(13, code->count_opcodes());
 }
@@ -505,11 +505,11 @@ TEST(StringSimplification, registerAliasingTest) {
 
   code->set_registers_size(9001);
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Initial Cfg: %s\n", SHOW(code->cfg()));
   runner.run(new StringSimplificationPass());
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   printf("Final Cfg: %s\n", SHOW(code->cfg()));
 
   std::vector<DexString*> arr;

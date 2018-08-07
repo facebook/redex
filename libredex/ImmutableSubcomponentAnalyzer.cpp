@@ -438,7 +438,7 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   if (code == nullptr) {
     return;
   }
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   std::unordered_set<uint16_t> unambiguous =

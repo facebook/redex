@@ -21,7 +21,7 @@ using namespace testing;
 class UsedVarsTest : public RedexTest {};
 
 std::unique_ptr<UsedVarsFixpointIterator> analyze(IRCode* code) {
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   std::unordered_set<const DexMethod*> non_overridden_virtuals;
   EffectSummaryMap effect_summaries;
   return DeadCodeEliminationPass::analyze(

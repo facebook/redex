@@ -435,7 +435,7 @@ Stats CopyPropagation::run(IRCode* code) {
   std::unordered_set<IRInstruction*> deletes;
   Stats stats;
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
   AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);

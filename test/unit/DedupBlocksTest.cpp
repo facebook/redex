@@ -135,14 +135,14 @@ TEST_F(DedupBlocksTest, simplestCase) {
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
   code->push_back(*D_goto_E.source);
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   EXPECT_EQ(5, code->cfg().blocks().size());
   printf("Input cfg:\n%s\n", SHOW(code->cfg()));
   code->clear_cfg();
 
   run_dedup_blocks();
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   printf("Result cfg:\n%s\n", SHOW(code->cfg()));
   EXPECT_EQ(4, code->cfg().blocks().size());
   code->clear_cfg();
@@ -215,7 +215,7 @@ TEST_F(DedupBlocksTest, noDups) {
 }
 
 std::string cfg_str(IRCode* code) {
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   const auto& cfg = code->cfg();
   auto result = show(cfg);
   code->clear_cfg();

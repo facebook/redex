@@ -16,7 +16,7 @@ inline void do_const_prop(
     IRCode* code,
     std::function<void(const IRInstruction*, ConstantEnvironment*)>
         insn_analyzer = cp::ConstantPrimitiveAnalyzer()) {
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   cp::intraprocedural::FixpointIterator intra_cp(code->cfg(), insn_analyzer);
   intra_cp.run(ConstantEnvironment());
   cp::Transform::Config transform_config;

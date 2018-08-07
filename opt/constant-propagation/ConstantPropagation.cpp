@@ -34,7 +34,7 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
         TRACE(CONSTP, 2, "Method: %s\n", SHOW(method));
         auto& code = *method->get_code();
-        code.build_cfg();
+        code.build_cfg(/* editable */ false);
         auto& cfg = code.cfg();
 
         TRACE(CONSTP, 5, "CFG: %s\n", SHOW(cfg));

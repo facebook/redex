@@ -43,7 +43,7 @@ void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
     if (code == nullptr) {
       return;
     }
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     const auto& blocks = code->cfg().blocks();
 
     TRACE(BBPROFILE, 5, "M,%s,%zu,%zu,%d\n",

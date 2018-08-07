@@ -1297,7 +1297,7 @@ void IRTypeChecker::run() {
   }
 
   // We then infer types for all the registers used in the method.
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
   m_type_inference = std::make_unique<irtc_impl::TypeInference>(
       cfg, m_enable_polymorphic_constants, m_verify_moves);

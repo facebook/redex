@@ -178,7 +178,7 @@ void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
   walk::code(scope,
       [&](DexMethod* meth, IRCode& code) {
-        code.build_cfg();
+        code.build_cfg(/* editable */ false);
         const auto& cfg = code.cfg();
         for (const auto& block : cfg.blocks()) {
           if (is_throw_block(meth, block)) {

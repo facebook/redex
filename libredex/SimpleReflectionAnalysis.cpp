@@ -337,7 +337,7 @@ SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method) {
   if (code == nullptr) {
     return;
   }
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(cfg);

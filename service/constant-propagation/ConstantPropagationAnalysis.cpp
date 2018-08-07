@@ -437,7 +437,7 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  callee_code->build_cfg();
+  callee_code->build_cfg(/* editable */ false);
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.

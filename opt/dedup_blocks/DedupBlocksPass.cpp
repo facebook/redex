@@ -133,7 +133,7 @@ class DedupBlocksImpl {
         return;
       }
 
-      code.build_cfg(true);
+      code.build_cfg(/* editable */ true);
       auto& cfg = code.cfg();
 
       Duplicates dups = collect_duplicates(cfg);

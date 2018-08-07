@@ -184,7 +184,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
     auto clinit = cls->get_clinit();
     if (clinit != nullptr && clinit->get_code() != nullptr) {
       auto* code = clinit->get_code();
-      code->build_cfg();
+      code->build_cfg(/* editable */ false);
       auto& cfg = code->cfg();
       cfg.calculate_exit_block();
       cp::intraprocedural::FixpointIterator intra_cp(

@@ -60,7 +60,7 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
                                        PassManager&) {
   auto scope = build_class_scope(stores);
   walk::parallel::code(
-      scope, [&](const DexMethod* method, IRCode& code) { code.build_cfg(); });
+      scope, [&](const DexMethod* method, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto non_overridden_virtuals = find_non_overridden_virtuals(scope);
 

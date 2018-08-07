@@ -86,7 +86,7 @@ size_t instrument_onBasicBlockBegin(
     return bb_id;
   }
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
   TRACE(INSTRUMENT, 5, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());

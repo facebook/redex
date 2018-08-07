@@ -1104,7 +1104,7 @@ void Allocator::allocate(IRCode* code) {
 
       // Since we have inserted instructions, we need to rebuild the CFG to
       // ensure that block boundaries remain correct
-      code->build_cfg();
+      code->build_cfg(/* editable */ false);
     } else {
       transform::remap_registers(code, reg_transform.map);
       code->set_registers_size(reg_transform.size);

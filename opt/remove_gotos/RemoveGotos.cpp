@@ -117,7 +117,7 @@ class RemoveGotos {
     TRACE(RMGOTO, 4, "Initial opcode count: %d\n", init_opcode_count);
 
     TRACE(RMGOTO, 3, "input code\n%s", SHOW(code));
-    code->build_cfg(true);
+    code->build_cfg(/* editable */ true);
     auto& cfg = code->cfg();
 
     TRACE(RMGOTO, 3, "before %s\n", SHOW(cfg));

@@ -22,7 +22,7 @@ EffectSummary analyze_code_effects(const IRCode* code) {
   MethodRefCache mref_cache;
   std::unordered_set<const DexMethod*> non_overridden_virtuals;
 
-  const_cast<IRCode*>(code)->build_cfg();
+  const_cast<IRCode*>(code)->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
 
   ptrs::FixpointIterator ptrs_fp_iter(cfg);

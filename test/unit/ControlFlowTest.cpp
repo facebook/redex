@@ -300,7 +300,7 @@ TEST(ControlFlow, iterate1) {
       (return-void)
     )
   )");
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
@@ -323,7 +323,7 @@ TEST(ControlFlow, iterate2) {
      (return-void)
     )
 )");
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   for (Block* b : code->cfg().blocks()) {
     EXPECT_NE(nullptr, b);
   }
@@ -358,7 +358,7 @@ TEST(ControlFlow, nullForwardIterators) {
       (return-void)
     )
   )");
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   for (int i = 0; i < 100; i++) {
     auto a = new cfg::InstructionIterable(cfg);
@@ -395,7 +395,7 @@ TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
   auto input_code = assembler::ircode_from_string(str);
   auto expected_code = assembler::ircode_from_string(str);
 
-  input_code->build_cfg(true);
+  input_code->build_cfg(/* editable */ true);
   input_code->clear_cfg();
 
   EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
@@ -417,7 +417,7 @@ TEST(ControlFlow, infinite) {
   auto expected_code = assembler::ircode_from_string(str);
 
   TRACE(CFG, 1, "%s", SHOW(input_code));
-  input_code->build_cfg(true);
+  input_code->build_cfg(/* editable */ true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -440,7 +440,7 @@ TEST(ControlFlow, infinite2) {
   auto input_code = assembler::ircode_from_string(str);
   auto expected_code = assembler::ircode_from_string(str);
 
-  input_code->build_cfg(true);
+  input_code->build_cfg(/* editable */ true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -468,7 +468,7 @@ TEST(ControlFlow, unreachable) {
     )
   )");
 
-  input_code->build_cfg(true);
+  input_code->build_cfg(/* editable */ true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -497,7 +497,7 @@ TEST(ControlFlow, unreachable2) {
     )
   )");
 
-  input_code->build_cfg(true);
+  input_code->build_cfg(/* editable */ true);
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
@@ -518,7 +518,7 @@ TEST(ControlFlow, remove_non_branch) {
       (return-void)
     )
   )");
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
 
   auto iterable = cfg::InstructionIterable(cfg);
@@ -577,7 +577,7 @@ TEST(ControlFlow, remove_non_branch_with_loop) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_CONST; });
   code->clear_cfg();
@@ -611,7 +611,7 @@ TEST(ControlFlow, remove_branch) {
     )
   )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_EQZ; });
   code->clear_cfg();
@@ -640,7 +640,7 @@ TEST(ControlFlow, remove_branch_with_loop) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_IF_GEZ; });
   code->clear_cfg();
@@ -669,7 +669,7 @@ TEST(ControlFlow, remove_all_but_return) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op != OPCODE_RETURN_VOID; });
   code->clear_cfg();
@@ -701,7 +701,7 @@ TEST(ControlFlow, remove_switch) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
   code->clear_cfg();
@@ -734,7 +734,7 @@ TEST(ControlFlow, remove_switch2) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
   code->clear_cfg();
@@ -768,7 +768,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   cfg.delete_pred_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
     return e->type() == EDGE_BRANCH;
@@ -812,7 +812,7 @@ TEST(ControlFlow, cleanup_after_deleting_branch) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
     return e->type() == EDGE_BRANCH;
@@ -843,7 +843,7 @@ TEST(ControlFlow, cleanup_after_deleting_goto) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
 
   auto& cfg = code->cfg();
   cfg.delete_succ_edge_if(cfg.entry_block(), [](const cfg::Edge* e) {
@@ -873,7 +873,7 @@ TEST(ControlFlow, remove_sget) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   auto iterable = cfg::InstructionIterable(cfg);
   std::vector<cfg::InstructionIterator> to_delete;
@@ -923,7 +923,7 @@ TEST(ControlFlow, branchingness) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   uint16_t blocks_checked = 0;
   for (Block* b : cfg.blocks()) {
@@ -958,7 +958,7 @@ TEST(ControlFlow, empty_first_block) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
 
   auto iterable = cfg::InstructionIterable(cfg);
@@ -989,7 +989,7 @@ TEST(ControlFlow, exit_blocks) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   EXPECT_EQ(2, cfg.real_exit_blocks().size());
@@ -1006,7 +1006,7 @@ TEST(ControlFlow, exit_blocks_change) {
     )
 )");
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
   EXPECT_EQ(2, cfg.real_exit_blocks().size());
 
