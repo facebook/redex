@@ -68,6 +68,85 @@ DexMethod* find_analysis_method(const DexClass& cls, const std::string& name) {
 }
 
 
+// Find if the current insertion point lies within a try_start - try_end block.
+// If it does, return its corresponding catch block.
+MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
+  for (auto mie_try = insert_point; mie_try != code->begin(); --mie_try) {
+    if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
+      return nullptr;
+    } else if (mie_try->type == MFLOW_TRY &&
+               mie_try->tentry->type == TRY_START) {
+      return mie_try->tentry->catch_start;
+    }
+  }
+  return nullptr;
+}
+
+void insert_invoke_static_call_bb(IRCode* code,
+                                  size_t method_id,
+                                  DexMethod* method_onMethodExit,
+                                  unsigned short reg_bb_vector) {
+  for (auto mie = code->begin(); mie != code->end(); ++mie) {
+    if (mie->type == MFLOW_OPCODE &&
+        (mie->insn->opcode() == OPCODE_RETURN ||
+         mie->insn->opcode() == OPCODE_RETURN_OBJECT ||
+         mie->insn->opcode() == OPCODE_RETURN_VOID)) {
+      IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
+      method_id_inst->set_literal(method_id);
+      auto reg_method_id = code->allocate_temp();
+      method_id_inst->set_dest(reg_method_id);
+
+      IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+      invoke_inst->set_method(method_onMethodExit);
+      invoke_inst->set_arg_word_count(2);
+      invoke_inst->set_src(0, reg_method_id);
+      invoke_inst->set_src(1, reg_bb_vector);
+
+      // When inserting an INVOKE instruction within a try_catch block, in order
+      // to prevent adding an extra throw edge to the CFG, we split the block
+      // into two. We insert a TRY_END instruction before our instrumentation
+      // INVOKE call and a TRY_START after.
+
+      auto catch_block = find_try_block(code, mie);
+
+      if (catch_block) {
+        auto try_start = new MethodItemEntry(TRY_START, catch_block);
+        auto try_end = new MethodItemEntry(TRY_END, catch_block);
+
+        code->insert_before(
+            code->insert_before(
+                code->insert_before(code->insert_before(mie, *try_start),
+                                    invoke_inst),
+                method_id_inst),
+            *try_end);
+      } else {
+        code->insert_before(code->insert_before(mie, invoke_inst),
+                            method_id_inst);
+      }
+    }
+  }
+}
+
+IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
+  // After every invoke instruction, the value returned from the function is
+  // moved to a register. The instruction used to move depends on the type of
+  // return value. Our instrumentation should skip over all these move_result
+  // instructions.
+  return std::find_if_not(
+      block->begin(), block->end(), [&](const MethodItemEntry& mie) {
+        auto mie_op = mie.insn->opcode();
+        return (mie.type == MFLOW_OPCODE &&
+                (opcode::is_internal(mie_op) || mie_op == OPCODE_MOVE ||
+                 mie_op == OPCODE_MOVE_WIDE ||
+                 mie_op == OPCODE_MOVE_EXCEPTION ||
+                 mie_op == OPCODE_MOVE_OBJECT || mie_op == OPCODE_MOVE_RESULT ||
+                 mie_op == OPCODE_MOVE_RESULT_OBJECT ||
+                 mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
+               (mie.type == MFLOW_TRY &&
+                (mie.tentry->type == TRY_END || mie.tentry->type == TRY_START));
+      });
+}
+
 int instrument_onBasicBlockBegin(
     DexMethod* method,
     DexMethod* method_onMethodExit,
@@ -115,25 +194,7 @@ int instrument_onBasicBlockBegin(
     or_inst->set_dest(reg_bb_vector);
 
     // Find where to insert the newly created instruction block.
-    // After every invoke instruction, the value returned from the function is
-    // moved to a register. The instruction used to move depends on the type of
-    // return value. Our instrumentation should skip over all these move_result
-    // instructions.
-    auto insert_point = std::find_if_not(
-        block->begin(), block->end(), [&](const MethodItemEntry& mie) {
-          auto mie_op = mie.insn->opcode();
-          return (mie.type == MFLOW_OPCODE &&
-                  (opcode::is_internal(mie_op) ||
-                   mie_op == OPCODE_MOVE ||
-                   mie_op == OPCODE_MOVE_WIDE ||
-                   mie_op == OPCODE_MOVE_EXCEPTION ||
-                   mie_op == OPCODE_MOVE_OBJECT ||
-                   mie_op == OPCODE_MOVE_RESULT ||
-                   mie_op == OPCODE_MOVE_RESULT_OBJECT ||
-                   mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
-                 (mie.type == MFLOW_TRY && (mie.tentry->type == TRY_END ||
-                                            mie.tentry->type == TRY_START));
-        });
+    auto insert_point = find_or_insn_insert_point(block);
 
     // We do not instrument a Basic block if:
     // 1. It only has internal or MOVE instructions.
@@ -166,66 +227,10 @@ int instrument_onBasicBlockBegin(
 
   // Once all the basic blocks are instrumented, before exiting from the method,
   // we add an INVOKE_STATIC call to send the bit vector to logs.
-  // This call takes 2 arguments: 1-Method ID, 2-Bit Vector.
-  for (auto mie = code->begin(); mie != code->end(); ++mie) {
-    if (mie->type == MFLOW_OPCODE &&
-        (mie->insn->opcode() == OPCODE_RETURN ||
-         mie->insn->opcode() == OPCODE_RETURN_OBJECT ||
-         mie->insn->opcode() == OPCODE_RETURN_VOID ||
-         mie->insn->opcode() == OPCODE_GOTO)) {
-      IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
-      method_id_inst->set_literal(method_id);
-      auto reg_method_id = code->allocate_temp();
-      method_id_inst->set_dest(reg_method_id);
+  // This invoke call takes 2 arguments: 1-Method ID, 2-Bit Vector.
+  insert_invoke_static_call_bb(code, method_id, method_onMethodExit,
+                               reg_bb_vector);
 
-      IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-      invoke_inst->set_method(method_onMethodExit);
-      invoke_inst->set_arg_word_count(2);
-      invoke_inst->set_src(0, reg_method_id);
-      invoke_inst->set_src(1, reg_bb_vector);
-
-      // Finding if the current insertion point lies within a try_catchblock.
-      // TODO : This can be done more efficiently. Update this.
-      auto mie_try = code->begin();
-      auto try_start_block = mie_try;
-      bool try_start_found = false;
-      MethodItemEntry* catch_block;
-      while (mie_try != mie) {
-        if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_START) {
-          try_start_found = true;
-          try_start_block = mie_try;
-          catch_block = mie_try->tentry->catch_start;
-        }
-        mie_try++;
-      }
-      if (try_start_found) {
-        for (mie_try = try_start_block; mie_try != mie; ++mie_try) {
-          if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
-            try_start_found = false;
-          }
-        }
-      }
-
-      // When inserting an INVOKE instruction within a try_catch block, in order
-      // to prevent adding an extra throw edge to the CFG, we split the block
-      // into two. We insert a TRY_END instruction before our instrumentation
-      // INVOKE call and a TRY_START after.
-      if (try_start_found) {
-        auto try_start = new MethodItemEntry(TRY_START, catch_block);
-        auto try_end = new MethodItemEntry(TRY_END, catch_block);
-
-        code->insert_before(
-            code->insert_before(
-                code->insert_before(code->insert_before(mie, *try_start),
-                                    invoke_inst),
-                method_id_inst),
-            *try_end);
-      } else {
-        code->insert_before(code->insert_before(mie, invoke_inst),
-                            method_id_inst);
-      }
-    }
-  }
   TRACE(INSTRUMENT, 7, "Id: %zu Method: %s\n", method_id++, SHOW(method_name));
 
   TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s\n", SHOW(code));
