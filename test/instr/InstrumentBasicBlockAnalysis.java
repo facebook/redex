@@ -6,13 +6,11 @@
  */
 package com.facebook.redextest;
 
-import java.util.HashMap;
-
 public class InstrumentBasicBlockAnalysis {
 
-  private static final boolean[] sBasicBlockStats = new boolean[0];
+  private static final int[] sBasicBlockStats = new int[0];
 
-  public static void onBasicBlockBegin(int bb_index) {
-    sBasicBlockStats[bb_index] = true;
+  public static void onMethodExitBB(int methodId, int bbVector) {
+    sBasicBlockStats[methodId] = bbVector;
   }
 }

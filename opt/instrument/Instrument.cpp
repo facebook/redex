@@ -70,43 +70,48 @@ DexMethod* find_analysis_method(const DexClass& cls, const std::string& name) {
 
 int instrument_onBasicBlockBegin(
     DexMethod* method,
-    DexMethod* method_onBasicBlockBegin,
-    int bb_id,
+    DexMethod* method_onMethodExit,
+    int method_id,
     int& all_bbs,
-    std::unordered_map<std::string, int>& bb_id_map,
-    std::vector<std::string>& bb_vector) {
+    int& num_blocks_instrumented,
+    std::unordered_map<std::string, int>& method_id_map,
+    std::vector<std::string>& method_vector) {
   IRCode* code = method->get_code();
   if (code == nullptr) {
-    return bb_id;
+    return method_id;
   }
 
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
+
   TRACE(INSTRUMENT, 7, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());
+
+  // For now, only instrumenting methods with less than 32 blocks.
+  if (blocks.size() > 32 || method->get_deobfuscated_name().empty()) {
+    return method_id;
+  }
   all_bbs += blocks.size();
 
-  // Do not instrument if there is only one block in the method.
-  if (blocks.size() == 1 || method->get_deobfuscated_name().length() == 0) {
-    return bb_id;
-  }
+  // Add a 32/64 bit integer to the beginning to method. This will be used as
+  // basic block bit vector
+  IRInstruction* const_inst_int = new IRInstruction(OPCODE_CONST);
+  const_inst_int->set_literal(0);
+  auto reg_bb_vector = code->allocate_temp();
+  const_inst_int->set_dest(reg_bb_vector);
+
   for (cfg::Block* block : blocks) {
-    // Individual Block can be identified by method name and block id. We can
-    // concatenate the method name with the block id to
-    // generate a unique identifier. This is mapped to an integer index, which
-    // is used in map.
-    std::string block_id = std::string(method->get_deobfuscated_name()) +
-                           std::to_string(block->id());
 
-    IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-    const_inst->set_literal(bb_id);
-    const auto reg_dest = code->allocate_temp();
-    const_inst->set_dest(reg_dest);
+    // Add instructions to calulate basic_block_vector |= 1UL << block->id();
+    IRInstruction* block_id_inst = new IRInstruction(OPCODE_CONST);
+    block_id_inst->set_literal(1UL << block->id());
+    const auto reg_bb_id_dest = code->allocate_temp();
+    block_id_inst->set_dest(reg_bb_id_dest);
 
-    IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-    invoke_inst->set_method(method_onBasicBlockBegin);
-    invoke_inst->set_arg_word_count(1);
-    invoke_inst->set_src(0, reg_dest);
+    IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT);
+    or_inst->set_src(0, reg_bb_vector);
+    or_inst->set_src(1, reg_bb_id_dest);
+    or_inst->set_dest(reg_bb_vector);
 
     // Find where to insert the newly created instruction block.
     // After every invoke instruction, the value returned from the function is
@@ -115,36 +120,115 @@ int instrument_onBasicBlockBegin(
     // instructions.
     auto insert_point = std::find_if_not(
         block->begin(), block->end(), [&](const MethodItemEntry& mie) {
-          return mie.type == MFLOW_FALLTHROUGH ||
-                 (mie.type == MFLOW_OPCODE &&
+          return (mie.type == MFLOW_OPCODE &&
                   (opcode::is_internal(mie.insn->opcode()) ||
+                   mie.insn->opcode() == OPCODE_MOVE ||
+                   mie.insn->opcode() == OPCODE_MOVE_WIDE ||
+                   mie.insn->opcode() == OPCODE_MOVE_EXCEPTION ||
+                   mie.insn->opcode() == OPCODE_MOVE_OBJECT ||
                    mie.insn->opcode() == OPCODE_MOVE_RESULT ||
                    mie.insn->opcode() == OPCODE_MOVE_RESULT_OBJECT ||
-                   mie.insn->opcode() == OPCODE_MOVE_RESULT_WIDE));
+                   mie.insn->opcode() == OPCODE_MOVE_RESULT_WIDE)) ||
+                 (mie.type == MFLOW_TRY && (mie.tentry->type == TRY_END ||
+                                            mie.tentry->type == TRY_START));
         });
 
     // We do not instrument a Basic block if:
-    // 1. It only has MFLOW_FALLTHROUGH or internal instructions.
-    // 2. BB has 1 in-degree and 1 out-degree.
-    // 3. BB has 0 or 1 opcodes.
-    if (insert_point == block->end() ||
-        (block->preds().size() <= 1 && block->succs().size() <= 1) ||
-        block->num_opcodes() <= 1) {
-      TRACE(INSTRUMENT, 7, "No instrumentation to block: %s\n", SHOW(block_id));
-      return bb_id;
+    // 1. It only has internal or MOVE instructions.
+    // 2. BB has no opcodes.
+    if (insert_point == block->end() || block->num_opcodes() < 1) {
+      TRACE(INSTRUMENT, 7, "No instrumentation to block: %s(%d)\n",
+            SHOW(std::string(method->get_deobfuscated_name()) +
+                 std::to_string(block->id())),
+            block->num_opcodes());
+      continue;
     }
-
-    TRACE(INSTRUMENT, 7, "Adding instrumentation to block: %s\n",
-          SHOW(block_id));
-    code->insert_before(code->insert_before(insert_point, invoke_inst),
-                        const_inst);
-
-    assert(!bb_id_map.count(block_id));
-    bb_id_map.emplace(block_id, bb_id);
-    bb_vector.push_back(block_id);
-    TRACE(INSTRUMENT, 7, "Id: %zu BB: %s\n", bb_id++, SHOW(block_id));
+    num_blocks_instrumented++;
+    code->insert_before(code->insert_before(insert_point, or_inst),
+                        block_id_inst);
   }
-  return bb_id;
+  auto method_name = method->get_deobfuscated_name();
+  assert(!method_id_map.count(method_name));
+  method_id_map.emplace(method_name, method_id);
+  method_vector.push_back(method_name);
+
+  // Find a point at the beginning of the method to insert the init instruction.
+  // This initializes bit vector to 0.
+  auto insert_point_init = std::find_if_not(
+      code->begin(), code->end(), [&](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_FALLTHROUGH ||
+               (mie.type == MFLOW_OPCODE &&
+                opcode::is_load_param(mie.insn->opcode()));
+      });
+
+  code->insert_before(insert_point_init, const_inst_int);
+
+  // Once all the basic blocks are instrumented, before exiting from the method,
+  // we add an INVOKE_STATIC call to send the bit vector to logs.
+  // This call takes 2 arguments: 1-Method ID, 2-Bit Vector.
+  for (auto mie = code->begin(); mie != code->end(); ++mie) {
+    if (mie->type == MFLOW_OPCODE &&
+        (mie->insn->opcode() == OPCODE_RETURN ||
+         mie->insn->opcode() == OPCODE_RETURN_OBJECT ||
+         mie->insn->opcode() == OPCODE_RETURN_VOID ||
+         mie->insn->opcode() == OPCODE_GOTO)) {
+      IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
+      method_id_inst->set_literal(method_id);
+      auto reg_method_id = code->allocate_temp();
+      method_id_inst->set_dest(reg_method_id);
+
+      IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+      invoke_inst->set_method(method_onMethodExit);
+      invoke_inst->set_arg_word_count(2);
+      invoke_inst->set_src(0, reg_method_id);
+      invoke_inst->set_src(1, reg_bb_vector);
+
+      // Finding if the current insertion point lies within a try_catchblock.
+      // TODO : This can be done more efficiently. Update this.
+      auto mie_try = code->begin();
+      auto try_start_block = mie_try;
+      bool try_start_found = false;
+      MethodItemEntry* catch_block;
+      while (mie_try != mie) {
+        if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_START) {
+          try_start_found = true;
+          try_start_block = mie_try;
+          catch_block = mie_try->tentry->catch_start;
+        }
+        mie_try++;
+      }
+      if (try_start_found) {
+        for (mie_try = try_start_block; mie_try != mie; ++mie_try) {
+          if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
+            try_start_found = false;
+          }
+        }
+      }
+
+      // When inserting an INVOKE instruction within a try_catch block, in order
+      // to prevent adding an extra throw edge to the CFG, we split the block
+      // into two. We insert a TRY_END instruction before our instrumentation
+      // INVOKE call and a TRY_START after.
+      if (try_start_found) {
+        auto try_start = new MethodItemEntry(TRY_START, catch_block);
+        auto try_end = new MethodItemEntry(TRY_END, catch_block);
+
+        code->insert_before(
+            code->insert_before(
+                code->insert_before(code->insert_before(mie, *try_start),
+                                    invoke_inst),
+                method_id_inst),
+            *try_end);
+      } else {
+        code->insert_before(code->insert_before(mie, invoke_inst),
+                            method_id_inst);
+      }
+    }
+  }
+  TRACE(INSTRUMENT, 7, "Id: %zu Method: %s\n", method_id++, SHOW(method_name));
+
+  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s\n", SHOW(code));
+  return method_id;
 }
 
 void instrument_onMethodBegin(DexMethod* method,
@@ -420,20 +504,21 @@ void do_basic_block_tracing(DexClass* analysis_cls,
                             ConfigFiles& cfg,
                             PassManager& pm,
                             const InstrumentPass::Options& options) {
-  DexMethod* method_onBasicBlockBegin = find_and_verify_analysis_method(
+  DexMethod* method_onMethodExit = find_and_verify_analysis_method(
       *analysis_cls, options.analysis_method_name);
 
   // For each indivdual basic block from every method, assign them an
   // identifier and add a jump to onBasicBlockBegin() at the beginning.
   // onBasicBlockBegin() will set the touch variable when a basic block is
   // accessed at runtime.
-  int bb_index = 1;
+  int method_index = 1;
   int all_bb_nums = 0;
   int num_methods = 0;
+  int all_bb_inst = 0;
   // Map Basic block identifier to its name(MethodName + BlockID).
-  std::unordered_map<std::string, int /*id*/> bb_id_map;
+  std::unordered_map<std::string, int /*id*/> method_id_map;
   // This vector is used to get references to the blocks.
-  std::vector<std::string> bb_vector;
+  std::vector<std::string> method_vector;
   auto scope = build_class_scope(stores);
 
   auto interdex_list = cfg.get_coldstart_classes();
@@ -449,39 +534,39 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   TRACE(INSTRUMENT, 7, "Number of classes: %d\n", cold_start_classes.size());
 
   walk::methods(scope, [&](DexMethod* method) {
-    if (method == method_onBasicBlockBegin ||
-        method == analysis_cls->get_clinit()) {
+    if (method == method_onMethodExit || method == analysis_cls->get_clinit()) {
       return;
     }
     // Basic block tracing assumes whitelist or set of cold start classes.
-    const auto& cls_name = show(method->get_class());
-
     if ((!options.whitelist.empty() &&
-         !is_included(method->get_name()->str(), cls_name,
+         !is_included(method->get_name()->str(), method->get_class()->c_str(),
                       options.whitelist)) ||
-        !is_included(method->get_name()->str(), cls_name, cold_start_classes)) {
-      TRACE(INSTRUMENT, 7, "Coldstart/Whitelist: excluded: %s\n", SHOW(method));
+        !is_included(method->get_name()->str(), method->get_class()->c_str(),
+                     cold_start_classes)) {
       return;
     }
 
     // Blacklist has priority over whitelist or cold start list.
-    if (is_included(method->get_name()->str(), cls_name, options.blacklist)) {
-      TRACE(INSTRUMENT, 7, "Blacklist: excluded: %s\n", SHOW(method));
+    if (is_included(method->get_name()->str(), method->get_class()->c_str(),
+                    options.blacklist)) {
+      TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s\n", SHOW(method));
       return;
     }
 
-    TRACE(INSTRUMENT, 7, "Whitelist: included: %s\n", SHOW(method));
+    TRACE(INSTRUMENT, 9, "Whitelist: included: %s\n", SHOW(method));
     num_methods++;
-    bb_index =
-        instrument_onBasicBlockBegin(method, method_onBasicBlockBegin, bb_index,
-                                     all_bb_nums, bb_id_map, bb_vector);
+    method_index = instrument_onBasicBlockBegin(
+        method, method_onMethodExit, method_index, all_bb_nums, all_bb_inst,
+        method_id_map, method_vector);
   });
-  patch_array_size(*analysis_cls, "sBasicBlockStats", bb_index);
+  patch_array_size(*analysis_cls, "sBasicBlockStats", method_index);
 
   write_index_file<std::string>(cfg.metafile(options.metadata_file_name),
-                                bb_vector);
-  TRACE(INSTRUMENT, 3, "Instrumented %d blocks out of %d(Methods: %d).\n",
-        (bb_index - 1), all_bb_nums, num_methods);
+                                method_vector);
+  TRACE(
+      INSTRUMENT, 3,
+      "Instrumented %d methods(%d blocks) out of %d (Number of Blocks: %d).\n",
+      (method_index - 1), all_bb_inst, num_methods, all_bb_nums);
 }
 
 } // namespace
