@@ -595,6 +595,8 @@ void InterDex::flush_out_dex(dex_emit_tracker& det, DexClassesVector& outdex) {
             SHOW(add_class));
     }
     dc.insert(dc.end(), add_classes.begin(), add_classes.end());
+    std::copy(add_classes.begin(), add_classes.end(),
+              std::inserter(det.emitted, det.emitted.end()));
   }
   check_refs_count(det, dc, m_linear_alloc_limit);
 
