@@ -38,6 +38,22 @@ namespace ptrs = local_pointers;
 
 namespace uv = used_vars;
 
+void DeadCodeEliminationPass::eval_pass(DexStoresVector& stores,
+                                        ConfigFiles& cfg,
+                                        PassManager& mgr) {
+  // XXX this is copypasta from LocalDCE
+  auto no_optimization_annos = cfg.get_no_optimizations_annos();
+  auto scope = build_class_scope(stores);
+  auto match = m::any_annos<DexMethod>(
+      m::as_type<DexAnnotation>(m::in<DexType>(no_optimization_annos)));
+
+  walk::methods(scope, [&](DexMethod* method) {
+    if (match.matches(method)) {
+      m_do_not_optimize_methods.insert(method);
+    }
+  });
+}
+
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
   CallGraphStrategy(const Scope& scope)
@@ -139,6 +155,10 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
                               &effect_summaries);
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    if (m_do_not_optimize_methods.count(method) != 0) {
+      return;
+    }
+
     uv::FixpointIterator used_vars_fp_iter(
         *ptrs_fp_iter_map->find(method)->second,
         build_summary_map(effect_summaries, call_graph, method),

@@ -31,9 +31,12 @@ class DeadCodeEliminationPass final : public Pass {
     }
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   boost::optional<std::string> m_external_side_effect_summaries_file;
   boost::optional<std::string> m_external_escape_summaries_file;
+  std::unordered_set<DexMethod*> m_do_not_optimize_methods;
 };
