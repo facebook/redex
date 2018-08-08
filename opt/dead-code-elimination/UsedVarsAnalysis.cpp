@@ -13,9 +13,9 @@ namespace ptrs = local_pointers;
 
 /*
  * This returns all the pointer-bearing registers whose pointees :insn will
- * read from.
+ * access (whether to read from or to write to them).
  */
-std::vector<uint16_t> object_read_registers(const IRInstruction* insn) {
+std::vector<uint16_t> pointer_registers(const IRInstruction* insn) {
   switch (insn->opcode()) {
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
@@ -31,12 +31,35 @@ std::vector<uint16_t> object_read_registers(const IRInstruction* insn) {
   case OPCODE_IGET_CHAR:
   case OPCODE_IGET_SHORT:
   case OPCODE_IGET_OBJECT:
+    return {insn->src(0)};
+
+  case OPCODE_APUT:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+    // src(0) is the value that is being written, src(1) is the object whose
+    // field is being written to.
+    return {insn->src(1)};
 
   case OPCODE_APUT_OBJECT:
   case OPCODE_IPUT_OBJECT:
+    return {insn->src(0), insn->src(1)};
   case OPCODE_SPUT_OBJECT:
+    return {insn->src(0)};
 
+  case OPCODE_THROW:
   case OPCODE_RETURN_OBJECT:
+    return {insn->src(0)};
+
+  case OPCODE_FILL_ARRAY_DATA:
     return {insn->src(0)};
 
   case OPCODE_INVOKE_SUPER:
@@ -110,18 +133,18 @@ std::string show_subset(const ptrs::Environment& env,
   return o.str();
 }
 
-UsedVarsFixpointIterator::UsedVarsFixpointIterator(
+namespace used_vars {
+
+FixpointIterator::FixpointIterator(
     const local_pointers::FixpointIterator& pointers_fp_iter,
-    const side_effects::SummaryMap& effect_summaries,
-    const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
+    side_effects::InvokeToSummaryMap invoke_to_summary_map,
     const cfg::ControlFlowGraph& cfg)
     : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
       m_insn_env_map(gen_instruction_environment_map(cfg, pointers_fp_iter)),
-      m_effect_summaries(effect_summaries),
-      m_non_overridden_virtuals(non_overridden_virtuals) {}
+      m_invoke_to_summary_map(invoke_to_summary_map) {}
 
-void UsedVarsFixpointIterator::analyze_instruction(
-    const IRInstruction* insn, UsedVarsSet* used_vars) const {
+void FixpointIterator::analyze_instruction(const IRInstruction* insn,
+                                           UsedVarsSet* used_vars) const {
   TRACE(DEAD_CODE, 5, "Before %s : %s : %s\n", SHOW(insn), SHOW(*used_vars),
         show_subset(m_insn_env_map.at(insn), insn).c_str());
   bool required = is_required(insn, *used_vars);
@@ -139,7 +162,13 @@ void UsedVarsFixpointIterator::analyze_instruction(
     if (env.is_bottom()) {
       return;
     }
-    for (auto reg : object_read_registers(insn)) {
+    // We mark all pointer-bearing registers as used, even if we only write to
+    // them. This is done in order to correctly handle the verifier's
+    // requirement that all objects are initialized before being used (even if
+    // only to make unused writes to them.) Marking modified objects as used
+    // ensures that we don't delete the <init>() calls on them. See the
+    // UsedVarsTest_noDeleteInit unit test for a concrete example.
+    for (auto reg : pointer_registers(insn)) {
       auto pointers = env.get_pointers(reg);
       // XXX: We should never encounter this case since we explicitly bind all
       // potential pointer-containing registers to non-Top values in our
@@ -147,7 +176,8 @@ void UsedVarsFixpointIterator::analyze_instruction(
       // all local allocations as potentially used -- a read from
       // PointerSet::top() must be treated like a read from every possible
       // heap location.
-      always_assert(!pointers.is_top());
+      always_assert_log(!pointers.is_top(), "%u is top for %s", reg,
+                        SHOW(insn));
       for (auto pointer : pointers.elements()) {
         used_vars->add(pointer);
       }
@@ -162,10 +192,9 @@ void UsedVarsFixpointIterator::analyze_instruction(
   TRACE(DEAD_CODE, 5, "After: %s\n", SHOW(*used_vars));
 }
 
-bool UsedVarsFixpointIterator::is_used_or_escaping_write(
-    const ptrs::Environment& env,
-    const UsedVarsSet& used_vars,
-    reg_t obj_reg) const {
+bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
+                                                 const UsedVarsSet& used_vars,
+                                                 reg_t obj_reg) const {
   auto pointers = env.get_pointers(obj_reg);
   if (!pointers.is_value()) {
     return true;
@@ -175,15 +204,17 @@ bool UsedVarsFixpointIterator::is_used_or_escaping_write(
     if (used_vars.contains(pointer)) {
       return true;
     }
-    if (heap.get(pointer).equals(EscapeDomain(EscapeState::MAY_ESCAPE))) {
+    // Writes to MAY_ESCAPE or ONLY_PARAMETER_DEPENDENT objects must be treated
+    // as potentially used.
+    if (!heap.get(pointer).equals(EscapeDomain(EscapeState::NOT_ESCAPED))) {
       return true;
     }
   }
   return false;
 }
 
-bool UsedVarsFixpointIterator::is_required(const IRInstruction* insn,
-                                           const UsedVarsSet& used_vars) const {
+bool FixpointIterator::is_required(const IRInstruction* insn,
+                                   const UsedVarsSet& used_vars) const {
   auto op = insn->opcode();
   switch (op) {
   case IOPCODE_LOAD_PARAM:
@@ -249,25 +280,16 @@ bool UsedVarsFixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method == nullptr) {
-      return true;
-    }
-    if (assumenosideeffects(method)) {
+    if (method != nullptr && assumenosideeffects(method)) {
       return used_vars.contains(RESULT_REGISTER);
     }
-    // We could be smarter about virtual calls that may resolve to one of many
-    // callees, but right now we just bail out.
-    if (op == OPCODE_INVOKE_VIRTUAL &&
-        !m_non_overridden_virtuals.count(method)) {
-      return true;
-    }
-    if (!m_effect_summaries.count(method)) {
+    if (!m_invoke_to_summary_map.count(insn)) {
       return true;
     }
     // A call is required if it has a side-effect, if its return value is used,
     // or if it mutates an argument that may later be read somewhere up the
     // callstack.
-    auto& summary = m_effect_summaries.at(method);
+    auto& summary = m_invoke_to_summary_map.at(insn);
     if (summary.effects != side_effects::EFF_NONE ||
         used_vars.contains(RESULT_REGISTER)) {
       return true;
@@ -295,11 +317,11 @@ bool UsedVarsFixpointIterator::is_required(const IRInstruction* insn,
 }
 
 std::vector<IRList::iterator> get_dead_instructions(
-    const IRCode* const_code, const UsedVarsFixpointIterator& fp_iter) {
+    const IRCode& const_code, const FixpointIterator& fp_iter) {
   // We aren't mutating the IRCode object, but we want to return non-const
   // IRList::iterators.
-  auto* code = const_cast<IRCode*>(const_code);
-  auto& cfg = code->cfg();
+  auto& code = const_cast<IRCode&>(const_code);
+  auto& cfg = code.cfg();
   std::vector<IRList::iterator> dead_instructions;
   for (auto* block : cfg.blocks()) {
     auto used_vars = fp_iter.get_used_vars_at_exit(block);
@@ -313,7 +335,7 @@ std::vector<IRList::iterator> get_dead_instructions(
         // move-result-pseudo instructions will be automatically removed
         // when their primary instruction is deleted.
         if (!opcode::is_move_result_pseudo(insn->opcode())) {
-          dead_instructions.emplace_back(code->iterator_to(*it));
+          dead_instructions.emplace_back(code.iterator_to(*it));
         }
       }
       fp_iter.analyze_instruction(insn, &used_vars);
@@ -323,3 +345,5 @@ std::vector<IRList::iterator> get_dead_instructions(
   }
   return dead_instructions;
 }
+
+} // namespace used_vars

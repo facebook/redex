@@ -9,6 +9,8 @@
 
 #include <boost/optional.hpp>
 
+#include "CallGraph.h"
+#include "LocalPointersAnalysis.h"
 #include "Pass.h"
 #include "SideEffectSummary.h"
 #include "UsedVarsAnalysis.h"

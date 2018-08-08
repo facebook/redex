@@ -7,6 +7,7 @@
 
 #include "DeadCodeEliminationPass.h"
 
+#include "ConcurrentContainers.h"
 #include "DexUtil.h"
 #include "LocalPointersAnalysis.h"
 #include "SummarySerialization.h"
@@ -35,6 +36,8 @@
 
 namespace ptrs = local_pointers;
 
+namespace uv = used_vars;
+
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
   CallGraphStrategy(const Scope& scope)
@@ -50,8 +53,8 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (is_invoke(insn->opcode())) {
-        auto callee = resolve_method(
-            insn->get_method(), opcode_to_search(insn), m_resolved_refs);
+        auto callee = resolve_method(insn->get_method(), opcode_to_search(insn),
+                                     m_resolved_refs);
         if (callee == nullptr || may_be_overridden(callee)) {
           continue;
         }
@@ -86,6 +89,24 @@ class CallGraphStrategy final : public call_graph::BuildStrategy {
   mutable MethodRefCache m_resolved_refs;
 };
 
+static side_effects::InvokeToSummaryMap build_summary_map(
+    const side_effects::SummaryMap& effect_summaries,
+    const call_graph::Graph& call_graph,
+    DexMethod* method) {
+  side_effects::InvokeToSummaryMap invoke_to_summary_map;
+  if (call_graph.has_node(method)) {
+    const auto& callee_edges = call_graph.node(method).callees();
+    for (const auto& edge : callee_edges) {
+      auto* callee = edge->callee();
+      if (effect_summaries.count(callee) != 0) {
+        invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
+                                      effect_summaries.at(callee));
+      }
+    }
+  }
+  return invoke_to_summary_map;
+}
+
 void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles&,
                                        PassManager&) {
@@ -114,22 +135,25 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
     std::ifstream file_input(*m_external_side_effect_summaries_file);
     summary_serialization::read(file_input, &effect_summaries);
   }
-  side_effects::analyze_scope(
-      scope, call_graph, *ptrs_fp_iter_map, &effect_summaries);
+  side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
+                              &effect_summaries);
 
-  auto non_overridden_virtuals = find_non_overridden_virtuals(scope);
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    auto ptrs_fp_iter = ptrs_fp_iter_map->find(method)->second;
-    UsedVarsFixpointIterator used_vars_fp_iter(*ptrs_fp_iter,
-                                               effect_summaries,
-                                               non_overridden_virtuals,
-                                               code.cfg());
-    used_vars_fp_iter.run(UsedVarsSet());
+    uv::FixpointIterator used_vars_fp_iter(
+        *ptrs_fp_iter_map->find(method)->second,
+        build_summary_map(effect_summaries, call_graph, method),
+        code.cfg());
+    used_vars_fp_iter.run(uv::UsedVarsSet());
 
     TRACE(DEAD_CODE, 5, "Transforming %s\n", SHOW(method));
     TRACE(DEAD_CODE, 5, "Before:\n%s\n", SHOW(code.cfg()));
-    auto dead_instructions = get_dead_instructions(&code, used_vars_fp_iter);
+    auto dead_instructions =
+        used_vars::get_dead_instructions(code, used_vars_fp_iter);
     for (auto dead : dead_instructions) {
+      // This logging is useful for quantifying what gets removed. E.g. to see
+      // all the removed callsites:
+      // grep "^DEAD.*INVOKE[^ ]*" log | grep " L.*$" -Po | sort | uniq -c
+      TRACE(DEAD_CODE, 3, "DEAD: %s\n", SHOW(dead->insn));
       code.remove_opcode(dead);
     }
     transform::remove_unreachable_blocks(&code);

@@ -18,6 +18,8 @@ using reg_t = uint32_t;
 
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
+namespace used_vars {
+
 using UsedRegisters = sparta::PatriciaTreeSetAbstractDomain<reg_t>;
 
 using UsedPointers =
@@ -64,18 +66,16 @@ class UsedVarsSet final
  * get read from. It is essentially a liveness analysis that ignores
  * instructions which it can determine to have no observable side-effects.
  */
-class UsedVarsFixpointIterator final
+class FixpointIterator final
     : public sparta::MonotonicFixpointIterator<
           sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
           UsedVarsSet> {
  public:
   using NodeId = cfg::Block*;
 
-  UsedVarsFixpointIterator(
-      const local_pointers::FixpointIterator& pointers_fp_iter,
-      const side_effects::SummaryMap& effect_summaries,
-      const std::unordered_set<const DexMethod*>& non_overridden_virtuals,
-      const cfg::ControlFlowGraph& cfg);
+  FixpointIterator(const local_pointers::FixpointIterator& pointers_fp_iter,
+                   side_effects::InvokeToSummaryMap invoke_to_summary_map,
+                   const cfg::ControlFlowGraph& cfg);
 
   void analyze_node(const NodeId& block,
                     UsedVarsSet* used_vars) const override {
@@ -115,9 +115,10 @@ class UsedVarsFixpointIterator final
  private:
   std::unordered_map<const IRInstruction*, local_pointers::Environment>
       m_insn_env_map;
-  const side_effects::SummaryMap& m_effect_summaries;
-  const std::unordered_set<const DexMethod*>& m_non_overridden_virtuals;
+  side_effects::InvokeToSummaryMap m_invoke_to_summary_map;
 };
 
-std::vector<IRList::iterator> get_dead_instructions(
-    const IRCode*, const UsedVarsFixpointIterator&);
+std::vector<IRList::iterator> get_dead_instructions(const IRCode&,
+                                                    const FixpointIterator&);
+
+} // namespace used_vars
