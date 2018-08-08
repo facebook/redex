@@ -63,7 +63,7 @@ TEST_F(PostVerify, InstrumentBBVerify) {
     // are 3 basic blocks in testFunc2, but only 1 qualifying one.
     // TODO: Verify if number of calls to onBasicBlockBegin() is same as
     // number of qualifying basic blocks.
-    EXPECT_EQ(1, count_invoke);
+    EXPECT_EQ(0, count_invoke);
   });
 
   EXPECT_EQ(true, found_testFunc2);
