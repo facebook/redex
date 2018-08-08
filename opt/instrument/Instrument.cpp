@@ -476,6 +476,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
         instrument_onBasicBlockBegin(method, method_onBasicBlockBegin, bb_index,
                                      all_bb_nums, bb_id_map, bb_vector);
   });
+  patch_array_size(*analysis_cls, "sBasicBlockStats", bb_index);
 
   write_index_file<std::string>(cfg.metafile(options.metadata_file_name),
                                 bb_vector);

@@ -10,9 +10,9 @@ import java.util.HashMap;
 
 public class InstrumentBasicBlockAnalysis {
 
-  private static final HashMap<Integer, Integer> bbMap = new HashMap<>();
+  private static final boolean[] sBasicBlockStats = new boolean[0];
 
-  public static void onBasicBlockBegin(int blockId) {
-    bbMap.put(blockId, 1);
+  public static void onBasicBlockBegin(int bb_index) {
+    sBasicBlockStats[bb_index] = true;
   }
 }
