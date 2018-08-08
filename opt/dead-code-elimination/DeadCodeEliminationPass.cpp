@@ -7,6 +7,8 @@
 
 #include "DeadCodeEliminationPass.h"
 
+#include <functional>
+
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
 #include "LocalPointersAnalysis.h"
@@ -125,7 +127,7 @@ static side_effects::InvokeToSummaryMap build_summary_map(
 
 void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles&,
-                                       PassManager&) {
+                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
@@ -154,31 +156,41 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
   side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
                               &effect_summaries);
 
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (m_do_not_optimize_methods.count(method) != 0) {
-      return;
-    }
+  auto removed = walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+      scope,
+      [&](std::nullptr_t, DexMethod* method) -> size_t {
+        if (m_do_not_optimize_methods.count(method) != 0) {
+          return 0;
+        }
+        auto* code = method->get_code();
+        if (code == nullptr) {
+          return 0;
+        }
 
-    uv::FixpointIterator used_vars_fp_iter(
-        *ptrs_fp_iter_map->find(method)->second,
-        build_summary_map(effect_summaries, call_graph, method),
-        code.cfg());
-    used_vars_fp_iter.run(uv::UsedVarsSet());
+        uv::FixpointIterator used_vars_fp_iter(
+            *ptrs_fp_iter_map->find(method)->second,
+            build_summary_map(effect_summaries, call_graph, method),
+            code->cfg());
+        used_vars_fp_iter.run(uv::UsedVarsSet());
 
-    TRACE(DEAD_CODE, 5, "Transforming %s\n", SHOW(method));
-    TRACE(DEAD_CODE, 5, "Before:\n%s\n", SHOW(code.cfg()));
-    auto dead_instructions =
-        used_vars::get_dead_instructions(code, used_vars_fp_iter);
-    for (auto dead : dead_instructions) {
-      // This logging is useful for quantifying what gets removed. E.g. to see
-      // all the removed callsites:
-      // grep "^DEAD.*INVOKE[^ ]*" log | grep " L.*$" -Po | sort | uniq -c
-      TRACE(DEAD_CODE, 3, "DEAD: %s\n", SHOW(dead->insn));
-      code.remove_opcode(dead);
-    }
-    transform::remove_unreachable_blocks(&code);
-    TRACE(DEAD_CODE, 5, "After:\n%s\n", SHOW(&code));
-  });
+        TRACE(DEAD_CODE, 5, "Transforming %s\n", SHOW(method));
+        TRACE(DEAD_CODE, 5, "Before:\n%s\n", SHOW(code->cfg()));
+        auto dead_instructions =
+            used_vars::get_dead_instructions(*code, used_vars_fp_iter);
+        for (auto dead : dead_instructions) {
+          // This logging is useful for quantifying what gets removed. E.g. to
+          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log | grep
+          // " L.*$" -Po | sort | uniq -c
+          TRACE(DEAD_CODE, 3, "DEAD: %s\n", SHOW(dead->insn));
+          code->remove_opcode(dead);
+        }
+        transform::remove_unreachable_blocks(code);
+        TRACE(DEAD_CODE, 5, "After:\n%s\n", SHOW(&code));
+        return dead_instructions.size();
+      },
+      std::plus<size_t>(),
+      [](int) { return nullptr; });
+  mgr.set_metric("removed_instructions", removed);
 }
 
 static DeadCodeEliminationPass s_pass;
