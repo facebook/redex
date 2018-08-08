@@ -63,9 +63,10 @@ class MixedModeInfo {
     m_mixed_mode_dex_statuses = std::move(mixed_mode_dex_statuses);
   }
 
-  void set_mixed_mode_classes(std::unordered_set<DexClass*>&& mixed_mode_classes,
-                              bool can_touch_coldstart_set,
-                              bool can_touch_coldstart_extended_set) {
+  void set_mixed_mode_classes(
+      std::unordered_set<DexClass*>&& mixed_mode_classes,
+      bool can_touch_coldstart_set,
+      bool can_touch_coldstart_extended_set) {
     m_type = MixedModeType::PRE_DEFINED_CLASSES;
 
     m_mixed_mode_classes = std::move(mixed_mode_classes);

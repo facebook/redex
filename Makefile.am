@@ -207,6 +207,7 @@ redex_all_SOURCES = \
 	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
 	opt/instrument/Instrument.cpp \
+	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/local-dce/LocalDce.cpp \

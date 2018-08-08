@@ -27,15 +27,102 @@
 
 namespace {
 
-size_t global_dmeth_cnt;
-size_t global_smeth_cnt;
-size_t global_vmeth_cnt;
-size_t global_methref_cnt;
-size_t global_fieldref_cnt;
-size_t global_cls_cnt;
-size_t cls_skipped_in_primary = 0;
-size_t cls_skipped_in_secondary = 0;
-size_t scroll_set_dex_count = 1000;
+constexpr const char* CANARY_PREFIX = "Lsecondary/dex";
+constexpr const char CANARY_CLASS_FORMAT[] = "Lsecondary/dex%02d/Canary;";
+constexpr size_t CANARY_CLASS_BUFSIZE = sizeof(CANARY_CLASS_FORMAT);
+
+constexpr const char* END_MARKER_FORMAT = "LDexEndMarker";
+constexpr const char* SCROLL_MARKER_FORMAT = "LScrollList";
+
+constexpr size_t MAX_DEX_NUM = 99;
+
+constexpr const interdex::DexInfo EMPTY_DEX_INFO = interdex::DexInfo();
+
+std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
+    const Scope& scope,
+    const std::vector<DexType*>& interdex_types,
+    bool static_prune_classes) {
+  int old_no_ref = -1;
+  int new_no_ref = 0;
+
+  std::unordered_set<DexType*> coldstart_classes(interdex_types.begin(),
+                                                 interdex_types.end());
+  std::unordered_set<DexType*> cold_cold_references;
+  std::unordered_set<DexClass*> unreferenced_classes;
+  Scope input_scope = scope;
+
+  // Don't do analysis if we're not doing pruning.
+  if (!static_prune_classes) {
+    return unreferenced_classes;
+  }
+
+  while (old_no_ref != new_no_ref) {
+    old_no_ref = new_no_ref;
+    new_no_ref = 0;
+    cold_cold_references.clear();
+    walk::code(input_scope,
+               [&](DexMethod* meth) {
+                 return coldstart_classes.count(meth->get_class()) > 0;
+               },
+               [&](DexMethod* meth, const IRCode& code) {
+                 auto base_cls = meth->get_class();
+                 for (auto& mie : InstructionIterable(meth->get_code())) {
+                   auto inst = mie.insn;
+                   DexType* called_cls = nullptr;
+                   if (inst->has_method()) {
+                     called_cls = inst->get_method()->get_class();
+                   } else if (inst->has_field()) {
+                     called_cls = inst->get_field()->get_class();
+                   } else if (inst->has_type()) {
+                     called_cls = inst->get_type();
+                   }
+                   if (called_cls != nullptr && base_cls != called_cls &&
+                       coldstart_classes.count(called_cls) > 0) {
+                     cold_cold_references.insert(called_cls);
+                   }
+                 }
+               });
+    for (const auto& cls : scope) {
+      // Make sure we don't drop classes which might be
+      // called from native code.
+      if (!can_rename(cls)) {
+        cold_cold_references.insert(cls->get_type());
+      }
+    }
+
+    // Get all classes in the reference set, even if they are not referenced by
+    // opcodes directly.
+    for (const auto& cls : input_scope) {
+      if (cold_cold_references.count(cls->get_type())) {
+        std::vector<DexType*> types;
+        cls->gather_types(types);
+        for (const auto& type : types) {
+          cold_cold_references.insert(type);
+        }
+      }
+    }
+
+    Scope output_scope;
+    for (auto& cls : coldstart_classes) {
+      if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
+        new_no_ref++;
+        unreferenced_classes.insert(type_class(cls));
+      } else {
+        output_scope.push_back(type_class(cls));
+      }
+    }
+    TRACE(IDEX, 4, "Found %d classes in coldstart with no references.\n",
+          new_no_ref);
+    input_scope = output_scope;
+  }
+
+  return unreferenced_classes;
+}
+
+bool is_canary(DexClass* clazz) {
+  const char* cname = clazz->get_type()->get_name()->c_str();
+  return strncmp(cname, CANARY_PREFIX, sizeof(CANARY_PREFIX) - 1) == 0;
+}
 
 void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
@@ -46,441 +133,230 @@ void gather_refs(
   std::vector<DexFieldRef*> field_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
+
   for (const auto& plugin : plugins) {
     plugin->gather_mrefs(cls, method_refs, field_refs);
   }
+
   mrefs->insert(method_refs.begin(), method_refs.end());
   frefs->insert(field_refs.begin(), field_refs.end());
 }
 
-/*
- * Removes the elements of b from a. Runs in O(size(a)), so it works best if
- * size(a) << size(b).
- */
-template <typename T>
-std::unordered_set<T> set_difference(const std::unordered_set<T>& a,
-                                     const std::unordered_set<T>& b) {
-  std::unordered_set<T> result;
-  for (auto& v : a) {
-    if (!b.count(v)) {
-      result.emplace(v);
-    }
-  }
-  return result;
-}
+void print_stats(interdex::DexesStructure* dexes_structure) {
+  TRACE(IDEX, 2, "InterDex Stats:\n");
+  TRACE(IDEX, 2, "\t dex count: %d\n", dexes_structure->get_num_dexes());
+  TRACE(IDEX, 2, "\t secondary dex count: %d\n",
+        dexes_structure->get_num_secondary_dexes());
+  TRACE(IDEX, 2, "\t coldstart dex count: %d\n",
+        dexes_structure->get_num_coldstart_dexes());
+  TRACE(IDEX, 2, "\t extendex dex count: %d\n",
+        dexes_structure->get_num_extended_dexes());
+  TRACE(IDEX, 2, "\t scroll dex count: %d\n",
+        dexes_structure->get_num_scroll_dexes());
+  TRACE(IDEX, 2, "\t mixedmode dex count: %d\n",
+        dexes_structure->get_num_mixedmode_dexes());
 
-constexpr int kMaxMethodRefs = ((64 * 1024) - 1);
-constexpr int kMaxFieldRefs = 64 * 1024 - 1;
-constexpr char kCanaryPrefix[] = "Lsecondary/dex";
-constexpr char kCanaryClassFormat[] = "Lsecondary/dex%02d/Canary;";
-constexpr size_t kCanaryClassBufsize = sizeof(kCanaryClassFormat);
-constexpr int kMaxDexNum = 99;
-
-void update_dex_stats(size_t cls_cnt, size_t methrefs_cnt, size_t frefs_cnt) {
-  global_cls_cnt += cls_cnt;
-  global_methref_cnt += methrefs_cnt;
-  global_fieldref_cnt += frefs_cnt;
-}
-
-void update_class_stats(DexClass* clazz) {
-  int cnt_smeths = 0;
-  for (auto const m : clazz->get_dmethods()) {
-    if (is_static(m)) {
-      cnt_smeths++;
-    }
-  }
-  global_smeth_cnt += cnt_smeths;
-  global_dmeth_cnt += clazz->get_dmethods().size();
-  global_vmeth_cnt += clazz->get_vmethods().size();
-}
-
-/*
- * Sanity check: did gather_refs return all the refs that ultimately ended up
- * in the dex?
- */
-void check_refs_count(const interdex::dex_emit_tracker& det,
-                      const DexClasses& dc,
-                      int64_t linear_alloc_limit) {
-  std::vector<DexMethodRef*> mrefs;
-  for (DexClass* cls : dc) {
-    cls->gather_methods(mrefs);
-  }
-  std::unordered_set<DexMethodRef*> mrefs_set(mrefs.begin(), mrefs.end());
-  if (mrefs_set.size() > det.mrefs.size()) {
-    for (DexMethodRef* mr : mrefs_set) {
-      if (!det.mrefs.count(mr)) {
-        TRACE(IDEX, 1, "WARNING: Could not find %s in predicted mrefs set\n",
-              SHOW(mr));
-      }
-    }
-  }
-
-  std::vector<DexFieldRef*> frefs;
-  for (DexClass* cls : dc) {
-    cls->gather_fields(frefs);
-  }
-  std::unordered_set<DexFieldRef*> frefs_set(frefs.begin(), frefs.end());
-  if (frefs_set.size() > det.frefs.size()) {
-    for (auto* fr : frefs_set) {
-      if (!det.frefs.count(fr)) {
-        TRACE(IDEX, 1, "WARNING: Could not find %s in predicted frefs set\n",
-              SHOW(fr));
-      }
-    }
-  }
-
-  // print out stats
-  TRACE(IDEX, 1,
-        "terminating dex at classes %lu, lin alloc %d:%d, mrefs %lu:%lu:%d, "
-        "frefs %lu:%lu:%d\n",
-        det.outs.size(), det.la_size, linear_alloc_limit, det.mrefs.size(),
-        mrefs_set.size(), kMaxMethodRefs, det.frefs.size(), frefs_set.size(),
-        kMaxFieldRefs);
-}
-
-bool is_canary(DexClass* clazz) {
-  const char* cname = clazz->get_type()->get_name()->c_str();
-  return strncmp(cname, kCanaryPrefix, sizeof(kCanaryPrefix) - 1) == 0;
-}
-
-struct PenaltyPattern {
-  const char* suffix;
-  unsigned penalty;
-
-  PenaltyPattern(const char* str, unsigned pen) : suffix(str), penalty(pen) {}
-};
-
-const PenaltyPattern kPatterns[] = {
-    {"Layout;", 1500},
-    {"View;", 1500},
-    {"ViewGroup;", 1800},
-    {"Activity;", 1500},
-};
-
-const unsigned kObjectVtable = 48;
-const unsigned kMethodSize = 52;
-const unsigned kInstanceFieldSize = 16;
-const unsigned kVtableSlotSize = 4;
-
-bool matches_penalty(const char* str, unsigned& penalty) {
-  for (auto const& pattern : kPatterns) {
-    if (ends_with(str, pattern.suffix)) {
-      penalty = pattern.penalty;
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Estimates the linear alloc space consumed by the class at runtime.
- */
-unsigned estimate_linear_alloc(const DexClass* clazz) {
-  unsigned lasize = 0;
-  // VTable guesstimate. Technically we could do better here, but only so much.
-  // Try to stay bug-compatible with DalvikStatsTool.
-  if (!is_interface(clazz)) {
-    unsigned vtablePenalty = kObjectVtable;
-    if (!matches_penalty(clazz->get_type()->get_name()->c_str(),
-                         vtablePenalty) &&
-        clazz->get_super_class() != nullptr) {
-      /* what?, we could be redexing object some day... :) */
-      matches_penalty(clazz->get_super_class()->get_name()->c_str(),
-                      vtablePenalty);
-    }
-    lasize += vtablePenalty;
-    lasize += clazz->get_vmethods().size() * kVtableSlotSize;
-  }
-  /* Dmethods... */
-  lasize += clazz->get_dmethods().size() * kMethodSize;
-  /* Vmethods... */
-  lasize += clazz->get_vmethods().size() * kMethodSize;
-  /* Instance Fields */
-  lasize += clazz->get_ifields().size() * kInstanceFieldSize;
-  return lasize;
-}
-
-bool should_skip_class(
-    const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
-    DexClass* clazz) {
-  for (const auto& plugin : plugins) {
-    if (plugin->should_skip_class(clazz)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-std::unordered_set<const DexClass*> find_unrefenced_coldstart_classes(
-    const Scope& scope,
-    interdex::dex_emit_tracker& det,
-    const std::vector<std::string>& interdexorder,
-    bool static_prune_classes) {
-  int old_no_ref = -1;
-  int new_no_ref = 0;
-  std::unordered_set<DexClass*> coldstart_classes;
-  std::unordered_set<const DexClass*> cold_cold_references;
-  std::unordered_set<const DexClass*> unreferenced_classes;
-  Scope input_scope = scope;
-
-  // don't do analysis if we're not going doing pruning
-  if (!static_prune_classes) {
-    return unreferenced_classes;
-  }
-
-  for (auto const& class_string : interdexorder) {
-    if (det.clookup.count(class_string)) {
-      coldstart_classes.insert(det.clookup[class_string]);
-    }
-  }
-
-  while (old_no_ref != new_no_ref) {
-    old_no_ref = new_no_ref;
-    new_no_ref = 0;
-    cold_cold_references.clear();
-    walk::code(input_scope,
-               [&](DexMethod* meth) {
-                 return coldstart_classes.count(type_class(meth->get_class())) >
-                        0;
-               },
-               [&](DexMethod* meth, const IRCode& code) {
-                 auto base_cls = type_class(meth->get_class());
-                 for (auto& mie : InstructionIterable(meth->get_code())) {
-                   auto inst = mie.insn;
-                   DexClass* called_cls = nullptr;
-                   if (inst->has_method()) {
-                     called_cls = type_class(inst->get_method()->get_class());
-                   } else if (inst->has_field()) {
-                     called_cls = type_class(inst->get_field()->get_class());
-                   } else if (inst->has_type()) {
-                     called_cls = type_class(inst->get_type());
-                   }
-                   if (called_cls != nullptr && base_cls != called_cls &&
-                       coldstart_classes.count(called_cls) > 0) {
-                     cold_cold_references.insert(called_cls);
-                   }
-                 }
-               });
-    for (const auto& cls : scope) {
-      // make sure we don't drop classes which might be called from native code
-      if (!can_rename(cls)) {
-        cold_cold_references.insert(cls);
-      }
-    }
-    // get all classes in the reference set, even if they are not referenced by
-    // opcodes directly
-    for (const auto& cls : input_scope) {
-      if (cold_cold_references.count(cls)) {
-        std::vector<DexType*> types;
-        cls->gather_types(types);
-        for (const auto& type : types) {
-          auto ref_cls = type_class(type);
-          cold_cold_references.insert(ref_cls);
-        }
-      }
-    }
-    Scope output_scope;
-    for (auto& cls : coldstart_classes) {
-      if (can_rename(cls) && cold_cold_references.count(cls) == 0) {
-        new_no_ref++;
-        unreferenced_classes.insert(cls);
-      } else {
-        output_scope.push_back(cls);
-      }
-    }
-    TRACE(IDEX, 1, "found %d classes in coldstart with no references\n",
-          new_no_ref);
-    input_scope = output_scope;
-  }
-  return unreferenced_classes;
+  TRACE(IDEX, 2, "Global stats:\n");
+  TRACE(IDEX, 2, "\t %lu classes\n", dexes_structure->get_num_classes());
+  TRACE(IDEX, 2, "\t %lu mrefs\n", dexes_structure->get_num_mrefs());
+  TRACE(IDEX, 2, "\t %lu frefs\n", dexes_structure->get_num_frefs());
+  TRACE(IDEX, 2, "\t %lu dmethods\n", dexes_structure->get_num_dmethods());
+  TRACE(IDEX, 2, "\t %lu vmethods\n", dexes_structure->get_num_vmethods());
+  TRACE(IDEX, 2, "\t %lu mrefs\n", dexes_structure->get_num_mrefs());
 }
 
 } // namespace
 
 namespace interdex {
 
-const DexConfig InterDex::s_empty_config = DexConfig();
+void InterDex::emit_class(const DexInfo& dex_info,
+                          DexClass* clazz,
+                          bool check_if_skip) {
+  if (is_canary(clazz)) {
+    // Nothing to do here.
+    return;
+  }
 
-DexClassesVector InterDex::run() {
-  global_dmeth_cnt = 0;
-  global_smeth_cnt = 0;
-  global_vmeth_cnt = 0;
-  global_methref_cnt = 0;
-  global_fieldref_cnt = 0;
-  global_cls_cnt = 0;
+  if (m_dexes_structure.has_class(clazz)) {
+    TRACE(IDEX, 6, "Trying to re-add class %s!\n", SHOW(clazz));
+    return;
+  }
 
-  cls_skipped_in_primary = 0;
-  cls_skipped_in_secondary = 0;
+  if (check_if_skip) {
+    for (const auto& plugin : m_plugins) {
+      if (plugin->should_skip_class(clazz)) {
+        TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
+        return;
+      }
+    }
 
-  auto interdexorder = m_cfg.get_coldstart_classes();
-
-  dex_emit_tracker det;
-  for (auto const& dex : m_dexen) {
-    for (auto const& clazz : dex) {
-      const std::string& clzname = clazz->get_type()->get_name()->str();
-      det.clookup[clzname] = clazz;
-      TRACE(IDEX, 2, "Adding class to dex.clookup %s , %s\n", clzname.c_str(),
-            SHOW(clazz));
+    if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
+      TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
+      return;
     }
   }
 
-  auto scope = build_class_scope(m_dexen);
+  // Calculate the extra method and field refs that we would need to add to
+  // the current dex if we defined clazz in it.
+  MethodRefs clazz_mrefs;
+  FieldRefs clazz_frefs;
+  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs);
 
-  auto unreferenced_classes = find_unrefenced_coldstart_classes(
-      scope, det, interdexorder, m_static_prune_classes);
-
-  DexClassesVector outdex;
-  auto const& primary_dex = m_dexen[0];
-
-  // We have a bunch of special logic for the primary dex which we only use if
-  // we can't touch the primary dex.
-  if (!m_normal_primary_dex) {
-    // build a separate lookup table for the primary dex, since we have to make
-    // sure we keep all classes in the same dex
-    dex_emit_tracker primary_det;
-    for (auto const& clazz : primary_dex) {
-      const std::string& clzname = clazz->get_type()->get_name()->str();
-      primary_det.clookup[clzname] = clazz;
-    }
-
-    // First emit just the primary dex, but sort it according to interdex order
-    auto coldstart_classes_in_primary = 0;
-    // first add the classes in the interdex list
-    for (auto& entry : interdexorder) {
-      auto it = primary_det.clookup.find(entry);
-      if (it == primary_det.clookup.end()) {
-        TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
-        continue;
-      }
-      auto clazz = it->second;
-      if (unreferenced_classes.count(clazz)) {
-        TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
-        cls_skipped_in_primary++;
-        continue;
-      }
-
-      emit_class(primary_det, outdex, clazz, s_empty_config, true);
-      coldstart_classes_in_primary++;
-    }
-    // now add the rest
-    for (auto const& clazz : primary_dex) {
-      emit_class(primary_det, outdex, clazz, s_empty_config, true);
-    }
-    TRACE(IDEX, 1, "%d out of %lu classes in primary dex in interdex list\n",
-          coldstart_classes_in_primary, primary_det.outs.size());
-    flush_out_dex(primary_det, outdex);
-    // record the primary dex classes in the main emit tracker,
-    // so we don't emit those classes again. *cough*
-    for (auto const& clazz : primary_dex) {
-      det.emitted.insert(clazz);
-    }
+  bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
+      clazz_mrefs, clazz_frefs, clazz);
+  if (!fits_current_dex) {
+    flush_out_dex(dex_info);
+    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz);
   }
+}
 
-  // If we have end-markers, we use them to demarcate the end of the
-  // cold-start set.  Otherwise, we calculate it on the basis of the
-  // whole list.
-  bool end_markers_present = false;
+void InterDex::emit_primary_dex(
+    const DexClasses& primary_dex,
+    const std::vector<DexType*>& interdex_types,
+    const std::unordered_set<DexClass*>& unreferenced_cls) {
 
-  // NOTE: If primary dex is treated as a normal dex, we are going to modify
-  //       it too, based on cold start classes.
-  if (m_normal_primary_dex && interdexorder.size() > 0) {
-    // We also need to respect the primary dex classes.
-    // For all primary dex classes that are in the interdex order before
-    // any DexEndMarker, we keep it at that position. Otherwise, we add it to
-    // the head of the list.
-    std::string first_end_marker_str("LDexEndMarker0;");
-    auto first_end_marker_it = std::find(
-        interdexorder.begin(), interdexorder.end(), first_end_marker_str);
-    if (first_end_marker_it == interdexorder.end()) {
-      TRACE(IDEX, 3, "Couldn't find first dex end marker.\n");
-    }
+  std::unordered_set<DexClass*> primary_dex_set(primary_dex.begin(),
+                                                primary_dex.end());
 
-    std::vector<std::string> not_already_included;
-    for (const auto& pclass : primary_dex) {
-      const std::string& pclass_str = pclass->get_name()->str();
-      auto pclass_it =
-          std::find(interdexorder.begin(), interdexorder.end(), pclass_str);
-      if (pclass_it == interdexorder.end() || pclass_it > first_end_marker_it) {
-        TRACE(IDEX, 4, "Class %s is not in the interdex order.\n",
-              pclass_str.c_str());
-        not_already_included.push_back(pclass->str());
-      } else {
-        TRACE(IDEX, 4,
-              "Class %s is in the interdex order. "
-              "No change required.\n",
-              pclass_str.c_str());
-      }
-    }
-    interdexorder.insert(interdexorder.begin(),
-                         not_already_included.begin(),
-                         not_already_included.end());
-  }
+  DexInfo primary_dex_info;
+  primary_dex_info.primary = true;
 
-  // Last end market delimits where the whole coldstart set ends
-  // and the extended coldstart set begins.
-  std::string last_end_marker_str("LDexEndMarker1;");
-  auto last_end_marker_it = std::find(interdexorder.begin(),
-                                      interdexorder.end(), last_end_marker_str);
+  size_t coldstart_classes_in_primary = 0;
+  size_t coldstart_classes_skipped_in_primary = 0;
 
-  // Scroll classes are delimited between start and end markers.
-  std::string scroll_list_start_str("LScrollListStart;");
-  auto scroll_list_start_it = std::find(
-      interdexorder.begin(), interdexorder.end(), scroll_list_start_str);
-  std::string scroll_list_end_str("LScrollListEnd;");
-  auto scroll_list_end_it = std::find(interdexorder.begin(),
-                                      interdexorder.end(), scroll_list_end_str);
-
-  DexConfig dconfig;
-  // We know we start with coldstart set whenever we have an interdex order.
-  dconfig.is_coldstart = interdexorder.size() > 0;
-  size_t previous_dex = m_secondary_dexes;
-
-  for (auto it_interdex = interdexorder.begin();
-       it_interdex != interdexorder.end();
-       ++it_interdex) {
-    auto& entry = *it_interdex;
-    auto it = det.clookup.find(entry);
-    if (it == det.clookup.end()) {
-      TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
-      if (entry.find("DexEndMarker") != std::string::npos) {
-        TRACE(IDEX, 1, "Terminating dex due to DexEndMarker\n");
-        flush_out_secondary(det, outdex, dconfig);
-        m_cold_start_set_dex_count = outdex.size();
-        end_markers_present = true;
-
-        if (last_end_marker_it == it_interdex &&
-            m_mixed_mode_info.has_predefined_classes()) {
-          TRACE(IDEX, 3,
-                "Emitting the mixed mode dex between the coldstart "
-                "set and the extended set of classes.\n");
-          bool can_touch_interdex_order =
-              m_mixed_mode_info.can_touch_coldstart_set() ||
-              m_mixed_mode_info.can_touch_coldstart_extended_set();
-          emit_mixed_mode_classes(interdexorder, det, outdex,
-                                  can_touch_interdex_order);
-        }
-      }
-      if (m_emit_scroll_set_marker && it_interdex == scroll_list_end_it) {
-        // have a separate dex for scroll
-        flush_out_secondary(det, outdex, dconfig);
-        scroll_set_dex_count = outdex.size() - m_secondary_dexes;
-      }
+  // Sort the primary dex according to interdex order (aka emit first the
+  // primary classes that appear in the interdex order, in the order that
+  // they appear there).
+  for (DexType* type : interdex_types) {
+    DexClass* cls = type_class(type);
+    if (!cls) {
       continue;
     }
 
-    auto clazz = it->second;
+    if (primary_dex_set.count(cls) > 0) {
+      if (unreferenced_cls.count(cls) > 0) {
+        TRACE(IDEX, 5, "[primary dex]: %s no longer linked to coldstart set.\n",
+              SHOW(cls));
+        coldstart_classes_skipped_in_primary++;
+        continue;
+      }
+
+      emit_class(primary_dex_info, cls, true);
+      coldstart_classes_in_primary++;
+    }
+  }
+
+  // Now add the rest.
+  for (DexClass* cls : primary_dex) {
+    emit_class(primary_dex_info, cls, true);
+  }
+  TRACE(IDEX, 2,
+        "[primary dex]: %d out of %d classes in primary dex "
+        "from interdex list.\n",
+        coldstart_classes_in_primary, primary_dex.size());
+  TRACE(IDEX, 2,
+        "[primary dex]: %d out of %d classes in primary dex skipped "
+        "from interdex list.\n",
+        coldstart_classes_skipped_in_primary, primary_dex.size());
+
+  flush_out_dex(primary_dex_info);
+
+  // Double check only 1 dex was created.
+  always_assert_log(
+      m_dexes_structure.get_num_dexes() == 1,
+      "[error]: Primary dex doesn't fit in only 1 dex anymore :|, but in %d\n",
+      m_dexes_structure.get_num_dexes());
+}
+
+void InterDex::emit_interdex_classes(
+    const std::vector<DexType*>& interdex_types,
+    const std::unordered_set<DexClass*>& unreferenced_classes) {
+  if (interdex_types.size() == 0) {
+    TRACE(IDEX, 2, "No interdex classes passed.\n");
+    return;
+  }
+
+  DexInfo dex_info;
+  // NOTE: coldstart has no interaction with extended and scroll set, but that
+  //       is not true for the later 2.
+  dex_info.coldstart = true;
+
+  // Last end market delimits where the whole coldstart set ends
+  // and the extended coldstart set begins.
+  auto last_end_marker_it =
+      m_end_markers.size() > 0
+          ? std::find(interdex_types.begin(), interdex_types.end(),
+                      m_end_markers.back())
+          : interdex_types.end();
+
+  auto scroll_list_end_it = interdex_types.end();
+  auto scroll_list_start_it = interdex_types.end();
+
+  if (m_scroll_markers.size() > 0) {
+    scroll_list_end_it = std::find(interdex_types.begin(), interdex_types.end(),
+                                   m_scroll_markers.back());
+    scroll_list_start_it = std::find(
+        interdex_types.begin(), interdex_types.end(), m_scroll_markers.front());
+  }
+
+  size_t cls_skipped_in_secondary = 0;
+
+  for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
+    DexType* type = *it;
+    DexClass* cls = type_class(type);
+
+    if (!cls) {
+      TRACE(IDEX, 5, "[interdex classes]: No such entry %s.\n", SHOW(type));
+
+      auto end_marker =
+          std::find(m_end_markers.begin(), m_end_markers.end(), type);
+      if (end_marker != m_end_markers.end()) {
+        TRACE(IDEX, 2, "Terminating dex due to %s\n", SHOW(type));
+
+        flush_out_dex(dex_info);
+
+        // Check if we need to add the mixed mode classes here.
+        if (end_marker == std::prev(m_end_markers.end())) {
+          dex_info.coldstart = false;
+          dex_info.extended = true;
+
+          if (m_mixed_mode_info.has_predefined_classes()) {
+            TRACE(IDEX, 3,
+                  "Emitting the mixed mode dex between the coldstart "
+                  "set and the extended set of classes.\n");
+            bool can_touch_interdex_order =
+                m_mixed_mode_info.can_touch_coldstart_set() ||
+                m_mixed_mode_info.can_touch_coldstart_extended_set();
+
+            emit_mixed_mode_classes(interdex_types, can_touch_interdex_order);
+          }
+        }
+      }
+
+      if (it == scroll_list_start_it) {
+        dex_info.scroll = true;
+      } else if (it == scroll_list_end_it) {
+        if (m_emit_scroll_set_marker) {
+          flush_out_dex(dex_info);
+        }
+
+        dex_info.scroll = false;
+      }
+
+      continue;
+    }
 
     // If we can't touch coldstart classes, simply remove the class
     // from the mix mode class list. Otherwise, we will end up moving
     // the class in the mixed mode dex.
     if (!m_mixed_mode_info.can_touch_coldstart_set() &&
-        m_mixed_mode_info.is_mixed_mode_class(clazz)) {
-      if (last_end_marker_it > it_interdex) {
+        m_mixed_mode_info.is_mixed_mode_class(cls)) {
+      if (last_end_marker_it > it) {
         TRACE(IDEX, 2,
               "%s is part of coldstart classes. Removing it from the "
               "list of mix mode classes\n",
-              SHOW(clazz));
-        m_mixed_mode_info.remove_mixed_mode_class(clazz);
+              SHOW(cls));
+        m_mixed_mode_info.remove_mixed_mode_class(cls);
       } else if (!m_mixed_mode_info.can_touch_coldstart_extended_set()) {
         always_assert_log(false,
                           "We shouldn't get here since we cleared "
@@ -488,332 +364,292 @@ DexClassesVector InterDex::run() {
       }
     }
 
-    if (unreferenced_classes.count(clazz)) {
-      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(clazz));
+    if (unreferenced_classes.count(cls)) {
+      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(cls));
       cls_skipped_in_secondary++;
       continue;
     }
 
-    if (previous_dex != m_secondary_dexes) {
-      dconfig.reset();
-      previous_dex = m_secondary_dexes;
-    }
-
-    // Only the last emit_class (per dex) will call `flush_out_secondary`
-    // which actually checks the dex flags. Since for coldstart we know we
-    // seperate it in a dex, it is safe to check for each class.
-    dconfig.is_coldstart = last_end_marker_it >= it_interdex;
-
-    // For extended set and scroll, we should update per dex.
-    dconfig.is_extended_set |= last_end_marker_it < it_interdex;
-    dconfig.has_scroll_cls |=
-        scroll_list_start_it < it_interdex && scroll_list_end_it > it_interdex;
-
-    emit_class(det, outdex, clazz, dconfig);
+    emit_class(dex_info, cls, true);
   }
 
-  if (m_mixed_mode_info.has_predefined_classes() &&
-      last_end_marker_it == interdexorder.end()) {
-    // If we got here, we didn't find the delimiter -> emitting the mixed mode
-    // classes here.
-    TRACE(IDEX, 3, "Emitting the mixed mode dex after the interdex order.\n");
-    bool can_touch_interdex_order =
-        m_mixed_mode_info.can_touch_coldstart_set() ||
-        m_mixed_mode_info.can_touch_coldstart_extended_set();
-    emit_mixed_mode_classes(interdexorder, det, outdex,
-                            can_touch_interdex_order);
-  }
+  // Now emit the classes we omitted from the original coldstart set.
+  for (DexType* type : interdex_types) {
+    DexClass* cls = type_class(type);
 
-  // Now emit the classes we omitted from the original coldstart set
-  for (auto& entry : interdexorder) {
-    auto it = det.clookup.find(entry);
-    if (it == det.clookup.end()) {
-      TRACE(IDEX, 4, "No such entry %s\n", entry.c_str());
-      continue;
-    }
-    auto clazz = it->second;
-    if (unreferenced_classes.count(clazz)) {
-      emit_class(det, outdex, clazz, s_empty_config);
+    if (cls && unreferenced_classes.count(cls)) {
+      emit_class(dex_info, cls, true);
     }
   }
 
-  if (!end_markers_present) {
-    // -1 because we're not counting the primary dex
-    m_cold_start_set_dex_count = outdex.size();
-    scroll_set_dex_count = 0;
-  }
-
-  // Now emit the classes that weren't specified in the head or primary list.
-  for (auto clazz : scope) {
-    emit_class(det, outdex, clazz, s_empty_config);
-  }
-  for (const auto& plugin : m_plugins) {
-    auto add_classes = plugin->leftover_classes();
-    for (auto add_class : add_classes) {
-      TRACE(IDEX,
-            4,
-            "IDEX: Emitting plugin generated leftover class :: %s\n",
-            SHOW(add_class));
-      emit_class(det,
-                 outdex,
-                 add_class,
-                 s_empty_config,
-                 false, /* not primary */
-                 false /* shouldn't skip */);
-    }
-  }
-
-  // Finally, emit the "left-over" det.outs
-  if (det.outs.size()) {
-    flush_out_secondary(det, outdex, s_empty_config);
-  }
-
-  TRACE(IDEX, 1, "InterDex secondary dex count %d\n", (int)(outdex.size() - 1));
-  TRACE(IDEX, 1,
-        "global stats: %lu mrefs, %lu frefs, %lu cls, %lu dmeth, %lu smeth, "
-        "%lu vmeth\n",
-        global_methref_cnt, global_fieldref_cnt, global_cls_cnt,
-        global_dmeth_cnt, global_smeth_cnt, global_vmeth_cnt);
-  TRACE(IDEX, 1,
-        "removed %d classes from coldstart list in primary dex, \
-%d in secondary dexes due to static analysis\n",
-        cls_skipped_in_primary, cls_skipped_in_secondary);
-  return outdex;
+  TRACE(IDEX, 3,
+        "[interdex order]: %d classes are unreferenced from the interdex order "
+        "in secondary dexes.\n",
+        cls_skipped_in_secondary);
 }
 
-void InterDex::flush_out_dex(dex_emit_tracker& det, DexClassesVector& outdex) {
-  DexClasses dc(det.outs.size());
-  for (size_t i = 0; i < det.outs.size(); i++) {
-    auto cls = det.outs[i];
-    TRACE(IDEX, 4, "IDEX: Emitting class :: %s\n", SHOW(cls));
-    dc.at(i) = cls;
-  }
-  for (auto& plugin : m_plugins) {
-    auto add_classes = plugin->additional_classes(outdex, det.outs);
-    for (auto add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s\n",
-            SHOW(add_class));
-    }
-    dc.insert(dc.end(), add_classes.begin(), add_classes.end());
-    std::copy(add_classes.begin(), add_classes.end(),
-              std::inserter(det.emitted, det.emitted.end()));
-  }
-  check_refs_count(det, dc, m_linear_alloc_limit);
-
-  outdex.emplace_back(std::move(dc));
-
-  update_dex_stats(det.outs.size(), det.mrefs.size(), det.frefs.size());
-  det.start_new_dex();
-}
-
-void InterDex::flush_out_secondary(dex_emit_tracker& det,
-                                   DexClassesVector& outdex,
-                                   const DexConfig& dconfig,
-                                   bool mixed_mode_dex) {
-  // don't emit dex if we don't have any classes
-  if (!det.outs.size()) {
-    return;
-  }
-
-  mixed_mode_dex |= is_mixed_mode_dex(dconfig);
-
-  // Update secondary dex counts.
-  m_secondary_dexes++;
-  if (dconfig.is_coldstart) {
-    m_coldstart_dexes++;
-  }
-  if (dconfig.is_extended_set) {
-    m_extended_set_dexes++;
-  }
-  if (dconfig.has_scroll_cls) {
-    m_scroll_dexes++;
-  }
-  TRACE(IDEX, 2,
-        "Writing out secondary dex number %d, which is "
-        "%s of coldstart, %s of extended set, %s scroll classes\n",
-        m_secondary_dexes, (dconfig.is_coldstart ? "part of" : "not part of"),
-        (dconfig.is_extended_set ? "part of" : "not part of"),
-        (dconfig.has_scroll_cls ? "has" : "doesn't have"));
-
-  // Find the Canary class and add it in.
-  if (m_emit_canaries) {
-    int dexnum = ((int)outdex.size());
-    char buf[kCanaryClassBufsize];
-    always_assert_log(dexnum <= kMaxDexNum,
-                      "Bailing, Max dex number surpassed %d\n", dexnum);
-    snprintf(buf, sizeof(buf), kCanaryClassFormat, dexnum);
-    std::string canaryname(buf);
-    auto it = det.clookup.find(canaryname);
-    if (it == det.clookup.end()) {
-      TRACE(IDEX, 2, "Warning, no canary class %s found\n", buf);
-      auto canary_type = DexType::make_type(canaryname.c_str());
-      auto canary_cls = type_class(canary_type);
-      if (canary_cls == nullptr) {
-        // class doesn't exist, we have to create it
-        // this can happen if we grow the number of dexes
-        ClassCreator cc(canary_type);
-        cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
-        cc.set_super(get_object_type());
-        canary_cls = cc.create();
-      }
-      det.outs.push_back(canary_cls);
-    } else {
-      auto clazz = it->second;
-      det.outs.push_back(clazz);
-    }
-    if (mixed_mode_dex) {
-      always_assert_log(m_num_mixed_mode_dexes == 0,
-                        "For now we only accept 1 mixed mode dex.\n");
-      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode\n",
-            m_secondary_dexes);
-
-      m_num_mixed_mode_dexes++;
-      auto mixed_mode_file = m_apk_manager.new_asset_file("mixed_mode.txt");
-      auto mixed_mode_fh = FileHandle(*mixed_mode_file);
-      mixed_mode_fh.seek_end();
-      write_str(mixed_mode_fh, canaryname + "\n");
-      *mixed_mode_file = nullptr;
-    }
-  }
-
-  // Now emit our outs list...
-  flush_out_dex(det, outdex);
-}
-
-/*
- * Try and fit :clazz into the last dex in the :outdex vector. If that would
- * result in excessive member refs, start a new dex, putting :clazz in there.
+/**
+ * Emit mix mode classes in a separate dex.
+ * We respect the order of the classes in the interdexorder,
+ * for the mixed mode classes that it contains.
  */
-void InterDex::emit_class(dex_emit_tracker& det,
-                          DexClassesVector& outdex,
-                          DexClass* clazz,
-                          const DexConfig& dconfig,
-                          bool is_primary,
-                          bool check_if_skip) {
-  if (det.emitted.count(clazz) != 0 || is_canary(clazz)) {
-    return;
-  }
-  if (check_if_skip && should_skip_class(m_plugins, clazz)) {
-    TRACE(IDEX, 3, "IDEX: Skipping class :: %s\n", SHOW(clazz));
-    return;
-  }
-  if (!is_primary && check_if_skip &&
-      m_mixed_mode_info.is_mixed_mode_class(clazz)) {
-    TRACE(IDEX, 2, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
-    return;
-  }
-
-  unsigned laclazz = estimate_linear_alloc(clazz);
-
-  // Calculate the extra method and field refs that we would need to add to
-  // the current dex if we defined :clazz in it.
-  MethodRefs clazz_mrefs;
-  FieldRefs clazz_frefs;
-  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs);
-  auto extra_mrefs = set_difference(clazz_mrefs, det.mrefs);
-  auto extra_frefs = set_difference(clazz_frefs, det.frefs);
-
-  // If those extra refs would cause use to overflow, start a new dex.
-  if ((det.la_size + laclazz) > m_linear_alloc_limit ||
-      // XXX(jezng): shouldn't this >= be > instead?
-      det.mrefs.size() + extra_mrefs.size() >= kMaxMethodRefs ||
-      det.frefs.size() + extra_frefs.size() >= kMaxFieldRefs) {
-    // Emit out list
-    always_assert_log(!is_primary,
-                      "would have to do an early flush on the primary dex\n"
-                      "la %d:%d , mrefs %lu:%d frefs %lu:%d\n",
-                      det.la_size + laclazz,
-                      m_linear_alloc_limit,
-                      det.mrefs.size() + extra_mrefs.size(),
-                      kMaxMethodRefs,
-                      det.frefs.size() + extra_frefs.size(),
-                      kMaxFieldRefs);
-    flush_out_secondary(det, outdex, dconfig);
-  }
-
-  det.mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
-  det.frefs.insert(clazz_frefs.begin(), clazz_frefs.end());
-  det.la_size += laclazz;
-  det.outs.push_back(clazz);
-  det.emitted.insert(clazz);
-  update_class_stats(clazz);
-}
-
-void InterDex::emit_class(dex_emit_tracker& det,
-                          DexClassesVector& outdex,
-                          DexClass* clazz,
-                          const DexConfig& dconfig) {
-  emit_class(det, outdex, clazz, dconfig, false);
-}
-
 void InterDex::emit_mixed_mode_classes(
-    const std::vector<std::string>& interdexorder,
-    dex_emit_tracker& det,
-    DexClassesVector& outdex,
+    const std::vector<DexType*>& interdex_types,
     bool can_touch_interdex_order) {
-  // Emit mix mode classes in a separate dex.
-  // We respect the order of the classes in the interdexorder,
-  //   for the mixed mode classes that it contains.
+  always_assert_log(m_mixed_mode_info.has_predefined_classes(),
+                    "No mixed mode classes to emit!\n");
+  size_t pre_mixedmode_dexes = m_dexes_structure.get_num_dexes();
+
+  DexInfo mixedmode_info;
+  mixedmode_info.mixed_mode = true;
 
   // NOTE: When we got here, we would have removed the coldstart
   //       mixed mode classes, if we couldn't touch them.
   //       The only classes that might still be in the mixed_mode_cls
   //       set would be the extended ones, which we will remove
   //       if needed.
-  for (auto& elem : interdexorder) {
-    auto det_it = det.clookup.find(elem);
-    if (det_it == det.clookup.end()) {
-      continue;
-    }
+  for (DexType* type : interdex_types) {
+    DexClass* clazz = type_class(type);
 
-    auto clazz = det_it->second;
     if (m_mixed_mode_info.is_mixed_mode_class(clazz)) {
       if (can_touch_interdex_order) {
         TRACE(IDEX, 2,
               " Emitting mixed mode class, that is also in the "
               "interdex list: %s \n",
               SHOW(clazz));
-        emit_class(det, outdex, clazz, s_empty_config, false, false);
+        emit_class(mixedmode_info, clazz, false);
       }
       m_mixed_mode_info.remove_mixed_mode_class(clazz);
     }
   }
 
   for (const auto& clazz : m_mixed_mode_info.get_mixed_mode_classes()) {
-    const auto& cls_name = clazz->get_name()->str();
-    if (!det.clookup.count(cls_name)) {
-      TRACE(IDEX, 2,
-            "Ignoring mixed mode class %s as it is not found in "
-            "dexes\n",
-            cls_name.c_str());
-      continue;
-    }
-    TRACE(IDEX, 2, " Emitting mixed mode class: %s \n", cls_name.c_str());
-    emit_class(det, outdex, clazz, s_empty_config, false, false);
+    TRACE(IDEX, 2, " Emitting mixed mode class: %s \n", SHOW(clazz));
+    emit_class(mixedmode_info, clazz, false);
   }
 
-  // Flush the mixed mode classes
-  if (det.outs.size()) {
-    flush_out_secondary(det, outdex, s_empty_config, true);
-  }
+  flush_out_dex(mixedmode_info);
+
+  // NOTE: For now, we only support this to generate one dex.
+  always_assert_log(m_dexes_structure.get_num_dexes() - pre_mixedmode_dexes ==
+                        1,
+                    "For now, we only support 1 dex for mixedmode classes.\n");
 
   // Clearing up the mixed mode classes.
   m_mixed_mode_info.remove_all_mixed_mode_classes();
 }
 
-bool InterDex::is_mixed_mode_dex(const DexConfig& dconfig) {
-  if (m_coldstart_dexes == 0 && dconfig.is_coldstart &&
-      m_mixed_mode_info.has_status(DexStatus::FIRST_COLDSTART_DEX)) {
+std::vector<DexType*> InterDex::get_interdex_types(
+    const Scope& scope, const std::vector<std::string>& interdexorder) {
+
+  std::unordered_set<DexClass*> classes(scope.begin(), scope.end());
+  std::vector<DexType*> interdex_types;
+
+  for (const auto& entry : interdexorder) {
+    DexType* type = DexType::get_type(entry.c_str());
+    if (!type) {
+      if (entry.find(END_MARKER_FORMAT) != std::string::npos) {
+        type = DexType::make_type(entry.c_str());
+        m_end_markers.emplace_back(type);
+        TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.\n",
+              entry.c_str());
+      } else if (entry.find(SCROLL_MARKER_FORMAT) != std::string::npos) {
+        type = DexType::make_type(entry.c_str());
+        m_scroll_markers.emplace_back(type);
+        TRACE(IDEX, 4, "[interdex order]: Found scroll class marker %s.\n",
+              entry.c_str());
+      } else {
+        continue;
+      }
+    } else {
+      DexClass* cls = type_class(type);
+      if (!cls || classes.count(cls) == 0) {
+        continue;
+      }
+    }
+
+    interdex_types.emplace_back(type);
+  }
+
+  return interdex_types;
+}
+
+void InterDex::update_interdexorder(const DexClasses& dex,
+                                    std::vector<DexType*>* interdex_types) {
+  // For all classes that are in the interdex order before
+  // the first class end marker, we keep it at that position. Otherwise, we
+  // add it to the head of the list.
+  auto first_end_marker_it = interdex_types->end();
+  auto last_end_marker_it = interdex_types->end();
+
+  if (m_end_markers.size() == 0) {
+    TRACE(IDEX, 3,
+          "[coldstart classes]: Couldn't find any class end marker.\n");
+  } else {
+    first_end_marker_it = std::find(
+        interdex_types->begin(), interdex_types->end(), m_end_markers.front());
+    last_end_marker_it = std::find(interdex_types->begin(),
+                                   interdex_types->end(), m_end_markers.back());
+  }
+
+  std::vector<DexType*> not_already_included;
+  for (const auto& pclass : dex) {
+    auto pclass_it = std::find(interdex_types->begin(), interdex_types->end(),
+                               pclass->get_type());
+    if (pclass_it == interdex_types->end() || pclass_it > first_end_marker_it) {
+      TRACE(IDEX, 4, "Class %s is not in the interdex order.\n", SHOW(pclass));
+      not_already_included.push_back(pclass->get_type());
+    } else {
+      TRACE(IDEX, 4, "Class %s is in the interdex order. No change required.\n",
+            SHOW(pclass));
+    }
+  }
+  interdex_types->insert(interdex_types->begin(),
+                         not_already_included.begin(),
+                         not_already_included.end());
+}
+
+DexClassesVector InterDex::run() {
+  auto scope = build_class_scope(m_dexen);
+
+  std::vector<DexType*> interdex_types =
+      get_interdex_types(scope, m_cfg.get_coldstart_classes());
+
+  auto unreferenced_classes = find_unrefenced_coldstart_classes(
+      scope, interdex_types, m_static_prune_classes);
+
+  const auto& primary_dex = m_dexen[0];
+  // We have a bunch of special logic for the primary dex which we only use if
+  // we can't touch the primary dex.
+  if (!m_normal_primary_dex) {
+    emit_primary_dex(primary_dex, interdex_types, unreferenced_classes);
+  }
+
+  // NOTE: If primary dex is treated as a normal dex, we are going to modify
+  //       it too, based on coldstart classes. Because of that, we need to
+  //       update the coldstart list to respect the primary dex.
+  if (m_normal_primary_dex && interdex_types.size() > 0) {
+    update_interdexorder(primary_dex, &interdex_types);
+  }
+
+  // Emit interdex classes, if any.
+  emit_interdex_classes(interdex_types, unreferenced_classes);
+
+  // Now emit the classes that weren't specified in the head or primary list.
+  for (DexClass* cls : scope) {
+    emit_class(EMPTY_DEX_INFO, cls, true);
+  }
+
+  // Add whatever leftovers there are from plugins.
+  for (const auto& plugin : m_plugins) {
+    auto add_classes = plugin->leftover_classes();
+    for (DexClass* add_class : add_classes) {
+      TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s\n",
+            SHOW(add_class));
+      emit_class(EMPTY_DEX_INFO, add_class, false);
+    }
+  }
+
+  // Emit what is left, if any.
+  if (m_dexes_structure.get_current_dex_classes().size()) {
+    flush_out_dex(EMPTY_DEX_INFO);
+  }
+
+  always_assert_log(!m_emit_canaries ||
+                        m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
+                    "Bailing, max dex number surpassed %d\n",
+                    m_dexes_structure.get_num_dexes());
+
+  print_stats(&m_dexes_structure);
+  return std::move(m_outdex);
+}
+
+/**
+ * This needs to be called before getting to the next dex.
+ */
+void InterDex::flush_out_dex(DexInfo dex_info) {
+
+  int dexnum = m_dexes_structure.get_num_dexes();
+  if (dex_info.primary) {
+    TRACE(IDEX, 2, "Writing out primary dex with %d classes.\n",
+          m_dexes_structure.get_current_dex_classes().size());
+  } else {
+    TRACE(IDEX, 2,
+          "Writing out secondary dex number %d, which is %s of coldstart, "
+          "%s of extended set, %s scroll classes and has %d classes.\n",
+          m_dexes_structure.get_num_secondary_dexes() + 1,
+          (dex_info.coldstart ? "part of" : "not part of"),
+          (dex_info.extended ? "part of" : "not part of"),
+          (dex_info.scroll ? "has" : "doesn't have"),
+          m_dexes_structure.get_current_dex_classes().size());
+  }
+
+  // Find the Canary class and add it in.
+  if (m_emit_canaries && !dex_info.primary) {
+    char buf[CANARY_CLASS_BUFSIZE];
+    snprintf(buf, sizeof(buf), CANARY_CLASS_FORMAT, dexnum);
+    std::string canary_name(buf);
+    auto canary_type = DexType::get_type(canary_name);
+    if (!canary_type) {
+      TRACE(IDEX, 4, "Warning, no canary class %s found.\n", buf);
+      canary_type = DexType::make_type(canary_name.c_str());
+    }
+    auto canary_cls = type_class(canary_type);
+    if (!canary_cls) {
+      ClassCreator cc(canary_type);
+      cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
+      cc.set_super(get_object_type());
+      canary_cls = cc.create();
+    }
+    m_dexes_structure.add_class_no_checks(canary_cls);
+
+    // NOTE: We only emit this if we have canary classes.
+    if (is_mixed_mode_dex(dex_info)) {
+      dex_info.mixed_mode = true;
+
+      always_assert_log(m_dexes_structure.get_num_mixedmode_dexes() == 0,
+                        "For now, we only accept 1 mixed mode dex.\n");
+      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode\n",
+            m_dexes_structure.get_num_secondary_dexes() + 1);
+
+      auto mixed_mode_file = m_apk_manager.new_asset_file("mixed_mode.txt");
+      auto mixed_mode_fh = FileHandle(*mixed_mode_file);
+      mixed_mode_fh.seek_end();
+      write_str(mixed_mode_fh, canary_name + "\n");
+      *mixed_mode_file = nullptr;
+    }
+  }
+
+  for (auto& plugin : m_plugins) {
+    auto add_classes = plugin->additional_classes(
+        m_outdex, m_dexes_structure.get_current_dex_classes());
+    for (auto add_class : add_classes) {
+      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s\n",
+            SHOW(add_class));
+      m_dexes_structure.add_class_no_checks(add_class);
+    }
+  }
+
+  m_outdex.emplace_back(m_dexes_structure.end_dex(dex_info));
+}
+
+bool InterDex::is_mixed_mode_dex(const DexInfo& dex_info) {
+  if (dex_info.mixed_mode) {
     return true;
   }
 
-  if (m_extended_set_dexes == 0 && dconfig.is_extended_set &&
-      m_mixed_mode_info.has_status(DexStatus::FIRST_EXTENDED_DEX)) {
+  if (m_mixed_mode_info.has_status(DexStatus::FIRST_COLDSTART_DEX) &&
+      m_dexes_structure.get_num_coldstart_dexes() == 0 && dex_info.coldstart) {
     return true;
   }
 
-  if (m_scroll_dexes == 0 && dconfig.has_scroll_cls &&
-      m_mixed_mode_info.has_status(DexStatus::SCROLL_DEX)) {
+  if (m_mixed_mode_info.has_status(DexStatus::FIRST_EXTENDED_DEX) &&
+      m_dexes_structure.get_num_extended_dexes() == 0 && dex_info.extended) {
+    return true;
+  }
+
+  if (m_mixed_mode_info.has_status(DexStatus::SCROLL_DEX) &&
+      m_dexes_structure.get_num_scroll_dexes() == 0 && dex_info.scroll) {
     return true;
   }
 
