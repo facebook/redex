@@ -497,6 +497,7 @@ void write_debug_line_mapping(
   /*
    * Binary file format:
    * magic number 0xfaceb000 (4 byte)
+   * version number (4 byte)
    * number (m) of methods that has debug line info (4 byte)
    * a list (m elements) of:
    *   [ encoded method-id (8 byte), method debug info byte offset (4 byte),
@@ -514,11 +515,13 @@ void write_debug_line_mapping(
   // Start of debug line info information would be after all of
   // method-id => offset info, so set the start of offset to be after that.
   int binary_offset =
-      2 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
+      3 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
   std::ofstream ofs(debug_line_mapping_filename_v2.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
   ofs.write((const char*)&magic, bit_32_size);
+  uint32_t version = 1;
+  ofs.write((const char*)&version, bit_32_size);
   ofs.write((const char*)&num_method, bit_32_size);
   FILE* fd = fopen(debug_line_mapping_filename.c_str(), "a");
   std::ostringstream line_out;
