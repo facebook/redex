@@ -885,14 +885,14 @@ DexEncodedValueArray* DexClass::get_static_values() {
 DexAnnotationDirectory* DexClass::get_annotation_directory() {
   /* First scan to see what types of annotations to scan for if any.
    */
-  DexFieldAnnotations* fanno = nullptr;
-  DexMethodAnnotations* manno = nullptr;
-  DexMethodParamAnnotations* mpanno = nullptr;
+  std::unique_ptr<DexFieldAnnotations> fanno = nullptr;
+  std::unique_ptr<DexMethodAnnotations> manno = nullptr;
+  std::unique_ptr<DexMethodParamAnnotations> mpanno = nullptr;
 
   for (auto const& f : m_sfields) {
     if (f->get_anno_set()) {
       if (fanno == nullptr) {
-        fanno = new DexFieldAnnotations();
+        fanno = std::make_unique<DexFieldAnnotations>();
       }
       fanno->push_back(std::make_pair(f, f->get_anno_set()));
     }
@@ -900,7 +900,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
   for (auto const& f : m_ifields) {
     if (f->get_anno_set()) {
       if (fanno == nullptr) {
-        fanno = new DexFieldAnnotations();
+        fanno = std::make_unique<DexFieldAnnotations>();
       }
       fanno->push_back(std::make_pair(f, f->get_anno_set()));
     }
@@ -908,13 +908,13 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
   for (auto const& m : m_dmethods) {
     if (m->get_anno_set()) {
       if (manno == nullptr) {
-        manno = new DexMethodAnnotations();
+        manno = std::make_unique<DexMethodAnnotations>();
       }
       manno->push_back(std::make_pair(m, m->get_anno_set()));
     }
     if (m->get_param_anno()) {
       if (mpanno == nullptr) {
-        mpanno = new DexMethodParamAnnotations();
+        mpanno = std::make_unique<DexMethodParamAnnotations>();
       }
       mpanno->push_back(std::make_pair(m, m->get_param_anno()));
     }
@@ -922,19 +922,20 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
   for (auto const& m : m_vmethods) {
     if (m->get_anno_set()) {
       if (manno == nullptr) {
-        manno = new DexMethodAnnotations();
+        manno = std::make_unique<DexMethodAnnotations>();
       }
       manno->push_back(std::make_pair(m, m->get_anno_set()));
     }
     if (m->get_param_anno()) {
       if (mpanno == nullptr) {
-        mpanno = new DexMethodParamAnnotations();
+        mpanno = std::make_unique<DexMethodParamAnnotations>();
       }
       mpanno->push_back(std::make_pair(m, m->get_param_anno()));
     }
   }
   if (m_anno || fanno || manno || mpanno) {
-    return new DexAnnotationDirectory(m_anno, fanno, manno, mpanno);
+    return new DexAnnotationDirectory(m_anno, std::move(fanno),
+                                      std::move(manno), std::move(mpanno));
   }
   return nullptr;
 }
