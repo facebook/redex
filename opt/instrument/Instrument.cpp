@@ -87,14 +87,17 @@ int instrument_onBasicBlockBegin(
   TRACE(INSTRUMENT, 7, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());
 
-  // For now, only instrumenting methods with less than 32 blocks.
-  if (blocks.size() > 32 || method->get_deobfuscated_name().empty()) {
+  // For now, only instrumenting methods with less than 16 blocks.
+  // There are cases for redex generated methods where the deobfuscated name is
+  // empty. We map the debofucated name to index into the method id, thus we
+  // skip the cases where this name is empty.
+  if (blocks.size() > 16 || method->get_deobfuscated_name().empty()) {
     return method_id;
   }
   all_bbs += blocks.size();
 
-  // Add a 32/64 bit integer to the beginning to method. This will be used as
-  // basic block bit vector
+  // Add a 16 bit integer to the beginning to method. This will be used as
+  // the basic block bit vector.
   IRInstruction* const_inst_int = new IRInstruction(OPCODE_CONST);
   const_inst_int->set_literal(0);
   auto reg_bb_vector = code->allocate_temp();
@@ -102,15 +105,13 @@ int instrument_onBasicBlockBegin(
 
   for (cfg::Block* block : blocks) {
 
-    // Add instructions to calulate basic_block_vector |= 1UL << block->id();
-    IRInstruction* block_id_inst = new IRInstruction(OPCODE_CONST);
-    block_id_inst->set_literal(1UL << block->id());
-    const auto reg_bb_id_dest = code->allocate_temp();
-    block_id_inst->set_dest(reg_bb_id_dest);
-
-    IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT);
+    // Add instruction to calculate
+    // [basic_block_bit_vector |= 1 << block->id()]
+    // We use OPCODE_OR_INT_LIT16 to prevent inserting an extra CONST
+    // instruction into the bytecode.
+    IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT_LIT16);
+    or_inst->set_literal(static_cast<int16_t>(1ULL << block->id()));
     or_inst->set_src(0, reg_bb_vector);
-    or_inst->set_src(1, reg_bb_id_dest);
     or_inst->set_dest(reg_bb_vector);
 
     // Find where to insert the newly created instruction block.
@@ -120,15 +121,16 @@ int instrument_onBasicBlockBegin(
     // instructions.
     auto insert_point = std::find_if_not(
         block->begin(), block->end(), [&](const MethodItemEntry& mie) {
+          auto mie_op = mie.insn->opcode();
           return (mie.type == MFLOW_OPCODE &&
-                  (opcode::is_internal(mie.insn->opcode()) ||
-                   mie.insn->opcode() == OPCODE_MOVE ||
-                   mie.insn->opcode() == OPCODE_MOVE_WIDE ||
-                   mie.insn->opcode() == OPCODE_MOVE_EXCEPTION ||
-                   mie.insn->opcode() == OPCODE_MOVE_OBJECT ||
-                   mie.insn->opcode() == OPCODE_MOVE_RESULT ||
-                   mie.insn->opcode() == OPCODE_MOVE_RESULT_OBJECT ||
-                   mie.insn->opcode() == OPCODE_MOVE_RESULT_WIDE)) ||
+                  (opcode::is_internal(mie_op) ||
+                   mie_op == OPCODE_MOVE ||
+                   mie_op == OPCODE_MOVE_WIDE ||
+                   mie_op == OPCODE_MOVE_EXCEPTION ||
+                   mie_op == OPCODE_MOVE_OBJECT ||
+                   mie_op == OPCODE_MOVE_RESULT ||
+                   mie_op == OPCODE_MOVE_RESULT_OBJECT ||
+                   mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
                  (mie.type == MFLOW_TRY && (mie.tentry->type == TRY_END ||
                                             mie.tentry->type == TRY_START));
         });
@@ -144,8 +146,7 @@ int instrument_onBasicBlockBegin(
       continue;
     }
     num_blocks_instrumented++;
-    code->insert_before(code->insert_before(insert_point, or_inst),
-                        block_id_inst);
+    code->insert_before(insert_point, or_inst);
   }
   auto method_name = method->get_deobfuscated_name();
   assert(!method_id_map.count(method_name));
