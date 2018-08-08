@@ -176,3 +176,50 @@ TEST_F(UsedVarsTest, noDeleteInit) {
 
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
+
+TEST_F(UsedVarsTest, noReturn) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LFoo;.<init>:()V")
+      (invoke-static () "LFoo;.noReturn:()V")
+      ; This instruction is never executed since noReturn() never returns.
+      ; Practically speaking, the instance of Foo in v0 is not used at runtime.
+      ; However, if we are to delete the new-instance opcode above, we must also
+      ; delete this iget opcode, otherwise the verifier will throw an error.
+      ; This is a bit tedious to implement properly -- e.g. we would need to
+      ; ensure that the `return` opcode below is replaced with an infinite loop
+      ; so that we don't have any unterminated blocks that trip the dex verifier
+      ; -- so for now we just assume that all methods return.
+      (iget v0 "LFoo;.bar:I")
+      (move-result-pseudo v1)
+      (return v1)
+    )
+  )");
+  // We expect nothing to change.
+  auto expected = assembler::to_s_expr(code.get());
+
+  side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
+  ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
+  for (auto& mie : InstructionIterable(*code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto callee = insn->get_method();
+      if (callee == DexMethod::get_method("LFoo;.<init>:()V")) {
+        invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
+        invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
+      } else if (callee == DexMethod::get_method("LFoo;.noReturn:()V")) {
+        invoke_to_eff_summary_map.emplace(
+            insn, side_effects::Summary(side_effects::EFF_THROWS, {}));
+        invoke_to_esc_summary_map.emplace(
+            insn, ptrs::EscapeSummary(ptrs::ParamSet::bottom(), {}));
+      }
+    }
+  }
+  auto fp_iter =
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+}

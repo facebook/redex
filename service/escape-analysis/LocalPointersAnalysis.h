@@ -132,6 +132,9 @@ struct EscapeSummary {
 
   EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
 
+  EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
+      : escaping_parameters(l), returned_parameters(ps) {}
+
   static EscapeSummary from_s_expr(const sparta::s_expr&);
 };
 

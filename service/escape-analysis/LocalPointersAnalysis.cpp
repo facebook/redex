@@ -279,12 +279,12 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
     env->set_pointers(RESULT_REGISTER, returned_ptrs);
     break;
   }
-  case sparta::AbstractValueKind::Top: {
-    analyze_dest(insn, RESULT_REGISTER, env);
-    break;
-  }
+  case sparta::AbstractValueKind::Top:
   case sparta::AbstractValueKind::Bottom: {
-    env->set_pointers(RESULT_REGISTER, PointerSet::bottom());
+    // We are intentionally handling Bottom by setting the result register to
+    // Top. This is a loss of precision but it makes it easier to implement
+    // dead code elimination. See UsedVarsTest_noReturn for details.
+    analyze_dest(insn, RESULT_REGISTER, env);
     break;
   }
   }
