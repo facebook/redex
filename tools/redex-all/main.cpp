@@ -564,6 +564,96 @@ void write_debug_line_mapping(
 }
 
 /**
+ * Pre processing steps: load dex and configurations
+ */
+void redex_frontend(ConfigFiles& cfg, /* input */
+                    Arguments& args, /* inout */
+                    redex::ProguardConfiguration& pg_config,
+                    DexStoresVector& stores,
+                    Scope& external_classes,
+                    Json::Value& stats) {
+  Timer redex_backend_timer("Redex_frontend");
+  for (const auto& pg_config_path : args.proguard_config_paths) {
+    Timer time_pg_parsing("Parsed ProGuard config file");
+    redex::proguard_parser::parse_file(pg_config_path, &pg_config);
+  }
+
+  const auto& pg_libs = pg_config.libraryjars;
+  args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
+
+  std::set<std::string> library_jars;
+  for (const auto& jar_path : args.jar_paths) {
+    std::istringstream jar_stream(jar_path);
+    std::string dependent_jar_path;
+    while (std::getline(jar_stream, dependent_jar_path, ':')) {
+      TRACE(MAIN,
+            2,
+            "Dependent JAR specified on command-line: %s\n",
+            dependent_jar_path.c_str());
+      library_jars.emplace(dependent_jar_path);
+    }
+  }
+
+  DexStore root_store("classes");
+  stores.emplace_back(std::move(root_store));
+
+  {
+    Timer t("Load classes from dexes");
+    dex_stats_t input_totals;
+    std::vector<dex_stats_t> input_dexes_stats;
+    for (const auto& filename : args.dex_files) {
+      if (filename.size() >= 5 &&
+          filename.compare(filename.size() - 4, 4, ".dex") == 0) {
+        dex_stats_t dex_stats;
+        DexClasses classes =
+            load_classes_from_dex(filename.c_str(), &dex_stats);
+        input_totals += dex_stats;
+        input_dexes_stats.push_back(dex_stats);
+        stores[0].add_classes(std::move(classes));
+      } else {
+        DexMetadata store_metadata;
+        store_metadata.parse(filename);
+        DexStore store(store_metadata);
+        for (const auto& file_path : store_metadata.get_files()) {
+          dex_stats_t dex_stats;
+          DexClasses classes =
+              load_classes_from_dex(file_path.c_str(), &dex_stats);
+          input_totals += dex_stats;
+          input_dexes_stats.push_back(dex_stats);
+          store.add_classes(std::move(classes));
+        }
+        stores.emplace_back(std::move(store));
+      }
+    }
+    stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
+  }
+
+  if (!library_jars.empty()) {
+    Timer t("Load library jars");
+    for (const auto& library_jar : library_jars) {
+      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+      if (!load_jar_file(library_jar.c_str(), &external_classes)) {
+        // Try again with the basedir
+        std::string basedir_path =
+            pg_config.basedirectory + "/" + library_jar.c_str();
+        if (!load_jar_file(basedir_path.c_str())) {
+          std::cerr << "error: library jar could not be loaded: " << library_jar
+                    << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+    }
+  }
+
+  {
+    Timer t("Deobfuscating dex elements");
+    for (auto& store : stores) {
+      apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
+    }
+  }
+}
+
+/**
  * Post processing steps: write dex and collect stats
  */
 void redex_backend(const PassManager& manager,
@@ -571,6 +661,7 @@ void redex_backend(const PassManager& manager,
                    const ConfigFiles& cfg,
                    DexStoresVector& stores,
                    Json::Value& stats) {
+  Timer redex_backend_timer("Redex_backend");
   instruction_lowering::Stats instruction_lowering_stats;
   {
     Timer t("Instruction lowering");
@@ -689,87 +780,11 @@ int main(int argc, char* argv[]) {
         args.config.get("next_release_gate", false).asBool());
 
     redex::ProguardConfiguration pg_config;
-    for (const auto pg_config_path : args.proguard_config_paths) {
-      Timer time_pg_parsing("Parsed ProGuard config file");
-      redex::proguard_parser::parse_file(pg_config_path, &pg_config);
-    }
-
-    const auto& pg_libs = pg_config.libraryjars;
-    args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
-
-    std::set<std::string> library_jars;
-    for (const auto jar_path : args.jar_paths) {
-      std::istringstream jar_stream(jar_path);
-      std::string dependent_jar_path;
-      while (std::getline(jar_stream, dependent_jar_path, ':')) {
-        TRACE(MAIN,
-              2,
-              "Dependent JAR specified on command-line: %s\n",
-              dependent_jar_path.c_str());
-        library_jars.emplace(dependent_jar_path);
-      }
-    }
-
-    DexStore root_store("classes");
     DexStoresVector stores;
-    stores.emplace_back(std::move(root_store));
-
-    {
-      Timer t("Load classes from dexes");
-      dex_stats_t input_totals;
-      std::vector<dex_stats_t> input_dexes_stats;
-      for (const auto& filename : args.dex_files) {
-        if (filename.size() >= 5 &&
-            filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-          dex_stats_t dex_stats;
-          DexClasses classes =
-              load_classes_from_dex(filename.c_str(), &dex_stats);
-          input_totals += dex_stats;
-          input_dexes_stats.push_back(dex_stats);
-          stores[0].add_classes(std::move(classes));
-        } else {
-          DexMetadata store_metadata;
-          store_metadata.parse(filename);
-          DexStore store(store_metadata);
-          for (auto file_path : store_metadata.get_files()) {
-            dex_stats_t dex_stats;
-            DexClasses classes =
-                load_classes_from_dex(file_path.c_str(), &dex_stats);
-            input_totals += dex_stats;
-            input_dexes_stats.push_back(dex_stats);
-            store.add_classes(std::move(classes));
-          }
-          stores.emplace_back(std::move(store));
-        }
-      }
-      stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
-    }
-
     Scope external_classes;
-    if (!library_jars.empty()) {
-      Timer t("Load library jars");
-      for (const auto& library_jar : library_jars) {
-        TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
-        if (!load_jar_file(library_jar.c_str(), &external_classes)) {
-          // Try again with the basedir
-          std::string basedir_path =
-              pg_config.basedirectory + "/" + library_jar.c_str();
-          if (!load_jar_file(basedir_path.c_str())) {
-            std::cerr << "error: library jar could not be loaded: "
-                      << library_jar << std::endl;
-            exit(EXIT_FAILURE);
-          }
-        }
-      }
-    }
-
     ConfigFiles cfg(args.config, args.out_dir);
-    {
-      Timer t("Deobfuscating dex elements");
-      for (auto& store : stores) {
-        apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
-      }
-    }
+
+    redex_frontend(cfg, args, pg_config, stores, external_classes, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode,

@@ -139,18 +139,28 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
           config.get("coldstart_classes", "").asString()),
       m_coldstart_method_filename(
           config.get("coldstart_methods", "").asString()),
-      m_printseeds(config.get("printseeds", "").asString()) {
-  auto no_optimizations_anno = config["no_optimizations_annotations"];
-  if (no_optimizations_anno != Json::nullValue) {
-    for (auto const& config_anno_name : no_optimizations_anno) {
-      std::string anno_name = config_anno_name.asString();
-      DexType* anno = DexType::get_type(anno_name.c_str());
-      if (anno) m_no_optimizations_annos.insert(anno);
-    }
-  }
-}
+      m_printseeds(config.get("printseeds", "").asString()) {}
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
+
+/**
+ * This function relies on the g_redex.
+ */
+const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
+  if (m_no_optimizations_annos.empty()) {
+    Json::Value no_optimizations_anno;
+    m_json.get("no_optimizations_annotations", Json::nullValue,
+               no_optimizations_anno);
+    if (no_optimizations_anno != Json::nullValue) {
+      for (auto const& config_anno_name : no_optimizations_anno) {
+        std::string anno_name = config_anno_name.asString();
+        DexType* anno = DexType::get_type(anno_name.c_str());
+        if (anno) m_no_optimizations_annos.insert(anno);
+      }
+    }
+  }
+  return m_no_optimizations_annos;
+}
 
 /**
  * Read an interdex list file and return as a vector of appropriately-formatted

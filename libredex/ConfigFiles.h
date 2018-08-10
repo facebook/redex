@@ -75,9 +75,7 @@ struct ConfigFiles {
     return m_coldstart_methods;
   }
 
-  const std::unordered_set<DexType*> get_no_optimizations_annos() const {
-    return m_no_optimizations_annos;
-  }
+  const std::unordered_set<DexType*>& get_no_optimizations_annos();
 
   bool save_move_map() const {
     return m_move_map;
