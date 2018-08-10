@@ -24,7 +24,6 @@
 #include "IRTypeChecker.h"
 #include "JemallocUtil.h"
 #include "PrintSeeds.h"
-#include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
@@ -121,21 +120,10 @@ void PassManager::run_type_checker(const Scope& scope,
 
 const std::string PASS_ORDER_KEY = "pass_order";
 
-void PassManager::run_passes(DexStoresVector& stores,
-                             const Scope& external_classes,
-                             ConfigFiles& cfg) {
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
-  {
-    Timer t("Initializing reachable classes");
-    init_reachable_classes(scope, cfg.get_json_config(), m_pg_config,
-                           cfg.get_no_optimizations_annos());
-  }
-  {
-    Timer t("Processing proguard rules");
-    process_proguard_rules(
-        cfg.get_proguard_map(), scope, external_classes, &m_pg_config);
-  }
+
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {
     std::string seed_filename = seeds_output_file;

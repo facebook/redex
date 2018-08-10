@@ -153,10 +153,9 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
   }
   Scope scope = build_class_scope(stores);
   JsonWrapper config(Json::nullValue);
-  redex::ProguardConfiguration pg_config;
   // TODO: Need to get this from a redex .config file
   std::unordered_set<DexType*> no_optimizations_anno;
-  init_reachable_classes(scope, config, pg_config, no_optimizations_anno);
+  init_reachable_classes(scope, config, no_optimizations_anno);
 
   return stores;
 }

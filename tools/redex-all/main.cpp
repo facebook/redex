@@ -47,6 +47,7 @@
 #include "PassManager.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
+#include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
@@ -570,7 +571,6 @@ void redex_frontend(ConfigFiles& cfg, /* input */
                     Arguments& args, /* inout */
                     redex::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
-                    Scope& external_classes,
                     Json::Value& stats) {
   Timer redex_backend_timer("Redex_frontend");
   for (const auto& pg_config_path : args.proguard_config_paths) {
@@ -628,6 +628,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
   }
 
+  Scope external_classes;
   if (!library_jars.empty()) {
     Timer t("Load library jars");
     for (const auto& library_jar : library_jars) {
@@ -650,6 +651,19 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     for (auto& store : stores) {
       apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
     }
+  }
+  DexStoreClassesIterator it(stores);
+  Scope scope = build_class_scope(it);
+  {
+    Timer t("Initializing reachable classes");
+    // init reachable will change rstate of classes, methods and fields
+    init_reachable_classes(scope, cfg.get_json_config(),
+                           cfg.get_no_optimizations_annos());
+  }
+  {
+    Timer t("Processing proguard rules");
+    process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
+                           &pg_config);
   }
 }
 
@@ -781,17 +795,16 @@ int main(int argc, char* argv[]) {
 
     redex::ProguardConfiguration pg_config;
     DexStoresVector stores;
-    Scope external_classes;
     ConfigFiles cfg(args.config, args.out_dir);
 
-    redex_frontend(cfg, args, pg_config, stores, external_classes, stats);
+    redex_frontend(cfg, args, pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, pg_config, args.config, args.verify_none_mode,
                         args.art_build);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, external_classes, cfg);
+      manager.run_passes(stores, cfg);
     }
 
     redex_backend(manager, args, cfg, stores, stats);

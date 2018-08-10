@@ -31,10 +31,9 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   PassManager manager(passes);
   manager.set_testing_mode();
 
-  Scope external_classes;
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_config(conf_obj);
-  manager.run_passes(stores, external_classes, dummy_config);
+  manager.run_passes(stores, dummy_config);
 }
 
 struct DedupBlocksTest : testing::Test {

@@ -85,8 +85,7 @@ TEST(SynthTest1, synthetic) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  Scope external_classes;
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {

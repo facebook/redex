@@ -67,9 +67,8 @@ TEST(DedupBlocksTest, useSwitch) {
   manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
-  Scope external_classes;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   TRACE(RME, 1, "Code after:\n");
   for (const auto& cls : classes) {

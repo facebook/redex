@@ -15,7 +15,6 @@
 void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
-    const redex::ProguardConfiguration& pg_config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
 

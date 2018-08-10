@@ -56,8 +56,11 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   manager.set_testing_mode();
 
   ConfigFiles dummy_cfg(conf_obj);
-  Scope external_classes;
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  DexStoreClassesIterator it(stores);
+  Scope scope = build_class_scope(it);
+  init_reachable_classes(scope, dummy_cfg.get_json_config(),
+                         dummy_cfg.get_no_optimizations_annos());
+  manager.run_passes(stores, dummy_cfg);
 
   auto type1 = type_class(DexType::get_type("Lcom/facebook/redextest/Type1;"));
   auto type2 = type_class(DexType::get_type("Lcom/facebook/redextest/Type2;"));

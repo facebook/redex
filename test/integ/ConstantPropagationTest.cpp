@@ -126,8 +126,7 @@ TEST(ConstantPropagationTest, constantPropagation) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  Scope external_classes;
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   TRACE(CONSTP, 1, "Code after:\n");
   for(const auto& cls : classes) {

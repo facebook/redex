@@ -162,8 +162,7 @@ class PeepholeTest : public ::testing::Test {
               const IRInstructionList& expected) {
     DexMethod* method = make_void_method(name.c_str(), src);
     dex_class->add_method(method);
-    Scope external_classes;
-    manager.run_passes(stores, external_classes, config);
+    manager.run_passes(stores, config);
     IRInstructionList result(method->get_code());
     EXPECT_EQ(result, expected) << " for test " << name;
     dex_class->remove_method(method);
@@ -356,7 +355,7 @@ static void sputget_peep_hole_test(const std::string& field_desc,
   store.add_classes({creator.create()});
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
-  manager.run_passes(stores, {}, config);
+  manager.run_passes(stores, config);
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 
@@ -577,7 +576,7 @@ static void aputget_peep_hole_test(const std::string& code_str,
   store.add_classes({creator.create()});
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
-  manager.run_passes(stores, {}, config);
+  manager.run_passes(stores, config);
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 
