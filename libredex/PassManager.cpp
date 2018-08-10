@@ -32,6 +32,8 @@
 
 namespace {
 
+const std::string PASS_ORDER_KEY = "pass_order";
+
 std::string get_apk_dir(const Json::Value& config) {
   auto apkdir = config["apk_dir"].asString();
   apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
@@ -92,6 +94,26 @@ void PassManager::init(const Json::Value& config) {
     // If config isn't set up, run all registered passes.
     m_activated_passes = m_registered_passes;
   }
+
+  // Count the number of appearances of each pass name.
+  std::unordered_map<const Pass*, size_t> pass_repeats;
+  for (const Pass* pass : m_activated_passes) {
+    ++pass_repeats[pass];
+  }
+
+  // Init m_pass_info
+  std::unordered_map<const Pass*, size_t> pass_counters;
+  m_pass_info.resize(m_activated_passes.size());
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    const size_t count = pass_counters[pass]++;
+    m_pass_info[i].pass = pass;
+    m_pass_info[i].order = i;
+    m_pass_info[i].repeat = count;
+    m_pass_info[i].total_repeat = pass_repeats.at(pass);
+    m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
+    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+  }
 }
 
 void PassManager::run_type_checker(const Scope& scope,
@@ -117,8 +139,6 @@ void PassManager::run_type_checker(const Scope& scope,
     }
   });
 }
-
-const std::string PASS_ORDER_KEY = "pass_order";
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
@@ -147,28 +167,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
         obfuscation_file, cfg.get_proguard_map(), scope, false, true);
   }
 
-  // Count the number of appearances of each pass name.
-  const auto pass_repeats = [&]() {
-    std::unordered_map<const Pass*, size_t> pass_repeats;
-    for (const auto& pass : m_activated_passes) {
-      ++pass_repeats[pass];
-    }
-    return pass_repeats;
-  }();
-
-  std::unordered_map<const Pass*, size_t> pass_counters;
-  m_pass_info.resize(m_activated_passes.size());
+  // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
-    const size_t count = pass_counters[pass]++;
-    m_pass_info[i].pass = pass;
-    m_pass_info[i].order = i;
-    m_pass_info[i].repeat = count;
-    m_pass_info[i].total_repeat = pass_repeats.at(pass);
-    m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
-    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
     m_current_pass_info = &m_pass_info[i];
     pass->eval_pass(stores, cfg, *this);
     m_current_pass_info = nullptr;
