@@ -621,11 +621,19 @@ class DexDebugItem {
   int encode(DexOutputIdx* dodx,
              PositionMapper* pos_mapper,
              uint8_t* output,
-             std::vector<DebugLineItem>* line_info);
+             uint32_t line_start,
+             const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
 };
+
+std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
+    DexDebugItem* debugitem,
+    DexOutputIdx* dodx,
+    PositionMapper* pos_mapper,
+    uint32_t* line_start,
+    std::vector<DebugLineItem>* line_info);
 
 typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
 

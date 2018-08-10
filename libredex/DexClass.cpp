@@ -189,8 +189,6 @@ std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(DexIdx* idx,
   return std::unique_ptr<DexDebugItem>(new DexDebugItem(idx, offset));
 }
 
-namespace {
-
 /*
  * Convert DexDebugEntries into debug opcodes.
  */
@@ -272,16 +270,13 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
   return dbgops;
 }
 
-}
-
-int DexDebugItem::encode(DexOutputIdx* dodx,
-                         PositionMapper* pos_mapper,
-                         uint8_t* output,
-                         std::vector<DebugLineItem>* line_info) {
+int DexDebugItem::encode(
+    DexOutputIdx* dodx,
+    PositionMapper* pos_mapper,
+    uint8_t* output,
+    uint32_t line_start,
+    const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
   uint8_t* encdata = output;
-  uint32_t line_start{0};
-  auto dbgops = generate_debug_instructions(this, dodx, pos_mapper, &line_start,
-                                            line_info);
   encdata = write_uleb128(encdata, line_start);
   encdata = write_uleb128(encdata, (uint32_t) m_param_names.size());
   for (auto s : m_param_names) {
