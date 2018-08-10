@@ -77,6 +77,7 @@ public class InstrumentBasicBlockTarget {
     return i > 0 && i < 27 ? String.valueOf((char) (i + 'A' - 1)) : null;
   }
 
+  // This is added to test cases with more than 16 basic blocks.
   public static void testFunc4(int test_var) {
     String test_char = getCharForNumber(test_var);
     switch (test_char) {
@@ -85,6 +86,75 @@ public class InstrumentBasicBlockTarget {
         break;
       case "B":
         System.out.println("Random Character: B");
+        break;
+      case "C":
+        System.out.println("Random Character: C");
+        break;
+      case "D":
+        System.out.println("Random Character: D");
+        break;
+      case "E":
+        System.out.println("Random Character: BE");
+        break;
+      case "F":
+        System.out.println("Random Character: BF");
+        break;
+      case "G":
+        System.out.println("Random Character: BG");
+        break;
+      case "H":
+        System.out.println("Random Character: BH");
+        break;
+      case "I":
+        System.out.println("Random Character: BI");
+        break;
+      case "J":
+        System.out.println("Random Character: BJ");
+        break;
+      case "K":
+        System.out.println("Random Character: BK");
+        break;
+      case "L":
+        System.out.println("Random Character: BL");
+        break;
+      case "M":
+        System.out.println("Random Character: BM");
+        break;
+      case "N":
+        System.out.println("Random Character: BN");
+        break;
+      case "O":
+        System.out.println("Random Character: BO");
+        break;
+      case "P":
+        System.out.println("Random Character: BP");
+        break;
+      case "Q":
+        System.out.println("Random Character: BQ");
+        break;
+      case "R":
+        System.out.println("Random Character: BR");
+        break;
+      case "S":
+        System.out.println("Random Character: BS");
+        break;
+      case "T":
+        System.out.println("Random Character: BT");
+        break;
+      case "U":
+        System.out.println("Random Character: BU");
+        break;
+      case "V":
+        System.out.println("Random Character: BV");
+        break;
+      case "W":
+        System.out.println("Random Character: W");
+        break;
+      case "X":
+        System.out.println("Random Character: X");
+        break;
+      case "Y":
+        System.out.println("Random Character: Y");
         break;
       default:
         System.out.println("Charater not allowed.");
