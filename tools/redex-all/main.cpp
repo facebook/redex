@@ -645,8 +645,12 @@ void redex_backend(const PassManager& manager,
                              debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
     pos_mapper->write_map();
-    opt_metadata::OptDataMapper::get_instance().write_opt_data(
-        opt_decisions_output_path);
+    auto opt_data = opt_metadata::OptDataMapper::get_instance().serialize_sql();
+    Json::StyledStreamWriter writer;
+    {
+      std::ofstream opt_data_out(opt_decisions_output_path);
+      writer.write(opt_data_out, opt_data);
+    }
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
     output_moved_methods_map(method_move_map.c_str(), cfg);

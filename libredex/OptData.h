@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <json/json.h>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -153,10 +154,20 @@ class OptDataMapper {
   void log_nopt(NoptReason opt, const DexClass* cls);
 
   /**
-   * Writes the gathered optimization data in human-readable format. Relies on
-   * write_insn_opt/write_meth_opt/write_cls_opt.
+   * Writes the gathered optimization data in terms of sql queries, separated
+   * by newlines for easy parsing later on.
+   * 11 tables are created:
+   *  - opt_messages maps an optimization reason_code to a message.
+   *  - nopt_messages maps a non-optimization reason_code to a message.
+   *  - 6 tables that are effectively edges between level and type,
+   *    where level = (class|method|instruction), type = (opts|nopts).
+   *    {level}_{type} maps {level}_id to corresponding {type} reason codes,
+   *    with an additional column reason_idx indicating the opt order for that
+   *    specific {level}_id.
+   *  - classes/methods/instructions contain basic information: a unique id,
+   *    names, and in the case of instructions, the instruction itself.
    */
-  void write_opt_data(const std::string& filename);
+  Json::Value serialize_sql();
 
  private:
   std::unordered_map<const DexClass*, std::shared_ptr<ClassOptData>>
@@ -170,26 +181,70 @@ class OptDataMapper {
   }
 
   /**
-   * NOTE: Register an optimization/non-opt message in this function.
-   * Adds messages to m_opt_msg_map.
-   */
-  void init_opt_messages();
-  void init_nopt_messages();
-
-  /**
-   * Returns the registered opt/non-opt message. Fails if given a
-   * non-registered reason.
-   */
-  std::string get_opt_msg(OptReason reason);
-  std::string get_nopt_msg(NoptReason reason);
-
-  /**
    * Finds and returns a ClassOptData for the given class type. If the
    * ClassOptData doesn't yet exist, construct it and return.
    */
   std::shared_ptr<ClassOptData> get_cls_opt_data(DexType* cls_type);
 
-  void write_opt(OptReason opt, FILE* file);
-  void write_nopt(NoptReason opt, FILE* file);
+  /**
+   * For the table {msg_type}_messages, append each row as an entry to arr.
+   */
+  void serialize_messages_helper(
+      const std::unordered_map<int, std::string>& msg_map, Json::Value* arr);
+
+  /**
+   * For the tables {level}_opts and {level}_nopts, append each row as an
+   * entry in the corresponding json arr.
+   */
+  void serialize_opt_nopt_helper(const std::vector<OptReason>& opts,
+                                 const std::vector<NoptReason>& nopts,
+                                 size_t id,
+                                 Json::Value* opt_arr,
+                                 Json::Value* nopt_arr);
+
+  /**
+   * For the table 'classes', append class info to arr. Append cls opt info to
+   * opt/nopt arrs.
+   */
+  void serialize_class(std::shared_ptr<ClassOptData> cls_opt_data,
+                       size_t cls_id,
+                       Json::Value* arr,
+                       Json::Value* opt_arr,
+                       Json::Value* nopt_arr);
+
+  /**
+   * For the table 'methods', append method info to arr. Append meth opt info to
+   * opt/nopt arrs.
+   */
+  void serialize_method(std::shared_ptr<MethodOptData> meth_opt_data,
+                        size_t cls_id,
+                        size_t meth_id,
+                        Json::Value* arr,
+                        Json::Value* opt_arr,
+                        Json::Value* nopt_arr);
+
+  /**
+   * For the table 'instructions', append instruction info to arr. Append insn
+   * opt info to opt/nopt arrs.
+   */
+  void serialize_insn(std::shared_ptr<InsnOptData> insn_opt_data,
+                      size_t meth_id,
+                      size_t insn_id,
+                      Json::Value* arr,
+                      Json::Value* opt_arr,
+                      Json::Value* nopt_arr);
+
+  /**
+   * NOTE: Register an opt/non-opt message to the corresponding init_ function.
+   * Adds messages to m_opt_msg_map, m_nopt_msg_map.
+   */
+  void init_opt_messages();
+  void init_nopt_messages();
+
+  /**
+   * Verifies that a message has been registered for the given reason.
+   */
+  void verify_opt(OptReason reason);
+  void verify_nopt(NoptReason reason);
 };
 } // namespace opt_metadata

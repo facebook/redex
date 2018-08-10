@@ -738,7 +738,7 @@ void select_inlinable(
     }
   }
 
-  for (size_t i = multiple_callers ? 2 : 4; i < MAX_COUNT; ++i) {
+  for (size_t i = multiple_callers ? 4 : 2; i < MAX_COUNT; ++i) {
     for (auto callee : calls_group[i]) {
       log_nopt(INL_TOO_MANY_CALLERS, callee);
     }

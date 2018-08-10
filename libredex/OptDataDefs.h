@@ -17,6 +17,9 @@ enum OptReason : int {
   // RemoveUnusedArgsPass
   CALLSITE_ARGS_REMOVED,
   METHOD_PARAMS_REMOVED,
+
+  // OPT reason count
+  N_OPT_REASONS,
 };
 
 enum NoptReason : int {
@@ -34,4 +37,7 @@ enum NoptReason : int {
   INL_TOO_MANY_CALLERS,
   INL_2_CALLERS_TOO_BIG,
   INL_3_CALLERS_TOO_BIG,
+
+  // NOPT reason count
+  N_NOPT_REASONS,
 };
