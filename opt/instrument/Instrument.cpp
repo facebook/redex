@@ -235,7 +235,7 @@ int instrument_onBasicBlockBegin(
     // We use OPCODE_OR_INT_LIT16 to prevent inserting an extra CONST
     // instruction into the bytecode.
     IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT_LIT16);
-    or_inst->set_literal(static_cast<int16_t>(1ULL << block->id()));
+    or_inst->set_literal(static_cast<int16_t>(1ULL << (block->id() % 16)));
     or_inst->set_src(0, reg_bb_vector.at(block_vector_index));
     or_inst->set_dest(reg_bb_vector.at(block_vector_index));
 
