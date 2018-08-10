@@ -12,7 +12,7 @@
 #include "Trace.h"
 
 constexpr size_t NUM_THREADS = 10;
-constexpr size_t NUM_ITERS = 10'000;
+constexpr size_t NUM_ITERS = 1'000;
 
 TEST(TraceMultithreadingTest, singleThread) {
   TRACE(TIME, 1, "Test output!\n");
