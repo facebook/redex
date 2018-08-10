@@ -690,7 +690,7 @@ def finalize_redex(state):
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'type-erasure-mappings.txt', 'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt', 'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt', 'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'opt-decisions.txt', 'opt info', 'redex-opt-decisions.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map.txt', 'debug line map', 'redex-debug-line-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2', 'debug method id map', 'redex-debug-line-map-v2')
 
