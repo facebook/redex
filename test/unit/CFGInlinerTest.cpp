@@ -35,10 +35,7 @@ void test_inliner(const std::string& caller_str,
   callee_code->build_cfg(true);
   auto& callee = callee_code->cfg();
 
-  cfg::ControlFlowGraph callee_copy;
-  callee.deep_copy(&callee_copy);
-  cfg::CFGInliner::inline_cfg(
-      &caller, get_invoke(&caller), std::move(callee_copy));
+  cfg::CFGInliner::inline_cfg(&caller, get_invoke(&caller), callee);
   TRACE(CFG, 1, "%s\n", SHOW(caller));
 
   auto expected_code = assembler::ircode_from_string(expected_str);

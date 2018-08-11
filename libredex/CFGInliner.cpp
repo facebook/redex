@@ -17,12 +17,16 @@ namespace cfg {
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
 /*
- * Move callee's blocks into caller. This method consumes callee cfg
+ * Copy callee's blocks into caller
  */
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
-                            ControlFlowGraph&& callee) {
+                            const ControlFlowGraph& callee_orig) {
   always_assert(&callsite.cfg() == caller);
+
+  // copy the callee because we're going to move its contents into the caller
+  ControlFlowGraph callee;
+  callee_orig.deep_copy(&callee);
 
   TRACE(CFG, 3, "caller %s\ncallee %s\n", SHOW(*caller), SHOW(callee));
 
@@ -71,8 +75,6 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   connect_cfgs(caller, callsite.block(), callee_entry_point, callee_exit_points,
                after_callee);
   caller->set_registers_size(callee_regs_size);
-
-  // TODO: destruct callee. Is this already happenning at end of function?
 
   TRACE(CFG, 3, "caller before simplify %s\n", SHOW(*caller));
   caller->simplify();

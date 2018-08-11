@@ -16,11 +16,11 @@ namespace cfg {
 class CFGInliner {
  public:
   /*
-   * Move callee's blocks into caller. This method consumes callee cfg
+   * Copy callee's blocks into caller.
    */
   static void inline_cfg(ControlFlowGraph* caller,
                          const cfg::InstructionIterator& callsite,
-                         ControlFlowGraph&& callee);
+                         const ControlFlowGraph& callee);
 
  private:
   /*
