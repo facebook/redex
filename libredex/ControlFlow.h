@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional/optional.hpp>
+#include <boost/range/sub_range.hpp>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -70,6 +71,7 @@ enum EdgeType {
 
 class Block;
 class ControlFlowGraph;
+class CFGInliner;
 
 struct ThrowInfo {
   DexType* catch_type;
@@ -102,8 +104,9 @@ class Edge final {
 
   std::unique_ptr<ThrowInfo> m_throw_info{nullptr};
 
-  friend class ControlFlowGraph;
   friend class Block;
+  friend class ControlFlowGraph;
+  friend class CFGInliner;
 
  public:
   Edge(Block* src, Block* target, EdgeType type)
@@ -233,6 +236,7 @@ class Block final {
 
  private:
   friend class ControlFlowGraph;
+  friend class CFGInliner;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
 
@@ -314,7 +318,12 @@ class ControlFlowGraph {
 
   // args are arguments to an Edge constructor
   template <class... Args>
-  void add_edge(Args&&... args);
+  void add_edge(Args&&... args) {
+    Edge* edge = new Edge(std::forward<Args>(args)...);
+    m_edges.insert(edge);
+    edge->src()->m_succs.emplace_back(edge);
+    edge->target()->m_preds.emplace_back(edge);
+  }
 
   using EdgePredicate = std::function<bool(const Edge* e)>;
   using EdgeSet = std::unordered_set<Edge*>;
@@ -446,6 +455,11 @@ class ControlFlowGraph {
   // the instructions.
   void recompute_registers_size();
 
+  // by default, start at the entry block
+  boost::sub_range<IRList> get_param_instructions();
+
+  cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
@@ -456,6 +470,7 @@ class ControlFlowGraph {
   using Blocks = std::map<BlockId, Block*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
+  friend class CFGInliner;
 
   // Find block boundaries in IRCode and create the blocks
   // For use by the constructor. You probably don't want to call this from
@@ -645,6 +660,7 @@ class InstructionIteratorImpl {
     }
   }
 
+  friend class ControlFlowGraph;
   friend class Block;
   InstructionIteratorImpl(Cfg& cfg,
                           Block* b,
@@ -712,6 +728,11 @@ class InstructionIteratorImpl {
         "%s", SHOW(m_cfg));
   }
 
+  bool is_end() const {
+    return m_block == m_cfg.m_blocks.end() &&
+           m_it == ir_list::InstructionIteratorImpl<is_const>();
+  }
+
   Iterator unwrap() const {
     return m_it.unwrap();
   }
@@ -720,6 +741,8 @@ class InstructionIteratorImpl {
     assert_not_end();
     return m_block->second;
   }
+
+  const ControlFlowGraph& cfg() const { return m_cfg; }
 };
 
 // Iterate through all IRInstructions in the CFG.

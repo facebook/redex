@@ -90,6 +90,7 @@ libredex_la_SOURCES = \
 	libredex/AnnoUtils.cpp \
 	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
+	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \

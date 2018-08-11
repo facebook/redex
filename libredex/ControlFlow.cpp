@@ -435,7 +435,7 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     if (fallthrough && next != m_blocks.end()) {
       TRACE(CFG,
             6,
-            "setting default successor %d -> %d\n",
+            "adding fallthrough goto %d -> %d\n",
             b->id(),
             next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
@@ -744,6 +744,43 @@ uint32_t ControlFlowGraph::num_opcodes() const {
   return result;
 }
 
+boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() {
+  // Find the first block that has instructions
+  Block* block = entry_block();
+  while (block->num_opcodes() == 0) {
+    const auto& succs = block->succs();
+    always_assert(succs.size() == 1);
+    const auto& out = succs[0];
+    always_assert(out->type() == EDGE_GOTO);
+    block = out->target();
+  }
+  return block->m_entries.get_param_instructions();
+}
+
+cfg::InstructionIterator ControlFlowGraph::move_result_of(
+    const cfg::InstructionIterator& it) {
+  auto next_insn = std::next(it);
+  auto end = cfg::InstructionIterable(*this).end();
+  if (next_insn != end && it.block() == next_insn.block()) {
+    // The easy case where the move result is in the same block
+    auto op = next_insn->insn->opcode();
+    if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+      return next_insn;
+    }
+  }
+  auto goto_edge = get_succ_edge_of_type(it.block(), EDGE_GOTO);
+  if (goto_edge != nullptr) {
+    auto next_block = goto_edge->target();
+    if (next_block->starts_with_move_result()) {
+      return cfg::InstructionIterator(
+          *this, next_block,
+          ir_list::InstructionIterator(next_block->get_first_insn(),
+                                       next_block->end()));
+    }
+  }
+  return end;
+}
+
 std::vector<Block*> ControlFlowGraph::order() {
   // TODO output in a better order
   // The order should maximize PC locality, hot blocks should be fallthroughs
@@ -1042,10 +1079,7 @@ ControlFlowGraph::~ControlFlowGraph() {
   }
 
   for (Edge* e : m_edges) {
-    // `free_edge` leaves behind "holes"
-    if (e != nullptr) {
-      delete e;
-    }
+    delete e;
   }
 }
 
@@ -1170,14 +1204,6 @@ void ControlFlowGraph::calculate_exit_block() {
       add_edge(b, m_exit_block, EDGE_GHOST);
     }
   }
-}
-
-template <class... Args>
-void ControlFlowGraph::add_edge(Args&&... args) {
-  Edge* edge = new Edge(std::forward<Args>(args)...);
-  m_edges.insert(edge);
-  edge->src()->m_succs.emplace_back(edge);
-  edge->target()->m_preds.emplace_back(edge);
 }
 
 // public API edge removal functions

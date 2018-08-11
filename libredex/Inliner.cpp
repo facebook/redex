@@ -777,24 +777,8 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
-    auto param_op = param_it->insn->opcode();
-    IROpcode op;
-    switch (param_op) {
-    case IOPCODE_LOAD_PARAM:
-      op = OPCODE_MOVE;
-      break;
-    case IOPCODE_LOAD_PARAM_OBJECT:
-      op = OPCODE_MOVE_OBJECT;
-      break;
-    case IOPCODE_LOAD_PARAM_WIDE:
-      op = OPCODE_MOVE_WIDE;
-      break;
-    default:
-      always_assert_log("Expected param op, got %s", SHOW(param_op));
-      not_reached();
-    }
     auto mov =
-        (new IRInstruction(op))
+        (new IRInstruction(opcode::load_param_to_move(param_it->insn->opcode())))
             ->set_src(0, insn->src(i))
             ->set_dest(callee_reg_start + param_it->insn->dest());
     caller_code->insert_before(invoke_it, mov);

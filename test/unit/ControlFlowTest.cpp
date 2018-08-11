@@ -333,6 +333,7 @@ TEST(ControlFlow, iterate2) {
   std::unordered_map<IRInstruction*, size_t> times_encountered;
   auto iterable = cfg::InstructionIterable(code->cfg());
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    EXPECT_FALSE(it.is_end());
     auto insn = it->insn;
     auto op = insn->opcode();
     if (op == OPCODE_CONST) {
@@ -340,6 +341,7 @@ TEST(ControlFlow, iterate2) {
     }
     times_encountered[insn] += 1;
   }
+  EXPECT_TRUE(iterable.end().is_end());
   EXPECT_EQ(4, times_encountered.size());
   for (const auto& entry : times_encountered) {
     EXPECT_EQ(1, entry.second);
@@ -380,6 +382,12 @@ TEST(ControlFlow, nullForwardIterators) {
     auto iterator = new ir_list::InstructionIterator();
     EXPECT_EQ(ir_list::InstructionIterator(), *iterator);
     delete iterator;
+  }
+
+  auto iterable = cfg::InstructionIterable(cfg);
+  EXPECT_TRUE(iterable.end().is_end());
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    EXPECT_FALSE(it.is_end());
   }
 }
 
