@@ -183,6 +183,23 @@ uint32_t Block::num_opcodes() const {
   }
 }
 
+// shallowly copy pointers (edges and parent cfg)
+// but deeply copy MethodItemEntries
+Block::Block(const Block& b)
+    : m_id(b.m_id),
+      m_preds(b.m_preds),
+      m_succs(b.m_succs),
+      m_parent(b.m_parent) {
+
+  // only for editable, don't worry about m_begin and m_end
+  always_assert(m_parent->editable());
+
+  MethodItemEntryCloner cloner;
+  for (const auto& mie : b.m_entries) {
+    m_entries.push_back(*cloner.clone(&mie));
+  }
+}
+
 bool Block::has_pred(Block* b, EdgeType t) const {
   const auto& edges = preds();
   return std::find_if(edges.begin(), edges.end(), [b, t](const Edge* edge) {
@@ -779,6 +796,53 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
     }
   }
   return end;
+}
+
+/*
+ * fill `new_cfg` with a copy of `this`
+ */
+void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
+  always_assert(editable());
+  new_cfg->m_editable = true;
+  new_cfg->set_registers_size(this->get_registers_size());
+
+  std::unordered_map<const Edge*, Edge*> old_edge_to_new;
+  for (const Edge* old_edge : this->m_edges) {
+    // this shallowly copies block pointers inside, then we patch them later
+    Edge* new_edge = new Edge(*old_edge);
+    new_cfg->m_edges.insert(new_edge);
+    old_edge_to_new.emplace(old_edge, new_edge);
+  }
+
+  for (const auto& entry : this->m_blocks) {
+    const Block* block = entry.second;
+    // this shallowly copies edge pointers inside, then we patch them later
+    Block* new_block = new Block(*block);
+    new_cfg->m_blocks.emplace(new_block->id(), new_block);
+  }
+
+  // patch the edge pointers in the blocks to their new cfg counterparts
+  for (auto& entry : new_cfg->m_blocks) {
+    Block* b = entry.second;
+    for (Edge*& e : b->m_preds) {
+      e = old_edge_to_new.at(e);
+    }
+    for (Edge*& e : b->m_succs) {
+      e = old_edge_to_new.at(e);
+    }
+  }
+
+  // patch the block pointers in the edges to their new cfg counterparts
+  for (Edge* e : new_cfg->m_edges) {
+    e->m_src = new_cfg->m_blocks.at(e->m_src->id());
+    e->m_target = new_cfg->m_blocks.at(e->m_target->id());
+  }
+
+  // update the entry and exit block pointers to their new cfg counterparts
+  new_cfg->m_entry_block = new_cfg->m_blocks.at(this->m_entry_block->id());
+  if (this->m_exit_block != nullptr) {
+    new_cfg->m_exit_block = new_cfg->m_blocks.at(this->m_exit_block->id());
+  }
 }
 
 std::vector<Block*> ControlFlowGraph::order() {

@@ -878,11 +878,7 @@ void cleanup_callee_debug(IRCode* callee_code) {
 class MethodSplicer {
   IRCode* m_mtcaller;
   IRCode* m_mtcallee;
-  // We need a map of MethodItemEntry we have created because a branch
-  // points to another MethodItemEntry which may have been created or not
-  std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
-  // for remapping the parent position pointers
-  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  MethodItemEntryCloner m_mie_cloner;
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
   MethodItemEntry* m_active_catch;
@@ -899,49 +895,10 @@ class MethodSplicer {
         m_callee_reg_map(callee_reg_map),
         m_invoke_position(invoke_position),
         m_active_catch(active_catch) {
-    m_entry_map[nullptr] = nullptr;
-    m_pos_map[nullptr] = nullptr;
   }
 
-  MethodItemEntry* clone(MethodItemEntry* mei) {
-    MethodItemEntry* cloned_mei;
-    auto entry = m_entry_map.find(mei);
-    if (entry != m_entry_map.end()) {
-      return entry->second;
-    }
-    cloned_mei = new MethodItemEntry(*mei);
-    m_entry_map[mei] = cloned_mei;
-    switch (cloned_mei->type) {
-    case MFLOW_TRY:
-      cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-      cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
-      return cloned_mei;
-    case MFLOW_CATCH:
-      cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
-      cloned_mei->centry->next = clone(cloned_mei->centry->next);
-      return cloned_mei;
-    case MFLOW_OPCODE:
-      cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
-      if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-        cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
-      }
-      return cloned_mei;
-    case MFLOW_TARGET:
-      cloned_mei->target = new BranchTarget(*cloned_mei->target);
-      cloned_mei->target->src = clone(cloned_mei->target->src);
-      return cloned_mei;
-    case MFLOW_DEBUG:
-      return cloned_mei;
-    case MFLOW_POSITION:
-      m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
-      cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
-      return cloned_mei;
-    case MFLOW_FALLTHROUGH:
-      return cloned_mei;
-    case MFLOW_DEX_OPCODE:
-      always_assert_log(false, "DexInstructions not expected here");
-    }
-    not_reached();
+  MethodItemEntry* clone(MethodItemEntry* mie) {
+    return m_mie_cloner.clone(mie);
   }
 
   void operator()(IRList::iterator insert_pos,

@@ -167,6 +167,18 @@ struct MethodItemEntry {
   opcode::Branchingness branchingness() const;
 };
 
+class MethodItemEntryCloner {
+  // We need a map of MethodItemEntry we have created because a branch
+  // points to another MethodItemEntry which may have been created or not
+  std::unordered_map<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
+  // for remapping the parent position pointers
+  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+
+ public:
+  MethodItemEntryCloner();
+  MethodItemEntry* clone(const MethodItemEntry* mei);
+};
+
 using MethodItemMemberListOption =
     boost::intrusive::member_hook<MethodItemEntry,
                                   boost::intrusive::list_member_hook<>,

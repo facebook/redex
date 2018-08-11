@@ -1033,3 +1033,100 @@ TEST(ControlFlow, exit_blocks_change) {
   EXPECT_EQ(1, cfg.real_exit_blocks().size());
   code->clear_cfg();
 }
+
+TEST(ControlFlow, deep_copy1) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (if-eqz v0 :thr)
+      (return-void)
+      (:thr)
+      (throw v0)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& orig = code->cfg();
+
+  cfg::ControlFlowGraph copy;
+  orig.deep_copy(&copy);
+  IRList* orig_list = orig.linearize();
+  IRList* copy_list = copy.linearize();
+
+  auto orig_iterable = ir_list::InstructionIterable(orig_list);
+  auto copy_iterable = ir_list::InstructionIterable(copy_list);
+  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+}
+
+TEST(ControlFlow, deep_copy2) {
+  g_redex = new RedexContext();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 10)
+
+      (:loop)
+      (if-eqz v0 :end)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+      (move-result v1)
+      (add-int v0 v0 v1)
+      (goto :loop)
+
+      (:end)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& orig = code->cfg();
+
+  cfg::ControlFlowGraph copy;
+  orig.deep_copy(&copy);
+  IRList* orig_list = orig.linearize();
+  IRList* copy_list = copy.linearize();
+
+  auto orig_iterable = ir_list::InstructionIterable(orig_list);
+  auto copy_iterable = ir_list::InstructionIterable(copy_list);
+  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+
+  delete g_redex;
+}
+
+TEST(ControlFlow, deep_copy3) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 10)
+
+      (:loop)
+      (if-eqz v0 :end)
+
+      (move v2 v0)
+      (if-nez v2 :true)
+      (const v2 0)
+      (goto :inner_end)
+
+      (:true)
+      (const v2 -1)
+
+      (:inner_end)
+      (move v1 v2)
+
+      (add-int v0 v0 v1)
+      (goto :loop)
+
+      (:end)
+      (return-void)
+    )
+)");
+
+  code->build_cfg(/* editable */ true);
+  auto& orig = code->cfg();
+
+  cfg::ControlFlowGraph copy;
+  orig.deep_copy(&copy);
+  IRList* orig_list = orig.linearize();
+  IRList* copy_list = copy.linearize();
+
+  auto orig_iterable = ir_list::InstructionIterable(orig_list);
+  auto copy_iterable = ir_list::InstructionIterable(copy_list);
+  EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+}

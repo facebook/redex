@@ -180,6 +180,52 @@ opcode::Branchingness MethodItemEntry::branchingness() const {
   }
 }
 
+MethodItemEntryCloner::MethodItemEntryCloner() {
+  m_entry_map[nullptr] = nullptr;
+  m_pos_map[nullptr] = nullptr;
+}
+
+MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mei) {
+  MethodItemEntry* cloned_mei;
+  auto entry = m_entry_map.find(mei);
+  if (entry != m_entry_map.end()) {
+    return entry->second;
+  }
+  cloned_mei = new MethodItemEntry(*mei);
+  m_entry_map[mei] = cloned_mei;
+  switch (cloned_mei->type) {
+  case MFLOW_TRY:
+    cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
+    cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
+    return cloned_mei;
+  case MFLOW_CATCH:
+    cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
+    cloned_mei->centry->next = clone(cloned_mei->centry->next);
+    return cloned_mei;
+  case MFLOW_OPCODE:
+    cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
+    if (cloned_mei->insn->has_data()) {
+      cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
+    }
+    return cloned_mei;
+  case MFLOW_TARGET:
+    cloned_mei->target = new BranchTarget(*cloned_mei->target);
+    cloned_mei->target->src = clone(cloned_mei->target->src);
+    return cloned_mei;
+  case MFLOW_DEBUG:
+    return cloned_mei;
+  case MFLOW_POSITION:
+    m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
+    cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
+    return cloned_mei;
+  case MFLOW_FALLTHROUGH:
+    return cloned_mei;
+  case MFLOW_DEX_OPCODE:
+    always_assert_log(false, "DexInstructions not expected here");
+  }
+  not_reached();
+}
+
 void IRList::replace_opcode(IRInstruction* to_delete,
                             std::vector<IRInstruction*> replacements) {
   auto it = m_list.begin();

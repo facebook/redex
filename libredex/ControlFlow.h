@@ -125,6 +125,20 @@ class Edge final {
         m_type(EDGE_THROW),
         m_throw_info(std::make_unique<ThrowInfo>(catch_type, index)) {}
 
+  /*
+   * Copy constructor.
+   * Notice that this shallowly copies the block pointers!
+   */
+  Edge(const Edge& e)
+      : m_src(e.m_src),
+        m_target(e.m_target),
+        m_type(e.m_type),
+        m_case_key(e.m_case_key) {
+    if (e.m_throw_info) {
+      m_throw_info = std::make_unique<ThrowInfo>(*e.m_throw_info);
+    }
+  }
+
   bool operator==(const Edge& that) const {
     return m_src == that.m_src && m_target == that.m_target &&
            equals_ignore_source_and_target(that);
@@ -175,6 +189,8 @@ class Block final {
   ~Block() {
     m_entries.clear_and_dispose();
   }
+
+  Block(const Block& b);
 
   BlockId id() const { return m_id; }
   const std::vector<Edge*>& preds() const {
@@ -460,6 +476,11 @@ class ControlFlowGraph {
 
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
+  /*
+   * fill `new_cfg` with a copy of `this`
+   */
+  void deep_copy(ControlFlowGraph* new_cfg) const;
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
@@ -599,7 +620,7 @@ class ControlFlowGraph {
   uint16_t m_registers_size{0};
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
-  bool m_editable;
+  bool m_editable{true};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

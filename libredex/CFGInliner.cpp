@@ -14,7 +14,6 @@ namespace cfg {
 // TODO:
 //  * handle throws
 //  * handle debug positions
-//  * deep copy cfg
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
 /*
