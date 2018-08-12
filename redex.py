@@ -473,6 +473,9 @@ Given an APK, produce a better APK!
     parser.add_argument('--side-effect-summaries',
            help='Side effect information for external methods')
 
+    parser.add_argument('--escape-summaries',
+           help='Escape information for external methods')
+
     return parser
 
 def remove_comments_from_line(l):
