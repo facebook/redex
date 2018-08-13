@@ -1,39 +1,10 @@
+# TODO: finish including all the tests
+# TODO: Include all redex source cpp files
+
 AM_CXXFLAGS = --std=gnu++14
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/test/googletest-release-1.7.0/include \
-	-I$(top_srcdir)/liblocator \
-	-I$(top_srcdir)/libredex \
-	-I$(top_srcdir)/libresource \
-	-I$(top_srcdir)/libresource/android \
-	-I$(top_srcdir)/libresource/androidfw \
-	-I$(top_srcdir)/libresource/cutils \
-	-I$(top_srcdir)/libresource/system \
-	-I$(top_srcdir)/libresource/utils \
-	-I$(top_srcdir)/opt \
-	-I$(top_srcdir)/opt/all-static \
-	-I$(top_srcdir)/opt/annokill \
-	-I$(top_srcdir)/opt/bridge \
-	-I$(top_srcdir)/opt/constant_propagation \
-	-I$(top_srcdir)/opt/delinit \
-	-I$(top_srcdir)/opt/delsuper \
-	-I$(top_srcdir)/opt/final_inline \
-	-I$(top_srcdir)/opt/interdex \
-	-I$(top_srcdir)/opt/local-dce \
-	-I$(top_srcdir)/opt/peephole \
-	-I$(top_srcdir)/opt/rebindrefs \
-	-I$(top_srcdir)/opt/remove_empty_classes \
-	-I$(top_srcdir)/opt/remove_unused_args \
-	-I$(top_srcdir)/opt/renameclasses \
-	-I$(top_srcdir)/opt/shorten-srcstrings \
-	-I$(top_srcdir)/opt/simpleinline \
-	-I$(top_srcdir)/opt/singleimpl \
-	-I$(top_srcdir)/opt/static-sink \
-	-I$(top_srcdir)/opt/staticrelo \
-	-I$(top_srcdir)/opt/synth \
-	-I$(top_srcdir)/opt/unterface \
-	-I$(top_srcdir)/tools/redex-all \
-	-I$(top_srcdir)/util \
-	-I/usr/include/jsoncpp
+	$(REDEX_INCLUDE_FLAGS)
 
 TESTS = \
 	config_parser_test \

@@ -1,39 +1,10 @@
+# TODO: finish including all the tests
+# TODO: Include all redex source cpp files
+
 AM_CXXFLAGS = --std=gnu++14
 AM_CPPFLAGS = \
 	-I$(top_srcdir)/test/googletest-release-1.7.0/include \
-	-I$(top_srcdir)/liblocator \
-	-I$(top_srcdir)/libredex \
-	-I$(top_srcdir)/libresource \
-	-I$(top_srcdir)/libresource/android \
-	-I$(top_srcdir)/libresource/androidfw \
-	-I$(top_srcdir)/libresource/cutils \
-	-I$(top_srcdir)/libresource/system \
-	-I$(top_srcdir)/libresource/utils \
-	-I$(top_srcdir)/opt \
-	-I$(top_srcdir)/opt/all-static \
-	-I$(top_srcdir)/opt/annokill \
-	-I$(top_srcdir)/opt/bridge \
-	-I$(top_srcdir)/opt/constant_propagation \
-	-I$(top_srcdir)/opt/delinit \
-	-I$(top_srcdir)/opt/delsuper \
-	-I$(top_srcdir)/opt/final_inline \
-	-I$(top_srcdir)/opt/interdex \
-	-I$(top_srcdir)/opt/local-dce \
-	-I$(top_srcdir)/opt/peephole \
-	-I$(top_srcdir)/opt/rebindrefs \
-	-I$(top_srcdir)/opt/remove_empty_classes \
-	-I$(top_srcdir)/opt/renameclasses \
-	-I$(top_srcdir)/opt/shorten-srcstrings \
-	-I$(top_srcdir)/opt/simpleinline \
-	-I$(top_srcdir)/opt/singleimpl \
-	-I$(top_srcdir)/opt/static-sink \
-	-I$(top_srcdir)/opt/staticrelo \
-	-I$(top_srcdir)/opt/synth \
-	-I$(top_srcdir)/opt/track_resources \
-	-I$(top_srcdir)/opt/unterface \
-	-I$(top_srcdir)/tools/redex-all \
-	-I$(top_srcdir)/util \
-	-I/usr/include/jsoncpp
+	$(REDEX_INCLUDE_FLAGS)
 
 TESTS = \
 	synth_test \
@@ -61,34 +32,41 @@ EXTRA_constant_propagation_test_DEPENDENCIES = constant-propagation-test-class.d
 
 check_PROGRAMS = $(TESTS)
 
+JAVA_BIN = `/usr/libexec/java_home -v 1.7`/bin
+
 synth-test-class.jar: Alpha.java SynthTest.java
 	mkdir -p synth-test-class
-	javac -d synth-test-class $^
-	jar cf $@ -C synth-test-class .
+	$(JAVA_BIN)/javac -version
+	$(JAVA_BIN)/javac -d synth-test-class $^
+	$(JAVA_BIN)/jar cf $@ -C synth-test-class .
 
 synth-test-class.dex: synth-test-class.jar
 	dx --dex --output=$@ $^
 
 empty-classes-test-class.jar: EmptyClasses.java EmptyClassesTest.java
 	mkdir -p empty-classes-test-class
-	javac -d empty-classes-test-class $^
-	jar cf $@ -C empty-classes-test-class .
+	$(JAVA_BIN)/javac -d empty-classes-test-class $^
+	$(JAVA_BIN)/jar cf $@ -C empty-classes-test-class .
 
 empty-classes-test-class.dex: empty-classes-test-class.jar
 	dx --dex --output=$@ $^
 
 propagation-test-class.jar: Propagation.java
 	mkdir -p propagation-test-class
-	javac -d propagation-test-class $^
-	jar cf $@ -C propagation-test-class .
+	$(JAVA_BIN)/javac -d propagation-test-class $^
+	$(JAVA_BIN)/jar cf $@ -C propagation-test-class .
 
 propagation-test-class.dex: propagation-test-class.jar
 	dx --dex --output=$@ $^
 
 constant-propagation-test-class.jar: ConstantPropagation.java
 	mkdir -p constant-propagation-test-class
-	javac -d constant-propagation-test-class $^
-	jar cf $@ -C constant-propagation-test-class .
+	$(JAVA_BIN)/javac -d constant-propagation-test-class $^
+	$(JAVA_BIN)/jar cf $@ -C constant-propagation-test-class .
 
 constant-propagation-test-class.dex: constant-propagation-test-class.jar
 	dx --dex --output=$@ $^
+
+clean-local:
+	rm -rf *.dex
+	rm -rf *.jar
