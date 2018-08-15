@@ -79,7 +79,6 @@ int main(int argc, char* argv[]) {
                        nullptr /* LocatorIndex* */,
                        0,
                        cfg,
-                       json,
                        pos_mapper.get(),
                        nullptr,
                        nullptr);

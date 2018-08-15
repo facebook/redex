@@ -671,7 +671,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
  * Post processing steps: write dex and collect stats
  */
 void redex_backend(const PassManager& manager,
-                   const Arguments& args,
+                   const std::string& output_dir,
                    const ConfigFiles& cfg,
                    DexStoresVector& stores,
                    Json::Value& stats) {
@@ -683,9 +683,10 @@ void redex_backend(const PassManager& manager,
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+  const JsonWrapper& json_cfg = cfg.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
-  if (args.config.get("emit_locator_strings", false).asBool()) {
+  if (json_cfg.get("emit_locator_strings", false)) {
     TRACE(LOC,
           1,
           "Will emit class-locator strings for classloader optimization\n");
@@ -696,13 +697,13 @@ void redex_backend(const PassManager& manager,
   std::vector<dex_stats_t> output_dexes_stats;
 
   auto pos_output =
-      cfg.metafile(args.config.get("line_number_map", "").asString());
+      cfg.metafile(json_cfg.get("line_number_map", std::string()));
   auto pos_output_v2 =
-      cfg.metafile(args.config.get("line_number_map_v2", "").asString());
+      cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
   auto debug_line_mapping_filename =
-     cfg.metafile(args.config.get("debug_line_method_map", "").asString());
+     cfg.metafile(json_cfg.get("debug_line_method_map", std::string()));
   auto debug_line_mapping_filename_v2 = cfg.metafile(
-     args.config.get("debug_line_method_map_v2", "").asString());
+     json_cfg.get("debug_line_method_map_v2", std::string()));
 
   std::unique_ptr<PositionMapper> pos_mapper(
       PositionMapper::make(pos_output, pos_output_v2));
@@ -712,7 +713,7 @@ void redex_backend(const PassManager& manager,
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::ostringstream ss;
-      ss << args.out_dir << "/" << store.get_name();
+      ss << output_dir << "/" << store.get_name();
       if (store.get_name().compare("classes") == 0) {
         // primary/secondary dex store, primary has no numeral and secondaries
         // start at 2
@@ -730,7 +731,6 @@ void redex_backend(const PassManager& manager,
           locator_index,
           i,
           cfg,
-          args.config,
           pos_mapper.get(),
           debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
           debug_line_mapping_filename_v2.empty() ? nullptr
@@ -743,9 +743,9 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing stats");
     auto method_move_map =
-        cfg.metafile(args.config.get("method_move_map", "").asString());
+        cfg.metafile(json_cfg.get("method_move_map", std::string()));
     auto opt_decisions_output_path =
-        cfg.metafile(args.config.get("opt_decisions_output", "").asString());
+        cfg.metafile(json_cfg.get("opt_decisions_output", std::string()));
     write_debug_line_mapping(debug_line_mapping_filename,
                              debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
@@ -807,7 +807,7 @@ int main(int argc, char* argv[]) {
       manager.run_passes(stores, cfg);
     }
 
-    redex_backend(manager, args, cfg, stores, stats);
+    redex_backend(manager, args.out_dir, cfg, stores, stats);
 
     stats_output_path =
         cfg.metafile(args.config.get("stats_output", "").asString());

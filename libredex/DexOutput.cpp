@@ -1535,22 +1535,21 @@ write_classes_to_dex(
   LocatorIndex* locator_index,
   size_t dex_number,
   const ConfigFiles& cfg,
-  const Json::Value& json_cfg,
   PositionMapper* pos_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
 {
-  auto method_mapping_filename = cfg.metafile(
-    json_cfg.get("method_mapping", "").asString());
-  auto class_mapping_filename = cfg.metafile(
-    json_cfg.get("class_mapping", "").asString());
-  auto pg_mapping_filename = cfg.metafile(
-    json_cfg.get("proguard_map_output", "").asString());
-  auto bytecode_offset_filename = cfg.metafile(
-    json_cfg.get("bytecode_offset_map", "").asString());
-  auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
-  auto emit_debug_line_info =
-      json_cfg.get("emit_debug_line_info", true).asBool();
+  const JsonWrapper& json_cfg = cfg.get_json_config();
+  auto method_mapping_filename =
+      cfg.metafile(json_cfg.get("method_mapping", std::string()));
+  auto class_mapping_filename =
+      cfg.metafile(json_cfg.get("class_mapping", std::string()));
+  auto pg_mapping_filename =
+      cfg.metafile(json_cfg.get("proguard_map_output", std::string()));
+  auto bytecode_offset_filename =
+      cfg.metafile(json_cfg.get("bytecode_offset_map", std::string()));
+  auto sort_strings = json_cfg.get("string_sort_mode", std::string());
+  auto emit_debug_line_info = json_cfg.get("emit_debug_line_info", true);
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
     string_sort_mode = SortMode::CLASS_STRINGS;

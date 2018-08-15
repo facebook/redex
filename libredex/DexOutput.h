@@ -95,7 +95,6 @@ dex_stats_t write_classes_to_dex(
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
   const ConfigFiles& cfg,
-  const Json::Value& json_cfg,
   PositionMapper* line_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);

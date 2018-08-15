@@ -29,6 +29,11 @@ void JsonWrapper::get(const char* name,
   param = m_config.get(name, dflt).asString();
 }
 
+const std::string JsonWrapper::get(const char* name,
+                                   const std::string& dflt) const {
+  return m_config.get(name, dflt).asString();
+}
+
 void JsonWrapper::get(const char* name, bool dflt, bool& param) const {
   auto val = m_config.get(name, dflt);
 
@@ -56,6 +61,12 @@ void JsonWrapper::get(const char* name, bool dflt, bool& param) const {
   }
   throw std::runtime_error("Cannot convert JSON value to bool: " +
                            val.asString());
+}
+
+bool JsonWrapper::get(const char* name, bool dflt) const {
+  bool res;
+  get(name, dflt, res);
+  return res;
 }
 
 void JsonWrapper::get(const char* name,
@@ -125,6 +136,11 @@ void JsonWrapper::get(const char* name,
                      const Json::Value dflt,
                      Json::Value& param) const {
   param = m_config.get(name, dflt);
+}
+
+const Json::Value JsonWrapper::get(const char* name,
+                                   const Json::Value dflt) const {
+  return m_config.get(name, dflt);
 }
 
 const Json::Value& JsonWrapper::operator[](const char* name) const {
