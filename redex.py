@@ -720,7 +720,7 @@ def finalize_redex(state):
                 state.dex_dir,
                 state.args.proguard_map)
     else:
-        passes_list = state.config_dict['redex']['passes']
+        passes_list = state.config_dict.get('redex', {}).get('passes', [])
         assert 'RenameClassesPass' not in passes_list and\
                 'RenameClassesPassV2' not in passes_list
 
