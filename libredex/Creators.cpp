@@ -603,7 +603,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
                              DexAccessFlags access,
-                             DexAnnotationSet* anno)
+                             DexAnnotationSet* anno,
+                             bool with_debug_item)
     : method(
           static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
   always_assert_log(!method->is_concrete(), "Method already defined");
@@ -612,8 +613,12 @@ MethodCreator::MethodCreator(DexType* cls,
   }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
+  method->set_deobfuscated_name(show(method));
   method->set_code(std::make_unique<IRCode>(method, 0));
   meth_code = method->get_code();
+  if (with_debug_item) {
+    meth_code->set_debug_item(std::make_unique<DexDebugItem>());
+  }
   load_locals(method);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }

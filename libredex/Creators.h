@@ -378,7 +378,8 @@ struct MethodCreator {
                 DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
-                DexAnnotationSet* anno = nullptr);
+                DexAnnotationSet* anno = nullptr,
+                bool with_debug_item = false);
 
   /**
    * Get an existing local.
@@ -491,6 +492,7 @@ struct ClassCreator {
     m_cls->m_source_file = nullptr;
     m_cls->m_anno = nullptr;
     m_cls->m_external = false;
+    m_cls->set_deobfuscated_name(type->get_name()->c_str());
   }
 
   /**
