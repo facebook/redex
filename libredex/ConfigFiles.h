@@ -98,6 +98,10 @@ struct ConfigFiles {
     return outdir + '/' + basename;
   }
 
+  std::string get_outdir() const {
+    return outdir;
+  }
+
   const ProguardMap& get_proguard_map() const {
     return m_proguard_map;
   }
