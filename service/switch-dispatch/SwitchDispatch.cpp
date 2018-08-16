@@ -38,7 +38,8 @@ MethodCreator* init_method_creator(const dispatch::Spec& spec,
                            DexString::make_string(spec.name),
                            spec.proto,
                            spec.access_flags,
-                           orig_method->get_anno_set());
+                           orig_method->get_anno_set(),
+                           true);
 }
 
 void emit_call(const dispatch::Spec& spec,
