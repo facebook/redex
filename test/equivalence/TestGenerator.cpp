@@ -82,7 +82,9 @@ int main(int argc, char* argv[]) {
                        0,
                        cfg,
                        json,
-                       pos_mapper.get());
+                       pos_mapper.get(),
+                       nullptr,
+                       nullptr);
 
   delete g_redex;
   return 0;
