@@ -203,6 +203,12 @@ public class InstrumentBasicBlockTarget {
     }
   }
 
+  public static void printArray(int[] intArray) {
+    for (int i = 0; i < intArray.length; i++) {
+      System.out.println(intArray[i]);
+    }
+  }
+
   public static void main(String args[]) {
     boolean target = InstrumentBasicBlockTarget.testFunc2();
     InstrumentBasicBlockTarget.testFunc1();
@@ -215,5 +221,11 @@ public class InstrumentBasicBlockTarget {
     // This test is added because we were getting instrumentation
     // errors in synchronization routines in fb4a.
     InstrumentBasicBlockTarget.synchronizationTest();
+    // This is added to test array usage.
+    int[] intArray = new int[3];
+    intArray[0] = 7001;
+    intArray[1] = 3823;
+    intArray[2] = 194;
+    InstrumentBasicBlockTarget.printArray(intArray);
   }
 }

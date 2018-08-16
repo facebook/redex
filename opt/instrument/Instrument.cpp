@@ -60,13 +60,19 @@ bool is_included(const std::string& method_name,
 
 std::unordered_map<int /* Number of arguments*/, DexMethod*>
 find_analysis_methods(const DexClass& cls, const std::string& name) {
-  std::unordered_map<int, DexMethod*> analysis_method_vector;
+  std::unordered_map<int, DexMethod*> analysis_method_map;
   for (const auto& dm : cls.get_dmethods()) {
     if (name == dm->get_name()->c_str()) {
-      analysis_method_vector.emplace(dm->get_proto()->get_args()->size(), dm);
+      auto const v =
+          std::next(dm->get_proto()->get_args()->get_type_list().begin(), 1);
+      if (*v == DexType::make_type("[S")) {
+        analysis_method_map.emplace(1, dm);
+      } else {
+        analysis_method_map.emplace(dm->get_proto()->get_args()->size(), dm);
+      }
     }
   }
-  return analysis_method_vector;
+  return analysis_method_map;
 }
 
 std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
@@ -98,10 +104,153 @@ MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
   return nullptr;
 }
 
+void insert_try_start_instr(IRCode* code,
+                            IRList::iterator insert_point,
+                            MethodItemEntry* catch_block) {
+  if (catch_block) {
+    auto try_start = new MethodItemEntry(TRY_START, catch_block);
+    code->insert_before(insert_point, *try_start);
+  }
+}
+
+void insert_try_end_instr(IRCode* code,
+                          IRList::iterator insert_point,
+                          MethodItemEntry* catch_block) {
+  if (catch_block) {
+    auto try_end = new MethodItemEntry(TRY_END, catch_block);
+    code->insert_before(insert_point, *try_end);
+  }
+}
+
+void insert_invoke_instr(IRCode* code,
+                         IRList::iterator insert_point,
+                         IRInstruction* method_id_inst,
+                         IRInstruction* invoke_inst) {
+  // When inserting an INVOKE instruction within a try_catch block, in
+  // order to prevent adding an extra throw edge to the CFG, we split the
+  // block into two. We insert a TRY_END instruction before our
+  // instrumentation INVOKE call and a TRY_START after.
+
+  auto catch_block = find_try_block(code, insert_point);
+
+  insert_try_end_instr(code, insert_point, catch_block);
+  code->insert_before(code->insert_before(insert_point, invoke_inst),
+                      method_id_inst);
+  insert_try_start_instr(code, insert_point, catch_block);
+}
+
+// When the number of bit vectors for a method is more than 5, they are added to
+// an array and the array is passed to the analysis function onMethodExitBB()
+// along with the method identifier.
+// Algorithm:
+// Bit vectors: v_0, v_1, v_2, v_3, v_4, v_5
+// num_vectors: 6
+// Initialize size of new array: OPCODE: CONST <v_array>, 6
+// Initialize a new empty array: OPCODE: NEW_ARRAY <v_array>, [S
+// For each bit vector <v_i>:
+//     initialize index:     OPCODE: CONST <v_pos>, [position]
+//     Add to array:         OPCODE: APUT_OBJECT <v_i>, <v_array> , <v_pos>
+// Finally, call analysis_method:
+//     initialize method id: OPCODE: CONST <v_mId>, [method_id]
+//     actual call:          OPCODE: INVOKE_STATIC <v_mId>, <v_array>
+//
+// Example:
+// OPCODE: CONST v59, 6
+// OPCODE: NEW_ARRAY v59, [S
+// OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v59
+// OPCODE: CONST v60, 0
+// OPCODE: APUT v52, v59, v60
+// OPCODE: CONST v61, 1
+// OPCODE: APUT v53, v59, v61
+// OPCODE: CONST v62, 2
+// OPCODE: APUT v54, v59, v62
+// OPCODE: CONST v63, 3
+// OPCODE: APUT v55, v59, v63
+// OPCODE: CONST v64, 4
+// OPCODE: APUT v56, v59, v64
+// OPCODE: CONST v65, 5
+// OPCODE: APUT v57, v59, v65
+// OPCODE: CONST v66, 6171
+// OPCODE: INVOKE_STATIC v66, v59,
+//          Lcom/facebook/redex/dynamicanalysis/Analysis;.onMethodExitBB:(I[S)V
+void insert_invoke_static_array_arg(IRCode* code,
+                                    size_t method_id,
+                                    DexMethod* method_onMethodExit,
+                                    const std::vector<uint16_t>& reg_bb_vector,
+                                    IRList::iterator insert_point) {
+  // If num_vectors >5, create array of all bit vectors. Add as argument to
+  // invoke call.
+  size_t num_vectors = reg_bb_vector.size();
+  // Create new array.
+  IRInstruction* array_size_inst = new IRInstruction(OPCODE_CONST);
+  array_size_inst->set_literal(num_vectors);
+  const auto array_dest = code->allocate_temp();
+  array_size_inst->set_dest(array_dest);
+
+  IRInstruction* new_array_insn = new IRInstruction(OPCODE_NEW_ARRAY);
+  new_array_insn->set_type(make_array_type(get_short_type()));
+  new_array_insn->set_arg_word_count(1);
+  new_array_insn->set_src(0, array_dest);
+
+  IRInstruction* move_result_pseudo =
+      new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  move_result_pseudo->set_dest(array_dest);
+
+  auto catch_block = find_try_block(code, insert_point);
+
+  insert_try_end_instr(code, insert_point, catch_block);
+  code->insert_before(
+      code->insert_before(code->insert_before(insert_point, move_result_pseudo),
+                          new_array_insn),
+      array_size_inst);
+  insert_try_start_instr(code, insert_point, catch_block);
+
+  // Set of instructions to add bit vectors to newly created array.
+  std::vector<IRInstruction*> index_inst(num_vectors);
+  std::vector<IRInstruction*> aput_inst(num_vectors);
+  std::vector<uint16_t> index_reg(num_vectors);
+
+  catch_block = find_try_block(code, insert_point);
+
+  insert_try_end_instr(code, insert_point, catch_block);
+  for (size_t i = 0; i < num_vectors; i++) {
+    // Initialize index where this element is to be inserted.
+    index_inst[i] = new IRInstruction(OPCODE_CONST);
+    index_inst[i]->set_literal(i);
+    index_reg[i] = code->allocate_temp();
+    index_inst[i]->set_dest(index_reg[i]);
+
+    // APUT instruction adds the bit vector to the array.
+    aput_inst[i] = new IRInstruction(OPCODE_APUT);
+    aput_inst[i]->set_arg_word_count(3);
+    aput_inst[i]->set_src(0, reg_bb_vector[i]);
+    aput_inst[i]->set_src(1, array_dest);
+    aput_inst[i]->set_src(2, index_reg[i]);
+
+    code->insert_before(code->insert_before(insert_point, aput_inst[i]),
+                        index_inst[i]);
+  }
+  insert_try_start_instr(code, insert_point, catch_block);
+
+  // Finally, make the INVOKE_STATIC call to analysis function.
+  // Argument 1: Method ID, Argument 2: Array of bit vectors.
+  IRInstruction* method_id_inst = new IRInstruction(OPCODE_CONST);
+  method_id_inst->set_literal(method_id);
+  auto reg_method_id = code->allocate_temp();
+  method_id_inst->set_dest(reg_method_id);
+
+  IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+  invoke_inst->set_method(method_onMethodExit);
+  invoke_inst->set_arg_word_count(2);
+  invoke_inst->set_src(0, reg_method_id);
+  invoke_inst->set_src(1, array_dest);
+
+  insert_invoke_instr(code, insert_point, method_id_inst, invoke_inst);
+} // namespace
 void insert_invoke_static_call_bb(IRCode* code,
                                   size_t method_id,
                                   DexMethod* method_onMethodExit,
-                                  std::vector<uint16_t>& reg_bb_vector) {
+                                  const std::vector<uint16_t>& reg_bb_vector) {
   for (auto mie = code->begin(); mie != code->end(); ++mie) {
     if (mie->type == MFLOW_OPCODE &&
         (mie->insn->opcode() == OPCODE_RETURN ||
@@ -112,40 +261,22 @@ void insert_invoke_static_call_bb(IRCode* code,
       auto reg_method_id = code->allocate_temp();
       method_id_inst->set_dest(reg_method_id);
 
-      assert_log(reg_bb_vector.size() <= 5,
-                 "Method has more than 80 blocks.\n");
-
-      IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
-      // Method to be invoked depends on the number of vectors in current
-      // method. The '1' is added to count first argument i.e. method_id.
-      invoke_inst->set_method(method_onMethodExit);
-      invoke_inst->set_arg_word_count(reg_bb_vector.size() + 1);
-      invoke_inst->set_src(0, reg_method_id);
-      for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
-           ++reg_index) {
-        invoke_inst->set_src(reg_index + 1, reg_bb_vector.at(reg_index));
-      }
-
-      // When inserting an INVOKE instruction within a try_catch block, in
-      // order to prevent adding an extra throw edge to the CFG, we split the
-      // block into two. We insert a TRY_END instruction before our
-      // instrumentation INVOKE call and a TRY_START after.
-
-      auto catch_block = find_try_block(code, mie);
-
-      if (catch_block) {
-        auto try_start = new MethodItemEntry(TRY_START, catch_block);
-        auto try_end = new MethodItemEntry(TRY_END, catch_block);
-
-        code->insert_before(
-            code->insert_before(
-                code->insert_before(code->insert_before(mie, *try_start),
-                                    invoke_inst),
-                method_id_inst),
-            *try_end);
+      assert(reg_bb_vector.size() != 0);
+      if (reg_bb_vector.size() <= 5) {
+        IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
+        // Method to be invoked depends on the number of vectors in current
+        // method. The '1' is added to count first argument i.e. method_id.
+        invoke_inst->set_method(method_onMethodExit);
+        invoke_inst->set_arg_word_count(reg_bb_vector.size() + 1);
+        invoke_inst->set_src(0, reg_method_id);
+        for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
+             ++reg_index) {
+          invoke_inst->set_src(reg_index + 1, reg_bb_vector[reg_index]);
+        }
+        insert_invoke_instr(code, mie, method_id_inst, invoke_inst);
       } else {
-        code->insert_before(code->insert_before(mie, invoke_inst),
-                            method_id_inst);
+        insert_invoke_static_array_arg(code, method_id, method_onMethodExit,
+                                       reg_bb_vector, mie);
       }
     }
   }
@@ -178,7 +309,7 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
 
 int instrument_onBasicBlockBegin(
     DexMethod* method,
-    const std::unordered_map<int, DexMethod*> method_onMethodExit_map,
+    const std::unordered_map<int, DexMethod*>& method_onMethodExit_map,
     size_t method_id,
     int& all_bbs,
     int& num_blocks_instrumented,
@@ -196,16 +327,12 @@ int instrument_onBasicBlockBegin(
   TRACE(INSTRUMENT, 7, "[%s] Number of Basic Blocks: %zu\n",
         SHOW(method->get_name()), blocks.size());
 
-  // For now, only instrumenting methods with less than 80 blocks using 16
-  // blocks implementation.
   // It is done this way to avoid using ceil() or double/float casting.
   const size_t num_vectors = (blocks.size() + 16 - 1) / 16;
 
-  TRACE(INSTRUMENT, 7, "[%s] Number of Vectors: %d\n", SHOW(method->get_name()),
-        num_vectors);
-  if (num_vectors > 5) {
-    return method_id;
-  }
+  TRACE(INSTRUMENT, 7, "[%s] Number of Vectors: %zu\n",
+        SHOW(method->get_name()), num_vectors);
+
   all_bbs += blocks.size();
 
   // Add <num_vectors> 16 bit integers to the beginning to method. These will be
@@ -224,9 +351,10 @@ int instrument_onBasicBlockBegin(
   // adding edges to this invoke call.
   // The INVOKE call takes (num_vectors+1) arguments: 1-Method ID,
   // num_vectors-Bit Vectors.
-  assert(method_onMethodExit_map.count(num_vectors + 1));
+  size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
+  assert(method_onMethodExit_map.count(index_to_method));
   insert_invoke_static_call_bb(code, method_id,
-                               method_onMethodExit_map.at(num_vectors + 1),
+                               method_onMethodExit_map.at(index_to_method),
                                reg_bb_vector);
 
   for (cfg::Block* block : blocks) {
@@ -273,10 +401,10 @@ int instrument_onBasicBlockBegin(
   }
 
   TRACE(INSTRUMENT, 7, "Id: %zu Method: %s\n", method_id, SHOW(method_name));
+  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s\n", SHOW(code));
+
   method_id += num_vectors;
   all_methods_inst++;
-
-  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s\n", SHOW(code));
   return method_id;
 }
 

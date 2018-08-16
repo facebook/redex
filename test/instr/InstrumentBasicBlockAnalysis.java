@@ -47,4 +47,10 @@ public class InstrumentBasicBlockAnalysis {
     sBasicBlockStats[methodId + 3] |= bbVector4;
     sBasicBlockStats[methodId + 4] |= bbVector5;
   }
+
+  public static void onMethodExitBB(int methodId, short[] bbVector) {
+    for (int i = 0; i < bbVector.length; i++) {
+      sBasicBlockStats[methodId + 1] |= bbVector[i];
+    }
+  }
 }
