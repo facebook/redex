@@ -74,6 +74,7 @@ class ControlFlowGraph;
 class CFGInliner;
 
 struct ThrowInfo {
+  // nullptr means catch all
   DexType* catch_type;
   // Index from the linked list of `CatchEntry`s in the IRCode. An index of 0
   // denotes the "primary" catch. At runtime, the primary catch is the first
@@ -245,6 +246,9 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  // TODO?: Should we just always store the throws in index order?
+  std::vector<Edge*> get_outgoing_throws_in_order() const;
+
   // Remove the first target in this block that corresponds to `branch`.
   // Returns a not-none CaseKey for multi targets, boost::none otherwise.
   boost::optional<Edge::CaseKey> remove_first_matching_target(
@@ -320,6 +324,8 @@ class ControlFlowGraph {
    */
   std::vector<Block*> real_exit_blocks(bool include_infinite_loops = false);
 
+  std::vector<Block*> return_blocks() const;
+
   /*
    * Determine where the exit block is. If there is more than one, create a
    * "ghost" block that is the successor to all of them.
@@ -393,6 +399,12 @@ class ControlFlowGraph {
   void delete_pred_edges(Block* b);
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
+
+  /*
+   * Split this block into two blocks. After this call, `it` will be the last
+   * instruction in the predecessor block.
+   */
+  Block* split_block(const cfg::InstructionIterator& it);
 
   // Merge `succ` into `pred` and delete `succ`
   //
@@ -480,6 +492,9 @@ class ControlFlowGraph {
    * fill `new_cfg` with a copy of `this`
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
+
+  cfg::InstructionIterator to_cfg_instruction_iterator(
+      Block* b, const ir_list::InstructionIterator& list_it);
 
  private:
   using BranchToTargets =

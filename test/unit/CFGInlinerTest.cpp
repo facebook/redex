@@ -36,12 +36,13 @@ void test_inliner(const std::string& caller_str,
   auto& callee = callee_code->cfg();
 
   cfg::CFGInliner::inline_cfg(&caller, get_invoke(&caller), callee);
-  TRACE(CFG, 1, "%s\n", SHOW(caller));
 
   auto expected_code = assembler::ircode_from_string(expected_str);
+
+  const std::string& final_cfg = show(caller);
   caller_code->clear_cfg();
   EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(caller_code.get()));
+            assembler::to_string(caller_code.get())) << final_cfg;
 
   delete g_redex;
 }
@@ -323,6 +324,325 @@ TEST(CFGInliner, callee_diamond_caller_loop) {
 
       (:end)
       (return-void)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_simple) {
+  const auto& caller_str = R"(
+    (
+      (.try_start a)
+      (invoke-static () "LCls;.foo:()V")
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (throw v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.try_start a)
+      (throw v2)
+      (.try_end a)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_with_return_reg) {
+  const auto& caller_str = R"(
+    (
+      (.try_start a)
+      (invoke-static () "LCls;.foo:()I")
+      (.try_end a)
+      (move-result v0)
+      (return v0)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (throw v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.try_start a)
+      (throw v2)
+      (.try_end a)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_with_arg_and_return_regs) {
+  const auto& caller_str = R"(
+    (
+      (.try_start a)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+      (move-result v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :thr)
+      (return v0)
+
+      (:thr)
+      (throw v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (move v2 v0)
+      (if-eqz v2 :thr)
+      (move v0 v2)
+      (return v0)
+
+      (.try_start a)
+      (:thr)
+      (throw v2)
+
+      (.try_end a)
+
+      (.catch (a))
+      (return v1)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_caller_catch_chain) {
+  const auto& caller_str = R"(
+    (
+      (.try_start a)
+      (invoke-static (v0) "LCls;.foo:(I)I")
+      (move-result v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a b) "LExcept;")
+      (return v1)
+
+      (.catch (b))
+      (return v0)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (load-param v0)
+      (if-eqz v0 :thr)
+      (return v0)
+
+      (:thr)
+      (throw v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (move v2 v0)
+      (if-eqz v2 :thr)
+      (move v0 v2)
+      (return v0)
+
+      (.try_start a)
+      (:thr)
+      (throw v2)
+
+      (.try_end a)
+
+      (.catch (a b) "LExcept;")
+      (return v1)
+
+      (.catch (b))
+      (return v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_with_may_throws) {
+  const auto& caller_str = R"(
+    (
+      (.try_start outer)
+      (invoke-static () "LCls;.foo:()I")
+      (move-result v0)
+      (return v0)
+      (.try_end outer)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
+
+      (.catch (all))
+      (return v0)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (.try_start inner)
+
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :thr)
+      (return v0)
+
+      (:thr)
+      (throw v0)
+
+      (.try_end inner)
+      (.catch (inner) "LInnerExcept")
+      (const v0 0)
+      (return v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.try_start inner)
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (if-eqz v2 :thr)
+      (move v0 v2)
+      (goto :exit)
+
+      (:thr)
+      (throw v2)
+      (.try_end inner)
+
+      (.catch (inner outer) "LInnerExcept")
+      (const v2 0)
+      (move v0 v2)
+
+      (:exit)
+      (return v0)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
+
+      (.catch (all))
+      (return v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_with_only_may_throws) {
+  const auto& caller_str = R"(
+    (
+      (.try_start outer)
+      (invoke-static () "LCls;.foo:()I")
+      (move-result v0)
+      (return v0)
+      (.try_end outer)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
+
+      (.catch (all))
+      (return v0)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (return v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.try_start outer)
+
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (move v0 v2)
+
+      (return v0)
+      (.try_end outer)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
+
+      (.catch (all))
+      (return v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, try_catch_callee_has_chain) {
+  const auto& caller_str = R"(
+    (
+      (.try_start outer)
+      (invoke-static () "LCls;.foo:()I")
+      (move-result v0)
+      (return v0)
+      (.try_end outer)
+
+      (.catch (outer))
+      (return v1)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (.try_start inner1)
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v0)
+      (return v0)
+      (.try_end inner1)
+
+      (.catch (inner1 inner2) "LExcept1;")
+      (const v0 0)
+      (return v0)
+
+      (.catch (inner2) "LExcept2;")
+      (const v0 1)
+      (return v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.try_start inner1)
+      (sget-object "LCls;.field:Ljava/lang/Object;")
+      (move-result-pseudo-object v2)
+      (move v0 v2)
+      (goto :end_callee)
+      (.try_end inner1)
+
+      (.catch (inner1 inner2) "LExcept1;")
+      (const v2 0)
+      (move v0 v2)
+      (goto :end_callee)
+
+      (.catch (inner2 outer) "LExcept2;")
+      (const v2 1)
+      (move v0 v2)
+
+      (:end_callee)
+      (return v0)
+
+      (.catch (outer))
+      (return v1)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);

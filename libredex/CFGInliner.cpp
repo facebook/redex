@@ -12,7 +12,6 @@
 namespace cfg {
 
 // TODO:
-//  * handle throws
 //  * handle debug positions
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
@@ -30,21 +29,13 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
   TRACE(CFG, 3, "caller %s\ncallee %s\n", SHOW(*caller), SHOW(callee));
 
-  // we save these blocks here because we're going to empty out the callee CFG
-  const auto& callee_entry_point = callee.entry_block();
-  const auto& callee_exit_points = callee.real_exit_blocks();
-
   if (caller->get_succ_edge_of_type(callsite.block(), EDGE_THROW) != nullptr) {
-    // TODO: need to re-split callee because it's all in a try region now (if it
-    // wasn't already)
-    // How?
-    //  * Destroy, insert try at beginning and end, rebuild?
-    //  * scan for cases and split blocks, adding throw edges
-    // TODO:
-    //  * add throw edge from each may_throw to each catch in caller (at invoke)
-    //    * If there are already throw edges in callee, add this edge to the end
-    //      of the list
+    split_on_callee_throws(&callee);
   }
+
+  // we save these blocks here because we're going to empty out the callee CFG
+  const auto& callee_entry_block = callee.entry_block();
+  const auto& callee_return_blocks = callee.return_blocks();
 
   // make the invoke last of its block
   Block* after_callee = maybe_split_block(caller, callsite);
@@ -64,17 +55,24 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   auto callee_regs_size = callee.get_registers_size();
   TRACE(CFG, 3, "callee after remap %s\n", SHOW(callee));
 
-  // delete the invoke and move-result
-  caller->remove_opcode(callsite);
+  // delete the move-result before connecting the cfgs because it's in a block
+  // that may be merged into another
   if (!move_res.is_end()) {
     caller->remove_opcode(move_res);
   }
 
   // redirect to callee
+  const std::vector<Block*> callee_blocks = callee.blocks();
   steal_contents(caller, callsite.block(), &callee);
-  connect_cfgs(caller, callsite.block(), callee_entry_point, callee_exit_points,
-               after_callee);
+  connect_cfgs(caller, callsite.block(), callee_blocks, callee_entry_block,
+               callee_return_blocks, after_callee);
   caller->set_registers_size(callee_regs_size);
+
+  TRACE(CFG, 3, "caller after connect %s\n", SHOW(*caller));
+
+  // delete the invoke after connecting the CFGs because remove_opcode will
+  // remove the outgoing throw if we remove the callsite
+  caller->remove_opcode(callsite);
 
   TRACE(CFG, 3, "caller before simplify %s\n", SHOW(*caller));
   caller->simplify();
@@ -92,28 +90,12 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
 
   const IRList::iterator& raw_it = it.unwrap();
   Block* old_block = it.block();
-  if (raw_it != it.block()->get_last_insn()) {
-    Block* new_block = caller->create_block();
-    // move the rest of the instructions after the callsite into the new block
-    new_block->m_entries.splice_selection(new_block->begin(),
-                                          old_block->m_entries,
-                                          std::next(raw_it), old_block->end());
-    // make the outgoing edges come from the new block
-    std::vector<Edge*> to_move(old_block->succs().begin(),
-                               old_block->succs().end());
-    for (auto e : to_move) {
-      caller->set_edge_source(e, new_block);
-    }
-    // connect the halves of the block we just split up. We do this to maintain
-    // a well-formed CFG for now even though we'll remove this edge later (when
-    // we inline the callee)
-    caller->add_edge(old_block, new_block, EDGE_GOTO);
-    return new_block;
+  if (raw_it != old_block->get_last_insn()) {
+    caller->split_block(it);
   }
 
-  // the call is already the last instruction of the block and there aren't any
-  // outgoing throws. No need to change the code, just return the next block
-  always_assert(old_block->succs().size() == 1);
+  // The call is already the last instruction of the block.
+  // No need to change the code, just return the next block
   Edge* goto_edge = caller->get_succ_edge_of_type(old_block, EDGE_GOTO);
   always_assert(goto_edge != nullptr);
   return goto_edge->target();
@@ -121,7 +103,6 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
 
 /*
  * Change the register numbers to not overlap with caller.
- * Convert load param and return instructions to move instructions.
  */
 void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
                                  uint16_t caller_regs_size) {
@@ -190,24 +171,37 @@ void CFGInliner::steal_contents(ControlFlowGraph* caller,
  */
 void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
                               Block* callsite,
+                              const std::vector<Block*>& callee_blocks,
                               Block* callee_entry,
-                              std::vector<Block*> callee_exits,
+                              const std::vector<Block*>& callee_exits,
                               Block* after_callsite) {
-  // First remove the goto between the callsite and its successor
+
+  // Add edges from callee throw sites to caller catch sites
+  const auto& caller_throws = callsite->get_outgoing_throws_in_order();
+
+  if (!caller_throws.empty()) {
+    add_callee_throws_to_caller(cfg, callee_blocks, caller_throws);
+  }
+
+  // Remove the goto between the callsite and its successor
   cfg->delete_succ_edge_if(
       callsite, [](const Edge* e) { return e->type() == EDGE_GOTO; });
 
   auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
     for (Block* pred : preds) {
+      TRACE(CFG, 3, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
       if (preds.size() == 1 && cfg->blocks_are_in_same_try(pred, succ)) {
+        // FIXME: this is annoying because it destroys the succ block
+        // (invalidating any iterators into it). Maybe it would be better to do
+        // this during cfg.simplify at the very end?
         cfg->merge_blocks(pred, succ);
       }
     }
   };
 
-  // We must connect the return first because merge blocks may delete the
+  // We must connect the return first because merge_blocks may delete the
   // successor
   connect(callee_exits, after_callsite);
   connect({callsite}, callee_entry);
@@ -268,6 +262,94 @@ void CFGInliner::move_return_reg(cfg::ControlFlowGraph* callee,
 }
 
 /*
+ * Callees that were not in a try region when their CFGs were created, need to
+ * have some blocks split because the callsite is in a try region. We do this
+ * because we need to add edges from the throwing opcodes to the catch handler
+ * of the caller's try region.
+ *
+ * Assumption: callsite is in a try region
+ */
+void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
+  std::vector<Block*> work_list = callee->blocks();
+  // iterate with an index instead of an iterator because we're adding to the
+  // end while we iterate
+  for (uint32_t i = 0; i < work_list.size(); ++i) {
+    Block* b = work_list[i];
+    // look for blocks we need to split
+    IRList::iterator last = b->get_last_insn();
+    const auto& iterable = ir_list::InstructionIterable(*b);
+    for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+      const auto& mie = *it;
+      const auto insn = mie.insn;
+      const auto op = insn->opcode();
+      if (can_throw(op) && it.unwrap() != last) {
+        const auto& cfg_it = callee->to_cfg_instruction_iterator(b, it);
+        Block* new_block = callee->split_block(cfg_it);
+        work_list.push_back(new_block);
+      }
+    }
+  }
+}
+
+/*
+ * Add a throw edge from each may_throw to each catch that is thrown to from the
+ * callsite
+ *   * If there are already throw edges in callee, add this edge to the end
+ *     of the list
+ *
+ * Assumption: caller_catches is sorted by catch index
+ */
+void CFGInliner::add_callee_throws_to_caller(
+    ControlFlowGraph* cfg,
+    const std::vector<Block*>& callee_blocks,
+    const std::vector<Edge*>& caller_catches) {
+
+  // There are two requirements about the catch indices here:
+  //   1) New throw edges must be added to the end of a callee's existing throw
+  //   chain. This is ensured by using the max index of the already existing
+  //   throws
+  //   2) New throw edges must go to the callsite's catch blocks in the same
+  //   order that the existing catch chain does. This is ensured by sorting
+  //   caller_catches by their throw indices.
+
+  // Add throw edges from callee_block to all the caller catches
+  const auto& add_throw_edges =
+      [&cfg, &caller_catches](Block* callee_block, uint32_t starting_index) {
+        auto index = starting_index;
+        for (Edge* caller_catch : caller_catches) {
+          cfg->add_edge(callee_block, caller_catch->target(),
+                        caller_catch->m_throw_info->catch_type, index);
+          ++index;
+        }
+      };
+
+  for (Block* callee_block : callee_blocks) {
+    const auto& existing_throws =
+        cfg->get_succ_edges_of_type(callee_block, EDGE_THROW);
+    if (!existing_throws.empty()) {
+      // Blocks that throw already
+      //   * Instructions that can throw that were already in a try region with
+      //   catch blocks
+      add_throw_edges(callee_block, max_index(existing_throws) + 1);
+    } else {
+      // Blocks that end in a throwing instruction but don't have outgoing throw
+      // instructions yet.
+      //   * Instructions that can throw that were not in a try region before
+      //   being inlined. These may have been created by split_on_callee_throws.
+      //   * OPCODE_THROW instructions without any catch blocks before being
+      //   inlined.
+      IRList::iterator last = callee_block->get_last_insn();
+      if (last != callee_block->end()) {
+        const auto op = last->insn->opcode();
+        if (can_throw(op)) {
+          add_throw_edges(callee_block, /* starting_index */ 0);
+        }
+      }
+    }
+  }
+}
+
+/*
  * Return the equivalent move opcode for the given return opcode
  */
 IROpcode CFGInliner::return_to_move(IROpcode op) {
@@ -286,5 +368,20 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
   }
 }
 
+bool CFGInliner::can_throw(IROpcode op) {
+  return opcode::may_throw(op) || op == OPCODE_THROW;
+};
+
+/*
+ * Assumption: `throws` is not empty
+ */
+uint32_t CFGInliner::max_index(const std::vector<Edge*> throws) {
+  return (*std::max_element(throws.begin(), throws.end(),
+                            [](Edge* e1, Edge* e2) {
+                              return e1->m_throw_info->index <
+                                     e2->m_throw_info->index;
+                            }))
+      ->m_throw_info->index;
+}
 
 } // namespace cfg

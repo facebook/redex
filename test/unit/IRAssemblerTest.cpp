@@ -246,6 +246,34 @@ TEST_F(IRAssemblerTest, try_catch_with_next) {
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
 
+TEST_F(IRAssemblerTest, try_catch_exception_name) {
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a) "LFoo;")
+      (const v1 1)
+      (return-void)
+    )
+  )");
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a) "LBar;")
+      (const v1 1)
+      (return-void)
+    )
+  )");
+
+  EXPECT_NE(assembler::to_string(code1.get()),
+            assembler::to_string(code2.get()));
+}
+
 TEST_F(IRAssemblerTest, try_catch_with_two_tries) {
   auto code = assembler::ircode_from_string(R"(
     (

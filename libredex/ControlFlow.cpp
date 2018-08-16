@@ -262,6 +262,14 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
+std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
+  std::vector<Edge*> result = m_parent->get_succ_edges_of_type(this, EDGE_THROW);
+  std::sort(result.begin(), result.end(), [](const Edge* e1, const Edge* e2) {
+    return e1->m_throw_info->index < e2->m_throw_info->index;
+  });
+  return result;
+}
+
 // We remove the first matching target because multiple switch cases can point
 // to the same block. We use this function to move information from the target
 // entries to the CFG edges. The two edges are identical, save the case key, so
@@ -668,6 +676,9 @@ void ControlFlowGraph::sanity_check() {
           }
         }
       }
+
+      size_t num_gotos = get_succ_edges_of_type(b, EDGE_GOTO).size();
+      always_assert_log(num_gotos < 2, "block %d, %s", b->id(), SHOW(*this));
     }
   }
 
@@ -843,6 +854,11 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   if (this->m_exit_block != nullptr) {
     new_cfg->m_exit_block = new_cfg->m_blocks.at(this->m_exit_block->id());
   }
+}
+
+cfg::InstructionIterator ControlFlowGraph::to_cfg_instruction_iterator(
+    Block* b, const ir_list::InstructionIterator& list_it) {
+  return cfg::InstructionIterator(*this, b, list_it);
 }
 
 std::vector<Block*> ControlFlowGraph::order() {
@@ -1237,6 +1253,18 @@ std::vector<Block*> ControlFlowGraph::real_exit_blocks(
   return result;
 }
 
+std::vector<Block*> ControlFlowGraph::return_blocks() const {
+  std::vector<Block*> result;
+  for (const auto& entry : m_blocks) {
+    Block* block = entry.second;
+    const auto& b = block->branchingness();
+    if (b == opcode::BRANCH_RETURN) {
+      result.push_back(block);
+    }
+  }
+  return result;
+}
+
 /*
  * Find all exit blocks. Note that it's not as simple as looking for Blocks with
  * return or throw opcodes; infinite loops are a valid way of terminating dex
@@ -1508,14 +1536,49 @@ std::vector<Edge*> ControlFlowGraph::get_succ_edges_of_type(
                            [type](const Edge* e) { return e->type() == type; });
 }
 
+/*
+ * Split this block into two blocks. After this call, `it` will be the last
+ * instruction in the predecessor block.
+ */
+Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
+  always_assert(editable());
+  always_assert(!it.is_end());
+
+  // old_block will be the predecessor
+  Block* old_block = it.block();
+  // new_block will be the successor
+  Block* new_block = create_block();
+  const IRList::iterator& raw_it = it.unwrap();
+  always_assert(raw_it != old_block->get_last_insn());
+
+  // move the rest of the instructions after the callsite into the new block
+  new_block->m_entries.splice_selection(new_block->begin(),
+                                        old_block->m_entries,
+                                        std::next(raw_it), old_block->end());
+  // make the outgoing edges come from the new block
+  std::vector<Edge*> to_move(old_block->succs().begin(),
+                             old_block->succs().end());
+  for (auto e : to_move) {
+    set_edge_source(e, new_block);
+  }
+  // connect the halves of the block we just split up
+  add_edge(old_block, new_block, EDGE_GOTO);
+  return new_block;
+}
+
 void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
+  const auto& not_throws = [](const Edge* e) {
+    return e->type() != EDGE_THROW;
+  };
   {
-    always_assert(pred->succs().size() == 1);
-    auto forward_edge = pred->succs()[0];
+    const auto& forwards = get_succ_edges_if(pred, not_throws);
+    always_assert(forwards.size() == 1);
+    auto forward_edge = forwards[0];
     always_assert(forward_edge->target() == succ);
     always_assert(forward_edge->type() == EDGE_GOTO);
-    always_assert(succ->preds().size() == 1);
-    auto reverse_edge = succ->preds()[0];
+    const auto& reverses = get_pred_edges_if(succ, not_throws);
+    always_assert(reverses.size() == 1);
+    auto reverse_edge = reverses[0];
     always_assert(forward_edge == reverse_edge);
   }
 
@@ -1525,15 +1588,16 @@ void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
   pred->m_entries.splice(pred->m_entries.end(), succ->m_entries);
 
   // move succ's outgoing edges to pred.
-  auto all = [](const Edge*) { return true; };
   // Intentionally copy the vector of edges because set_edge_source edits the
   // edge vectors
-  auto succs = get_succ_edges_if(succ, all);
+  auto succs = get_succ_edges_if(succ, not_throws);
   for (auto succ_edge : succs) {
     set_edge_source(succ_edge, pred);
   }
 
   // remove the succ block
+  delete_pred_edges(succ);
+  delete_succ_edges(succ);
   m_blocks.erase(succ->id());
   delete succ;
 }
@@ -1568,8 +1632,8 @@ void ControlFlowGraph::move_edge(Edge* edge,
 
 bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
                                               const Block* b2) const {
-  const auto& throws1 = get_succ_edges_of_type(b1, EDGE_THROW);
-  const auto& throws2 = get_succ_edges_of_type(b2, EDGE_THROW);
+  const auto& throws1 = b1->get_outgoing_throws_in_order();
+  const auto& throws2 = b2->get_outgoing_throws_in_order();
   if (throws1.size() != throws2.size()) {
     return false;
   }

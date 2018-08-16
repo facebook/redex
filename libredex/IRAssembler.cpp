@@ -301,6 +301,7 @@ std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
         s_expr maybe_next, type_expr;
         s_patn({s_patn({s_patn(&this_catch)}, maybe_next)}, type_expr)
             .must_match(tail, "catch marker missing a name list");
+        // FIXME?
         result.emplace(
             this_catch,
             new MethodItemEntry(static_cast<DexType*>(nullptr)));
@@ -538,6 +539,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
           catch_type = DexType::make_type(DexString::make_string(type_name));
         }
         MethodItemEntry* catch_marker = catches.at(this_catch);
+        catch_marker->centry->catch_type = catch_type;
         if (next_catch != "") {
           catch_marker->centry->next = catches.at(next_catch);
         }
