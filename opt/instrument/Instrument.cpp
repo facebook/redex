@@ -221,7 +221,7 @@ void insert_invoke_static_array_arg(IRCode* code,
     index_inst[i]->set_dest(index_reg[i]);
 
     // APUT instruction adds the bit vector to the array.
-    aput_inst[i] = new IRInstruction(OPCODE_APUT);
+    aput_inst[i] = new IRInstruction(OPCODE_APUT_SHORT);
     aput_inst[i]->set_arg_word_count(3);
     aput_inst[i]->set_src(0, reg_bb_vector[i]);
     aput_inst[i]->set_src(1, array_dest);
@@ -308,6 +308,7 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
 // bit_vector[n] OR (1<<block_id).
 
 int instrument_onBasicBlockBegin(
+    IRCode* code,
     DexMethod* method,
     const std::unordered_map<int, DexMethod*>& method_onMethodExit_map,
     size_t method_id,
@@ -316,10 +317,7 @@ int instrument_onBasicBlockBegin(
     int& all_methods_inst,
     std::unordered_map<int, std::string>& method_id_name_map,
     std::unordered_map<int, int>& id_numbb_map) {
-  IRCode* code = method->get_code();
-  if (code == nullptr) {
-    return method_id;
-  }
+  assert(code != nullptr);
 
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
@@ -766,7 +764,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   }
   TRACE(INSTRUMENT, 7, "Number of classes: %d\n", cold_start_classes.size());
 
-  walk::methods(scope, [&](DexMethod* method) {
+  walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method == analysis_cls->get_clinit()) {
       return;
     }
@@ -795,8 +793,8 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     TRACE(INSTRUMENT, 9, "Whitelist: included: %s\n", SHOW(method));
     all_methods++;
     method_index = instrument_onBasicBlockBegin(
-        method, method_onMethodExit_map, method_index, all_bb_nums, all_bb_inst,
-        all_method_inst, method_id_name_map, method_id_bb_map);
+        &code, method, method_onMethodExit_map, method_index, all_bb_nums,
+        all_bb_inst, all_method_inst, method_id_name_map, method_id_bb_map);
   });
   patch_array_size(*analysis_cls, "sBasicBlockStats", method_index);
 
