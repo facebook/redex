@@ -217,6 +217,104 @@ TEST(CFGInliner, multi_return) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
+TEST(CFGInliner, multi_return_wide) {
+  const auto& caller_str = R"(
+    (
+      (const-wide v0 0)
+      (const-wide v2 10)
+      (invoke-static (v0 v2) "LCls;.max:(JJ)J")
+      (move-result-wide v0)
+      (return-wide v0)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      ; max
+      (load-param-wide v0)
+      (load-param-wide v2)
+      (cmp-long v4 v0 v2)
+      (if-gtz v4 :true)
+
+      (return-wide v2)
+
+      (:true)
+      (return-wide v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const-wide v0 0)
+      (const-wide v2 10)
+
+      (move-wide v4 v0)
+      (move-wide v6 v2)
+      (cmp-long v8 v4 v6)
+      (if-gtz v8 :true)
+
+      (move-wide v0 v6)
+      (goto :callee_end)
+
+      (:true)
+      (move-wide v0 v4)
+
+      (:callee_end)
+      (return-wide v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, multi_return_object) {
+  const auto& caller_str = R"(
+    (
+      (invoke-static () "LCls;.randObj:()Ljava/lang/Object;")
+      (move-result v0)
+      (return-object v0)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (new-instance "Ljava/util/Random;")
+      (move-result-pseudo v0)
+      (invoke-virtual (v0) "Ljava/util/Random;.nextBoolean:()Z")
+      (move-result-pseudo v0)
+      (if-nez v0 :true)
+
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (return-object v0)
+
+      (:true)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v0)
+      (return-object v0)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (new-instance "Ljava/util/Random;")
+      (move-result-pseudo v1)
+      (invoke-virtual (v1) "Ljava/util/Random;.nextBoolean:()Z")
+      (move-result-pseudo v1)
+      (if-nez v1 :true)
+
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (move-object v0 v1)
+      (goto :callee_end)
+
+      (:true)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v1)
+      (move-object v0 v1)
+
+      (:callee_end)
+      (return-object v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
 TEST(CFGInliner, both_multi_block) {
   const auto& caller_str = R"(
     (
