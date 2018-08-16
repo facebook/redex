@@ -31,8 +31,9 @@ IRInstruction* make_invoke(DexMethod* callee,
   return invoke;
 }
 
-void patch_callsite(const CallSiteSpec& spec,
-                    const boost::optional<uint32_t>& additional_arg) {
+void patch_callsite_var_additional_args(
+    const CallSiteSpec& spec,
+    const boost::optional<std::vector<uint32_t>>& additional_args) {
   const auto caller = spec.caller;
   const auto call_insn = spec.call_insn;
   const auto callee = spec.new_callee;
@@ -48,25 +49,32 @@ void patch_callsite(const CallSiteSpec& spec,
       SHOW(callee), SHOW(caller));
 
   auto code = caller->get_code();
-  auto additional_arg_reg = code->allocate_temp();
-  auto load_additional_arg =
-      make_load_const(additional_arg_reg, additional_arg.get_value_or(0));
+  std::vector<uint16_t> additional_arg_regs;
+  std::vector<IRInstruction*> load_additional_args;
+  if (additional_args != boost::none) {
+    const auto& args = additional_args.get();
+    for (const auto arg : args) {
+      auto arg_reg = code->allocate_temp();
+      additional_arg_regs.push_back(arg_reg);
+      load_additional_args.push_back(make_load_const(arg_reg, arg));
+    }
+  }
 
   // Assuming the following move-result is there and good.
   std::vector<uint16_t> args;
   for (size_t i = 0; i < call_insn->srcs_size(); i++) {
     args.push_back(call_insn->src(i));
   }
-  if (additional_arg != boost::none) {
-    args.push_back(additional_arg_reg);
-  }
+    for (const auto additional_arg_reg : additional_arg_regs) {
+      args.push_back(additional_arg_reg);
+    }
   auto invoke = make_invoke(callee, call_insn->opcode(), args);
-  if (additional_arg != boost::none) {
-    code->insert_after(
-        call_insn, std::vector<IRInstruction*>{load_additional_arg, invoke});
-  } else {
-    code->insert_after(call_insn, std::vector<IRInstruction*>{invoke});
-  }
+  std::vector<IRInstruction*> new_call_insns;
+    for (const auto load_additional_arg : load_additional_args) {
+      new_call_insns.push_back(load_additional_arg);
+    }
+  new_call_insns.push_back(invoke);
+  code->insert_after(call_insn, new_call_insns);
 
   // remove original call.
   code->remove_opcode(call_insn);
@@ -106,6 +114,19 @@ void update_call_refs_simple(
     }
   };
   walk::parallel::code(scope, patcher);
+}
+
+void patch_callsite(
+    const CallSiteSpec& spec,
+    const boost::optional<uint32_t>& additional_arg) {
+  std::vector<uint32_t> additional_args;
+  if (additional_arg != boost::none) {
+    additional_args.push_back(additional_arg.get());
+    patch_callsite_var_additional_args(
+        spec, boost::optional<std::vector<uint32_t>>(additional_args));
+  } else {
+    patch_callsite_var_additional_args(spec, boost::none);
+  }
 }
 
 CallSites collect_call_refs(const Scope& scope,

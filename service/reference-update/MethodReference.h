@@ -31,6 +31,15 @@ IRInstruction* make_invoke(DexMethod* callee,
                            std::vector<uint16_t> args);
 
 /**
+ * An optional list of additional arguments that we can pass to the patched call
+ * site.
+ */
+void patch_callsite_var_additional_args(
+    const CallSiteSpec& spec,
+    const boost::optional<std::vector<uint32_t>>& additional_args =
+        boost::none);
+
+/**
  * An optional additional argument that we want to pass to the patched call
  * site. One example would be passing the type tag in type erased code.
  */
