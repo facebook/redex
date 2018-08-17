@@ -24,6 +24,7 @@
 #include "IRTypeChecker.h"
 #include "JemallocUtil.h"
 #include "PrintSeeds.h"
+#include "OptData.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
@@ -165,6 +166,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
     redex::print_seeds(
         obfuscation_file, cfg.get_proguard_map(), scope, false, true);
+  }
+
+  // Enable opt decision logging if specified in config.
+  const Json::Value& opt_decisions_args =
+      cfg.get_json_config()["opt_decisions"];
+  if (opt_decisions_args.get("enable_logs", false).asBool()) {
+    opt_metadata::OptDataMapper::get_instance().enable_logs();
   }
 
   // TODO(fengliu) : Remove Pass::eval_pass API

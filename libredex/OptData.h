@@ -140,6 +140,11 @@ class OptDataMapper {
   void operator=(OptDataMapper const&) = delete;
 
   /**
+   * Enable logging for the rest of this build.
+   */
+  void enable_logs() { m_logs_enabled = true; };
+
+  /**
    * Records the given opt and attributes it to the given class/method/insn.
    */
   void log_opt(OptReason opt,
@@ -170,6 +175,7 @@ class OptDataMapper {
   Json::Value serialize_sql();
 
  private:
+  bool m_logs_enabled{false};
   std::unordered_map<const DexClass*, std::shared_ptr<ClassOptData>>
       m_cls_opt_map;
   std::unordered_map<int /*OptReason*/, std::string> m_opt_msg_map;

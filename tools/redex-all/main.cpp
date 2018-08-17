@@ -741,21 +741,30 @@ void redex_backend(const PassManager& manager,
   }
 
   {
+    Timer t("Writing opt decisions data");
+    const Json::Value& opt_decisions_args =
+      cfg.get_json_config()["opt_decisions"];
+    if (opt_decisions_args.get("enable_logs", false).asBool()) {
+      auto opt_decisions_output_path =
+          cfg.metafile(opt_decisions_args.get("output_file_name", "").asString());
+      auto opt_data =
+          opt_metadata::OptDataMapper::get_instance().serialize_sql();
+      Json::StyledStreamWriter writer;
+      {
+        std::ofstream opt_data_out(opt_decisions_output_path);
+        writer.write(opt_data_out, opt_data);
+      }
+    }
+  }
+
+  {
     Timer t("Writing stats");
     auto method_move_map =
         cfg.metafile(json_cfg.get("method_move_map", std::string()));
-    auto opt_decisions_output_path =
-        cfg.metafile(json_cfg.get("opt_decisions_output", std::string()));
     write_debug_line_mapping(debug_line_mapping_filename,
                              debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
     pos_mapper->write_map();
-    auto opt_data = opt_metadata::OptDataMapper::get_instance().serialize_sql();
-    Json::StyledStreamWriter writer;
-    {
-      std::ofstream opt_data_out(opt_decisions_output_path);
-      writer.write(opt_data_out, opt_data);
-    }
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
     output_moved_methods_map(method_move_map.c_str(), cfg);
