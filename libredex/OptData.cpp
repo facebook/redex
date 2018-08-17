@@ -345,6 +345,7 @@ void OptDataMapper::serialize_class(std::shared_ptr<ClassOptData> cls_opt_data,
   cls_data["source_file"] =
       cls_opt_data->m_has_srcfile ? cls_opt_data->m_filename : "";
   cls_data["name"] = name.c_str();
+  arr->append(cls_data);
   serialize_opt_nopt_helper(cls_opt_data->m_opts, cls_opt_data->m_nopts, cls_id,
                             opt_arr, nopt_arr);
 }
@@ -365,6 +366,7 @@ void OptDataMapper::serialize_method(
   meth_data["signature"] = get_deobfuscated_name(method);
   meth_data["code_size"] =
       (uint)(method->get_code() ? method->get_code()->sum_opcode_sizes() : 0);
+  arr->append(meth_data);
   serialize_opt_nopt_helper(meth_opt_data->m_opts, meth_opt_data->m_nopts,
                             meth_id, opt_arr, nopt_arr);
 }
