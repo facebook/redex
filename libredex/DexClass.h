@@ -901,20 +901,11 @@ class DexMethod : public DexMethodRef {
     return m_deobfuscated_name;
   }
 
-  /** return just the name of the method */
-  std::string get_simple_deobfuscated_name() const {
-    auto full_name = get_deobfuscated_name();
-    if (full_name.empty()) {
-      // This comes up for redex-created methods
-      return std::string(c_str());
-    }
-    auto dot_pos = full_name.find(".");
-    auto colon_pos = full_name.find(":");
-    if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
-      return full_name;
-    }
-    return full_name.substr(dot_pos + 1, colon_pos-dot_pos - 1);
-  }
+  // Return just the name of the method.
+  std::string get_simple_deobfuscated_name() const;
+
+  // Return a really fully deobfuscated name, even for a generated method.
+  std::string get_fully_deobfuscated_name() const;
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,

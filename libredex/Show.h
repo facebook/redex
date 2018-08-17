@@ -127,6 +127,8 @@ std::string show_deobfuscated(const DexFieldRef*);
 std::string show_deobfuscated(const DexMethodRef*);
 std::string show_deobfuscated(const IRInstruction*);
 std::string show_deobfuscated(const DexEncodedValue*);
+std::string show_deobfuscated(const DexTypeList*);
+std::string show_deobfuscated(const DexProto*);
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

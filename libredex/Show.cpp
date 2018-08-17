@@ -541,34 +541,34 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << ", ";
   }
   switch (opcode::ref(insn->opcode())) {
-    case opcode::Ref::None:
-      break;
-    case opcode::Ref::String:
-      ss << boost::io::quoted(show(insn->get_string()));
-      break;
-    case opcode::Ref::Type:
-      ss << show(insn->get_type());
-      break;
-    case opcode::Ref::Field:
-      if (deobfuscated) {
-        ss << show_deobfuscated(insn->get_field());
-      } else {
-        ss << show(insn->get_field());
-      }
-      break;
-    case opcode::Ref::Method:
-      if (deobfuscated) {
-        ss << show_deobfuscated(insn->get_method());
-      } else {
-        ss << show(insn->get_method());
-      }
-      break;
-    case opcode::Ref::Literal:
-      ss << insn->get_literal();
-      break;
-    case opcode::Ref::Data:
-      ss << "<data>"; // TODO: print something more informative
-      break;
+  case opcode::Ref::None:
+    break;
+  case opcode::Ref::String:
+    ss << boost::io::quoted(show(insn->get_string()));
+    break;
+  case opcode::Ref::Type:
+    ss << show(insn->get_type());
+    break;
+  case opcode::Ref::Field:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_field());
+    } else {
+      ss << show(insn->get_field());
+    }
+    break;
+  case opcode::Ref::Method:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_method());
+    } else {
+      ss << show(insn->get_method());
+    }
+    break;
+  case opcode::Ref::Literal:
+    ss << insn->get_literal();
+    break;
+  case opcode::Ref::Data:
+    ss << "<data>"; // TODO: print something more informative
+    break;
   }
   return ss.str();
 }
@@ -648,7 +648,7 @@ std::string vshow(const DexProto* p, bool include_ret_type = true) {
   std::ostringstream ss;
   ss << "(" << vshow(p->get_args()) << ")";
   if (include_ret_type) {
-     ss << humanize(show(p->get_rtype()));
+    ss << humanize(show(p->get_rtype()));
   }
   return ss.str();
 }
@@ -678,8 +678,8 @@ std::string show(const DexCode* code) {
   if (!code) return "";
   std::ostringstream ss;
   ss << "regs: " << code->get_registers_size()
-      << ", ins: " << code->get_ins_size()
-      << ", outs: " << code->get_outs_size() << "\n";
+     << ", ins: " << code->get_ins_size() << ", outs: " << code->get_outs_size()
+     << "\n";
   if (code->m_insns != nullptr) {
     for (auto const& insn : code->get_instructions()) {
       ss << show(insn) << "\n";
@@ -698,19 +698,14 @@ std::string show(const DexMethodRef* p) {
   return b.str();
 }
 
-std::string vshow(uint32_t acc) {
-  return accessibility(acc, 32);
-}
+std::string vshow(uint32_t acc) { return accessibility(acc, 32); }
 
-std::string vshow(const DexType* t) {
-  return humanize(show(t));
-}
+std::string vshow(const DexType* t) { return humanize(show(t)); }
 
 std::string vshow(const DexMethod* p, bool include_annotations /*=true*/) {
   if (!p) return "";
   std::ostringstream ss;
-  ss << vshow(p->get_access())
-     << vshow(p->get_proto()->get_rtype()) << " "
+  ss << vshow(p->get_access()) << vshow(p->get_proto()->get_rtype()) << " "
      << humanize(show(p->get_class())) << "." << show(p->get_name())
      << vshow(p->get_proto(), false);
   if (include_annotations) {
@@ -766,9 +761,7 @@ std::string show(const DexEncodedValue* value) {
   return value->show();
 }
 
-std::string show(const DexAnnotation* anno) {
-  return show_helper(anno, false);
-}
+std::string show(const DexAnnotation* anno) { return show_helper(anno, false); }
 
 std::string show_deobfuscated(const DexAnnotation* anno) {
   return show_helper(anno, true);
@@ -823,8 +816,7 @@ std::string show(IROpcode opcode) {
     return #op;
     OPS
 #undef OP
-  case IOPCODE_LOAD_PARAM:
-    return "IOPCODE_LOAD_PARAM";
+        case IOPCODE_LOAD_PARAM : return "IOPCODE_LOAD_PARAM";
   case IOPCODE_LOAD_PARAM_OBJECT:
     return "IOPCODE_LOAD_PARAM_OBJECT";
   case IOPCODE_LOAD_PARAM_WIDE:
@@ -847,17 +839,14 @@ std::string show(DexOpcode opcode) {
     return #op;
     DOPS
 #undef OP
-  case FOPCODE_PACKED_SWITCH:
-    return "PACKED_SWITCH_DATA";
+        case FOPCODE_PACKED_SWITCH : return "PACKED_SWITCH_DATA";
   case FOPCODE_SPARSE_SWITCH:
     return "SPARSE_SWITCH_DATA";
   case FOPCODE_FILLED_ARRAY:
     return "FILLED_ARRAY_DATA";
-  SWITCH_FORMAT_QUICK_FIELD_REF
-  SWITCH_FORMAT_QUICK_METHOD_REF
-  SWITCH_FORMAT_RETURN_VOID_NO_BARRIER {
-    not_reached();
-  }
+    SWITCH_FORMAT_QUICK_FIELD_REF
+    SWITCH_FORMAT_QUICK_METHOD_REF
+    SWITCH_FORMAT_RETURN_VOID_NO_BARRIER { not_reached(); }
   }
 }
 
@@ -883,9 +872,7 @@ std::string show(const DexInstruction* insn) {
   return ss.str();
 }
 
-std::string show(const IRInstruction* insn) {
-  return show_insn(insn, false);
-}
+std::string show(const IRInstruction* insn) { return show_insn(insn, false); }
 
 std::ostream& operator<<(std::ostream& o, const IRInstruction& insn) {
   o << show(&insn);
@@ -907,14 +894,14 @@ std::string show(const DexDebugInstruction* insn) {
     break;
   case DBG_START_LOCAL: {
     auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
-    ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name())
-        << ":" << show(sl->type());
+    ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name()) << ":"
+       << show(sl->type());
     break;
   }
   case DBG_START_LOCAL_EXTENDED: {
     auto sl = static_cast<const DexDebugOpcodeStartLocal*>(insn);
-    ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name())
-        << ":" << show(sl->type()) << ";" << show(sl->sig());
+    ss << "DBG_START_LOCAL v" << sl->uvalue() << " " << show(sl->name()) << ":"
+       << show(sl->type()) << ";" << show(sl->sig());
     break;
   }
   case DBG_END_LOCAL:
@@ -958,12 +945,12 @@ std::string show(const DexDebugEntry* entry) {
   std::ostringstream ss;
   ss << std::hex;
   switch (entry->type) {
-    case DexDebugEntryType::Instruction:
-      ss << "INSTRUCTION: [0x" << entry->addr << "] " << show(entry->insn);
-      break;
-    case DexDebugEntryType::Position:
-      ss << "POSITION: [0x" << entry->addr << "] " << show(entry->pos);
-      break;
+  case DexDebugEntryType::Instruction:
+    ss << "INSTRUCTION: [0x" << entry->addr << "] " << show(entry->insn);
+    break;
+  case DexDebugEntryType::Position:
+    ss << "POSITION: [0x" << entry->addr << "] " << show(entry->pos);
+    break;
   }
   return ss.str();
 }
@@ -1113,9 +1100,7 @@ std::string show(DexIdx* p) {
   return ss.str();
 }
 
-std::string show(const IRCode* mt) {
-  return show(mt->m_ir_list);
-}
+std::string show(const IRCode* mt) { return show(mt->m_ir_list); }
 
 std::string show(const ir_list::InstructionIterable& it) {
   std::ostringstream ss;
@@ -1161,12 +1146,13 @@ std::string show_deobfuscated(const DexFieldRef* ref) {
 
 std::string show_deobfuscated(const DexMethodRef* ref) {
   if (ref->is_def()) {
-    const auto& name =
-        static_cast<const DexMethod*>(ref)->get_deobfuscated_name();
+    const DexMethod* m = static_cast<const DexMethod*>(ref);
+    const auto& name = m->get_deobfuscated_name();
     if (!name.empty()) {
       return name;
     }
   }
+
   return show(ref);
 }
 
@@ -1179,4 +1165,45 @@ std::string show_deobfuscated(const DexEncodedValue* ev) {
     return "";
   }
   return ev->show_deobfuscated();
+}
+
+std::string show_deobfuscated(const DexTypeList* l) {
+  if (l == nullptr) {
+    return "";
+  }
+  const auto& type_list = l->get_type_list();
+  string_builders::DynamicStringBuilder b(type_list.size());
+  for (const auto& type : type_list) {
+    DexClass* type_cls = type_class(type);
+    if (type_cls == nullptr) {
+      // Primitive types
+      b << show(type);
+    } else {
+      if (type_cls->get_deobfuscated_name().empty()) {
+        b << show(type_cls);
+      } else {
+        b << show_deobfuscated(type_cls);
+      }
+    }
+  }
+  return b.str();
+}
+
+std::string show_deobfuscated(const DexProto* p) {
+  if (p == nullptr) {
+    return "";
+  }
+  DexClass* rtype_cls = type_class(p->get_rtype());
+  string_builders::StaticStringBuilder<4> b;
+  b << "(" << show_deobfuscated(p->get_args()) << ")";
+  if (rtype_cls == nullptr) {
+    b << show(p->get_rtype());
+  } else {
+    if (rtype_cls->get_deobfuscated_name().empty()) {
+      b << show(rtype_cls);
+    } else {
+      b << show_deobfuscated(rtype_cls);
+    }
+  }
+  return b.str();
 }
