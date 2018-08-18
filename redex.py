@@ -701,6 +701,7 @@ def finalize_redex(state):
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map.txt', 'debug line map', 'redex-debug-line-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2', 'debug method id map', 'redex-debug-line-map-v2')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'method-info-map.txt', 'method info map', 'redex-method-info-map.txt')
     copy_all_file_to_out_dir(state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
     if state.config_dict.get('proguard_map_output', '') != '':

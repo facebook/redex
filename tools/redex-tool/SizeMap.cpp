@@ -15,41 +15,20 @@
 /*
  * This tool dumps method size and property information.
  *
- * C, N, Lcom/foo/bar;
- * M, N, <clinit>:()V, 20, 0, 0, 1
- * M, N, <init>:()V, 38, 0, 0, 1
- * M, N, enableSomething:(Landroid/content/Context;)V, 67, 0, 0, 1
+ * Lcom/foo/bar;.<clinit>:()V, 20, 0, 0, 1
+ * Lcom/foo/bar;.<init>:()V, 38, 0, 0, 1
+ * Lcom/foo/bar;.enableSomething:(Landroid/content/Context;)V, 67, 0, 0, 1
  * ...
  */
 namespace {
 void dump_sizes(std::ostream& ofs, DexStoresVector& stores) {
   auto print = [&](DexMethod* method) {
-    if (method->get_dex_code() == nullptr) {
-      return;
-    }
-    ofs << "M, ";
-    auto full_name = method->get_deobfuscated_name();
-    // Print method name + proto, excluding class name.
-    if (!full_name.empty()) {
-      auto dot_pos = full_name.find(".");
-      if (dot_pos != std::string::npos) {
-        ofs << "N, " << full_name.substr(dot_pos + 1);
-      } else {
-        ofs << "?, " << full_name;
-      }
-    } else {
-      ofs << "Y, " << method->c_str() << ":" << show(method->get_proto());
-    }
-    ofs << ", " << method->get_dex_code()->size() << ", "
-        << method->is_virtual() << ", " << method->is_external() << ", "
+    ofs << method->get_fully_deobfuscated_name() << ", "
+        << (method->get_dex_code() ? method->get_dex_code()->size() : -1)
+        << ", " << method->is_virtual() << ", " << method->is_external() << ", "
         << method->is_concrete() << std::endl;
   };
-
   walk::classes(build_class_scope(stores), [&](DexClass* cls) {
-    ofs << "C, "
-        << (show_deobfuscated(cls).empty() ? ("Y, " + show(cls))
-                                           : ("N, " + show_deobfuscated(cls)))
-        << std::endl;
     for (auto dmethod : cls->get_dmethods()) {
       print(dmethod);
     }

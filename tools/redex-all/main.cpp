@@ -149,15 +149,9 @@ bool add_value_to_config(Json::Value& config,
 
 Json::Value default_config() {
   const auto passes = {
-      "ReBindRefsPass",
-      "BridgePass",
-      "SynthPass",
-      "FinalInlinePass",
-      "DelSuperPass",
-      "SingleImplPass",
-      "SimpleInlinePass",
-      "StaticReloPass",
-      "RemoveEmptyClassesPass",
+      "ReBindRefsPass",        "BridgePass",     "SynthPass",
+      "FinalInlinePass",       "DelSuperPass",   "SingleImplPass",
+      "SimpleInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
@@ -249,8 +243,8 @@ Arguments parse_args(int argc, char* argv[]) {
       "Note: Be careful to properly escape JSON parameters, e.g., strings must "
       "be quoted.");
   od.add_options()("show-passes", "show registered passes");
-  od.add_options()(
-      "dex-files", po::value<std::vector<std::string>>(), "dex files");
+  od.add_options()("dex-files", po::value<std::vector<std::string>>(),
+                   "dex files");
 
   po::positional_options_description pod;
   pod.add("dex-files", -1);
@@ -364,8 +358,8 @@ Arguments parse_args(int argc, char* argv[]) {
     args.art_build = false;
   }
 
-  TRACE(
-      MAIN, 2, "Verify-none mode: %s\n", args.verify_none_mode ? "Yes" : "No");
+  TRACE(MAIN, 2, "Verify-none mode: %s\n",
+        args.verify_none_mode ? "Yes" : "No");
   return args;
 }
 
@@ -726,15 +720,15 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
-      auto this_dex_stats = write_classes_to_dex(ss.str(),
+      auto this_dex_stats = write_classes_to_dex(
+          ss.str(),
           &store.get_dexen()[i],
           locator_index,
           i,
           cfg,
           pos_mapper.get(),
           debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
-          debug_line_mapping_filename_v2.empty() ? nullptr
-                                                 : &code_debug_lines);
+          debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines);
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
@@ -770,6 +764,25 @@ void redex_backend(const PassManager& manager,
     output_moved_methods_map(method_move_map.c_str(), cfg);
     print_warning_summary();
   }
+}
+
+void dump_method_info_map(const std::string file_path,
+                          DexStoresVector& stores) {
+  std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
+  auto print = [&](DexMethod* method) {
+    ofs << method->get_fully_deobfuscated_name() << ", "
+        << (method->get_dex_code() ? method->get_dex_code()->size() : -1)
+        << ", " << method->is_virtual() << ", " << method->is_external() << ", "
+        << method->is_concrete() << std::endl;
+  };
+  walk::classes(build_class_scope(stores), [&](DexClass* cls) {
+    for (auto dmethod : cls->get_dmethods()) {
+      print(dmethod);
+    }
+    for (auto vmethod : cls->get_vmethods()) {
+      print(vmethod);
+    }
+  });
 }
 } // namespace
 
@@ -817,6 +830,12 @@ int main(int argc, char* argv[]) {
     }
 
     redex_backend(manager, args.out_dir, cfg, stores, stats);
+
+    if (!args.config.get("method_info_map", "").empty()) {
+      dump_method_info_map(
+          cfg.metafile(args.config.get("method_info_map", "").asString()),
+          stores);
+    }
 
     stats_output_path =
         cfg.metafile(args.config.get("stats_output", "").asString());
