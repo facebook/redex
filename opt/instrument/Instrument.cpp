@@ -26,7 +26,6 @@
  * inserts the method to points of interest. For a starting example, we
  * implement the "onMethodBegin" instrumentation.
  */
-
 namespace {
 
 static bool debug = false;
@@ -373,14 +372,14 @@ int instrument_onBasicBlockBegin(
     // 2. BB has no opcodes.
     if (insert_point == block->end() || block->num_opcodes() < 1) {
       TRACE(INSTRUMENT, 7, "No instrumentation to block: %s\n",
-            SHOW(std::string(method->get_deobfuscated_name()) +
+            SHOW(std::string(method->get_fully_deobfuscated_name()) +
                  std::to_string(block->id())));
       continue;
     }
     num_blocks_instrumented++;
     code->insert_before(insert_point, or_inst);
   }
-  auto method_name = method->get_deobfuscated_name();
+  auto method_name = method->get_fully_deobfuscated_name();
   assert(!method_id_name_map.count(method_id));
   method_id_name_map.emplace(method_id, method_name);
   id_numbb_map.emplace(method_id, blocks.size());
@@ -474,8 +473,7 @@ void instrument_onMethodBegin(DexMethod* method,
   }
 }
 
-// Find a sequence of opcode that creates a static array. Patch the array
-// size.
+// Find a sequence of opcode that creates a static array. Patch the array size.
 void patch_array_size(DexClass& analysis_cls,
                       const char* array_name,
                       const int array_size) {
@@ -570,20 +568,20 @@ void patch_static_field(DexClass& analysis_cls,
   TRACE(INSTRUMENT, 2, "%s was patched: %d\n", field_name, new_number);
 }
 
-template <typename T>
-void write_index_file(const std::string& file_name,
-                      const std::vector<T>& id_vector) {
+void write_method_index_file(const std::string& file_name,
+                             const std::vector<DexMethod*>& id_vector) {
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (size_t i = 0; i < id_vector.size(); ++i) {
-    ofs << i + 1 << ", " << show(id_vector[i]) << std::endl;
+    ofs << i + 1 << ", " << id_vector[i]->get_fully_deobfuscated_name()
+        << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 }
 
-template <typename T>
-void write_index_file(const std::string& file_name,
-                      const std::unordered_map<int, T>& id_name_map,
-                      const std::unordered_map<int, int>& id_numbb_map) {
+void write_basic_block_index_file(
+    const std::string& file_name,
+    const std::unordered_map<int, std::string>& id_name_map,
+    const std::unordered_map<int, int>& id_numbb_map) {
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (auto it = id_name_map.begin(); it != id_name_map.end(); ++it) {
     ofs << it->first << ", " << show(it->second) << ","
@@ -669,8 +667,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Patch method count constant.
   patch_static_field(*analysis_cls, "sMethodCount", index);
 
-  write_index_file<DexMethod*>(cfg.metafile(options.metadata_file_name),
-                               method_id_vector);
+  write_method_index_file(cfg.metafile(options.metadata_file_name),
+                          method_id_vector);
 
   pm.incr_metric("Instrumented", index);
   pm.incr_metric("Excluded", excluded);
@@ -798,8 +796,8 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   });
   patch_array_size(*analysis_cls, "sBasicBlockStats", method_index);
 
-  write_index_file<std::string>(cfg.metafile(options.metadata_file_name),
-                                method_id_name_map, method_id_bb_map);
+  write_basic_block_index_file(cfg.metafile(options.metadata_file_name),
+                               method_id_name_map, method_id_bb_map);
   TRACE(INSTRUMENT, 3,
         "Instrumented %d methods(%d blocks) out of %d (Number of Blocks: "
         "%d).\n",
