@@ -71,6 +71,8 @@ struct Arguments {
   std::vector<std::string> dex_files;
   bool verify_none_mode{false};
   bool art_build{false};
+  boost::optional<int> stop_pass_idx;
+  std::string output_ir_dir;
 };
 
 UNUSED void dump_args(const Arguments& args) {
@@ -246,6 +248,13 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("dex-files", po::value<std::vector<std::string>>(),
                    "dex files");
 
+  // Development usage only, and Python script will generate the folloing
+  // arguments.
+  od.add_options()("stop-pass", po::value<int>(),
+                   "Stop before pass n and output IR to file");
+  od.add_options()("output-ir", po::value<std::string>(),
+                   "Output IR directory, used with --stop-pass");
+
   po::positional_options_description pod;
   pod.add("dex-files", -1);
   po::variables_map vm;
@@ -357,9 +366,38 @@ Arguments parse_args(int argc, char* argv[]) {
   } else {
     args.art_build = false;
   }
+  // Development usage only
+  if (vm.count("stop-pass")) {
+    args.stop_pass_idx = vm["stop-pass"].as<int>();
+  }
+
+  if (vm.count("output-ir")) {
+    args.output_ir_dir = vm["output-ir"].as<std::string>();
+  }
+  if (args.stop_pass_idx != boost::none) {
+    // Resize the passes list and append an additional RegAllocPass if its final
+    // pass is not RegAllocPass.
+    auto& passes_list = args.config["redex"]["passes"];
+    int idx = *args.stop_pass_idx;
+    if (idx < 0 || (size_t)idx > passes_list.size()) {
+      std::cerr << "Invalid stop_pass value\n";
+      exit(EXIT_FAILURE);
+    }
+    if (passes_list.size() > (size_t)idx) {
+      passes_list.resize(idx);
+    }
+    if (idx > 0 && passes_list[idx - 1].asString() != "RegAllocPass") {
+      passes_list.append("RegAllocPass");
+    }
+    if (args.output_ir_dir.empty() || !dir_is_writable(args.output_ir_dir)) {
+      std::cerr << "output-ir is empty or not writable" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+  }
 
   TRACE(MAIN, 2, "Verify-none mode: %s\n",
         args.verify_none_mode ? "Yes" : "No");
+
   return args;
 }
 
@@ -829,12 +867,16 @@ int main(int argc, char* argv[]) {
       manager.run_passes(stores, cfg);
     }
 
-    redex_backend(manager, args.out_dir, cfg, stores, stats);
-
-    if (!args.config.get("method_info_map", "").empty()) {
-      dump_method_info_map(
-          cfg.metafile(args.config.get("method_info_map", "").asString()),
-          stores);
+    if (args.stop_pass_idx == boost::none) {
+      // Call redex_backend by default
+      redex_backend(manager, args.out_dir, cfg, stores, stats);
+      if (!args.config.get("method_info_map", "").empty()) {
+        dump_method_info_map(
+            cfg.metafile(args.config.get("method_info_map", "").asString()),
+            stores);
+      }
+    } else {
+      // Dump intermediate dex and meta data
     }
 
     stats_output_path =
