@@ -650,8 +650,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // safely uploaded. So we enabled this pass but prevent actual
     // instrumentation.
     //
-    // instrument_onMethodBegin(method, index * options.num_stats_per_method,
-    //                          method_onMethodBegin);
+    instrument_onMethodBegin(method, index * options.num_stats_per_method,
+                             method_onMethodBegin);
   });
 
   TRACE(INSTRUMENT,
