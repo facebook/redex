@@ -17,6 +17,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "AbstractDomain.h"
 #include "PatriciaTreeUtil.h"
 
 // Forward declarations
@@ -142,16 +143,6 @@ class PatriciaTreeMap final {
   using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
 
-  PatriciaTreeMap() {
-    if (std::is_same<decltype(Value::leq(std::declval<typename Value::type>(),
-                                         std::declval<typename Value::type>())),
-                     bool>::value) {
-      RUNTIME_CHECK(Value::default_value().is_top() ||
-                        Value::default_value().is_bottom(),
-                    undefined_operation());
-    }
-  }
-
   ~PatriciaTreeMap() {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
@@ -168,14 +159,6 @@ class PatriciaTreeMap final {
                                             std::declval<mapped_type>())),
                      bool>::value,
         "Value::equals() does not exist");
-    static_assert(!std::is_same<decltype(Value::leq(
-                                    std::declval<typename Value::type>(),
-                                    std::declval<typename Value::type>())),
-                                bool>::value ||
-                      std::is_base_of<AbstractDomain<typename Value::type>,
-                                      typename Value::type>::value,
-                  "Value::leq() is defined, but Value::type is not an "
-                  "implementation of AbstractDomain");
   }
 
   bool is_empty() const { return m_tree == nullptr; }
@@ -199,6 +182,14 @@ class PatriciaTreeMap final {
   }
 
   bool leq(const PatriciaTreeMap& other) const {
+    static_assert(!std::is_same<decltype(Value::leq(
+                                    std::declval<typename Value::type>(),
+                                    std::declval<typename Value::type>())),
+                                bool>::value ||
+                      std::is_base_of<AbstractDomain<typename Value::type>,
+                                      typename Value::type>::value,
+                  "Value::leq() is defined, but Value::type is not an "
+                  "implementation of AbstractDomain");
     return ptmap_impl::leq<IntegerType>(m_tree, other.m_tree);
   }
 
