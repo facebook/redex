@@ -275,6 +275,7 @@ class DexFieldRef {
    DexType* get_class() const { return m_spec.cls; }
    DexString* get_name() const { return m_spec.name; }
    const char* c_str() const { return get_name()->c_str(); }
+   const std::string& str() const { return get_name()->str(); }
    DexType* get_type() const { return m_spec.type; }
 
    void gather_types_shallow(std::vector<DexType*>& ltype) const;
@@ -777,6 +778,7 @@ class DexMethodRef {
    DexType* get_class() const { return m_spec.cls; }
    DexString* get_name() const { return m_spec.name; }
    const char* c_str() const { return get_name()->c_str(); }
+   const std::string& str() const { return get_name()->str(); }
    DexProto* get_proto() const { return m_spec.proto; }
 
    void gather_types_shallow(std::vector<DexType*>& ltype) const;

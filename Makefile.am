@@ -117,6 +117,7 @@ libredex_la_SOURCES = \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/IRList.cpp \
+	libredex/IRMetaIO.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \

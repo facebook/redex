@@ -10,6 +10,10 @@
 #include <atomic>
 #include <string>
 
+namespace ir_meta_io {
+class IRMetaIO;
+}
+
 class ReferencedState {
  private:
   bool m_bytype{false};
@@ -46,6 +50,9 @@ class ReferencedState {
 
   // The number of keep rules that touch this class.
   std::atomic<unsigned int> m_keep_count{0};
+
+  // IR serialization class
+  friend class ir_meta_io::IRMetaIO;
 
  public:
   ReferencedState() = default;
