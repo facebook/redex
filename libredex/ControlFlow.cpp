@@ -524,7 +524,7 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
     }
 
     TRACE(CFG, 5, "  build: removing succ edges from block %d\n", b->id());
-    remove_succ_edges(b);
+    delete_succ_edges(b);
   }
   TRACE(CFG, 5, "  build: unreachables removed\n");
 }
@@ -551,6 +551,7 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
   remove_empty_blocks();
+  delete_unreferenced_edges();
 
   recompute_registers_size();
 }
@@ -611,7 +612,7 @@ void ControlFlowGraph::remove_empty_blocks() {
       // b is empty. Reorganize the edges so we can remove it
 
       // Remove the one goto edge from b to succ
-      remove_all_edges(b, succ);
+      delete_edges_between(b, succ);
 
       // Redirect from b's predecessors to b's successor (skipping b). We
       // can't move edges around while we iterate through the edge list
@@ -627,6 +628,28 @@ void ControlFlowGraph::remove_empty_blocks() {
     }
     delete b;
     it = m_blocks.erase(it);
+  }
+}
+
+void ControlFlowGraph::delete_unreferenced_edges() {
+  EdgeSet referenced;
+  for (const auto& entry : m_blocks) {
+    Block* b = entry.second;
+    for (Edge* e : b->preds()) {
+      referenced.insert(e);
+    }
+    for (Edge* e : b->succs()) {
+      referenced.insert(e);
+    }
+  }
+
+  for (auto it = m_edges.begin(); it != m_edges.end();) {
+    if (referenced.count(*it) == 0) {
+      delete *it;
+      it = m_edges.erase(it);
+    } else {
+      ++it;
+    }
   }
 }
 
@@ -1330,9 +1353,13 @@ void ControlFlowGraph::delete_pred_edges(Block* b) {
 
 // private edge removal functions
 //   These are raw removal, they don't free the edge.
-ControlFlowGraph::EdgeSet ControlFlowGraph::remove_all_edges(
+ControlFlowGraph::EdgeSet ControlFlowGraph::remove_edges_between(
     Block* p, Block* s, bool cleanup) {
   return remove_edge_if(p, s, [](const Edge*) { return true; }, cleanup);
+}
+
+void ControlFlowGraph::delete_edges_between(Block* p, Block* s) {
+  free_edges(remove_edges_between(p, s));
 }
 
 void ControlFlowGraph::remove_edge(Edge* edge, bool cleanup) {
@@ -1582,8 +1609,7 @@ void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
     always_assert(forward_edge == reverse_edge);
   }
 
-  // remove the edges between them
-  remove_all_edges(pred, succ);
+  delete_edges_between(pred, succ);
   // move succ's code into pred
   pred->m_entries.splice(pred->m_entries.end(), succ->m_entries);
 
@@ -1617,6 +1643,8 @@ void ControlFlowGraph::set_edge_source(Edge* edge,
 void ControlFlowGraph::move_edge(Edge* edge,
                                  Block* new_source,
                                  Block* new_target) {
+  // remove this edge from the graph temporarily but do not delete it because
+  // we're going to move it elsewhere
   remove_edge(edge, /* cleanup */ false);
 
   if (new_source != nullptr) {
@@ -1668,9 +1696,9 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
     //
     // Don't cleanup because we're deleting the instruction at the end of this
     // function
-    remove_succ_edge_if(block, [](const Edge* e) {
+    free_edges(remove_succ_edge_if(block, [](const Edge* e) {
       return e->type() == EDGE_BRANCH;
-    }, /* cleanup */ false);
+    }, /* cleanup */ false));
   } else if (insn->has_move_result_pseudo()) {
     // delete the move-result-pseudo too
     if (insn == last_it->insn) {
@@ -1707,7 +1735,7 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
   if (insn == last_it->insn && (opcode::may_throw(op) || op == OPCODE_THROW)) {
     // We're deleting the last instruction that may throw, this block no longer
     // throws. We should remove the throw edges
-    remove_succ_edge_if(block, [](const Edge* e) {
+    delete_succ_edge_if(block, [](const Edge* e) {
       return e->type() == EDGE_THROW;
     });
   }
@@ -1721,8 +1749,8 @@ void ControlFlowGraph::remove_block(Block* block) {
     always_assert(block->succs().size() == 1);
     set_entry_block(block->succs()[0]->target());
   }
-  remove_pred_edges(block);
-  remove_succ_edges(block);
+  delete_pred_edges(block);
+  delete_succ_edges(block);
   m_blocks.erase(block->id());
   block->m_entries.clear_and_dispose();
   delete block;

@@ -384,19 +384,18 @@ class ControlFlowGraph {
   std::vector<Edge*> get_succ_edges_of_type(
       const Block* block, EdgeType type) const;
 
-  // remove_..._edge:
+  // delete_..._edge:
   //   * These functions remove edges from the graph and free the memory
   //   * the `_if` functions take a predicate to decide which edges to delete
   void delete_edge(Edge* edge);
   void delete_edge_if(Block* source,
-                         Block* target,
-                         const EdgePredicate& predicate);
-  void delete_succ_edge_if(Block* block,
-                              const EdgePredicate& predicate);
-  void delete_pred_edge_if(Block* block,
-                              const EdgePredicate& predicate);
+                      Block* target,
+                      const EdgePredicate& predicate);
+  void delete_succ_edge_if(Block* block, const EdgePredicate& predicate);
+  void delete_pred_edge_if(Block* block, const EdgePredicate& predicate);
   void delete_succ_edges(Block* b);
   void delete_pred_edges(Block* b);
+  void delete_edges_between(Block* p, Block* s);
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
@@ -585,6 +584,9 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
+  // Delete edges that are never a predecessor or successor of a block
+  void delete_unreferenced_edges();
+
   // remove_..._edge:
   //   * These functions remove edges from the graph.
   //   * They do not free the memory of the edge. `free_edge` does that.
@@ -593,21 +595,20 @@ class ControlFlowGraph {
   //   * the `_if` functions take a predicate to decide which edges to delete
   //   * They return which edges were removed (with the exception of
   //     `remove_edge`)
-  EdgeSet remove_all_edges(Block* pred, Block* succ, bool cleanup = true);
-
   void remove_edge(Edge* edge, bool cleanup = true);
   EdgeSet remove_edge_if(Block* source,
-                              Block* target,
+                         Block* target,
+                         const EdgePredicate& predicate,
+                         bool cleanup = true);
+  EdgeSet remove_succ_edge_if(Block* block,
                               const EdgePredicate& predicate,
                               bool cleanup = true);
-  EdgeSet remove_succ_edge_if(Block* block,
-                                   const EdgePredicate& predicate,
-                                   bool cleanup = true);
   EdgeSet remove_pred_edge_if(Block* block,
-                                   const EdgePredicate& predicate,
-                                   bool cleanup = true);
+                              const EdgePredicate& predicate,
+                              bool cleanup = true);
   EdgeSet remove_succ_edges(Block* b, bool cleanup = true);
   EdgeSet remove_pred_edges(Block* b, bool cleanup = true);
+  EdgeSet remove_edges_between(Block* p, Block* s, bool cleanup = true);
 
   // Assumes the edge is already removed.
   void free_edge(Edge* edge);
