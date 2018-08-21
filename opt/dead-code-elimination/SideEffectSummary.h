@@ -84,10 +84,10 @@ Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
 /*
  * Get the effect summary for all methods in scope.
  */
-void analyze_scope(
-    const Scope& scope,
-    const call_graph::Graph&,
-    ConcurrentMap<const DexMethodRef*, local_pointers::FixpointIterator*>&,
-    SummaryMap* effect_summaries);
+void analyze_scope(const Scope& scope,
+                   const call_graph::Graph&,
+                   const ConcurrentMap<const DexMethodRef*,
+                                       local_pointers::FixpointIterator*>&,
+                   SummaryMap* effect_summaries);
 
 } // namespace side_effects

@@ -21,7 +21,7 @@
 // Forward declaration.
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots>
+template <typename Container, typename Iterator, size_t n_slots, bool is_const>
 class ConcurrentContainerIterator;
 
 } // namespace cc_impl
@@ -54,12 +54,14 @@ class ConcurrentContainer {
   using iterator =
       cc_impl::ConcurrentContainerIterator<Container,
                                            typename Container::iterator,
-                                           n_slots>;
+                                           n_slots,
+                                           /* is_const */ false>;
 
   using const_iterator =
       cc_impl::ConcurrentContainerIterator<Container,
                                            typename Container::const_iterator,
-                                           n_slots>;
+                                           n_slots,
+                                           /* is_const */ true>;
 
   virtual ~ConcurrentContainer() {}
 
@@ -91,6 +93,15 @@ class ConcurrentContainer {
     return iterator(&m_slots[0], slot, it);
   }
 
+  const_iterator find(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(key);
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return const_iterator(&m_slots[0], slot, it);
+  }
+
   size_t size() const {
     size_t s = 0;
     for (size_t slot = 0; slot < n_slots; ++slot) {
@@ -117,9 +128,14 @@ class ConcurrentContainer {
   /*
    * This operation is always thread-safe.
    */
-  size_t count(const Key& key) {
+  size_t count(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(m_locks[slot]);
+    return m_slots[slot].count(key);
+  }
+
+  size_t count_unsafe(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
     return m_slots[slot].count(key);
   }
 
@@ -138,10 +154,12 @@ class ConcurrentContainer {
 
   Container& get_container(size_t slot) { return m_slots[slot]; }
 
-  boost::mutex& get_lock(size_t slot) { return m_locks[slot]; }
+  const Container& get_container(size_t slot) const { return m_slots[slot]; }
+
+  boost::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
 
  private:
-  boost::mutex m_locks[n_slots];
+  mutable boost::mutex m_locks[n_slots];
   Container m_slots[n_slots];
 };
 
@@ -168,11 +186,16 @@ class ConcurrentMap final
    * rather than a reference since insertions from other threads may cause the
    * hashtables to be resized. If you are reading from a ConcurrentMap that is
    * not being concurrently modified, it will probably be faster to use
-   * `find()` to avoid the copy.
+   * `find()` or `at_unsafe()` to avoid the copy.
    */
-  Value at(const Key& key) {
+  Value at(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    return this->get_container(slot).at(key);
+  }
+
+  const Value& at_unsafe(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
     return this->get_container(slot).at(key);
   }
 
@@ -269,19 +292,23 @@ class ConcurrentSet final
 
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots>
+template <typename Container, typename Iterator, size_t n_slots, bool is_const>
 class ConcurrentContainerIterator final
     : public std::iterator<std::forward_iterator_tag,
                            typename Iterator::value_type> {
+
+  using ContainerType =
+      typename std::conditional<is_const, const Container, Container>::type;
+
  public:
-  explicit ConcurrentContainerIterator(Container* slots)
+  explicit ConcurrentContainerIterator(ContainerType* slots)
       : m_slots(slots),
         m_slot(n_slots - 1),
         m_position(m_slots[n_slots - 1].end()) {
     skip_empty_slots();
   }
 
-  ConcurrentContainerIterator(Container* slots,
+  ConcurrentContainerIterator(ContainerType* slots,
                               size_t slot,
                               const Iterator& position)
       : m_slots(slots), m_slot(slot), m_position(position) {
@@ -327,7 +354,7 @@ class ConcurrentContainerIterator final
     }
   }
 
-  Container* m_slots;
+  ContainerType* m_slots;
   size_t m_slot;
   Iterator m_position;
 };

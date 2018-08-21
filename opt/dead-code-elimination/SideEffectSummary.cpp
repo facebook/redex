@@ -183,7 +183,7 @@ class SummaryBuilder final {
  */
 void analyze_method_recursive(const DexMethod* method,
                               const call_graph::Graph& call_graph,
-                              ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
+                              const ptrs::FixpointIteratorMap& ptrs_fp_iter_map,
                               PatriciaTreeSet<const DexMethodRef*> visiting,
                               SummaryConcurrentMap* summary_cmap) {
   if (summary_cmap->count(method) != 0 || visiting.contains(method) ||
@@ -223,11 +223,12 @@ Summary analyze_code(const InvokeToSummaryMap& invoke_to_summary_cmap,
   return SummaryBuilder(invoke_to_summary_cmap, ptrs_fp_iter, code).build();
 }
 
-void analyze_scope(const Scope& scope,
-                   const call_graph::Graph& call_graph,
-                   ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
-                       ptrs_fp_iter_map,
-                   SummaryMap* summary_map) {
+void analyze_scope(
+    const Scope& scope,
+    const call_graph::Graph& call_graph,
+    const ConcurrentMap<const DexMethodRef*, ptrs::FixpointIterator*>&
+        ptrs_fp_iter_map,
+    SummaryMap* summary_map) {
   // This method is special: the bytecode verifier requires that this method
   // be called before a newly-allocated object gets used in any way. We can
   // model this by treating the method as modifying its `this` parameter --
