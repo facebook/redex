@@ -372,14 +372,14 @@ int instrument_onBasicBlockBegin(
     // 2. BB has no opcodes.
     if (insert_point == block->end() || block->num_opcodes() < 1) {
       TRACE(INSTRUMENT, 7, "No instrumentation to block: %s\n",
-            SHOW(std::string(method->get_fully_deobfuscated_name()) +
-                 std::to_string(block->id())));
+            SHOW(show(method) + std::to_string(block->id())));
       continue;
     }
     num_blocks_instrumented++;
     code->insert_before(insert_point, or_inst);
   }
-  auto method_name = method->get_fully_deobfuscated_name();
+  // We use intentionally obfuscated name to guarantee the uniqueness.
+  const auto& method_name = show(method);
   assert(!method_id_name_map.count(method_id));
   method_id_name_map.emplace(method_id, method_name);
   id_numbb_map.emplace(method_id, blocks.size());
@@ -572,8 +572,8 @@ void write_method_index_file(const std::string& file_name,
                              const std::vector<DexMethod*>& id_vector) {
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (size_t i = 0; i < id_vector.size(); ++i) {
-    ofs << i + 1 << ", " << id_vector[i]->get_fully_deobfuscated_name()
-        << std::endl;
+    // We use intentionally obfuscated name to guarantee the uniqueness.
+    ofs << i + 1 << ", " << show(id_vector[i]) << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 }

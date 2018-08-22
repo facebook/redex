@@ -1167,6 +1167,28 @@ std::string show_deobfuscated(const DexEncodedValue* ev) {
   return ev->show_deobfuscated();
 }
 
+std::string show_deobfuscated(const DexType* t) {
+  std::function<std::string(const DexType*)> f = [&f](const DexType* t) {
+    if (t == nullptr) {
+      return std::string("");
+    }
+    const auto& name = show(t);
+    if (name[0] == 'L') {
+      const DexClass* cls = type_class(t);
+      if (cls == nullptr || cls->get_deobfuscated_name().empty()) {
+        return name;
+      }
+      return cls->get_deobfuscated_name();
+    } else if (name[0] == '[') {
+      std::ostringstream ss;
+      ss << '[' << f(DexType::get_type(name.substr(1)));
+      return ss.str();
+    }
+    return name;
+  };
+  return f(t);
+}
+
 std::string show_deobfuscated(const DexTypeList* l) {
   if (l == nullptr) {
     return "";
@@ -1174,17 +1196,7 @@ std::string show_deobfuscated(const DexTypeList* l) {
   const auto& type_list = l->get_type_list();
   string_builders::DynamicStringBuilder b(type_list.size());
   for (const auto& type : type_list) {
-    DexClass* type_cls = type_class(type);
-    if (type_cls == nullptr) {
-      // Primitive types
-      b << show(type);
-    } else {
-      if (type_cls->get_deobfuscated_name().empty()) {
-        b << show(type_cls);
-      } else {
-        b << show_deobfuscated(type_cls);
-      }
-    }
+    b << show_deobfuscated(type);
   }
   return b.str();
 }
@@ -1193,17 +1205,8 @@ std::string show_deobfuscated(const DexProto* p) {
   if (p == nullptr) {
     return "";
   }
-  DexClass* rtype_cls = type_class(p->get_rtype());
   string_builders::StaticStringBuilder<4> b;
-  b << "(" << show_deobfuscated(p->get_args()) << ")";
-  if (rtype_cls == nullptr) {
-    b << show(p->get_rtype());
-  } else {
-    if (rtype_cls->get_deobfuscated_name().empty()) {
-      b << show(rtype_cls);
-    } else {
-      b << show_deobfuscated(rtype_cls);
-    }
-  }
+  b << "(" << show_deobfuscated(p->get_args()) << ")"
+    << show_deobfuscated(p->get_rtype());
   return b.str();
 }

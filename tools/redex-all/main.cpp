@@ -734,9 +734,9 @@ void redex_backend(const PassManager& manager,
   auto pos_output_v2 =
       cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
   auto debug_line_mapping_filename =
-     cfg.metafile(json_cfg.get("debug_line_method_map", std::string()));
-  auto debug_line_mapping_filename_v2 = cfg.metafile(
-     json_cfg.get("debug_line_method_map_v2", std::string()));
+      cfg.metafile(json_cfg.get("debug_line_method_map", std::string()));
+  auto debug_line_mapping_filename_v2 =
+      cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
 
   std::unique_ptr<PositionMapper> pos_mapper(
       PositionMapper::make(pos_output, pos_output_v2));
@@ -776,10 +776,10 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing opt decisions data");
     const Json::Value& opt_decisions_args =
-      cfg.get_json_config()["opt_decisions"];
+        cfg.get_json_config()["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
-      auto opt_decisions_output_path =
-          cfg.metafile(opt_decisions_args.get("output_file_name", "").asString());
+      auto opt_decisions_output_path = cfg.metafile(
+          opt_decisions_args.get("output_file_name", "").asString());
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
       Json::StyledStreamWriter writer;
@@ -809,7 +809,7 @@ void dump_method_info_map(const std::string file_path,
                           DexStoresVector& stores) {
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
   auto print = [&](DexMethod* method) {
-    ofs << method->get_fully_deobfuscated_name() << ", "
+    ofs << show(method) << ", " << method->get_fully_deobfuscated_name() << ", "
         << (method->get_dex_code() ? method->get_dex_code()->size() : -1)
         << ", " << method->is_virtual() << ", " << method->is_external() << ", "
         << method->is_concrete() << std::endl;
