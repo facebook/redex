@@ -246,6 +246,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 
   insert_invoke_instr(code, insert_point, method_id_inst, invoke_inst);
 } // namespace
+
 void insert_invoke_static_call_bb(IRCode* code,
                                   size_t method_id,
                                   DexMethod* method_onMethodExit,
@@ -301,11 +302,14 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
       });
 }
 
-// num_vectors is the number of 16-bit vectors used to capture all the basic
-// blocks in the current method.
-// For every basic block, add an instruction to calculate
-// bit_vector[n] OR (1<<block_id).
-
+// For every basic block, add an instruction to calculate:
+//   bit_vector[n] OR (1 << block_id).
+//
+// We use 16-bit short vectors to capture all the basic blocks in a method. We
+// reserve the MSB of each 16-bit vector as the end marker. This end marker is
+// used to distinguish multiple bit vectors. The set MSB indicates continuation:
+// read the following vector(s) again until we see the unset MSB. We actually
+// use 15 bits per vector.
 int instrument_onBasicBlockBegin(
     IRCode* code,
     DexMethod* method,
@@ -314,53 +318,55 @@ int instrument_onBasicBlockBegin(
     int& all_bbs,
     int& num_blocks_instrumented,
     int& all_methods_inst,
-    std::unordered_map<int, std::string>& method_id_name_map,
-    std::unordered_map<int, int>& id_numbb_map) {
+    std::map<int, std::pair<std::string, int>>& method_id_name_map,
+    std::map<size_t, int>& bb_vector_stat) {
   assert(code != nullptr);
 
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
-  TRACE(INSTRUMENT, 7, "[%s] Number of Basic Blocks: %zu\n",
-        SHOW(method->get_name()), blocks.size());
-
   // It is done this way to avoid using ceil() or double/float casting.
-  const size_t num_vectors = (blocks.size() + 16 - 1) / 16;
+  // Since we reserve the MSB as the end marker, we divide by 15.
+  const size_t num_vectors = (blocks.size() + 15 - 1) / 15;
 
-  TRACE(INSTRUMENT, 7, "[%s] Number of Vectors: %zu\n",
-        SHOW(method->get_name()), num_vectors);
+  TRACE(INSTRUMENT, 7, "[%s] Basic Blocks: %zu, Necessary vectors: %zu\n",
+        SHOW(method->get_name()), blocks.size(), num_vectors);
 
   all_bbs += blocks.size();
 
-  // Add <num_vectors> 16 bit integers to the beginning to method. These will be
-  // used as basic block bit vectors.
+  // Add <num_vectors> shorts to the beginning to method. These will be used as
+  // basic block 16-bit vectors.
   std::vector<uint16_t> reg_bb_vector(num_vectors);
   std::vector<IRInstruction*> const_inst_int(num_vectors);
   for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
     const_inst_int.at(reg_index) = new IRInstruction(OPCODE_CONST);
-    const_inst_int.at(reg_index)->set_literal(0);
+    // The very last bit is for the end marker: the unset bit. Otherwise, set
+    // the MSB to indicate continuation.
+    const_inst_int.at(reg_index)->set_literal(
+        reg_index == num_vectors - 1 ? 0 : -32768);
     reg_bb_vector.at(reg_index) = code->allocate_temp();
     const_inst_int.at(reg_index)->set_dest(reg_bb_vector.at(reg_index));
   }
+
   // Before the basic blocks are instrumented, at the method exit points,
-  // we add an INVOKE_STATIC call to send the bit vector to logs.
-  // This is done before actual instrumentation to get the updated CFG after
-  // adding edges to this invoke call.
-  // The INVOKE call takes (num_vectors+1) arguments: 1-Method ID,
-  // num_vectors-Bit Vectors.
+  // we add an INVOKE_STATIC call to send the bit vector to logs. This is done
+  // before actual instrumentation to get the updated CFG after adding edges to
+  // this invoke call. The INVOKE call takes (num_vectors + 1) arguments:
+  // Method ID (actually, the short array offset) and bit vectors * n.
   size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
+  ++bb_vector_stat[num_vectors];
   assert(method_onMethodExit_map.count(index_to_method));
   insert_invoke_static_call_bb(code, method_id,
                                method_onMethodExit_map.at(index_to_method),
                                reg_bb_vector);
 
   for (cfg::Block* block : blocks) {
-    const size_t block_vector_index = block->id() / 16;
+    const size_t block_vector_index = block->id() / 15;
     // Add instruction to calculate 'basic_block_bit_vector |= 1 << block->id()'
     // We use OPCODE_OR_INT_LIT16 to prevent inserting an extra CONST
     // instruction into the bytecode.
     IRInstruction* or_inst = new IRInstruction(OPCODE_OR_INT_LIT16);
-    or_inst->set_literal(static_cast<int16_t>(1ULL << (block->id() % 16)));
+    or_inst->set_literal(static_cast<int16_t>(1ULL << (block->id() % 15)));
     or_inst->set_src(0, reg_bb_vector.at(block_vector_index));
     or_inst->set_dest(reg_bb_vector.at(block_vector_index));
 
@@ -378,11 +384,12 @@ int instrument_onBasicBlockBegin(
     num_blocks_instrumented++;
     code->insert_before(insert_point, or_inst);
   }
+
   // We use intentionally obfuscated name to guarantee the uniqueness.
   const auto& method_name = show(method);
   assert(!method_id_name_map.count(method_id));
-  method_id_name_map.emplace(method_id, method_name);
-  id_numbb_map.emplace(method_id, blocks.size());
+  method_id_name_map.emplace(method_id,
+                             std::make_pair(method_name, blocks.size()));
 
   // Find a point at the beginning of the method to insert the init
   // instruction. This initializes bit vector registers to 0.
@@ -580,12 +587,11 @@ void write_method_index_file(const std::string& file_name,
 
 void write_basic_block_index_file(
     const std::string& file_name,
-    const std::unordered_map<int, std::string>& id_name_map,
-    const std::unordered_map<int, int>& id_numbb_map) {
+    const std::map<int, std::pair<std::string, int>>& id_name_map) {
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
-  for (auto it = id_name_map.begin(); it != id_name_map.end(); ++it) {
-    ofs << it->first << ", " << show(it->second) << ","
-        << id_numbb_map.find(it->first)->second << std::endl;
+  for (const auto& p : id_name_map) {
+    ofs << p.first << ", " << p.second.first << ", " << p.second.second
+        << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 } // namespace
@@ -746,8 +752,8 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   int all_methods = 0;
   int all_bb_inst = 0;
   int all_method_inst = 0;
-  std::unordered_map<int /*id*/, std::string> method_id_name_map;
-  std::unordered_map<int /*id*/, int /*Num BBs*/> method_id_bb_map;
+  std::map<int /*id*/, std::pair<std::string, int /*number of BBs*/>>
+      method_id_name_map;
   auto scope = build_class_scope(stores);
 
   auto interdex_list = cfg.get_coldstart_classes();
@@ -762,6 +768,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   }
   TRACE(INSTRUMENT, 7, "Number of classes: %d\n", cold_start_classes.size());
 
+  std::map<size_t /* num_vectors */, int /* count */> bb_vector_stat;
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method == analysis_cls->get_clinit()) {
       return;
@@ -776,8 +783,9 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     if ((!options.whitelist.empty() &&
          !is_included(method->get_name()->str(), method->get_class()->c_str(),
                       options.whitelist)) ||
-        !is_included(method->get_name()->str(), method->get_class()->c_str(),
-                     cold_start_classes)) {
+        (options.only_cold_start_class &&
+         !is_included(method->get_name()->str(), method->get_class()->c_str(),
+                      cold_start_classes))) {
       return;
     }
 
@@ -792,15 +800,25 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     all_methods++;
     method_index = instrument_onBasicBlockBegin(
         &code, method, method_onMethodExit_map, method_index, all_bb_nums,
-        all_bb_inst, all_method_inst, method_id_name_map, method_id_bb_map);
+        all_bb_inst, all_method_inst, method_id_name_map, bb_vector_stat);
   });
   patch_array_size(*analysis_cls, "sBasicBlockStats", method_index);
 
   write_basic_block_index_file(cfg.metafile(options.metadata_file_name),
-                               method_id_name_map, method_id_bb_map);
+                               method_id_name_map);
+
+  double cumulative = 0.;
+  TRACE(INSTRUMENT, 4, "BB vector stats:\n");
+  for (const auto& p : bb_vector_stat) {
+    double percent = (double)p.second * 100. / (float)all_method_inst;
+    cumulative += percent;
+    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)\n",
+          p.first, p.second, percent, cumulative);
+  }
+
   TRACE(INSTRUMENT, 3,
-        "Instrumented %d methods(%d blocks) out of %d (Number of Blocks: "
-        "%d).\n",
+        "Instrumented %d methods and %d blocks, out of %d methods and %d "
+        "blocks\n",
         (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
 }
 

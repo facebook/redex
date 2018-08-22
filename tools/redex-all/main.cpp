@@ -810,7 +810,7 @@ void dump_method_info_map(const std::string file_path,
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
   auto print = [&](DexMethod* method) {
     ofs << show(method) << ", " << method->get_fully_deobfuscated_name() << ", "
-        << (method->get_dex_code() ? method->get_dex_code()->size() : -1)
+        << (method->get_dex_code() ? method->get_dex_code()->size() : 0)
         << ", " << method->is_virtual() << ", " << method->is_external() << ", "
         << method->is_concrete() << std::endl;
   };

@@ -31,6 +31,7 @@ class InstrumentPass : public Pass {
     jw.get("metadata_file_name", "instrument-mapping.txt",
            m_options.metadata_file_name);
     jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
+    jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -43,6 +44,7 @@ class InstrumentPass : public Pass {
     std::unordered_set<std::string> whitelist;
     std::string metadata_file_name;
     int64_t num_stats_per_method;
+    bool only_cold_start_class;
   };
 
  private:
