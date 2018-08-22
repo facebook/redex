@@ -271,7 +271,8 @@ redex_all_SOURCES = \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
-	service/method-dedup/ConstantLifting.cpp \
+  service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
 	service/reference-update/MethodReference.cpp \
