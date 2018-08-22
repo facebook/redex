@@ -1187,7 +1187,10 @@ ControlFlowGraph::~ControlFlowGraph() {
 }
 
 Block* ControlFlowGraph::create_block() {
-  size_t id = m_blocks.size();
+  const auto& rbegin = m_blocks.rbegin();
+  // Choose the next largest id. Note that we can't use m_block.size() because
+  // we may have deleted some blocks from the cfg.
+  size_t id = (rbegin == m_blocks.rend()) ? 0 : (rbegin->first + 1);
   Block* b = new Block(this, id);
   m_blocks.emplace(id, b);
   return b;
