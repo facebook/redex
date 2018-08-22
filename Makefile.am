@@ -277,6 +277,7 @@ redex_all_SOURCES = \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
+	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \
