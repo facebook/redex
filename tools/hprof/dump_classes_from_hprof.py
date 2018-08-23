@@ -1279,4 +1279,5 @@ if __name__ == "__main__":
     # so it's useful to sort by them.
     class_serials.sort(key=lambda x: x[1])
     for cls in class_serials:
-        print(str(cls[0]) + ".class")
+        class_name = str(cls[0]).replace(".", "/") + ".class"
+        print(class_name)
