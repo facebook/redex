@@ -23,23 +23,40 @@ void fix_colliding_method(
     const std::unordered_map<DexMethod*, DexProto*>& colliding_methods) {
   // Fix colliding methods by appending an additional param.
   TRACE(REFU, 9, "sig: colliding_methods %d\n", colliding_methods.size());
+  std::unordered_map<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
     auto new_proto = it.second;
     auto new_arg_list =
         type_reference::append_and_make(new_proto->get_args(), get_int_type());
     new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+    size_t arg_count = 1;
+    while (DexMethod::get_method(
+               meth->get_class(), meth->get_name(), new_proto) != nullptr) {
+      new_arg_list = type_reference::append_and_make(new_proto->get_args(),
+                                                     get_int_type());
+      new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
+      ++arg_count;
+    }
+
     DexMethodSpec spec;
     spec.proto = new_proto;
     meth->change(spec, false);
+    num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
-    auto new_param_reg = code->allocate_temp();
-    auto& last_param = code->get_param_instructions().back().insn;
-    auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
-    new_param_load->set_dest(new_param_reg);
-    code->insert_after(last_param, std::vector<IRInstruction*>{new_param_load});
-    TRACE(REFU, 9, "sig: patching colliding method %s\n", SHOW(meth));
+    for (size_t i = 0; i < arg_count; ++i) {
+      auto new_param_reg = code->allocate_temp();
+      auto params = code->get_param_instructions();
+      auto new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+      new_param_load->set_dest(new_param_reg);
+      code->insert_before(params.end(), new_param_load);
+    }
+    TRACE(REFU,
+          9,
+          "sig: patching colliding method %s with %d additional args\n",
+          SHOW(meth),
+          arg_count);
   }
 
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
@@ -70,8 +87,13 @@ void fix_colliding_method(
             SHOW(meth));
       // 42 is a dummy int val as the additional argument to the patched
       // colliding method.
+      std::vector<uint32_t> additional_args;
+      for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
+        additional_args.push_back(42);
+      }
       method_reference::CallSiteSpec spec{meth, insn, callee};
-      method_reference::patch_callsite(spec, boost::optional<uint32_t>(42));
+      method_reference::patch_callsite_var_additional_args(
+          spec, boost::optional<std::vector<uint32_t>>(additional_args));
     }
   });
 }
