@@ -117,6 +117,15 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, latticeOperations) {
 
   EXPECT_TRUE(e1.meet(Environment::bottom()).is_bottom());
   EXPECT_TRUE(e1.meet(Environment::top()).equals(e1));
+  
+  Environment s1({{7, Domain({"a", "b"})}});
+  Environment s2({{7, Domain({"a", "b", "c"})}});
+  Environment s3({{4, Domain({"a", "b", "c"})}});
+  EXPECT_TRUE(s1.leq(s2));
+  EXPECT_FALSE(s2.leq(s1));
+  EXPECT_FALSE(s1.leq(s3));
+  EXPECT_FALSE(s2.leq(s3));
+  EXPECT_FALSE(s3.leq(s2));
 }
 
 TEST_F(PatriciaTreeMapAbstractEnvironmentTest, destructiveOperations) {

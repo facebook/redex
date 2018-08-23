@@ -96,8 +96,8 @@ T snd(const T&, const T& second) {
 } // namespace ptmap_impl
 
 /*
- * This structure implements a map of integer keys and AbstractDomain values.
- * It's based on the following paper:
+ * This structure implements a map of integer/pointer keys and AbstractDomain
+ * values. It's based on the following paper:
  *
  *   C. Okasaki, A. Gill. Fast Mergeable Integer Maps. In Workshop on ML (1998).
  *
@@ -130,6 +130,11 @@ T snd(const T&, const T& second) {
  *     // implementation of an AbstractDomain.
  *     static bool leq(const type& x, const type& y);
  *   }
+ *
+ * Patricia trees can only handle unsigned integers. Arbitrary objects can be
+ * accommodated as long as they are represented as pointers. Our implementation
+ * of Patricia-tree maps can transparently operate on keys that are either
+ * unsigned integers or pointers to objects.
  */
 template <typename Key, typename Value>
 class PatriciaTreeMap final {
@@ -270,8 +275,8 @@ class PatriciaTreeMap final {
 
  private:
   // These functions are used to handle the type conversions required when
-  // manipulating sets of pointers. The first parameter is necessary to make
-  // template deduction work.
+  // manipulating maps with pointer keys. The first parameter is necessary to
+  // make template deduction work.
   template <typename T = Key,
             typename = typename std::enable_if_t<std::is_pointer<T>::value>>
   static uintptr_t encode(Key x) {
@@ -497,7 +502,8 @@ inline bool leq(const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(s);
     const auto& t_leaf =
         std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(t);
-    return Value::leq(s_leaf->value(), t_leaf->value());
+    return s_leaf->key() == t_leaf->key() &&
+           Value::leq(s_leaf->value(), t_leaf->value());
   }
   if (t->is_leaf()) {
     const auto& leaf =
