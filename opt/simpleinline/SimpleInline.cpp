@@ -156,17 +156,13 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
       no_inline_anno_count++;
       return;
     }
-    if (code.count_opcodes() < SMALL_CODE_SIZE) {
-      // always inline small methods even if they are not deletable
-      inlinable.insert(meth);
+
+    if (!can_delete(meth)) {
+      // never inline methods that cannot be deleted
+      TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
+      dont_strip++;
     } else {
-      if (!can_delete(meth)) {
-        // never inline methods that cannot be deleted
-        TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
-        dont_strip++;
-      } else {
-        methods.insert(meth);
-      }
+      methods.insert(meth);
     }
 
     if (has_anno(meth, force_inline)) {

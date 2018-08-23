@@ -410,3 +410,21 @@ TEST_F(PostVerify, testFillArrayOpcode) {
   EXPECT_EQ(nullptr,
             find_invoke(m, DOPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
 }
+
+TEST_F(PreVerify, testUpdateCodeSizeWhenInlining) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_DIRECT, "bigMethod"));
+}
+
+TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto small = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
+  EXPECT_NE(small, nullptr)
+      << "smallMethodThatBecomesBig should not be inlined!";
+  EXPECT_EQ(nullptr,
+            find_invoke(small, DOPCODE_INVOKE_DIRECT, "bigMethod"));
+}

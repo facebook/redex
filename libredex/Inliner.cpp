@@ -20,6 +20,8 @@ namespace {
 
 const size_t CODE_SIZE_2_CALLERS = 7;
 const size_t CODE_SIZE_3_CALLERS = 5;
+// count of instructions that define a method as inlinable always
+const size_t CODE_SIZE_ANY_CALLERS = 2;
 
 // the max number of callers we care to track explicitly, after that we
 // group all callees/callers count in the same bucket
@@ -683,6 +685,22 @@ void MultiMethodInliner::invoke_direct_to_static() {
       });
 }
 
+void adjust_opcode_counts(
+    const std::unordered_multimap<DexMethod*, DexMethod*>& callee_to_callers,
+    DexMethod* callee,
+    std::unordered_map<DexMethod*, size_t>* adjusted_opcode_count) {
+  auto code = callee->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  auto code_size = code->count_opcodes();
+  auto range = callee_to_callers.equal_range(callee);
+  for (auto it = range.first; it != range.second; ++it) {
+    auto caller = it->second;
+    (*adjusted_opcode_count)[caller] += code_size;
+  }
+}
+
 void select_inlinable(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& methods,
@@ -690,8 +708,15 @@ void select_inlinable(
     std::unordered_set<DexMethod*>* inlinable,
     bool multiple_callers) {
   std::unordered_map<DexMethod*, int> calls;
+  // Keep adjusted tally of opcode size after a method is selected for inlining.
+  // This avoids an edge case where a small method has many callers, but becomes
+  // large due to inlining (need to prevent code duplication in such a case)
+  std::unordered_map<DexMethod*, size_t> adjusted_opcode_count;
+  std::unordered_multimap<DexMethod*, DexMethod*> callee_to_callers;
   for (const auto& method : methods) {
     calls[method] = 0;
+    auto code = method->get_code();
+    adjusted_opcode_count[method] = code == nullptr ? 0 : code->count_opcodes();
   }
   // count call sites for each method
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
@@ -702,6 +727,7 @@ void select_inlinable(
           if (callee != nullptr && callee->is_concrete()
               && methods.count(callee) > 0) {
             calls[callee]++;
+            callee_to_callers.emplace(callee, meth);
           }
         }
       });
@@ -719,18 +745,23 @@ void select_inlinable(
   }
   assert(method_breakup(calls_group));
   for (auto callee : calls_group[1]) {
+    adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
     inlinable->insert(callee);
   }
   if (multiple_callers) {
     for (auto callee : calls_group[2]) {
-      if (callee->get_code()->count_opcodes() <= CODE_SIZE_2_CALLERS) {
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_2_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
         inlinable->insert(callee);
       } else {
         log_nopt(INL_2_CALLERS_TOO_BIG, callee);
       }
     }
     for (auto callee : calls_group[3]) {
-      if (callee->get_code()->count_opcodes() <= CODE_SIZE_3_CALLERS) {
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_3_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
         inlinable->insert(callee);
       } else {
         log_nopt(INL_3_CALLERS_TOO_BIG, callee);
@@ -740,7 +771,13 @@ void select_inlinable(
 
   for (size_t i = multiple_callers ? 4 : 2; i < MAX_COUNT; ++i) {
     for (auto callee : calls_group[i]) {
-      log_nopt(INL_TOO_MANY_CALLERS, callee);
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_ANY_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
+        inlinable->insert(callee);
+      } else {
+        log_nopt(INL_TOO_MANY_CALLERS, callee);
+      }
     }
   }
 }

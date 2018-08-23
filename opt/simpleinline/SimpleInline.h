@@ -53,9 +53,6 @@ class SimpleInlinePass : public Pass {
       const std::unordered_set<DexType*>& force_inline);
 
  private:
-  // count of instructions that define a method as inlinable always
-  static const size_t SMALL_CODE_SIZE = 3;
-
   // inline virtual methods
   bool m_virtual_inline;
   // inline methods with multiple callers
