@@ -58,11 +58,11 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
       std::cerr << "Unable to open: " << file_name << std::endl;
       exit(EXIT_FAILURE);
     }
-    dump_reachability_graph(stores, reachables.retainers_of, tag, file);
+    dump_reachability_graph(stores, reachables->retainers_of(), tag, file);
   }
 
   if (m_dump_detailed_info) {
-    dump_reachability(stores, reachables.retainers_of, "[" + tag + "]");
+    dump_reachability(stores, reachables->retainers_of(), "[" + tag + "]");
   }
 }
 

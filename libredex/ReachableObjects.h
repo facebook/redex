@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 #include "Pass.h"
 
@@ -27,15 +28,18 @@ enum class ReachableObjectType {
  * Represents an object (class, method, or field) that's considered reachable
  * by this pass.
  *
- * Used for logging what retains what so that we can see what things which
- * should be removed aren't being removed.
+ * Used by our mark-sweep algorithm for keeping track of which objects to visit
+ * next, as well as for logging what retains what so that we can see what things
+ * which should be removed aren't.
  */
 struct ReachableObject {
   ReachableObjectType type;
-  const DexAnnotation* anno{nullptr};
-  const DexClass* cls{nullptr};
-  const DexFieldRef* field{nullptr};
-  const DexMethodRef* method{nullptr};
+  union {
+    const DexAnnotation* anno{nullptr};
+    const DexClass* cls;
+    const DexFieldRef* field;
+    const DexMethodRef* method;
+  };
 
   explicit ReachableObject(const DexAnnotation* anno)
       : type{ReachableObjectType::ANNO}, anno{anno} {}
@@ -99,6 +103,25 @@ struct ReachableObject {
       return "Seed";
     }
   }
+
+  friend bool operator==(const ReachableObject& lhs,
+                         const ReachableObject& rhs) {
+    if (lhs.type != rhs.type) {
+      return false;
+    }
+    switch (lhs.type) {
+    case ReachableObjectType::ANNO:
+      return lhs.anno == rhs.anno;
+    case ReachableObjectType::CLASS:
+      return lhs.cls == rhs.cls;
+    case ReachableObjectType::FIELD:
+      return lhs.field == rhs.field;
+    case ReachableObjectType::METHOD:
+      return lhs.method == rhs.method;
+    case ReachableObjectType::SEED:
+      return true;
+    }
+  }
 };
 
 struct ReachableObjectHash {
@@ -118,44 +141,62 @@ struct ReachableObjectHash {
   }
 };
 
-struct ReachableObjectEq {
-  bool operator()(const ReachableObject& lhs,
-                  const ReachableObject& rhs) const {
-    if (lhs.type != rhs.type) {
-      return false;
-    }
-    switch (lhs.type) {
-    case ReachableObjectType::ANNO:
-      return lhs.anno == rhs.anno;
-    case ReachableObjectType::CLASS:
-      return lhs.cls == rhs.cls;
-    case ReachableObjectType::FIELD:
-      return lhs.field == rhs.field;
-    case ReachableObjectType::METHOD:
-      return lhs.method == rhs.method;
-    case ReachableObjectType::SEED:
-      return true;
-    }
-  }
-};
-
+// The ReachableObjectSet does not need to be a ConcurrentSet since it is nested
+// within the ReachableObjectGraph's ConcurrentMap, which ensures that all
+// updates to it are thread-safe. Using a plain unordered_set here is a
+// significant performance improvement.
 using ReachableObjectSet =
-    std::unordered_set<ReachableObject, ReachableObjectHash, ReachableObjectEq>;
-using ReachableObjectGraph = std::unordered_map<ReachableObject,
-                                                ReachableObjectSet,
-                                                ReachableObjectHash,
-                                                ReachableObjectEq>;
+    std::unordered_set<ReachableObject, ReachableObjectHash>;
+using ReachableObjectGraph =
+    ConcurrentMap<ReachableObject, ReachableObjectSet, ReachableObjectHash>;
 
-} // namespace
+} // namespace reachable_objects
 
-struct ReachableObjects {
-  std::unordered_set<const DexClass*> marked_classes;
-  std::unordered_set<const DexFieldRef*> marked_fields;
-  std::unordered_set<const DexMethodRef*> marked_methods;
-  reachable_objects::ReachableObjectGraph retainers_of;
+class ReachableObjects {
+ public:
+  ConcurrentSet<const DexClass*> marked_classes;
+  ConcurrentSet<const DexFieldRef*> marked_fields;
+  ConcurrentSet<const DexMethodRef*> marked_methods;
+
+  const reachable_objects::ReachableObjectGraph& retainers_of() const {
+    return m_retainers_of;
+  }
+
+  void mark(const DexClass* cls) {
+    marked_classes.insert(cls);
+  }
+
+  void mark(const DexMethodRef* method) {
+    marked_methods.insert(method);
+  }
+
+  void mark(const DexFieldRef* field) {
+    marked_fields.insert(field);
+  }
+
+  bool marked(const DexClass* cls) const {
+    return marked_classes.count(cls);
+  }
+
+  bool marked(const DexMethodRef* method) const {
+    return marked_methods.count(method);
+  }
+
+  bool marked(const DexFieldRef* field) const {
+    return marked_fields.count(field);
+  }
+
+  template <class Seed>
+  void record_is_seed(Seed* seed);
+
+  template <class Parent, class Object>
+  void record_reachability(Parent*, Object*);
+
+ private:
+  reachable_objects::ReachableObjectGraph m_retainers_of;
 };
 
-ReachableObjects compute_reachable_objects(
+std::unique_ptr<ReachableObjects> compute_reachable_objects(
     DexStoresVector& stores,
     const std::unordered_set<const DexType*>& ignore_string_literals,
     const std::unordered_set<const DexType*>& ignore_string_literal_annos,
@@ -164,12 +205,13 @@ ReachableObjects compute_reachable_objects(
     bool record_reachability = false);
 
 // Dump reachability information to TRACE(REACH_DUMP, 5).
-void dump_reachability(DexStoresVector& stores,
-                       reachable_objects::ReachableObjectGraph& retainers_of,
-                       const std::string& dump_tag);
+void dump_reachability(
+    DexStoresVector& stores,
+    const reachable_objects::ReachableObjectGraph& retainers_of,
+    const std::string& dump_tag);
 
 void dump_reachability_graph(
     DexStoresVector& stores,
-    reachable_objects::ReachableObjectGraph& retainers_of,
+    const reachable_objects::ReachableObjectGraph& retainers_of,
     const std::string& dump_tag,
     std::ostream& os);

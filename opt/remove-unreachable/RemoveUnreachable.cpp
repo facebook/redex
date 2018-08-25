@@ -12,6 +12,8 @@
 #include "ReachableObjects.h"
 #include "Resolver.h"
 #include "Show.h"
+#include "Walkers.h"
+#include "Timer.h"
 
 #include <string>
 
@@ -28,9 +30,9 @@ namespace {
  */
 void sweep_fields_if_unmarked(
     std::vector<DexField*>& fields,
-    const std::unordered_set<const DexFieldRef*>& marked) {
+    const ConcurrentSet<const DexFieldRef*>& marked) {
   auto p = [&](DexField* f) {
-    if (marked.count(f) == 0) {
+    if (marked.count_unsafe(f) == 0) {
       TRACE(RMU, 2, "Removing %s\n", SHOW(f));
       DexField::erase_field(f);
       return true;
@@ -46,9 +48,9 @@ void sweep_fields_if_unmarked(
  * pointers (at least for DexMethods). We should fix that at some point...
  */
 template <class Container, class Marked>
-void sweep_if_unmarked(Container& c, const std::unordered_set<Marked>& marked) {
+void sweep_if_unmarked(Container& c, const ConcurrentSet<Marked>& marked) {
   auto p = [&](const Marked& m) {
-    if (marked.count(m) == 0) {
+    if (marked.count_unsafe(m) == 0) {
       TRACE(RMU, 2, "Removing %s\n", SHOW(m));
       return true;
     }
@@ -57,15 +59,16 @@ void sweep_if_unmarked(Container& c, const std::unordered_set<Marked>& marked) {
   c.erase(std::remove_if(c.begin(), c.end(), p), c.end());
 }
 
-void sweep(DexStoresVector& stores, ReachableObjects& reachables) {
+void sweep(DexStoresVector& stores, const ReachableObjects& reachables) {
+  Timer t("Sweep");
   for (auto& dex : DexStoreClassesIterator(stores)) {
     sweep_if_unmarked(dex, reachables.marked_classes);
-    for (auto const& cls : dex) {
+    walk::parallel::classes(dex, [&](DexClass* cls) {
       sweep_fields_if_unmarked(cls->get_ifields(), reachables.marked_fields);
       sweep_fields_if_unmarked(cls->get_sfields(), reachables.marked_fields);
       sweep_if_unmarked(cls->get_dmethods(), reachables.marked_methods);
       sweep_if_unmarked(cls->get_vmethods(), reachables.marked_methods);
-    }
+    });
   }
 }
 } // namespace
@@ -127,7 +130,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
                                 load_annos(m_ignore_system_annos),
                                 &num_ignore_check_strings);
   deleted_stats before = trace_stats("before", stores);
-  sweep(stores, reachables);
+  sweep(stores, *reachables);
   deleted_stats after = trace_stats("after", stores);
   pm.incr_metric("num_ignore_check_strings", num_ignore_check_strings);
   pm.incr_metric("classes_removed", before.nclasses - after.nclasses);
