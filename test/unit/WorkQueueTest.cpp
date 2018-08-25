@@ -71,10 +71,11 @@ TEST(WorkQueueTest, checkDataInitialization) {
   int data_refs[3] = {50, 50, 50};
   int array[NUM_INTS] = {0};
 
-  WorkQueue<int, int*, int> wq([](int*& a, int b) { return *a; },
-                               [](int a, int b) { return a + b; },
-                               [&](int a) { return &data_refs[a]; },
-                               3);
+  WorkQueue<int, int*, int> wq(
+      [](WorkerState<int, int*, int>* a, int b) { return *a->get_data(); },
+      [](int a, int b) { return a + b; },
+      [&](int a) { return &data_refs[a]; },
+      3);
 
   for (int idx = 0; idx < NUM_INTS; ++idx) {
     wq.add_item(array[idx]);
@@ -86,15 +87,16 @@ TEST(WorkQueueTest, checkDataInitialization) {
 
 // Check that we can dynamically adding work items during execution.
 TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
-  auto wq = workqueue_mapreduce<int, int>([](int a) { return a; },
-                                          [](int a, int b) { return a + b; });
-  wq.set_mapper([&wq](std::nullptr_t&, int a) {
-    if (a > 0) {
-      wq.add_item(a - 1);
-      return a;
-    }
-    return 0;
-  });
+  using WorkerState = WorkerState<int, std::nullptr_t, int>;
+  WorkQueue<int, std::nullptr_t, int> wq(
+      [&wq](WorkerState* worker_state, int a) {
+        if (a > 0) {
+          worker_state->push_task(a - 1);
+          return a;
+        }
+        return 0;
+      },
+      [](int a, int b) { return a + b; }, [](uint) { return nullptr; }, 3);
   wq.add_item(10);
   auto result = wq.run_all();
 

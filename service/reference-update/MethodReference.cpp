@@ -131,7 +131,7 @@ void patch_callsite(
 
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees) {
-  auto patcher = [&](std::nullptr_t, DexMethod* meth) {
+  auto patcher = [&](DexMethod* meth) {
     CallSites call_sites;
     auto code = meth->get_code();
     if (!code) {
@@ -159,14 +159,13 @@ CallSites collect_call_refs(const Scope& scope,
   };
 
   CallSites call_sites =
-      walk::parallel::reduce_methods<std::nullptr_t, CallSites>(
+      walk::parallel::reduce_methods<CallSites>(
           scope,
           patcher,
           [](CallSites left, CallSites right) {
             left.insert(left.end(), right.begin(), right.end());
             return left;
-          },
-          [](int) { return nullptr; });
+          });
   return call_sites;
 }
 

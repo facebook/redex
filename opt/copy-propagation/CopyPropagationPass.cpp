@@ -377,11 +377,10 @@ Stats Stats::operator+(const Stats& other) {
 }
 
 Stats CopyPropagation::run(Scope scope) {
-  using Data = std::nullptr_t;
   using Output = Stats;
-  return walk::parallel::reduce_methods<Data, Output>(
+  return walk::parallel::reduce_methods<Output>(
       scope,
-      [this](Data&, DexMethod* m) {
+      [this](DexMethod* m) {
         IRCode* code = m->get_code();
         if (code == nullptr) {
           return Stats();
@@ -410,7 +409,6 @@ Stats CopyPropagation::run(Scope scope) {
         return result;
       },
       [](Output a, Output b) { return a + b; },
-      [](unsigned int /* thread_index */) { return nullptr; },
       Output(),
       m_config.debug ? 1 : walk::parallel::default_num_threads());
 }

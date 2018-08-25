@@ -156,9 +156,9 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
   side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
                               &effect_summaries);
 
-  auto removed = walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+  auto removed = walk::parallel::reduce_methods<size_t>(
       scope,
-      [&](std::nullptr_t, DexMethod* method) -> size_t {
+      [&](DexMethod* method) -> size_t {
         if (m_do_not_optimize_methods.count(method) != 0) {
           return 0;
         }
@@ -188,8 +188,7 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
         TRACE(DEAD_CODE, 5, "After:\n%s\n", SHOW(&code));
         return dead_instructions.size();
       },
-      std::plus<size_t>(),
-      [](int) { return nullptr; });
+      std::plus<size_t>());
   mgr.set_metric("removed_instructions", removed);
 }
 

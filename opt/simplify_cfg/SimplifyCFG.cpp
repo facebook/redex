@@ -17,9 +17,9 @@ void SimplifyCFGPass::run_pass(DexStoresVector& stores,
                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
   auto total_insns_removed =
-      walk::parallel::reduce_methods<std::nullptr_t, int64_t, Scope>(
+      walk::parallel::reduce_methods<int64_t, Scope>(
           scope,
-          [](std::nullptr_t, DexMethod* m) -> int64_t {
+          [](DexMethod* m) -> int64_t {
             auto code = m->get_code();
             if (code == nullptr) {
               return 0;
@@ -34,8 +34,7 @@ void SimplifyCFGPass::run_pass(DexStoresVector& stores,
             int64_t after_insns = code->count_opcodes();
             return before_insns - after_insns;
           },
-          [](int64_t a, int64_t b) { return a + b; },
-          [](int) { return nullptr; }, 0);
+          [](int64_t a, int64_t b) { return a + b; });
   mgr.set_metric("insns_removed", total_insns_removed);
 }
 

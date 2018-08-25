@@ -241,9 +241,9 @@ class FinalInlineImpl {
       }
     }
 
-    return walk::parallel::reduce_methods<std::nullptr_t, size_t, Scope>(
+    return walk::parallel::reduce_methods<size_t, Scope>(
         m_full_scope,
-        [&inline_field, this](std::nullptr_t, DexMethod* m) -> size_t {
+        [&inline_field, this](DexMethod* m) -> size_t {
           auto* code = m->get_code();
           if (!code) {
             return 0;
@@ -277,9 +277,7 @@ class FinalInlineImpl {
           }
           return rewrites.size();
         },
-        [](size_t a, size_t b) { return a + b; }, // output reducer
-        [](int) { return nullptr; } // data initializer. not needed
-    );
+        [](size_t a, size_t b) { return a + b; });
   }
 
   /*

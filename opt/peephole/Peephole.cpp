@@ -1611,10 +1611,18 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
   std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  walk::parallel::reduce_methods<PeepholeOptimizer*, std::nullptr_t>(
-      scope,
-      [](PeepholeOptimizer*& ph, DexMethod* m) { // walker
-        ph->run_method(m);
+  auto wq = WorkQueue<DexClass*, PeepholeOptimizer*, std::nullptr_t>(
+      [&](WorkerState<DexClass*, PeepholeOptimizer*, std::nullptr_t>* state,
+          DexClass* cls) {
+        PeepholeOptimizer* ph = state->get_data();
+        for (auto dmethod : cls->get_dmethods()) {
+          TraceContext context(dmethod->get_deobfuscated_name());
+          ph->run_method(dmethod);
+        }
+        for (auto vmethod : cls->get_vmethods()) {
+          TraceContext context(vmethod->get_deobfuscated_name());
+          ph->run_method(vmethod);
+        }
         return nullptr;
       },
       [](std::nullptr_t, std::nullptr_t) { return nullptr; }, // reducer
@@ -1622,7 +1630,13 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         helpers.emplace_back(std::make_unique<PeepholeOptimizer>(
             mgr, config.disabled_peepholes));
         return helpers.back().get();
-      });
+      },
+      std::thread::hardware_concurrency() / 2);
+  for (auto* cls : scope) {
+    wq.add_item(cls);
+  }
+  wq.run_all();
+
   for (const auto& helper : helpers) {
     helper->incr_all_metrics();
   }

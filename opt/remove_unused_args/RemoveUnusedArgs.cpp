@@ -177,10 +177,9 @@ bool RemoveArgs::update_method_signature(
  * For methods that have unused arguments, record live argument registers.
  */
 RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
-  return walk::parallel::reduce_methods<std::nullptr_t,
-                                        RemoveArgs::MethodStats>(
+  return walk::parallel::reduce_methods<RemoveArgs::MethodStats>(
       m_scope,
-      [&](std::nullptr_t, DexMethod* method) -> RemoveArgs::MethodStats {
+      [&](DexMethod* method) -> RemoveArgs::MethodStats {
         auto method_stats = RemoveArgs::MethodStats();
         if (method->get_code() == nullptr) {
           return method_stats;
@@ -239,8 +238,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
         a.method_params_removed_count += b.method_params_removed_count;
         a.methods_updated_count += b.methods_updated_count;
         return a;
-      },
-      [](int) { return nullptr; });
+      });
 }
 
 /**
@@ -277,9 +275,9 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
  */
 size_t RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  return walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+  return walk::parallel::reduce_methods<size_t>(
       m_scope,
-      [&](std::nullptr_t, DexMethod* method) -> size_t {
+      [&](DexMethod* method) -> size_t {
         auto code = method->get_code();
         if (code == nullptr) {
           return 0;
@@ -297,8 +295,7 @@ size_t RemoveArgs::update_callsites() {
         }
         return callsite_args_removed;
       },
-      [](size_t a, size_t b) { return a + b; },
-      [](int) { return nullptr; });
+      [](size_t a, size_t b) { return a + b; });
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,

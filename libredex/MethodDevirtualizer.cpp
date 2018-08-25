@@ -54,8 +54,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
                     const std::unordered_set<DexMethod*>& target_methods,
                     DevirtualizerMetrics& metrics,
                     bool drop_this = false) {
-  const auto fixer = [&target_methods, drop_this](std::nullptr_t,
-                                                  DexMethod* m) -> CallCounter {
+  const auto fixer = [&target_methods, drop_this](DexMethod* m) -> CallCounter {
     CallCounter call_counter;
     IRCode* code = m->get_code();
     if (code == nullptr) {
@@ -90,7 +89,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
   };
 
   CallCounter call_counter =
-      walk::parallel::reduce_methods<std::nullptr_t, CallCounter, Scope>(
+      walk::parallel::reduce_methods<CallCounter, Scope>(
           scope,
           fixer,
           [](CallCounter a, CallCounter b) -> CallCounter {
@@ -98,8 +97,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
             a.supers += b.supers;
             a.directs += b.directs;
             return a;
-          },
-          [](int) { return nullptr; });
+          });
 
   metrics.num_virtual_calls += call_counter.virtuals;
   metrics.num_super_calls += call_counter.supers;

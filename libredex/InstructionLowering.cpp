@@ -446,11 +446,10 @@ Stats lower(DexMethod* method) {
 }
 
 Stats run(DexStoresVector& stores) {
-  using Data = std::nullptr_t;
   auto scope = build_class_scope(stores);
-  return walk::parallel::reduce_methods<Data, Stats>(
+  return walk::parallel::reduce_methods<Stats>(
       scope,
-      [](Data&, DexMethod* m) {
+      [](DexMethod* m) {
         Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
@@ -461,8 +460,7 @@ Stats run(DexStoresVector& stores) {
       [](Stats a, Stats b) {
         a.accumulate(b);
         return a;
-      },
-      [&](unsigned int) { return nullptr; });
+      });
 }
 
 } // namespace instruction_lowering

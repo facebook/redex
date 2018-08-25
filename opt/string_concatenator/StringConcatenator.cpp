@@ -378,9 +378,9 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
   const auto& scope = build_class_scope(stores);
   const ConcatenatorConfig config{};
   LockedMethodSet methods_to_remove;
-  Stats stats = walk::parallel::reduce_methods<std::nullptr_t, Stats, Scope>(
+  Stats stats = walk::parallel::reduce_methods<Stats, Scope>(
       scope,
-      [&config, &methods_to_remove](std::nullptr_t, DexMethod* m) -> Stats {
+      [&config, &methods_to_remove](DexMethod* m) -> Stats {
         auto code = m->get_code();
         if (code == nullptr) {
           return Stats{};
@@ -402,7 +402,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         a += b;
         return a;
       },
-      [](int) { return nullptr; }, Stats{},
+      Stats{},
       DEBUG ? 1 : walk::parallel::default_num_threads());
 
   for (DexMethod* method : methods_to_remove.get()) {

@@ -151,16 +151,15 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   size_t total_gotos_removed =
-      walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+      walk::parallel::reduce_methods<size_t>(
           scope,
-          [](std::nullptr_t, DexMethod* m) -> size_t {
+          [](DexMethod* m) -> size_t {
             if (!m->get_code()) {
               return 0;
             }
             return RemoveGotos::process_method(m);
           },
-          [](size_t a, size_t b) { return a + b; },
-          [](unsigned int /* thread_index */) { return nullptr; });
+          [](size_t a, size_t b) { return a + b; });
 
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
   TRACE(RMGOTO,

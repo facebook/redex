@@ -291,9 +291,9 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   }
   const auto& pure_methods = find_pure_methods();
   auto scope = build_class_scope(stores);
-  auto stats = walk::parallel::reduce_methods<std::nullptr_t, LocalDce::Stats>(
+  auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
-      [&](std::nullptr_t, DexMethod* m) {
+      [&](DexMethod* m) {
         auto* code = m->get_code();
         if (code == nullptr || m_do_not_optimize_methods.find(m) !=
                                    m_do_not_optimize_methods.end()) {
@@ -308,8 +308,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         a.dead_instruction_count += b.dead_instruction_count;
         a.unreachable_instruction_count += b.unreachable_instruction_count;
         return a;
-      },
-      [](int) { return nullptr; });
+      });
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);

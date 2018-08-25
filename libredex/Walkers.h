@@ -397,36 +397,33 @@ class walk {
 
     /**
      * Call `walker` on all methods in `classes` in parallel. Then combine the
-     * Output with `reducer` function. Make sure all global information needed
-     * is copied locally per thread using DataInitializerFn.
+     * Output with `reducer` function.
      */
-    template <class Data,
-              class Output,
+    template <class Output,
               class Classes,
-              class MethodWalkerFn = Output(Data&, DexMethod*),
-              class OutputReducerFn = Output(Output, Output),
-              class DataInitializerFn = Data(int)>
+              class MethodWalkerFn = Output(DexMethod*),
+              class OutputReducerFn = Output(Output, Output)>
     Output static reduce_methods(const Classes& classes,
                                  MethodWalkerFn walker,
                                  OutputReducerFn reducer,
-                                 DataInitializerFn data_initializer,
                                  const Output& init = Output(),
                                  size_t num_threads = default_num_threads()) {
-      auto wq = WorkQueue<DexClass*, Data, Output>(
-          [&](Data& data, DexClass* cls) {
+      auto wq = WorkQueue<DexClass*, std::nullptr_t, Output>(
+          [&](WorkerState<DexClass*, std::nullptr_t, Output>* state,
+              DexClass* cls) {
             Output out = init;
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
-              out = reducer(out, walker(data, dmethod));
+              out = reducer(out, walker(dmethod));
             }
             for (auto vmethod : cls->get_vmethods()) {
               TraceContext context(vmethod->get_deobfuscated_name());
-              out = reducer(out, walker(data, vmethod));
+              out = reducer(out, walker(vmethod));
             }
             return out;
           },
           reducer,
-          data_initializer,
+          [](unsigned int) { return nullptr; },
           num_threads);
 
       for (const auto& cls : classes) {

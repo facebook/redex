@@ -24,10 +24,9 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  using Data = std::nullptr_t;
-  auto stats = walk::parallel::reduce_methods<Data, Transform::Stats>(
+  auto stats = walk::parallel::reduce_methods<Transform::Stats>(
       scope,
-      [&](Data&, DexMethod* method) {
+      [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
@@ -47,9 +46,6 @@ void ConstantPropagationPass::run_pass(DexStoresVector& stores,
 
       [](Transform::Stats a, Transform::Stats b) { // reducer
         return a + b;
-      },
-      [&](unsigned int) { // data initializer
-        return nullptr;
       });
 
   mgr.incr_metric("num_branch_propagated", stats.branches_removed);
