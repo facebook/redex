@@ -115,7 +115,7 @@ void DexesStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                          const FieldRefs& clazz_frefs,
                                          DexClass* clazz) {
   always_assert_log(m_classes.count(clazz) == 0,
-                    "Can't emit the same class twice!\n", SHOW(clazz));
+                    "Can't emit the same class twice: %s!\n", SHOW(clazz));
 
   auto laclazz = estimate_linear_alloc(clazz);
   m_current_dex.add_class_no_checks(clazz_mrefs, clazz_frefs, laclazz, clazz);
