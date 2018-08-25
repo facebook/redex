@@ -165,9 +165,9 @@ class ConcurrentContainer {
 
 template <typename Key,
           typename Value,
-          size_t n_slots = 31,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>>
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
 class ConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, Equal>,
                                  Key,
@@ -260,9 +260,9 @@ class ConcurrentMap final
 };
 
 template <typename Key,
-          size_t n_slots = 31,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>>
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
 class ConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
                                  Key,

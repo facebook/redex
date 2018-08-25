@@ -123,6 +123,7 @@ libredex_la_SOURCES = \
 	libredex/JarLoader.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
+	libredex/MethodOverrideGraph.cpp \
 	libredex/Mutators.cpp \
 	libredex/OptData.cpp \
 	libredex/PassManager.cpp \

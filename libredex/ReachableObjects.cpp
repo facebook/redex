@@ -8,11 +8,14 @@
 #include "ReachableObjects.h"
 
 #include "DexUtil.h"
+#include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 
 using namespace reachable_objects;
+
+namespace mog = method_override_graph;
 
 /*
  * This helper class computes reachable objects by a DFS+marking algorithm.
@@ -66,89 +69,13 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   return nullptr;
 }
 
-// TODO: Can it be replaced by ClassHierarchy helpers? I tried to replace it,
-// but the results were different.
-struct InheritanceGraph {
-  explicit InheritanceGraph(DexStoresVector& stores) {
-    for (auto const& dex : DexStoreClassesIterator(stores)) {
-      for (auto const& cls : dex) {
-        add_child(cls->get_type(), cls->get_type());
-      }
-    }
-  }
-
-  const std::set<const DexType*, dextypes_comparator>& get_descendants(
-      const DexType* type) const {
-    if (m_inheritors.count(type)) {
-      return m_inheritors.at(type);
-    } else {
-      static std::set<const DexType*, dextypes_comparator> empty;
-      return empty;
-    }
-  }
-
- private:
-  void add_child(DexType* child, DexType* ancestor) {
-    auto const& ancestor_cls = type_class(ancestor);
-    if (!ancestor_cls) return;
-    m_inheritors[ancestor].insert(child);
-    auto const& super_type = ancestor_cls->get_super_class();
-    if (super_type) {
-      TRACE(REACH, 4, "Child %s of %s\n", SHOW(child), SHOW(super_type));
-      add_child(child, super_type);
-    }
-    auto const& interfaces = ancestor_cls->get_interfaces()->get_type_list();
-    for (auto const& interface : interfaces) {
-      TRACE(REACH, 4, "Child %s of %s\n", SHOW(child), SHOW(interface));
-      add_child(child, interface);
-    }
-  }
-
- private:
-  std::unordered_map<const DexType*,
-                     std::set<const DexType*, dextypes_comparator>>
-      m_inheritors;
-};
-
-bool implements_library_method(const DexMethod* to_check, const DexClass* cls) {
-  if (!cls) return false;
-  if (cls->is_external()) {
-    for (auto const& m : cls->get_vmethods()) {
-      if (signatures_match(to_check, m)) {
-        return true;
-      }
-    }
-  }
-  auto const& superclass = type_class(cls->get_super_class());
-  if (implements_library_method(to_check, superclass)) {
-    return true;
-  }
-  for (auto const& interface : cls->get_interfaces()->get_type_list()) {
-    if (implements_library_method(to_check, type_class(interface))) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool implements_library_method(InheritanceGraph& graph,
-                               const DexMethod* to_check,
-                               const DexClass* cls) {
-  for (auto child : graph.get_descendants(cls->get_type())) {
-    if (implements_library_method(to_check, type_class(child))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 class Reachable {
   DexStoresVector& m_stores;
   const std::unordered_set<const DexType*>& m_ignore_string_literals;
   const std::unordered_set<const DexType*>& m_ignore_string_literal_annos;
   std::unordered_set<const DexType*> m_ignore_system_annos;
   bool m_record_reachability;
-  InheritanceGraph m_inheritance_graph;
+  std::unique_ptr<mog::Graph> m_method_override_graph;
   int m_num_ignore_check_strings = 0;
   std::unordered_set<const DexClass*> m_marked_classes;
   std::unordered_set<const DexFieldRef*> m_marked_fields;
@@ -172,7 +99,7 @@ class Reachable {
         m_ignore_string_literal_annos(ignore_string_literal_annos),
         m_ignore_system_annos(ignore_system_annos),
         m_record_reachability(record_reachability),
-        m_inheritance_graph(stores) {
+        m_method_override_graph(mog::build_graph(build_class_scope(stores))) {
     // To keep the backward compatability of this code, ensure that the
     // "MemberClasses" annotation is always in m_ignore_system_annos.
     m_ignore_system_annos.emplace(
@@ -416,26 +343,17 @@ class Reachable {
     for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
       push(method, t);
     }
-    if (method->is_def() && (static_cast<DexMethod*>(method)->is_virtual() ||
-                             !method->is_concrete())) {
-      // If we're keeping an interface method, we have to keep its
-      // implementations.  Annoyingly, the implementation might be defined on a
-      // super class of the class that implements the interface.
-      auto const& cls = method->get_class();
-      auto const& children = m_inheritance_graph.get_descendants(cls);
-      for (auto child : children) {
-        while (true) {
-          auto child_cls = type_class(child);
-          if (!child_cls || child_cls->is_external()) {
-            break;
-          }
-          for (auto const& m : child_cls->get_vmethods()) {
-            if (signatures_match(method, m)) {
-              push_cond(m);
-            }
-          }
-          child = child_cls->get_super_class();
-        }
+    if (!method->is_def()) {
+      return;
+    }
+    auto m = static_cast<DexMethod*>(method);
+    // If we're keeping an interface or virtual method, we have to keep its
+    // implementations and overriding methods respectively.
+    if (m->is_virtual() || !m->is_concrete()) {
+      const auto& overriding_methods =
+          mog::get_overriding_methods(*m_method_override_graph, m);
+      for (auto* overriding : overriding_methods) {
+        push_cond(overriding);
       }
     }
   }
@@ -479,6 +397,31 @@ class Reachable {
     }
   }
 
+  /*
+   * Mark as seeds all methods that override or implement an external method.
+   */
+  void mark_external_method_overriders() {
+    std::unordered_set<const DexMethod*> visited;
+    for (auto& pair : m_method_override_graph->nodes()) {
+      auto method = pair.first;
+      if (!method->is_external() || visited.count(method)) {
+        continue;
+      }
+      const auto& overriding_methods =
+          mog::get_overriding_methods(*m_method_override_graph, method);
+      for (auto* overriding : overriding_methods) {
+        // Avoid re-visiting methods found in overriding sets since we would
+        // already have conditionally marked all their children.
+        visited.emplace(overriding);
+        if (!overriding->is_external()) {
+          TRACE(REACH, 3, "Visiting seed: %s (implements %s)\n",
+                SHOW(overriding), SHOW(method));
+          push_cond(overriding);
+        }
+      }
+    }
+  }
+
  public:
   ReachableObjects mark(int* num_ignore_check_strings) {
     for (auto const& dex : DexStoreClassesIterator(m_stores)) {
@@ -506,14 +449,17 @@ class Reachable {
           }
         }
         for (auto const& m : cls->get_vmethods()) {
-          if (root(m) ||
-              implements_library_method(m_inheritance_graph, m, cls)) {
-            TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+          if (root(m)) {
+            TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
             push_cond(m);
+            continue;
           }
         }
       }
     }
+
+    mark_external_method_overriders();
+
     while (true) {
       if (!m_class_stack.empty()) {
         auto cls = m_class_stack.back();
