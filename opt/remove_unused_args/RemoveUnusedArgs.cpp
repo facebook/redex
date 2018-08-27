@@ -229,7 +229,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
         for (auto dead_insn : dead_insns) {
           method->get_code()->remove_opcode(dead_insn);
         }
-        m_live_arg_idxs_map.insert(std::make_pair(method, live_arg_idxs));
+        m_live_arg_idxs_map.emplace(method, live_arg_idxs);
         method_stats.methods_updated_count++;
         method_stats.method_params_removed_count += dead_insns.size();
         return method_stats;

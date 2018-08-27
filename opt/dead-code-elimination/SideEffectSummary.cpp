@@ -210,7 +210,7 @@ void analyze_method_recursive(const DexMethod* method,
   auto summary =
       SummaryBuilder(invoke_to_summary_cmap, *ptrs_fp_iter, method->get_code())
           .build();
-  summary_cmap->insert(std::make_pair(method, summary));
+  summary_cmap->emplace(method, summary);
 }
 
 } // namespace

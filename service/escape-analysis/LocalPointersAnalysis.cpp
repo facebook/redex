@@ -374,9 +374,8 @@ static void analyze_method_recursive(
   auto& cfg = code->cfg();
   auto fp_iter = new FixpointIterator(cfg, std::move(invoke_to_summary_map));
   fp_iter->run(Environment());
-  fp_iter_map->insert(std::make_pair(method, fp_iter));
-  summary_map->insert(
-      std::make_pair(method, get_escape_summary(*fp_iter, *code)));
+  fp_iter_map->emplace(method, fp_iter);
+  summary_map->emplace(method, get_escape_summary(*fp_iter, *code));
 }
 
 FixpointIteratorMapPtr analyze_scope(const Scope& scope,
@@ -387,8 +386,8 @@ FixpointIteratorMapPtr analyze_scope(const Scope& scope,
   if (summary_map_ptr == nullptr) {
     summary_map_ptr = &summary_map;
   }
-  summary_map_ptr->insert(std::make_pair(
-      DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{}));
+  summary_map_ptr->emplace(
+      DexMethod::get_method("Ljava/lang/Object;.<init>:()V"), EscapeSummary{});
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
     sparta::PatriciaTreeSet<const DexMethodRef*> visiting;

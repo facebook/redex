@@ -142,7 +142,7 @@ class RootSetMarker {
     if (!cls) return;
     record_is_seed(cls);
     m_reachable_objects->mark(cls);
-    m_root_set->insert(ReachableObject(cls));
+    m_root_set->emplace(cls);
   }
 
   void push_seed(const DexField* field) {
@@ -518,7 +518,7 @@ void ReachableObjects::record_reachability(Parent* parent, Object* object) {
   m_retainers_of.update(
       ReachableObject(object),
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        set.insert(ReachableObject(parent));
+        set.emplace(parent);
       });
 }
 
@@ -528,7 +528,7 @@ void ReachableObjects::record_is_seed(Seed* seed) {
   m_retainers_of.update(
       ReachableObject(seed),
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        set.insert(ReachableObject(SEED_SINGLETON));
+        set.emplace(SEED_SINGLETON);
       });
 }
 

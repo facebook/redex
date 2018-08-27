@@ -207,8 +207,7 @@ class ConcurrentMap final
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    auto status = map.insert(entry);
-    return status.second;
+    return map.insert(entry).second;
   }
 
   /*
@@ -238,6 +237,18 @@ class ConcurrentMap final
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
     map[entry.first] = entry.second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  bool emplace(Args&& ...args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    return map.emplace(std::move(entry)).second;
   }
 
   /*
@@ -287,6 +298,18 @@ class ConcurrentSet final
     for (const auto& x : l) {
       insert(x);
     }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  bool emplace(Args&& ...args) {
+    Key key(std::forward<Args>(args)...);
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& set = this->get_container(slot);
+    return set.emplace(std::move(key)).second;
   }
 };
 

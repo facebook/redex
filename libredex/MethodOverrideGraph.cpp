@@ -149,7 +149,7 @@ class GraphBuilder {
       }
     }
 
-    m_class_signature_maps.insert(std::make_pair(cls, class_signatures));
+    m_class_signature_maps.emplace(cls, class_signatures);
     return class_signatures;
   }
 
@@ -186,8 +186,7 @@ class GraphBuilder {
       update_signature_map(method, MethodSet{method}, &interface_signatures);
     }
 
-    m_interface_signature_maps.insert(
-        std::make_pair(cls, interface_signatures));
+    m_interface_signature_maps.emplace(cls, interface_signatures);
     return interface_signatures;
   }
 
