@@ -166,7 +166,6 @@ void create_object_class() {
     for (auto const& m : object_methods) {
       object_class->add_method(m);
     }
-    cc.create();
   }
 }
 
