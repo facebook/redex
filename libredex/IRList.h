@@ -297,9 +297,6 @@ class IRList {
    */
   void remove_opcode(const IRList::iterator& it);
 
-  /* This method will delete the switch case where insn resides. */
-  void remove_switch_case(IRInstruction* insn);
-
   /*
    * Returns an estimated of the number of 2-byte code units needed to encode
    * all the instructions.

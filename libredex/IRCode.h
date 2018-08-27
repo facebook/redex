@@ -254,11 +254,6 @@ class IRCode {
     m_ir_list->remove_opcode(it);
   }
 
-  /* This method will delete the switch case where insn resides. */
-  void remove_switch_case(IRInstruction* insn) {
-    m_ir_list->remove_switch_case(insn);
-  }
-
   /*
    * Returns an estimated of the number of 2-byte code units needed to encode
    * all the instructions.
