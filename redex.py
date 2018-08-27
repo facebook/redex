@@ -104,6 +104,27 @@ def add_extra_environment_args(env):
         env['MALLOC_CONF'] = 'prof:true,prof_prefix:jeprof.out,prof_gdump:true,prof_active:false'
 
 
+def get_stop_pass_idx(passes_list, pass_name_and_num):
+    # Get the stop position
+    # pass_name_and num may be "MyPass#0", "MyPass#3" or "MyPass"
+    pass_name = pass_name_and_num
+    pass_order = 0
+    if '#' in pass_name_and_num:
+        pass_name, pass_order = pass_name_and_num.split('#', 1)
+        try:
+            pass_order = int(pass_order)
+        except ValueError:
+            sys.exit("Invalid stop-pass %s, should be in 'SomePass(#num)'" % pass_name_and_num)
+    cur_order = 0
+    for _idx, _name in enumerate(passes_list):
+        if _name == pass_name:
+            if cur_order == pass_order:
+                return _idx
+            else:
+                cur_order += 1
+    sys.exit("Invalid stop-pass %s. %d %s in passes_list" % (pass_name_and_num, cur_order, pass_name))
+
+
 def run_redex_binary(state):
 
     if state.args.redex_binary is None:
@@ -147,6 +168,11 @@ def run_redex_binary(state):
     args += ['-J' + x for x in state.args.passthru_json]
 
     args += state.dexen
+
+    # Stop before a pass and output intermediate dex and IR meta data.
+    if state.stop_pass_idx != -1:
+        args += ['--stop-pass', str(state.stop_pass_idx),
+                 '--output-ir', state.args.output_ir]
 
     if state.debugger == 'lldb':
         args = ['lldb', '--'] + args
@@ -481,6 +507,10 @@ Given an APK, produce a better APK!
     parser.add_argument('--escape-summaries',
            help='Escape information for external methods')
 
+    parser.add_argument('--stop-pass', default='',
+           help='Stop before a pass and dump intermediate dex and IR meta data to a directory')
+    parser.add_argument('--output-ir', default='',
+           help='Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder')
     return parser
 
 def remove_comments_from_line(l):
@@ -505,7 +535,8 @@ class State(object):
     # This structure is only used for passing arguments between prepare_redex,
     # launch_redex_binary, finalize_redex
     def __init__(self, application_modules, args, config_dict, debugger,
-            dex_dir, dexen, dex_mode, extracted_apk_dir, temporary_lib_file):
+            dex_dir, dexen, dex_mode, extracted_apk_dir, temporary_lib_file,
+            stop_pass_idx):
         self.application_modules = application_modules
         self.args = args
         self.config_dict = config_dict
@@ -515,6 +546,7 @@ class State(object):
         self.dex_mode = dex_mode
         self.extracted_apk_dir = extracted_apk_dir
         self.temporary_lib_file = temporary_lib_file
+        self.stop_pass_idx = stop_pass_idx
 
 
 def prepare_redex(args):
@@ -558,6 +590,20 @@ def prepare_redex(args):
             except ValueError:
                 raise ValueError("Invalid JSON in ReDex config file: %s" %
                                  config_file.name)
+
+    # stop_pass_idx >= 0 means need stop before a pass and dump intermediate result
+    stop_pass_idx = -1
+    if args.stop_pass:
+        passes_list = config_dict.get('redex', {}).get('passes', [])
+        stop_pass_idx = get_stop_pass_idx(passes_list, args.stop_pass)
+        if not args.output_ir or isfile(args.output_ir):
+            print('Error: output_ir should be a directory')
+            sys.exit(1)
+        try:
+            os.makedirs(args.output_ir)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise e
 
     unpack_start_time = timer()
     if not extracted_apk_dir:
@@ -649,7 +695,8 @@ def prepare_redex(args):
         dexen=dexen,
         dex_mode=dex_mode,
         extracted_apk_dir=extracted_apk_dir,
-        temporary_lib_file=temporary_lib_file)
+        temporary_lib_file=temporary_lib_file,
+        stop_pass_idx=stop_pass_idx)
 
 
 def finalize_redex(state):
@@ -729,6 +776,11 @@ def finalize_redex(state):
 def run_redex(args):
     state = prepare_redex(args)
     run_redex_binary(state)
+
+    if args.stop_pass:
+        remove_temp_dirs()
+        sys.exit()
+
     finalize_redex(state)
     remove_temp_dirs()
 
