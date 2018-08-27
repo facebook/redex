@@ -778,7 +778,7 @@ def run_redex(args):
     run_redex_binary(state)
 
     if args.stop_pass:
-        remove_temp_dirs()
+        # Do not remove temp dirs
         sys.exit()
 
     finalize_redex(state)

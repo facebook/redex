@@ -8,8 +8,18 @@
 #include "ConfigFiles.h"
 #include "DexStore.h"
 
-void write_ir_meta(const std::string& output_ir_dir, DexStoresVector& stores);
+namespace redex {
 
-void write_intermediate_dex(const ConfigFiles& cfg,
+bool dir_is_writable(const std::string& dir);
+
+Json::Value parse_config(const std::string& config_file);
+
+void write_all_intermediate(const ConfigFiles& cfg,
                             const std::string& output_ir_dir,
-                            DexStoresVector& stores);
+                            DexStoresVector& stores,
+                            Json::Value& entry_data);
+
+void load_all_intermediate(const std::string& input_ir_dir,
+                           DexStoresVector& stores,
+                           Json::Value* entry_data);
+} // namespace redex

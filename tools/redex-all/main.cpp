@@ -24,16 +24,7 @@
 #include <unistd.h>
 #endif
 
-#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <boost/iostreams/filtering_stream.hpp> // uses deprecated auto_ptr
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif
 #include <json/json.h>
 
 #include "CommentFilter.h"
@@ -72,6 +63,9 @@ struct Arguments {
   std::vector<std::string> dex_files;
   bool verify_none_mode{false};
   bool art_build{false};
+  // Entry data contains the list of dex files, config file and original
+  // command line arguments. For development usage
+  Json::Value entry_data;
   boost::optional<int> stop_pass_idx;
   std::string output_ir_dir;
 };
@@ -94,21 +88,6 @@ UNUSED void dump_args(const Arguments& args) {
   }
   std::cout << "config: " << std::endl;
   std::cout << args.config << std::endl;
-}
-
-Json::Value parse_config(const std::string& config_file) {
-  std::ifstream config_stream(config_file);
-  if (!config_stream) {
-    std::cerr << "error: cannot find config file: " << config_file << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
-  boost::iostreams::filtering_istream inbuf;
-  inbuf.push(CommentFilter());
-  inbuf.push(config_stream);
-  Json::Value ret;
-  inbuf >> ret; // parse JSON
-  return ret;
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
@@ -164,17 +143,6 @@ Json::Value default_config() {
     cfg["redex"]["passes"].append(pass);
   }
   return cfg;
-}
-
-bool dir_is_writable(const std::string& dir) {
-  if (!boost::filesystem::is_directory(dir)) {
-    return false;
-  }
-#ifdef _MSC_VER
-  return _access(dir.c_str(), 2) == 0;
-#else
-  return access(dir.c_str(), W_OK) == 0;
-#endif
 }
 
 Arguments parse_args(int argc, char* argv[]) {
@@ -249,7 +217,7 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("dex-files", po::value<std::vector<std::string>>(),
                    "dex files");
 
-  // Development usage only, and Python script will generate the folloing
+  // Development usage only, and Python script will generate the following
   // arguments.
   od.add_options()("stop-pass", po::value<int>(),
                    "Stop before pass n and output IR to file");
@@ -310,12 +278,14 @@ Arguments parse_args(int argc, char* argv[]) {
   };
 
   if (vm.count("config")) {
-    args.config = parse_config(take_last(vm["config"]));
+    const std::string& config_file = take_last(vm["config"]);
+    args.entry_data["config"] = config_file;
+    args.config = redex::parse_config(config_file);
   }
 
   if (vm.count("outdir")) {
     args.out_dir = take_last(vm["outdir"]);
-    if (!dir_is_writable(args.out_dir)) {
+    if (!redex::dir_is_writable(args.out_dir)) {
       std::cerr << "error: outdir is not a writable directory: " << args.out_dir
                 << std::endl;
       exit(EXIT_FAILURE);
@@ -339,7 +309,7 @@ Arguments parse_args(int argc, char* argv[]) {
   // overwrite values read from the config file regardless of the order of
   // arguments.
   if (vm.count("apkdir")) {
-    args.config["apk_dir"] = take_last(vm["apkdir"]);
+    args.entry_data["apk_dir"] = args.config["apk_dir"] = take_last(vm["apkdir"]);
   }
 
   if (vm.count("printseeds")) {
@@ -390,7 +360,8 @@ Arguments parse_args(int argc, char* argv[]) {
     if (idx > 0 && passes_list[idx - 1].asString() != "RegAllocPass") {
       passes_list.append("RegAllocPass");
     }
-    if (args.output_ir_dir.empty() || !dir_is_writable(args.output_ir_dir)) {
+    if (args.output_ir_dir.empty() ||
+        !redex::dir_is_writable(args.output_ir_dir)) {
       std::cerr << "output-ir is empty or not writable" << std::endl;
       exit(EXIT_FAILURE);
     }
@@ -605,7 +576,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
                     redex::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
                     Json::Value& stats) {
-  Timer redex_backend_timer("Redex_frontend");
+  Timer redex_frontend_timer("Redex_frontend");
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
     redex::proguard_parser::parse_file(pg_config_path, &pg_config);
@@ -614,7 +585,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
 
-  std::set<std::string> library_jars;
+  args.entry_data["jars"] = Json::arrayValue;
   for (const auto& jar_path : args.jar_paths) {
     std::istringstream jar_stream(jar_path);
     std::string dependent_jar_path;
@@ -623,7 +594,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
             2,
             "Dependent JAR specified on command-line: %s\n",
             dependent_jar_path.c_str());
-      library_jars.emplace(dependent_jar_path);
+      args.entry_data["jars"].append(dependent_jar_path);
     }
   }
 
@@ -662,9 +633,10 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   }
 
   Scope external_classes;
-  if (!library_jars.empty()) {
+  if (!args.entry_data["jars"].empty()) {
     Timer t("Load library jars");
-    for (const auto& library_jar : library_jars) {
+    for (const auto& _library_jar : args.entry_data["jars"]) {
+      const std::string library_jar = _library_jar.asString();
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
@@ -837,6 +809,7 @@ int main(int argc, char* argv[]) {
   {
     Timer redex_all_main_timer("redex-all main()");
 
+
     g_redex = new RedexContext();
 
     // Currently there are two sources that specify the library jars:
@@ -877,9 +850,8 @@ int main(int argc, char* argv[]) {
             stores);
       }
     } else {
-      // Dump intermediate dex and meta data
-      write_ir_meta(args.output_ir_dir, stores);
-      write_intermediate_dex(cfg, args.output_ir_dir, stores);
+      redex::write_all_intermediate(cfg, args.output_ir_dir, stores,
+                                    args.entry_data);
     }
 
     stats_output_path =

@@ -12,12 +12,13 @@ namespace ir_meta_io {
 
 void dump(const Scope& classes, const std::string& output_dir);
 
-bool load(const std::string& output_dir, RedexContext* rdx_context);
+bool load(const std::string& input_dir);
 
 class IRMetaIO {
  public:
   static void serialize_rstate(const ReferencedState& rstate,
                                std::ofstream& ostrm);
+  static void deserialize_rstate(const char** _ptr, ReferencedState& rstate);
 
   /**
    * Only serialize meta data of class/method/field if they are not default
