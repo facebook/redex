@@ -40,7 +40,21 @@ using ProtoMap =
 using SignatureMap = sparta::PatriciaTreeMap<const DexString* /* name */,
                                              PatriciaTreeMapValue<ProtoMap>>;
 
-using SignatureMaps = ConcurrentMap<const DexClass*, SignatureMap>;
+struct ClassSignatureMap {
+  // The methods implemented by the current class or one of its superclasses.
+  // The MethodSets here should always be singleton sets.
+  SignatureMap implemented;
+  // The interface methods not yet implemented by the current class or its
+  // superclasses.
+  // The MethodSets here can have multiple elements -- a class can implement
+  // multiple interfaces where some or all of them define a method with the
+  // same signature.
+  SignatureMap unimplemented;
+};
+
+using ClassSignatureMaps = ConcurrentMap<const DexClass*, ClassSignatureMap>;
+
+using InterfaceSignatureMaps = ConcurrentMap<const DexClass*, SignatureMap>;
 
 void update_signature_map(const DexMethod* method,
                           MethodSet value,
@@ -83,77 +97,60 @@ class GraphBuilder {
   }
 
  private:
-  SignatureMap analyze_non_interface(
-      const DexClass* cls, SignatureMap* interface_signatures_out = nullptr) {
+  ClassSignatureMap analyze_non_interface(const DexClass* cls) {
     always_assert(!is_interface(cls));
-    if (m_implementation_signature_maps.count(cls) != 0) {
-      if (interface_signatures_out) {
-        *interface_signatures_out = m_interface_signature_maps.at(cls);
-      }
-      return m_implementation_signature_maps.at(cls);
+    if (m_class_signature_maps.count(cls) != 0) {
+      return m_class_signature_maps.at(cls);
     }
 
-    // The methods implemented by the current class or one of its superclasses.
-    SignatureMap implementation_signatures;
-    // The interface methods *not* yet implemented by the current class or its
-    // superinterface.
-    SignatureMap interface_signatures;
-
     // Initialize the signature maps from those of the superclass.
+    ClassSignatureMap class_signatures;
     if (cls->get_super_class() != nullptr) {
       auto super_cls = type_class(cls->get_super_class());
       if (super_cls != nullptr) {
-        implementation_signatures =
-            analyze_non_interface(super_cls, &interface_signatures);
+        class_signatures = analyze_non_interface(super_cls);
       }
     }
 
     // Add all methods from the interfaces that the current class directly
     // implements to the set of unimplemented methods.
     unify_signature_maps(unify_super_interface_signatures(cls),
-                         &interface_signatures);
+                         &class_signatures.unimplemented);
 
     // Mark all overriding methods as reachable via their parent method ref.
     for (auto* method : cls->get_vmethods()) {
-      auto overridden_set = implementation_signatures.at(method->get_name())
+      auto overridden_set = class_signatures.implemented.at(method->get_name())
                                 .at(method->get_proto());
       for (auto overridden : overridden_set) {
         m_graph->add_edge(overridden, method);
       }
       // Replace the overridden methods by the overriding ones.
       update_signature_map(
-          method, MethodSet{method}, &implementation_signatures);
+          method, MethodSet{method}, &class_signatures.implemented);
     }
 
     // Mark all implementation methods as reachable via their interface methods.
     // Note that an interface method can be implemented by a method inherited
     // from a superclass.
-    for (const auto& protos_pair : implementation_signatures) {
+    for (const auto& protos_pair : class_signatures.implemented) {
       for (const auto& ms_pair : protos_pair.second) {
         auto ms = ms_pair.second;
         always_assert(ms.size() == 1);
         auto implementation = *ms.begin();
-        auto implemented_set =
-            interface_signatures.at(implementation->get_name())
+        auto unimplemented_set =
+            class_signatures.unimplemented.at(implementation->get_name())
                 .at(implementation->get_proto());
-        for (auto implemented : implemented_set) {
-          m_graph->add_edge(implemented, implementation);
+        for (auto unimplemented : unimplemented_set) {
+          m_graph->add_edge(unimplemented, implementation);
         }
         // Remove the method from the set of unimplemented interface methods.
         update_signature_map(
-            implementation, MethodSet{}, &interface_signatures);
+            implementation, MethodSet{}, &class_signatures.unimplemented);
       }
     }
 
-    m_implementation_signature_maps.insert(
-        std::make_pair(cls, implementation_signatures));
-    m_interface_signature_maps.insert(
-        std::make_pair(cls, interface_signatures));
-
-    if (interface_signatures_out) {
-      *interface_signatures_out = interface_signatures;
-    }
-    return implementation_signatures;
+    m_class_signature_maps.insert(std::make_pair(cls, class_signatures));
+    return class_signatures;
   }
 
   SignatureMap analyze_interface(const DexClass* cls) {
@@ -207,12 +204,8 @@ class GraphBuilder {
   }
 
   std::unique_ptr<Graph> m_graph;
-  // The MethodSets for implementations should always be singleton sets.
-  SignatureMaps m_implementation_signature_maps;
-  // The MethodSets for interfaces can have multiple elements -- a class can
-  // implement multiple interfaces where some or all of them define a method
-  // with the same signature.
-  SignatureMaps m_interface_signature_maps;
+  ClassSignatureMaps m_class_signature_maps;
+  InterfaceSignatureMaps m_interface_signature_maps;
   const Scope& m_scope;
 };
 
