@@ -39,7 +39,7 @@ MethodCreator* init_method_creator(const dispatch::Spec& spec,
                            spec.proto,
                            spec.access_flags,
                            orig_method->get_anno_set(),
-                           true);
+                           spec.keep_debug_info);
 }
 
 void emit_call(const dispatch::Spec& spec,
@@ -290,15 +290,14 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
           prepend_and_make(spec.proto->get_args(), spec.owner_type);
       auto static_dispatch_proto =
           DexProto::make_proto(spec.proto->get_rtype(), new_arg_list);
-      dispatch::Spec sub_spec{
-          spec.owner_type,
-          dispatch::Type::VIRTUAL,
-          sub_name,
-          static_dispatch_proto,
-          spec.access_flags | ACC_STATIC,
-          spec.type_tag_field,
-          nullptr // overridden_method
-      };
+      dispatch::Spec sub_spec{spec.owner_type,
+                              dispatch::Type::VIRTUAL,
+                              sub_name,
+                              static_dispatch_proto,
+                              spec.access_flags | ACC_STATIC,
+                              spec.type_tag_field,
+                              nullptr, // overridden_method,
+                              spec.keep_debug_info};
       auto sub_dispatch =
           create_simple_switch_dispatch(sub_spec, sub_indices_to_callee);
       sub_indices_to_callee.clear();
