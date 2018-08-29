@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "AbstractDomain.h"
+#include "FixpointIterator.h"
 #include "WeakTopologicalOrdering.h"
 
 namespace sparta {
@@ -87,85 +88,22 @@ class MonotonicFixpointIteratorContext final {
  * This is the implementation of a monotonically increasing chaotic fixpoint
  * iteration sequence with widening over a control-flow graph (CFG) using the
  * recursive iteration strategy induced by a weak topological ordering of the
- * nodes in the control-flow graph. A detailed exposition of chaotic fixpoint
- * iteration and its use in Abstract Interpretation can be found in the
- * following paper:
+ * nodes in the control-flow graph. The recursive iteration strategy is
+ * described in Bourdoncle's paper on weak topological orderings:
  *
- *  Patrick Cousot & Radhia Cousot. Abstract interpretation and application to
- *  logic programs. Journal of Logic Programming, 13(2—3):103—179, 1992.
- *
- * The recursive iteration strategy is described in Bourdoncle's paper on weak
- * topological orderings.
- *
- * The interface to the CFG is specified by a structure that should have the
- * following layout:
- *
- * class CFG {
- *  using Graph = ...;
- *  using NodeId = ...;
- *  using EdgeId = ...;
- *
- *  static const NodeId entry(const Graph& graph) { ... }
- *  static const NodeId source(const Graph& graph, const EdgeId& e) { ... }
- *  static const NodeId target(const Graph& graph, const EdgeId& e) { ... }
- *
- *  // Edges is an arbitrary type representing a collection of edges. The only
- *  // requirement is that it must define a standard iterator interface.
- *  static Edges predecessors(const Graph& graph, const NodeId& m) { ... }
- *  static Edges successors(const Graph& graph, const NodeId& m) { ... }
- * }
- *
+ *   F. Bourdoncle. Efficient chaotic iteration strategies with widenings.
+ *   In Formal Methods in Programming and Their Applications, pp 128-141.
  */
 template <typename GraphInterface,
           typename Domain,
           typename NodeHash = std::hash<typename GraphInterface::NodeId>>
-class MonotonicFixpointIterator {
+class MonotonicFixpointIterator
+    : public FixpointIterator<GraphInterface, Domain> {
  public:
   using Graph = typename GraphInterface::Graph;
   using NodeId = typename GraphInterface::NodeId;
   using EdgeId = typename GraphInterface::EdgeId;
   using Context = MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
-
-  virtual ~MonotonicFixpointIterator() {
-    static_assert(std::is_base_of<AbstractDomain<Domain>, Domain>::value,
-                  "Domain does not inherit from AbstractDomain");
-
-    // Check that GraphInterface has the necessary methods.
-    // We specify it here instead of putting the static asserts in the
-    // destructor of a CRTP-style base class because the destructor may not be
-    // instantiated when we don't create any instances of the GraphInterface
-    // class.
-    // The graph is specified by its root node together with the successors,
-    // predecessors, and edge source/target functions.
-    static_assert(
-        std::is_same<decltype(GraphInterface::entry(std::declval<Graph>())),
-                     NodeId>::value,
-        "No implementation of entry()");
-    static_assert(
-        !std::is_same<typename std::iterator_traits<typename decltype(
-                          GraphInterface::predecessors(
-                              std::declval<Graph>(),
-                              std::declval<NodeId>()))::iterator>::value_type,
-                      void>::value,
-        "No implementation of predecessors() that returns an iterable type");
-    static_assert(
-        !std::is_same<typename std::iterator_traits<typename decltype(
-                          GraphInterface::successors(
-                              std::declval<Graph>(),
-                              std::declval<NodeId>()))::iterator>::value_type,
-                      void>::value,
-        "No implementation of successors() that returns an iterable type");
-    static_assert(
-        std::is_same<decltype(GraphInterface::source(std::declval<Graph>(),
-                                                     std::declval<EdgeId>())),
-                     NodeId>::value,
-        "No implementation of source()");
-    static_assert(
-        std::is_same<decltype(GraphInterface::target(std::declval<Graph>(),
-                                                     std::declval<EdgeId>())),
-                     NodeId>::value,
-        "No implementation of target()");
-  }
 
   /*
    * When the number of nodes in the CFG is known, it's better to provide it to
@@ -188,36 +126,6 @@ class MonotonicFixpointIterator {
               }),
         m_entry_states(cfg_size_hint),
         m_exit_states(cfg_size_hint) {}
-
-  /*
-   * This method implements the semantic transformer for each node in the
-   * control-flow graph. For better performance, the transformer operates by
-   * modifying the current state via side effects (hence the pointer to an
-   * abstract value). The method is invoked with an abstract value describing
-   * the state of the program upon entering the node. When the method returns,
-   * the abstract value 'current_state' should contain the state of the program
-   * after the node has been processed. If a node represents a basic block, the
-   * same abstract value can be used in sequence to analyze all instructions in
-   * the block, thus avoiding costly copies between instructions.
-   *
-   * Node transformers are required to be monotonic.
-   *
-   */
-  virtual void analyze_node(const NodeId& node,
-                            Domain* current_state) const = 0;
-
-  /*
-   * Edges in the control-flow graph may be associated with different behaviors
-   * that have distinct semantics (conditional branch, exception, etc.). This
-   * method describes the effect of traversing an outgoing edge on the state of
-   * the program, when the source node is exited and control is transferred over
-   * to the target node.
-   *
-   * Edge transformers are required to be monotonic.
-   *
-   */
-  virtual Domain analyze_edge(const EdgeId& edge,
-                              const Domain& exit_state_at_source) const = 0;
 
   /*
    * This method is invoked on the head of an SCC at each iteration, whenever
@@ -299,7 +207,7 @@ class MonotonicFixpointIterator {
       placeholder->join_with(context->get_initial_value());
     }
     for (EdgeId edge : GraphInterface::predecessors(m_graph, node)) {
-      placeholder->join_with(analyze_edge(
+      placeholder->join_with(this->analyze_edge(
           edge, get_exit_state_at(GraphInterface::source(m_graph, edge))));
     }
   }
@@ -326,7 +234,7 @@ class MonotonicFixpointIterator {
     compute_entry_state(context, node, &entry_state);
     Domain& exit_state = m_exit_states[node];
     exit_state = entry_state;
-    analyze_node(node, &exit_state);
+    this->analyze_node(node, &exit_state);
   }
 
   void analyze_scc(Context* context, const WtoComponent<NodeId>& scc) {

@@ -161,14 +161,14 @@ class WtoComponent final {
 /*
  * Implementation of the decomposition of a rooted directed graph into a weak
  * topological ordering (WTO), as described in Bourdoncle's original paper:
+ *
  *   F. Bourdoncle. Efficient chaotic iteration strategies with widenings.
  *   In Formal Methods in Programming and Their Applications, pp 128-141.
+ *
  * State-of-the-art fixpoint iteration algorithms use weak topological orderings
- * as the underlying structure for high performance. Although we will primarily
- * use WTOs on the control-flow graph of an IRList, WTOs can come handy when
- * manipulating structures like call graphs or dependency graphs, hence the
- * parametric class definition. This also makes the design of unit tests much
- * easier.
+ * as the underlying structure for high performance. Although WTOs are primarily
+ * used with control-flow graphs of functions or methods, they can come handy
+ * when manipulating structures like call graphs or dependency graphs.
  *
  * - NodeId is the identifier of a node in the graph. Nodes should be comparable
  *   using `operator==()`.

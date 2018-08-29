@@ -147,13 +147,13 @@ class ProgramInterface {
  */
 using LivenessDomain = HashedSetAbstractDomain<std::string>;
 
-class FixpointIterator final
+class FixpointEngine final
     : public MonotonicFixpointIterator<
           BackwardsFixpointIterationAdaptor<ProgramInterface>,
           LivenessDomain,
           boost::hash<ControlPoint>> {
  public:
-  explicit FixpointIterator(const Program& program)
+  explicit FixpointEngine(const Program& program)
       : MonotonicFixpointIterator(program), m_program(program) {}
 
   void analyze_node(const ControlPoint& node,
@@ -266,7 +266,7 @@ class MonotonicFixpointIteratorTest : public ::testing::Test {
 
 TEST_F(MonotonicFixpointIteratorTest, program1) {
   using namespace std::placeholders;
-  FixpointIterator fp(this->m_program1);
+  FixpointEngine fp(this->m_program1);
   fp.run(LivenessDomain());
 
   ASSERT_TRUE(fp.get_live_in_vars_at("1").is_value());
@@ -313,7 +313,7 @@ TEST_F(MonotonicFixpointIteratorTest, program1) {
 
 TEST_F(MonotonicFixpointIteratorTest, program2) {
   using namespace std::placeholders;
-  FixpointIterator fp(this->m_program2);
+  FixpointEngine fp(this->m_program2);
   fp.run(LivenessDomain());
 
   ASSERT_TRUE(fp.get_live_in_vars_at("1").is_value());
