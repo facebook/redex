@@ -7,6 +7,8 @@
 
 #include "ConstantValue.h"
 
+#include <boost/algorithm/string.hpp>
+
 namespace {
 
 std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
@@ -24,8 +26,10 @@ std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
 } // namespace
 
 ConstantValue::ConstantValue(const TypeTags* type_tags,
-                             std::string kind_str,
-                             std::string val_str) {
+                             const std::string kind_str,
+                             const std::string val_str,
+                             const uint16_t param_reg)
+    : m_param_reg(param_reg) {
   if (kind_str == "I") {
     m_kind = ConstantKind::INT;
     m_int_val = std::stoll(val_str);
@@ -37,6 +41,8 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
       return;
     } else if (type_val == nullptr) {
       TRACE(TERA, 9, "const lift: unable to find type %s\n", val_str.c_str());
+    } else {
+      TRACE(TERA, 9, "const lift: no type tag found %s\n", val_str.c_str());
     }
     // Cannot find type or not type tag.
     m_kind = ConstantKind::INVALID;
@@ -49,11 +55,9 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
 }
 
 std::vector<ConstantValue::ConstantLoad>
-ConstantValue::collect_constant_loads_in(IRCode* code) {
+ConstantValue::collect_constant_loads_in(const IRCode* code) {
   std::vector<ConstantValue::ConstantLoad> res;
-  if (is_invalid()) {
-    return res;
-  }
+  always_assert(is_valid());
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
@@ -80,7 +84,7 @@ ConstantValue::collect_constant_loads_in(IRCode* code) {
 }
 
 std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
-  always_assert(!is_invalid());
+  always_assert(is_valid());
 
   if (is_int_value()) {
     std::vector<IRInstruction*> res;
@@ -90,4 +94,63 @@ std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
   } else {
     return make_string_const(const_reg, m_str_val);
   }
+}
+
+ConstantValues::ConstantValues(const TypeTags* type_tags,
+                               const std::string kinds_str,
+                               const std::string vals_str,
+                               IRCode* code) {
+  // Split vals_str.
+  std::vector<std::string> vals_vec;
+  boost::split(vals_vec, vals_str, [](char c) { return c == ':'; });
+  always_assert(vals_vec.size() == kinds_str.length());
+
+  // Build kind_to_val pairs.
+  std::vector<std::pair<std::string, std::string>> kind_to_val;
+  auto vals_it = vals_vec.begin();
+  for (std::string::const_iterator it = kinds_str.begin();
+       it != kinds_str.end();
+       ++it) {
+    std::string kind_str = std::string(1, *it);
+    kind_to_val.emplace_back(kind_str, *vals_it);
+    ++vals_it;
+  }
+
+  // Populate the const_vals set.
+  for (auto& pair : kind_to_val) {
+    auto param_reg = code->allocate_temp();
+    ConstantValue cval(type_tags, pair.first, pair.second, param_reg);
+    if (cval.is_invalid()) {
+      m_is_valid = false;
+    }
+    m_const_vals.emplace_back(cval);
+  }
+}
+
+std::vector<ConstantValues::ConstantValueLoad>
+ConstantValues::collect_constant_loads(const IRCode* code) {
+  std::vector<ConstantValueLoad> const_val_loads;
+  if (!is_valid()) {
+    return const_val_loads;
+  }
+  for (auto& const_val : m_const_vals) {
+    auto const_loads = const_val.collect_constant_loads_in(code);
+    for (auto& load : const_loads) {
+      const_val_loads.emplace_back(const_val, load);
+    }
+  }
+  return const_val_loads;
+}
+
+std::vector<IRInstruction*> ConstantValues::make_const_loads(
+    std::vector<uint16_t>& const_regs) {
+  always_assert(const_regs.size() == m_const_vals.size());
+  always_assert(is_valid());
+  std::vector<IRInstruction*> res;
+  for (size_t i = 0; i < m_const_vals.size(); ++i) {
+    auto& val = m_const_vals.at(i);
+    auto loads = val.make_load_const(const_regs.at(i));
+    res.insert(res.end(), loads.begin(), loads.end());
+  }
+  return res;
 }

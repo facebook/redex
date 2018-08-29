@@ -44,8 +44,8 @@ bool overlaps_with_an_existing_virtual_scope(DexType* type,
 
 } // namespace
 
-using MethodToConstant =
-    std::map<DexMethod*, ConstantValue, dexmethods_comparator>;
+using MethodToConstants =
+    std::map<DexMethod*, ConstantValues, dexmethods_comparator>;
 
 const DexType* s_method_meta_anno;
 
@@ -69,39 +69,40 @@ void ConstantLifting::lift_constants_from(
     const TypeTags* type_tags,
     const std::vector<DexMethod*>& methods) {
   MethodOrderedSet lifted;
-  MethodToConstant lifted_constants;
+  MethodToConstants lifted_constants;
   for (auto method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));
-    auto const_kind_str = parse_str_anno_value(
+    auto kinds_str = parse_str_anno_value(
         method, s_method_meta_anno, CONST_TYPE_ANNO_ATTR_NAME);
-    auto const_str = parse_str_anno_value(
+    auto vals_str = parse_str_anno_value(
         method, s_method_meta_anno, CONST_VALUE_ANNO_ATTR_NAME);
 
-    ConstantValue const_value(type_tags, const_kind_str, const_str);
-    auto const_loads =
-        const_value.collect_constant_loads_in(method->get_code());
+    ConstantValues const_vals(
+        type_tags, kinds_str, vals_str, method->get_code());
+    auto const_loads = const_vals.collect_constant_loads(method->get_code());
     if (const_loads.size() == 0) {
       // No matching constant found.
       TRACE(TERA,
             5,
             "  no matching constant %s found in %s\n",
-            const_value.to_str().c_str(),
+            const_vals.to_str().c_str(),
             SHOW(method));
       TRACE(TERA, 9, "%s\n", SHOW(method->get_code()));
       continue;
     }
     lifted.insert(method);
-    lifted_constants.emplace(method, const_value);
+    lifted_constants.emplace(method, const_vals);
     TRACE(TERA,
           5,
           "constant lifting: const value %s\n",
-          const_value.to_str().c_str());
+          const_vals.to_str().c_str());
+    TRACE(TERA, 9, "    in %s\n", SHOW(method));
 
     // Add constant to arg list.
     auto old_proto = method->get_proto();
-    auto const_type = const_value.get_constant_type();
+    auto const_types = const_vals.get_constant_types();
     auto arg_list =
-        type_reference::append_and_make(old_proto->get_args(), const_type);
+        type_reference::append_and_make(old_proto->get_args(), const_types);
     auto new_proto = DexProto::make_proto(old_proto->get_rtype(), arg_list);
 
     // Find a non-conflicting name
@@ -124,24 +125,26 @@ void ConstantLifting::lift_constants_from(
 
     // Insert param load.
     auto code = method->get_code();
-    auto const_val_reg = code->allocate_temp();
     auto params = code->get_param_instructions();
-    auto load_type_tag_param =
-        const_value.is_int_value()
-            ? new IRInstruction(IOPCODE_LOAD_PARAM)
-            : new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
-    load_type_tag_param->set_dest(const_val_reg);
-    code->insert_before(params.end(), load_type_tag_param);
+    for (const auto& const_val : const_vals.get_constant_values()) {
+      auto load_type_tag_param =
+          const_val.is_int_value()
+              ? new IRInstruction(IOPCODE_LOAD_PARAM)
+              : new IRInstruction(IOPCODE_LOAD_PARAM_OBJECT);
+      load_type_tag_param->set_dest(const_val.get_param_reg());
+      code->insert_before(params.end(), load_type_tag_param);
+    }
 
     // Replace const loads with moves.
-    for (const auto load : const_loads) {
-      auto insn = load.first;
-      auto dest = load.second;
-      auto move_const_arg = const_value.is_int_value()
+    for (const auto& load : const_loads) {
+      auto const_val = load.first;
+      auto insn = load.second.first;
+      auto dest = load.second.second;
+      auto move_const_arg = const_val.is_int_value()
                                 ? new IRInstruction(OPCODE_MOVE)
                                 : new IRInstruction(OPCODE_MOVE_OBJECT);
       move_const_arg->set_dest(dest);
-      move_const_arg->set_src(0, const_val_reg);
+      move_const_arg->set_src(0, const_val.get_param_reg());
       code->replace_opcode(insn, move_const_arg);
     }
   }
@@ -160,20 +163,23 @@ void ConstantLifting::lift_constants_from(
     const auto callee =
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
+    auto const_vals = lifted_constants.at(callee);
     // Make const load
     auto code = meth->get_code();
-    auto const_reg = code->allocate_temp();
-    auto const_value = lifted_constants.at(callee);
-    auto const_load_and_invoke = const_value.make_load_const(const_reg);
+    std::vector<uint16_t> const_regs;
+    for (size_t i = 0; i < const_vals.size(); ++i) {
+      const_regs.push_back(code->allocate_temp());
+    }
+    auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
     // Insert const load
     std::vector<uint16_t> args;
     for (size_t i = 0; i < insn->srcs_size(); i++) {
       args.push_back(insn->src(i));
     }
-    args.push_back(const_reg);
+    args.insert(args.end(), const_regs.begin(), const_regs.end());
     auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
-    const_load_and_invoke.push_back(invoke);
-    code->insert_after(insn, const_load_and_invoke);
+    const_loads_and_invoke.push_back(invoke);
+    code->insert_after(insn, const_loads_and_invoke);
     // remove original call.
     code->remove_opcode(insn);
     TRACE(TERA, 9, " patched call site in %s\n%s\n", SHOW(meth), SHOW(code));
