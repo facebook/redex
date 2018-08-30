@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "ConcurrentContainers.h"
 #include "PassManager.h"
 #include "TypeSystem.h"
@@ -33,6 +35,7 @@ class RemoveArgs {
       std::vector<IRInstruction*>* dead_insns);
 
  private:
+  std::mutex m_lock;
   const Scope& m_scope;
   TypeSystem m_type_system;
   ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;

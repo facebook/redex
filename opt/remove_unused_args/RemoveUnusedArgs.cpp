@@ -8,6 +8,7 @@
 #include "RemoveUnusedArgs.h"
 
 #include <deque>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
@@ -130,31 +131,39 @@ bool RemoveArgs::update_method_signature(
     DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
+  auto num_orig_args = method->get_proto()->get_args()->get_type_list().size();
   auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   auto updated_proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), live_args_list);
-  auto colliding_method = DexMethod::get_method(
-      method->get_class(), method->get_name(), updated_proto);
-  if (colliding_method && colliding_method->is_def() &&
-      is_constructor(static_cast<const DexMethod*>(colliding_method))) {
-    // We can't rename constructors, so we give up on removing args.
-    return false;
-  }
 
-  DexMethodSpec spec(method->get_class(), method->get_name(), updated_proto);
-  method->change(spec, /* rename on collision */ true);
+  // Enforce sequential execution for the rest of this method, otherwise two
+  // colliding constructors may fail the collision check.
+  {
+    std::lock_guard<std::mutex> guard(m_lock);
+    auto colliding_method = DexMethod::get_method(
+        method->get_class(), method->get_name(), updated_proto);
+    if (colliding_method && colliding_method->is_def() &&
+        is_constructor(static_cast<const DexMethod*>(colliding_method))) {
+      // We can't rename constructors, so we give up on removing args.
+      return false;
+    }
+
+    DexMethodSpec spec(method->get_class(), method->get_name(), updated_proto);
+    method->change(spec, /* rename on collision */ true);
+  }
 
   // We must also update debug info when we change the method proto.
   // We calculate this separately from live_args in case the method isn't
   // changeable to avoid unnecessary computation.
   auto code = method->get_code();
-  if (code) {
-    auto debug = code->get_debug_item();
-    if (debug) {
-      auto& param_names = debug->get_param_names();
-      auto type_list = updated_proto->get_args()->get_type_list();
-      // Keep only the param_names at the matching live argument indices.
+  DexDebugItem* debug = nullptr;
+  if (code && (debug = code->get_debug_item())) {
+    auto& param_names = debug->get_param_names();
+    // Avoid adding debug params to methods that don't originally have them.
+    // Methods that don't have them are created methods where param debug info
+    // seems generally useless anyway.
+    if (param_names.size() == num_orig_args) {
       // NOTE: The "this" argument isn't included in param_names, so
       //       we must apply instance_offset to each param_names update.
       size_t instance_offset = is_static(method) ? 0 : 1;
@@ -162,9 +171,7 @@ bool RemoveArgs::update_method_signature(
         param_names.at(i - instance_offset) =
             param_names.at(live_arg_idxs.at(i) - instance_offset);
       }
-      // The DexStrings at the end of param_names at indices >= (number of
-      // updated params) are now garbage and should be removed.
-      param_names.resize(live_args.size());
+      param_names.resize(live_arg_idxs.size() - instance_offset);
     }
   }
 
@@ -328,5 +335,4 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
 }
 
 static RemoveUnusedArgsPass s_pass;
-
 } // namespace remove_unused_args
