@@ -101,6 +101,9 @@ void write_intermediate_dex(const ConfigFiles& cfg,
     store_files["list"] = Json::arrayValue;
 
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
+      if (store.get_dexen()[i].empty()) {
+        continue;
+      }
       std::ostringstream ss;
       ss << output_ir_dir << "/" << store.get_name();
       if (store.get_name().compare("classes") == 0) {

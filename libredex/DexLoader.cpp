@@ -27,7 +27,8 @@ class DexLoader {
   std::string m_dex_location;
 
  public:
-  explicit DexLoader(const char* location) : m_dex_location(location) {}
+  explicit DexLoader(const char* location)
+      : m_idx(nullptr), m_dex_location(location) {}
   ~DexLoader() {
     if (m_idx) delete m_idx;
     if (m_file.is_open()) m_file.close();
