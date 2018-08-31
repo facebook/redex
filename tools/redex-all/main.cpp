@@ -777,21 +777,66 @@ void redex_backend(const PassManager& manager,
   }
 }
 
-void dump_method_info_map(const std::string file_path,
-                          DexStoresVector& stores) {
+void dump_class_method_info_map(const std::string file_path,
+                                DexStoresVector& stores) {
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
-  auto print = [&](DexMethod* method) {
-    ofs << show(method) << ", " << method->get_fully_deobfuscated_name() << ", "
-        << (method->get_dex_code() ? method->get_dex_code()->size() : 0)
-        << ", " << method->is_virtual() << ", " << method->is_external() << ", "
+
+  static const char* header =
+      "# This map enumerates all class and method sizes and some properties.\n"
+      "# To minimize the size, dex location strings are interned.\n"
+      "# Class information is also interned.\n"
+      "#\n"
+      "# First column can be M, C, and I.\n"
+      "# - C => Class index and nformation\n"
+      "# - M => Method information\n"
+      "# - I,DEXLOC => Dex location string index\n"
+      "#\n"
+      "# C,<index>,<obfuscated class name>,<deobfuscated class name>,\n"
+      "#   <# of all methods>,<# of all virtual methods>,\n"
+      "#   <dex location string index>\n"
+      "# M,<class index>,<obfuscated method name>,<deobfuscated method name>,\n"
+      "#   <size>,<virtual>,<external>,<concrete>\n"
+      "# I,DEXLOC,<index>,<string>";
+  ofs << header << std::endl;
+
+  auto exclude_class_name = [&](const std::string& full_name) {
+    const auto dot_pos = full_name.find('.');
+    always_assert(dot_pos != std::string::npos);
+    // Return excluding class name and "."
+    return full_name.substr(dot_pos + 1);
+  };
+
+  auto print = [&](const int cls_idx, const DexMethod* method) {
+    ofs << "M," << cls_idx << "," << exclude_class_name(show(method)) << ","
+        << exclude_class_name(method->get_fully_deobfuscated_name()) << ","
+        << (method->get_dex_code() ? method->get_dex_code()->size() : 0) << ","
+        << method->is_virtual() << "," << method->is_external() << ","
         << method->is_concrete() << std::endl;
   };
-  walk::classes(build_class_scope(stores), [&](DexClass* cls) {
+
+  // Interning
+  std::unordered_map<const DexClass*, int /*index*/> class_map;
+  std::unordered_map<std::string /*location*/, int /*index*/> dexloc_map;
+
+  walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
+    const auto& dexloc = cls->get_dex_location();
+    if (!dexloc_map.count(dexloc)) {
+      dexloc_map[dexloc] = dexloc_map.size();
+      ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
+    }
+
+    assert(!class_map.count(cls));
+    const int cls_idx = (class_map[cls] = class_map.size());
+    ofs << "C," << cls_idx << "," << show(cls) << "," << show_deobfuscated(cls)
+        << "," << (cls->get_dmethods().size() + cls->get_vmethods().size())
+        << "," << cls->get_vmethods().size() << "," << dexloc_map[dexloc]
+        << std::endl;
+
     for (auto dmethod : cls->get_dmethods()) {
-      print(dmethod);
+      print(cls_idx, dmethod);
     }
     for (auto vmethod : cls->get_vmethods()) {
-      print(vmethod);
+      print(cls_idx, vmethod);
     }
   });
 }
@@ -844,9 +889,10 @@ int main(int argc, char* argv[]) {
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
       redex_backend(manager, args.out_dir, cfg, stores, stats);
-      if (!args.config.get("method_info_map", "").empty()) {
-        dump_method_info_map(
-            cfg.metafile(args.config.get("method_info_map", "").asString()),
+      if (!args.config.get("class_method_info_map", "").empty()) {
+        dump_class_method_info_map(
+            cfg.metafile(
+                args.config.get("class_method_info_map", "").asString()),
             stores);
       }
     } else {
