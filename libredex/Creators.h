@@ -116,6 +116,11 @@ struct MethodBlock {
   void new_instance(DexType* type, Location& dst);
 
   /**
+   * new-array; instatiate an array 'type' of 'size' into dst location.
+   */
+  void new_array(DexType* type, const Location& size, const Location& dst);
+
+  /**
    * throw; throw ex object at Location
    */
   void throwex(Location ex);

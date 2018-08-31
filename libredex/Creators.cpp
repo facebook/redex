@@ -77,6 +77,18 @@ void MethodBlock::new_instance(DexType* type, Location& dst) {
                        ->set_dest(dst.get_reg()));
 }
 
+void MethodBlock::new_array(DexType* type,
+                            const Location& size,
+                            const Location& dst) {
+  auto insn = new IRInstruction(OPCODE_NEW_ARRAY);
+  insn->set_type(type);
+  insn->set_arg_word_count(1);
+  insn->set_src(0, size.get_reg());
+  push_instruction(insn);
+  push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                       ->set_dest(dst.get_reg()));
+}
+
 void MethodBlock::throwex(Location ex) {
   auto insn = new IRInstruction(OPCODE_THROW);
   insn->set_src(0, ex.get_reg());
