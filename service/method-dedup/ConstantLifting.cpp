@@ -127,6 +127,9 @@ void ConstantLifting::lift_constants_from(
     auto code = method->get_code();
     auto params = code->get_param_instructions();
     for (const auto& const_val : const_vals.get_constant_values()) {
+      if (const_val.is_invalid()) {
+        continue;
+      }
       auto load_type_tag_param =
           const_val.is_int_value()
               ? new IRInstruction(IOPCODE_LOAD_PARAM)
@@ -153,7 +156,7 @@ void ConstantLifting::lift_constants_from(
         "constant lifting applied to %ld among %ld\n",
         lifted.size(),
         methods.size());
-  m_num_const_lifted_methods += methods.size();
+  m_num_const_lifted_methods += lifted.size();
 
   // Update call sites
   auto call_sites = method_reference::collect_call_refs(scope, lifted);

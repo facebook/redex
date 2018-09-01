@@ -55,6 +55,7 @@ class ConstantValue {
     always_assert(is_int_value());
     return m_int_val;
   }
+  bool is_int_kind() { return m_kind == ConstantKind::INT; }
   bool is_invalid() const { return m_kind == ConstantKind::INVALID; }
   bool is_valid() const { return !is_invalid(); }
   std::string get_str_value() {
@@ -115,7 +116,9 @@ class ConstantValues {
   std::vector<DexType*> get_constant_types() {
     std::vector<DexType*> res;
     for (const auto& c : m_const_vals) {
-      always_assert(c.is_valid());
+      if (c.is_invalid()) {
+        continue;
+      }
       res.push_back(c.get_constant_type());
     }
     return res;
@@ -124,8 +127,15 @@ class ConstantValues {
   std::vector<IRInstruction*> make_const_loads(
       std::vector<uint16_t>& const_regs);
 
-  size_t size() const { return m_const_vals.size(); }
-  bool is_valid() const { return m_is_valid; }
+  size_t size() const {
+    size_t res = 0;
+    for (const auto& c : m_const_vals) {
+      if (c.is_valid()) {
+        ++res;
+      }
+    }
+    return res;
+  }
 
   std::string to_str() {
     std::ostringstream ss;
@@ -141,5 +151,15 @@ class ConstantValues {
 
  private:
   std::vector<ConstantValue> m_const_vals;
-  bool m_is_valid = true;
+  /**
+   * This is a hack. The issue is CFP will replace reference to its removed type
+   * to a `const 0`. This change conflicts with the parsing of constant loads
+   * when the annotated constant is an int of value 0. In this case, constant
+   * lifting will replace the `wrong const 0` to a move from the lifted int
+   * param. This unexpected transformation leads to a type violation detected by
+   * the IRTypeChecker. What we need to do here is whenever we failed to find a
+   * type constant, we will skip replacing multiple `const 0`, which will likely
+   * lead to the above mentioned bug.
+   */
+  bool m_skip_multiple_const_0 = false;
 };

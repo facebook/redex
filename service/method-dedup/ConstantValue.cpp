@@ -40,9 +40,9 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
       m_int_val = type_tags->get_type_tag(type_val);
       return;
     } else if (type_val == nullptr) {
-      TRACE(TERA, 9, "const lift: unable to find type %s\n", val_str.c_str());
+      TRACE(TERA, 9, "const value: unable to find type %s\n", val_str.c_str());
     } else {
-      TRACE(TERA, 9, "const lift: no type tag found %s\n", val_str.c_str());
+      TRACE(TERA, 9, "const value: no type tag found %s\n", val_str.c_str());
     }
     // Cannot find type or not type tag.
     m_kind = ConstantKind::INVALID;
@@ -120,21 +120,28 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
   for (auto& pair : kind_to_val) {
     auto param_reg = code->allocate_temp();
     ConstantValue cval(type_tags, pair.first, pair.second, param_reg);
-    if (cval.is_invalid()) {
-      m_is_valid = false;
-    }
     m_const_vals.emplace_back(cval);
+    if (cval.is_invalid()) {
+      m_skip_multiple_const_0 = true;
+      TRACE(TERA, 9, "const value: skip multiple const 0\n");
+    }
   }
 }
 
 std::vector<ConstantValues::ConstantValueLoad>
 ConstantValues::collect_constant_loads(const IRCode* code) {
   std::vector<ConstantValueLoad> const_val_loads;
-  if (!is_valid()) {
-    return const_val_loads;
-  }
   for (auto& const_val : m_const_vals) {
+    if (const_val.is_invalid()) {
+      continue;
+    }
     auto const_loads = const_val.collect_constant_loads_in(code);
+    if (m_skip_multiple_const_0 && const_val.is_int_kind() &&
+        const_val.get_int_value() == 0 && !const_loads.empty()) {
+      const_val_loads.emplace_back(const_val, const_loads.front());
+      TRACE(TERA, 9, "const value: skip const 0 loads\n");
+      continue;
+    }
     for (auto& load : const_loads) {
       const_val_loads.emplace_back(const_val, load);
     }
@@ -144,13 +151,14 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
 
 std::vector<IRInstruction*> ConstantValues::make_const_loads(
     std::vector<uint16_t>& const_regs) {
-  always_assert(const_regs.size() == m_const_vals.size());
-  always_assert(is_valid());
+  always_assert(const_regs.size() == size());
   std::vector<IRInstruction*> res;
-  for (size_t i = 0; i < m_const_vals.size(); ++i) {
-    auto& val = m_const_vals.at(i);
-    auto loads = val.make_load_const(const_regs.at(i));
-    res.insert(res.end(), loads.begin(), loads.end());
+  size_t reg_idx = 0;
+  for (auto& cval : m_const_vals) {
+    if (cval.is_valid()) {
+      auto loads = cval.make_load_const(const_regs.at(reg_idx++));
+      res.insert(res.end(), loads.begin(), loads.end());
+    }
   }
   return res;
 }
