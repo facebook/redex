@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <iomanip>
 #include <limits>
 #include <ostream>
 #include <sstream>
@@ -1100,8 +1101,8 @@ class TypeInference final
       }
       std::ostringstream out;
       print_register(out, reg1) << " and ";
-      print_register(out, reg2) << ": incompatible types in comparison " << t1
-                                << " and " << t2;
+      print_register(out, reg2)
+          << ": incompatible types in comparison " << t1 << " and " << t2;
       throw TypeCheckingException(out.str());
     }
   }
@@ -1142,9 +1143,9 @@ class TypeInference final
     if (!(TypeDomain(actual1).leq(TypeDomain(expected1)) &&
           TypeDomain(actual2).leq(TypeDomain(expected2)))) {
       std::ostringstream out;
-      print_register(out, reg) << ": expected type (" << expected1 << ", "
-                               << expected2 << "), but found (" << actual1
-                               << ", " << actual2 << ") instead";
+      print_register(out, reg)
+          << ": expected type (" << expected1 << ", " << expected2
+          << "), but found (" << actual1 << ", " << actual2 << ") instead";
       throw TypeCheckingException(out.str());
     }
   }
@@ -1316,7 +1317,8 @@ void IRTypeChecker::run() {
       m_good = false;
       std::ostringstream out;
       out << "Type error in method " << m_dex_method->get_deobfuscated_name()
-          << " at instruction '" << SHOW(insn) << "' for " << e.what();
+          << " at instruction '" << SHOW(insn) << "' @ " << std::hex
+          << static_cast<const void*>(&mie) << " for " << e.what();
       m_what = out.str();
       m_complete = true;
       return;

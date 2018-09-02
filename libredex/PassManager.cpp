@@ -19,12 +19,12 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "InstructionLowering.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
+#include "InstructionLowering.h"
 #include "JemallocUtil.h"
-#include "PrintSeeds.h"
 #include "OptData.h"
+#include "PrintSeeds.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
@@ -41,7 +41,7 @@ std::string get_apk_dir(const Json::Value& config) {
   return apkdir;
 }
 
-}
+} // namespace
 
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
@@ -52,9 +52,8 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          bool verify_none_mode,
                          bool is_art_build)
-    : PassManager(passes, empty_pg_config(), config,
-                  verify_none_mode, is_art_build) {
-}
+    : PassManager(
+          passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const redex::ProguardConfiguration& pg_config,
@@ -133,9 +132,10 @@ void PassManager::run_type_checker(const Scope& scope,
     checker.run();
     if (checker.fail()) {
       std::string msg = checker.what();
-      fprintf(
-          stderr, "ABORT! Inconsistency found in Dex code. %s\n", msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code. %s\n",
+              msg.c_str());
+      fprintf(stderr, "Code: %s\n%s\n", SHOW(dex_method),
+              SHOW(dex_method->get_code()));
       exit(EXIT_FAILURE);
     }
   });
@@ -161,11 +161,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::ofstream incoming(cfg.get_printseeds() + ".incoming");
     redex::print_classes(incoming, cfg.get_proguard_map(), scope);
     std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");
-    redex::print_seeds(
-        shrinking_file, cfg.get_proguard_map(), scope, true, false);
+    redex::print_seeds(shrinking_file, cfg.get_proguard_map(), scope, true,
+                       false);
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(
-        obfuscation_file, cfg.get_proguard_map(), scope, false, true);
+    redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false,
+                       true);
   }
 
   // Enable opt decision logging if specified in config.
