@@ -138,40 +138,45 @@ void insert_invoke_instr(IRCode* code,
   insert_try_start_instr(code, insert_point, catch_block);
 }
 
+// TODO(minjang): We could simply utilize already existing analysis methods
+// instead of making an array. For an instance, to handle 42 bit vecgors, We
+// could call 8 times of onMethodExitBB(SSSSS) and 1 time of onMethodExitBB(SS).
+//
+// ---
 // When the number of bit vectors for a method is more than 5, they are added to
 // an array and the array is passed to the analysis function onMethodExitBB()
 // along with the method identifier.
+//
 // Algorithm:
-// Bit vectors: v_0, v_1, v_2, v_3, v_4, v_5
-// num_vectors: 6
-// Initialize size of new array: OPCODE: CONST <v_array>, 6
-// Initialize a new empty array: OPCODE: NEW_ARRAY <v_array>, [S
-// For each bit vector <v_i>:
-//     initialize index:     OPCODE: CONST <v_pos>, [position]
-//     Add to array:         OPCODE: APUT_OBJECT <v_i>, <v_array> , <v_pos>
-// Finally, call analysis_method:
-//     initialize method id: OPCODE: CONST <v_mId>, [method_id]
-//     actual call:          OPCODE: INVOKE_STATIC <v_mId>, <v_array>
+//  Bit vectors: v_0, v_1, v_2, v_3, v_4, v_5
+//  num_vectors: 6
+//  Initialize size of new array: CONST <v_array>, 6
+//  Initialize a new empty array: NEW_ARRAY <v_array>, [S
+//  For each bit vector <v_i>:
+//   Initialize index:     CONST <v_pos>, [position]
+//   Add to array:         APUT_OBJECT <v_i>, <v_array> , <v_pos>
+//  Finally, call analysis_method:
+//   Initialize method id: CONST <v_mId>, [method_id]
+//   Actual call:          INVOKE_STATIC <v_mId>, <v_array>
 //
 // Example:
-// OPCODE: CONST v59, 6
-// OPCODE: NEW_ARRAY v59, [S
-// OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v59
-// OPCODE: CONST v60, 0
-// OPCODE: APUT v52, v59, v60
-// OPCODE: CONST v61, 1
-// OPCODE: APUT v53, v59, v61
-// OPCODE: CONST v62, 2
-// OPCODE: APUT v54, v59, v62
-// OPCODE: CONST v63, 3
-// OPCODE: APUT v55, v59, v63
-// OPCODE: CONST v64, 4
-// OPCODE: APUT v56, v59, v64
-// OPCODE: CONST v65, 5
-// OPCODE: APUT v57, v59, v65
-// OPCODE: CONST v66, 6171
-// OPCODE: INVOKE_STATIC v66, v59,
-//          Lcom/facebook/redex/dynamicanalysis/Analysis;.onMethodExitBB:(I[S)V
+//  CONST v59, 6
+//  NEW_ARRAY v59, [S
+//  IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v59
+//  CONST v60, 0
+//  APUT v52, v59, v60
+//  CONST v61, 1
+//  APUT v53, v59, v61
+//  CONST v62, 2
+//  APUT v54, v59, v62
+//  CONST v63, 3
+//  APUT v55, v59, v63
+//  CONST v64, 4
+//  APUT v56, v59, v64
+//  CONST v65, 5
+//  APUT v57, v59, v65
+//  CONST v66, 6171
+//  INVOKE_STATIC v66, v59, Lcom/foo/Analysis;.onMethodExitBB:(I[S)V
 void insert_invoke_static_array_arg(IRCode* code,
                                     size_t method_id,
                                     DexMethod* method_onMethodExit,
@@ -245,7 +250,7 @@ void insert_invoke_static_array_arg(IRCode* code,
   invoke_inst->set_src(1, array_dest);
 
   insert_invoke_instr(code, insert_point, method_id_inst, invoke_inst);
-} // namespace
+}
 
 void insert_invoke_static_call_bb(IRCode* code,
                                   size_t method_id,
@@ -299,6 +304,9 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
                  mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
                (mie.type == MFLOW_TRY &&
                 (mie.tentry->type == TRY_END || mie.tentry->type == TRY_START));
+                //
+                // TODO(minjang): Fix a bug! Should pass MFLOW_TARGET as well.
+                //
       });
 }
 
@@ -580,7 +588,7 @@ void write_method_index_file(const std::string& file_name,
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (size_t i = 0; i < id_vector.size(); ++i) {
     // We use intentionally obfuscated name to guarantee the uniqueness.
-    ofs << i + 1 << ", " << show(id_vector[i]) << std::endl;
+    ofs << i + 1 << "," << show(id_vector[i]) << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 }
@@ -590,7 +598,7 @@ void write_basic_block_index_file(
     const std::map<int, std::pair<std::string, int>>& id_name_map) {
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (const auto& p : id_name_map) {
-    ofs << p.first << ", " << p.second.first << ", " << p.second.second
+    ofs << p.first << "," << p.second.first << "," << p.second.second
         << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
@@ -652,10 +660,6 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     method_id_vector.push_back(method);
     TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
 
-    // NOTE: Only for testing D8607258! We test the method index file is
-    // safely uploaded. So we enabled this pass but prevent actual
-    // instrumentation.
-    //
     instrument_onMethodBegin(method, index * options.num_stats_per_method,
                              method_onMethodBegin);
   });
@@ -680,64 +684,28 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   pm.incr_metric("Excluded", excluded);
 }
 
-// Basic block instrumentation algorithm.
-// 1. Initialize a variable b_vector to 0. Number of bits in b_vector >= Number
-// of basic blocks in the method.
-// 2. For every block with id b_id, set <b_id>th bit in the bit-vector.
-// 3. Before RETURN, INVOKE onMethodExit(method_id, b_vector).
-// Example:
-// Original CFG
-//     ++++++++++           ++++++++++          ++++++++++
-//     + block0 +  ---->    + block1 +  ---->   + block2 +
-//     +        +           +        +          + Return +
-//     ++++++++++           ++++++++++          ++++++++++
-// Initialize empty bit vectors
-//     +++++++++++++++
-//     + CONST v0, 0 +           ++++++++++          ++++++++++
-//     + block0      +  ---->    + block1 +  ---->   + block2 +
-//     +             +           +        +          + Return +
-//     +++++++++++++++           ++++++++++          ++++++++++
-// Instrument individual basic block to set <i>th bit in the bit vector, where
-// i = 2^(block_id)
-//     +++++++++++++++++++
-//     + CONST v0, 0     +      ++++++++++++++++++         ++++++++++++++++++
-//     + CONST v1, 1<<0  +      + CONST v1, 1<<1 +          + CONST v1, 1<<2 +
-//     + OR v0, v1       +      + OR v0, v1      +          + OR v0, v1      +
-//     + block0          +  --->  + block1       +  ---->   + block2         +
-//     +++++++++++++++          ++++++++++++++++++          + Return         +
-//                                                          ++++++++++++++++++
+// A simple bit-vector basic block instrumentation algorithm
 //
-// Before return, add an INVOKE call to send the bit vector for analysis
-// +++++++++++++++++++
-// + CONST v0, 0     +       ++++++++++++++++++      +++++++++++++++++++++++++++
-// + CONST v1, 1<<0  +       + CONST v1, 1<<1 +      + CONST v1, 1<<2          +
-// + OR v0, v1       +       + OR v0, v1      +      + OR v0, v1               +
-// + block0          +  -->  + block1         +  --> + block2                  +
-// +++++++++++++++++++       ++++++++++++++++++      + CONST v2, method_id     +
-//                                                   + INVOKE v2,v0, Analysis()+
-//                                                   + Return                  +
-//                                                   +++++++++++++++++++++++++++
+//  Example) Original CFG
+//   +--------+       +--------+       +--------+
+//   | block0 | ----> | block1 | ----> | block2 |
+//   |        |       |        |       | Return |
+//   +--------+       +--------+       +--------+
 //
-// ============
-// OPTIMIZATION:
-// We use OR_INT_LIT16 to prevent adding CONST v1, 1<<0 instruction at each
-// block.
-//     +++++++++++++++++++
-//     + CONST v0, 0     +       ++++++++++++++++++++     +++++++++++++++++++++
-//     + OR_LIT16 v0, 1<<0 +     + OR_LIT16 v0, 1<<1+     + OR_LIT16 v0, 1<<2 +
-//     + block0            + --> + block1           + --> + block2            +
-//     +++++++++++++++           ++++++++++++++++++       + Return            +
-//                                                        +++++++++++++++++++++
-// Optimized final instrumented code
-// +++++++++++++++++++
-// + CONST v0, 0     +       ++++++++++++++++++      +++++++++++++++++++++++++++
-// + OR_LIT16 v0, 1  +       + OR_LIT16 v0, 2 +      + OR_LIT16 v0, 4          +
-// + block0          +  -->  + block1         +  --> + block2                  +
-// +++++++++++++++++++       ++++++++++++++++++      + CONST v2, method_id     +
-//                                                   + INVOKE v2,v0, Analysis()+
-//                                                   + Return                  +
-//                                                   +++++++++++++++++++++++++++
-
+//  Instrumented CFG:
+//   - Initialize bit vector(s) at the beginning
+//   - Set <bb_id>-th bit in the vector using or-lit/16. So, the bit vector is a
+//     short type. We don't use a 32-bit int; no such or-lit/32 instruction.
+//   - Before RETURN, insert INVOKE onMethodExit(method_id, bit_vectors).
+//
+//   +------------------+     +------------------+     +-----------------------+
+//   | * CONST v0, 0    | --> | * OR_LIT16 v0, 2 | --> | * OR_LIT16 v0, 4      |
+//   | * OR_LIT16 v0, 1 |     |   block1         |     |   block2              |
+//   |   block0         |     |                  |     | * CONST v2, method_id |
+//   +------------------+     +------------------+     | * INVOKE v2,v0, ...   |
+//                                                     |   Return              |
+//                                                     +-----------------------+
+//
 void do_basic_block_tracing(DexClass* analysis_cls,
                             DexStoresVector& stores,
                             ConfigFiles& cfg,
