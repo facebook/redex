@@ -110,3 +110,19 @@ std::string parse_str_anno_value(const DexMethod* method,
                                  std::string name) {
   return parse_str_anno_value(method, target_anno, DEVT_STRING, name);
 }
+
+DexAnnotationSet* create_anno_set(
+    const std::vector<std::pair<std::string, std::string>>& elements,
+    DexType* anno_type) {
+  auto anno = new DexAnnotation(anno_type, DexAnnotationVisibility::DAV_BUILD);
+  for (const auto& pair : elements) {
+    auto key = pair.first;
+    auto elem_val = pair.second;
+    anno->add_element(
+        key.c_str(),
+        new DexEncodedValueString(DexString::make_string(elem_val)));
+  }
+  DexAnnotationSet* anno_set = new DexAnnotationSet();
+  anno_set->add_annotation(anno);
+  return anno_set;
+}

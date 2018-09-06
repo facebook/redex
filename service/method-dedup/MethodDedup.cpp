@@ -104,7 +104,7 @@ bool are_methods_identical(const std::vector<DexMethod*>& methods) {
   return group_identical_methods(methods).size() == 1;
 }
 
-size_t dedup_methods(
+size_t dedup_methods_helper(
     const Scope& scope,
     const std::vector<DexMethod*>& to_dedup,
     std::vector<DexMethod*>& replacements,
@@ -150,6 +150,29 @@ size_t dedup_methods(
   }
   method_reference::update_call_refs_simple(scope, duplicates_to_replacement);
   return dedup_count;
+}
+
+size_t dedup_methods(
+    const Scope& scope,
+    const std::vector<DexMethod*>& to_dedup,
+    std::vector<DexMethod*>& replacements,
+    boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>&
+        new_to_old) {
+  size_t total_dedup_count = 0;
+  auto to_dedup_temp = to_dedup;
+  while (true) {
+    TRACE(TERA, 8, "dedup: static|non_virt input %d\n", to_dedup_temp.size());
+    size_t dedup_count =
+        dedup_methods_helper(scope, to_dedup_temp, replacements, new_to_old);
+    total_dedup_count += dedup_count;
+    TRACE(TERA, 8, "dedup: static|non_virt dedupped %d\n", dedup_count);
+    if (dedup_count == 0) {
+      break;
+    }
+    to_dedup_temp = replacements;
+    replacements = {};
+  }
+  return total_dedup_count;
 }
 
 } // namespace method_dedup

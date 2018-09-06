@@ -76,3 +76,7 @@ bool has_any_annotation(
   }
   return false;
 }
+
+DexAnnotationSet* create_anno_set(
+    const std::vector<std::pair<std::string, std::string>>& elements,
+    DexType* anno_type);
