@@ -439,8 +439,39 @@ void InterDex::emit_mixed_mode_classes(
   m_mixed_mode_info.remove_all_mixed_mode_classes();
 }
 
-std::vector<DexType*> InterDex::get_interdex_types(
-    const Scope& scope, const std::vector<std::string>& interdexorder) {
+namespace {
+
+/**
+ * Grab classes that should end up in a pre-defined interdex group.
+ */
+std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
+    const Scope& scope) {
+  std::vector<std::vector<DexType*>> res(MAX_DEX_NUM);
+
+  size_t num_interdex_groups = 0;
+  walk::classes(scope, [&](const DexClass* cls) {
+    if (cls->rstate.has_interdex_subgroup()) {
+      size_t interdex_subgroup = cls->rstate.get_interdex_subgroup();
+      res[interdex_subgroup].push_back(cls->get_type());
+      num_interdex_groups =
+          std::max(num_interdex_groups, interdex_subgroup + 1);
+    }
+  });
+
+  res.resize(num_interdex_groups);
+
+  return res;
+}
+
+} // namespace
+
+std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
+  const std::vector<std::string>& interdexorder = m_cfg.get_coldstart_classes();
+
+  // Find generated classes that should be in the interdex order.
+  std::vector<std::vector<DexType*>> interdex_group_classes =
+      get_extra_classes_per_interdex_group(scope);
+  size_t curr_interdex_group = 0;
 
   std::unordered_set<DexClass*> classes(scope.begin(), scope.end());
   std::vector<DexType*> interdex_types;
@@ -451,6 +482,15 @@ std::vector<DexType*> InterDex::get_interdex_types(
       if (entry.find(END_MARKER_FORMAT) != std::string::npos) {
         type = DexType::make_type(entry.c_str());
         m_end_markers.emplace_back(type);
+
+        if (interdex_group_classes.size() > curr_interdex_group) {
+          for (DexType* extra_type :
+               interdex_group_classes.at(curr_interdex_group)) {
+            interdex_types.emplace_back(extra_type);
+          }
+          curr_interdex_group++;
+        }
+
         TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.\n",
               entry.c_str());
       } else if (entry.find(SCROLL_MARKER_FORMAT) != std::string::npos) {
@@ -466,9 +506,23 @@ std::vector<DexType*> InterDex::get_interdex_types(
       if (!cls || classes.count(cls) == 0) {
         continue;
       }
+
+      if (cls->rstate.has_interdex_subgroup()) {
+        // Skipping generated classes that should end up in a specific group.
+        continue;
+      }
     }
 
     interdex_types.emplace_back(type);
+  }
+
+  // We still want to add the ones in the last interdex group, if any.
+  always_assert_log(interdex_group_classes.size() <= curr_interdex_group + 2,
+                    "Too many interdex subgroups!\n");
+  if (interdex_group_classes.size() > curr_interdex_group) {
+    for (DexType* type : interdex_group_classes.at(curr_interdex_group)) {
+      interdex_types.push_back(type);
+    }
   }
 
   return interdex_types;
@@ -512,8 +566,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
 DexClassesVector InterDex::run() {
   auto scope = build_class_scope(m_dexen);
 
-  std::vector<DexType*> interdex_types =
-      get_interdex_types(scope, m_cfg.get_coldstart_classes());
+  std::vector<DexType*> interdex_types = get_interdex_types(scope);
 
   auto unreferenced_classes = find_unrefenced_coldstart_classes(
       scope, interdex_types, m_static_prune_classes);

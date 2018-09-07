@@ -79,8 +79,7 @@ class InterDex {
    * * classes that still exist in the current scope
    * * + a "fake" type for each of the class markers (ex: DexEndMarker etc)
    */
-  std::vector<DexType*> get_interdex_types(
-      const Scope& scope, const std::vector<std::string>& interdexorder);
+  std::vector<DexType*> get_interdex_types(const Scope& scope);
 
   /**
    * Makes sure that classes in the dex end up in the interdex list.
