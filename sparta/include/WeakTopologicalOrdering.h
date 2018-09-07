@@ -30,6 +30,10 @@ class WeakTopologicalOrdering;
 
 namespace wto_impl {
 
+// Forward declaration
+template <typename NodeId, typename NodeHash>
+class WtoBuilder;
+
 /*
  * Iterator over the subcomponents of a strongly connected component (head
  * node excluded). This is a regular C++ iterator meant for traversing a
@@ -190,22 +194,57 @@ class WeakTopologicalOrdering final {
    */
   WeakTopologicalOrdering(
       const NodeId& root,
-      std::function<std::vector<NodeId>(const NodeId&)> successors)
-      : m_successors(successors), m_free_position(0), m_num(0) {
-    int32_t partition = -1;
-    visit(root, &partition);
+      std::function<std::vector<NodeId>(const NodeId&)> successors) {
+    if (successors(root).empty()) {
+      // If the CFG consists of a single node with no control-flow edges, we
+      // don't need to run the general algorithm. This avoids building all the
+      // auxiliary data structures required by Bourdoncle's algorithm.
+      // This optimization benefits the simple parallel fixpoint iterator, which
+      // computes a WTO for each toplevel component of the CFG, most of them
+      // single nodes in practice.
+      m_components.emplace_back(root, WtoComponent<NodeId>::Kind::Vertex,
+                                /* position */ 0,
+                                /* next_component_position */ -1);
+      return;
+    }
+    wto_impl::WtoBuilder<NodeId, NodeHash> builder(successors, &m_components);
+    builder.build(root);
   }
 
   iterator begin() const {
-    return iterator(&m_wto_space.back(), &m_wto_space.front() - 1);
+    return iterator(&m_components.back(), &m_components.front() - 1);
   }
 
   iterator end() const {
-    auto end_ptr = &m_wto_space.front() - 1;
+    auto end_ptr = &m_components.front() - 1;
     return iterator(end_ptr, end_ptr);
   }
 
  private:
+  // We store all the components of a WTO inside a vector. This is more
+  // efficient than allocating each component individually on the heap.
+  // It's also more cache-friendly when repeatedly traversing the WTO during
+  // a fixpoint iteration.
+  std::vector<WtoComponent<NodeId>> m_components;
+};
+
+namespace wto_impl {
+
+template <typename NodeId, typename NodeHash>
+class WtoBuilder final {
+ public:
+  WtoBuilder(std::function<std::vector<NodeId>(const NodeId&)> successors,
+             std::vector<WtoComponent<NodeId>>* wto_space)
+      : m_successors(successors),
+        m_wto_space(wto_space),
+        m_free_position(0),
+        m_num(0) {}
+
+  void build(const NodeId& root) {
+    int32_t partition = -1;
+    visit(root, &partition);
+  }
+
   // We keep the notations used by Bourdoncle in the paper to describe the
   // algorithm.
 
@@ -243,7 +282,7 @@ class WeakTopologicalOrdering final {
       }
       auto kind = loop ? WtoComponent<NodeId>::Kind::Scc
                        : WtoComponent<NodeId>::Kind::Vertex;
-      m_wto_space.emplace_back(vertex, kind, m_free_position, *partition);
+      m_wto_space->emplace_back(vertex, kind, m_free_position, *partition);
       *partition = m_free_position++;
     }
     return head;
@@ -275,18 +314,16 @@ class WeakTopologicalOrdering final {
   }
 
   std::function<std::vector<NodeId>(const NodeId&)> m_successors;
-  // We store all the components of a WTO inside a vector. This is more
-  // efficient than allocating each component individually on the heap.
-  // It's also more cache-friendly when repeatedly traversing the WTO during
-  // a fixpoint iteration.
-  std::vector<WtoComponent<NodeId>> m_wto_space;
-  // The next available position at the end of the vector m_wto_space.
+  std::vector<WtoComponent<NodeId>>* m_wto_space;
+  // The next available position at the end of the vector of components.
   int32_t m_free_position;
   // These are auxiliary data structures used by Bourdoncle's algorithm.
   std::unordered_map<NodeId, uint32_t, NodeHash> m_dfn;
   std::stack<NodeId> m_stack;
   uint32_t m_num;
 };
+
+} // namespace wto_impl
 
 } // namespace sparta
 
