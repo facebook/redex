@@ -111,7 +111,7 @@ void AnalysisImpl::filter_list(
 
   auto find_in_list = [&](const std::string& name) {
     for (const std::string& el_name : list) {
-      if (name == el_name) {
+      if (name.compare(0, el_name.size(), el_name) == 0) {
         return true;
       }
     }
