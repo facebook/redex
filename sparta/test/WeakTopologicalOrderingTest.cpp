@@ -224,6 +224,24 @@ TEST(WeakTopologicalOrderingTest, SccAtEnd) {
   }
 }
 
+TEST(WeakTopologicalOrderingTest, SingleNode) {
+  {
+    // +---+
+    // | 1 |
+    // +---+
+    SimpleGraph g;
+    WeakTopologicalOrdering<std::string> wto(
+        "1", [&g](const std::string& n) { return g.successors(n); });
+    std::ostringstream s;
+    s << wto;
+    EXPECT_EQ("1", s.str()) << "failed to order graph:\n" << g;
+    auto it = wto.begin();
+    EXPECT_EQ("1", it->head_node());
+    ++it;
+    EXPECT_EQ(it, wto.end());
+  }
+}
+
 TEST(WeakTopologicalOrderingTest, InvalidIteratorDeref) {
   SimpleGraph g;
   g.add_edge("1", "1");
