@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "androidfw/ResourceTypes.h"
 
@@ -111,9 +112,10 @@ void walk_references_for_resource(
    std::unordered_set<std::string>& leaf_string_values,
    android::ResTable* table);
 
-std::unordered_set<uint32_t> get_js_resources_by_parsing(
+std::unordered_set<uint32_t> get_js_resources(
    const std::string& directory,
-   std::map<std::string, std::vector<uint32_t>> name_to_ids);
+   const std::vector<std::string>& js_assets_lists,
+   const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
    std::vector<std::string> prefixes,
