@@ -149,6 +149,10 @@ class ConstantValues {
     return ss.str();
   }
 
+  bool needs_stub() const { return size() >= 3; }
+
+  DexMethod* create_stub_method(DexMethod* callee);
+
  private:
   std::vector<ConstantValue> m_const_vals;
   /**

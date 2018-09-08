@@ -41,6 +41,8 @@ DexTypeList* append_and_make(const DexTypeList* list,
 
 DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head);
 
+DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop);
+
 /**
  * Update all method signature type references in-place using the old_to_new
  * map. We update all references to an old type to the provided new type.

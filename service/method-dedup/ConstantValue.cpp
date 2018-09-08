@@ -9,6 +9,9 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include "Creators.h"
+#include "TypeReference.h"
+
 namespace {
 
 std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
@@ -167,4 +170,85 @@ std::vector<IRInstruction*> ConstantValues::make_const_loads(
     }
   }
   return res;
+}
+
+/**
+ * Will return a newly created method that loads the argument values and
+ * passes them to the `callee` method.
+ *
+ *   <ret_type> <method_name>$redex(<method_args>...) {
+ *      const-* <local_reg_0> field_1_data
+ *      const-* <local_reg_1> field_2_data
+ *      ...
+ *      invoke-static <callee> <method_args ...> <local_regs ...>
+ *   }
+ */
+DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
+  DexType* type = callee->get_class();
+  // Assuming that callee's proto is already modified by appending the lifted
+  // params.
+  auto appended_proto = callee->get_proto();
+  auto stub_arg_list =
+      type_reference::drop_and_make(appended_proto->get_args(), size());
+  auto stub_proto =
+      DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
+  auto name = DexString::make_string(callee->get_name()->str() + "$stub");
+  name = DexMethod::get_noncolliding_name(type, name, stub_proto);
+  TRACE(TERA, 9, "const value: stub name %s\n", name->c_str());
+  auto mc = new MethodCreator(type,
+                              name,
+                              stub_proto,
+                              callee->get_access(),
+                              nullptr, // anno
+                              false // with_debug_item
+  );
+  auto mb = mc->get_main_block();
+  // Setup args for calling the callee.
+  size_t arg_loc = 0;
+  std::vector<Location> args;
+  if (!is_static(callee)) {
+    args.push_back(mc->get_local(arg_loc++));
+  }
+  for (; arg_loc < stub_arg_list->size(); ++arg_loc) {
+    args.push_back(mc->get_local(arg_loc));
+  }
+  for (auto& cval : m_const_vals) {
+    if (cval.is_invalid()) {
+      continue;
+    }
+    auto loc = mc->make_local(cval.get_constant_type());
+    if (cval.is_int_value()) {
+      mb->load_const(loc, static_cast<int32_t>(cval.get_int_value()));
+    } else {
+      mb->load_const(loc, DexString::make_string(cval.get_str_value()));
+    }
+    args.push_back(loc);
+  }
+  mb->invoke(callee, args);
+
+  DexType* ret_type = callee->get_proto()->get_rtype();
+  if (ret_type == get_void_type()) {
+    mb->ret_void();
+  } else {
+    auto ret_loc = mc->make_local(ret_type);
+    mb->move_result(ret_loc, ret_type);
+    mb->ret(ret_type, ret_loc);
+  }
+
+  auto stub = mc->create();
+  // Propogate deobfuscated name
+  auto orig_name = callee->get_deobfuscated_name();
+  auto pos = orig_name.find(":");
+  always_assert(pos != std::string::npos);
+  auto new_name = orig_name.substr(0, pos) + "$stub" + orig_name.substr(pos);
+  stub->set_deobfuscated_name(new_name);
+  TRACE(TERA, 9, "stub's new deobfuscated name %s\n", new_name.c_str());
+  // Add stub to class
+  type_class(type)->add_method(stub);
+  TRACE(TERA,
+        9,
+        "const value: created stub %s\n%s\n",
+        SHOW(stub),
+        SHOW(stub->get_code()));
+  return stub;
 }

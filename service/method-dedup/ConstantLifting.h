@@ -18,9 +18,11 @@ class ConstantLifting {
 
   bool is_applicable_to_constant_lifting(const DexMethod* method);
 
-  void lift_constants_from(const Scope& scope,
-                           const TypeTags* type_tags,
-                           const std::vector<DexMethod*>& methods);
+  // The potentially created constant value stub methods are returned.
+  std::vector<DexMethod*> lift_constants_from(
+      const Scope& scope,
+      const TypeTags* type_tags,
+      const std::vector<DexMethod*>& methods);
 
   uint32_t get_num_const_lifted_methods() const {
     return m_num_const_lifted_methods;

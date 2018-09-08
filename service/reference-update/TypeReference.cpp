@@ -193,6 +193,15 @@ DexTypeList* replace_head_and_make(const DexTypeList* list, DexType* new_head) {
   return DexTypeList::make_type_list(std::move(new_list));
 }
 
+DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop) {
+  auto old_list = list->get_type_list();
+  auto dropped = std::deque<DexType*>(old_list.begin(), old_list.end());
+  for (size_t i = 0; i < num_types_to_drop; ++i) {
+    dropped.pop_back();
+  }
+  return DexTypeList::make_type_list(std::move(dropped));
+}
+
 void update_method_signature_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new,

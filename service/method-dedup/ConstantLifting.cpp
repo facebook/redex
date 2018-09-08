@@ -64,7 +64,7 @@ bool ConstantLifting::is_applicable_to_constant_lifting(
   return true;
 }
 
-void ConstantLifting::lift_constants_from(
+std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const Scope& scope,
     const TypeTags* type_tags,
     const std::vector<DexMethod*>& methods) {
@@ -159,6 +159,7 @@ void ConstantLifting::lift_constants_from(
   m_num_const_lifted_methods += lifted.size();
 
   // Update call sites
+  std::vector<DexMethod*> stub_methods;
   auto call_sites = method_reference::collect_call_refs(scope, lifted);
   for (const auto& pair : call_sites) {
     auto meth = pair.first;
@@ -167,24 +168,40 @@ void ConstantLifting::lift_constants_from(
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr);
     auto const_vals = lifted_constants.at(callee);
-    // Make const load
     auto code = meth->get_code();
-    std::vector<uint16_t> const_regs;
-    for (size_t i = 0; i < const_vals.size(); ++i) {
-      const_regs.push_back(code->allocate_temp());
+    if (const_vals.needs_stub()) {
+      // Insert const load
+      std::vector<uint16_t> args;
+      for (size_t i = 0; i < insn->srcs_size(); i++) {
+        args.push_back(insn->src(i));
+      }
+      auto stub = const_vals.create_stub_method(callee);
+      auto invoke = method_reference::make_invoke(stub, insn->opcode(), args);
+      code->insert_after(insn, {invoke});
+      // remove original call.
+      code->remove_opcode(insn);
+      stub_methods.push_back(stub);
+    } else {
+      // Make const load
+      std::vector<uint16_t> const_regs;
+      for (size_t i = 0; i < const_vals.size(); ++i) {
+        const_regs.push_back(code->allocate_temp());
+      }
+      auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
+      // Insert const load
+      std::vector<uint16_t> args;
+      for (size_t i = 0; i < insn->srcs_size(); i++) {
+        args.push_back(insn->src(i));
+      }
+      args.insert(args.end(), const_regs.begin(), const_regs.end());
+      auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
+      const_loads_and_invoke.push_back(invoke);
+      code->insert_after(insn, const_loads_and_invoke);
+      // remove original call.
+      code->remove_opcode(insn);
     }
-    auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
-    // Insert const load
-    std::vector<uint16_t> args;
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      args.push_back(insn->src(i));
-    }
-    args.insert(args.end(), const_regs.begin(), const_regs.end());
-    auto invoke = method_reference::make_invoke(callee, insn->opcode(), args);
-    const_loads_and_invoke.push_back(invoke);
-    code->insert_after(insn, const_loads_and_invoke);
-    // remove original call.
-    code->remove_opcode(insn);
     TRACE(TERA, 9, " patched call site in %s\n%s\n", SHOW(meth), SHOW(code));
   }
+
+  return stub_methods;
 }

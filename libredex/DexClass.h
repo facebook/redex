@@ -876,6 +876,25 @@ class DexMethod : public DexMethodRef {
     return g_redex->get_method(type, name, proto);
   }
 
+  static DexString* get_noncolliding_name(DexType* type,
+                                          DexString* name,
+                                          DexProto* proto) {
+    if (!DexMethod::get_method(type, name, proto)) {
+      return name;
+    }
+    DexString* res = DexString::make_string(name->c_str());
+    uint32_t i = 0;
+    while (true) {
+      auto temp =
+          DexString::make_string(res->str() + "r$" + std::to_string(i++));
+      if (!DexMethod::get_method(type, temp, proto)) {
+        res = temp;
+        break;
+      }
+    }
+    return res;
+  }
+
  public:
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
