@@ -707,7 +707,7 @@ void select_inlinable(
     MethodRefCache& resolved_refs,
     std::unordered_set<DexMethod*>* inlinable,
     bool multiple_callers) {
-  std::unordered_map<DexMethod*, int> calls;
+  std::map<DexMethod*, int, dexmethods_comparator> calls;
   // Keep adjusted tally of opcode size after a method is selected for inlining.
   // This avoids an edge case where a small method has many callers, but becomes
   // large due to inlining (need to prevent code duplication in such a case)
