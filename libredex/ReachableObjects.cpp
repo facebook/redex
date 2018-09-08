@@ -284,10 +284,15 @@ class TransitiveClosureMarker {
     if (!method || m_reachable_objects->marked(method)) return;
     TRACE(REACH, 4, "Conditionally marking method: %s\n", SHOW(method));
     auto clazz = type_class(method->get_class());
+    m_cond_marked->methods.insert(method);
+    // If :clazz has been marked, we cannot count on visit(DexClass*) to move
+    // the conditionally-marked methods into the actually-marked ones -- we have
+    // to do it ourselves. Note that we must do this check after adding :method
+    // to m_cond_marked to avoid a race condition where we add to m_cond_marked
+    // after visit(DexClass*) has finished moving its contents over to
+    // m_reachable_objects.
     if (m_reachable_objects->marked(clazz)) {
       push(clazz, method);
-    } else {
-      m_cond_marked->methods.insert(method);
     }
   }
 
