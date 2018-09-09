@@ -80,7 +80,7 @@ add_executable(redex-all ${redex_all_srcs})
 target_link_libraries(redex-all
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
-        ${ZLIB_LIBRARIES}
+        ${REDEX_ZLIB_LIBRARY}
         redex
         resource
         )
