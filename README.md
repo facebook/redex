@@ -107,6 +107,12 @@ If you prefer the ninja build system:
 cmake .. -G Ninja
 ```
 
+You can also provide `BUILD_TYPE` for Static Linking of dependencies. This is optional and defaults to Shared.
+
+```
+cmake .. -DBUILD_TYPE=Static
+```
+
 On Windows, first, get `CMAKE_TOOLCHAIN_FILE` from the output of `"vcpkg integrate install"`, and then:
 ```
 cmake .. -G "Visual Studio 15 2017 Win64"
