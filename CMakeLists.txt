@@ -8,6 +8,16 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
+if(NOT BUILD_TYPE)
+    set(BUILD_TYPE Shared)
+endif ()
+
+if(BUILD_TYPE STREQUAL Static)
+    set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
+elseif (BUILD_TYPE STREQUAL Shared)
+    set(ENABLE_STATIC OFF CACHE BOOL "" FORCE)
+endif ()
+
 set_common_cxx_flags_for_redex()
 add_dependent_packages_for_redex()
 
@@ -69,7 +79,7 @@ add_executable(redex-all ${redex_all_srcs})
 
 target_link_libraries(redex-all
         ${Boost_LIBRARIES}
-        ${JSONCPP_LIBRARY}
+        ${REDEX_JSONCPP_LIBRARY}
         ${ZLIB_LIBRARIES}
         redex
         resource

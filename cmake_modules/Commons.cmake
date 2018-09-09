@@ -26,16 +26,28 @@ endmacro()
 
 macro(add_dependent_packages_for_redex)
 
-    set(Boost_USE_STATIC_LIBS ON)
-    set(Boost_USE_STATIC_RUNTIME ON)
-    set(Boost_USE_MULTITHREADED ON)
+    message("-- ENABLE_STATIC ${ENABLE_STATIC}")
+
+    if(ENABLE_STATIC)
+        set(Boost_USE_STATIC_LIBS ON)
+        set(Boost_USE_STATIC_RUNTIME ON)
+        set(Boost_USE_MULTITHREADED ON)
+    endif()
+
     find_package(Boost 1.56.0 REQUIRED COMPONENTS system regex filesystem program_options iostreams thread)
     print_dirs("${Boost_INCLUDE_DIRS}" "Boost_INCLUDE_DIRS")
     print_dirs("${Boost_LIBRARIES}" "Boost_LIBRARIES")
 
     find_package(JsonCpp 0.10.5 REQUIRED)
     print_dirs("${JSONCPP_INCLUDE_DIRS}" "JSONCPP_INCLUDE_DIRS")
-    print_dirs("${JSONCPP_LIBRARY}" "JSONCPP_LIBRARY")
+
+    if(ENABLE_STATIC)
+        set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY_STATIC})
+    else()
+        set(REDEX_JSONCPP_LIBRARY ${JSONCPP_LIBRARY})
+    endif()
+
+    message("-- REDEX_JSONCPP_LIBRARY: ${REDEX_JSONCPP_LIBRARY}")
 
     if (NOT MSVC)
         set(JSONCPP_INCLUDE_DIRS "${JSONCPP_INCLUDE_DIRS}/jsoncpp")
