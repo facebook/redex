@@ -148,7 +148,7 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
 
   m_current_dex.check_refs_count();
 
-  DexClasses all_classes = std::move(m_current_dex.take_all_classes());
+  DexClasses all_classes = m_current_dex.take_all_classes();
 
   m_current_dex = DexStructure();
   return all_classes;

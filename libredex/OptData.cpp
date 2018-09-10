@@ -39,7 +39,7 @@ bool get_line_num(const DexMethod* method,
                   const IRInstruction* insn,
                   size_t* line_num) {
   auto code = method->get_code();
-  always_assert_log(!insn || insn && code,
+  always_assert_log(!insn || (insn && code),
                     "Logged method with instructions must contain code\n");
   if (code == nullptr) {
     return false;
