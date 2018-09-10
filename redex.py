@@ -164,6 +164,8 @@ def run_redex_binary(state):
     args += ['--jarpath=' + x for x in state.args.jarpaths]
     if state.args.printseeds:
         args += ['--printseeds=' + state.args.printseeds]
+    if state.args.used_js_assets:
+        args += ['--used-js-assets=' + x for x in state.args.used_js_assets]
     args += ['-S' + x for x in state.args.passthru]
     args += ['-J' + x for x in state.args.passthru_json]
 
@@ -481,6 +483,9 @@ Given an APK, produce a better APK!
 
     parser.add_argument('-q', '--printseeds', nargs='?',
             help='File to print seeds to')
+
+    parser.add_argument('--used-js-assets', action='append', default=[],
+            help='A JSON file (or files) containing a list of resources used by JS')
 
     parser.add_argument('-P', '--proguard-config', dest='proguard_configs',
             action='append', default=[], help='Path to proguard config')
