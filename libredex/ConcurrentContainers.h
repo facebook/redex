@@ -148,6 +148,14 @@ class ConcurrentContainer {
     return m_slots[slot].erase(key);
   }
 
+  /*
+   * This operation is not thread-safe.
+   */
+  size_t bucket_size(size_t i) const {
+    always_assert(i < n_slots);
+    return m_slots[i].size();
+  }
+
  protected:
   // Only derived classes may be instantiated.
   ConcurrentContainer() = default;
@@ -163,21 +171,18 @@ class ConcurrentContainer {
   Container m_slots[n_slots];
 };
 
-template <typename Key,
+template <typename MapContainer,
+          typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
           size_t n_slots = 31>
-class ConcurrentMap final
-    : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, Equal>,
-                                 Key,
-                                 Hash,
-                                 n_slots> {
+class ConcurrentMapContainer
+    : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
  public:
-  ConcurrentMap() = default;
+  ConcurrentMapContainer() = default;
 
   template <typename InputIt>
-  ConcurrentMap(InputIt first, InputIt last) {
+  ConcurrentMapContainer(InputIt first, InputIt last) {
     insert(first, last);
   }
 
@@ -199,9 +204,25 @@ class ConcurrentMap final
     return this->get_container(slot).at(key);
   }
 
+  Value get(const Key& key, Value default_value) {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    const auto& map = this->get_container(slot);
+    const auto& it = map.find(key);
+    if (it == map.end()) {
+      return default_value;
+    }
+    return it->second;
+  }
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
+   *
+   * Note that while the STL containers' insert() methods return both an
+   * iterator and a boolean success value, we only return the boolean value
+   * here as any operations on a returned iterator are not guaranteed to be
+   * thread-safe.
    */
   bool insert(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
@@ -269,6 +290,18 @@ class ConcurrentMap final
     }
   }
 };
+
+template <typename Key,
+          typename Value,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+using ConcurrentMap =
+    ConcurrentMapContainer<std::unordered_map<Key, Value, Hash, Equal>,
+                           Key,
+                           Value,
+                           Hash,
+                           n_slots>;
 
 template <typename Key,
           typename Hash = std::hash<Key>,

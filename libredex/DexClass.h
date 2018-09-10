@@ -809,6 +809,13 @@ class DexMethod : public DexMethodRef {
   DexMethod(DexType* type, DexString* name, DexProto* proto);
   ~DexMethod();
 
+  // For friend classes to use with smart pointers.
+  struct Deleter {
+    void operator()(DexMethod* m) {
+      delete m;
+    }
+  };
+
  public:
   // Tracks whether this method can be deleted or renamed
   ReferencedState rstate;
