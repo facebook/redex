@@ -42,6 +42,7 @@
 #include "utils/String8.h"
 #include "utils/Serialize.h"
 #include "utils/TypeHelpers.h"
+#include <json/json.h>
 
 #include "StringUtil.h"
 
@@ -535,7 +536,7 @@ std::unordered_set<std::string> get_js_files(const std::string& directory) {
   return get_files_by_suffix(directory, ".js");
 }
 
-std::unordered_set<std::string> get_candidate_js_resources(
+std::unordered_set<std::string> get_candidate_js_resources_from_bundle(
     const std::string& filename) {
   std::string file_contents = read_entire_file(filename);
   std::unordered_set<std::string> js_candidate_resources;
@@ -547,39 +548,88 @@ std::unordered_set<std::string> get_candidate_js_resources(
   return js_candidate_resources;
 }
 
+std::unordered_set<std::string> get_candidate_js_resources_from_assets_list(
+    const std::string& filename) {
+  std::ifstream inbuf(filename);
+  Json::Value json;
+  inbuf >> json;
+  const auto& assets_list = json["ids"];
 
-// Parses the content of all .js files and extracts all resources referenced.
-std::unordered_set<uint32_t> get_js_resources_by_parsing(
-    const std::string& directory,
-    std::map<std::string, std::vector<uint32_t>> name_to_ids) {
   std::unordered_set<std::string> js_candidate_resources;
-  std::unordered_set<uint32_t> js_resources;
-
-  for (auto& f : get_js_files(directory)) {
-    auto c = get_candidate_js_resources(f);
-    js_candidate_resources.insert(c.begin(), c.end());
+  for (const auto& asset : assets_list) {
+    js_candidate_resources.insert(asset.asString());
   }
 
+  return js_candidate_resources;
+}
+
+std::unordered_set<uint32_t> get_apk_resources_from_candidates(
+  const std::unordered_set<std::string>& candidate_resources,
+  std::map<std::string, std::vector<uint32_t>> name_to_ids
+) {
   // The actual resources are the intersection of the real resources and the
   // candidate resources (since our current javascript processing produces
   // a few potential resource names that are not actually valid).
   // Look through the smaller set and compare it to the larger to efficiently
   // compute the intersection.
-  if (name_to_ids.size() < js_candidate_resources.size()) {
+  std::unordered_set<uint32_t> apk_resources;
+  if (name_to_ids.size() < candidate_resources.size()) {
     for (auto& p : name_to_ids) {
-      if (js_candidate_resources.find(p.first) != js_candidate_resources.end()) {
-        js_resources.insert(p.second.begin(), p.second.end());
+      if (candidate_resources.find(p.first) != candidate_resources.end()) {
+        apk_resources.insert(p.second.begin(), p.second.end());
       }
     }
   } else {
-    for (auto& name : js_candidate_resources) {
+    for (auto& name : candidate_resources) {
       if (name_to_ids.find(name) != name_to_ids.end()) {
-        js_resources.insert(name_to_ids[name].begin(), name_to_ids[name].end());
+        apk_resources.insert(name_to_ids[name].begin(), name_to_ids[name].end());
       }
     }
   }
 
-  return js_resources;
+  return apk_resources;
+}
+
+// Uses an explicitly provided file to list resources referenced in js.
+std::unordered_set<uint32_t> get_js_resources_from_assets_lists(
+    const std::vector<std::string>& js_assets_lists,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
+  std::unordered_set<std::string> js_candidate_resources;
+  for (const auto& f : js_assets_lists) {
+    auto c = get_candidate_js_resources_from_assets_list(f);
+    js_candidate_resources.insert(c.begin(), c.end());
+  }
+  return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
+}
+
+// Parses the content of all .js files and extracts all resources referenced.
+std::unordered_set<uint32_t> get_js_resources_by_parsing(
+    const std::string& directory,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
+  std::unordered_set<std::string> js_candidate_resources;
+  for (auto& f : get_js_files(directory)) {
+    auto c = get_candidate_js_resources_from_bundle(f);
+    js_candidate_resources.insert(c.begin(), c.end());
+  }
+
+  return get_apk_resources_from_candidates(js_candidate_resources, name_to_ids);
+}
+
+std::unordered_set<uint32_t> get_js_resources(
+    const std::string& directory,
+    const std::vector<std::string>& js_assets_lists,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
+  std::unordered_set<uint32_t> assets_from_js_files = get_js_resources_by_parsing(
+      directory,
+      name_to_ids);
+  std::unordered_set<uint32_t> assets_from_js_list_files = get_js_resources_from_assets_lists(
+      js_assets_lists,
+      name_to_ids);
+
+  std::unordered_set<uint32_t> js_assets;
+  js_assets.insert(assets_from_js_files.begin(), assets_from_js_files.end());
+  js_assets.insert(assets_from_js_list_files.begin(), assets_from_js_list_files.end());
+  return js_assets;
 }
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(

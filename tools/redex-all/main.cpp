@@ -199,6 +199,8 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("printseeds,q",
                    po::value<std::vector<std::string>>(),
                    "file to report seeds computed by redex");
+  od.add_options()("used-js-assets", po::value<std::vector<std::string>>(),
+                   "A JSON file (or files) containing a list of resources used by JS");
   od.add_options()("warn,w",
                    po::value<std::vector<int>>(),
                    "warning level:\n"
@@ -324,6 +326,15 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("printseeds")) {
     args.config["printseeds"] = take_last(vm["printseeds"]);
+  }
+
+  if (vm.count("used-js-assets")) {
+    const auto& js_assets_lists = vm["used-js-assets"].as<std::vector<std::string>>();
+    Json::Value array(Json::arrayValue);
+    for (const auto& list : js_assets_lists) {
+      array.append(list);
+    }
+    args.config["used-js-assets"] = array;
   }
 
   if (vm.count("-S")) {
