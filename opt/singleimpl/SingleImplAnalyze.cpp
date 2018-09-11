@@ -152,7 +152,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
   filter_list(config.black_list, false);
   filter_list(config.package_black_list, false);
   // TODO(T33109158): Better way to eliminate VerifyError.
-  if (false) filter_proguard_special_interface();
+  if (config.filter_proguard_special_interfaces) filter_proguard_special_interface();
 }
 
 /**

@@ -18,6 +18,7 @@ struct SingleImplConfig {
   bool meth_anno;
   bool field_anno;
   bool rename_on_collision;
+  bool filter_proguard_special_interfaces;
 };
 
 class SingleImplPass : public Pass {
@@ -33,6 +34,9 @@ class SingleImplPass : public Pass {
     jw.get("method_annotations", true, m_pass_config.meth_anno);
     jw.get("field_annotations", true, m_pass_config.field_anno);
     jw.get("rename_on_collision", false, m_pass_config.rename_on_collision);
+    jw.get("filter_proguard_special_interfaces",
+           false,
+           m_pass_config.filter_proguard_special_interfaces);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
