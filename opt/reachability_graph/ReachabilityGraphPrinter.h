@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "Reachability.h"
 
 class ReachabilityGraphPrinterPass : public Pass {
  public:
@@ -16,9 +17,7 @@ class ReachabilityGraphPrinterPass : public Pass {
   virtual void configure_pass(const JsonWrapper& jw) override {
     jw.get("output_file_name", "", m_output_file_name);
     jw.get("dump_detailed_info", false, m_dump_detailed_info);
-    jw.get("ignore_string_literals", {}, m_ignore_string_literals);
-    jw.get("ignore_string_literal_annos", {}, m_ignore_string_literal_annos);
-    jw.get("ignore_system_annos", {}, m_ignore_system_annos);
+    m_ignore_sets = reachability::IgnoreSets(jw);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -26,7 +25,5 @@ class ReachabilityGraphPrinterPass : public Pass {
  private:
   std::string m_output_file_name;
   bool m_dump_detailed_info{true};
-  std::vector<std::string> m_ignore_string_literals;
-  std::vector<std::string> m_ignore_string_literal_annos;
-  std::vector<std::string> m_ignore_system_annos;
+  reachability::IgnoreSets m_ignore_sets;
 };

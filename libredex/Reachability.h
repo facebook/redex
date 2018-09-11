@@ -14,7 +14,7 @@
 #include "DexClass.h"
 #include "Pass.h"
 
-namespace reachable_objects {
+namespace reachability {
 
 enum class ReachableObjectType {
   ANNO,
@@ -141,6 +141,14 @@ struct ReachableObjectHash {
   }
 };
 
+struct IgnoreSets {
+  IgnoreSets() = default;
+  IgnoreSets(const JsonWrapper&);
+  std::unordered_set<const DexType*> string_literals;
+  std::unordered_set<const DexType*> string_literal_annos;
+  std::unordered_set<const DexType*> system_annos;
+};
+
 // The ReachableObjectSet does not need to be a ConcurrentSet since it is nested
 // within the ReachableObjectGraph's ConcurrentMap, which ensures that all
 // updates to it are thread-safe. Using a plain unordered_set here is a
@@ -150,40 +158,38 @@ using ReachableObjectSet =
 using ReachableObjectGraph =
     ConcurrentMap<ReachableObject, ReachableObjectSet, ReachableObjectHash>;
 
-} // namespace reachable_objects
-
 class ReachableObjects {
  public:
-  ConcurrentSet<const DexClass*> marked_classes;
-  ConcurrentSet<const DexFieldRef*> marked_fields;
-  ConcurrentSet<const DexMethodRef*> marked_methods;
-
-  const reachable_objects::ReachableObjectGraph& retainers_of() const {
+  const ReachableObjectGraph& retainers_of() const {
     return m_retainers_of;
   }
 
-  void mark(const DexClass* cls) {
-    marked_classes.insert(cls);
-  }
+  void mark(const DexClass* cls) { m_marked_classes.insert(cls); }
 
-  void mark(const DexMethodRef* method) {
-    marked_methods.insert(method);
-  }
+  void mark(const DexMethodRef* method) { m_marked_methods.insert(method); }
 
-  void mark(const DexFieldRef* field) {
-    marked_fields.insert(field);
-  }
+  void mark(const DexFieldRef* field) { m_marked_fields.insert(field); }
 
-  bool marked(const DexClass* cls) const {
-    return marked_classes.count(cls);
-  }
+  bool marked(const DexClass* cls) const { return m_marked_classes.count(cls); }
 
   bool marked(const DexMethodRef* method) const {
-    return marked_methods.count(method);
+    return m_marked_methods.count(method);
   }
 
   bool marked(const DexFieldRef* field) const {
-    return marked_fields.count(field);
+    return m_marked_fields.count(field);
+  }
+
+  bool marked_unsafe(const DexClass* cls) const {
+    return m_marked_classes.count_unsafe(cls);
+  }
+
+  bool marked_unsafe(const DexMethodRef* method) const {
+    return m_marked_methods.count_unsafe(method);
+  }
+
+  bool marked_unsafe(const DexFieldRef* field) const {
+    return m_marked_fields.count_unsafe(field);
   }
 
   template <class Seed>
@@ -193,25 +199,40 @@ class ReachableObjects {
   void record_reachability(Parent*, Object*);
 
  private:
-  reachable_objects::ReachableObjectGraph m_retainers_of;
+  ConcurrentSet<const DexClass*> m_marked_classes;
+  ConcurrentSet<const DexFieldRef*> m_marked_fields;
+  ConcurrentSet<const DexMethodRef*> m_marked_methods;
+  ReachableObjectGraph m_retainers_of;
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
     DexStoresVector& stores,
-    const std::unordered_set<const DexType*>& ignore_string_literals,
-    const std::unordered_set<const DexType*>& ignore_string_literal_annos,
-    const std::unordered_set<const DexType*>& ignore_system_annos,
+    const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability = false);
 
-// Dump reachability information to TRACE(REACH_DUMP, 5).
-void dump_reachability(
-    DexStoresVector& stores,
-    const reachable_objects::ReachableObjectGraph& retainers_of,
-    const std::string& dump_tag);
+void sweep(DexStoresVector& stores, const ReachableObjects& reachables);
 
-void dump_reachability_graph(
-    DexStoresVector& stores,
-    const reachable_objects::ReachableObjectGraph& retainers_of,
-    const std::string& dump_tag,
-    std::ostream& os);
+struct ObjectCounts {
+  size_t num_classes{0};
+  size_t num_fields{0};
+  size_t num_methods{0};
+};
+
+/*
+ * Count the number of objects in scope. Can be used to measure the number of
+ * objects removed by a mark-sweep.
+ */
+ObjectCounts count_objects(const DexStoresVector& stores);
+
+// Dump reachability information to TRACE(REACH_DUMP, 5).
+void dump_info(DexStoresVector& stores,
+               const ReachableObjectGraph& retainers_of,
+               const std::string& dump_tag);
+
+void dump_graph(DexStoresVector& stores,
+                const ReachableObjectGraph& retainers_of,
+                const std::string& dump_tag,
+                std::ostream& os);
+
+} // namespace reachability

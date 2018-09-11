@@ -7,10 +7,9 @@
 
 #include "ReachabilityGraphPrinter.h"
 
-#include "PassManager.h"
-#include "ReachableObjects.h"
-
 #include <fstream>
+
+#include "PassManager.h"
 
 void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
                                             ConfigFiles& /*cfg*/,
@@ -23,25 +22,8 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  // A bit ugly copy from RMU pass, but...
-  auto load_annos = [](const std::vector<std::string>& list) {
-    std::unordered_set<const DexType*> set;
-    for (const auto& name : list) {
-      const auto type = DexType::get_type(name.c_str());
-      if (type != nullptr) {
-        set.insert(type);
-      }
-    }
-    return set;
-  };
-
-  auto reachables =
-      compute_reachable_objects(stores,
-                                load_annos(m_ignore_string_literals),
-                                load_annos(m_ignore_string_literal_annos),
-                                load_annos(m_ignore_system_annos),
-                                nullptr,
-                                true /*generate graph*/);
+  auto reachables = compute_reachable_objects(
+      stores, m_ignore_sets, nullptr, true /*generate graph*/);
 
   std::string tag = std::to_string(pm.get_current_pass_info()->repeat + 1);
 
@@ -58,11 +40,12 @@ void ReachabilityGraphPrinterPass::run_pass(DexStoresVector& stores,
       std::cerr << "Unable to open: " << file_name << std::endl;
       exit(EXIT_FAILURE);
     }
-    dump_reachability_graph(stores, reachables->retainers_of(), tag, file);
+    reachability::dump_graph(stores, reachables->retainers_of(), tag, file);
   }
 
   if (m_dump_detailed_info) {
-    dump_reachability(stores, reachables->retainers_of(), "[" + tag + "]");
+    reachability::dump_info(
+        stores, reachables->retainers_of(), "[" + tag + "]");
   }
 }
 

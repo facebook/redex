@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "ReachableObjects.h"
+#include "Reachability.h"
 
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
@@ -16,25 +16,9 @@
 #include "Walkers.h"
 #include "WorkQueue.h"
 
-using namespace reachable_objects;
+using namespace reachability;
 
 namespace mog = method_override_graph;
-
-/*
- * This helper class computes reachable objects by a DFS+marking algorithm.
- *
- * Conceptually we start at roots, which are defined by -keep rules in the
- * config file, and perform a depth-first search to find all references.
- * Elements visited in this manner will be retained, and are found in the
- * marked_* sets.
- *
- * -keepclassmembers rules are a bit more complicated, because they require
- * "conditional" marking: these members are kept only if their containing class
- * is determined to be kept. The conditional marking logic is also used to
- * retain (or not) implementations of interface methods. These elements are
- * placed in the cond_marked_* sets; care must be taken to promote
- * conditionally marked elements to fully marked.
- */
 
 namespace {
 
@@ -83,6 +67,22 @@ struct Stats {
 
 using MarkWorkQueue = WorkQueue<ReachableObject, Stats*>;
 using MarkWorkerState = WorkerState<ReachableObject, Stats*>;
+
+/*
+ * These helper classes compute reachable objects by a DFS+marking algorithm.
+ *
+ * Conceptually we start at roots, which are defined by -keep rules in the
+ * config file, and perform a depth-first search to find all references.
+ * Elements visited in this manner will be retained, and are found in the
+ * m_marked_* sets.
+ *
+ * -keepclassmembers rules are a bit more complicated, because they require
+ * "conditional" marking: these members are kept only if their containing class
+ * is determined to be kept. The conditional marking logic is also used to
+ * retain (or not) implementations of interface methods. These elements are
+ * placed in the cond_marked_* sets; care must be taken to promote
+ * conditionally marked elements to fully marked.
+ */
 
 class RootSetMarker {
  public:
@@ -199,28 +199,18 @@ class RootSetMarker {
 
 class TransitiveClosureMarker {
  public:
-  TransitiveClosureMarker(
-      const std::unordered_set<const DexType*>& ignore_string_literals,
-      const std::unordered_set<const DexType*>& ignore_string_literal_annos,
-      const std::unordered_set<const DexType*>& ignore_system_annos,
-      const mog::Graph& method_override_graph,
-      bool record_reachability,
-      ConditionallyMarked* cond_marked,
-      ReachableObjects* reachable_objects,
-      MarkWorkerState* worker_state)
-      : m_ignore_string_literals(ignore_string_literals),
-        m_ignore_string_literal_annos(ignore_string_literal_annos),
-        m_ignore_system_annos(ignore_system_annos),
+  TransitiveClosureMarker(const IgnoreSets& ignore_sets,
+                          const mog::Graph& method_override_graph,
+                          bool record_reachability,
+                          ConditionallyMarked* cond_marked,
+                          ReachableObjects* reachable_objects,
+                          MarkWorkerState* worker_state)
+      : m_ignore_sets(ignore_sets),
         m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
-        m_worker_state(worker_state) {
-    // To keep the backward compatability of this code, ensure that the
-    // "MemberClasses" annotation is always in m_ignore_system_annos.
-    m_ignore_system_annos.emplace(
-        DexType::get_type("Ldalvik/annotation/MemberClasses;"));
-  }
+        m_worker_state(worker_state) {}
 
   /*
    * Marks :obj and pushes its immediately reachable neighbors onto the local
@@ -300,12 +290,12 @@ class TransitiveClosureMarker {
     auto* type = meth->get_class();
     auto* cls = type_class(type);
     bool check_strings = true;
-    if (m_ignore_string_literals.count(type)) {
+    if (m_ignore_sets.string_literals.count(type)) {
       ++m_worker_state->get_data()->num_ignore_check_strings;
       check_strings = false;
     }
     if (cls && check_strings) {
-      for (const auto& ignore_anno_type : m_ignore_string_literal_annos) {
+      for (const auto& ignore_anno_type : m_ignore_sets.string_literal_annos) {
         if (has_anno(cls, ignore_anno_type)) {
           ++m_worker_state->get_data()->num_ignore_check_strings;
           check_strings = false;
@@ -329,10 +319,10 @@ class TransitiveClosureMarker {
     if (check_strings) {
       for (auto const& str : strings) {
         auto internal = JavaNameUtil::external_to_internal(str->c_str());
-        auto typestr = DexString::get_string(internal.c_str());
-        if (!typestr) continue;
-        auto type = DexType::get_type(typestr);
-        if (!type) continue;
+        auto type = DexType::get_type(internal.c_str());
+        if (!type) {
+          continue;
+        }
         push(t, type);
       }
     }
@@ -367,7 +357,7 @@ class TransitiveClosureMarker {
     const DexAnnotationSet* annoset = cls->get_anno_set();
     if (annoset) {
       for (auto const& anno : annoset->get_annotations()) {
-        if (m_ignore_system_annos.count(anno->type())) {
+        if (m_ignore_sets.system_annos.count(anno->type())) {
           TRACE(REACH,
                 5,
                 "Stop marking from %s by system anno: %s\n",
@@ -448,9 +438,7 @@ class TransitiveClosureMarker {
     }
   }
 
-  const std::unordered_set<const DexType*>& m_ignore_string_literals;
-  const std::unordered_set<const DexType*>& m_ignore_string_literal_annos;
-  std::unordered_set<const DexType*> m_ignore_system_annos;
+  const IgnoreSets& m_ignore_sets;
   const mog::Graph& m_method_override_graph;
   bool m_record_reachability;
   ConditionallyMarked* m_cond_marked;
@@ -460,11 +448,32 @@ class TransitiveClosureMarker {
 
 } // namespace
 
+namespace reachability {
+
+IgnoreSets::IgnoreSets(const JsonWrapper& jw) {
+  auto parse_type_list = [&jw](const char* key,
+                               std::unordered_set<const DexType*>* type_list) {
+    std::vector<std::string> strs;
+    jw.get(key, {}, strs);
+    for (auto s : strs) {
+      auto type = DexType::get_type(s);
+      if (type != nullptr) {
+        type_list->insert(type);
+      }
+    }
+  };
+  parse_type_list("ignore_string_literals", &string_literals);
+  parse_type_list("ignore_string_literal_annos", &string_literal_annos);
+  parse_type_list("ignore_system_annos", &system_annos);
+
+  // To keep the backward compatability of this code, ensure that the
+  // "MemberClasses" annotation is always in system_annos.
+  system_annos.emplace(DexType::get_type("Ldalvik/annotation/MemberClasses;"));
+}
+
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
     DexStoresVector& stores,
-    const std::unordered_set<const DexType*>& ignore_string_literals,
-    const std::unordered_set<const DexType*>& ignore_string_literal_annos,
-    const std::unordered_set<const DexType*>& ignore_system_annos,
+    const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability) {
   Timer t("Marking");
@@ -486,8 +495,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   MarkWorkQueue work_queue(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
-            ignore_string_literals, ignore_string_literal_annos,
-            ignore_system_annos, *method_override_graph, record_reachability,
+            ignore_sets, *method_override_graph, record_reachability,
             &cond_marked, reachable_objects.get(), worker_state);
         transitive_closure_marker.visit(obj);
         return nullptr;
@@ -535,6 +543,63 @@ void ReachableObjects::record_is_seed(Seed* seed) {
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
         set.emplace(SEED_SINGLETON);
       });
+}
+
+/*
+ * Remove unmarked fields from :fields and erase their definitions from
+ * g_redex.
+ */
+static void sweep_fields_if_unmarked(
+    std::vector<DexField*>& fields,
+    const ReachableObjects& reachables) {
+  auto p = [&](DexField* f) {
+    if (reachables.marked_unsafe(f) == 0) {
+      TRACE(RMU, 2, "Removing %s\n", SHOW(f));
+      DexField::erase_field(f);
+      return true;
+    }
+    return false;
+  };
+  fields.erase(std::remove_if(fields.begin(), fields.end(), p), fields.end());
+}
+
+/*
+ * Remove unmarked classes and methods. This should really erase the classes /
+ * methods from g_redex as well, but that will probably result in dangling
+ * pointers (at least for DexMethods). We should fix that at some point...
+ */
+template <class Container>
+static void sweep_if_unmarked(Container& c,
+                              const ReachableObjects& reachables) {
+  auto p = [&](const auto& m) { return !reachables.marked_unsafe(m); };
+  c.erase(std::remove_if(c.begin(), c.end(), p), c.end());
+}
+
+void sweep(DexStoresVector& stores, const ReachableObjects& reachables) {
+  Timer t("Sweep");
+  for (auto& dex : DexStoreClassesIterator(stores)) {
+    sweep_if_unmarked(dex, reachables);
+    walk::parallel::classes(dex, [&](DexClass* cls) {
+      sweep_fields_if_unmarked(cls->get_ifields(), reachables);
+      sweep_fields_if_unmarked(cls->get_sfields(), reachables);
+      sweep_if_unmarked(cls->get_dmethods(), reachables);
+      sweep_if_unmarked(cls->get_vmethods(), reachables);
+    });
+  }
+}
+
+ObjectCounts count_objects(const DexStoresVector& stores) {
+  ObjectCounts counts;
+  for (auto const& dex : DexStoreClassesIterator(stores)) {
+    counts.num_classes += dex.size();
+    for (auto const& cls : dex) {
+      counts.num_fields += cls->get_ifields().size();
+      counts.num_fields += cls->get_sfields().size();
+      counts.num_methods += cls->get_dmethods().size();
+      counts.num_methods += cls->get_vmethods().size();
+    }
+  }
+  return counts;
 }
 
 namespace {
@@ -627,9 +692,9 @@ void print_graph_edges(const DexClass* cls,
 
 } // namespace
 
-void dump_reachability(DexStoresVector& stores,
-                       const ReachableObjectGraph& retainers_of,
-                       const std::string& dump_tag) {
+void dump_info(DexStoresVector& stores,
+               const ReachableObjectGraph& retainers_of,
+               const std::string& dump_tag) {
   for (const auto& dex : DexStoreClassesIterator(stores)) {
     for (const auto& cls : dex) {
       print_reachable_reason(cls, retainers_of, dump_tag);
@@ -638,13 +703,15 @@ void dump_reachability(DexStoresVector& stores,
   }
 }
 
-void dump_reachability_graph(DexStoresVector& stores,
-                             const ReachableObjectGraph& retainers_of,
-                             const std::string& dump_tag,
-                             std::ostream& os) {
+void dump_graph(DexStoresVector& stores,
+                const ReachableObjectGraph& retainers_of,
+                const std::string& dump_tag,
+                std::ostream& os) {
   for (const auto& dex : DexStoreClassesIterator(stores)) {
     for (const auto& cls : dex) {
       print_graph_edges(cls, retainers_of, dump_tag, os);
     }
   }
 }
+
+} // namespace reachability

@@ -8,21 +8,18 @@
 #pragma once
 
 #include "Pass.h"
+#include "Reachability.h"
 
 class RemoveUnreachablePass : public Pass {
  public:
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
   virtual void configure_pass(const JsonWrapper& jw) override {
-    jw.get("ignore_string_literals", {}, m_ignore_string_literals);
-    jw.get("ignore_string_literal_annos", {}, m_ignore_string_literal_annos);
-    jw.get("ignore_system_annos", {}, m_ignore_system_annos);
+    m_ignore_sets = reachability::IgnoreSets(jw);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  private:
-    std::vector<std::string> m_ignore_string_literals;
-    std::vector<std::string> m_ignore_string_literal_annos;
-    std::vector<std::string> m_ignore_system_annos;
+ private:
+  reachability::IgnoreSets m_ignore_sets;
 };
