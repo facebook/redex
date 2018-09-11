@@ -103,6 +103,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
   int max_steps = 0;
   size_t previous_invoke_intf_count = s_invoke_intf_count;
   removed_count = 0;
+  const auto& pg_map = cfg.get_proguard_map();
   while (true) {
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
@@ -113,7 +114,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
 
     std::unique_ptr<SingleImplAnalysis> single_impls =
         SingleImplAnalysis::analyze(
-            scope, stores, single_impl, intfs, m_pass_config);
+            scope, stores, single_impl, intfs, pg_map, m_pass_config);
     auto optimized = optimize(
         std::move(single_impls), ch, scope, m_pass_config);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;

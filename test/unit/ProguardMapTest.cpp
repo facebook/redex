@@ -26,6 +26,7 @@ TEST(ProguardMapTest, empty) {
     "com.instagram.common.api.base.Header -> com.instagram.common.j.a.f:\n"
     "com.facebook.react.bridge.WritableMap -> com.facebook.react.bridge.e:\n"
     "com.instagram.react.IgNetworkingModule -> com.instagram.react.IgNetworkingModule:\n"
+    "    a_vcard.android.syncml.pim.VBuilder mExecutorSupplier$7ec36e13 -> b\n"
     "    356:368:com.facebook.react.bridge.WritableMap translateHeaders(com.instagram.common.api.base.Header[]) -> translateHeaders\n"
   );
   ProguardMap pm(ss);
@@ -38,4 +39,6 @@ TEST(ProguardMapTest, empty) {
   EXPECT_EQ("Landroid/support/v4/app/Fragment;.sClassMap:Landroid/support/v4/b/b;", pm.translate_field("Landroid/support/v4/app/Fragment;.sClassMap:Landroid/support/v4/util/SimpleArrayMap;"));
   EXPECT_EQ("Landroid/support/v4/app/Fragment;.x:(LA;LA;)LA;", pm.translate_method("Landroid/support/v4/app/Fragment;.stuff:(Lcom/foo/bar;Lcom/foo/bar;)Lcom/foo/bar;"));
   EXPECT_EQ("Lcom/instagram/react/IgNetworkingModule;.translateHeaders:([Lcom/instagram/common/j/a/f;)Lcom/facebook/react/bridge/e;", pm.translate_method("Lcom/instagram/react/IgNetworkingModule;.translateHeaders:([Lcom/instagram/common/api/base/Header;)Lcom/facebook/react/bridge/WritableMap;"));
+  EXPECT_EQ(true, pm.is_special_interface("La_vcard/android/syncml/pim/VBuilder;"));
+  EXPECT_EQ(false, pm.is_special_interface("Lcom/not/Found;"));
 }
