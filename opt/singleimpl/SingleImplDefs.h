@@ -133,6 +133,7 @@ struct SingleImplAnalysis {
   static std::unique_ptr<SingleImplAnalysis> analyze(
       const Scope& scope, const DexStoresVector& stores,
       const TypeMap& single_impl, const TypeSet& intfs,
+      const ProguardMap& pg_map,
       const SingleImplConfig& config);
 
   /**

@@ -26,9 +26,10 @@
 #include "Walkers.h"
 
 struct AnalysisImpl : SingleImplAnalysis {
-  AnalysisImpl(const Scope& scope, const DexStoresVector& stores)
-      : SingleImplAnalysis(), scope(scope), xstores(stores) {
-  }
+  AnalysisImpl(const Scope& scope,
+               const ProguardMap& pg_map,
+               const DexStoresVector& stores)
+      : SingleImplAnalysis(), scope(scope), pg_map(pg_map), xstores(stores) {}
 
   void create_single_impl(const TypeMap& single_impl,
                           const TypeSet& intfs,
@@ -46,11 +47,13 @@ struct AnalysisImpl : SingleImplAnalysis {
   void escape_with_clinit();
   void escape_with_sfields();
   void filter_single_impl(const SingleImplConfig& config);
+  void filter_proguard_special_interface();
   void filter_do_not_strip();
   void filter_list(const std::vector<std::string>& list, bool keep_match);
 
  private:
   const Scope& scope;
+  const ProguardMap& pg_map;
   XStoreRefs xstores;
 };
 
@@ -127,6 +130,18 @@ void AnalysisImpl::filter_list(
   }
 }
 
+void AnalysisImpl::filter_proguard_special_interface() {
+  for (const auto intf_it : single_impls) {
+    const auto intf = intf_it.first;
+    const auto intf_cls = type_class(intf);
+    const std::string& intf_name = intf_cls->get_deobfuscated_name();
+    if (pg_map.is_special_interface(intf_name)) {
+      escape_interface(intf, FILTERED);
+    }
+  }
+}
+
+
 /**
  * Apply filters to the set of single impl found.
  * White lists come first, then black lists.
@@ -136,6 +151,8 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
   filter_list(config.package_white_list, true);
   filter_list(config.black_list, false);
   filter_list(config.package_black_list, false);
+  // TODO(T33109158): Better way to eliminate VerifyError.
+  if (false) filter_proguard_special_interface();
 }
 
 /**
@@ -417,9 +434,10 @@ void AnalysisImpl::analyze_opcodes() {
 std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
     const Scope& scope, const DexStoresVector& stores,
     const TypeMap& single_impl, const TypeSet& intfs,
+    const ProguardMap& pg_map,
     const SingleImplConfig& config) {
   std::unique_ptr<AnalysisImpl> single_impls(
-      new AnalysisImpl(scope, stores));
+      new AnalysisImpl(scope, pg_map, stores));
   single_impls->create_single_impl(single_impl, intfs, config);
   single_impls->collect_field_defs();
   single_impls->collect_method_defs();

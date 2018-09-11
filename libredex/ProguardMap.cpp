@@ -117,7 +117,25 @@ bool literal(const char*& p, char s) {
   }
   return false;
 }
+
+/**
+ * Proguard would generate some special sequences when a coalesced interface is used.
+ * https://sourceforge.net/p/proguard/code/ci/default/tree/core/src/proguard/classfile/editor/ClassReferenceFixer.java#l554
+ * Before:
+ *   com.facebook.imagepipeline.core.ExecutorSupplier mExecutorSupplier;
+ * After:
+ *   a_vcard.android.syncml.pim.VBuilder mExecutorSupplier$7ec36e13 -> b
+ */
+bool is_maybe_proguard_generated_member(const std::string& s) {
+  unsigned int count = 0;
+  for (auto it = s.rbegin(); it != s.rend(); ++it, ++count) {
+    if (isxdigit(*it)) continue;
+    if (*it == '$') return count == 8;
+    return false;
+  }
+  return false;
 }
+} // namespace
 
 ProguardMap::ProguardMap(const std::string& filename) {
   if (!filename.empty()) {
@@ -207,6 +225,14 @@ bool ProguardMap::parse_field(const std::string& line) {
   auto xtype = translate_type(ctype, *this);
   auto pgnew = convert_field(m_currNewClass, xtype, newname);
   auto pgold = convert_field(m_currClass, ctype, fieldname);
+  // Record interfaces that are coalesced by Proguard.
+  if (ctype[0] == 'L' && is_maybe_proguard_generated_member(fieldname)) {
+    fprintf(stderr,
+            "Type '%s' is touched by Proguard in '%s'\n",
+            ctype.c_str(),
+            pgold.c_str());
+    m_pg_coalesced_interfaces.insert(ctype);
+  }
   m_fieldMap[pgold] = pgnew;
   m_obfFieldMap[pgnew] = pgold;
   return true;

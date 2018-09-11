@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 
 #include "DexClass.h"
@@ -82,6 +83,11 @@ struct ProguardMap {
   bool empty() const { return m_classMap.empty() && m_fieldMap.empty() &&
                               m_methodMap.empty() ; }
 
+  bool is_special_interface(const std::string& type) const {
+    return m_pg_coalesced_interfaces.find(type) !=
+           m_pg_coalesced_interfaces.end();
+  }
+
  private:
   void parse_proguard_map(std::istream& fp);
 
@@ -99,6 +105,9 @@ struct ProguardMap {
   std::unordered_map<std::string, std::string> m_obfClassMap;
   std::unordered_map<std::string, std::string> m_obfFieldMap;
   std::unordered_map<std::string, std::string> m_obfMethodMap;
+
+  // Interfaces that are (most likely) coalesced by Proguard.
+  std::unordered_set<std::string> m_pg_coalesced_interfaces;
 
   std::string m_currClass;
   std::string m_currNewClass;
