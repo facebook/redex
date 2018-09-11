@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "CopyPropagationPass.h"
@@ -379,11 +377,10 @@ Stats Stats::operator+(const Stats& other) {
 }
 
 Stats CopyPropagation::run(Scope scope) {
-  using Data = std::nullptr_t;
   using Output = Stats;
-  return walk::parallel::reduce_methods<Data, Output>(
+  return walk::parallel::reduce_methods<Output>(
       scope,
-      [this](Data&, DexMethod* m) {
+      [this](DexMethod* m) {
         IRCode* code = m->get_code();
         if (code == nullptr) {
           return Stats();
@@ -412,7 +409,6 @@ Stats CopyPropagation::run(Scope scope) {
         return result;
       },
       [](Output a, Output b) { return a + b; },
-      [](unsigned int /* thread_index */) { return nullptr; },
       Output(),
       m_config.debug ? 1 : walk::parallel::default_num_threads());
 }
@@ -437,7 +433,7 @@ Stats CopyPropagation::run(IRCode* code) {
   std::unordered_set<IRInstruction*> deletes;
   Stats stats;
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
   AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);

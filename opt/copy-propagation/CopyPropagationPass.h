@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -17,7 +15,7 @@ class CopyPropagationPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
 
     // This option can only be safely enabled in verify-none. `run_pass` will
     // override this value to false if we aren't in verify-none. Here's why:
@@ -33,16 +31,17 @@ class CopyPropagationPass : public Pass {
     // second const load
     //
     // TODO: detect the type of constant for each alias group
-    pc.get("eliminate_const_literals", false, m_config.eliminate_const_literals);
+    jw.get(
+        "eliminate_const_literals", false, m_config.eliminate_const_literals);
 
-    pc.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
-    pc.get("eliminate_const_classes", true, m_config.eliminate_const_classes);
-    pc.get("replace_with_representative",
+    jw.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
+    jw.get("eliminate_const_classes", true, m_config.eliminate_const_classes);
+    jw.get("replace_with_representative",
            true,
            m_config.replace_with_representative);
-    pc.get("wide_registers", false, m_config.wide_registers);
-    pc.get("static_finals", false, m_config.static_finals);
-    pc.get("debug", false, m_config.debug);
+    jw.get("wide_registers", false, m_config.wide_registers);
+    jw.get("static_finals", false, m_config.static_finals);
+    jw.get("debug", false, m_config.debug);
   }
 
   struct Config {
@@ -54,7 +53,7 @@ class CopyPropagationPass : public Pass {
     bool static_finals{false};
     bool debug{false};
 
-    // this is set by PassManager, not by PassConfig
+    // this is set by PassManager, not by JsonWrapper
     bool regalloc_has_run{false};
   } m_config;
 };

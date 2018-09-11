@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "Peephole.h"
@@ -356,7 +354,6 @@ struct Matcher {
           return false;
         }
       }
-
       switch (dex_pattern.kind) {
       case DexPattern::Kind::none:
         return true;
@@ -483,6 +480,23 @@ struct Matcher {
     case OPCODE_SGET_OBJECT:
       assert(replace.kind == DexPattern::Kind::field);
       return new IRInstruction(static_cast<IROpcode>(opcode));
+
+    case OPCODE_APUT:
+    case OPCODE_APUT_BYTE:
+    case OPCODE_APUT_CHAR:
+    case OPCODE_APUT_BOOLEAN:
+    case OPCODE_APUT_SHORT:
+    case OPCODE_APUT_WIDE:
+    case OPCODE_APUT_OBJECT:
+    case OPCODE_AGET:
+    case OPCODE_AGET_BYTE:
+    case OPCODE_AGET_CHAR:
+    case OPCODE_AGET_BOOLEAN:
+    case OPCODE_AGET_SHORT:
+    case OPCODE_AGET_WIDE:
+    case OPCODE_AGET_OBJECT:
+      assert(replace.kind == DexPattern::Kind::none);
+      return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
     always_assert_log(false, "Unhandled opcode: 0x%x", opcode);
@@ -490,7 +504,7 @@ struct Matcher {
   }
 
   DexString* get_simple_name(const DexType* type) {
-    std::string full(type->get_name()->c_str());
+    const std::string& full = type->get_name()->str();
     auto lpos = full.rfind('/');
     auto simple = full.substr(lpos + 1, full.size() - lpos - 2);
     return DexString::make_string(simple.c_str());
@@ -1197,27 +1211,27 @@ static bool second_get_non_volatile(const Matcher& m) {
   return !(field->get_access() & ACC_VOLATILE);
 }
 
-DexPattern put_x_op(IROpcode op_code,
+DexPattern put_x_op(IROpcode opcode,
                     Register src,
                     Register obj_register,
                     Field field) {
-  if (is_iput(op_code)) {
-    return {{op_code}, {src, obj_register}, {}, field};
+  if (is_iput(opcode)) {
+    return {{opcode}, {src, obj_register}, {}, field};
   }
-  if (is_sput(op_code)) {
-    return {{op_code}, {src}, {}, field};
+  if (is_sput(opcode)) {
+    return {{opcode}, {src}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode");
+  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
 }
 
-DexPattern get_x_op(IROpcode op_code, Register src, Field field) {
-  if (is_iget(op_code)) {
-    return {{op_code}, {src}, {}, field};
+DexPattern get_x_op(IROpcode opcode, Register src, Field field) {
+  if (is_iget(opcode)) {
+    return {{opcode}, {src}, {}, field};
   }
-  if (is_sget(op_code)) {
-    return {{op_code}, {}, {}, field};
+  if (is_sget(opcode)) {
+    return {{opcode}, {}, {}, field};
   }
-  always_assert_log(false, "Not supported IROpcode");
+  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
 }
 
 std::vector<DexPattern> put_x_patterns(IROpcode put_code) {
@@ -1233,77 +1247,127 @@ std::vector<DexPattern> put_get_x_patterns(
           move_pseudo_func(Register::A)};
 }
 
+DexPattern aput_x_op(IROpcode opcode,
+                     Register src,
+                     Register array_register,
+                     Register index_register) {
+  if (is_aput(opcode)) {
+    return {{opcode}, {src, array_register, index_register}, {}};
+  }
+  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+}
+
+std::vector<DexPattern> aput_x_patterns(IROpcode put_code) {
+  return {aput_x_op(put_code, Register::A, Register::B, Register::C)};
+}
+
+DexPattern aget_x_op(IROpcode opcode,
+                     Register array_register,
+                     Register index_register) {
+  if (is_aget(opcode)) {
+    return {{opcode}, {array_register, index_register}, {}};
+  }
+  always_assert_log(false, "Not supported IROpcode %s", SHOW(opcode));
+}
+
+std::vector<DexPattern> aput_aget_x_patterns(
+    IROpcode aput_code,
+    IROpcode aget_code,
+    DexPattern (*move_pseudo_func)(Register reg)) {
+  return {aput_x_op(aput_code, Register::A, Register::B, Register::C),
+          aget_x_op(aget_code, Register::B, Register::C),
+          move_pseudo_func(Register::A)};
+}
+
+const std::vector<Pattern>& get_aputaget_patterns() {
+  static const auto* kAputAgetPatterns = new std::vector<Pattern>(
+      {{"Replace_AputAget",
+        aput_aget_x_patterns(OPCODE_APUT, OPCODE_AGET, move_result_pseudo),
+        aput_x_patterns(OPCODE_APUT)},
+       {"Replace_AputAgetWide",
+        aput_aget_x_patterns(OPCODE_APUT_WIDE, OPCODE_AGET_WIDE,
+                             move_result_pseudo_wide),
+        aput_x_patterns(OPCODE_APUT_WIDE)},
+       {"Replace_AputAgetObject",
+        aput_aget_x_patterns(OPCODE_APUT_OBJECT, OPCODE_AGET_OBJECT,
+                             move_result_pseudo_object),
+        aput_x_patterns(OPCODE_APUT_OBJECT)},
+       {"Replace_AputAgetShort",
+        aput_aget_x_patterns(OPCODE_APUT_SHORT, OPCODE_AGET_SHORT,
+                             move_result_pseudo),
+        aput_x_patterns(OPCODE_APUT_SHORT)},
+       {"Replace_AputAgetChar",
+        aput_aget_x_patterns(OPCODE_APUT_CHAR, OPCODE_AGET_CHAR,
+                             move_result_pseudo),
+        aput_x_patterns(OPCODE_APUT_CHAR)},
+       {"Replace_AputAgetByte",
+        aput_aget_x_patterns(OPCODE_APUT_BYTE, OPCODE_AGET_BYTE,
+                             move_result_pseudo),
+        aput_x_patterns(OPCODE_APUT_BYTE)},
+       {"Replace_AputAgetBoolean",
+        aput_aget_x_patterns(OPCODE_APUT_BOOLEAN, OPCODE_AGET_BOOLEAN,
+                             move_result_pseudo),
+        aput_x_patterns(OPCODE_APUT_BOOLEAN)}});
+  return *kAputAgetPatterns;
+}
+
 const std::vector<Pattern>& get_putget_patterns() {
   static const auto* kPutGetPatterns = new std::vector<Pattern>(
       {{"Replace_PutGet",
         put_get_x_patterns(OPCODE_IPUT, OPCODE_IGET, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT),
-        second_get_non_volatile},
+        put_x_patterns(OPCODE_IPUT), second_get_non_volatile},
        {"Replace_PutGetWide",
-        put_get_x_patterns(
-            OPCODE_IPUT_WIDE, OPCODE_IGET_WIDE, move_result_pseudo_wide),
-        put_x_patterns(OPCODE_IPUT_WIDE),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_WIDE, OPCODE_IGET_WIDE,
+                           move_result_pseudo_wide),
+        put_x_patterns(OPCODE_IPUT_WIDE), second_get_non_volatile},
        {"Replace_PutGetObject",
-        put_get_x_patterns(
-            OPCODE_IPUT_OBJECT, OPCODE_IGET_OBJECT, move_result_pseudo_object),
-        put_x_patterns(OPCODE_IPUT_OBJECT),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_OBJECT, OPCODE_IGET_OBJECT,
+                           move_result_pseudo_object),
+        put_x_patterns(OPCODE_IPUT_OBJECT), second_get_non_volatile},
        {"Replace_PutGetShort",
-        put_get_x_patterns(
-            OPCODE_IPUT_SHORT, OPCODE_IGET_SHORT, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_SHORT),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_SHORT, OPCODE_IGET_SHORT,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_SHORT), second_get_non_volatile},
        {"Replace_PutGetChar",
-        put_get_x_patterns(
-            OPCODE_IPUT_CHAR, OPCODE_IGET_CHAR, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_CHAR),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_CHAR, OPCODE_IGET_CHAR,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_CHAR), second_get_non_volatile},
        {"Replace_PutGetByte",
-        put_get_x_patterns(
-            OPCODE_IPUT_BYTE, OPCODE_IGET_BYTE, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_BYTE),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_BYTE, OPCODE_IGET_BYTE,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_BYTE), second_get_non_volatile},
        {"Replace_PutGetBoolean",
-        put_get_x_patterns(
-            OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN, move_result_pseudo),
-        put_x_patterns(OPCODE_IPUT_BOOLEAN),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_IPUT_BOOLEAN, OPCODE_IGET_BOOLEAN,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_IPUT_BOOLEAN), second_get_non_volatile},
 
        {"Replace_StaticPutGet",
         put_get_x_patterns(OPCODE_SPUT, OPCODE_SGET, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT),
-        second_get_non_volatile},
+        put_x_patterns(OPCODE_SPUT), second_get_non_volatile},
        {"Replace_StaticPutGetWide",
-        put_get_x_patterns(
-            OPCODE_SPUT_WIDE, OPCODE_SGET_WIDE, move_result_pseudo_wide),
-        put_x_patterns(OPCODE_SPUT_WIDE),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_SPUT_WIDE, OPCODE_SGET_WIDE,
+                           move_result_pseudo_wide),
+        put_x_patterns(OPCODE_SPUT_WIDE), second_get_non_volatile},
        {"Replace_StaticPutGetObject",
-        put_get_x_patterns(
-            OPCODE_SPUT_OBJECT, OPCODE_SGET_OBJECT, move_result_pseudo_object),
-        put_x_patterns(OPCODE_SPUT_OBJECT),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_SPUT_OBJECT, OPCODE_SGET_OBJECT,
+                           move_result_pseudo_object),
+        put_x_patterns(OPCODE_SPUT_OBJECT), second_get_non_volatile},
        {"Replace_StaticPutGetShort",
-        put_get_x_patterns(
-            OPCODE_SPUT_SHORT, OPCODE_SGET_SHORT, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_SHORT),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_SPUT_SHORT, OPCODE_SGET_SHORT,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_SHORT), second_get_non_volatile},
        {"Replace_StaticPutGetChar",
-        put_get_x_patterns(
-            OPCODE_SPUT_CHAR, OPCODE_SGET_CHAR, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_CHAR),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_SPUT_CHAR, OPCODE_SGET_CHAR,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_CHAR), second_get_non_volatile},
        {"Replace_StaticPutGetByte",
-        put_get_x_patterns(
-            OPCODE_SPUT_BYTE, OPCODE_SGET_BYTE, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_BYTE),
-        second_get_non_volatile},
+        put_get_x_patterns(OPCODE_SPUT_BYTE, OPCODE_SGET_BYTE,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_BYTE), second_get_non_volatile},
        {"Replace_StaticPutGetBoolean",
-        put_get_x_patterns(
-            OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN, move_result_pseudo),
-        put_x_patterns(OPCODE_SPUT_BOOLEAN),
-        second_get_non_volatile}});
+        put_get_x_patterns(OPCODE_SPUT_BOOLEAN, OPCODE_SGET_BOOLEAN,
+                           move_result_pseudo),
+        put_x_patterns(OPCODE_SPUT_BOOLEAN), second_get_non_volatile}});
   return *kPutGetPatterns;
 }
 
@@ -1404,11 +1468,8 @@ const std::vector<Pattern>& get_func_patterns() {
 
 const std::vector<std::vector<Pattern>>& get_all_patterns() {
   static const std::vector<std::vector<Pattern>>& kAllPatterns = {
-      get_string_patterns(),
-      get_arith_patterns(),
-      get_func_patterns(),
-      get_nop_patterns(),
-      get_putget_patterns()};
+      get_string_patterns(), get_arith_patterns(),  get_func_patterns(),
+      get_nop_patterns(),    get_putget_patterns(), get_aputaget_patterns()};
 
   return kAllPatterns;
 }
@@ -1452,7 +1513,7 @@ class PeepholeOptimizer {
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
 
     // do optimizations one at a time
     // so they can match on the same pattern without interfering
@@ -1550,10 +1611,18 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
   std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  walk::parallel::reduce_methods<PeepholeOptimizer*, std::nullptr_t>(
-      scope,
-      [](PeepholeOptimizer*& ph, DexMethod* m) { // walker
-        ph->run_method(m);
+  auto wq = WorkQueue<DexClass*, PeepholeOptimizer*, std::nullptr_t>(
+      [&](WorkerState<DexClass*, PeepholeOptimizer*, std::nullptr_t>* state,
+          DexClass* cls) {
+        PeepholeOptimizer* ph = state->get_data();
+        for (auto dmethod : cls->get_dmethods()) {
+          TraceContext context(dmethod->get_deobfuscated_name());
+          ph->run_method(dmethod);
+        }
+        for (auto vmethod : cls->get_vmethods()) {
+          TraceContext context(vmethod->get_deobfuscated_name());
+          ph->run_method(vmethod);
+        }
         return nullptr;
       },
       [](std::nullptr_t, std::nullptr_t) { return nullptr; }, // reducer
@@ -1561,7 +1630,13 @@ void PeepholePass::run_pass(DexStoresVector& stores,
         helpers.emplace_back(std::make_unique<PeepholeOptimizer>(
             mgr, config.disabled_peepholes));
         return helpers.back().get();
-      });
+      },
+      std::thread::hardware_concurrency() / 2);
+  for (auto* cls : scope) {
+    wq.add_item(cls);
+  }
+  wq.run_all();
+
   for (const auto& helper : helpers) {
     helper->incr_all_metrics();
   }

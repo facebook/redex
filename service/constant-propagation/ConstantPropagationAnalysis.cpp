@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "ConstantPropagationAnalysis.h"
@@ -439,15 +437,16 @@ void semantically_inline_method(
     const IRInstruction* insn,
     const InstructionAnalyzer<ConstantEnvironment>& analyzer,
     ConstantEnvironment* env) {
-  callee_code->build_cfg();
+  callee_code->build_cfg(/* editable */ false);
   auto& cfg = callee_code->cfg();
 
   // Set up the environment at entry into the callee.
   ConstantEnvironment call_entry_env;
-  auto load_param_it = callee_code->get_param_instructions().begin();
+  auto load_params = callee_code->get_param_instructions();
+  auto load_params_it = InstructionIterable(load_params).begin();
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    call_entry_env.set(load_param_it->insn->dest(), env->get(insn->src(i)));
-    ++load_param_it;
+    call_entry_env.set(load_params_it->insn->dest(), env->get(insn->src(i)));
+    ++load_params_it;
   }
   call_entry_env.mutate_heap(
       [env](ConstantHeap* heap) { *heap = env->get_heap(); });
@@ -506,81 +505,6 @@ void FixpointIterator::analyze_node(const NodeId& block,
 /*
  * Helpers for CFG edge analysis
  */
-
-/*
- * Note that runtime_equals_visitor and runtime_leq_visitor are handling
- * different notions of equality / order than AbstractDomain::equals() and
- * AbstractDomain::leq(). The former return true if they can prove that their
- * respective relations hold for a runtime comparison (e.g. from an if-eq or
- * packed-switch instruction). In contrast, AbstractDomain::equals() will
- * return true for two domains representing integers > 0, even though their
- * corresponding runtime values may be different integers.
- */
-class runtime_equals_visitor : public boost::static_visitor<bool> {
- public:
-  bool operator()(const SignedConstantDomain& scd_left,
-                  const SignedConstantDomain& scd_right) const {
-    auto cst_left = scd_left.get_constant();
-    auto cst_right = scd_right.get_constant();
-    if (!(cst_left && cst_right)) {
-      return false;
-    }
-    if (*cst_left == *cst_right) {
-      return true;
-    }
-    return false;
-  }
-
-  bool operator()(const SingletonObjectDomain& d1,
-                  const SingletonObjectDomain& d2) const {
-    if (!(d1.is_value() && d2.is_value())) {
-      return false;
-    }
-    if (*d1.get_constant() == *d2.get_constant()) {
-      return true;
-    }
-    return false;
-  }
-
-  template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
-    return false;
-  }
-};
-
-class runtime_leq_visitor : public boost::static_visitor<bool> {
- public:
-  bool operator()(const SignedConstantDomain& scd_left,
-                  const SignedConstantDomain& scd_right) const {
-    return scd_left.max_element() <= scd_right.min_element();
-  }
-
-  template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
-    return false;
-  }
-};
-
-/*
- * Note: We cannot replace the runtime_lt_visitor by combining the
- * runtime_leq_visitor and the negation of the runtime_equals_visitor. Suppose
- * the runtime_leq_visitor returns true and the runtime_equals_visitor returns
- * false. That means that the LHS must be less than or equal to the RHS, and
- * that they *might* not be equal. Since they may still be equal, we cannot
- * conclude that the LHS must be less than the RHS.
- */
-class runtime_lt_visitor : public boost::static_visitor<bool> {
- public:
-  bool operator()(const SignedConstantDomain& scd_left,
-                  const SignedConstantDomain& scd_right) const {
-    return scd_left.max_element() < scd_right.min_element();
-  }
-
-  template <typename Domain, typename OtherDomain>
-  bool operator()(const Domain& d1, const OtherDomain& d2) const {
-    return false;
-  }
-};
 
 /*
  * If we can determine that a branch is not taken based on the constants in the
@@ -684,6 +608,12 @@ ConstantEnvironment FixpointIterator::analyze_edge(
   auto op = insn->opcode();
   if (is_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
+  } else if (is_switch(op)) {
+    auto case_key = edge->case_key();
+    if (case_key) {
+      env.set(insn->src(0),
+              env.get(insn->src(0)).meet(SignedConstantDomain(*case_key)));
+    }
   }
   return env;
 }

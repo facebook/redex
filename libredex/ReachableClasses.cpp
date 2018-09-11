@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "ReachableClasses.h"
@@ -408,14 +406,14 @@ void keep_class_members(
     const Scope& scope,
     const std::vector<std::string>& keep_class_mems) {
   for (auto const& cls : scope) {
-    std::string name = std::string(cls->get_type()->get_name()->c_str());
+    const std::string& name = cls->get_type()->get_name()->str();
     for (auto const& class_mem : keep_class_mems) {
       std::string class_mem_str = std::string(class_mem.c_str());
       std::size_t pos = class_mem_str.find(name);
       if (pos != std::string::npos) {
         std::string rem_str = class_mem_str.substr(pos+name.size());
         for (auto const& f : cls->get_sfields()) {
-          if (rem_str.find(std::string(f->get_name()->c_str()))!=std::string::npos) {
+          if (rem_str.find(f->get_name()->str()) != std::string::npos) {
             mark_only_reachable_directly(f);
             mark_only_reachable_directly(cls);
           }
@@ -473,11 +471,9 @@ bool in_reflected_pkg(DexClass* dclass,
  *  - Classes reachable from native libraries
  */
 void init_permanently_reachable_classes(
-  const Scope& scope,
-  const Json::Value& config,
-  const std::unordered_set<DexType*>& no_optimizations_anno
-) {
-  PassConfig pc(config);
+    const Scope& scope,
+    const JsonWrapper& config,
+    const std::unordered_set<DexType*>& no_optimizations_anno) {
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
@@ -487,13 +483,14 @@ void init_permanently_reachable_classes(
   bool compute_xml_reachability;
   bool legacy_reflection_reachability;
 
-  pc.get("apk_dir", "", apk_dir);
-  pc.get("keep_packages", {}, reflected_package_names);
-  pc.get("keep_annotations", {}, annotations);
-  pc.get("keep_class_members", {}, class_members);
-  pc.get("keep_methods", {}, methods);
-  pc.get("compute_xml_reachability", true, compute_xml_reachability);
-  pc.get("legacy_reflection_reachability", true, legacy_reflection_reachability);
+  config.get("apk_dir", "", apk_dir);
+  config.get("keep_packages", {}, reflected_package_names);
+  config.get("keep_annotations", {}, annotations);
+  config.get("keep_class_members", {}, class_members);
+  config.get("keep_methods", {}, methods);
+  config.get("compute_xml_reachability", true, compute_xml_reachability);
+  config.get("legacy_reflection_reachability", true,
+             legacy_reflection_reachability);
 
   if (legacy_reflection_reachability) {
     auto match = std::make_tuple(
@@ -615,8 +612,7 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
 
 void init_reachable_classes(
     const Scope& scope,
-    const Json::Value& config,
-    const redex::ProguardConfiguration& pg_config,
+    const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
   // Find classes that are reachable in such a way that none of the redex
   // passes will cause them to be no longer reachable.  For example, if a

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -37,14 +35,14 @@ class PassImpl : public Pass {
 
   PassImpl() : PassImpl(Config()) {}
 
-  void configure_pass(const PassConfig& pc) override {
-    pc.get("replace_moves_with_consts",
+  void configure_pass(const JsonWrapper& jw) override {
+    jw.get("replace_moves_with_consts",
            false,
            m_config.transform.replace_moves_with_consts);
-    pc.get("include_virtuals", false, m_config.include_virtuals);
-    pc.get("create_runtime_asserts", false, m_config.create_runtime_asserts);
+    jw.get("include_virtuals", false, m_config.include_virtuals);
+    jw.get("create_runtime_asserts", false, m_config.create_runtime_asserts);
     int64_t max_heap_analysis_iterations;
-    pc.get("max_heap_analysis_iterations", 0, max_heap_analysis_iterations);
+    jw.get("max_heap_analysis_iterations", 0, max_heap_analysis_iterations);
     always_assert(max_heap_analysis_iterations >= 0);
     m_config.max_heap_analysis_iterations =
         static_cast<size_t>(max_heap_analysis_iterations);

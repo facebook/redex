@@ -19,6 +19,7 @@ file(GLOB includes
         "liblocator"
         "libresource"
         "shared"
+        "sparta/include"
         )
 
 include_directories(
@@ -34,6 +35,8 @@ file(GLOB_RECURSE redex_srcs
         "service/*.h"
         "opt/*.cpp"
         "opt/*.h"
+        "util/CommandProfiling.*"
+        "util/JemallocUtil.*"
         "util/Sha1.*"
         "shared/*.cpp"
         "shared/*.h"

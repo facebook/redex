@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -83,6 +81,11 @@ DexType* get_class_type();
  * Return the DexType for an java.lang.Enum type.
  */
 DexType* get_enum_type();
+
+/**
+ * Return the package for a valid DexType.
+ */
+std::string get_package_name(const DexType* type);
 
 /**
  * Return true if the type is a primitive.
@@ -204,7 +207,7 @@ DexType* make_array_type(const DexType*);
 /**
  * True if the method is a constructor (matches the "<init>" name)
  */
-bool is_init(const DexMethod* method);
+bool is_init(const DexMethodRef* method);
 
 /**
  * True if the method is a static constructor (matches the "<clinit>" name)

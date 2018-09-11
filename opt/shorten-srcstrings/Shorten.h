@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -15,11 +13,8 @@ class ShortenSrcStringsPass : public Pass {
  public:
   ShortenSrcStringsPass() : Pass("ShortenSrcStringsPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get(
-      "filename_mappings",
-      "filename_mappings.txt",
-      m_filename_mappings);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("filename_mappings", "filename_mappings.txt", m_filename_mappings);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

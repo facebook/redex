@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "FinalInline.h"
@@ -243,9 +241,9 @@ class FinalInlineImpl {
       }
     }
 
-    return walk::parallel::reduce_methods<std::nullptr_t, size_t, Scope>(
+    return walk::parallel::reduce_methods<size_t, Scope>(
         m_full_scope,
-        [&inline_field, this](std::nullptr_t, DexMethod* m) -> size_t {
+        [&inline_field, this](DexMethod* m) -> size_t {
           auto* code = m->get_code();
           if (!code) {
             return 0;
@@ -279,9 +277,7 @@ class FinalInlineImpl {
           }
           return rewrites.size();
         },
-        [](size_t a, size_t b) { return a + b; }, // output reducer
-        [](int) { return nullptr; } // data initializer. not needed
-    );
+        [](size_t a, size_t b) { return a + b; });
   }
 
   /*

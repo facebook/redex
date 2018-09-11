@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -462,6 +460,34 @@ inline std::vector<DexMethod*> devirtualize(
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   auto signature_map = build_signature_map(class_hierarchy);
   return devirtualize(signature_map);
+}
+
+inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
+    const SignatureMap& sig_map) {
+  std::unordered_set<const DexMethod*> non_overridden_virtuals;
+  for (const auto& proto_it : sig_map) {
+    for (const auto& scopes : proto_it.second) {
+      for (const auto& scope : scopes.second) {
+        if (type_class(scope.type) == nullptr ||
+            is_interface(type_class(scope.type))) {
+          continue;
+        }
+        for (const auto& meth : scope.methods) {
+          if (meth.second & FINAL) {
+            non_overridden_virtuals.emplace(meth.first);
+          }
+        }
+      }
+    }
+  }
+  return non_overridden_virtuals;
+}
+
+inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
+    const std::vector<DexClass*>& scope) {
+  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
+  auto signature_map = build_signature_map(class_hierarchy);
+  return find_non_overridden_virtuals(signature_map);
 }
 
 inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {

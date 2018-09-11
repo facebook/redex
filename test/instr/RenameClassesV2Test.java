@@ -1,22 +1,15 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.redex.test.instr;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.fest.assertions.api.Assertions.assertThat;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-
-import static org.fest.assertions.api.Assertions.*;
-
-import org.junit.Before;
+import com.facebook.FooTextView;
 import org.junit.Test;
 
 interface IForceRename {
@@ -41,5 +34,6 @@ public class RenameClassesV2Test {
         Utils.demangle("com_facebook_redex_test_instr_ForceRename"));
     // Make sure, specifically, that it seems to abide the renamer's conventions
     assertThat(ForceRename.class.getPackage().getName()).isEqualTo("X");
+    assertThat(FooTextView.class.getPackage().getName()).isEqualTo("X");
   }
 }

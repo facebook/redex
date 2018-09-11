@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <algorithm>
@@ -361,6 +359,7 @@ public:
   uint32_t m_offset;
   const char* m_filename;
   size_t m_dex_number;
+  bool m_emit_debug_line_info;
   PositionMapper* m_pos_mapper;
   std::string m_method_mapping_filename;
   std::string m_class_mapping_filename;
@@ -376,7 +375,7 @@ public:
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
-  ConfigFiles& m_config_files;
+  const ConfigFiles& m_config_files;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data(SortMode mode = SortMode::DEFAULT);
@@ -424,7 +423,8 @@ public:
     DexClasses* classes,
     LocatorIndex* locator_index,
     size_t dex_number,
-    ConfigFiles& config_files,
+    bool emit_debug_line_info,
+    const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -442,7 +442,8 @@ DexOutput::DexOutput(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  ConfigFiles& config_files,
+  bool emit_debug_line_info,
+  const ConfigFiles& config_files,
   PositionMapper* pos_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -468,6 +469,7 @@ DexOutput::DexOutput(
   m_bytecode_offset_filename = bytecode_offset_filename;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
+  m_emit_debug_line_info = emit_debug_line_info;
 }
 
 DexOutput::~DexOutput() {
@@ -1038,16 +1040,22 @@ void DexOutput::generate_debug_items() {
     dbgcount++;
     // No align requirement for debug items.
     std::vector<DebugLineItem> debug_line_info;
-    int size =
-        dbg->encode(dodx, m_pos_mapper, m_output + m_offset, &debug_line_info);
-    dci->debug_info_off = m_offset;
-    m_offset += size;
-
+    uint32_t line_start{0};
+    auto dbgops = generate_debug_instructions(dbg, dodx, m_pos_mapper,
+                                              &line_start, &debug_line_info);
+    if (m_emit_debug_line_info) {
+      int size = dbg->encode(dodx, m_pos_mapper, m_output + m_offset,
+                             line_start, dbgops);
+      dci->debug_info_off = m_offset;
+      m_offset += size;
+    }
     if (m_code_debug_lines != nullptr) {
       (*m_code_debug_lines)[dc] = debug_line_info;
     }
   }
-  insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
+  if (m_emit_debug_line_info) {
+    insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
+  }
 }
 
 void DexOutput::generate_map() {
@@ -1526,21 +1534,22 @@ write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index,
   size_t dex_number,
-  ConfigFiles& cfg,
-  const Json::Value& json_cfg,
+  const ConfigFiles& cfg,
   PositionMapper* pos_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
 {
-  auto method_mapping_filename = cfg.metafile(
-    json_cfg.get("method_mapping", "").asString());
-  auto class_mapping_filename = cfg.metafile(
-    json_cfg.get("class_mapping", "").asString());
-  auto pg_mapping_filename = cfg.metafile(
-    json_cfg.get("proguard_map_output", "").asString());
-  auto bytecode_offset_filename = cfg.metafile(
-    json_cfg.get("bytecode_offset_map", "").asString());
-  auto sort_strings = json_cfg.get("string_sort_mode", "").asString();
+  const JsonWrapper& json_cfg = cfg.get_json_config();
+  auto method_mapping_filename =
+      cfg.metafile(json_cfg.get("method_mapping", std::string()));
+  auto class_mapping_filename =
+      cfg.metafile(json_cfg.get("class_mapping", std::string()));
+  auto pg_mapping_filename =
+      cfg.metafile(json_cfg.get("proguard_map_output", std::string()));
+  auto bytecode_offset_filename =
+      cfg.metafile(json_cfg.get("bytecode_offset_map", std::string()));
+  auto sort_strings = json_cfg.get("string_sort_mode", std::string());
+  auto emit_debug_line_info = json_cfg.get("emit_debug_line_info", true);
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
     string_sort_mode = SortMode::CLASS_STRINGS;
@@ -1567,6 +1576,7 @@ write_classes_to_dex(
     classes,
     locator_index,
     dex_number,
+    emit_debug_line_info,
     cfg,
     pos_mapper,
     method_to_id,

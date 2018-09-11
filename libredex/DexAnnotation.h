@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -408,9 +406,9 @@ using DexMethodParamAnnotations =
 class DexAnnotationDirectory {
   double m_viz;
   DexAnnotationSet* m_class;
-  DexFieldAnnotations* m_field;
-  DexMethodAnnotations* m_method;
-  DexMethodParamAnnotations* m_method_param;
+  std::unique_ptr<DexFieldAnnotations> m_field;
+  std::unique_ptr<DexMethodAnnotations> m_method;
+  std::unique_ptr<DexMethodParamAnnotations> m_method_param;
   int m_aset_size;
   int m_xref_size;
   int m_anno_count;
@@ -420,26 +418,19 @@ class DexAnnotationDirectory {
 
  public:
   DexAnnotationDirectory(DexAnnotationSet* c,
-                         DexFieldAnnotations* f,
-                         DexMethodAnnotations* m,
-                         DexMethodParamAnnotations* mp) {
-    m_class = c;
-    m_field = f;
-    m_method = m;
-    m_method_param = mp;
-    m_aset_size = 0;
-    m_xref_size = 0;
-    m_anno_count = 0;
-    m_aset_count = 0;
-    m_xref_count = 0;
+                         std::unique_ptr<DexFieldAnnotations> f,
+                         std::unique_ptr<DexMethodAnnotations> m,
+                         std::unique_ptr<DexMethodParamAnnotations> mp)
+      : m_class(c),
+        m_field(std::move(f)),
+        m_method(std::move(m)),
+        m_method_param(std::move(mp)),
+        m_aset_size(0),
+        m_xref_size(0),
+        m_anno_count(0),
+        m_aset_count(0),
+        m_xref_count(0) {
     calc_internals();
-  }
-
-  ~DexAnnotationDirectory() {
-    delete m_class;
-    delete m_field;
-    delete m_method;
-    delete m_method_param;
   }
 
   double viz_score() const { return m_viz; }

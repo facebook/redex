@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -19,15 +17,15 @@ class CreateReferenceGraphPass : public Pass {
  public:
   CreateReferenceGraphPass() : Pass("CreateReferenceGraphPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("gather_all", false, config.gather_all);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("gather_all", false, config.gather_all);
 
-    pc.get("refs_in_annotations", true, config.refs_in_annotations);
-    pc.get("refs_in_class_structure", true, config.refs_in_class_structure);
-    pc.get("refs_in_code", true, config.refs_in_code);
+    jw.get("refs_in_annotations", true, config.refs_in_annotations);
+    jw.get("refs_in_class_structure", true, config.refs_in_class_structure);
+    jw.get("refs_in_code", true, config.refs_in_code);
 
-    pc.get("resolve_fields", false, config.resolve_fields);
-    pc.get("resolve_methods", false, config.resolve_methods);
+    jw.get("resolve_fields", false, config.resolve_fields);
+    jw.get("resolve_methods", false, config.resolve_methods);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

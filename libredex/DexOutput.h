@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -96,8 +94,7 @@ dex_stats_t write_classes_to_dex(
   DexClasses* classes,
   LocatorIndex* locator_index /* nullable */,
   size_t dex_number,
-  ConfigFiles& cfg,
-  const Json::Value& json_cfg,
+  const ConfigFiles& cfg,
   PositionMapper* line_mapper,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);

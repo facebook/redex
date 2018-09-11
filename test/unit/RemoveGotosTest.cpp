@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -70,11 +68,12 @@ TEST_F(RemoveGotosTest, simplifySinglePath) {
   code->push_back(gt1.second);
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 1_v}));
   code->push_back(*gt2.first);
+  code->set_registers_size(4);
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(1, m_method->get_code()->cfg().blocks().size());
 
   auto ins = InstructionIterable(m_method->get_code());
@@ -106,14 +105,15 @@ TEST_F(RemoveGotosTest, simplifyForwardsGoto) {
   code->push_back(gt.second);
   code->push_back(dasm(OPCODE_ADD_INT, {2_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(2, m_method->get_code()->cfg().blocks().size());
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(1, m_method->get_code()->cfg().blocks().size());
   EXPECT_EQ(3, m_method->get_code()->count_opcodes());
 }
@@ -139,14 +139,15 @@ TEST_F(RemoveGotosTest, simplifyBackwardsGoto) {
   code->push_back(gt1.second);
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 1_v}));
   code->push_back(*gt2.first);
+  code->set_registers_size(3);
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   EXPECT_EQ(3, m_method->get_code()->cfg().blocks().size());
 
   RemoveGotosPass().run(m_method);
   printf("Result code: %s\n", SHOW(m_method->get_code()));
 
-  m_method->get_code()->build_cfg();
+  m_method->get_code()->build_cfg(/* editable */ false);
   auto iter = m_method->get_code()->begin();
   for (auto i = 0; i < 3; ++i) {
     EXPECT_EQ(iter->insn->opcode(), OPCODE_ADD_INT);
@@ -175,6 +176,7 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
   code->push_back(target);
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
   RemoveGotosPass().run(m_method);
 
@@ -193,6 +195,7 @@ TEST_F(RemoveGotosTest, preserveSimplifiedMethod) {
   code->push_back(dasm(OPCODE_ADD_INT, {1_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_ADD_INT, {2_v, 2_v, 2_v}));
   code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(3);
 
   RemoveGotosPass().run(m_method);
 

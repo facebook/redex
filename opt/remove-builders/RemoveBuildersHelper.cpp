@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "RemoveBuildersHelper.h"
@@ -418,7 +416,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
     return false;
   }
 
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
 
@@ -628,7 +626,7 @@ bool params_change_regs(DexMethod* method) {
   auto args = proto->get_args()->get_type_list();
 
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();

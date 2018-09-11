@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -15,10 +13,11 @@ class AccessMarkingPass : public Pass {
  public:
   AccessMarkingPass() : Pass("AccessMarkingPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("finalize_classes", true, m_finalize_classes);
-    pc.get("finalize_methods", true, m_finalize_methods);
-    pc.get("privatize_methods", true, m_privatize_methods);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("finalize_classes", true, m_finalize_classes);
+    jw.get("finalize_methods", true, m_finalize_methods);
+    jw.get("finalize_fields", false, m_finalize_fields);
+    jw.get("privatize_methods", true, m_privatize_methods);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -26,5 +25,6 @@ class AccessMarkingPass : public Pass {
  private:
   bool m_finalize_classes;
   bool m_finalize_methods;
+  bool m_finalize_fields;
   bool m_privatize_methods;
 };

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -302,6 +300,10 @@ inline bool is_aget(IROpcode op) {
   return op >= OPCODE_AGET && op <= OPCODE_AGET_SHORT;
 }
 
+inline bool is_aput(IROpcode op) {
+  return op >= OPCODE_APUT && op <= OPCODE_APUT_SHORT;
+}
+
 inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }
@@ -336,6 +338,8 @@ inline bool is_invoke_super(IROpcode op) { return op == OPCODE_INVOKE_SUPER; }
 inline bool is_invoke_direct(IROpcode op) { return op == OPCODE_INVOKE_DIRECT; }
 
 inline bool is_invoke_static(IROpcode op) { return op == OPCODE_INVOKE_STATIC; }
+
+inline bool is_new_instance(IROpcode op) { return op == OPCODE_NEW_INSTANCE; }
 
 inline bool is_filled_new_array(IROpcode op) {
   return op == OPCODE_FILLED_NEW_ARRAY;
@@ -407,3 +411,5 @@ inline bool is_const(IROpcode op) {
 inline bool is_monitor(IROpcode op) {
   return op == OPCODE_MONITOR_ENTER || op == OPCODE_MONITOR_EXIT;
 }
+
+inline bool is_instance_of(IROpcode op) { return op == OPCODE_INSTANCE_OF; }

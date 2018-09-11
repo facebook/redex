@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 /*
@@ -119,7 +117,7 @@ class RemoveGotos {
     TRACE(RMGOTO, 4, "Initial opcode count: %d\n", init_opcode_count);
 
     TRACE(RMGOTO, 3, "input code\n%s", SHOW(code));
-    code->build_cfg(true);
+    code->build_cfg(/* editable */ true);
     auto& cfg = code->cfg();
 
     TRACE(RMGOTO, 3, "before %s\n", SHOW(cfg));
@@ -153,16 +151,15 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   size_t total_gotos_removed =
-      walk::parallel::reduce_methods<std::nullptr_t, size_t>(
+      walk::parallel::reduce_methods<size_t>(
           scope,
-          [](std::nullptr_t, DexMethod* m) -> size_t {
+          [](DexMethod* m) -> size_t {
             if (!m->get_code()) {
               return 0;
             }
             return RemoveGotos::process_method(m);
           },
-          [](size_t a, size_t b) { return a + b; },
-          [](unsigned int /* thread_index */) { return nullptr; });
+          [](size_t a, size_t b) { return a + b; });
 
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
   TRACE(RMGOTO,

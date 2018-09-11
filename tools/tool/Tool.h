@@ -1,17 +1,15 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
 
 #include <boost/program_options.hpp>
-#include <string>
 #include <map>
+#include <string>
 #include <vector>
 
 #include "DexStore.h"
@@ -27,11 +25,8 @@ using DexStoresVector = std::vector<DexStore>;
 
 class Tool {
  public:
-
-  Tool(const std::string& name, const std::string& desc, bool verbose=true)
-     : m_name(name),
-       m_desc(desc),
-       m_verbose(verbose) {
+  Tool(const std::string& name, const std::string& desc, bool verbose = true)
+      : m_name(name), m_desc(desc), m_verbose(verbose) {
     ToolRegistry::get().register_tool(this);
   }
 
@@ -45,11 +40,10 @@ class Tool {
   const std::string& desc() const { return m_desc; }
 
  protected:
-
-  DexStoresVector init(
-    const std::string& system_jar_paths,
-    const std::string& apk_dir,
-    const std::string& dexen_dir);
+  DexStoresVector init(const std::string& system_jar_paths,
+                       const std::string& apk_dir,
+                       const std::string& dexen_dir,
+                       bool balloon = true);
 
   void add_standard_options(po::options_description& options) const;
 

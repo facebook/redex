@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -39,17 +37,17 @@ class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("rename_annotations", false, m_rename_annotations);
-    pc.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
-    pc.get("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
-    pc.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
-    pc.get("dont_rename_annotated", {}, m_dont_rename_annotated);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("rename_annotations", false, m_rename_annotations);
+    jw.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
+    jw.get("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
+    jw.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
+    jw.get("dont_rename_annotated", {}, m_dont_rename_annotated);
     std::vector<std::string> dont_rename_specific;
-    pc.get("dont_rename_specific", {}, dont_rename_specific);
-    pc.get("dont_rename_packages", {}, m_dont_rename_packages);
-    pc.get("dont_rename_types_with_reflection", {},
-        m_dont_rename_types_with_reflection);
+    jw.get("dont_rename_specific", {}, dont_rename_specific);
+    jw.get("dont_rename_packages", {}, m_dont_rename_packages);
+    jw.get("dont_rename_types_with_reflection", {},
+           m_dont_rename_types_with_reflection);
     m_dont_rename_specific.insert(dont_rename_specific.begin(),
         dont_rename_specific.end());
   }

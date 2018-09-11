@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "StaticRelo.h"
@@ -122,7 +120,7 @@ std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
   std::unordered_map<const DexClass*, size_t> coldstart_classes;
   for (auto const& dex : dexen) {
     for (auto const& cls : dex) {
-      class_string_map[std::string(cls->get_type()->get_name()->c_str())] = cls;
+      class_string_map[cls->get_type()->get_name()->str()] = cls;
     }
   }
   int rank = 0;

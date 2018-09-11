@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "IPConstantPropagation.h"
@@ -80,7 +78,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // within FixpointIterator::analyze_node(), since that can get called
   // multiple times for a given method
   walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg();
+    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
   auto fp_iter = std::make_unique<FixpointIterator>(cg, analyze_procedure);
@@ -143,10 +141,9 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
  * that analyze() obtained.
  */
 void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
-  using Data = std::nullptr_t;
-  m_transform_stats = walk::parallel::reduce_methods<Data, Transform::Stats>(
+  m_transform_stats = walk::parallel::reduce_methods<Transform::Stats>(
       scope,
-      [&](Data&, DexMethod* method) {
+      [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
@@ -158,15 +155,15 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
           rat.apply(*intra_cp, fp_iter.get_whole_program_state(), method);
           return Transform::Stats();
         } else {
-          Transform tf(m_config.transform);
+          Transform::Config config(m_config.transform);
+          config.class_under_init =
+              is_clinit(method) ? method->get_class() : nullptr;
+          Transform tf(config);
           return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
         }
       },
       [](Transform::Stats a, Transform::Stats b) { // reducer
         return a + b;
-      },
-      [&](unsigned int) { // data initializer
-        return nullptr;
       });
 }
 

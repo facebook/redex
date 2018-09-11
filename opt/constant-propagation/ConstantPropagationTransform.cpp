@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "ConstantPropagationTransform.h"
@@ -23,20 +21,11 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
                                    IRList::iterator it) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
-  auto scd = value.maybe_get<SignedConstantDomain>();
-  if (!scd) {
+  auto replacement =
+      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
+  if (replacement.size() == 0) {
     return;
   }
-  auto cst = scd->get_constant();
-  if (!cst) {
-    return;
-  }
-  IRInstruction* replacement = new IRInstruction(
-      insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
-  replacement->set_literal(*cst);
-  replacement->set_dest(insn->dest());
-
-  TRACE(CONSTP, 5, "Replacing %s with %s\n", SHOW(insn), SHOW(replacement));
   if (opcode::is_move_result_pseudo(insn->opcode())) {
     m_replacements.emplace_back(std::prev(it)->insn, replacement);
   } else {
@@ -45,6 +34,42 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   ++m_stats.materialized_consts;
 }
 
+void Transform::eliminate_redundant_sput(const ConstantEnvironment& env,
+                                         const WholeProgramState& wps,
+                                         IRList::iterator it) {
+  auto* insn = it->insn;
+  switch (insn->opcode()) {
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_SHORT:
+  case OPCODE_SPUT_WIDE: {
+    auto* field = resolve_field(insn->get_field());
+    if (!field) {
+      break;
+    }
+    // WholeProgramState tells us the abstract value of a static field across
+    // all program traces outside their class initializers; the
+    // ConstantEnvironment tells us the abstract value
+    // of a non-escaping static field at this particular program point.
+    auto existing_val = m_config.class_under_init == field->get_class()
+                            ? env.get(field)
+                            : wps.get_field_value(field);
+    auto new_val = env.get(insn->src(0));
+    if (ConstantValue::apply_visitor(runtime_equals_visitor(), existing_val,
+                                     new_val)) {
+      TRACE(FINALINLINE, 2, "%s has %s\n", SHOW(field), SHOW(existing_val));
+      // This field must already hold this value. We don't need to write to it
+      // again.
+      m_deletes.push_back(it);
+    }
+    break;
+  }
+  default: {}
+  }
+}
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
                                      IRList::iterator it) {
@@ -79,26 +104,6 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     break;
   }
   */
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_SPUT_SHORT:
-  case OPCODE_SPUT_WIDE: {
-    auto* field = resolve_field(insn->get_field());
-    auto scd = wps.get_field_value(field).maybe_get<SignedConstantDomain>();
-    if (!scd) {
-      break;
-    }
-    auto cst = scd->get_constant();
-    if (cst) {
-      // This field is known to be constant and must already hold this value.
-      // We don't need to write to it again.
-      m_deletes.push_back(it);
-    }
-    break;
-  }
   case OPCODE_ADD_INT_LIT16:
   case OPCODE_ADD_INT_LIT8: {
     replace_with_const(env, it);
@@ -137,7 +142,7 @@ void Transform::eliminate_dead_branch(
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;
       if (is_fallthrough) {
-        m_replacements.emplace_back(insn, new IRInstruction(OPCODE_GOTO));
+        m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
       } else {
         m_deletes.emplace_back(insn_it);
       }
@@ -151,13 +156,12 @@ void Transform::eliminate_dead_branch(
 void Transform::apply_changes(IRCode* code) {
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
-    IRInstruction* new_op = p.second;
-    TRACE(CONSTP, 4, "Replacing instruction %s -> %s\n", SHOW(old_op),
-          SHOW(new_op));
+    std::vector<IRInstruction*> new_ops = p.second;
     if (is_branch(old_op->opcode())) {
-      code->replace_branch(old_op, new_op);
+      always_assert(new_ops.size() == 1);
+      code->replace_branch(old_op, new_ops.at(0));
     } else {
-      code->replace_opcode(old_op, new_op);
+      code->replace_opcode(old_op, new_ops);
     }
   }
   for (auto it : m_deletes) {
@@ -179,6 +183,7 @@ Transform::Stats Transform::apply(
       continue;
     }
     for (auto& mie : InstructionIterable(block)) {
+      eliminate_redundant_sput(env, wps, code->iterator_to(mie));
       intra_cp.analyze_instruction(mie.insn, &env);
       simplify_instruction(env, wps, code->iterator_to(mie));
     }

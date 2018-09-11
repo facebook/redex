@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -51,7 +49,7 @@ class LocalDce {
 
   const Stats& get_stats() const { return m_stats; }
 
-  void dce(DexMethod* method);
+  void dce(IRCode*);
 
  private:
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
@@ -66,7 +64,7 @@ class LocalDcePass : public Pass {
  public:
   LocalDcePass() : Pass("LocalDcePass") {}
 
-  static void run(DexMethod* method);
+  static void run(IRCode* code);
 
   virtual void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

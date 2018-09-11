@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "RemoveBuilders.h"
@@ -48,7 +46,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   always_assert(this_insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT);
   auto regs_size = code->get_registers_size();
   auto this_cls = method->get_class();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
@@ -216,7 +214,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
   always_assert(method != nullptr);
 
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   auto regs_size = method->get_code()->get_registers_size();
@@ -226,7 +224,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 }
 
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles&,
+                                  ConfigFiles& cfg,
                                   PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(BUILDERS,
@@ -331,8 +329,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexClass*> kept_builders =
       get_builders_with_subclasses(scope);
 
-  PassConfig pc(mgr.get_config());
-  BuilderTransform b_transform(pc, scope, stores, false);
+  BuilderTransform b_transform(scope, stores, false);
 
   // Inline non init methods.
   std::unordered_set<DexClass*> removed_builders;
@@ -357,7 +354,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
         DexMethod* method_copy = DexMethod::make_method_from(
             method,
             method->get_class(),
-            DexString::make_string(std::string(method->get_name()->c_str()) +
+            DexString::make_string(method->get_name()->str() +
                                    "$redex_builders"));
         bool was_not_removed =
             !b_transform.inline_methods(

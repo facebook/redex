@@ -1,24 +1,27 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "Inliner.h"
 #include "IRInstruction.h"
 #include "DexUtil.h"
 #include "Mutators.h"
+#include "OptData.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"
+
+using namespace opt_metadata;
 
 namespace {
 
 const size_t CODE_SIZE_2_CALLERS = 7;
 const size_t CODE_SIZE_3_CALLERS = 5;
+// count of instructions that define a method as inlinable always
+const size_t CODE_SIZE_ANY_CALLERS = 2;
 
 // the max number of callers we care to track explicitly, after that we
 // group all callees/callers count in the same bucket
@@ -287,7 +290,7 @@ void MultiMethodInliner::inline_inlinables(
     auto callee = inlinable.first;
     auto insn = inlinable.second;
 
-    if (!is_inlinable(caller, callee, estimated_insn_size)) {
+    if (!is_inlinable(caller, callee, insn->insn, estimated_insn_size)) {
       continue;
     }
 
@@ -295,6 +298,10 @@ void MultiMethodInliner::inline_inlinables(
         SHOW(callee), caller->get_code()->get_registers_size(),
         SHOW(caller),
         callee->get_code()->get_registers_size());
+    // Logging before the call to inline_method to get the most relevant line
+    // number near insn before insn gets replaced. Should be ok as inline_method
+    // does not fail to inline.
+    log_opt(INLINED, caller, insn->insn);
     inliner::inline_method(caller->get_code(), callee->get_code(), insn);
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
@@ -313,18 +320,30 @@ void MultiMethodInliner::inline_inlinables(
  */
 bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
                                       const DexMethod* callee,
+                                      const IRInstruction* insn,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
   if (cross_store_reference(callee)) {
+    log_nopt(INL_CROSS_STORE_REFS, caller, insn);
     return false;
   }
-  if (is_blacklisted(callee)) return false;
-  if (caller_is_blacklisted(caller)) return false;
-  if (has_external_catch(callee)) return false;
-  if (cannot_inline_opcodes(caller, callee)) {
+  if (is_blacklisted(callee)) {
+    log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    return false;
+  }
+  if (caller_is_blacklisted(caller)) {
+    log_nopt(INL_BLACKLISTED_CALLER, caller);
+    return false;
+  }
+  if (has_external_catch(callee)) {
+    log_nopt(INL_EXTERN_CATCH, callee);
+    return false;
+  }
+  if (cannot_inline_opcodes(caller, callee, insn)) {
     return false;
   }
   if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+    log_nopt(INL_TOO_BIG, caller, insn);
     return false;
   }
 
@@ -419,14 +438,27 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
 bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
-                                               const DexMethod* callee) {
+                                               const DexMethod* callee,
+                                               const IRInstruction* invk_insn) {
   int ret_count = 0;
   for (const auto& mie : InstructionIterable(callee->get_code())) {
     auto insn = mie.insn;
-    if (create_vmethod(insn)) return true;
-    if (nonrelocatable_invoke_super(insn, callee, caller)) return true;
-    if (unknown_virtual(insn, callee, caller)) return true;
-    if (unknown_field(insn, callee, caller)) return true;
+    if (create_vmethod(insn)) {
+      log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+      return true;
+    }
+    if (nonrelocatable_invoke_super(insn, callee, caller)) {
+      log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+      return true;
+    }
+    if (unknown_virtual(insn, callee, caller)) {
+      log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+      return true;
+    }
+    if (unknown_field(insn, callee, caller)) {
+      log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+      return true;
+    }
     if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
       info.throws++;
       return true;
@@ -439,6 +471,7 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
   // worry about creating branches from the multiple returns to the main code
   if (ret_count > 1) {
     info.multi_ret++;
+    log_nopt(INL_MULTIPLE_RETURNS, callee);
     return true;
   }
   return false;
@@ -652,15 +685,38 @@ void MultiMethodInliner::invoke_direct_to_static() {
       });
 }
 
+void adjust_opcode_counts(
+    const std::unordered_multimap<DexMethod*, DexMethod*>& callee_to_callers,
+    DexMethod* callee,
+    std::unordered_map<DexMethod*, size_t>* adjusted_opcode_count) {
+  auto code = callee->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  auto code_size = code->count_opcodes();
+  auto range = callee_to_callers.equal_range(callee);
+  for (auto it = range.first; it != range.second; ++it) {
+    auto caller = it->second;
+    (*adjusted_opcode_count)[caller] += code_size;
+  }
+}
+
 void select_inlinable(
     const Scope& scope,
     const std::unordered_set<DexMethod*>& methods,
     MethodRefCache& resolved_refs,
     std::unordered_set<DexMethod*>* inlinable,
     bool multiple_callers) {
-  std::unordered_map<DexMethod*, int> calls;
+  std::map<DexMethod*, int, dexmethods_comparator> calls;
+  // Keep adjusted tally of opcode size after a method is selected for inlining.
+  // This avoids an edge case where a small method has many callers, but becomes
+  // large due to inlining (need to prevent code duplication in such a case)
+  std::unordered_map<DexMethod*, size_t> adjusted_opcode_count;
+  std::unordered_multimap<DexMethod*, DexMethod*> callee_to_callers;
   for (const auto& method : methods) {
     calls[method] = 0;
+    auto code = method->get_code();
+    adjusted_opcode_count[method] = code == nullptr ? 0 : code->count_opcodes();
   }
   // count call sites for each method
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
@@ -671,6 +727,7 @@ void select_inlinable(
           if (callee != nullptr && callee->is_concrete()
               && methods.count(callee) > 0) {
             calls[callee]++;
+            callee_to_callers.emplace(callee, meth);
           }
         }
       });
@@ -688,17 +745,38 @@ void select_inlinable(
   }
   assert(method_breakup(calls_group));
   for (auto callee : calls_group[1]) {
+    adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
     inlinable->insert(callee);
   }
   if (multiple_callers) {
     for (auto callee : calls_group[2]) {
-      if (callee->get_code()->count_opcodes() <= CODE_SIZE_2_CALLERS) {
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_2_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
         inlinable->insert(callee);
+      } else {
+        log_nopt(INL_2_CALLERS_TOO_BIG, callee);
       }
     }
     for (auto callee : calls_group[3]) {
-      if (callee->get_code()->count_opcodes() <= CODE_SIZE_3_CALLERS) {
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_3_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
         inlinable->insert(callee);
+      } else {
+        log_nopt(INL_3_CALLERS_TOO_BIG, callee);
+      }
+    }
+  }
+
+  for (size_t i = multiple_callers ? 4 : 2; i < MAX_COUNT; ++i) {
+    for (auto callee : calls_group[i]) {
+      auto code_size = adjusted_opcode_count[callee];
+      if (code_size <= CODE_SIZE_ANY_CALLERS) {
+        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
+        inlinable->insert(callee);
+      } else {
+        log_nopt(INL_TOO_MANY_CALLERS, callee);
       }
     }
   }
@@ -736,24 +814,8 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
-    auto param_op = param_it->insn->opcode();
-    IROpcode op;
-    switch (param_op) {
-    case IOPCODE_LOAD_PARAM:
-      op = OPCODE_MOVE;
-      break;
-    case IOPCODE_LOAD_PARAM_OBJECT:
-      op = OPCODE_MOVE_OBJECT;
-      break;
-    case IOPCODE_LOAD_PARAM_WIDE:
-      op = OPCODE_MOVE_WIDE;
-      break;
-    default:
-      always_assert_log("Expected param op, got %s", SHOW(param_op));
-      not_reached();
-    }
     auto mov =
-        (new IRInstruction(op))
+        (new IRInstruction(opcode::load_param_to_move(param_it->insn->opcode())))
             ->set_src(0, insn->src(i))
             ->set_dest(callee_reg_start + param_it->insn->dest());
     caller_code->insert_before(invoke_it, mov);
@@ -853,11 +915,7 @@ void cleanup_callee_debug(IRCode* callee_code) {
 class MethodSplicer {
   IRCode* m_mtcaller;
   IRCode* m_mtcallee;
-  // We need a map of MethodItemEntry we have created because a branch
-  // points to another MethodItemEntry which may have been created or not
-  std::unordered_map<MethodItemEntry*, MethodItemEntry*> m_entry_map;
-  // for remapping the parent position pointers
-  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  MethodItemEntryCloner m_mie_cloner;
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
   MethodItemEntry* m_active_catch;
@@ -874,49 +932,10 @@ class MethodSplicer {
         m_callee_reg_map(callee_reg_map),
         m_invoke_position(invoke_position),
         m_active_catch(active_catch) {
-    m_entry_map[nullptr] = nullptr;
-    m_pos_map[nullptr] = nullptr;
   }
 
-  MethodItemEntry* clone(MethodItemEntry* mei) {
-    MethodItemEntry* cloned_mei;
-    auto entry = m_entry_map.find(mei);
-    if (entry != m_entry_map.end()) {
-      return entry->second;
-    }
-    cloned_mei = new MethodItemEntry(*mei);
-    m_entry_map[mei] = cloned_mei;
-    switch (cloned_mei->type) {
-    case MFLOW_TRY:
-      cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-      cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
-      return cloned_mei;
-    case MFLOW_CATCH:
-      cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
-      cloned_mei->centry->next = clone(cloned_mei->centry->next);
-      return cloned_mei;
-    case MFLOW_OPCODE:
-      cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
-      if (cloned_mei->insn->opcode() == OPCODE_FILL_ARRAY_DATA) {
-        cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
-      }
-      return cloned_mei;
-    case MFLOW_TARGET:
-      cloned_mei->target = new BranchTarget(*cloned_mei->target);
-      cloned_mei->target->src = clone(cloned_mei->target->src);
-      return cloned_mei;
-    case MFLOW_DEBUG:
-      return cloned_mei;
-    case MFLOW_POSITION:
-      m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
-      cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
-      return cloned_mei;
-    case MFLOW_FALLTHROUGH:
-      return cloned_mei;
-    case MFLOW_DEX_OPCODE:
-      always_assert_log(false, "DexInstructions not expected here");
-    }
-    not_reached();
+  MethodItemEntry* clone(MethodItemEntry* mie) {
+    return m_mie_cloner.clone(mie);
   }
 
   void operator()(IRList::iterator insert_pos,

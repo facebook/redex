@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "RegAlloc.h"
@@ -20,17 +18,18 @@
 #include "Transform.h"
 #include "Walkers.h"
 
+#include "JemallocUtil.h"
+
 using namespace regalloc;
 
 void RegAllocPass::run_pass(DexStoresVector& stores,
                             ConfigFiles&,
                             PassManager& mgr) {
-  using Data = std::nullptr_t;
   using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk::parallel::reduce_methods<Data, Output>(
+  auto stats = walk::parallel::reduce_methods<Output>(
       scope,
-      [this](Data&, DexMethod* m) { // mapper
+      [this](DexMethod* m) { // mapper
         graph_coloring::Allocator::Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
@@ -46,7 +45,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
         try {
           // The transformations below all require a CFG. Build it once
           // here instead of requiring each transform to build it.
-          code.build_cfg();
+          code.build_cfg(/* editable */ false);
           // It doesn't make sense to try to allocate registers in
           // unreachable code. Remove it so that the allocator doesn't
           // get confused.
@@ -71,9 +70,6 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
       [](Output a, Output b) { // reducer
         a.accumulate(b);
         return a;
-      },
-      [&](unsigned int) { // data initializer
-        return nullptr;
       });
 
   TRACE(REG, 1, "Total reiteration count: %lu\n", stats.reiteration_count);

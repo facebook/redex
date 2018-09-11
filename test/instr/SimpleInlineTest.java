@@ -1,16 +1,15 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.redexinline;
 
 import static org.fest.assertions.api.Assertions.*;
 import com.facebook.redexinline.otherpackage.SimpleInlineOtherPackage;
+import android.util.Log;
 
 import org.junit.Test;
 
@@ -309,5 +308,34 @@ public class SimpleInlineTest {
     int[] a = {4, 5, 6};
     int[] b = calleeWithFillArray();
     assertThat(a[0]).isEqualTo(b[2]);
+  }
+
+  @Test
+  public void testUpdateCodeSizeWhenInlining() {
+    // Should not inline smallMethodThatBecomesBig.
+    if (mHello == null) {
+      smallMethodThatBecomesBig();
+    } else {
+      smallMethodThatBecomesBig();
+    }
+  }
+
+  // If bigMethod gets inlined, we should not inline this method to any callers.
+  private void smallMethodThatBecomesBig() {
+    bigMethod();
+  }
+
+  private int bigMethod() {
+    Log.e("Hello0", "World0");
+    Log.e("Hello1", "World1");
+    Log.e("Hello2", "World2");
+    Log.e("Hello3", "World3");
+    Log.e("Hello4", "World4");
+    Log.e("Hello5", "World5");
+    Log.e("Hello6", "World6");
+    Log.e("Hello7", "World7");
+    Log.e("Hello8", "World8");
+    Log.e("Hello9", "World9");
+    return 100;
   }
 }

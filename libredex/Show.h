@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -99,6 +97,7 @@ std::ostream& operator<<(std::ostream&, const DexType&);
 std::ostream& operator<<(std::ostream&, const DexClass&);
 std::ostream& operator<<(std::ostream&, const DexPosition&);
 std::ostream& operator<<(std::ostream&, const DexFieldRef&);
+std::ostream& operator<<(std::ostream&, const IRInstruction&);
 std::ostream& operator<<(std::ostream&, const MethodItemEntry&);
 
 std::string show(const DexFieldRef*);
@@ -128,6 +127,8 @@ std::string show_deobfuscated(const DexFieldRef*);
 std::string show_deobfuscated(const DexMethodRef*);
 std::string show_deobfuscated(const IRInstruction*);
 std::string show_deobfuscated(const DexEncodedValue*);
+std::string show_deobfuscated(const DexTypeList*);
+std::string show_deobfuscated(const DexProto*);
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

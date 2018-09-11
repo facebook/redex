@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "IPConstantPropagation.h"
@@ -259,7 +257,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   scope.push_back(cls);
 
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
   FixpointIterator fp_iter(
       cg,
       [](const DexMethod* method,
@@ -317,7 +315,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
   ConstantEnvironment env{{0, SignedConstantDomain(5)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   intraprocedural::FixpointIterator intra_cp(code->cfg(),
                                              ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
@@ -356,7 +354,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
                           {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   intraprocedural::FixpointIterator intra_cp(code->cfg(),
                                              ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
@@ -399,7 +397,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
                           {1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   intraprocedural::FixpointIterator intra_cp(code->cfg(),
                                              ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
@@ -437,7 +435,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
   ConstantEnvironment env{{1, SignedConstantDomain(Interval::LTZ)}};
   RuntimeAssertTransform rat(m_config.runtime_assert);
   auto code = method->get_code();
-  code->build_cfg();
+  code->build_cfg(/* editable */ false);
   intraprocedural::FixpointIterator intra_cp(code->cfg(),
                                              ConstantPrimitiveAnalyzer());
   intra_cp.run(env);
@@ -683,7 +681,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -741,7 +739,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto expected = assembler::to_s_expr(m2->get_code());
 
@@ -795,7 +793,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   auto expected = assembler::to_s_expr(m2->get_code());
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -855,7 +853,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
 
   Scope scope{creator.create()};
   walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg();
+    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
 
@@ -872,7 +870,9 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   auto expected_clinit_code = assembler::ircode_from_string(R"(
      (
       (const v0 1)
+      (sput v0 "LFoo;.corge:I") ; these field writes will be removed by RMUF
       (const v0 0)
+      (sput v0 "LFoo;.qux:I")
       (return-void)
      )
   )");
@@ -945,7 +945,7 @@ TEST_F(InterproceduralConstantPropagationTest,
 
   Scope scope{creator.create()};
   walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg();
+    code.build_cfg(/* editable */ false);
     code.cfg().calculate_exit_block();
   });
 
@@ -990,7 +990,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1042,7 +1042,7 @@ TEST_F(InterproceduralConstantPropagationTest, virtualMethodReturnValue) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto expected = assembler::to_s_expr(m1->get_code());
 
@@ -1092,7 +1092,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   creator.add_method(never_returns);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1156,7 +1156,7 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   creator.add_method(returns_constant);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(); });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -42,14 +40,11 @@ class PassManager {
     std::unordered_map<std::string, int> metrics;
   };
 
-  void run_passes(DexStoresVector&,
-                  const Scope& external_classes,
-                  ConfigFiles&);
+  void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
-  const Json::Value& get_config() const { return m_config; }
   bool verify_none_enabled() const { return m_verify_none_mode; }
   bool is_art_build() const { return m_art_build; }
 
@@ -80,13 +75,14 @@ class PassManager {
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
 
+  Pass* find_pass(const std::string& pass_name) const;
+
   void init(const Json::Value& config);
 
   static void run_type_checker(const Scope& scope,
                                bool polymorphic_constants,
                                bool verify_moves);
 
-  Json::Value m_config;
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;
   std::vector<Pass*> m_activated_passes;
@@ -109,4 +105,5 @@ class PassManager {
   };
 
   boost::optional<ProfilerInfo> m_profiler_info;
+  Pass* m_malloc_profile_pass{nullptr};
 };

@@ -1,16 +1,19 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
 
 #include <atomic>
+#include <boost/optional.hpp>
 #include <string>
+
+namespace ir_meta_io {
+class IRMetaIO;
+}
 
 class ReferencedState {
  private:
@@ -46,8 +49,15 @@ class ReferencedState {
 
   bool m_keep_name{false};
 
+  // InterDex subgroup, if any.
+  // NOTE: Will be set ONLY for generated classes.
+  boost::optional<size_t> m_interdex_subgroup{boost::none};
+
   // The number of keep rules that touch this class.
   std::atomic<unsigned int> m_keep_count{0};
+
+  // IR serialization class
+  friend class ir_meta_io::IRMetaIO;
 
  public:
   ReferencedState() = default;
@@ -107,9 +117,7 @@ class ReferencedState {
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() {
-    m_bytype = m_bystring = true;
-  }
+  void ref_by_string() { m_bytype = m_bystring = true; }
   bool is_referenced_by_string() const { return m_bystring; }
 
   // A class referenced by resource XML can take the following forms in .xml
@@ -147,4 +155,12 @@ class ReferencedState {
 
   bool has_mix_mode() const { return m_mix_mode; }
   void set_mix_mode() { m_mix_mode = true; }
+
+  void set_interdex_subgroup(const boost::optional<size_t>& interdex_subgroup) {
+    m_interdex_subgroup = interdex_subgroup;
+  }
+  size_t get_interdex_subgroup() const { return m_interdex_subgroup.get(); }
+  bool has_interdex_subgroup() const {
+    return m_interdex_subgroup != boost::none;
+  }
 };

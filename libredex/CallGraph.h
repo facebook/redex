@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -109,6 +107,10 @@ class Graph final {
   Graph(const BuildStrategy&);
 
   const Node& entry() const { return m_entry; }
+
+  bool has_node(const DexMethod* m) const {
+    return m_nodes.count(const_cast<DexMethod*>(m)) != 0;
+  }
 
   const Node& node(const DexMethod* m) const {
     if (m == nullptr) {

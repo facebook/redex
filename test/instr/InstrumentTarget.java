@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
-
 package com.facebook.redextest;
 
 public class InstrumentTarget {
@@ -25,8 +22,24 @@ public class InstrumentTarget {
 
   public static void main(String[] args) {
     InstrumentTarget target = new InstrumentTarget();
+    InstrumentTestClass1.it1Func1();
+    if (InstrumentTestClass1.it1Func2()) {
+      InstrumentTarget.func1();
+    }
     InstrumentTarget.func1();
     InstrumentTarget.func2(42);
     System.out.println("Result: " + target.func3(4, 42));
+  }
+}
+
+class InstrumentTestClass1 {
+  public static void it1Func1() {
+    System.out.println(InstrumentTestClass1.class.getSimpleName());
+    System.out.println("TestClass1 Func1");
+  }
+
+  public static boolean it1Func2() {
+    System.out.println("TestClass1 Func2");
+    return true;
   }
 }

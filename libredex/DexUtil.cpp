@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "DexUtil.h"
@@ -70,6 +68,15 @@ DexType* get_class_type() {
 
 DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
+}
+
+std::string get_package_name(const DexType* type) {
+  std::string name = std::string(type->get_name()->c_str());
+  always_assert_log(name.find("/") != std::string::npos,
+                    "Type name is not valid: %s\n",
+                    name.c_str());
+  unsigned long pos = name.find_last_of("/");
+  return name.substr(0, pos);
 }
 
 bool is_primitive(const DexType* type) {
@@ -175,7 +182,7 @@ bool has_hierarchy_in_scope(DexClass* cls) {
   return super == get_object_type();
 }
 
-bool is_init(const DexMethod* method) {
+bool is_init(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<init>") == 0;
 }
 
@@ -261,7 +268,8 @@ DexType* get_array_type(const DexType* type) {
 
 DexType* make_array_type(const DexType* type) {
   always_assert(type != nullptr);
-  return DexType::make_type(DexString::make_string("[" + std::string(type->get_name()->c_str())));
+  return DexType::make_type(
+      DexString::make_string("[" + type->get_name()->str()));
 }
 
 void create_runtime_exception_block(

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "IRCode.h"
@@ -588,7 +586,8 @@ IRCode::IRCode(const IRCode& code) {
 
 void IRCode::build_cfg(bool editable) {
   clear_cfg();
-  m_cfg = std::make_unique<cfg::ControlFlowGraph>(m_ir_list, editable);
+  m_cfg = std::make_unique<cfg::ControlFlowGraph>(
+      m_ir_list, m_registers_size, editable);
 }
 
 void IRCode::clear_cfg() {
@@ -597,6 +596,7 @@ void IRCode::clear_cfg() {
   }
 
   if (m_cfg->editable()) {
+    m_registers_size = m_cfg->get_registers_size();
     m_ir_list = m_cfg->linearize();
   }
 

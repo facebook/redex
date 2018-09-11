@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <algorithm>
@@ -158,17 +156,13 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
       no_inline_anno_count++;
       return;
     }
-    if (code.count_opcodes() < SMALL_CODE_SIZE) {
-      // always inline small methods even if they are not deletable
-      inlinable.insert(meth);
+
+    if (!can_delete(meth)) {
+      // never inline methods that cannot be deleted
+      TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
+      dont_strip++;
     } else {
-      if (!can_delete(meth)) {
-        // never inline methods that cannot be deleted
-        TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
-        dont_strip++;
-      } else {
-        methods.insert(meth);
-      }
+      methods.insert(meth);
     }
 
     if (has_anno(meth, force_inline)) {

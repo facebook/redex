@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "GraphColoring.h"
@@ -1047,7 +1045,7 @@ void Allocator::allocate(IRCode* code) {
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
     LivenessFixpointIterator fixpoint_iter(cfg);
-    fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+    fixpoint_iter.run(LivenessDomain());
 
     TRACE(REG, 5, "Allocating:\n%s\n", ::SHOW(code->cfg()));
     auto ig =
@@ -1058,7 +1056,7 @@ void Allocator::allocate(IRCode* code) {
       first = false;
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
-      fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+      fixpoint_iter.run(LivenessDomain());
       TRACE(REG, 5, "Post-coalesce:\n%s\n", ::SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
@@ -1106,7 +1104,7 @@ void Allocator::allocate(IRCode* code) {
 
       // Since we have inserted instructions, we need to rebuild the CFG to
       // ensure that block boundaries remain correct
-      code->build_cfg();
+      code->build_cfg(/* editable */ false);
     } else {
       transform::remap_registers(code, reg_transform.map);
       code->set_registers_size(reg_transform.size);

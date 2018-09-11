@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "PointsToSemantics.h"
@@ -896,7 +894,7 @@ class PointsToActionGenerator final {
   void run() {
     IRCode* code = m_dex_method->get_code();
     always_assert(code != nullptr);
-    code->build_cfg();
+    code->build_cfg(/* editable */ false);
     cfg::ControlFlowGraph& cfg = code->cfg();
     cfg.calculate_exit_block();
 

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "InstructionLowering.h"
@@ -448,11 +446,10 @@ Stats lower(DexMethod* method) {
 }
 
 Stats run(DexStoresVector& stores) {
-  using Data = std::nullptr_t;
   auto scope = build_class_scope(stores);
-  return walk::parallel::reduce_methods<Data, Stats>(
+  return walk::parallel::reduce_methods<Stats>(
       scope,
-      [](Data&, DexMethod* m) {
+      [](DexMethod* m) {
         Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
@@ -463,8 +460,7 @@ Stats run(DexStoresVector& stores) {
       [](Stats a, Stats b) {
         a.accumulate(b);
         return a;
-      },
-      [&](unsigned int) { return nullptr; });
+      });
 }
 
 } // namespace instruction_lowering

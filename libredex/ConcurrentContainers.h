@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -23,7 +21,7 @@
 // Forward declaration.
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots>
+template <typename Container, typename Iterator, size_t n_slots, bool is_const>
 class ConcurrentContainerIterator;
 
 } // namespace cc_impl
@@ -56,12 +54,14 @@ class ConcurrentContainer {
   using iterator =
       cc_impl::ConcurrentContainerIterator<Container,
                                            typename Container::iterator,
-                                           n_slots>;
+                                           n_slots,
+                                           /* is_const */ false>;
 
   using const_iterator =
       cc_impl::ConcurrentContainerIterator<Container,
                                            typename Container::const_iterator,
-                                           n_slots>;
+                                           n_slots,
+                                           /* is_const */ true>;
 
   virtual ~ConcurrentContainer() {}
 
@@ -86,7 +86,20 @@ class ConcurrentContainer {
 
   iterator find(const Key& key) {
     size_t slot = Hash()(key) % n_slots;
-    return iterator(&m_slots[0], slot, m_slots[slot].find(key));
+    const auto& it = m_slots[slot].find(key);
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return iterator(&m_slots[0], slot, it);
+  }
+
+  const_iterator find(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    const auto& it = m_slots[slot].find(key);
+    if (it == m_slots[slot].end()) {
+      return end();
+    }
+    return const_iterator(&m_slots[0], slot, it);
   }
 
   size_t size() const {
@@ -115,9 +128,14 @@ class ConcurrentContainer {
   /*
    * This operation is always thread-safe.
    */
-  size_t count(const Key& key) {
+  size_t count(const Key& key) const {
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(m_locks[slot]);
+    return m_slots[slot].count(key);
+  }
+
+  size_t count_unsafe(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
     return m_slots[slot].count(key);
   }
 
@@ -136,24 +154,51 @@ class ConcurrentContainer {
 
   Container& get_container(size_t slot) { return m_slots[slot]; }
 
-  boost::mutex& get_lock(size_t slot) { return m_locks[slot]; }
+  const Container& get_container(size_t slot) const { return m_slots[slot]; }
+
+  boost::mutex& get_lock(size_t slot) const { return m_locks[slot]; }
 
  private:
-  boost::mutex m_locks[n_slots];
+  mutable boost::mutex m_locks[n_slots];
   Container m_slots[n_slots];
 };
 
 template <typename Key,
           typename Value,
-          size_t n_slots = 31,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>>
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
 class ConcurrentMap final
     : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, Equal>,
                                  Key,
                                  Hash,
                                  n_slots> {
  public:
+  ConcurrentMap() = default;
+
+  template <typename InputIt>
+  ConcurrentMap(InputIt first, InputIt last) {
+    insert(first, last);
+  }
+
+  /*
+   * This operation is always thread-safe. Note that it returns a copy of Value
+   * rather than a reference since insertions from other threads may cause the
+   * hashtables to be resized. If you are reading from a ConcurrentMap that is
+   * not being concurrently modified, it will probably be faster to use
+   * `find()` or `at_unsafe()` to avoid the copy.
+   */
+  Value at(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    return this->get_container(slot).at(key);
+  }
+
+  const Value& at_unsafe(const Key& key) const {
+    size_t slot = Hash()(key) % n_slots;
+    return this->get_container(slot).at(key);
+  }
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
@@ -162,8 +207,7 @@ class ConcurrentMap final
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
     auto& map = this->get_container(slot);
-    auto status = map.insert(entry);
-    return status.second;
+    return map.insert(entry).second;
   }
 
   /*
@@ -173,6 +217,38 @@ class ConcurrentMap final
     for (const auto& entry : l) {
       insert(entry);
     }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename InputIt>
+  void insert(InputIt first, InputIt last) {
+    for (; first != last; ++first) {
+      insert(*first);
+    }
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  void insert_or_assign(const std::pair<Key, Value>& entry) {
+    size_t slot = Hash()(entry.first) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    map[entry.first] = entry.second;
+  }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  bool emplace(Args&& ...args) {
+    std::pair<Key, Value> entry(std::forward<Args>(args)...);
+    size_t slot = Hash()(entry.first) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& map = this->get_container(slot);
+    return map.emplace(std::move(entry)).second;
   }
 
   /*
@@ -195,9 +271,9 @@ class ConcurrentMap final
 };
 
 template <typename Key,
-          size_t n_slots = 31,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>>
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
 class ConcurrentSet final
     : public ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
                                  Key,
@@ -223,23 +299,39 @@ class ConcurrentSet final
       insert(x);
     }
   }
+
+  /*
+   * This operation is always thread-safe.
+   */
+  template <typename... Args>
+  bool emplace(Args&& ...args) {
+    Key key(std::forward<Args>(args)...);
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    auto& set = this->get_container(slot);
+    return set.emplace(std::move(key)).second;
+  }
 };
 
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots>
+template <typename Container, typename Iterator, size_t n_slots, bool is_const>
 class ConcurrentContainerIterator final
     : public std::iterator<std::forward_iterator_tag,
                            typename Iterator::value_type> {
+
+  using ContainerType =
+      typename std::conditional<is_const, const Container, Container>::type;
+
  public:
-  explicit ConcurrentContainerIterator(Container* slots)
+  explicit ConcurrentContainerIterator(ContainerType* slots)
       : m_slots(slots),
         m_slot(n_slots - 1),
         m_position(m_slots[n_slots - 1].end()) {
     skip_empty_slots();
   }
 
-  ConcurrentContainerIterator(Container* slots,
+  ConcurrentContainerIterator(ContainerType* slots,
                               size_t slot,
                               const Iterator& position)
       : m_slots(slots), m_slot(slot), m_position(position) {
@@ -285,7 +377,7 @@ class ConcurrentContainerIterator final
     }
   }
 
-  Container* m_slots;
+  ContainerType* m_slots;
   size_t m_slot;
   Iterator m_position;
 };

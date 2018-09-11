@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "Creators.h"
@@ -18,9 +16,8 @@ namespace {
 
 // TODO: make naming of methods smart
 DexString* get_name(DexMethod* meth) {
-  std::string name(meth->get_name()->c_str());
-  name = "__st__" + name;
-  return DexString::make_string(name.c_str());
+  std::string name = "__st__" + meth->get_name()->str();
+  return DexString::make_string(name);
 }
 
 DexProto* make_static_sig(DexMethod* meth) {
@@ -75,6 +72,18 @@ void MethodBlock::invoke(IROpcode opcode,
 void MethodBlock::new_instance(DexType* type, Location& dst) {
   auto insn = new IRInstruction(OPCODE_NEW_INSTANCE);
   insn->set_type(type);
+  push_instruction(insn);
+  push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                       ->set_dest(dst.get_reg()));
+}
+
+void MethodBlock::new_array(DexType* type,
+                            const Location& size,
+                            const Location& dst) {
+  auto insn = new IRInstruction(OPCODE_NEW_ARRAY);
+  insn->set_type(type);
+  insn->set_arg_word_count(1);
+  insn->set_src(0, size.get_reg());
   push_instruction(insn);
   push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
                        ->set_dest(dst.get_reg()));
@@ -606,7 +615,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,
                              DexAccessFlags access,
-                             DexAnnotationSet* anno)
+                             DexAnnotationSet* anno,
+                             bool with_debug_item)
     : method(
           static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
   always_assert_log(!method->is_concrete(), "Method already defined");
@@ -615,8 +625,12 @@ MethodCreator::MethodCreator(DexType* cls,
   }
   method->make_concrete(
       access, !(access & (ACC_STATIC | ACC_PRIVATE | ACC_CONSTRUCTOR)));
+  method->set_deobfuscated_name(show(method));
   method->set_code(std::make_unique<IRCode>(method, 0));
   meth_code = method->get_code();
+  if (with_debug_item) {
+    meth_code->set_debug_item(std::make_unique<DexDebugItem>());
+  }
   load_locals(method);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2018-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "SwitchDispatch.h"
@@ -40,7 +38,8 @@ MethodCreator* init_method_creator(const dispatch::Spec& spec,
                            DexString::make_string(spec.name),
                            spec.proto,
                            spec.access_flags,
-                           orig_method->get_anno_set());
+                           orig_method->get_anno_set(),
+                           spec.keep_debug_info);
 }
 
 void emit_call(const dispatch::Spec& spec,
@@ -105,6 +104,7 @@ void handle_default_block(
     const dispatch::Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
     const std::vector<Location>& args,
+    MethodCreator* mc,
     Location& ret_loc,
     MethodBlock* def_block) {
   if (is_ctor(spec)) {
@@ -121,7 +121,15 @@ void handle_default_block(
     emit_call(spec, OPCODE_INVOKE_SUPER, args, ret_loc, spec.overridden_meth,
               def_block);
   } else if (!spec.proto->is_void()) {
-    def_block->init_loc(ret_loc);
+    // dex2oat doesn't verify the simple init if the return type is an array
+    // type.
+    if (is_array(spec.proto->get_rtype())) {
+      Location size_loc = mc->make_local(get_int_type());
+      def_block->init_loc(size_loc);
+      def_block->new_array(spec.proto->get_rtype(), size_loc, ret_loc);
+    } else {
+      def_block->init_loc(ret_loc);
+    }
   }
 }
 
@@ -236,7 +244,7 @@ DexMethod* create_simple_switch_dispatch(
 
   // default case and return
   auto def_block = mb->switch_op(type_tag_loc, cases);
-  handle_default_block(spec, indices_to_callee, args, ret_loc, def_block);
+  handle_default_block(spec, indices_to_callee, args, mc, ret_loc, def_block);
   mb->ret(spec.proto->get_rtype(), ret_loc);
 
   for (auto& case_it : cases) {
@@ -271,7 +279,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
 
   // default case and return
   auto def_block = mb->switch_op(type_tag_loc, cases);
-  handle_default_block(spec, indices_to_callee, args, ret_loc, def_block);
+  handle_default_block(spec, indices_to_callee, args, mc, ret_loc, def_block);
   mb->ret(spec.proto->get_rtype(), ret_loc);
 
   size_t max_num_leaf_switch = cases.size() / num_switch_needed + 1;
@@ -291,15 +299,14 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
           prepend_and_make(spec.proto->get_args(), spec.owner_type);
       auto static_dispatch_proto =
           DexProto::make_proto(spec.proto->get_rtype(), new_arg_list);
-      dispatch::Spec sub_spec{
-          spec.owner_type,
-          dispatch::Type::VIRTUAL,
-          sub_name,
-          static_dispatch_proto,
-          spec.access_flags | ACC_STATIC,
-          spec.type_tag_field,
-          nullptr // overridden_method
-      };
+      dispatch::Spec sub_spec{spec.owner_type,
+                              dispatch::Type::VIRTUAL,
+                              sub_name,
+                              static_dispatch_proto,
+                              spec.access_flags | ACC_STATIC,
+                              spec.type_tag_field,
+                              nullptr, // overridden_method,
+                              spec.keep_debug_info};
       auto sub_dispatch =
           create_simple_switch_dispatch(sub_spec, sub_indices_to_callee);
       sub_indices_to_callee.clear();
@@ -455,7 +462,7 @@ DexMethod* create_ctor_or_static_dispatch(
   // TODO (zwei): better dispatch? E.g., push down invoke-direct to the super
   // ctor to happen after the switch stmt.
   auto def_block = mb->switch_op(type_tag_loc, cases);
-  handle_default_block(spec, indices_to_callee, args, ret_loc, def_block);
+  handle_default_block(spec, indices_to_callee, args, mc, ret_loc, def_block);
   mb->ret(spec.proto->get_rtype(), ret_loc);
 
   for (auto& case_it : cases) {

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "Transform.h"
@@ -119,7 +117,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
     }
     // Remove all successor edges. Note that we don't need to try and remove
     // predecessors since by definition, unreachable blocks have no preds
-    cfg.remove_succ_edges(b);
+    cfg.delete_succ_edges(b);
     insns_removed += remove_block(code, b);
   }
 

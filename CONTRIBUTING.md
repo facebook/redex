@@ -52,4 +52,4 @@ will complain.
 ## License
 
 By contributing to ReDex, you agree that your contributions will be licensed
-under its BSD license.
+under its MIT license.

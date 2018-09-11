@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <cstdint>
@@ -87,8 +85,7 @@ TEST(SynthTest1, synthetic) {
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  Scope external_classes;
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   // Make sure synthetic method is removed from class Alpha.
   for (const auto& cls : classes) {
@@ -104,7 +101,7 @@ TEST(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha$Beta;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
         auto* code = method->get_code();
-        code->build_cfg(true);
+        code->build_cfg(/* editable */ true);
         for (auto& mie : InstructionIterable(code->cfg())) {
           auto insn = mie.insn;
           std::cout << SHOW(insn) << std::endl;

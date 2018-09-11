@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "IROpcode.h"
@@ -1003,9 +1001,24 @@ bool is_load_param(IROpcode op) {
   return op >= IOPCODE_LOAD_PARAM && op <= IOPCODE_LOAD_PARAM_WIDE;
 }
 
+
 bool is_move_result_pseudo(IROpcode op) {
   return op >= IOPCODE_MOVE_RESULT_PSEUDO &&
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+}
+
+IROpcode load_param_to_move(IROpcode op) {
+  switch (op) {
+  case IOPCODE_LOAD_PARAM:
+    return OPCODE_MOVE;
+  case IOPCODE_LOAD_PARAM_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case IOPCODE_LOAD_PARAM_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert_log(false, "Expected param op, got %s", SHOW(op));
+    not_reached();
+  }
 }
 
 IROpcode move_result_pseudo_for_iget(IROpcode op) {

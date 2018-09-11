@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -254,6 +252,8 @@ bool is_internal(IROpcode);
 bool is_load_param(IROpcode);
 
 bool is_move_result_pseudo(IROpcode);
+
+IROpcode load_param_to_move(IROpcode);
 
 IROpcode invert_conditional_branch(IROpcode op);
 

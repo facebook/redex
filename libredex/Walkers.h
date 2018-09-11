@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -328,7 +326,7 @@ class walk {
                                             MatchingInBlockWalkerFn walker) {
     std::vector<std::pair<cfg::Block*, std::vector<IRInstruction*>>>
         block_matches;
-    ir_code.build_cfg();
+    ir_code.build_cfg(/* editable */ false);
     for (cfg::Block* block : ir_code.cfg().blocks()) {
       std::vector<std::vector<IRInstruction*>> method_matches;
       std::vector<IRInstruction*> insns;
@@ -399,36 +397,33 @@ class walk {
 
     /**
      * Call `walker` on all methods in `classes` in parallel. Then combine the
-     * Output with `reducer` function. Make sure all global information needed
-     * is copied locally per thread using DataInitializerFn.
+     * Output with `reducer` function.
      */
-    template <class Data,
-              class Output,
+    template <class Output,
               class Classes,
-              class MethodWalkerFn = Output(Data&, DexMethod*),
-              class OutputReducerFn = Output(Output, Output),
-              class DataInitializerFn = Data(int)>
+              class MethodWalkerFn = Output(DexMethod*),
+              class OutputReducerFn = Output(Output, Output)>
     Output static reduce_methods(const Classes& classes,
                                  MethodWalkerFn walker,
                                  OutputReducerFn reducer,
-                                 DataInitializerFn data_initializer,
                                  const Output& init = Output(),
                                  size_t num_threads = default_num_threads()) {
-      auto wq = WorkQueue<DexClass*, Data, Output>(
-          [&](Data& data, DexClass* cls) {
+      auto wq = WorkQueue<DexClass*, std::nullptr_t, Output>(
+          [&](WorkerState<DexClass*, std::nullptr_t, Output>* state,
+              DexClass* cls) {
             Output out = init;
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
-              out = reducer(out, walker(data, dmethod));
+              out = reducer(out, walker(dmethod));
             }
             for (auto vmethod : cls->get_vmethods()) {
               TraceContext context(vmethod->get_deobfuscated_name());
-              out = reducer(out, walker(data, vmethod));
+              out = reducer(out, walker(vmethod));
             }
             return out;
           },
           reducer,
-          data_initializer,
+          [](unsigned int) { return nullptr; },
           num_threads);
 
       for (const auto& cls : classes) {

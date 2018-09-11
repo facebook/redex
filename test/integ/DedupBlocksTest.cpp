@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -57,7 +55,7 @@ TEST(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_before = true;
         IRCode* code = m->get_code();
-        code->build_cfg(true);
+        code->build_cfg(/* editable */ true);
         EXPECT_EQ(count_someFunc_calls(code->cfg()), 3);
         code->clear_cfg();
       }
@@ -73,9 +71,8 @@ TEST(DedupBlocksTest, useSwitch) {
   manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
-  Scope external_classes;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   bool code_checked_after = false;
   TRACE(DEDUP_BLOCKS, 1, "Code after:\n");
@@ -84,7 +81,7 @@ TEST(DedupBlocksTest, useSwitch) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_after = true;
         IRCode* code = m->get_code();
-        code->build_cfg(true);
+        code->build_cfg(/* editable */ true);
         EXPECT_EQ(count_someFunc_calls(code->cfg()), 1);
         code->clear_cfg();
       }

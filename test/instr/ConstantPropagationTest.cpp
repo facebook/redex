@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -45,7 +43,7 @@ TEST_F(PreVerify, ConstantPropagation) {
     }
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
-    code->build_cfg(true);
+    code->build_cfg(/* editable */ true);
     bool has_if = false;
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s\n", SHOW(meth));
@@ -72,7 +70,7 @@ TEST_F(PostVerify, ConstantPropagation) {
     }
     IRCode* code = new IRCode(meth);
     EXPECT_NE(code, nullptr);
-    code->build_cfg(true);
+    code->build_cfg(/* editable */ true);
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s\n", SHOW(meth));
       TRACE(CONSTP, 1, "%s\n", SHOW(code));

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -209,5 +207,89 @@ TEST_F(IRAssemblerTest, diabolical_bad_order_switch) {
             "(:L1 1) "
             "(const v1 1))");
 
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_simplest) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a))
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_with_next) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a b) "LFoo;")
+      (const v1 1)
+      (return-void)
+
+      (.catch (b) "LBar;")
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_exception_name) {
+  auto code1 = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a) "LFoo;")
+      (const v1 1)
+      (return-void)
+    )
+  )");
+  auto code2 = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.catch (a) "LBar;")
+      (const v1 1)
+      (return-void)
+    )
+  )");
+
+  EXPECT_NE(assembler::to_string(code1.get()),
+            assembler::to_string(code2.get()));
+}
+
+TEST_F(IRAssemblerTest, try_catch_with_two_tries) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.try_start a)
+      (const v0 0)
+      (.try_end a)
+
+      (.try_start a)
+      (const v1 1)
+      (.try_end a)
+
+      (.catch (a))
+      (const v2 2)
+      (return-void)
+    )
+  )");
+  auto s = assembler::to_string(code.get());
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }

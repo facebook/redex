@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gmock/gmock.h>
@@ -81,7 +79,7 @@ TEST_F(IRTypeCheckerTest, load_param) {
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: "
+              MatchesRegex("^Encountered [0x[0-9a-f]+] OPCODE: "
                            "IOPCODE_LOAD_PARAM v5 not at the start "
                            "of the method$"));
 }
@@ -100,7 +98,7 @@ TEST_F(IRTypeCheckerTest, move_result) {
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: MOVE_RESULT v0 "
+              MatchesRegex("^Encountered [0x[0-9a-f]+] OPCODE: MOVE_RESULT v0 "
                            "without appropriate prefix instruction. Expected "
                            "invoke or filled-new-array, got "
                            "ADD_INT v5, v5, v5$"));
@@ -128,7 +126,7 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   checker.run();
   EXPECT_TRUE(checker.fail());
   EXPECT_THAT(checker.what(),
-              MatchesRegex("^Encountered [0x[0-9a-f]*] OPCODE: MOVE_RESULT v0 "
+              MatchesRegex("^Encountered [0x[0-9a-f]+] OPCODE: MOVE_RESULT v0 "
                            "at start of the method$"));
 }
 
@@ -145,7 +143,7 @@ TEST_F(IRTypeCheckerTest, move_result_pseudo_no_prefix) {
   EXPECT_THAT(
       checker.what(),
       MatchesRegex(
-          "^Encountered [0x[0-9a-f]*] OPCODE: IOPCODE_MOVE_RESULT_PSEUDO v0 "
+          "^Encountered [0x[0-9a-f]+] OPCODE: IOPCODE_MOVE_RESULT_PSEUDO v0 "
           "without appropriate prefix instruction$"));
 }
 
@@ -160,7 +158,7 @@ TEST_F(IRTypeCheckerTest, move_result_pseudo_no_suffix) {
   EXPECT_TRUE(checker.fail());
   EXPECT_THAT(checker.what(),
               ContainsRegex("^Did not find move-result-pseudo after "
-                            "[0x[0-9a-f]*] OPCODE: CHECK_CAST v14, "
+                            "[0x[0-9a-f]+] OPCODE: CHECK_CAST v14, "
                             "Ljava/lang/Object;"));
 }
 
@@ -247,10 +245,12 @@ TEST_F(IRTypeCheckerTest, referenceFromInteger) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'AGET v0, v5' for "
-      "register v0: expected type REFERENCE, but found INT instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'AGET v0, v5' "
+          "@ 0x[0-9a-f]+ for register v0: expected type REFERENCE, but found "
+          "INT instead"));
 }
 
 TEST_F(IRTypeCheckerTest, misalignedLong) {
@@ -264,11 +264,12 @@ TEST_F(IRTypeCheckerTest, misalignedLong) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'NEG_LONG v1, v1' for "
-      "register v1: expected type (LONG1, LONG2), but found (LONG2, TOP) "
-      "instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'NEG_LONG v1, v1' "
+          "@ 0x[0-9a-f]+ for register v1: expected type \\(LONG1, LONG2\\), "
+          "but found \\(LONG2, TOP\\) instead"));
 }
 
 TEST_F(IRTypeCheckerTest, uninitializedRegister) {
@@ -283,11 +284,12 @@ TEST_F(IRTypeCheckerTest, uninitializedRegister) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
-      "Lbar;.foo:()V' for register v0: expected type REFERENCE, but found TOP "
-      "instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
+          "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
+          "type REFERENCE, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, undefinedRegister) {
@@ -300,8 +302,7 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
   code->push_back(*if_mie); // branch to target1
   code->push_back(dasm(OPCODE_MOVE_OBJECT, {0_v, 14_v}));
   code->push_back(dasm(OPCODE_CHECK_CAST, DexType::make_type("Lbar;"), {0_v}));
-  code->push_back(
-		  dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   code->push_back(*goto_mie); // branch to target2
   code->push_back(target1);
   code->push_back(dasm(OPCODE_MOVE, {0_v, 12_v}));
@@ -315,11 +316,12 @@ TEST_F(IRTypeCheckerTest, undefinedRegister) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
-      "Lbar;.foo:()V' for register v0: expected type REFERENCE, but found TOP "
-      "instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
+          "Lbar;\\.foo:\\(\\)V' @ 0x[0-9a-f]+ for register v0: expected "
+          "type REFERENCE, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, signatureMismatch) {
@@ -336,11 +338,12 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, v5, "
-      "v7, v13, Lbar;.foo:(IJZ)V' for register v13: expected type INT, but "
-      "found FLOAT instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'INVOKE_VIRTUAL v0, "
+          "v5, v7, v13, Lbar;\\.foo:\\(IJZ\\)V' @ 0x[0-9a-f]+ for register "
+          "v13: expected type INT, but found FLOAT instead"));
 }
 
 TEST_F(IRTypeCheckerTest, longInvoke) {
@@ -381,11 +384,14 @@ TEST_F(IRTypeCheckerTest, longSignatureMismatch) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'INVOKE_STATIC "
-      "v5, v6, v7, v9, v10, v11, v13, Lbar;.foo:(IBJZSDF)V' for "
-      "register v10: expected type INT, but found DOUBLE1 instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'INVOKE_STATIC "
+          "v5, v6, v7, v9, v10, v11, v13, Lbar;\\.foo:\\(IBJZSDF\\)V' "
+          "@ 0x[0-9a-f]+ for register v10: expected type INT, but found "
+          "DOUBLE1 "
+          "instead"));
 }
 
 TEST_F(IRTypeCheckerTest, comparisonOperation) {
@@ -399,11 +405,12 @@ TEST_F(IRTypeCheckerTest, comparisonOperation) {
   IRTypeChecker checker(m_method);
   checker.run();
   EXPECT_TRUE(checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'CMP_LONG v0, v7, v0' "
-      "for register v0: expected type (LONG1, LONG2), but found (DOUBLE1, "
-      "DOUBLE2) instead",
-      checker.what());
+  EXPECT_THAT(
+      checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'CMP_LONG v0, v7, "
+          "v0' @ 0x[0-9a-f]+ for register v0: expected type \\(LONG1, "
+          "LONG2\\), but found \\(DOUBLE1, DOUBLE2\\) instead"));
 }
 
 TEST_F(IRTypeCheckerTest, verifyMoves) {
@@ -421,10 +428,12 @@ TEST_F(IRTypeCheckerTest, verifyMoves) {
   strict_checker.verify_moves();
   strict_checker.run();
   EXPECT_TRUE(strict_checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'MOVE_OBJECT v1, v0' for "
-      "register v0: expected type REFERENCE, but found TOP instead",
-      strict_checker.what());
+  EXPECT_THAT(
+      strict_checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction "
+          "'MOVE_OBJECT v1, v0' @ 0x[0-9a-f]+ for register v0: expected type "
+          "REFERENCE, but found TOP instead"));
 }
 
 TEST_F(IRTypeCheckerTest, exceptionHandler) {
@@ -479,10 +488,12 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants1) {
   IRTypeChecker regular_checker(m_method);
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'MUL_FLOAT v13, "
-      "v13, v0' for register v0: expected type FLOAT, but found INT instead",
-      regular_checker.what());
+  EXPECT_THAT(
+      regular_checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'MUL_FLOAT v13, "
+          "v13, v0' @ 0x[0-9a-f]+ for register v0: expected type FLOAT, but "
+          "found INT instead"));
 }
 
 TEST_F(IRTypeCheckerTest, polymorphicConstants2) {
@@ -500,11 +511,12 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants2) {
   IRTypeChecker regular_checker(m_method);
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'MUL_DOUBLE v10, "
-      "v10, v0' for register v0: expected type (DOUBLE1, DOUBLE2), but found "
-      "(LONG1, LONG2) instead",
-      regular_checker.what());
+  EXPECT_THAT(
+      regular_checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'MUL_DOUBLE v10, "
+          "v10, v0' @ 0x[0-9a-f]+ for register v0: expected type \\(DOUBLE1, "
+          "DOUBLE2\\), but found \\(LONG1, LONG2\\) instead"));
 }
 
 TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
@@ -523,10 +535,12 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
   IRTypeChecker regular_checker(m_method);
   regular_checker.run();
   EXPECT_TRUE(regular_checker.fail());
-  EXPECT_EQ(
-      "Type error in method testMethod at instruction 'ADD_INT v5, v5, "
-      "v0' for register v0: expected type INT, but found REFERENCE instead",
-      regular_checker.what());
+  EXPECT_THAT(
+      regular_checker.what(),
+      MatchesRegex(
+          "^Type error in method testMethod at instruction 'ADD_INT v5, v5, "
+          "v0' @ 0x[0-9a-f]+ for register v0: expected type INT, but found "
+          "REFERENCE instead"));
 }
 
 TEST_F(IRTypeCheckerTest, overlappingMoveWide) {

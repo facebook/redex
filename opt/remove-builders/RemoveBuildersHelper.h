@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -91,8 +89,7 @@ get_tainted_regs(uint16_t regs_size,
 
 class BuilderTransform {
  public:
-  BuilderTransform(const PassConfig& pc,
-                   const Scope& scope,
+  BuilderTransform(const Scope& scope,
                    DexStoresVector& stores,
                    bool throws_inline) {
     m_inliner_config.throws_inline = throws_inline;

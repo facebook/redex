@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -122,6 +120,7 @@ class MultiMethodInliner {
    */
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
+                    const IRInstruction* insn,
                     size_t estimated_insn_size);
 
 
@@ -149,7 +148,9 @@ class MultiMethodInliner {
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
    */
-  bool cannot_inline_opcodes(const DexMethod* caller, const DexMethod* callee);
+  bool cannot_inline_opcodes(const DexMethod* caller,
+                             const DexMethod* callee,
+                             const IRInstruction* invk_insn);
 
   /**
    * Return true if inlining would require a method called from the callee

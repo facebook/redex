@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2018-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -34,6 +32,7 @@ struct Spec {
   DexField* type_tag_field;
   DexMethod* overridden_meth;
   boost::optional<size_t> max_num_dispatch_target;
+  bool keep_debug_info;
 
   Spec(DexType* owner_type,
        Type type,
@@ -41,14 +40,16 @@ struct Spec {
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
-       DexMethod* overridden_meth)
+       DexMethod* overridden_meth,
+       bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
         name(name),
         proto(proto),
         access_flags(access_flags),
         type_tag_field(type_tag_field),
-        overridden_meth(overridden_meth) {
+        overridden_meth(overridden_meth),
+        keep_debug_info(keep_debug_info) {
     max_num_dispatch_target = boost::none;
   }
 
@@ -59,7 +60,8 @@ struct Spec {
        DexAccessFlags access_flags,
        DexField* type_tag_field,
        DexMethod* overridden_meth,
-       boost::optional<size_t> max_num_dispatch_target)
+       boost::optional<size_t> max_num_dispatch_target,
+       bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
         name(name),
@@ -67,7 +69,8 @@ struct Spec {
         access_flags(access_flags),
         type_tag_field(type_tag_field),
         overridden_meth(overridden_meth),
-        max_num_dispatch_target(max_num_dispatch_target) {}
+        max_num_dispatch_target(max_num_dispatch_target),
+        keep_debug_info(keep_debug_info) {}
 };
 
 struct DispatchMethod {

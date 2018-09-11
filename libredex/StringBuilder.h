@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -48,8 +46,8 @@ class StaticStringBuilder {
   std::string str() const {
     std::string result;
     result.reserve(m_total_chars);
-    for (const auto& s : m_strings) {
-      result += s;
+    for (uint32_t i = 0; i < m_index; ++i) {
+      result += m_strings[i];
     }
     return result;
   }

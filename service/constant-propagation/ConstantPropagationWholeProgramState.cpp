@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "ConstantPropagationWholeProgramState.h"
@@ -52,8 +50,8 @@ void analyze_clinits(const Scope& scope,
                      ConstantStaticFieldPartition* field_partition) {
   for (DexClass* cls : scope) {
     auto& dmethods = cls->get_dmethods();
-    auto clinit_it = std::find_if(dmethods.begin(), dmethods.end(), is_clinit);
-    if (clinit_it == dmethods.end()) {
+    auto clinit = cls->get_clinit();
+    if (clinit == nullptr) {
       // If there is no class initializer, then the initial field values are
       // simply the DexEncodedValues.
       ConstantEnvironment env;
@@ -62,7 +60,6 @@ void analyze_clinits(const Scope& scope,
                               field_partition);
       continue;
     }
-    auto* clinit = *clinit_it;
     IRCode* code = clinit->get_code();
     auto& cfg = code->cfg();
     auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
@@ -172,6 +169,18 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
   m_method_partition.update(method, [&value](auto* current_value) {
     current_value->join_with(value);
   });
+}
+
+void WholeProgramState::collect_static_finals(
+    const DexClass* cls, StaticFieldEnvironment field_env) {
+  for (auto* field : cls->get_sfields()) {
+    if (is_static(field) && is_final(field) && !field->is_external()) {
+      m_known_fields.emplace(field);
+    } else {
+      field_env.set(field, ConstantValue::top());
+    }
+  }
+  set_fields_in_partition(cls, field_env, &m_field_partition);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_sget(

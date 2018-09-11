@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -16,8 +14,7 @@
 
 void init_reachable_classes(
     const Scope& scope,
-    const Json::Value& config,
-    const redex::ProguardConfiguration& pg_config,
+    const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 void recompute_classes_reachable_from_code(const Scope& scope);
 

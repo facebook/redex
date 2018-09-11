@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <algorithm>
@@ -411,4 +409,22 @@ TEST_F(PostVerify, testFillArrayOpcode) {
   auto m = find_vmethod_named(*cls, "testFillArrayOpcode");
   EXPECT_EQ(nullptr,
             find_invoke(m, DOPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
+}
+
+TEST_F(PreVerify, testUpdateCodeSizeWhenInlining) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto m = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_DIRECT, "bigMethod"));
+}
+
+TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  auto small = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
+  EXPECT_NE(small, nullptr)
+      << "smallMethodThatBecomesBig should not be inlined!";
+  EXPECT_EQ(nullptr,
+            find_invoke(small, DOPCODE_INVOKE_DIRECT, "bigMethod"));
 }

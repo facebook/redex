@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <queue>
@@ -180,7 +178,7 @@ void find_throwing_block(const Scope& scope) {
   LogicalBlock throwing_blocks;
   walk::code(scope,
       [&](DexMethod* meth, IRCode& code) {
-        code.build_cfg();
+        code.build_cfg(/* editable */ false);
         const auto& cfg = code.cfg();
         for (const auto& block : cfg.blocks()) {
           if (is_throw_block(meth, block)) {

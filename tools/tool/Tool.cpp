@@ -1,32 +1,33 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <iostream>
 
-#include "Tool.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "JarLoader.h"
 #include "ReachableClasses.h"
+#include "Tool.h"
 
 namespace fs = boost::filesystem;
 
 namespace {
 
-void load_store_dexen(DexStore& store, const DexMetadata& store_metadata, bool verbose) {
+void load_store_dexen(DexStore& store,
+                      const DexMetadata& store_metadata,
+                      bool verbose,
+                      bool balloon) {
   for (const auto& file_path : store_metadata.get_files()) {
     if (verbose) {
       std::cout << "Loading " << file_path << std::endl;
     }
-    DexClasses classes = load_classes_from_dex(file_path.c_str(), true);
+    DexClasses classes = load_classes_from_dex(file_path.c_str(), balloon);
     store.add_classes(std::move(classes));
   }
 }
@@ -52,7 +53,7 @@ DexMetadata parse_store_metadata(const fs::path& metadata_path) {
 std::vector<std::string> find_store_dexen(const fs::path& store_dir_path) {
   std::vector<std::string> dexen;
   auto end = fs::directory_iterator();
-  for (fs::directory_iterator it(store_dir_path) ; it != end ; ++it) {
+  for (fs::directory_iterator it(store_dir_path); it != end; ++it) {
     auto file = it->path();
     if (fs::is_regular_file(file) &&
         !file.extension().compare(std::string(".dex"))) {
@@ -62,14 +63,13 @@ std::vector<std::string> find_store_dexen(const fs::path& store_dir_path) {
   return dexen;
 }
 
-std::vector<DexMetadata> find_stores(
-  const std::string& apk_dir_str,
-  const std::string& dexen_dir_str) {
+std::vector<DexMetadata> find_stores(const std::string& apk_dir_str,
+                                     const std::string& dexen_dir_str) {
   fs::path apk_dir_path(apk_dir_str);
   fs::path dexen_dir_path(dexen_dir_str);
   auto end = fs::directory_iterator();
   std::vector<DexMetadata> metadatas;
-  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
+  for (fs::directory_iterator it(dexen_dir_path); it != end; ++it) {
     // Look for metadata.txt for this store in the apk dir
     auto metadata_path = apk_dir_path;
     metadata_path += fs::path::preferred_separator;
@@ -88,26 +88,27 @@ std::vector<DexMetadata> find_stores(
   return metadatas;
 }
 
-} // namespace {
+} // namespace
 
 void Tool::add_standard_options(po::options_description& options) const {
-  options.add_options()
-    ("jars,j",
-     po::value<std::string>()->value_name("foo.jar,bar.jar,...")->required(),
-     "delimited list of system jars")
-    ("apkdir,a",
-     po::value<std::string>()->value_name("/tmp/redex_extracted_apk")->required(),
-     "path of an apk dir obtained from redex.py -u")
-    ("dexendir,d",
-     po::value<std::string>()->value_name("/tmp/redex_dexen")->required(),
-     "path of a dexen dir obtained from redex.py -u")
-  ;
+  options.add_options()(
+      "jars,j",
+      po::value<std::string>()->value_name("foo.jar,bar.jar,...")->required(),
+      "delimited list of system jars")(
+      "apkdir,a",
+      po::value<std::string>()
+          ->value_name("/tmp/redex_extracted_apk")
+          ->required(),
+      "path of an apk dir obtained from redex.py -u")(
+      "dexendir,d",
+      po::value<std::string>()->value_name("/tmp/redex_dexen")->required(),
+      "path of a dexen dir obtained from redex.py -u");
 }
 
-DexStoresVector Tool::init(
-  const std::string& system_jar_paths,
-  const std::string& apk_dir_str,
-  const std::string& dexen_dir_str) {
+DexStoresVector Tool::init(const std::string& system_jar_paths,
+                           const std::string& apk_dir_str,
+                           const std::string& dexen_dir_str,
+                           bool balloon) {
   if (!fs::is_directory(fs::path(apk_dir_str))) {
     throw std::invalid_argument("'" + apk_dir_str + "' is not a directory");
   }
@@ -124,7 +125,8 @@ DexStoresVector Tool::init(
       if (m_verbose) {
         std::cout << "Loading " << system_jar << std::endl;
         if (!load_jar_file(system_jar.c_str())) {
-          throw std::runtime_error("Could not load system jar file '"+system_jar+"'");
+          throw std::runtime_error("Could not load system jar file '" +
+                                   system_jar + "'");
         }
       }
     }
@@ -135,13 +137,13 @@ DexStoresVector Tool::init(
   DexStoresVector stores;
 
   // Load root dexen
-  load_root_dexen(root_store, dexen_dir_str, /* balloon = */ true, m_verbose);
+  load_root_dexen(root_store, dexen_dir_str, balloon, m_verbose);
   stores.emplace_back(std::move(root_store));
 
   // Load module dexen
   for (const auto& metadata : find_stores(apk_dir_str, dexen_dir_str)) {
     DexStore store(metadata);
-    load_store_dexen(store, metadata, m_verbose);
+    load_store_dexen(store, metadata, m_verbose, balloon);
     stores.emplace_back(std::move(store));
   }
 
@@ -150,11 +152,10 @@ DexStoresVector Tool::init(
     std::cout << "Initializing reachable classes" << std::endl;
   }
   Scope scope = build_class_scope(stores);
-  Json::Value config;
-  redex::ProguardConfiguration pg_config;
+  JsonWrapper config(Json::nullValue);
   // TODO: Need to get this from a redex .config file
   std::unordered_set<DexType*> no_optimizations_anno;
-  init_reachable_classes(scope, config, pg_config, no_optimizations_anno);
+  init_reachable_classes(scope, config, no_optimizations_anno);
 
   return stores;
 }

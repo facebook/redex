@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -57,11 +55,12 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(*goto_mie);
   // this TRY_END is in a block that is dead code
   code->push_back(TRY_END, catch_start);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
-  code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->push_back(*catch_start);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(0);
 
-  LocalDcePass().run(m_method);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -94,8 +93,9 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->set_registers_size(0);
 
-  LocalDcePass().run(m_method);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -124,8 +124,9 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(TRY_END, catch_start);
   code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->set_registers_size(0);
 
-  LocalDcePass().run(m_method);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -151,12 +152,14 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(TRY_END, catch_start);
   // this one doesn't wrap a may-throw opcode
   code->push_back(TRY_START, catch_start);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
   code->push_back(TRY_END, catch_start);
-  code->push_back(*catch_start);
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
+  code->push_back(*catch_start);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(1);
 
-  LocalDcePass().run(m_method);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <gtest/gtest.h>
@@ -33,10 +31,9 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   PassManager manager(passes);
   manager.set_testing_mode();
 
-  Scope external_classes;
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_config(conf_obj);
-  manager.run_passes(stores, external_classes, dummy_config);
+  manager.run_passes(stores, dummy_config);
 }
 
 struct DedupBlocksTest : testing::Test {
@@ -137,14 +134,14 @@ TEST_F(DedupBlocksTest, simplestCase) {
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
   code->push_back(*D_goto_E.source);
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   EXPECT_EQ(5, code->cfg().blocks().size());
   printf("Input cfg:\n%s\n", SHOW(code->cfg()));
   code->clear_cfg();
 
   run_dedup_blocks();
 
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   printf("Result cfg:\n%s\n", SHOW(code->cfg()));
   EXPECT_EQ(4, code->cfg().blocks().size());
   code->clear_cfg();
@@ -217,7 +214,7 @@ TEST_F(DedupBlocksTest, noDups) {
 }
 
 std::string cfg_str(IRCode* code) {
-  code->build_cfg(true);
+  code->build_cfg(/* editable */ true);
   const auto& cfg = code->cfg();
   auto result = show(cfg);
   code->clear_cfg();
@@ -403,5 +400,101 @@ TEST_F(DedupBlocksTest, diamond) {
             assembler::to_s_expr(code))
       << "expected:\n"
       << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
+      << cfg_str(code) << SHOW(method->get_code());
+}
+
+// in Code:  A B C (where B == C,
+//      and they contain a pair of new-instance and constructor instructions)
+// in CFG:   A -> B
+//            \
+//             > C
+// out Code: A B
+// out CFG:  A -> B
+TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
+  auto input_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v0 :c)
+
+      (:b)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+
+      (:c)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )");
+  auto method = get_fresh_method("blockWithNewInstanceAndConstroctor");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+
+  run_dedup_blocks();
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (if-eqz v0 :c)
+
+      (:b)
+      (:c)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code))
+      << "expected:\n"
+      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual\n"
+      << cfg_str(code) << SHOW(method->get_code());
+}
+
+// in Code: A B C(where B == C,
+//      and they construct an object from A)
+// in CFG:  A -> B
+//           \
+//            > C
+// out Code: the same as the in Code
+// out CFG: the same as the in CFG
+TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
+  std::string str_code = R"(
+    (
+      (:a)
+      (const v0 0)
+      (const v1 1)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :c)
+
+      (:b)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+
+      (:c)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str_code);
+  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+  run_dedup_blocks();
+  auto expect_code = assembler::ircode_from_string(str_code);
+  EXPECT_EQ(assembler::to_s_expr(expect_code.get()),
+            assembler::to_s_expr(code))
+      << "expected:\n"
+      << cfg_str(expect_code.get()) << SHOW(expect_code) << "actual\n"
       << cfg_str(code) << SHOW(method->get_code());
 }

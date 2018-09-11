@@ -23,9 +23,11 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/analysis_ref_graph \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
+	-I$(top_srcdir)/opt/basic-block \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/constant-propagation \
+	-I$(top_srcdir)/opt/dead-code-elimination \
 	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
@@ -47,6 +49,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
+	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
@@ -54,6 +57,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
+	-I$(top_srcdir)/opt/string_concatenator \
 	-I$(top_srcdir)/opt/string_simplification \
 	-I$(top_srcdir)/opt/strip-debug-info \
 	-I$(top_srcdir)/opt/synth \
@@ -65,6 +69,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
+	-I$(top_srcdir)/service/escape-analysis \
+	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/shared \
@@ -81,8 +87,10 @@ noinst_LTLIBRARIES = libredex.la
 
 libredex_la_SOURCES = \
 	liblocator/locator.cpp \
+	libredex/AnnoUtils.cpp \
 	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
+	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Creators.cpp \
@@ -101,6 +109,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
@@ -108,12 +117,15 @@ libredex_la_SOURCES = \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
 	libredex/IRList.cpp \
+	libredex/IRMetaIO.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
+	libredex/MethodOverrideGraph.cpp \
 	libredex/Mutators.cpp \
+	libredex/OptData.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
 	libredex/PluginRegistry.cpp \
@@ -154,6 +166,8 @@ libredex_la_SOURCES = \
 	libresource/VectorImpl.cpp \
 	shared/DexDefs.cpp \
 	shared/file-utils.cpp \
+	util/CommandProfiling.cpp \
+	util/JemallocUtil.cpp \
 	util/Sha1.cpp
 
 libredex_la_LIBADD = \
@@ -176,6 +190,7 @@ redex_all_SOURCES = \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
 	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
+	opt/basic-block/BasicBlockProfile.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
@@ -184,13 +199,19 @@ redex_all_SOURCES = \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
+	opt/dead-code-elimination/DeadCodeEliminationPass.cpp \
+	opt/dead-code-elimination/SideEffectSummary.cpp \
+	opt/dead-code-elimination/UsedVarsAnalysis.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
+	opt/final_inline/FinalInlineV2.cpp \
 	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
 	opt/instrument/Instrument.cpp \
+	opt/interdex/DexStructure.cpp \
+	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/obfuscate/Obfuscate.cpp \
@@ -215,6 +236,7 @@ redex_all_SOURCES = \
 	opt/remove-unread-fields/RemoveUnreadFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
+	opt/remove_unused_args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
@@ -226,8 +248,11 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/singleimpl/SingleImplUtil.cpp \
+	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/static-sink/StaticSink.cpp \
 	opt/staticrelo/StaticRelo.cpp \
+	opt/staticrelo/StaticReloV2.cpp \
+	opt/string_concatenator/StringConcatenator.cpp \
 	opt/string_simplification/StringIterator.cpp \
 	opt/string_simplification/StringSimplification.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
@@ -246,9 +271,15 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
+	service/escape-analysis/LocalPointersAnalysis.cpp \
+  service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantValue.cpp \
+	service/method-dedup/MethodDedup.cpp \
+	service/method-dedup/TypeTags.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \
 	service/switch-dispatch/SwitchDispatch.cpp \
+	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \
@@ -258,7 +289,8 @@ redex_all_LDADD = \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_PROGRAM_OPTIONS_LIB) \
 	$(BOOST_THREAD_LIB) \
-	-lpthread
+	-lpthread \
+	-ldl
 
 redex_all_LDFLAGS = \
 	-rdynamic # function names in stack traces
@@ -276,7 +308,8 @@ redexdump_LDADD = \
 	$(BOOST_SYSTEM_LIB) \
 	$(BOOST_REGEX_LIB) \
 	$(BOOST_THREAD_LIB) \
-	-lpthread
+	-lpthread \
+	-ldl
 
 #
 # redex: Python driver script

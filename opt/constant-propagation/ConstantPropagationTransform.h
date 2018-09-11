@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -25,7 +23,9 @@ namespace constant_propagation {
 class Transform final {
  public:
   struct Config {
-    bool replace_moves_with_consts;
+    bool replace_moves_with_consts{false};
+    const DexType* class_under_init{nullptr};
+    Config() {}
   };
 
   struct Stats {
@@ -40,7 +40,7 @@ class Transform final {
     }
   };
 
-  explicit Transform(const Config& config) : m_config(config) {}
+  explicit Transform(Config config = Config()) : m_config(config) {}
 
   Stats apply(const intraprocedural::FixpointIterator&,
               const WholeProgramState&,
@@ -60,14 +60,61 @@ class Transform final {
 
   void replace_with_const(const ConstantEnvironment&, IRList::iterator);
 
+  void eliminate_redundant_sput(const ConstantEnvironment&,
+                                const WholeProgramState& wps,
+                                IRList::iterator);
+
   void eliminate_dead_branch(const intraprocedural::FixpointIterator&,
                              const ConstantEnvironment&,
                              cfg::Block*);
 
   const Config m_config;
-  std::vector<std::pair<IRInstruction*, IRInstruction*>> m_replacements;
+  std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
+      m_replacements;
   std::vector<IRList::iterator> m_deletes;
   Stats m_stats;
+};
+
+/*
+ * Generates an appropriate const-* instruction for a given ConstantValue.
+ */
+class value_to_instruction_visitor final
+    : public boost::static_visitor<std::vector<IRInstruction*>> {
+ public:
+  value_to_instruction_visitor(const IRInstruction* original)
+      : m_original(original) {}
+
+  std::vector<IRInstruction*> operator()(
+      const SignedConstantDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return {};
+    }
+    IRInstruction* insn = new IRInstruction(
+        m_original->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
+    insn->set_literal(*cst);
+    insn->set_dest(m_original->dest());
+    return {insn};
+  }
+
+  std::vector<IRInstruction*> operator()(const StringDomain& dom) const {
+    auto cst = dom.get_constant();
+    if (!cst) {
+      return {};
+    }
+    IRInstruction* insn = new IRInstruction(OPCODE_CONST_STRING);
+    insn->set_string(const_cast<DexString*>(*cst));
+    return {insn, (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                      ->set_dest(m_original->dest())};
+  }
+
+  template <typename Domain>
+  std::vector<IRInstruction*> operator()(const Domain& dom) const {
+    return {};
+  }
+
+ private:
+  const IRInstruction* m_original;
 };
 
 } // namespace constant_propagation

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -101,6 +99,10 @@ class DexString {
 
   static DexString* get_string(const char* nstr) {
     return get_string(nstr, (uint32_t)strlen(nstr));
+  }
+
+  static DexString* get_string(const std::string &str) {
+    return get_string(str.c_str(), (uint32_t)strlen(str.c_str()));
   }
 
  public:
@@ -203,6 +205,10 @@ class DexType {
     return get_type(DexString::get_string(type_string));
   }
 
+  static DexType* get_type(const std::string &str) {
+    return get_type(DexString::get_string(str));
+  }
+
   static DexType* get_type(const char* type_string, int utfsize) {
     return get_type(DexString::get_string(type_string, utfsize));
   }
@@ -214,6 +220,7 @@ class DexType {
 
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
+  const std::string& str() const { return get_name()->str(); }
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -268,6 +275,7 @@ class DexFieldRef {
    DexType* get_class() const { return m_spec.cls; }
    DexString* get_name() const { return m_spec.name; }
    const char* c_str() const { return get_name()->c_str(); }
+   const std::string& str() const { return get_name()->str(); }
    DexType* get_type() const { return m_spec.type; }
 
    void gather_types_shallow(std::vector<DexType*>& ltype) const;
@@ -382,8 +390,7 @@ class DexField : public DexFieldRef {
       return;
     }
     always_assert_log(false, "attach_annotation_set failed for field %s.%s\n",
-                      m_spec.cls->get_name()->c_str(),
-                      m_spec.name->c_str());
+                      m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -615,11 +622,19 @@ class DexDebugItem {
   int encode(DexOutputIdx* dodx,
              PositionMapper* pos_mapper,
              uint8_t* output,
-             std::vector<DebugLineItem>* line_info);
+             uint32_t line_start,
+             const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
 };
+
+std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
+    DexDebugItem* debugitem,
+    DexOutputIdx* dodx,
+    PositionMapper* pos_mapper,
+    uint32_t* line_start,
+    std::vector<DebugLineItem>* line_info);
 
 typedef std::vector<std::pair<DexType*, uint32_t>> DexCatches;
 
@@ -763,6 +778,7 @@ class DexMethodRef {
    DexType* get_class() const { return m_spec.cls; }
    DexString* get_name() const { return m_spec.name; }
    const char* c_str() const { return get_name()->c_str(); }
+   const std::string& str() const { return get_name()->str(); }
    DexProto* get_proto() const { return m_spec.proto; }
 
    void gather_types_shallow(std::vector<DexType*>& ltype) const;
@@ -860,6 +876,25 @@ class DexMethod : public DexMethodRef {
     return g_redex->get_method(type, name, proto);
   }
 
+  static DexString* get_noncolliding_name(DexType* type,
+                                          DexString* name,
+                                          DexProto* proto) {
+    if (!DexMethod::get_method(type, name, proto)) {
+      return name;
+    }
+    DexString* res = DexString::make_string(name->c_str());
+    uint32_t i = 0;
+    while (true) {
+      auto temp =
+          DexString::make_string(res->str() + "r$" + std::to_string(i++));
+      if (!DexMethod::get_method(type, temp, proto)) {
+        res = temp;
+        break;
+      }
+    }
+    return res;
+  }
+
  public:
   const DexAnnotationSet* get_anno_set() const { return m_anno; }
   DexAnnotationSet* get_anno_set() { return m_anno; }
@@ -887,20 +922,11 @@ class DexMethod : public DexMethodRef {
     return m_deobfuscated_name;
   }
 
-  /** return just the name of the method */
-  std::string get_simple_deobfuscated_name() const {
-    auto full_name = get_deobfuscated_name();
-    if (full_name.empty()) {
-      // This comes up for redex-created methods
-      return std::string(c_str());
-    }
-    auto dot_pos = full_name.find(".");
-    auto colon_pos = full_name.find(":");
-    if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
-      return full_name;
-    }
-    return full_name.substr(dot_pos + 1, colon_pos-dot_pos - 1);
-  }
+  // Return just the name of the method.
+  std::string get_simple_deobfuscated_name() const;
+
+  // Return a really fully deobfuscated name, even for a generated method.
+  std::string get_fully_deobfuscated_name() const;
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,
@@ -1059,6 +1085,7 @@ class DexClass {
   DexType* get_type() const { return m_self; }
   DexString* get_name() const { return m_self->get_name(); }
   const char* c_str() const { return get_name()->c_str(); }
+  const std::string& str() const { return get_name()->str(); }
   DexTypeList* get_interfaces() const { return m_interfaces; }
   DexString* get_source_file() const { return m_source_file; }
   bool has_class_data() const;

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "DedupBlocksPass.h"
@@ -135,7 +133,7 @@ class DedupBlocksImpl {
         return;
       }
 
-      code.build_cfg(true);
+      code.build_cfg(/* editable */ true);
       auto& cfg = code.cfg();
 
       Duplicates dups = collect_duplicates(cfg);
@@ -287,45 +285,7 @@ class DedupBlocksImpl {
       return false;
     }
 
-    // Deal with a verification error like this
-    //
-    // A: new-instance v0
-    //    add-int v1, v2, v3       (this is here to clarify that A != C)
-    // B: v0 <init>
-    //
-    //    ...
-    //
-    // C: new-instance v0
-    // D: v0 <init>
-    //
-    // B == D. Coalesce!
-    //
-    // A: new-instance v0
-    //    add-int v1, v2, v3
-    // B: v0 <init>
-    //
-    // C: new-instance v0
-    //    goto B
-    //
-    // But the verifier doesn't like this. When it merges v0 on B,
-    // it declares it to be a conflict because they were instantiated
-    // on different lines.
-    // See androidxref.com/6.0.1_r10/xref/art/runtime/verifier/reg_type.cc#684
-    //
-    // It would be impossible to write this in java, but if you tried it would
-    // look like this
-    //
-    // if (someCondition) {
-    //   Foo a;
-    // } else {
-    //   Foo b;
-    // }
-    // (a or b) = new Foo();
-    //
-    // We try to avoid this situation by not considering blocks that call
-    // constructors, but this isn't bulletproof. FIXME
-    if (calls_constructor(block)) {
-      // TODO(T27582908): This could be more precise
+    if (constructs_object_from_another_block(block)) {
       return false;
     }
 
@@ -338,13 +298,67 @@ class DedupBlocksImpl {
     return is_move_result(first_op) || opcode::is_move_result_pseudo(first_op);
   }
 
-  static bool calls_constructor(cfg::Block* block) {
-    for (const auto& mie : InstructionIterable(block)) {
-      if (is_invoke_direct(mie.insn->opcode())) {
-        auto meth =
-            resolve_method(mie.insn->get_method(), MethodSearch::Direct);
-        if (meth != nullptr && is_init(meth)) {
-          return true;
+  // Deal with a verification error like this
+  //
+  // A: new-instance v0
+  //    add-int v1, v2, v3       (this is here to clarify that A != C)
+  // B: v0 <init>
+  //
+  //    ...
+  //
+  // C: new-instance v0
+  // D: v0 <init>
+  //
+  // B == D. Coalesce!
+  //
+  // A: new-instance v0
+  //    add-int v1, v2, v3
+  // B: v0 <init>
+  //
+  // C: new-instance v0
+  //    goto B
+  //
+  // But the verifier doesn't like this. When it merges v0 on B,
+  // it declares it to be a conflict because they were instantiated
+  // on different lines.
+  // See androidxref.com/6.0.1_r10/xref/art/runtime/verifier/reg_type.cc#684
+  //
+  // It would be impossible to write this in java, but if you tried it would
+  // look like this
+  //
+  // if (someCondition) {
+  //   Foo a;
+  // } else {
+  //   Foo b;
+  // }
+  // (a or b) = new Foo();
+  //
+  // We try to avoid this situation by skipping the blocks with uninitalized
+  // objects at the entrance
+  static bool constructs_object_from_another_block(cfg::Block* block) {
+    std::unordered_set<uint16_t> objs;
+
+    const auto& iterable = InstructionIterable(block);
+    for (auto it = iterable.begin(); it != iterable.end(); it++) {
+      if (is_new_instance(it->insn->opcode())) {
+        ++it;
+        if (it == iterable.end()) {
+          break;
+        }
+        always_assert(it->type == MFLOW_OPCODE &&
+                      opcode::is_move_result_pseudo(it->insn->opcode()));
+        objs.insert(it->insn->dest());
+
+      } else if (is_invoke_direct(it->insn->opcode())) {
+        if (is_init(it->insn->get_method())) {
+          auto reg = it->insn->src(0);
+          if (objs.count(reg) == 0) {
+            // Found a constructor call on an object from another block
+            return true;
+          } else {
+            // normal initialization
+            objs.erase(reg);
+          }
         }
       }
     }

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -17,9 +15,9 @@ class DedupBlocksPass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const PassConfig& pc) override {
+  virtual void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> method_black_list_names;
-    pc.get("method_black_list", {}, method_black_list_names);
+    jw.get("method_black_list", {}, method_black_list_names);
     for (std::string name : method_black_list_names) {
       auto meth = DexMethod::get_method(name);
       if (meth == nullptr || !meth->is_def()) continue;

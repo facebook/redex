@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -17,26 +15,38 @@ class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
 
-  virtual void configure_pass(const PassConfig& pc) override {
-    pc.get("analysis_class_name", "", m_analysis_class_name);
-    pc.get("onMethodBegin_name", "", m_onMethodBegin_name);
-    pc.get("num_stats_per_method", 1, m_num_stats_per_method);
-    pc.get("method_index_file_name", "instrument-methods-idx.txt",
-           m_method_index_file_name);
-
-    std::vector<std::string> exclude_list;
-    pc.get("exclude", {}, exclude_list);
-    for (const auto& e : exclude_list) {
-      m_exclude.insert(e);
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("instrumentation_strategy", "", m_options.instrumentation_strategy);
+    jw.get("analysis_class_name", "", m_options.analysis_class_name);
+    jw.get("analysis_method_name", "", m_options.analysis_method_name);
+    std::vector<std::string> list;
+    jw.get("blacklist", {}, list);
+    for (const auto& e : list) {
+      m_options.blacklist.insert(e);
     }
+    jw.get("whitelist", {}, list);
+    for (const auto& e : list) {
+      m_options.whitelist.insert(e);
+    }
+    jw.get("metadata_file_name", "instrument-mapping.txt",
+           m_options.metadata_file_name);
+    jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
+    jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
+  struct Options {
+    std::string instrumentation_strategy;
+    std::string analysis_class_name;
+    std::string analysis_method_name;
+    std::unordered_set<std::string> blacklist;
+    std::unordered_set<std::string> whitelist;
+    std::string metadata_file_name;
+    int64_t num_stats_per_method;
+    bool only_cold_start_class;
+  };
+
  private:
-  std::string m_analysis_class_name;
-  std::string m_onMethodBegin_name;
-  int64_t m_num_stats_per_method;
-  std::string m_method_index_file_name;
-  std::unordered_set<std::string> m_exclude;
+  Options m_options;
 };

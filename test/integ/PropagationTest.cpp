@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 
@@ -81,12 +79,11 @@ TEST(PropagationTest1, localDCE1) {
   };
 
   PassManager manager(passes);
-  Scope external_classes;
   manager.set_testing_mode();
 
   Json::Value conf_obj = Json::nullValue;
   ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, external_classes, dummy_cfg);
+  manager.run_passes(stores, dummy_cfg);
 
   TRACE(DCE, 2, "Code after:\n");
   for(const auto& cls : classes) {

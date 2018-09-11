@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "IRList.h"
@@ -182,6 +180,52 @@ opcode::Branchingness MethodItemEntry::branchingness() const {
   }
 }
 
+MethodItemEntryCloner::MethodItemEntryCloner() {
+  m_entry_map[nullptr] = nullptr;
+  m_pos_map[nullptr] = nullptr;
+}
+
+MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mei) {
+  MethodItemEntry* cloned_mei;
+  auto entry = m_entry_map.find(mei);
+  if (entry != m_entry_map.end()) {
+    return entry->second;
+  }
+  cloned_mei = new MethodItemEntry(*mei);
+  m_entry_map[mei] = cloned_mei;
+  switch (cloned_mei->type) {
+  case MFLOW_TRY:
+    cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
+    cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
+    return cloned_mei;
+  case MFLOW_CATCH:
+    cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
+    cloned_mei->centry->next = clone(cloned_mei->centry->next);
+    return cloned_mei;
+  case MFLOW_OPCODE:
+    cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
+    if (cloned_mei->insn->has_data()) {
+      cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
+    }
+    return cloned_mei;
+  case MFLOW_TARGET:
+    cloned_mei->target = new BranchTarget(*cloned_mei->target);
+    cloned_mei->target->src = clone(cloned_mei->target->src);
+    return cloned_mei;
+  case MFLOW_DEBUG:
+    return cloned_mei;
+  case MFLOW_POSITION:
+    m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
+    cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
+    return cloned_mei;
+  case MFLOW_FALLTHROUGH:
+    return cloned_mei;
+  case MFLOW_DEX_OPCODE:
+    always_assert_log(false, "DexInstructions not expected here");
+  }
+  not_reached();
+}
+
 void IRList::replace_opcode(IRInstruction* to_delete,
                             std::vector<IRInstruction*> replacements) {
   auto it = m_list.begin();
@@ -320,80 +364,6 @@ void IRList::remove_opcode(IRInstruction* insn) {
                     SHOW(insn));
 }
 
-/*
- * Param `insn` should be part of a switch...case statement. Find the case
- * block it is contained within and remove it. Then decrement the case_key of
- * all the other case blocks that are larger than the case_key of the removed
- * block so that the case numbers don't have any gaps and the switch can
- * still be encoded as a packed-switch opcode.
- *
- * We do the removal by removing the MFLOW_TARGET corresponding to that
- * case label. Its contents are dead code which will be removed by LocalDCE
- * later. (We could do it here too, but LocalDCE already knows how to find
- * block boundaries.)
- */
-void IRList::remove_switch_case(IRInstruction* insn) {
-
-  TRACE(MTRANS, 3, "Removing switch case from: %s\n", SHOW(this));
-  // Check if we are inside switch method.
-  const MethodItemEntry* switch_mei {nullptr};
-  for (const auto& mei : InstructionIterable(m_list)) {
-    auto op = mei.insn->opcode();
-    if (opcode::is_load_param(op)) {
-      continue;
-    }
-    assert_log(is_switch(op), " Method is not a switch");
-    switch_mei = &mei;
-    break;
-  }
-  always_assert(switch_mei != nullptr);
-
-  int target_count = 0;
-  for (auto& mei : m_list) {
-    if (mei.type == MFLOW_TARGET && mei.target->type == BRANCH_MULTI) {
-      target_count++;
-    }
-  }
-  assert_log(target_count != 0, " There should be atleast one target");
-  if (target_count == 1) {
-    auto excpt_str = DexString::make_string("Redex switch Exception");
-    std::vector<IRInstruction*> excpt_block;
-    create_runtime_exception_block(excpt_str, excpt_block);
-    insert_after(insn, excpt_block);
-    remove_opcode(insn);
-    return;
-  }
-
-  // Find the starting MULTI Target point to delete.
-  MethodItemEntry* target_mei = nullptr;
-  for (auto miter = m_list.begin(); miter != m_list.end(); miter++) {
-    MethodItemEntry* mentry = &*miter;
-    if (mentry->type == MFLOW_TARGET) {
-      target_mei = mentry;
-    }
-    // Check if insn belongs to the current block.
-    if (mentry->type == MFLOW_OPCODE && mentry->insn == insn) {
-      break;
-    }
-  }
-  always_assert_log(target_mei != nullptr,
-                    "Could not find target for %s in %s",
-                    SHOW(insn),
-                    SHOW(this));
-
-  for (const auto& mie : m_list) {
-    if (mie.type == MFLOW_TARGET) {
-      BranchTarget* bt = mie.target;
-      if (bt->src == switch_mei && bt->case_key > target_mei->target->case_key) {
-        bt->case_key -= 1;
-      }
-    }
-  }
-
-  target_mei->type = MFLOW_FALLTHROUGH;
-  delete target_mei->target;
-}
-
 size_t IRList::sum_opcode_sizes() const {
   size_t size {0};
   for (const auto& mie : m_list) {
@@ -450,7 +420,9 @@ IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
   return std::distance(iterator_to(mie), begin());
 }
 
-bool IRList::structural_equals(const IRList& other) const {
+bool IRList::structural_equals(
+    const IRList& other,
+    const InstructionEquality& instruction_equals) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
@@ -473,7 +445,7 @@ bool IRList::structural_equals(const IRList& other) const {
     }
 
     if (it1->type == MFLOW_OPCODE) {
-      if (*it1->insn != *it2->insn) {
+      if (!instruction_equals(*it1->insn, *it2->insn)) {
         return false;
       }
     } else if (it1->type == MFLOW_TARGET) {

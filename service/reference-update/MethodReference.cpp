@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2018-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "MethodReference.h"
@@ -133,7 +131,7 @@ void patch_callsite(
 
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees) {
-  auto patcher = [&](std::nullptr_t, DexMethod* meth) {
+  auto patcher = [&](DexMethod* meth) {
     CallSites call_sites;
     auto code = meth->get_code();
     if (!code) {
@@ -161,14 +159,13 @@ CallSites collect_call_refs(const Scope& scope,
   };
 
   CallSites call_sites =
-      walk::parallel::reduce_methods<std::nullptr_t, CallSites>(
+      walk::parallel::reduce_methods<CallSites>(
           scope,
           patcher,
           [](CallSites left, CallSites right) {
             left.insert(left.end(), right.begin(), right.end());
             return left;
-          },
-          [](int) { return nullptr; });
+          });
   return call_sites;
 }
 

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -116,6 +114,11 @@ struct MethodBlock {
    * new-instance; instatiate 'type' into dst location.
    */
   void new_instance(DexType* type, Location& dst);
+
+  /**
+   * new-array; instatiate an array 'type' of 'size' into dst location.
+   */
+  void new_array(DexType* type, const Location& size, const Location& dst);
 
   /**
    * throw; throw ex object at Location
@@ -380,7 +383,8 @@ struct MethodCreator {
                 DexString* name,
                 DexProto* proto,
                 DexAccessFlags access,
-                DexAnnotationSet* anno = nullptr);
+                DexAnnotationSet* anno = nullptr,
+                bool with_debug_item = false);
 
   /**
    * Get an existing local.
@@ -493,6 +497,7 @@ struct ClassCreator {
     m_cls->m_source_file = nullptr;
     m_cls->m_anno = nullptr;
     m_cls->m_external = false;
+    m_cls->set_deobfuscated_name(type->get_name()->c_str());
   }
 
   /**

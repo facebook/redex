@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.redexlinemap;
@@ -33,8 +31,8 @@ public class DisabledLineMapTest {
     } catch (Exception e) {
       List<StackTraceElement> trace = Arrays.asList(e.getStackTrace());
       assertThat(TraceUtil.traceToString(trace, 2)).isEqualTo(Arrays.asList(
-       "com.facebook.redexlinemap.DisabledLineMapTest.wrapsThrow(DisabledLineMapTest.java:22)",
-       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:26)"));
+       "com.facebook.redexlinemap.DisabledLineMapTest.wrapsThrow(DisabledLineMapTest.java:20)",
+       "com.facebook.redexlinemap.DisabledLineMapTest.testStackTraceWithoutLineMap(DisabledLineMapTest.java:24)"));
     }
   }
 }

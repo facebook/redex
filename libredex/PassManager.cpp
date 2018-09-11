@@ -1,35 +1,30 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "PassManager.h"
 
 #include <boost/filesystem.hpp>
 #include <cstdio>
-#if defined (__unix__) || (defined (__APPLE__) && defined (__MACH__))
-#include <signal.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
 #include <unordered_set>
 
 #include "ApkManager.h"
+#include "CommandProfiling.h"
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
-#include "InstructionLowering.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
+#include "InstructionLowering.h"
+#include "JemallocUtil.h"
+#include "OptData.h"
 #include "PrintSeeds.h"
-#include "ProguardMatcher.h"
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
@@ -38,13 +33,15 @@
 
 namespace {
 
+const std::string PASS_ORDER_KEY = "pass_order";
+
 std::string get_apk_dir(const Json::Value& config) {
   auto apkdir = config["apk_dir"].asString();
   apkdir.erase(std::remove(apkdir.begin(), apkdir.end(), '"'), apkdir.end());
   return apkdir;
 }
 
-}
+} // namespace
 
 redex::ProguardConfiguration empty_pg_config() {
   redex::ProguardConfiguration pg_config;
@@ -55,17 +52,15 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          bool verify_none_mode,
                          bool is_art_build)
-    : PassManager(passes, empty_pg_config(), config,
-                  verify_none_mode, is_art_build) {
-}
+    : PassManager(
+          passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const redex::ProguardConfiguration& pg_config,
                          const Json::Value& config,
                          bool verify_none_mode,
                          bool is_art_build)
-    : m_config(config),
-      m_apk_mgr(get_apk_dir(config)),
+    : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(pg_config),
@@ -74,15 +69,18 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
       m_art_build(is_art_build) {
   init(config);
   if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
-    std::string pass_name{getenv("PROFILE_PASS")};
     // Resolve the pass in the constructor so that any typos / references to
     // nonexistent passes are caught as early as possible
-    auto pass_it = std::find_if(
-        m_activated_passes.begin(),
-        m_activated_passes.end(),
-        [&pass_name](const Pass* pass) { return pass->name() == pass_name; });
-    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), *pass_it);
-    fprintf(stderr, "Will run profiler for %s\n", pass_name.c_str());
+    auto pass = find_pass(getenv("PROFILE_PASS"));
+    always_assert(pass != nullptr);
+    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), pass);
+    fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
+  }
+  if (getenv("MALLOC_PROFILE_PASS")) {
+    m_malloc_profile_pass = find_pass(getenv("MALLOC_PROFILE_PASS"));
+    always_assert(m_malloc_profile_pass != nullptr);
+    fprintf(stderr, "Will run jemalloc profiler for %s\n",
+            m_malloc_profile_pass->name().c_str());
   }
 }
 
@@ -95,6 +93,26 @@ void PassManager::init(const Json::Value& config) {
   } else {
     // If config isn't set up, run all registered passes.
     m_activated_passes = m_registered_passes;
+  }
+
+  // Count the number of appearances of each pass name.
+  std::unordered_map<const Pass*, size_t> pass_repeats;
+  for (const Pass* pass : m_activated_passes) {
+    ++pass_repeats[pass];
+  }
+
+  // Init m_pass_info
+  std::unordered_map<const Pass*, size_t> pass_counters;
+  m_pass_info.resize(m_activated_passes.size());
+  for (size_t i = 0; i < m_activated_passes.size(); ++i) {
+    Pass* pass = m_activated_passes[i];
+    const size_t count = pass_counters[pass]++;
+    m_pass_info[i].pass = pass;
+    m_pass_info[i].order = i;
+    m_pass_info[i].repeat = count;
+    m_pass_info[i].total_repeat = pass_repeats.at(pass);
+    m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
+    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
   }
 }
 
@@ -114,67 +132,19 @@ void PassManager::run_type_checker(const Scope& scope,
     checker.run();
     if (checker.fail()) {
       std::string msg = checker.what();
-      fprintf(
-          stderr, "ABORT! Inconsistency found in Dex code. %s\n", msg.c_str());
-      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code. %s\n",
+              msg.c_str());
+      fprintf(stderr, "Code: %s\n%s\n", SHOW(dex_method),
+              SHOW(dex_method->get_code()));
       exit(EXIT_FAILURE);
     }
   });
 }
 
-const std::string PASS_ORDER_KEY = "pass_order";
-
-/*
- * Appends the PID of the current process to :cmd and invokes it.
- */
-pid_t spawn_profiler(const std::string& cmd) {
-#ifdef _POSIX_VERSION
-  auto parent = getpid();
-  auto child = fork();
-  if (child == -1) {
-    always_assert_log(false, "Failed to fork");
-    not_reached();
-  } else if (child != 0) {
-    return child;
-  } else {
-    std::ostringstream ss;
-    ss << cmd << " " << parent;
-    auto full_cmd = ss.str();
-    execl("/bin/sh", "/bin/sh", "-c", full_cmd.c_str(), nullptr);
-    always_assert_log(false, "exec of profiler command failed");
-    not_reached();
-  }
-#else
-  fprintf(stderr, "spawn_profiler() is a no-op");
-  return 0;
-#endif
-}
-
-pid_t kill_and_wait(pid_t pid, int sig) {
-#ifdef _POSIX_VERSION
-  kill(pid, sig);
-  return waitpid(pid, nullptr, 0);
-#else
-  fprintf(stderr, "kill_and_wait() is a no-op");
-  return 0;
-#endif
-}
-
-void PassManager::run_passes(DexStoresVector& stores,
-                             const Scope& external_classes,
-                             ConfigFiles& cfg) {
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
-  {
-    Timer t("Initializing reachable classes");
-    init_reachable_classes(
-        scope, m_config, m_pg_config, cfg.get_no_optimizations_annos());
-  }
-  {
-    Timer t("Processing proguard rules");
-    process_proguard_rules(
-        cfg.get_proguard_map(), scope, external_classes, &m_pg_config);
-  }
+
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {
     std::string seed_filename = seeds_output_file;
@@ -191,42 +161,33 @@ void PassManager::run_passes(DexStoresVector& stores,
     std::ofstream incoming(cfg.get_printseeds() + ".incoming");
     redex::print_classes(incoming, cfg.get_proguard_map(), scope);
     std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");
-    redex::print_seeds(
-        shrinking_file, cfg.get_proguard_map(), scope, true, false);
+    redex::print_seeds(shrinking_file, cfg.get_proguard_map(), scope, true,
+                       false);
     std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(
-        obfuscation_file, cfg.get_proguard_map(), scope, false, true);
+    redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false,
+                       true);
   }
 
-  // Count the number of appearances of each pass name.
-  const auto pass_repeats = [&]() {
-    std::unordered_map<const Pass*, size_t> pass_repeats;
-    for (const auto& pass : m_activated_passes) {
-      ++pass_repeats[pass];
-    }
-    return pass_repeats;
-  }();
+  // Enable opt decision logging if specified in config.
+  const Json::Value& opt_decisions_args =
+      cfg.get_json_config()["opt_decisions"];
+  if (opt_decisions_args.get("enable_logs", false).asBool()) {
+    opt_metadata::OptDataMapper::get_instance().enable_logs();
+  }
 
-  std::unordered_map<const Pass*, size_t> pass_counters;
-  m_pass_info.resize(m_activated_passes.size());
+  // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
-    const size_t count = pass_counters[pass]++;
-    m_pass_info[i].pass = pass;
-    m_pass_info[i].order = i;
-    m_pass_info[i].repeat = count;
-    m_pass_info[i].total_repeat = pass_repeats.at(pass);
-    m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
-    m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
     m_current_pass_info = &m_pass_info[i];
     pass->eval_pass(stores, cfg, *this);
     m_current_pass_info = nullptr;
   }
 
   // Retrieve the type checker's settings.
-  auto type_checker_args = m_config["ir_type_checker"];
+  const Json::Value& type_checker_args =
+      cfg.get_json_config()["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
   // When verify_none is enabled, it's OK to have polymorphic constants.
@@ -245,17 +206,16 @@ void PassManager::run_passes(DexStoresVector& stores,
     TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
-    bool run_profiler{m_profiler_info && m_profiler_info->pass == pass};
-    pid_t profiler{-1};
-    if (run_profiler) {
-      fprintf(stderr, "Running profiler...\n");
-      profiler = spawn_profiler(m_profiler_info->command);
+
+    {
+      ScopedCommandProfiling cmd_prof(
+          m_profiler_info && m_profiler_info->pass == pass
+              ? boost::make_optional(m_profiler_info->command)
+              : boost::none);
+      jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
+      pass->run_pass(stores, cfg, *this);
     }
-    pass->run_pass(stores, cfg, *this);
-    if (run_profiler) {
-      fprintf(stderr, "Waiting for profiler to finish...\n");
-      kill_and_wait(profiler, SIGINT);
-    }
+
     if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
       scope = build_class_scope(it);
       run_type_checker(scope, polymorphic_constants, verify_moves);
@@ -289,11 +249,19 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->configure_pass(PassConfig(cfg[name_str]));
+      pass->configure_pass(JsonWrapper(cfg[name_str]));
       return;
     }
   }
   always_assert_log(false, "No pass named %s!", name);
+}
+
+Pass* PassManager::find_pass(const std::string& pass_name) const {
+  auto pass_it = std::find_if(
+      m_activated_passes.begin(),
+      m_activated_passes.end(),
+      [&pass_name](const Pass* pass) { return pass->name() == pass_name; });
+  return pass_it != m_activated_passes.end() ? *pass_it : nullptr;
 }
 
 void PassManager::incr_metric(const std::string& key, int value) {

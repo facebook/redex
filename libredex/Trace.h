@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -19,6 +17,8 @@
   TM(ADD_REDEX_TXT)      \
   TM(ACCESS)             \
   TM(ANNO)               \
+  TM(ARGS)               \
+  TM(BBPROFILE)          \
   TM(BIND)               \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
@@ -32,6 +32,7 @@
   TM(DBGSTRIP)           \
   TM(DC)                 \
   TM(DCE)                \
+  TM(DEAD_CODE)          \
   TM(DEDUP_BLOCKS)       \
   TM(DEDUP_RES)          \
   TM(DELINIT)            \
@@ -53,7 +54,7 @@
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(MMINL)              \
-  TM(MMODE)               \
+  TM(MMODE)              \
   TM(MORTIROLO)          \
   TM(MTRANS)             \
   TM(OBFUSCATE)          \
@@ -65,6 +66,7 @@
   TM(PM)                 \
   TM(PTA)                \
   TM(QUICK)              \
+  TM(REDEX)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REFU)               \
@@ -81,6 +83,8 @@
   TM(SINK)               \
   TM(SINL)               \
   TM(SPLIT_RES)          \
+  TM(STATIC_RELO)        \
+  TM(STR_CAT)            \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \
   TM(SYNT)               \
@@ -95,13 +99,14 @@
   TM(SWIN)               \
   TM(SWCL)               \
   TM(SW)                 \
+  TM(IFCS_ANALYSIS)      \
   TM(UNREF_INTF)
 
 enum TraceModule : int {
 #define TM(x) x,
-TMS
+  TMS
 #undef TM
-  N_TRACE_MODULES,
+      N_TRACE_MODULES,
 };
 
 bool traceEnabled(TraceModule module, int level);

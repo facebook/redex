@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "RenameClassesV2.h"
@@ -27,7 +25,7 @@
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (62)
 #define BASE MAX_IDENT_CHAR
-#define MAX_IDENT (MAX_IDENT_CHAR * MAX_IDENT_CHAR * MAX_IDENT_CHAR)
+#define MAX_CLASS_NAME_LENGTH 6
 
 static const char* METRIC_CLASSES_IN_SCOPE = "num_classes_in_scope";
 static const char* METRIC_RENAMED_CLASSES = "**num_renamed**";
@@ -132,22 +130,18 @@ static char getident(int num) {
 }
 
 void get_next_ident(char *out, int num) {
-  int low = num;
-  int mid = (num / BASE);
-  int top = (mid / BASE);
-  always_assert_log(num <= MAX_IDENT,
-                    "Bailing, Ident %d, greater than maximum\n", num);
-  if (top) {
-    *out++ = getident(top);
-    low -= (top * BASE * BASE);
+  char* ptr = out;
+  while (num) {
+    *ptr++ = getident(num % BASE);
+    num /= BASE;
   }
-  if (mid) {
-    mid -= (top * BASE);
-    *out++ = getident(mid);
-    low -= (mid * BASE);
+  *ptr-- = '\0';
+  // reverse
+  while (out < ptr) {
+    std::swap(*out, *ptr);
+    out++;
+    ptr--;
   }
-  *out++ = getident(low);
-  *out++ = '\0';
 }
 
 static int s_base_strings_size = 0;
@@ -193,7 +187,7 @@ RenameClassesPassV2::build_dont_rename_resources(
   if (m_apk_dir.size()) {
     // Classnames present in native libraries (lib/*/*.so)
     for (std::string classname : get_native_classes(m_apk_dir)) {
-      auto type = DexType::get_type(classname.c_str());
+      auto type = DexType::get_type(classname);
       if (type == nullptr) continue;
       TRACE(RENAME, 4, "native_lib: %s\n", classname.c_str());
       dont_rename_resources.insert(classname);
@@ -215,7 +209,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
         IRInstruction* const_string = insns[0];
         auto classname = JavaNameUtil::external_to_internal(
           const_string->get_string()->c_str());
-        if (DexType::get_type(classname.c_str())) {
+        if (DexType::get_type(classname)) {
           TRACE(RENAME, 4,
                 "Found const-string of: %s, marking %s unrenameable\n",
                 const_string->get_string()->c_str(), classname.c_str());
@@ -255,7 +249,7 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           if (callee == nullptr || !callee->is_concrete()) return;
           auto callee_method_cls = callee->get_class();
           if (refl_map.count(callee_method_cls) == 0) return;
-          std::string classname(m->get_class()->get_name()->c_str());
+          std::string classname = m->get_class()->get_name()->str();
           TRACE(RENAME, 4,
             "Found %s with known reflection usage. marking reachable\n",
             classname.c_str());
@@ -271,7 +265,7 @@ std::unordered_set<std::string> RenameClassesPassV2::build_dont_rename_canaries(
   // Gather canaries
   for (auto clazz : scope) {
     if (strstr(clazz->get_name()->c_str(), "/Canary")) {
-      dont_rename_canaries.insert(std::string(clazz->get_name()->c_str()));
+      dont_rename_canaries.insert(clazz->get_name()->str());
     }
   }
   return dont_rename_canaries;
@@ -382,8 +376,8 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     std::replace(name.begin(), name.end(), '$', '_');
     std::string flatbuf_sername = name + "Serializer;";
 
-    DexType* ser = DexType::get_type(sername.c_str());
-    DexType* flatbuf_ser = DexType::get_type(flatbuf_sername.c_str());
+    DexType* ser = DexType::get_type(sername);
+    DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
     bool has_ser_finder = false;
 
     if (ser || flatbuf_ser) {
@@ -459,7 +453,7 @@ std::unordered_set<const DexType*>
 RenameClassesPassV2::build_dont_rename_annotated() {
   std::unordered_set<const DexType*> dont_rename_annotated;
   for (const auto& annotation : m_dont_rename_annotated) {
-    DexType* anno = DexType::get_type(annotation.c_str());
+    DexType* anno = DexType::get_type(annotation);
     if (anno) {
       dont_rename_annotated.insert(anno);
     }
@@ -565,7 +559,7 @@ void RenameClassesPassV2::eval_classes(
     for (const auto& anno : dont_rename_annotated) {
       if (has_anno(clazz, anno)) {
         m_dont_rename_reasons[clazz] =
-            { DontRenameReasonCode::Annotated, std::string(anno->c_str()) };
+            { DontRenameReasonCode::Annotated, anno->str() };
         annotated = true;
         break;
       }
@@ -707,9 +701,9 @@ void RenameClassesPassV2::eval_classes_post(
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
                                     ConfigFiles& cfg,
                                     PassManager& mgr) {
-  const Json::Value& config = mgr.get_config();
-  PassConfig pc(config);
-  pc.get("apk_dir", "", m_apk_dir);
+  auto json = cfg.get_json_config();
+  json.get("apk_dir", "", m_apk_dir);
+  TRACE(RENAME, 3, "APK Dir: %s\n", m_apk_dir.c_str());
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes(scope, class_hierarchy, cfg, m_rename_annotations, mgr);
@@ -750,7 +744,7 @@ void RenameClassesPassV2::rename_classes(
 
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
-    char clzname[4];
+    char clzname[MAX_CLASS_NAME_LENGTH + 1];
     const char* padding = "0000000000000";
     get_next_ident(clzname, s_sequence);
     // The X helps our hacked Dalvik classloader recognize that a
@@ -780,9 +774,9 @@ void RenameClassesPassV2::rename_classes(
 
     TRACE(RENAME, 2, "'%s' ->  %s'\n", oldname->c_str(), descriptor);
     while (1) {
-     std::string arrayop("[");
+      std::string arrayop("[");
       arrayop += oldname->c_str();
-      oldname = DexString::get_string(arrayop.c_str());
+      oldname = DexString::get_string(arrayop);
       if (oldname == nullptr) {
         break;
       }
@@ -792,7 +786,7 @@ void RenameClassesPassV2::rename_classes(
       }
       std::string newarraytype("[");
       newarraytype += dstring->c_str();
-      dstring = DexString::make_string(newarraytype.c_str());
+      dstring = DexString::make_string(newarraytype);
 
       aliases.add_alias(oldname, dstring);
       arraytype->assign_name_alias(dstring);
@@ -826,7 +820,7 @@ void RenameClassesPassV2::rename_classes(
           // make_string here because the external form of the name may not be
           // present in the string table
           alias_to = DexString::make_string(
-            JavaNameUtil::internal_to_external(std::string(alias_to->c_str())));
+            JavaNameUtil::internal_to_external(alias_to->str()));
         } else if (aliases.has(str)) {
           alias_from = str;
           alias_to = aliases.at(str);
@@ -950,6 +944,9 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
+
+  always_assert_log(scope.size() < std::pow(BASE, MAX_CLASS_NAME_LENGTH),
+                    "scope size %uz too large", scope.size());
   int total_classes = scope.size();
 
   s_base_strings_size = 0;
@@ -957,14 +954,14 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   s_sequence = 0;
   // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
   s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
+  TRACE(RENAME, 1,
+        "Total classes in scope for renaming: %d chosen padding: %d\n",
+        total_classes, s_padding);
 
   rename_classes(scope, cfg, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
-  TRACE(RENAME, 1,
-      "Total classes in scope for renaming: %d chosen padding: %d\n",
-      total_classes, s_padding);
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes \n",
       s_base_strings_size, s_ren_strings_size,
       s_base_strings_size - s_ren_strings_size);

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2017-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "MethodDevirtualizer.h"
@@ -56,8 +54,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
                     const std::unordered_set<DexMethod*>& target_methods,
                     DevirtualizerMetrics& metrics,
                     bool drop_this = false) {
-  const auto fixer = [&target_methods, drop_this](std::nullptr_t,
-                                                  DexMethod* m) -> CallCounter {
+  const auto fixer = [&target_methods, drop_this](DexMethod* m) -> CallCounter {
     CallCounter call_counter;
     IRCode* code = m->get_code();
     if (code == nullptr) {
@@ -92,7 +89,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
   };
 
   CallCounter call_counter =
-      walk::parallel::reduce_methods<std::nullptr_t, CallCounter, Scope>(
+      walk::parallel::reduce_methods<CallCounter, Scope>(
           scope,
           fixer,
           [](CallCounter a, CallCounter b) -> CallCounter {
@@ -100,8 +97,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
             a.supers += b.supers;
             a.directs += b.directs;
             return a;
-          },
-          [](int) { return nullptr; });
+          });
 
   metrics.num_virtual_calls += call_counter.virtuals;
   metrics.num_super_calls += call_counter.supers;

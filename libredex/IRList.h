@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -47,6 +45,8 @@ struct CatchEntry {
  * of values matching a switch case.
  */
 using SwitchIndices = std::set<int>;
+
+using InstructionEquality = std::function<bool(const IRInstruction&, const IRInstruction&)>;
 
 /*
  * Multi is where an opcode encodes more than
@@ -167,6 +167,18 @@ struct MethodItemEntry {
   opcode::Branchingness branchingness() const;
 };
 
+class MethodItemEntryCloner {
+  // We need a map of MethodItemEntry we have created because a branch
+  // points to another MethodItemEntry which may have been created or not
+  std::unordered_map<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
+  // for remapping the parent position pointers
+  std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+
+ public:
+  MethodItemEntryCloner();
+  MethodItemEntry* clone(const MethodItemEntry* mei);
+};
+
 using MethodItemMemberListOption =
     boost::intrusive::member_hook<MethodItemEntry,
                                   boost::intrusive::list_member_hook<>,
@@ -230,7 +242,9 @@ class IRList {
    */
   boost::sub_range<IRList> get_param_instructions();
 
-  bool structural_equals(const IRList& other) const;
+  bool structural_equals(
+      const IRList& other,
+      const InstructionEquality& instruction_equals) const;
 
   /* Passes memory ownership of "mie" to callee. */
   void push_back(MethodItemEntry& mie) { m_list.push_back(mie); }
@@ -282,9 +296,6 @@ class IRList {
    * remove both that instruction and the move-result-pseudo that follows.
    */
   void remove_opcode(const IRList::iterator& it);
-
-  /* This method will delete the switch case where insn resides. */
-  void remove_switch_case(IRInstruction* insn);
 
   /*
    * Returns an estimated of the number of 2-byte code units needed to encode

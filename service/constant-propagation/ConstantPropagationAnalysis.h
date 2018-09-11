@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -197,6 +195,82 @@ class BoxedBooleanAnalyzer final
 /*
  * Utility methods.
  */
+
+/*
+ * runtime_equals_visitor and runtime_leq_visitor are handling different
+ * notions of equality / order than AbstractDomain::equals() and
+ * AbstractDomain::leq(). The former return true if they can prove that their
+ * respective relations hold for a runtime comparison (e.g. from an if-eq or
+ * packed-switch instruction). In contrast, AbstractDomain::equals() will
+ * return true for two domains representing integers > 0, even though their
+ * corresponding runtime values may be different integers.
+ */
+class runtime_equals_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    auto cst_left = scd_left.get_constant();
+    auto cst_right = scd_right.get_constant();
+    if (!(cst_left && cst_right)) {
+      return false;
+    }
+    return *cst_left == *cst_right;
+  }
+
+  // SingletonObjectDomain and StringDomains are equal iff their respective
+  // constants are equal.
+  template <
+      typename Constant,
+      typename = typename std::enable_if_t<
+          template_util::contains<Constant, const DexField*, const DexString*>::
+              value>>
+  bool operator()(const sparta::ConstantAbstractDomain<Constant>& d1,
+                  const sparta::ConstantAbstractDomain<Constant>& d2) const {
+    if (!(d1.is_value() && d2.is_value())) {
+      return false;
+    }
+    return *d1.get_constant() == *d2.get_constant();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+class runtime_leq_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() <= scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
+
+/*
+ * Note: We cannot replace the runtime_lt_visitor by combining the
+ * runtime_leq_visitor and the negation of the runtime_equals_visitor. Suppose
+ * the runtime_leq_visitor returns true and the runtime_equals_visitor returns
+ * false. That means that the LHS must be less than or equal to the RHS, and
+ * that they *might* not be equal. Since they may still be equal, we cannot
+ * conclude that the LHS must be less than the RHS.
+ */
+class runtime_lt_visitor : public boost::static_visitor<bool> {
+ public:
+  bool operator()(const SignedConstantDomain& scd_left,
+                  const SignedConstantDomain& scd_right) const {
+    return scd_left.max_element() < scd_right.min_element();
+  }
+
+  template <typename Domain, typename OtherDomain>
+  bool operator()(const Domain& d1, const OtherDomain& d2) const {
+    return false;
+  }
+};
 
 /*
  * Analyze the invoke instruction given by :insn by running an abstract

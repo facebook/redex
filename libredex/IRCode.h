@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #pragma once
@@ -95,7 +93,12 @@ class IRCode {
   ~IRCode();
 
   bool structural_equals(const IRCode& other) {
-    return m_ir_list->structural_equals(*other.m_ir_list);
+    return m_ir_list->structural_equals(*other.m_ir_list, std::equal_to<const IRInstruction&>());
+  }
+
+  bool structural_equals(const IRCode& other,
+                         const InstructionEquality& instruction_equals) {
+    return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 
   uint16_t get_registers_size() const { return m_registers_size; }
@@ -157,7 +160,7 @@ class IRCode {
   //    MethodItemEntries taken from IRCode)
   // Changes to an editable CFG are reflected in IRCode after `clear_cfg` is
   // called
-  void build_cfg(bool editable = false);
+  void build_cfg(bool editable = true);
 
   // if the cfg was editable, linearize it back into m_ir_list
   void clear_cfg();
@@ -249,11 +252,6 @@ class IRCode {
    */
   void remove_opcode(const IRList::iterator& it) {
     m_ir_list->remove_opcode(it);
-  }
-
-  /* This method will delete the switch case where insn resides. */
-  void remove_switch_case(IRInstruction* insn) {
-    m_ir_list->remove_switch_case(insn);
   }
 
   /*

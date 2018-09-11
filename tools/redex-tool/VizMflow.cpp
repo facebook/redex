@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <queue>
@@ -27,7 +25,7 @@ void dump_viz(
       [&](DexMethod* meth, IRCode& code) {
         if (cls_filter && !strstr(meth->get_class()->c_str(), cls_filter)) return;
         if (meth_filter && !strstr(meth->c_str(), meth_filter)) return;
-        code.build_cfg();
+        code.build_cfg(/* editable */ false);
         const auto& blocks = code.cfg().blocks();
         fprintf(stderr, "digraph \"%s\" {\n", SHOW(meth));
         for (const auto& block : blocks) {

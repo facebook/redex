@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2016-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include "UnterfaceOpt.h"
@@ -81,8 +79,7 @@ DexProto* get_updated_proto(DexProto* proto, DexType* impl, DexType* untf) {
 
 // TODO: come up with a good story for names
 DexString* get_name(DexString* base) {
-  auto name =
-      std::string(base->c_str()).substr(0, strlen(base->c_str()) - 1);
+  auto name = base->str().substr(0, strlen(base->c_str()) - 1);
   return DexString::make_string((name + "__untf__;").c_str());
 }
 
@@ -387,8 +384,8 @@ void move_methods(Unterface& unterface) {
     for (auto vmeth : impl->get_vmethods()) {
       // create the static method on the unterface class to host the
       // vmethod original code
-      std::string smeth_name = vmeth->get_name()->c_str();
-      smeth_name = smeth_name + std::to_string(i) + std::to_string(j++);
+      const std::string& smeth_name = vmeth->get_name()->str() +
+                                      std::to_string(i) + std::to_string(j++);
       auto name = DexString::make_string(smeth_name.c_str());
       auto smeth = MethodCreator::make_static_from(name,
           get_updated_proto(vmeth->get_proto(), impl->get_type(),
