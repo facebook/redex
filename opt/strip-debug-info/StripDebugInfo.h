@@ -28,6 +28,7 @@ class StripDebugInfoPass : public Pass {
     jw.get("drop_all_dbg_info_if_empty", false, m_drop_all_dbg_info_if_empty);
     jw.get("drop_synth_aggressive", false, m_drop_synth_aggressive);
     jw.get("drop_synth_conservative", false, m_drop_synth_conservative);
+    jw.get("drop_debug_param_names", false, m_drop_debug_param_names);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -67,6 +68,7 @@ class StripDebugInfoPass : public Pass {
   bool m_drop_all_dbg_info_if_empty = false;
   bool m_drop_synth_aggressive = false;
   bool m_drop_synth_conservative = false;
+  bool m_drop_debug_param_names = false;
   int m_num_matches = 0;
   int m_num_pos_dropped = 0;
   int m_num_var_dropped = 0;

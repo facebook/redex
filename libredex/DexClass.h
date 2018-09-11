@@ -615,7 +615,10 @@ class DexDebugItem {
   }
   uint32_t get_line_start() const;
   std::vector<DexString*>& get_param_names() { return m_param_names; }
-  void remove_parameter_names() { m_param_names.clear(); };
+  void remove_parameter_names() { m_param_names.clear(); }
+  void nullify_parameter_names() {
+    std::fill(m_param_names.begin(), m_param_names.end(), nullptr);
+  }
   void bind_positions(DexMethod* method, DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
