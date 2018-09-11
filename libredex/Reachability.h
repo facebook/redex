@@ -12,7 +12,9 @@
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
+#include "MethodOverrideGraph.h"
 #include "Pass.h"
+#include "WorkQueue.h"
 
 namespace reachability {
 
@@ -203,6 +205,156 @@ class ReachableObjects {
   ConcurrentSet<const DexFieldRef*> m_marked_fields;
   ConcurrentSet<const DexMethodRef*> m_marked_methods;
   ReachableObjectGraph m_retainers_of;
+};
+
+struct ConditionallyMarked {
+  ConcurrentSet<const DexField*> fields;
+  ConcurrentSet<const DexMethod*> methods;
+};
+
+struct References {
+  std::vector<DexString*> strings;
+  std::vector<DexType*> types;
+  std::vector<DexFieldRef*> fields;
+  std::vector<DexMethodRef*> methods;
+};
+
+struct Stats {
+  int num_ignore_check_strings;
+};
+
+using MarkWorkQueue = WorkQueue<ReachableObject, Stats*>;
+using MarkWorkerState = WorkerState<ReachableObject, Stats*>;
+
+/*
+ * These helper classes compute reachable objects by a DFS+marking algorithm.
+ *
+ * Conceptually we start at roots, which are defined by -keep rules in the
+ * config file, and perform a depth-first search to find all references.
+ * Elements visited in this manner will be retained, and are found in the
+ * m_marked_* sets.
+ *
+ * -keepclassmembers rules are a bit more complicated, because they require
+ * "conditional" marking: these members are kept only if their containing class
+ * is determined to be kept. The conditional marking logic is also used to
+ * retain (or not) implementations of interface methods. These elements are
+ * placed in the cond_marked_* sets; care must be taken to promote
+ * conditionally marked elements to fully marked.
+ */
+class RootSetMarker {
+ public:
+  RootSetMarker(
+      const method_override_graph::Graph& method_override_graph,
+      bool record_reachability,
+      ConditionallyMarked* cond_marked,
+      ReachableObjects* reachable_objects,
+      ConcurrentSet<ReachableObject, ReachableObjectHash>* root_set)
+      : m_method_override_graph(method_override_graph),
+        m_record_reachability(record_reachability),
+        m_cond_marked(cond_marked),
+        m_reachable_objects(reachable_objects),
+        m_root_set(root_set) {}
+
+  /*
+   * Initializes the root set by marking and pushing nodes onto the work queue.
+   * Also conditionally marks class member seeds.
+   */
+  void mark(const Scope& scope);
+
+ private:
+  void push_seed(const DexClass* cls);
+
+  void push_seed(const DexField* field);
+
+  void push_seed(const DexMethod* method);
+
+  template <class Seed>
+  void record_is_seed(Seed* seed);
+
+  /*
+   * Mark as seeds all methods that override or implement an external method.
+   */
+  void mark_external_method_overriders();
+
+  const method_override_graph::Graph& m_method_override_graph;
+  bool m_record_reachability;
+  ConditionallyMarked* m_cond_marked;
+  ReachableObjects* m_reachable_objects;
+  ConcurrentSet<ReachableObject, ReachableObjectHash>* m_root_set;
+};
+
+class TransitiveClosureMarker {
+ public:
+  TransitiveClosureMarker(
+      const IgnoreSets& ignore_sets,
+      const method_override_graph::Graph& method_override_graph,
+      bool record_reachability,
+      ConditionallyMarked* cond_marked,
+      ReachableObjects* reachable_objects,
+      MarkWorkerState* worker_state)
+      : m_ignore_sets(ignore_sets),
+        m_method_override_graph(method_override_graph),
+        m_record_reachability(record_reachability),
+        m_cond_marked(cond_marked),
+        m_reachable_objects(reachable_objects),
+        m_worker_state(worker_state) {}
+
+  virtual ~TransitiveClosureMarker() = default;
+
+  /*
+   * Marks :obj and pushes its immediately reachable neighbors onto the local
+   * task queue of the current worker.
+   */
+  void visit(const ReachableObject& obj);
+
+  virtual References gather(const DexAnnotation* anno) const;
+
+  virtual References gather(const DexMethod* method) const;
+
+  virtual References gather(const DexField* field) const;
+
+ private:
+  template <class Parent, class InputIt>
+  void push(const Parent* parent, InputIt begin, InputIt end);
+
+  template <class Parent>
+  void push(const Parent* parent, const DexType* type);
+
+  template <class Parent>
+  void push(const Parent* parent, const DexClass* cls);
+
+  template <class Parent>
+  void push(const Parent* parent, const DexFieldRef* field);
+
+  template <class Parent>
+  void push(const Parent* parent, const DexMethodRef* method);
+
+  void push_cond(const DexMethod* method);
+
+  void gather_and_push(DexMethod* meth);
+
+  template <typename T>
+  void gather_and_push(T t);
+
+  template <class Parent>
+  void push_typelike_strings(const Parent* parent,
+                             const std::vector<DexString*>& strings);
+
+  void visit(const DexClass* cls);
+
+  void visit(const DexFieldRef* field);
+
+  void visit(const DexMethodRef* method);
+
+  template <class Parent, class Object>
+  void record_reachability(Parent* parent, Object* object);
+
+  const IgnoreSets& m_ignore_sets;
+  const method_override_graph::Graph& m_method_override_graph;
+  bool m_record_reachability;
+  ConditionallyMarked* m_cond_marked;
+  ReachableObjects* m_reachable_objects;
+  MarkWorkerState* m_worker_state;
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(

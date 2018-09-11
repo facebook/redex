@@ -8,13 +8,11 @@
 #include "Reachability.h"
 
 #include "DexUtil.h"
-#include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Timer.h"
 #include "Walkers.h"
-#include "WorkQueue.h"
 
 using namespace reachability;
 
@@ -56,399 +54,356 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   return nullptr;
 }
 
-struct ConditionallyMarked {
-  ConcurrentSet<const DexField*> fields;
-  ConcurrentSet<const DexMethod*> methods;
-};
-
-struct Stats {
-  int num_ignore_check_strings;
-};
-
-using MarkWorkQueue = WorkQueue<ReachableObject, Stats*>;
-using MarkWorkerState = WorkerState<ReachableObject, Stats*>;
-
-/*
- * These helper classes compute reachable objects by a DFS+marking algorithm.
- *
- * Conceptually we start at roots, which are defined by -keep rules in the
- * config file, and perform a depth-first search to find all references.
- * Elements visited in this manner will be retained, and are found in the
- * m_marked_* sets.
- *
- * -keepclassmembers rules are a bit more complicated, because they require
- * "conditional" marking: these members are kept only if their containing class
- * is determined to be kept. The conditional marking logic is also used to
- * retain (or not) implementations of interface methods. These elements are
- * placed in the cond_marked_* sets; care must be taken to promote
- * conditionally marked elements to fully marked.
- */
-
-class RootSetMarker {
- public:
-  RootSetMarker(
-      const mog::Graph& method_override_graph,
-      bool record_reachability,
-      ConditionallyMarked* cond_marked,
-      ReachableObjects* reachable_objects,
-      ConcurrentSet<ReachableObject, ReachableObjectHash>* root_set)
-      : m_method_override_graph(method_override_graph),
-        m_record_reachability(record_reachability),
-        m_cond_marked(cond_marked),
-        m_reachable_objects(reachable_objects),
-        m_root_set(root_set) {}
-
-  /*
-   * Initializes the root set by marking and pushing nodes onto the work queue.
-   * Also conditionally marks class member seeds.
-   */
-  void mark(const Scope& scope) {
-    walk::parallel::classes(scope, [&](const DexClass* cls) {
-      if (root(cls) || is_canary(cls)) {
-        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
-        push_seed(cls);
-      }
-      for (auto const& f : cls->get_ifields()) {
-        if (root(f) || is_volatile(f)) {
-          TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
-          push_seed(f);
-        }
-      }
-      for (auto const& f : cls->get_sfields()) {
-        if (root(f)) {
-          TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
-          push_seed(f);
-        }
-      }
-      for (auto const& m : cls->get_dmethods()) {
-        if (root(m)) {
-          TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
-          push_seed(m);
-        }
-      }
-      for (auto const& m : cls->get_vmethods()) {
-        if (root(m)) {
-          TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
-          push_seed(m);
-        }
-      }
-    });
-
-    mark_external_method_overriders();
-  }
-
- private:
-  void push_seed(const DexClass* cls) {
-    if (!cls) return;
-    record_is_seed(cls);
-    m_reachable_objects->mark(cls);
-    m_root_set->emplace(cls);
-  }
-
-  void push_seed(const DexField* field) {
-    if (!field) return;
-    record_is_seed(field);
-    m_cond_marked->fields.insert(field);
-  }
-
-  void push_seed(const DexMethod* method) {
-    if (!method) return;
-    record_is_seed(method);
-    m_cond_marked->methods.insert(method);
-  }
-
-  template <class Seed>
-  void record_is_seed(Seed* seed) {
-    if (m_record_reachability) {
-      assert(seed != nullptr);
-      m_reachable_objects->record_is_seed(seed);
-    }
-  }
-
-  /*
-   * Mark as seeds all methods that override or implement an external method.
-   */
-  void mark_external_method_overriders() {
-    std::unordered_set<const DexMethod*> visited;
-    for (auto& pair : m_method_override_graph.nodes()) {
-      auto method = pair.first;
-      if (!method->is_external() || visited.count(method)) {
-        continue;
-      }
-      const auto& overriding_methods =
-          mog::get_overriding_methods(m_method_override_graph, method);
-      for (auto* overriding : overriding_methods) {
-        // Avoid re-visiting methods found in overriding sets since we would
-        // already have conditionally marked all their children.
-        visited.emplace(overriding);
-        if (!overriding->is_external()) {
-          TRACE(REACH, 3, "Visiting seed: %s (implements %s)\n",
-                SHOW(overriding), SHOW(method));
-          push_seed(overriding);
-        }
-      }
-    }
-  }
-
-  const mog::Graph& m_method_override_graph;
-  bool m_record_reachability;
-  ConditionallyMarked* m_cond_marked;
-  ReachableObjects* m_reachable_objects;
-  ConcurrentSet<ReachableObject, ReachableObjectHash>* m_root_set;
-};
-
-class TransitiveClosureMarker {
- public:
-  TransitiveClosureMarker(const IgnoreSets& ignore_sets,
-                          const mog::Graph& method_override_graph,
-                          bool record_reachability,
-                          ConditionallyMarked* cond_marked,
-                          ReachableObjects* reachable_objects,
-                          MarkWorkerState* worker_state)
-      : m_ignore_sets(ignore_sets),
-        m_method_override_graph(method_override_graph),
-        m_record_reachability(record_reachability),
-        m_cond_marked(cond_marked),
-        m_reachable_objects(reachable_objects),
-        m_worker_state(worker_state) {}
-
-  /*
-   * Marks :obj and pushes its immediately reachable neighbors onto the local
-   * task queue of the current worker.
-   */
-  void visit(const ReachableObject& obj) {
-    switch (obj.type) {
-    case ReachableObjectType::CLASS:
-      visit(obj.cls);
-      break;
-    case ReachableObjectType::FIELD:
-      visit(obj.field);
-      break;
-    case ReachableObjectType::METHOD:
-      visit(obj.method);
-      break;
-    case ReachableObjectType::ANNO:
-    case ReachableObjectType::SEED:
-      always_assert_log(false, "Unexpected ReachableObject type");
-      break;
-    }
-  }
-
- private:
-  template <class Parent>
-  void push(const Parent* parent, const DexType* type) {
-    type = get_array_type_or_self(type);
-    push(parent, type_class(type));
-  }
-
-  template <class Parent>
-  void push(const Parent* parent, const DexClass* cls) {
-    // FIXME: Bug! Even if cls is already marked, we need to record its
-    // reachability from parent to cls.
-    if (!cls || m_reachable_objects->marked(cls)) return;
-    record_reachability(parent, cls);
-    m_reachable_objects->mark(cls);
-    m_worker_state->push_task(ReachableObject(cls));
-  }
-
-  template <class Parent>
-  void push(const Parent* parent, const DexFieldRef* field) {
-    if (!field || m_reachable_objects->marked(field)) return;
-    if (field->is_def()) {
-      gather_and_push(static_cast<const DexField*>(field));
-    }
-    record_reachability(parent, field);
-    m_reachable_objects->mark(field);
-    m_worker_state->push_task(ReachableObject(field));
-  }
-
-  template <class Parent>
-  void push(const Parent* parent, const DexMethodRef* method) {
-    if (!method || m_reachable_objects->marked(method)) return;
-    record_reachability(parent, method);
-    m_reachable_objects->mark(method);
-    m_worker_state->push_task(ReachableObject(method));
-  }
-
-  void push_cond(const DexMethod* method) {
-    if (!method || m_reachable_objects->marked(method)) return;
-    TRACE(REACH, 4, "Conditionally marking method: %s\n", SHOW(method));
-    auto clazz = type_class(method->get_class());
-    m_cond_marked->methods.insert(method);
-    // If :clazz has been marked, we cannot count on visit(DexClass*) to move
-    // the conditionally-marked methods into the actually-marked ones -- we have
-    // to do it ourselves. Note that we must do this check after adding :method
-    // to m_cond_marked to avoid a race condition where we add to m_cond_marked
-    // after visit(DexClass*) has finished moving its contents over to
-    // m_reachable_objects.
-    if (m_reachable_objects->marked(clazz)) {
-      push(clazz, method);
-    }
-  }
-
-  void gather_and_push(DexMethod* meth) {
-    auto* type = meth->get_class();
-    auto* cls = type_class(type);
-    bool check_strings = true;
-    if (m_ignore_sets.string_literals.count(type)) {
-      ++m_worker_state->get_data()->num_ignore_check_strings;
-      check_strings = false;
-    }
-    if (cls && check_strings) {
-      for (const auto& ignore_anno_type : m_ignore_sets.string_literal_annos) {
-        if (has_anno(cls, ignore_anno_type)) {
-          ++m_worker_state->get_data()->num_ignore_check_strings;
-          check_strings = false;
-          break;
-        }
-      }
-    }
-    gather_and_push(meth, check_strings);
-  }
-
-  template <typename T>
-  void gather_and_push(T t, bool check_strings = true) {
-    std::vector<DexString*> strings;
-    std::vector<DexType*> types;
-    std::vector<DexFieldRef*> fields;
-    std::vector<DexMethodRef*> methods;
-    t->gather_strings(strings);
-    t->gather_types(types);
-    t->gather_fields(fields);
-    t->gather_methods(methods);
-    if (check_strings) {
-      for (auto const& str : strings) {
-        auto internal = JavaNameUtil::external_to_internal(str->c_str());
-        auto type = DexType::get_type(internal.c_str());
-        if (!type) {
-          continue;
-        }
-        push(t, type);
-      }
-    }
-    for (auto const& type : types) {
-      push(t, type);
-    }
-    for (auto const& field : fields) {
-      push(t, field);
-    }
-    for (auto const& method : methods) {
-      push(t, method);
-    }
-  }
-
-  void visit(const DexClass* cls) {
-    TRACE(REACH, 4, "Visiting class: %s\n", SHOW(cls));
-    for (auto& m : cls->get_dmethods()) {
-      if (is_clinit(m)) {
-        push(cls, m);
-      } else if (is_init(m)) {
-        // Push the parameterless constructor, in case it's constructed via
-        // .class or Class.forName()
-        if (m->get_proto()->get_args()->get_type_list().size() == 0) {
-          push(cls, m);
-        }
-      }
-    }
-    push(cls, type_class(cls->get_super_class()));
-    for (auto const& t : cls->get_interfaces()->get_type_list()) {
-      push(cls, t);
-    }
-    const DexAnnotationSet* annoset = cls->get_anno_set();
-    if (annoset) {
-      for (auto const& anno : annoset->get_annotations()) {
-        if (m_ignore_sets.system_annos.count(anno->type())) {
-          TRACE(REACH,
-                5,
-                "Stop marking from %s by system anno: %s\n",
-                SHOW(cls),
-                SHOW(anno->type()));
-          continue;
-        }
-        record_reachability(cls, anno);
-        gather_and_push(anno);
-      }
-    }
-    for (auto const& m : cls->get_ifields()) {
-      if (m_cond_marked->fields.count(m)) {
-        push(cls, m);
-      }
-    }
-    for (auto const& m : cls->get_sfields()) {
-      if (m_cond_marked->fields.count(m)) {
-        push(cls, m);
-      }
-    }
-    for (auto const& m : cls->get_dmethods()) {
-      if (m_cond_marked->methods.count(m)) {
-        push(cls, m);
-      }
-    }
-    for (auto const& m : cls->get_vmethods()) {
-      if (m_cond_marked->methods.count(m)) {
-        push(cls, m);
-      }
-    }
-  }
-
-  void visit(const DexFieldRef* field) {
-    TRACE(REACH, 4, "Visiting field: %s\n", SHOW(field));
-    if (!field->is_concrete()) {
-      auto const& realfield = resolve_field(
-          field->get_class(), field->get_name(), field->get_type());
-      push(field, realfield);
-    }
-    push(field, field->get_class());
-    push(field, field->get_type());
-  }
-
-  void visit(const DexMethodRef* method) {
-    TRACE(REACH, 4, "Visiting method: %s\n", SHOW(method));
-    auto resolved_method = resolve(method, type_class(method->get_class()));
-    if (resolved_method != nullptr) {
-      TRACE(REACH, 5, "    Resolved to: %s\n", SHOW(resolved_method));
-      push(method, resolved_method);
-      gather_and_push(resolved_method);
-    }
-    push(method, method->get_class());
-    push(method, method->get_proto()->get_rtype());
-    for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
-      push(method, t);
-    }
-    if (!method->is_def()) {
-      return;
-    }
-    auto m = static_cast<const DexMethod*>(method);
-    // If we're keeping an interface or virtual method, we have to keep its
-    // implementations and overriding methods respectively.
-    if (m->is_virtual() || !m->is_concrete()) {
-      const auto& overriding_methods =
-          mog::get_overriding_methods(m_method_override_graph, m);
-      for (auto* overriding : overriding_methods) {
-        push_cond(overriding);
-      }
-    }
-  }
-
-  template <class Parent, class Object>
-  void record_reachability(Parent* parent, Object* object) {
-    if (m_record_reachability) {
-      assert(parent != nullptr && object != nullptr);
-      m_reachable_objects->record_reachability(parent, object);
-    }
-  }
-
-  const IgnoreSets& m_ignore_sets;
-  const mog::Graph& m_method_override_graph;
-  bool m_record_reachability;
-  ConditionallyMarked* m_cond_marked;
-  ReachableObjects* m_reachable_objects;
-  MarkWorkerState* m_worker_state;
-};
-
 } // namespace
 
 namespace reachability {
+
+/*
+ * Initializes the root set by marking and pushing nodes onto the work queue.
+ * Also conditionally marks class member seeds.
+ */
+void RootSetMarker::mark(const Scope& scope) {
+  walk::parallel::classes(scope, [&](const DexClass* cls) {
+    if (root(cls) || is_canary(cls)) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
+      push_seed(cls);
+    }
+    for (auto const& f : cls->get_ifields()) {
+      if (root(f) || is_volatile(f)) {
+        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+        push_seed(f);
+      }
+    }
+    for (auto const& f : cls->get_sfields()) {
+      if (root(f)) {
+        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+        push_seed(f);
+      }
+    }
+    for (auto const& m : cls->get_dmethods()) {
+      if (root(m)) {
+        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+        push_seed(m);
+      }
+    }
+    for (auto const& m : cls->get_vmethods()) {
+      if (root(m)) {
+        TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
+        push_seed(m);
+      }
+    }
+  });
+
+  mark_external_method_overriders();
+}
+
+void RootSetMarker::push_seed(const DexClass* cls) {
+  if (!cls) return;
+  record_is_seed(cls);
+  m_reachable_objects->mark(cls);
+  m_root_set->emplace(cls);
+}
+
+void RootSetMarker::push_seed(const DexField* field) {
+  if (!field) return;
+  record_is_seed(field);
+  m_cond_marked->fields.insert(field);
+}
+
+void RootSetMarker::push_seed(const DexMethod* method) {
+  if (!method) return;
+  record_is_seed(method);
+  m_cond_marked->methods.insert(method);
+}
+
+template <class Seed>
+void RootSetMarker::record_is_seed(Seed* seed) {
+  if (m_record_reachability) {
+    assert(seed != nullptr);
+    m_reachable_objects->record_is_seed(seed);
+  }
+}
+
+/*
+ * Mark as seeds all methods that override or implement an external method.
+ */
+void RootSetMarker::mark_external_method_overriders() {
+  std::unordered_set<const DexMethod*> visited;
+  for (auto& pair : m_method_override_graph.nodes()) {
+    auto method = pair.first;
+    if (!method->is_external() || visited.count(method)) {
+      continue;
+    }
+    const auto& overriding_methods =
+        mog::get_overriding_methods(m_method_override_graph, method);
+    for (auto* overriding : overriding_methods) {
+      // Avoid re-visiting methods found in overriding sets since we would
+      // already have conditionally marked all their children.
+      visited.emplace(overriding);
+      if (!overriding->is_external()) {
+        TRACE(REACH, 3, "Visiting seed: %s (implements %s)\n", SHOW(overriding),
+              SHOW(method));
+        push_seed(overriding);
+      }
+    }
+  }
+}
+
+/*
+ * Marks :obj and pushes its immediately reachable neighbors onto the local
+ * task queue of the current worker.
+ */
+void TransitiveClosureMarker::visit(const ReachableObject& obj) {
+  switch (obj.type) {
+  case ReachableObjectType::CLASS:
+    visit(obj.cls);
+    break;
+  case ReachableObjectType::FIELD:
+    visit(obj.field);
+    break;
+  case ReachableObjectType::METHOD:
+    visit(obj.method);
+    break;
+  case ReachableObjectType::ANNO:
+  case ReachableObjectType::SEED:
+    always_assert_log(false, "Unexpected ReachableObject type");
+    break;
+  }
+}
+
+template <class Parent, class InputIt>
+void TransitiveClosureMarker::push(const Parent* parent,
+                                   InputIt begin,
+                                   InputIt end) {
+  for (auto it = begin; it != end; ++it) {
+    push(parent, *it);
+  }
+}
+
+template <class Parent>
+void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
+  type = get_array_type_or_self(type);
+  push(parent, type_class(type));
+}
+
+template <class Parent>
+void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
+  // FIXME: Bug! Even if cls is already marked, we need to record its
+  // reachability from parent to cls.
+  if (!cls || m_reachable_objects->marked(cls)) return;
+  record_reachability(parent, cls);
+  m_reachable_objects->mark(cls);
+  m_worker_state->push_task(ReachableObject(cls));
+}
+
+template <class Parent>
+void TransitiveClosureMarker::push(const Parent* parent,
+                                   const DexFieldRef* field) {
+  if (!field || m_reachable_objects->marked(field)) return;
+  if (field->is_def()) {
+    gather_and_push(static_cast<const DexField*>(field));
+  }
+  record_reachability(parent, field);
+  m_reachable_objects->mark(field);
+  m_worker_state->push_task(ReachableObject(field));
+}
+
+template <class Parent>
+void TransitiveClosureMarker::push(const Parent* parent,
+                                   const DexMethodRef* method) {
+  if (!method || m_reachable_objects->marked(method)) return;
+  record_reachability(parent, method);
+  m_reachable_objects->mark(method);
+  m_worker_state->push_task(ReachableObject(method));
+}
+
+void TransitiveClosureMarker::push_cond(const DexMethod* method) {
+  if (!method || m_reachable_objects->marked(method)) return;
+  TRACE(REACH, 4, "Conditionally marking method: %s\n", SHOW(method));
+  auto clazz = type_class(method->get_class());
+  m_cond_marked->methods.insert(method);
+  // If :clazz has been marked, we cannot count on visit(DexClass*) to move
+  // the conditionally-marked methods into the actually-marked ones -- we have
+  // to do it ourselves. Note that we must do this check after adding :method
+  // to m_cond_marked to avoid a race condition where we add to m_cond_marked
+  // after visit(DexClass*) has finished moving its contents over to
+  // m_reachable_objects.
+  if (m_reachable_objects->marked(clazz)) {
+    push(clazz, method);
+  }
+}
+
+template <class T>
+static References generic_gather(T t) {
+  References refs;
+  t->gather_strings(refs.strings);
+  t->gather_types(refs.types);
+  t->gather_fields(refs.fields);
+  t->gather_methods(refs.methods);
+  return refs;
+}
+
+References TransitiveClosureMarker::gather(const DexAnnotation* anno) const {
+  return generic_gather(anno);
+}
+
+References TransitiveClosureMarker::gather(const DexMethod* method) const {
+  return generic_gather(method);
+}
+
+References TransitiveClosureMarker::gather(const DexField* field) const {
+  return generic_gather(field);
+}
+
+void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
+  auto* type = meth->get_class();
+  auto* cls = type_class(type);
+  bool check_strings = true;
+  if (m_ignore_sets.string_literals.count(type)) {
+    ++m_worker_state->get_data()->num_ignore_check_strings;
+    check_strings = false;
+  }
+  if (cls && check_strings) {
+    for (const auto& ignore_anno_type : m_ignore_sets.string_literal_annos) {
+      if (has_anno(cls, ignore_anno_type)) {
+        ++m_worker_state->get_data()->num_ignore_check_strings;
+        check_strings = false;
+        break;
+      }
+    }
+  }
+  auto refs = gather(meth);
+  if (check_strings) {
+    push_typelike_strings(meth, refs.strings);
+  }
+  push(meth, refs.types.begin(), refs.types.end());
+  push(meth, refs.fields.begin(), refs.fields.end());
+  push(meth, refs.methods.begin(), refs.methods.end());
+}
+
+template <typename T>
+void TransitiveClosureMarker::gather_and_push(T t) {
+  auto refs = gather(t);
+  push_typelike_strings(t, refs.strings);
+  push(t, refs.types.begin(), refs.types.end());
+  push(t, refs.fields.begin(), refs.fields.end());
+  push(t, refs.methods.begin(), refs.methods.end());
+}
+
+template <class Parent>
+void TransitiveClosureMarker::push_typelike_strings(
+    const Parent* parent, const std::vector<DexString*>& strings) {
+  for (auto const& str : strings) {
+    auto internal = JavaNameUtil::external_to_internal(str->c_str());
+    auto type = DexType::get_type(internal.c_str());
+    if (!type) {
+      continue;
+    }
+    push(parent, type);
+  }
+}
+
+void TransitiveClosureMarker::visit(const DexClass* cls) {
+  TRACE(REACH, 4, "Visiting class: %s\n", SHOW(cls));
+  for (auto& m : cls->get_dmethods()) {
+    if (is_clinit(m)) {
+      push(cls, m);
+    } else if (is_init(m)) {
+      // Push the parameterless constructor, in case it's constructed via
+      // .class or Class.forName()
+      if (m->get_proto()->get_args()->get_type_list().size() == 0) {
+        push(cls, m);
+      }
+    }
+  }
+  push(cls, type_class(cls->get_super_class()));
+  for (auto const& t : cls->get_interfaces()->get_type_list()) {
+    push(cls, t);
+  }
+  const DexAnnotationSet* annoset = cls->get_anno_set();
+  if (annoset) {
+    for (auto const& anno : annoset->get_annotations()) {
+      if (m_ignore_sets.system_annos.count(anno->type())) {
+        TRACE(REACH,
+              5,
+              "Stop marking from %s by system anno: %s\n",
+              SHOW(cls),
+              SHOW(anno->type()));
+        continue;
+      }
+      record_reachability(cls, anno);
+      gather_and_push(anno);
+    }
+  }
+  for (auto const& m : cls->get_ifields()) {
+    if (m_cond_marked->fields.count(m)) {
+      push(cls, m);
+    }
+  }
+  for (auto const& m : cls->get_sfields()) {
+    if (m_cond_marked->fields.count(m)) {
+      push(cls, m);
+    }
+  }
+  for (auto const& m : cls->get_dmethods()) {
+    if (m_cond_marked->methods.count(m)) {
+      push(cls, m);
+    }
+  }
+  for (auto const& m : cls->get_vmethods()) {
+    if (m_cond_marked->methods.count(m)) {
+      push(cls, m);
+    }
+  }
+}
+
+void TransitiveClosureMarker::visit(const DexFieldRef* field) {
+  TRACE(REACH, 4, "Visiting field: %s\n", SHOW(field));
+  if (!field->is_concrete()) {
+    auto const& realfield =
+        resolve_field(field->get_class(), field->get_name(), field->get_type());
+    push(field, realfield);
+  }
+  push(field, field->get_class());
+  push(field, field->get_type());
+}
+
+void TransitiveClosureMarker::visit(const DexMethodRef* method) {
+  TRACE(REACH, 4, "Visiting method: %s\n", SHOW(method));
+  auto resolved_method = resolve(method, type_class(method->get_class()));
+  if (resolved_method != nullptr) {
+    TRACE(REACH, 5, "    Resolved to: %s\n", SHOW(resolved_method));
+    push(method, resolved_method);
+    gather_and_push(resolved_method);
+  }
+  push(method, method->get_class());
+  push(method, method->get_proto()->get_rtype());
+  for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
+    push(method, t);
+  }
+  if (!method->is_def()) {
+    return;
+  }
+  auto m = static_cast<const DexMethod*>(method);
+  // If we're keeping an interface or virtual method, we have to keep its
+  // implementations and overriding methods respectively.
+  if (m->is_virtual() || !m->is_concrete()) {
+    const auto& overriding_methods =
+        mog::get_overriding_methods(m_method_override_graph, m);
+    for (auto* overriding : overriding_methods) {
+      push_cond(overriding);
+    }
+  }
+}
+
+template <class Parent, class Object>
+void TransitiveClosureMarker::record_reachability(Parent* parent,
+                                                  Object* object) {
+  if (m_record_reachability) {
+    assert(parent != nullptr && object != nullptr);
+    m_reachable_objects->record_reachability(parent, object);
+  }
+}
 
 IgnoreSets::IgnoreSets(const JsonWrapper& jw) {
   auto parse_type_list = [&jw](const char* key,
