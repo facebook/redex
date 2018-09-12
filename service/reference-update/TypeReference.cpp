@@ -18,7 +18,8 @@ namespace {
 
 void fix_colliding_method(
     const Scope& scope,
-    const std::unordered_map<DexMethod*, DexProto*>& colliding_methods) {
+    const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
+        colliding_methods) {
   // Fix colliding methods by appending an additional param.
   TRACE(REFU, 9, "sig: colliding_methods %d\n", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
@@ -207,7 +208,7 @@ void update_method_signature_type_references(
     const std::unordered_map<const DexType*, DexType*>& old_to_new,
     boost::optional<std::unordered_map<DexMethod*, std::string>&>
         method_debug_map) {
-  std::unordered_map<DexMethod*, DexProto*> colliding_candidates;
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_candidates;
   TypeSet mergeables;
   for (const auto& pair : old_to_new) {
     mergeables.insert(pair.first);
@@ -258,7 +259,7 @@ void update_method_signature_type_references(
   auto non_virtuals = devirtualize(scope);
   std::unordered_set<DexMethod*> non_virt_set(non_virtuals.begin(),
                                               non_virtuals.end());
-  std::unordered_map<DexMethod*, DexProto*> colliding_methods;
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_methods;
   for (const auto& pair : colliding_candidates) {
     auto meth = pair.first;
     auto new_proto = pair.second;
