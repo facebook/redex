@@ -98,10 +98,6 @@ bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
  * all synthetic methods is hard, so it's hard to be sure that stripping all of
  * them of debug info is safe -- hence I'm gating their removal under the
  * drop_synth_aggressive flag.
- *
- * The code debug section also contain parameter names, which aren't quite useful. We still need to
- * keep them for making crash reporting work, but replacing them with nullptr to save some strings,
- * gating behind m_drop_debug_param_names flag.
  */
 bool StripDebugInfoPass::should_drop_for_synth(const DexMethod* method) const {
   if (!is_synthetic(method) && !is_bridge(method)) {
@@ -163,10 +159,6 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
         (debug_info_empty && m_drop_all_dbg_info_if_empty) || force_discard) {
       ++m_num_empty_dropped;
       code.release_debug_item();
-    }
-
-    if (m_drop_debug_param_names) {
-      code.get_debug_item()->nullify_parameter_names();
     }
   });
 
