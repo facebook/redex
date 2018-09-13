@@ -205,6 +205,36 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   return coldstart_classes;
 }
 
+/**
+ * Read a map of {list_name : class_list} from json
+ */
+std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_class_lists() {
+  std::unordered_map<std::string, std::vector<std::string> > lists;
+  std::string class_lists_filename;
+  this->m_json.get("class_lists", "", class_lists_filename);
+
+  if (class_lists_filename.empty()) {
+    return lists;
+  }
+
+  std::ifstream input(class_lists_filename);
+  Json::Reader reader;
+  Json::Value root;
+  bool parsing_succeeded = reader.parse(input, root);
+  always_assert_log(parsing_succeeded, "Failed to parse class list json from file: %s\n%s",
+                    class_lists_filename.c_str(),
+                    reader.getFormattedErrorMessages().c_str());
+
+  for (Json::ValueIterator it = root.begin(); it != root.end(); ++it) {
+    std::vector<std::string> class_list;
+    Json::Value current_list = *it;
+    for (Json::ValueIterator list_it = current_list.begin(); list_it != current_list.end(); ++list_it) {
+      lists[it.key().asString()].push_back((*list_it).asString());
+    }
+  }
+  return lists;
+}
+
 /*
  * Read the method list file and return it is a vector of strings.
  */
