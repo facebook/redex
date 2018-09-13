@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "CFGInliner.h"
+#include "DexUtil.h"
 #include "Inliner.h"
 #include "IRInstruction.h"
-#include "DexUtil.h"
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
@@ -288,9 +289,9 @@ void MultiMethodInliner::inline_inlinables(
   size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
-    auto insn = inlinable.second;
+    auto callsite = inlinable.second;
 
-    if (!is_inlinable(caller, callee, insn->insn, estimated_insn_size)) {
+    if (!is_inlinable(caller, callee, callsite->insn, estimated_insn_size)) {
       continue;
     }
 
@@ -299,10 +300,15 @@ void MultiMethodInliner::inline_inlinables(
         SHOW(caller),
         callee->get_code()->get_registers_size());
     // Logging before the call to inline_method to get the most relevant line
-    // number near insn before insn gets replaced. Should be ok as inline_method
-    // does not fail to inline.
-    log_opt(INLINED, caller, insn->insn);
-    inliner::inline_method(caller->get_code(), callee->get_code(), insn);
+    // number near callsite before callsite gets replaced. Should be ok as
+    // inline_method does not fail to inline.
+    log_opt(INLINED, caller, callsite->insn);
+    if (m_config.use_cfg_inliner) {
+      inliner::inline_with_cfg(caller->get_code(), callee->get_code(),
+                               callsite->insn);
+    } else {
+      inliner::inline_method(caller->get_code(), callee->get_code(), callsite);
+    }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
     TRACE(MMINL,
@@ -1152,6 +1158,30 @@ void inline_tail_call(DexMethod* caller,
       ++pos;
     }
   }
+}
+
+void inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
+  // TODO build these earlier
+  // Once the CFGInliner is working fully, we can remove this section and
+  // rewrite the inliner with the new CFG completely.
+  caller->build_cfg(/* editable */ true);
+  callee->build_cfg(/* editable */ true);
+  auto& caller_cfg = caller->cfg();
+  const auto& callee_cfg = callee->cfg();
+
+  auto find_callsite = [&caller_cfg, &callsite]() {
+    auto iterable = cfg::InstructionIterable(caller_cfg);
+    for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+      if (it->insn == callsite) {
+        return it;
+      }
+    }
+    not_reached();
+  };
+  cfg::CFGInliner::inline_cfg(&caller_cfg, find_callsite(), callee_cfg);
+
+  caller->clear_cfg();
+  callee->clear_cfg();
 }
 
 } // namespace inliner

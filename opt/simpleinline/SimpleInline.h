@@ -26,6 +26,7 @@ class SimpleInlinePass : public Pass {
     jw.get("enforce_method_size_limit",
            true,
            m_inliner_config.enforce_method_size_limit);
+    jw.get("use_cfg_inliner", false, m_inliner_config.use_cfg_inliner);
     jw.get("no_inline_annos", {}, m_no_inline_annos);
     jw.get("force_inline_annos", {}, m_force_inline_annos);
     jw.get("multiple_callers", false, m_multiple_callers);

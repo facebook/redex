@@ -27,7 +27,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
 
-  TRACE(CFG, 3, "caller %s\ncallee %s\n", SHOW(*caller), SHOW(callee));
+  TRACE(CFG, 3, "caller %s\n", SHOW(*caller));
+  TRACE(CFG, 3, "callee %s\n", SHOW(callee));
 
   if (caller->get_succ_edge_of_type(callsite.block(), EDGE_THROW) != nullptr) {
     split_on_callee_throws(&callee);
@@ -192,7 +193,8 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
       TRACE(CFG, 3, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
-      if (preds.size() == 1 && cfg->blocks_are_in_same_try(pred, succ)) {
+      if (preds.size() == 1 && succ->preds().size() == 1 &&
+          cfg->blocks_are_in_same_try(pred, succ)) {
         // FIXME: this is annoying because it destroys the succ block
         // (invalidating any iterators into it). Maybe it would be better to do
         // this during cfg.simplify at the very end?

@@ -240,7 +240,9 @@ class Block final {
 
   uint32_t num_opcodes() const;
 
+  // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
+  // return an iterator to the first MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_first_insn();
 
   // including move-result-pseudo

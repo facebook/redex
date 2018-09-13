@@ -494,6 +494,21 @@ std::string show_opcode(const DexInstruction* insn) {
   case DOPCODE_INVOKE_INTERFACE:
     ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
+  case DOPCODE_INVOKE_VIRTUAL_RANGE:
+    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_SUPER_RANGE:
+    ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_DIRECT_RANGE:
+    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_STATIC_RANGE:
+    ss << "invoke-static/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_INTERFACE_RANGE:
+    ss << "invoke-interface/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
   case DOPCODE_CONST_STRING:
     ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();

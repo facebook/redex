@@ -798,7 +798,7 @@ uint32_t ControlFlowGraph::num_opcodes() const {
 boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() {
   // Find the first block that has instructions
   Block* block = entry_block();
-  while (block->num_opcodes() == 0) {
+  while (block->get_first_insn() == block->end()) {
     const auto& succs = block->succs();
     always_assert(succs.size() == 1);
     const auto& out = succs[0];
@@ -1606,7 +1606,7 @@ void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
     auto forward_edge = forwards[0];
     always_assert(forward_edge->target() == succ);
     always_assert(forward_edge->type() == EDGE_GOTO);
-    const auto& reverses = get_pred_edges_if(succ, not_throws);
+    const auto& reverses = succ->preds();
     always_assert(reverses.size() == 1);
     auto reverse_edge = reverses[0];
     always_assert(forward_edge == reverse_edge);

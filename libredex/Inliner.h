@@ -46,6 +46,11 @@ void inline_method(IRCode* caller,
                    IRCode* callee,
                    IRList::iterator pos);
 
+/*
+ * Use the editable CFG instead of IRCode to do the inlining
+ */
+void inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite);
+
 } // namespace inliner
 
 /**
@@ -62,6 +67,7 @@ class MultiMethodInliner {
   struct Config {
     bool throws_inline;
     bool enforce_method_size_limit{true};
+    bool use_cfg_inliner{false};
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
     std::unordered_set<DexType*> whitelist_no_method_limit;
