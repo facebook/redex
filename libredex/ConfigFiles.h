@@ -81,6 +81,28 @@ struct ConfigFiles {
     return m_coldstart_methods;
   }
 
+  void ensure_class_lists_loaded() {
+    if (!m_load_class_lists_attempted) {
+      m_load_class_lists_attempted = true;
+      m_class_lists = load_class_lists();
+    }
+  }
+
+  const std::unordered_map<std::string, std::vector<std::string> >& get_all_class_lists() {
+    ensure_class_lists_loaded();
+    return m_class_lists;
+  }
+
+  const bool has_class_list(const std::string& name) {
+    ensure_class_lists_loaded();
+    return m_class_lists.count(name) != 0;
+  }
+
+  const std::vector<std::string>& get_class_list(const std::string& name) {
+    ensure_class_lists_loaded();
+    return m_class_lists.at(name);
+  }
+
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
 
   bool save_move_map() const {
@@ -122,14 +144,17 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
+  std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
 
   bool m_move_map{false};
+  bool m_load_class_lists_attempted{false};
   ProguardMap m_proguard_map;
   MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_method_filename;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
+  std::unordered_map<std::string, std::vector<std::string> > m_class_lists;
   std::string m_printseeds; // Filename to dump computed seeds.
 
   // global no optimizations annotations
