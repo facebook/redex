@@ -46,6 +46,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
 	-I$(top_srcdir)/opt/remove-builders \
+  -I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
@@ -109,6 +110,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+  libredex/DexStoreUtil.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
@@ -232,6 +234,7 @@ redex_all_SOURCES = \
 	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
+  opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unread-fields/RemoveUnreadFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
