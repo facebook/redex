@@ -64,6 +64,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/track_resources \
+  -I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
@@ -262,6 +263,15 @@ redex_all_SOURCES = \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
+  opt/type-erasure/ApproximateShapeMerging.cpp \
+  opt/type-erasure/ClassAssemblingUtils.cpp \
+  opt/type-erasure/MergerType.cpp \
+  opt/type-erasure/MethodMerger.cpp \
+  opt/type-erasure/Model.cpp \
+  opt/type-erasure/ModelMerger.cpp \
+  opt/type-erasure/TypeErasureInterDexPlugin.cpp \
+  opt/type-erasure/TypeErasurePass.cpp \
+  opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
