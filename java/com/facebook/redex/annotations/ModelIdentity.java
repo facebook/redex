@@ -13,10 +13,9 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
-/**
- * Redex might add this annotation to generated interface dispatch methods. It is later on picked up
- * for another post processing steps in Redex to further optimize these dispatch methods.
- */
-@Target({ElementType.METHOD})
+/** Declaration for a class hierarchy that has its own concept of a type tag identity system. */
+@Target({ElementType.TYPE})
 @Retention(CLASS)
-public @interface InterfaceDispatch {}
+public @interface ModelIdentity {
+  int typeTag();
+}
