@@ -105,6 +105,7 @@ class ConstantValues {
   ConstantValues(const TypeTags* type_tags,
                  const std::string kinds_str,
                  const std::string vals_str,
+                 const size_t stud_method_threshold,
                  IRCode* code);
 
   std::vector<ConstantValueLoad> collect_constant_loads(const IRCode* code);
@@ -149,7 +150,7 @@ class ConstantValues {
     return ss.str();
   }
 
-  bool needs_stub() const { return size() >= 3; }
+  bool needs_stub() const { return size() >= m_stub_method_threshold; }
 
   DexMethod* create_stub_method(DexMethod* callee);
 
@@ -166,4 +167,6 @@ class ConstantValues {
    * lead to the above mentioned bug.
    */
   bool m_skip_multiple_const_0 = false;
+
+  size_t m_stub_method_threshold;
 };

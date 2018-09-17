@@ -883,9 +883,9 @@ class DexMethod : public DexMethodRef {
     return g_redex->get_method(type, name, proto);
   }
 
-  static DexString* get_noncolliding_name(DexType* type,
-                                          DexString* name,
-                                          DexProto* proto) {
+  static DexString* get_unique_name(DexType* type,
+                                    DexString* name,
+                                    DexProto* proto) {
     if (!DexMethod::get_method(type, name, proto)) {
       return name;
     }

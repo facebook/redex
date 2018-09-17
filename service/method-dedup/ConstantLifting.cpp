@@ -67,7 +67,8 @@ bool ConstantLifting::is_applicable_to_constant_lifting(
 std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const Scope& scope,
     const TypeTags* type_tags,
-    const std::vector<DexMethod*>& methods) {
+    const std::vector<DexMethod*>& methods,
+    const size_t stud_method_threshold) {
   MethodOrderedSet lifted;
   MethodToConstants lifted_constants;
   for (auto method : methods) {
@@ -77,8 +78,11 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto vals_str = parse_str_anno_value(
         method, s_method_meta_anno, CONST_VALUE_ANNO_ATTR_NAME);
 
-    ConstantValues const_vals(
-        type_tags, kinds_str, vals_str, method->get_code());
+    ConstantValues const_vals(type_tags,
+                              kinds_str,
+                              vals_str,
+                              stud_method_threshold,
+                              method->get_code());
     auto const_loads = const_vals.collect_constant_loads(method->get_code());
     if (const_loads.size() == 0) {
       // No matching constant found.

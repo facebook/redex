@@ -108,7 +108,9 @@ std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
 ConstantValues::ConstantValues(const TypeTags* type_tags,
                                const std::string kinds_str,
                                const std::string vals_str,
-                               IRCode* code) {
+                               const size_t stud_method_threshold,
+                               IRCode* code)
+    : m_stub_method_threshold(stud_method_threshold) {
   // Split vals_str.
   std::vector<std::string> vals_vec;
   boost::split(vals_vec, vals_str, [](char c) { return c == ':'; });
@@ -193,7 +195,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto stub_proto =
       DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");
-  name = DexMethod::get_noncolliding_name(type, name, stub_proto);
+  name = DexMethod::get_unique_name(type, name, stub_proto);
   TRACE(TERA, 9, "const value: stub name %s\n", name->c_str());
   auto mc = new MethodCreator(type,
                               name,
@@ -209,8 +211,8 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   if (!is_static(callee)) {
     args.push_back(mc->get_local(arg_loc++));
   }
-  for (; arg_loc < stub_arg_list->size(); ++arg_loc) {
-    args.push_back(mc->get_local(arg_loc));
+  for (size_t i = 0; i < stub_arg_list->size(); ++i) {
+    args.push_back(mc->get_local(arg_loc++));
   }
   for (auto& cval : m_const_vals) {
     if (cval.is_invalid()) {
