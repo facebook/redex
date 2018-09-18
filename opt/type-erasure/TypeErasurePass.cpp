@@ -209,11 +209,10 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   }
   auto scope = build_class_scope(stores);
   Model::build_interdex_groups(&cfg);
-  for (const auto& model_spec : m_model_specs) {
+  for (ModelSpec& model_spec : m_model_specs) {
     if (model_spec.enabled) {
       if (is_interface(type_class(model_spec.root)))
-        handle_interface_as_root(const_cast<ModelSpec&>(model_spec), scope,
-                                 stores);
+        handle_interface_as_root(model_spec, scope, stores);
       erase_model(model_spec, scope, mgr, stores, cfg);
     }
   }

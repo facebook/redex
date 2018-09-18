@@ -22,11 +22,6 @@
 #include "TypeReference.h"
 #include "Walkers.h"
 
-using namespace dispatch;
-using namespace method_dedup;
-using namespace method_reference;
-using namespace type_reference;
-
 namespace {
 
 using MethodTypeTags = std::unordered_map<const DexMethod*, uint32_t>;
@@ -50,7 +45,7 @@ std::vector<IRInstruction*> find_before(IRCode* code,
 }
 
 void update_call_refs(
-    const CallSites& call_sites,
+    const method_reference::CallSites& call_sites,
     const MethodTypeTags& type_tags,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee,
     bool with_type_tag = false) {
@@ -61,7 +56,7 @@ void update_call_refs(
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
     auto new_callee = old_to_new_callee.at(callee);
-    CallSiteSpec spec{meth, insn, new_callee};
+    method_reference::CallSiteSpec spec{meth, insn, new_callee};
     auto type_tag_arg = with_type_tag
                             ? boost::optional<uint32_t>(type_tags.at(callee))
                             : boost::none;
@@ -73,7 +68,7 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
   DexMethodSpec spec;
   auto args = meth->get_proto()->get_args();
   always_assert(args->size());
-  auto new_type_list = replace_head_and_make(args, new_head);
+  auto new_type_list = type_reference::replace_head_and_make(args, new_head);
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
@@ -176,13 +171,13 @@ MethodMerger::MethodMerger(
       m_process_method_meta(process_method_meta),
       m_max_num_dispatch_target(max_num_dispatch_target),
       m_keep_debug_info(keep_debug_info) {
-  for (auto mtf : type_tag_fields) {
+  for (const auto& mtf : type_tag_fields) {
     auto type_tag_field = mtf.second;
     assert((type_tag_field && type_tag_field->is_concrete()) ||
            !generate_type_tags);
   }
   // Collect ctors, non_ctors.
-  for (auto merger : mergers) {
+  for (const MergerType* merger : mergers) {
     std::vector<DexMethod*> ctors;
     std::vector<DexMethod*> non_ctors;
     for (const auto m : merger->dmethods) {
@@ -203,13 +198,13 @@ MethodMerger::MethodMerger(
 void MethodMerger::fix_visibility() {
   MethodOrderedSet vmethods_created;
   for (const auto& pair : m_merger_ctors) {
-    auto ctors = pair.second;
-    for (auto m : ctors) {
+    const std::vector<DexMethod*>& ctors = pair.second;
+    for (DexMethod* m : ctors) {
       fix_visibility_helper(m, vmethods_created);
     }
   }
   for (const auto& pair : m_merger_non_ctors) {
-    auto non_ctors = pair.second;
+    const std::vector<DexMethod*>& non_ctors = pair.second;
     for (auto m : non_ctors) {
       fix_visibility_helper(m, vmethods_created);
     }
@@ -247,7 +242,8 @@ void MethodMerger::fix_visibility() {
     }
   }
   // Fix call sites of vmethods_created.
-  auto call_sites = collect_call_refs(m_scope, vmethods_created);
+  auto call_sites =
+      method_reference::collect_call_refs(m_scope, vmethods_created);
   for (const auto& pair : call_sites) {
     auto insn = pair.second;
     always_assert(is_invoke_direct(insn->opcode()));
@@ -279,7 +275,7 @@ std::vector<IRInstruction*> MethodMerger::make_check_cast(DexType* type,
 }
 
 dispatch::DispatchMethod MethodMerger::create_dispatch_method(
-    const Spec spec, const std::vector<DexMethod*>& targets) {
+    const dispatch::Spec spec, const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   TRACE(TERA,
         5,
@@ -302,7 +298,8 @@ std::map<SwitchIndices, DexMethod*> MethodMerger::get_dedupped_indices_map(
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
 
   // Find equivalent methods.
-  std::vector<MethodOrderedSet> duplicates = group_identical_methods(targets);
+  std::vector<MethodOrderedSet> duplicates =
+      method_dedup::group_identical_methods(targets);
   for (const auto& duplicate : duplicates) {
     SwitchIndices switch_indices;
     for (auto& meth : duplicate) {
@@ -381,7 +378,7 @@ std::string MethodMerger::get_method_signature_string(DexMethod* meth) {
     return orig_signature;
   }
 
-  return get_method_signature(meth);
+  return type_reference::get_method_signature(meth);
 }
 
 void MethodMerger::merge_virtual_methods(
@@ -467,7 +464,7 @@ void MethodMerger::merge_ctors() {
     }
     ctor_set.insert(ctors.begin(), ctors.end());
   }
-  auto call_sites = collect_call_refs(m_scope, ctor_set);
+  auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
 
   //////////////////////////////////////////
   // Create dispatch and fixes
@@ -495,7 +492,8 @@ void MethodMerger::merge_ctors() {
       auto ctor_proto = ctors_pair.first;
       std::unordered_map<const DexType*, std::string> ctor_signatures;
       for (const auto ctor : ctors) {
-        ctor_signatures[ctor->get_class()] = get_method_signature(ctor);
+        ctor_signatures[ctor->get_class()] =
+            type_reference::get_method_signature(ctor);
         mutators::make_static(ctor, mutators::KeepThis::Yes);
         replace_method_args_head(ctor, target_type);
         TRACE(TERA, 9, "  converting ctor %s\n", SHOW(ctor));
@@ -504,15 +502,16 @@ void MethodMerger::merge_ctors() {
       // Create dispatch.
       bool pass_type_tag_param =
           !m_use_external_type_tags && m_generate_type_tags;
-      auto dispatch_arg_list =
-          append_and_make(ctor_proto->get_args(), get_int_type());
+      auto dispatch_arg_list = type_reference::append_and_make(
+          ctor_proto->get_args(), get_int_type());
       auto dispatch_proto =
           m_generate_type_tags
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
       dispatch::Spec spec{target_type,
-                          pass_type_tag_param ? Type::CTOR_WITH_TYPE_TAG_PARAM
-                                              : Type::CTOR,
+                          pass_type_tag_param
+                              ? dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM
+                              : dispatch::Type::CTOR,
                           "<init>",
                           dispatch_proto,
                           ACC_PUBLIC | ACC_CONSTRUCTOR,
@@ -611,8 +610,8 @@ void MethodMerger::merge_non_ctor_non_virt_methods() {
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
-    m_num_static_non_virt_dedupped +=
-        dedup_methods(m_scope, to_dedup, replacements, new_to_old_optional);
+    m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
+        m_scope, to_dedup, replacements, new_to_old_optional);
 
     // Relocate the remainders.
     std::set<DexMethod*, dexmethods_comparator> to_relocate(
@@ -705,7 +704,7 @@ void MethodMerger::merge_virt_itf_methods() {
                           old_to_new_callee);
   }
 
-  update_call_refs_simple(m_scope, old_to_new_callee);
+  method_reference::update_call_refs_simple(m_scope, old_to_new_callee);
   // Adding dispatch after updating callsites to avoid patching callsites within
   // the dispatch switch itself.
   for (auto& pair : dispatch_methods) {

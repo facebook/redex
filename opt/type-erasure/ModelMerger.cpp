@@ -20,8 +20,6 @@
 
 #include <sstream>
 
-using namespace type_reference;
-
 namespace {
 
 using MergedTypeNames = std::unordered_map<std::string, std::string>;
@@ -95,11 +93,10 @@ void update_code_type_refs(
           continue;
         }
         auto proto = meth_ref->get_proto();
-        if (!proto_has_reference_to(proto, mergeables)) {
+        if (!type_reference::proto_has_reference_to(proto, mergeables)) {
           continue;
         }
-        const auto meth_def = resolve_method(
-            meth_ref, opcode_to_search(const_cast<IRInstruction*>(insn)));
+        const auto meth_def = resolve_method(meth_ref, opcode_to_search(insn));
         // This is a very tricky case where RebindRefs cannot resolve a
         // MethodRef to MethodDef. It is a invoke-virtual with a MethodRef
         // referencing an interface method implmentation defined in a subclass
@@ -109,7 +106,8 @@ void update_code_type_refs(
         if (meth_def == nullptr) {
           auto intf_def = resolve_method(meth_ref, MethodSearch::Interface);
           always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL && intf_def);
-          auto new_proto = update_proto_reference(proto, mergeable_to_merger);
+          auto new_proto = type_reference::update_proto_reference(
+              proto, mergeable_to_merger);
           DexMethodSpec spec;
           spec.proto = new_proto;
           meth_ref->change(spec, true);
@@ -139,8 +137,8 @@ void update_code_type_refs(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       if (is_array(ref_type)) {
-        const auto array_merger_type = make_array_type(merger_type);
-        insn->set_type(const_cast<DexType*>(array_merger_type));
+        auto array_merger_type = make_array_type(merger_type);
+        insn->set_type(array_merger_type);
         TRACE(TERA,
               9,
               "  replacing %s referencing array type of %s\n",
@@ -331,12 +329,12 @@ void update_refs_to_mergeable_types(
     bool generate_type_tags) {
   // Update simple type referencing instructions to instantiate merger type.
   update_code_type_refs(scope, mergeable_to_merger);
-  update_method_signature_type_references(
+  type_reference::update_method_signature_type_references(
       scope,
       mergeable_to_merger,
       boost::optional<std::unordered_map<DexMethod*, std::string>&>(
           method_debug_map));
-  update_field_type_references(scope, mergeable_to_merger);
+  type_reference::update_field_type_references(scope, mergeable_to_merger);
   // Fix INSTANCE_OF
   if (!generate_type_tags) {
     update_instance_of_no_type_tag(scope, mergeable_to_merger);
