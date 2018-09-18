@@ -191,7 +191,8 @@ class Block final {
     m_entries.clear_and_dispose();
   }
 
-  Block(const Block& b);
+  // copy constructor
+  Block(const Block& b, MethodItemEntryCloner* cloner);
 
   BlockId id() const { return m_id; }
   const std::vector<Edge*>& preds() const {
@@ -455,13 +456,10 @@ class ControlFlowGraph {
   void simplify();
 
   // SIGABORT if the internal state of the CFG is invalid
-  void sanity_check();
+  void sanity_check() const;
 
   // SIGABORT if there are dangling parent pointers to deleted DexPositions
   void no_dangling_dex_positions() const;
-
-  // SIGABORT if m_registers_size is wrong
-  void check_registers_size();
 
   uint32_t num_opcodes() const;
 
@@ -630,6 +628,8 @@ class ControlFlowGraph {
   // If either new_source or new_target is null, don't change that field of the
   // edge
   void move_edge(Edge* edge, Block* new_source, Block* new_target);
+
+  uint16_t compute_registers_size() const;
 
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;

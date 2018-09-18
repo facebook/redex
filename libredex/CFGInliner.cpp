@@ -7,12 +7,15 @@
 
 #include "CFGInliner.h"
 
+#include <memory>
+
+#include "IRList.h"
 #include "IROpcode.h"
+#include "DexPosition.h"
 
 namespace cfg {
 
 // TODO:
-//  * handle debug positions
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
 /*
@@ -41,6 +44,20 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // make the invoke last of its block
   Block* after_callee = maybe_split_block(caller, callsite);
   TRACE(CFG, 3, "caller after split %s\n", SHOW(*caller));
+
+  DexPosition* callsite_dbg_pos = get_dbg_pos(callsite);
+  if (callsite_dbg_pos) {
+    set_dbg_pos_parents(&callee, callsite_dbg_pos);
+    // ensure that the caller's code after the inlined method retain their
+    // original position
+    const auto& first = after_callee->begin();
+    if (first == after_callee->end() || first->type != MFLOW_POSITION) {
+      // but don't add if there's already a position at the front of this
+      // block
+      after_callee->m_entries.push_front(
+          *(new MethodItemEntry(std::make_unique<DexPosition>(*callsite_dbg_pos))));
+    }
+  }
 
   // make sure the callee's registers don't overlap with the caller's
   caller->recompute_registers_size();
@@ -190,7 +207,7 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 3, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
+      TRACE(CFG, 4, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
       if (preds.size() == 1 && succ->preds().size() == 1 &&
@@ -351,6 +368,20 @@ void CFGInliner::add_callee_throws_to_caller(
   }
 }
 
+void CFGInliner::set_dbg_pos_parents(ControlFlowGraph* callee,
+                                     DexPosition* callsite_dbg_pos) {
+  for (auto& entry : callee->m_blocks) {
+    Block* b = entry.second;
+    for (auto& mie : *b) {
+      // Don't overwrite existing parent pointers because those are probably
+      // methods that were inlined into callee before
+      if (mie.type == MFLOW_POSITION && mie.pos->parent == nullptr) {
+        mie.pos->parent = callsite_dbg_pos;
+      }
+    }
+  }
+}
+
 /*
  * Return the equivalent move opcode for the given return opcode
  */
@@ -384,6 +415,50 @@ uint32_t CFGInliner::max_index(const std::vector<Edge*> throws) {
                                      e2->m_throw_info->index;
                             }))
       ->m_throw_info->index;
+}
+
+DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
+  auto search_block = [](Block* b,
+                         IRList::iterator in_block_it) -> DexPosition* {
+    // Search for an MFLOW_POSITION preceding this instruction within the
+    // same block
+    while (in_block_it->type != MFLOW_POSITION && in_block_it != b->begin()) {
+      --in_block_it;
+    }
+    return in_block_it->type == MFLOW_POSITION ? in_block_it->pos.get()
+                                               : nullptr;
+  };
+  auto result = search_block(callsite.block(), callsite.unwrap());
+  if (result != nullptr) {
+    return result;
+  }
+
+  // TODO: Positions should be connected to instructions rather than preceding
+  // them in the flow of instructions. Having the positions depend on the order
+  // of instructions is a very linear way to encode the information which isn't
+  // very amenable to the editable CFG.
+
+  // while there's a single predecessor, follow that edge
+  const auto& cfg = callsite.cfg();
+  std::function<DexPosition*(Block*)> check_prev_block;
+  check_prev_block = [&check_prev_block, &search_block,
+                      &cfg](Block* b) -> DexPosition* {
+    const auto& reverse_gotos = cfg.get_pred_edges_of_type(b, EDGE_GOTO);
+    if (b->preds().size() == 1 && !reverse_gotos.empty()) {
+      Block* prev_block = reverse_gotos[0]->src();
+      if (!prev_block->empty()) {
+        auto result = search_block(prev_block, std::prev(prev_block->end()));
+        if (result != nullptr) {
+          return result;
+        }
+      }
+      // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
+      return check_prev_block(prev_block);
+    }
+    // This block has no solo predecessors anymore. Nowhere left to search.
+    return nullptr;
+  };
+  return check_prev_block(callsite.block());
 }
 
 } // namespace cfg

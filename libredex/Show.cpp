@@ -953,6 +953,9 @@ std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
     o << *pos.file;
   }
   o << ":" << pos.line;
+  if (pos.parent != nullptr) {
+    o << " (parent: " << *(pos.parent) << ")";
+  }
   return o;
 }
 

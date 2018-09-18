@@ -185,7 +185,7 @@ uint32_t Block::num_opcodes() const {
 
 // shallowly copy pointers (edges and parent cfg)
 // but deeply copy MethodItemEntries
-Block::Block(const Block& b)
+Block::Block(const Block& b, MethodItemEntryCloner* cloner)
     : m_id(b.m_id),
       m_preds(b.m_preds),
       m_succs(b.m_succs),
@@ -194,9 +194,8 @@ Block::Block(const Block& b)
   // only for editable, don't worry about m_begin and m_end
   always_assert(m_parent->editable());
 
-  MethodItemEntryCloner cloner;
   for (const auto& mie : b.m_entries) {
-    m_entries.push_back(*cloner.clone(&mie));
+    m_entries.push_back(*cloner->clone(&mie));
   }
 }
 
@@ -657,7 +656,7 @@ void ControlFlowGraph::delete_unreferenced_edges() {
 //  * MFLOW_TARGETs are gone
 //  * OPCODE_GOTOs are gone
 //  * Correct number of outgoing edges
-void ControlFlowGraph::sanity_check() {
+void ControlFlowGraph::sanity_check() const {
   if (m_editable) {
     for (const auto& entry : m_blocks) {
       Block* b = entry.second;
@@ -731,20 +730,15 @@ void ControlFlowGraph::sanity_check() {
   }
 
   if (m_editable) {
-    check_registers_size();
+    auto used_regs = compute_registers_size();
+    always_assert_log(used_regs == m_registers_size,
+                      "used regs %d != registers size %d. %s",
+                      used_regs, m_registers_size, SHOW(*this));
   }
   no_dangling_dex_positions();
 }
 
-void ControlFlowGraph::check_registers_size() {
-  auto old_size = m_registers_size;
-  recompute_registers_size();
-  always_assert_log(m_registers_size == old_size,
-                    "used regs %d != old registers size %d. %s",
-                    m_registers_size, old_size, SHOW(*this));
-}
-
-void ControlFlowGraph::recompute_registers_size() {
+uint16_t ControlFlowGraph::compute_registers_size() const {
   uint16_t num_regs = 0;
   const auto& check = [&num_regs](uint16_t reg, bool is_wide) {
     auto highest_in_use = reg + is_wide;
@@ -762,7 +756,11 @@ void ControlFlowGraph::recompute_registers_size() {
       check(insn->src(i), insn->src_is_wide(i));
     }
   }
-  m_registers_size = num_regs;
+  return num_regs;
+}
+
+void ControlFlowGraph::recompute_registers_size() {
+  m_registers_size = compute_registers_size();
 }
 
 void ControlFlowGraph::no_dangling_dex_positions() const {
@@ -848,10 +846,11 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
     old_edge_to_new.emplace(old_edge, new_edge);
   }
 
+  MethodItemEntryCloner cloner;
   for (const auto& entry : this->m_blocks) {
     const Block* block = entry.second;
     // this shallowly copies edge pointers inside, then we patch them later
-    Block* new_block = new Block(*block);
+    Block* new_block = new Block(*block, &cloner);
     new_cfg->m_blocks.emplace(new_block->id(), new_block);
   }
 
