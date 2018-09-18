@@ -13,6 +13,7 @@ from __future__ import unicode_literals
 import argparse
 import distutils.version
 import errno
+import fnmatch
 import glob
 import json
 import os
@@ -540,7 +541,7 @@ class State(object):
     # This structure is only used for passing arguments between prepare_redex,
     # launch_redex_binary, finalize_redex
     def __init__(self, application_modules, args, config_dict, debugger,
-            dex_dir, dexen, dex_mode, extracted_apk_dir, temporary_lib_file,
+            dex_dir, dexen, dex_mode, extracted_apk_dir, temporary_libs_dir,
             stop_pass_idx):
         self.application_modules = application_modules
         self.args = args
@@ -550,8 +551,21 @@ class State(object):
         self.dexen = dexen
         self.dex_mode = dex_mode
         self.extracted_apk_dir = extracted_apk_dir
-        self.temporary_lib_file = temporary_lib_file
+        self.temporary_libs_dir = temporary_libs_dir
         self.stop_pass_idx = stop_pass_idx
+
+
+def ensure_libs_dir(libs_dir, sub_dir):
+    """Ensures the base libs directory and the sub directory exist. Returns top
+    most dir that was created.
+    """
+    if os.path.exists(libs_dir):
+        os.mkdir(sub_dir)
+        return sub_dir
+    else:
+        os.mkdir(libs_dir)
+        os.mkdir(sub_dir)
+        return libs_dir
 
 
 def prepare_redex(args):
@@ -642,12 +656,22 @@ def prepare_redex(args):
     # Some of the native libraries can be concatenated together into one
     # xz-compressed file. We need to decompress that file so that we can scan
     # through it looking for classnames.
-    xz_compressed_libs = join(extracted_apk_dir, 'assets/lib/libs.xzs')
-    libs_dir = join(extracted_apk_dir, 'lib')
-    temporary_lib_file = join(libs_dir, 'concated_native_libs.so')
-    if os.path.exists(xz_compressed_libs) and os.path.exists(libs_dir):
-        cmd = 'xz -d --stdout {} > {}'.format(xz_compressed_libs, temporary_lib_file)
-        subprocess.check_call(cmd, shell=True)
+    libs_to_extract = []
+    temporary_libs_dir = None
+    for root, _, filenames in os.walk(extracted_apk_dir):
+        for filename in fnmatch.filter(filenames, 'libs.xzs'):
+            libs_to_extract.append(join(root, filename))
+    if len(libs_to_extract) > 0:
+        libs_dir = join(extracted_apk_dir, 'lib')
+        extracted_dir = join(libs_dir, '__extracted_libs__')
+        # Ensure both directories exist.
+        temporary_libs_dir = ensure_libs_dir(libs_dir, extracted_dir)
+        lib_count = 0
+        for lib_to_extract in libs_to_extract:
+            extract_path = join(extracted_dir, "lib_{}.so".format(lib_count))
+            cmd = 'xz -d --stdout {} > {}'.format(lib_to_extract, extract_path)
+            subprocess.check_call(cmd, shell=True)
+            lib_count += 1
 
     if args.unpack_only:
         print('APK: ' + extracted_apk_dir)
@@ -700,15 +724,15 @@ def prepare_redex(args):
         dexen=dexen,
         dex_mode=dex_mode,
         extracted_apk_dir=extracted_apk_dir,
-        temporary_lib_file=temporary_lib_file,
+        temporary_libs_dir=temporary_libs_dir,
         stop_pass_idx=stop_pass_idx)
 
 
 def finalize_redex(state):
-    # This file was just here so we could scan it for classnames, but we don't
+    # This dir was just here so we could scan it for classnames, but we don't
     # want to pack it back up into the apk
-    if os.path.exists(state.temporary_lib_file):
-        os.remove(state.temporary_lib_file)
+    if state.temporary_libs_dir is not None:
+        shutil.rmtree(state.temporary_libs_dir)
 
     repack_start_time = timer()
 
