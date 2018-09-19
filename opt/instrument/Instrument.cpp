@@ -304,9 +304,9 @@ IRList::iterator find_or_insn_insert_point(cfg::Block* block) {
                  mie_op == OPCODE_MOVE_RESULT_WIDE)) ||
                (mie.type == MFLOW_TRY &&
                 (mie.tentry->type == TRY_END || mie.tentry->type == TRY_START));
-                //
-                // TODO(minjang): Fix a bug! Should pass MFLOW_TARGET as well.
-                //
+        //
+        // TODO(minjang): Fix a bug! Should pass MFLOW_TARGET as well.
+        //
       });
 }
 
@@ -588,7 +588,7 @@ void write_method_index_file(const std::string& file_name,
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
   for (size_t i = 0; i < id_vector.size(); ++i) {
     // We use intentionally obfuscated name to guarantee the uniqueness.
-    ofs << i + 1 << "," << show(id_vector[i]) << std::endl;
+    ofs << i << "," << show(id_vector[i]) << std::endl;
   }
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 }
@@ -617,9 +617,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   always_assert(method_onMethodBegin_map.count(1));
   auto method_onMethodBegin = method_onMethodBegin_map.at(1);
   // Instrument and build the method id map at the same time.
-  std::unordered_map<DexMethod*, int /*id*/> method_id_map;
   std::vector<DexMethod*> method_id_vector;
-  int index = 0;
+  int method_id = 0;
   int excluded = 0;
   auto scope = build_class_scope(stores);
   walk::methods(scope, [&](DexMethod* method) {
@@ -655,32 +654,31 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return;
     }
 
-    assert(!method_id_map.count(method));
-    method_id_map.emplace(method, ++index);
     method_id_vector.push_back(method);
-    TRACE(INSTRUMENT, 5, "%d: %s\n", method_id_map.at(method), SHOW(method));
+    TRACE(INSTRUMENT, 5, "%d: %s\n", method_id, SHOW(method));
 
-    instrument_onMethodBegin(method, index * options.num_stats_per_method,
+    instrument_onMethodBegin(method, method_id * options.num_stats_per_method,
                              method_onMethodBegin);
+    ++method_id;
   });
 
   TRACE(INSTRUMENT,
         1,
         "%d methods were instrumented (%d methods were excluded)\n",
-        index,
+        method_id,
         excluded);
 
   // Patch stat array size.
   patch_array_size(*analysis_cls, "sMethodStats",
-                   index * options.num_stats_per_method);
+                   method_id * options.num_stats_per_method);
 
   // Patch method count constant.
-  patch_static_field(*analysis_cls, "sMethodCount", index);
+  patch_static_field(*analysis_cls, "sMethodCount", method_id);
 
   write_method_index_file(cfg.metafile(options.metadata_file_name),
                           method_id_vector);
 
-  pm.incr_metric("Instrumented", index);
+  pm.incr_metric("Instrumented", method_id);
   pm.incr_metric("Excluded", excluded);
 }
 
