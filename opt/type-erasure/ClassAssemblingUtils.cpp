@@ -7,6 +7,8 @@
 
 #include "ClassAssemblingUtils.h"
 
+#include <boost/algorithm/string.hpp>
+
 #include "Creators.h"
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
@@ -187,6 +189,17 @@ void cook_merger_fields_lookup(
   }
 }
 
+std::string get_merger_package_name(const DexType* type) {
+  auto pkg_name = get_package_name(type);
+  // Avoid an Android OS like package name, which might confuse the custom class
+  // loader.
+  if (boost::starts_with(pkg_name, "Landroid") ||
+      boost::starts_with(pkg_name, "Ldalvik")) {
+    return "Lcom/facebook";
+  }
+  return pkg_name;
+}
+
 DexClass* create_merger_class(const DexType* type,
                               const DexType* super_type,
                               const std::vector<DexField*>& merger_fields,
@@ -208,7 +221,7 @@ DexClass* create_merger_class(const DexType* type,
     fields.push_back(f);
   }
   // Put merger class in the same package as super_type.
-  auto pkg_name = get_package_name(super_type);
+  auto pkg_name = get_merger_package_name(super_type);
   auto cls = create_class(type, super_type, pkg_name, fields, interfaces,
                           with_default_ctor);
   TRACE(TERA, 3, "  created merger class w/ fields %s \n", SHOW(cls));
@@ -312,7 +325,7 @@ void handle_interface_as_root(ModelSpec& spec,
       DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
   auto base_class = create_class(base_type,
                                  get_object_type(),
-                                 get_package_name(spec.root),
+                                 get_merger_package_name(spec.root),
                                  std::vector<DexField*>(),
                                  TypeSet(),
                                  true);
