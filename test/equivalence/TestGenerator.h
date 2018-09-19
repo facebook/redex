@@ -51,6 +51,7 @@ class EquivalenceTest {
   }
 
  public:
+  virtual ~EquivalenceTest() = default;
   virtual std::string test_name() = 0;
   virtual void setup(DexClass*) {}
   virtual void build_method(DexMethod*) = 0;
