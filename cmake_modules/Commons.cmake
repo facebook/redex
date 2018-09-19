@@ -58,7 +58,7 @@ macro(add_dependent_packages_for_redex)
         set(ZLIB_HOME "/usr/local/opt/zlib/")
     endif ()
 
-    find_package(ZLIB REQUIRED)
+    find_package(Zlib REQUIRED)
 
     print_dirs(${ZLIB_STATIC_LIB} "ZLIB_STATIC_LIB")
     print_dirs(${ZLIB_SHARED_LIB} "ZLIB_SHARED_LIB")
