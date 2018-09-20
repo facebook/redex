@@ -84,6 +84,7 @@ target_link_libraries(redex-all
         ${Boost_LIBRARIES}
         ${REDEX_JSONCPP_LIBRARY}
         ${REDEX_ZLIB_LIBRARY}
+	${CMAKE_DL_LIBS}
         redex
         resource
         )
