@@ -941,7 +941,12 @@ class MethodSplicer {
   }
 
   MethodItemEntry* clone(MethodItemEntry* mie) {
-    return m_mie_cloner.clone(mie);
+    auto result = m_mie_cloner.clone(mie);
+    if (result != nullptr && result->type == MFLOW_POSITION &&
+        result->pos->parent != nullptr) {
+      m_mie_cloner.fix_parent_position(result->pos.get());
+    }
+    return result;
   }
 
   void operator()(IRList::iterator insert_pos,

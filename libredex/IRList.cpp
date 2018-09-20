@@ -216,7 +216,6 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mei) {
     return cloned_mei;
   case MFLOW_POSITION:
     m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
-    cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
     return cloned_mei;
   case MFLOW_FALLTHROUGH:
     return cloned_mei;
@@ -224,6 +223,15 @@ MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mei) {
     always_assert_log(false, "DexInstructions not expected here");
   }
   not_reached();
+}
+
+/*
+ * This should to be done after the whole method is already cloned so that
+ * m_pos_map has all the positions in the method.
+ */
+void MethodItemEntryCloner::fix_parent_position(DexPosition* pos) {
+  // When the DexPosition was copied, the parent pointer was shallowly copied
+  pos->parent = m_pos_map.at(pos->parent);
 }
 
 void IRList::replace_opcode(IRInstruction* to_delete,

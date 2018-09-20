@@ -846,12 +846,23 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
     old_edge_to_new.emplace(old_edge, new_edge);
   }
 
+  // copy the code itself
   MethodItemEntryCloner cloner;
   for (const auto& entry : this->m_blocks) {
     const Block* block = entry.second;
     // this shallowly copies edge pointers inside, then we patch them later
     Block* new_block = new Block(*block, &cloner);
     new_cfg->m_blocks.emplace(new_block->id(), new_block);
+  }
+  // We need a second pass because parent position pointers may refer to
+  // positions in a block that would be processed later.
+  for (const auto& entry : new_cfg->m_blocks) {
+    const Block* block = entry.second;
+    for (auto& mie : *block) {
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+        cloner.fix_parent_position(mie.pos.get());
+      }
+    }
   }
 
   // patch the edge pointers in the blocks to their new cfg counterparts

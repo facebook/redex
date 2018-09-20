@@ -177,6 +177,7 @@ class MethodItemEntryCloner {
  public:
   MethodItemEntryCloner();
   MethodItemEntry* clone(const MethodItemEntry* mei);
+  void fix_parent_position(DexPosition* pos);
 };
 
 using MethodItemMemberListOption =
