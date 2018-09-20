@@ -216,6 +216,9 @@ DexClasses TypeErasureInterDexPlugin::additional_classes(
     DexStoresVector empty_stores;
     auto merger_classes = mm.merge_model(m_scope, empty_stores, model);
     mm.update_redex_stats(model.get_class_name_prefix(), m_mgr);
+    m_generated_types.insert(merger_classes.begin(), merger_classes.end());
+    additional_classes.insert(
+        additional_classes.end(), merger_classes.begin(), merger_classes.end());
   }
 
   m_current_mergeables.clear();
