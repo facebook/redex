@@ -336,10 +336,6 @@ void InterDex::emit_interdex_classes(
       if (it == scroll_list_start_it) {
         dex_info.scroll = true;
       } else if (it == scroll_list_end_it) {
-        if (m_emit_scroll_set_marker) {
-          flush_out_dex(dex_info);
-        }
-
         dex_info.scroll = false;
       }
 

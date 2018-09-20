@@ -108,9 +108,6 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   jw.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   jw.get("can_touch_coldstart_extended_cls", false,
          m_can_touch_coldstart_extended_cls);
-
-  jw.get("emit_scroll_set_marker", false, m_emit_scroll_set_marker);
-
   always_assert_log(
       !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
       "can_touch_coldstart_extended_cls needs to be true, when we can touch "
@@ -161,8 +158,10 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
   for (const auto& plugin : plugins) {
     plugin->cleanup(original_scope);
   }
-  mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT,
-                  interdex.get_num_cold_start_set_dexes());
+  mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
+                 interdex.get_num_cold_start_set_dexes());
+  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT,
+                 interdex.get_num_scroll_dexes());
 
   plugins.clear();
 }
