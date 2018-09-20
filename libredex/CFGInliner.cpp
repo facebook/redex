@@ -222,6 +222,7 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   // We must connect the return first because merge_blocks may delete the
   // successor
+  // TODO: tail call optimization (if after_callsite is just a return)
   connect(callee_exits, after_callsite);
   connect({callsite}, callee_entry);
 }
@@ -343,14 +344,8 @@ void CFGInliner::add_callee_throws_to_caller(
       };
 
   for (Block* callee_block : callee_blocks) {
-    const auto& existing_throws =
-        cfg->get_succ_edges_of_type(callee_block, EDGE_THROW);
-    if (!existing_throws.empty()) {
-      // Blocks that throw already
-      //   * Instructions that can throw that were already in a try region with
-      //   catch blocks
-      add_throw_edges(callee_block, max_index(existing_throws) + 1);
-    } else {
+    const auto& existing_throws = callee_block->get_outgoing_throws_in_order();
+    if (existing_throws.empty()) {
       // Blocks that end in a throwing instruction but don't have outgoing throw
       // instructions yet.
       //   * Instructions that can throw that were not in a try region before
@@ -364,6 +359,14 @@ void CFGInliner::add_callee_throws_to_caller(
           add_throw_edges(callee_block, /* starting_index */ 0);
         }
       }
+    } else if (existing_throws.back()->m_throw_info->catch_type != nullptr) {
+      // Blocks that throw already
+      //   * Instructions that can throw that were already in a try region with
+      //   catch blocks
+      //   * But don't add to the end of a throw list if there's a catchall
+      //   already
+      add_throw_edges(callee_block,
+                      existing_throws.back()->m_throw_info->index + 1);
     }
   }
 }
@@ -404,18 +407,6 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
 bool CFGInliner::can_throw(IROpcode op) {
   return opcode::may_throw(op) || op == OPCODE_THROW;
 };
-
-/*
- * Assumption: `throws` is not empty
- */
-uint32_t CFGInliner::max_index(const std::vector<Edge*> throws) {
-  return (*std::max_element(throws.begin(), throws.end(),
-                            [](Edge* e1, Edge* e2) {
-                              return e1->m_throw_info->index <
-                                     e2->m_throw_info->index;
-                            }))
-      ->m_throw_info->index;
-}
 
 DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
   auto search_block = [](Block* b,

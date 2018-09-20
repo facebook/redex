@@ -647,6 +647,7 @@ class ControlFlowGraph {
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
+  static constexpr bool DEBUG{true};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

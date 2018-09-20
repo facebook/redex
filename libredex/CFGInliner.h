@@ -102,11 +102,6 @@ class CFGInliner {
   static bool can_throw(IROpcode op);
 
   /*
-   * Assumption: `throws` is not empty
-   */
-  static uint32_t max_index(const std::vector<Edge*> throws);
-
-  /*
    * Find the first debug position preceding the callsite
    */
   static DexPosition* get_dbg_pos(const cfg::InstructionIterator& callsite);

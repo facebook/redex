@@ -657,6 +657,10 @@ void ControlFlowGraph::delete_unreferenced_edges() {
 //  * OPCODE_GOTOs are gone
 //  * Correct number of outgoing edges
 void ControlFlowGraph::sanity_check() const {
+  if (!DEBUG) {
+    return;
+  }
+
   if (m_editable) {
     for (const auto& entry : m_blocks) {
       Block* b = entry.second;
@@ -726,6 +730,19 @@ void ControlFlowGraph::sanity_check() const {
                                   e) != forward_edges.end(),
                         "block %d -> %d, %s", e->src()->id(), b->id(),
                         SHOW(*this));
+    }
+
+    const auto& throws = b->get_outgoing_throws_in_order();
+    bool last = true;
+    for (auto it = throws.rbegin(); it != throws.rend(); ++it) {
+      Edge* e = *it;
+      if (!last) {
+        always_assert_log(
+            e->m_throw_info->catch_type != nullptr,
+            "Can't have a catchall (%d -> %d) that isn't last. %s",
+            e->src()->id(), e->target()->id(), SHOW(*this));
+      }
+      last = false;
     }
   }
 
@@ -1092,6 +1109,8 @@ void ControlFlowGraph::insert_try_catch_markers(
     }
   }
   if (active_catch != nullptr) {
+    always_assert_log(active_catch->centry->next != active_catch,
+                      "Invalid cycle: %s", SHOW(active_catch));
     ordering.back()->m_entries.push_back(
         *new MethodItemEntry(TRY_END, active_catch));
   }
@@ -1120,9 +1139,9 @@ MethodItemEntry* ControlFlowGraph::create_catch(
   // throw edge indices.
   //
   // We stop early if we find find an equivalent linked list of catch entries
-  std::function<MethodItemEntry*(EdgeVector::iterator)> add_catch;
+  std::function<MethodItemEntry*(const EdgeVector::iterator&)> add_catch;
   add_catch = [this, &add_catch, &throws_end, catch_to_containing_block](
-                  EdgeVector::iterator it) -> MethodItemEntry* {
+                  const EdgeVector::iterator& it) -> MethodItemEntry* {
     if (it == throws_end) {
       return nullptr;
     }
@@ -1140,13 +1159,15 @@ MethodItemEntry* ControlFlowGraph::create_catch(
         return &mie;
       }
     }
+    // We recurse and find the next catch before creating this catch because
+    // otherwise, we could create a cycle of the catch entries.
+    MethodItemEntry* next = add_catch(std::next(it));
+
     // create a new catch entry and insert it into the bytecode
     auto new_catch = new MethodItemEntry(edge->m_throw_info->catch_type);
-    edge->target()->m_entries.push_front(*new_catch);
-    catch_to_containing_block->emplace(new_catch, edge->target());
-
-    // recurse to the next throw item
-    new_catch->centry->next = add_catch(std::next(it));
+    new_catch->centry->next = next;
+    catch_block->m_entries.push_front(*new_catch);
+    catch_to_containing_block->emplace(new_catch, catch_block);
     return new_catch;
   };
   return add_catch(throws.begin());
@@ -1172,6 +1193,7 @@ bool ControlFlowGraph::catch_entries_equivalent_to_throw_edges(
     }
 
     auto edge = *it;
+    // TODO: use `find` instead of `count` and `at`
     always_assert_log(catch_to_containing_block.count(mie) > 0,
                       "%s not found in %s", SHOW(*mie), SHOW(*this));
     if (mie->centry->catch_type != edge->m_throw_info->catch_type ||
