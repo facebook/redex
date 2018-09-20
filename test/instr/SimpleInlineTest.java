@@ -338,4 +338,16 @@ public class SimpleInlineTest {
     Log.e("Hello9", "World9");
     return 100;
   }
+
+  @Test
+  public void callEmpty() {
+    try {
+      tryStuff(0);
+    } finally {
+      cleanup(1);
+    }
+  }
+
+  public void tryStuff(int i) {}
+  public void cleanup(int i) {}
 }

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "ControlFlow.h"
 #include "CFGInliner.h"
 #include "DexUtil.h"
 #include "Inliner.h"
@@ -1165,28 +1166,35 @@ void inline_tail_call(DexMethod* caller,
   }
 }
 
-void inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
+// return true on successfull inlining, false otherwise
+bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
   // TODO build these earlier
   // Once the CFGInliner is working fully, we can remove this section and
   // rewrite the inliner with the new CFG completely.
+
   caller->build_cfg(/* editable */ true);
-  callee->build_cfg(/* editable */ true);
   auto& caller_cfg = caller->cfg();
+
+  const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
+  if (callsite_it.is_end()) {
+    // The callsite is not in the caller cfg. This is probably because the
+    // callsite pointer is stale. Maybe the callsite's block was deleted since
+    // the time the callsite was found.
+    //
+    // This could have happened if a previous inlining caused a block to be
+    // unreachable, and that block was deleted when the CFG was simplified.
+    caller->clear_cfg();
+    return false;
+  }
+
+  callee->build_cfg(/* editable */ true);
   const auto& callee_cfg = callee->cfg();
 
-  auto find_callsite = [&caller_cfg, &callsite]() {
-    auto iterable = cfg::InstructionIterable(caller_cfg);
-    for (auto it = iterable.begin(); it != iterable.end(); ++it) {
-      if (it->insn == callsite) {
-        return it;
-      }
-    }
-    not_reached();
-  };
-  cfg::CFGInliner::inline_cfg(&caller_cfg, find_callsite(), callee_cfg);
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_cfg);
 
   caller->clear_cfg();
   callee->clear_cfg();
+  return true;
 }
 
 } // namespace inliner

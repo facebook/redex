@@ -47,9 +47,10 @@ void inline_method(IRCode* caller,
                    IRList::iterator pos);
 
 /*
- * Use the editable CFG instead of IRCode to do the inlining
+ * Use the editable CFG instead of IRCode to do the inlining. Return true on
+ * success.
  */
-void inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite);
+bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite);
 
 } // namespace inliner
 

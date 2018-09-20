@@ -145,6 +145,10 @@ class Edge final {
            equals_ignore_source_and_target(that);
   }
 
+  bool operator!=(const Edge& that) const {
+    return !(*this == that);
+  }
+
   bool equals_ignore_source(const Edge& that) const {
     return m_target == that.m_target && equals_ignore_source_and_target(that);
   }
@@ -495,6 +499,10 @@ class ControlFlowGraph {
   cfg::InstructionIterator to_cfg_instruction_iterator(
       Block* b, const ir_list::InstructionIterator& list_it);
 
+  // Search all the instructions in this CFG for the given one. Return an
+  // iterator to it, or end, if it isn't in the graph.
+  InstructionIterator find_insn(IRInstruction* insn);
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
@@ -789,8 +797,10 @@ class InstructionIteratorImpl {
 // Blocks are iterated in an undefined order
 template <bool is_const>
 class InstructionIterableImpl {
-  using Cfg = typename std::conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
-  using Iterator = typename std::conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  using Cfg = typename std::
+      conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
+  using Iterator = typename std::
+      conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
   Cfg& m_cfg;
 
  public:

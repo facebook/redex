@@ -428,3 +428,23 @@ TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
   EXPECT_EQ(nullptr,
             find_invoke(small, DOPCODE_INVOKE_DIRECT, "bigMethod"));
 }
+
+TEST_F(PreVerify, testFinallyEmpty) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  ASSERT_NE(nullptr, cls);
+  auto m = find_vmethod_named(*cls, "callEmpty");
+  ASSERT_NE(nullptr, m);
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "cleanup")) << SHOW(m->get_dex_code());
+}
+
+TEST_F(PostVerify, testFinallyEmpty) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  ASSERT_NE(nullptr, cls);
+  auto m = find_vmethod_named(*cls, "callEmpty");
+  ASSERT_NE(nullptr, m);
+  EXPECT_EQ(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "cleanup"));
+}

@@ -894,6 +894,16 @@ cfg::InstructionIterator ControlFlowGraph::to_cfg_instruction_iterator(
   return cfg::InstructionIterator(*this, b, list_it);
 }
 
+InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle) {
+  auto iterable = InstructionIterable(*this);
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (it->insn == needle) {
+      return it;
+    }
+  }
+  return iterable.end();
+}
+
 std::vector<Block*> ControlFlowGraph::order() {
   // TODO output in a better order
   // The order should maximize PC locality, hot blocks should be fallthroughs
