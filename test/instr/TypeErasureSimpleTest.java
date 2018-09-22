@@ -35,6 +35,8 @@ class A extends Base {
   A(String s) {
     super(s, 0);
   }
+  private A() { this("Oh A!"); }
+  public static A createA() { return new A(); }
   public String getStr() { return str; }
   @Override
   int realVirt() { return 200; }
@@ -68,6 +70,8 @@ class B extends Base {
   B(String s) {
     super(s, 0);
   }
+  private B() { this("Oh B!"); }
+  public static B createB() { return new B(); }
   public String getStr() { return str; }
   @Override
   int realVirt() { return 300; }
@@ -95,6 +99,8 @@ class C extends Base {
   C(String s) {
     super(s, 1);
   }
+  private C() { this("Oh C!"); }
+  public static C createC() { return new C(); }
   public String getStr() { return str; }
   @Override
   int realVirt() { return 400; }
@@ -120,6 +126,8 @@ class D extends Base {
   D(String s) {
     super(s, 2);
   }
+  private D() { this("Oh D!"); }
+  public static D createD() { return new D(); }
   public String getStr() { return str; }
   @Override
   int realVirt() { return 500; }
@@ -149,6 +157,18 @@ public class TypeErasureSimpleTest {
     B b = new B("Oh B!");
     C c = new C("Oh C!");
     D d = new D("Oh D!");
+    assertThat(a.getStr()).isEqualTo("Oh A!");
+    assertThat(b.getStr()).isEqualTo("Oh B!");
+    assertThat(c.getStr()).isEqualTo("Oh C!");
+    assertThat(d.getStr()).isEqualTo("Oh D!");
+  }
+
+  @Test
+  public void testMultipleCtors() {
+    A a = A.createA();
+    B b = B.createB();
+    C c = C.createC();
+    D d = D.createD();
     assertThat(a.getStr()).isEqualTo("Oh A!");
     assertThat(b.getStr()).isEqualTo("Oh B!");
     assertThat(c.getStr()).isEqualTo("Oh C!");

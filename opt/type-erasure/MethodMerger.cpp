@@ -369,6 +369,11 @@ void MethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
     auto& call_pos = pair.second;
     inliner::inline_method(dispatch_code, callee_code, call_pos);
   }
+  TRACE(TERA,
+        9,
+        "inlined ctor dispatch %s\n%s",
+        SHOW(dispatch),
+        SHOW(dispatch->get_code()));
 }
 
 std::string MethodMerger::get_method_signature_string(DexMethod* meth) {
@@ -464,7 +469,6 @@ void MethodMerger::merge_ctors() {
     }
     ctor_set.insert(ctors.begin(), ctors.end());
   }
-  auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
 
   //////////////////////////////////////////
   // Create dispatch and fixes
@@ -573,6 +577,7 @@ void MethodMerger::merge_ctors() {
   //////////////////////////////////////////
   // Update call sites
   //////////////////////////////////////////
+  auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
   update_call_refs(
       call_sites, type_tags, old_to_new_callee, m_generate_type_tags);
 }
