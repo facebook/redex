@@ -14,8 +14,6 @@
 
 namespace {
 
-constexpr const char* ROOT_STORE_NAME = "classes";
-
 std::unordered_set<interdex::DexStatus, std::hash<int>>
 get_mixed_mode_dex_statuses(
     const std::vector<std::string>& mixed_mode_dex_statuses) {
@@ -178,7 +176,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   auto original_scope = build_class_scope(stores);
   for (auto& store : stores) {
-    if (store.get_name() == ROOT_STORE_NAME) {
+    if (store.is_root_store()) {
       run_pass(store.get_dexen(), original_scope, cfg, mgr);
     }
   }
