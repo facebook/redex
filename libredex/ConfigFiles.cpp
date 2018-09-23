@@ -232,6 +232,9 @@ std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_cla
       lists[it.key().asString()].push_back((*list_it).asString());
     }
   }
+
+  lists["secondary_dex_head.list"] = get_coldstart_classes();
+
   return lists;
 }
 
