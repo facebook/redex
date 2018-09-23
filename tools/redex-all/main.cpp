@@ -798,7 +798,7 @@ void dump_class_method_info_map(const std::string file_path,
       "# Class information is also interned.\n"
       "#\n"
       "# First column can be M, C, and I.\n"
-      "# - C => Class index and nformation\n"
+      "# - C => Class index and information\n"
       "# - M => Method information\n"
       "# - I,DEXLOC => Dex location string index\n"
       "#\n"
