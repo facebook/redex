@@ -56,11 +56,13 @@ void DexMetadata::parse(const std::string& path) {
 
 XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
   m_xstores.push_back(std::unordered_set<const DexType*>());
+  m_stores.push_back(&stores[0]);
   for (const auto& cls : stores[0].get_dexen()[0]) {
     m_xstores.back().insert(cls->get_type());
   }
   if (stores[0].get_dexen().size() > 1) {
     m_xstores.push_back(std::unordered_set<const DexType*>());
+    m_stores.push_back(&stores[0]);
     for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {
       for (const auto& cls : stores[0].get_dexen()[i]) {
         m_xstores.back().insert(cls->get_type());
@@ -69,6 +71,7 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
   }
   for (size_t i = 1; i < stores.size(); i++) {
     m_xstores.push_back(std::unordered_set<const DexType*>());
+    m_stores.push_back(&stores[i]);
     for (const auto& classes : stores[i].get_dexen()) {
       for (const auto& cls : classes) {
         m_xstores.back().insert(cls->get_type());

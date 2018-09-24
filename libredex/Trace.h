@@ -100,7 +100,8 @@
   TM(SWCL)               \
   TM(SW)                 \
   TM(IFCS_ANALYSIS)      \
-  TM(UNREF_INTF)
+  TM(UNREF_INTF)         \
+  TM(OPT_STORES)
 
 enum TraceModule : int {
 #define TM(x) x,
