@@ -70,6 +70,7 @@ class MultiMethodInliner {
     bool throws_inline;
     bool enforce_method_size_limit{true};
     bool multiple_callers{false};
+    bool inline_small_non_deletables{false};
     bool use_cfg_inliner{false};
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;

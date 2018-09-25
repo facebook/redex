@@ -28,6 +28,9 @@ class SimpleInlinePass : public Pass {
            m_inliner_config.enforce_method_size_limit);
     jw.get("use_cfg_inliner", false, m_inliner_config.use_cfg_inliner);
     jw.get("multiple_callers", false, m_inliner_config.multiple_callers);
+    jw.get("inline_small_non_deletables",
+           false,
+           m_inliner_config.inline_small_non_deletables);
 
     std::vector<std::string> black_list;
     jw.get("black_list", {}, black_list);

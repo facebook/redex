@@ -436,9 +436,6 @@ bool MultiMethodInliner::should_inline(const DexMethod* caller,
   if (has_any_annotation(callee, m_config.force_inline)) {
     return true;
   }
-  if (!can_delete(callee)) {
-    return false;
-  }
   if (too_many_callers(callee)) {
     log_nopt(INL_TOO_MANY_CALLERS, callee);
     return false;
@@ -463,19 +460,25 @@ static size_t count_important_opcodes(const IRCode* code) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
-  auto caller_count_it = callee_caller.find(callee);
-  if (caller_count_it == callee_caller.end()) {
-    return false;
-  }
-  auto caller_count = caller_count_it->second.size();
+  auto caller_count = callee_caller.at(callee).size();
   always_assert(caller_count > 0);
-  if (caller_count == 1) {
-    return false;
-  }
+
   if (!m_opcode_counts.count(callee)) {
     m_opcode_counts[callee] = count_important_opcodes(callee->get_code());
   }
   auto code_size = m_opcode_counts.at(callee);
+
+  if (!can_delete(callee)) {
+    if (m_config.inline_small_non_deletables) {
+      return code_size > CODE_SIZE_ANY_CALLERS;
+    } else {
+      return true;
+    }
+  }
+
+  if (caller_count == 1) {
+    return false;
+  }
   if (m_config.multiple_callers) {
     switch (caller_count) {
     case 2:
