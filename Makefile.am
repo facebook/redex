@@ -139,8 +139,8 @@ libredex_la_SOURCES = \
 	libredex/ProguardPrintConfiguration.cpp \
 	libredex/ProguardRegex.cpp \
 	libredex/ProguardReporting.cpp \
+	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
-	libredex/ReachableObjects.cpp \
 	libredex/RedexContext.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
