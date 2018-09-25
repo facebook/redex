@@ -5,10 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Inliner.h"
+
+#include "AnnoUtils.h"
 #include "ControlFlow.h"
 #include "CFGInliner.h"
 #include "DexUtil.h"
-#include "Inliner.h"
 #include "IRInstruction.h"
 #include "Mutators.h"
 #include "OptData.h"
@@ -193,22 +195,29 @@ void MultiMethodInliner::inline_methods() {
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
   // hit a leaf and we start inlining from there
+  std::unordered_set<DexMethod*> visited;
   for (auto it : caller_callee) {
     auto caller = it.first;
     TraceContext context(caller->get_deobfuscated_name());
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
-    std::unordered_set<DexMethod*> visited;
-    visited.insert(caller);
-    caller_inline(caller, it.second, visited);
+    sparta::PatriciaTreeSet<DexMethod*> call_stack;
+    caller_inline(caller, it.second, call_stack, &visited);
   }
 }
 
 void MultiMethodInliner::caller_inline(
     DexMethod* caller,
     const std::vector<DexMethod*>& callees,
-    std::unordered_set<DexMethod*>& visited) {
+    sparta::PatriciaTreeSet<DexMethod*> call_stack,
+    std::unordered_set<DexMethod*>* visited) {
+  if (visited->count(caller)) {
+    return;
+  }
+  visited->emplace(caller);
+  call_stack.insert(caller);
+
   std::vector<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
   // recurse into the callees in case they have something to inline on
@@ -216,17 +225,18 @@ void MultiMethodInliner::caller_inline(
   // completely resolved by the time it is inlined.
   for (auto callee : callees) {
     // if the call chain hits a call loop, ignore and keep going
-    if (visited.count(callee) > 0) {
+    if (call_stack.contains(callee)) {
       info.recursive++;
       continue;
     }
-    nonrecursive_callees.push_back(callee);
 
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
-      visited.insert(callee);
-      caller_inline(callee, maybe_caller->second, visited);
-      visited.erase(callee);
+      caller_inline(callee, maybe_caller->second, call_stack, visited);
+    }
+
+    if (should_inline(caller, callee)) {
+      nonrecursive_callees.push_back(callee);
     }
   }
   inline_callees(caller, nonrecursive_callees);
@@ -414,6 +424,69 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
   }
 
   return false;
+}
+
+bool MultiMethodInliner::should_inline(const DexMethod* caller,
+                                       const DexMethod* callee) const {
+  DexClass* cls = type_class(callee->get_class());
+  if (has_any_annotation(cls, m_config.no_inline) ||
+      has_any_annotation(callee, m_config.no_inline)) {
+    return false;
+  }
+  if (has_any_annotation(callee, m_config.force_inline)) {
+    return true;
+  }
+  if (!can_delete(callee)) {
+    return false;
+  }
+  if (too_many_callers(callee)) {
+    log_nopt(INL_TOO_MANY_CALLERS, callee);
+    return false;
+  }
+  return true;
+}
+
+/*
+ * Ignore internal opcodes because they do not take up any space in the final
+ * dex file. Ignore move opcodes with the hope that RegAlloc will eliminate
+ * most of them.
+ */
+static size_t count_important_opcodes(const IRCode* code) {
+  size_t count {0};
+  for (auto& mie : InstructionIterable(code)) {
+    auto op = mie.insn->opcode();
+    if (!opcode::is_internal(op) && !opcode::is_move(op)) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
+  auto caller_count_it = callee_caller.find(callee);
+  if (caller_count_it == callee_caller.end()) {
+    return false;
+  }
+  auto caller_count = caller_count_it->second.size();
+  always_assert(caller_count > 0);
+  if (caller_count == 1) {
+    return false;
+  }
+  if (!m_opcode_counts.count(callee)) {
+    m_opcode_counts[callee] = count_important_opcodes(callee->get_code());
+  }
+  auto code_size = m_opcode_counts.at(callee);
+  if (m_config.multiple_callers) {
+    switch (caller_count) {
+    case 2:
+      return code_size > CODE_SIZE_2_CALLERS;
+    case 3:
+      return code_size > CODE_SIZE_3_CALLERS;
+    default:
+      break;
+    }
+  }
+  return code_size > CODE_SIZE_ANY_CALLERS;
 }
 
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
@@ -705,87 +778,6 @@ void adjust_opcode_counts(
   for (auto it = range.first; it != range.second; ++it) {
     auto caller = it->second;
     (*adjusted_opcode_count)[caller] += code_size;
-  }
-}
-
-void select_inlinable(
-    const Scope& scope,
-    const std::unordered_set<DexMethod*>& methods,
-    MethodRefCache& resolved_refs,
-    std::unordered_set<DexMethod*>* inlinable,
-    bool multiple_callers) {
-  std::map<DexMethod*, int, dexmethods_comparator> calls;
-  // Keep adjusted tally of opcode size after a method is selected for inlining.
-  // This avoids an edge case where a small method has many callers, but becomes
-  // large due to inlining (need to prevent code duplication in such a case)
-  std::unordered_map<DexMethod*, size_t> adjusted_opcode_count;
-  std::unordered_multimap<DexMethod*, DexMethod*> callee_to_callers;
-  for (const auto& method : methods) {
-    calls[method] = 0;
-    auto code = method->get_code();
-    adjusted_opcode_count[method] = code == nullptr ? 0 : code->count_opcodes();
-  }
-  // count call sites for each method
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto callee = resolve_method(
-              insn->get_method(), opcode_to_search(insn), resolved_refs);
-          if (callee != nullptr && callee->is_concrete()
-              && methods.count(callee) > 0) {
-            calls[callee]++;
-            callee_to_callers.emplace(callee, meth);
-          }
-        }
-      });
-
-  // pick methods with a single call site and add to candidates.
-  // This vector usage is only because of logging we should remove it
-  // once the optimization is "closed"
-  std::vector<std::vector<DexMethod*>> calls_group(MAX_COUNT);
-  for (auto call_it : calls) {
-    if (call_it.second >= MAX_COUNT) {
-      calls_group[MAX_COUNT - 1].push_back(call_it.first);
-      continue;
-    }
-    calls_group[call_it.second].push_back(call_it.first);
-  }
-  assert(method_breakup(calls_group));
-  for (auto callee : calls_group[1]) {
-    adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-    inlinable->insert(callee);
-  }
-  if (multiple_callers) {
-    for (auto callee : calls_group[2]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_2_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_2_CALLERS_TOO_BIG, callee);
-      }
-    }
-    for (auto callee : calls_group[3]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_3_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_3_CALLERS_TOO_BIG, callee);
-      }
-    }
-  }
-
-  for (size_t i = multiple_callers ? 4 : 2; i < MAX_COUNT; ++i) {
-    for (auto callee : calls_group[i]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_ANY_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_TOO_MANY_CALLERS, callee);
-      }
-    }
   }
 }
 

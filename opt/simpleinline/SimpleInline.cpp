@@ -24,66 +24,14 @@
 #include "VirtualScope.h"
 #include "ClassHierarchy.h"
 
-namespace {
-
-std::unordered_set<DexType*> no_inline_annos(
-  const std::vector<std::string>& annos,
-  ConfigFiles& cfg
-) {
-  std::unordered_set<DexType*> no_inline;
-  for (const auto& anno : cfg.get_no_optimizations_annos()) {
-    no_inline.insert(anno);
-  }
-  for (auto const& no_inline_anno : annos) {
-    auto type = DexType::get_type(
-        DexString::get_string(no_inline_anno.c_str()));
-    if (type != nullptr) {
-      no_inline.insert(type);
-    }
-  }
-  return no_inline;
-}
-
-std::unordered_set<DexType*> force_inline_annos(
-    const std::vector<std::string>& annos) {
-  std::unordered_set<DexType*> force_inline;
-  for (auto const& force_inline_anno : annos) {
-    auto type = DexType::get_type(force_inline_anno.c_str());
-    if (type != nullptr) {
-      force_inline.insert(type);
-    }
-  }
-  return force_inline;
-}
-
-template<typename DexMember>
-bool has_anno(DexMember* m, const std::unordered_set<DexType*>& no_inline) {
-  if (no_inline.size() == 0) return false;
-  if (m != nullptr && m->get_anno_set() != nullptr) {
-    for (const auto& anno : m->get_anno_set()->get_annotations()) {
-      if (no_inline.count(anno->type()) > 0) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-}
-
 void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(SINL, 1, "SimpleInlinePass not run because no ProGuard configuration was provided.");
     return;
   }
-  const auto no_inline = no_inline_annos(m_no_inline_annos, cfg);
-  const auto force_inline = force_inline_annos(m_force_inline_annos);
-
   auto scope = build_class_scope(stores);
   // gather all inlinable candidates
-  auto methods = gather_non_virtual_methods(scope, no_inline, force_inline);
-  select_inlinable(
-      scope, methods, resolved_refs, &inlinable, m_multiple_callers);
+  auto methods = gather_non_virtual_methods(scope);
 
   auto resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);
@@ -91,7 +39,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
 
   // inline candidates
   MultiMethodInliner inliner(
-      scope, stores, inlinable, resolver, m_inliner_config);
+      scope, stores, methods, resolver, m_inliner_config);
   inliner.inline_methods();
 
   // delete all methods that can be deleted
@@ -129,9 +77,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
  * for inlining.
  */
 std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
-    Scope& scope,
-    const std::unordered_set<DexType*>& no_inline,
-    const std::unordered_set<DexType*>& force_inline) {
+    Scope& scope) {
   // trace counter
   size_t all_methods = 0;
   size_t direct_methods = 0;
@@ -142,33 +88,11 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   size_t static_methods = 0;
   size_t private_methods = 0;
   size_t dont_strip = 0;
-  size_t no_inline_anno_count = 0;
   size_t non_virt_dont_strip = 0;
   size_t non_virt_methods = 0;
 
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
-
-  const auto can_inline_method = [&](DexMethod* meth, const IRCode& code) {
-    DexClass* cls = type_class(meth->get_class());
-    if (has_anno(cls, no_inline) ||
-        has_anno(meth, no_inline)) {
-      no_inline_anno_count++;
-      return;
-    }
-
-    if (!can_delete(meth)) {
-      // never inline methods that cannot be deleted
-      TRACE(SINL, 4, "cannot_delete: %s\n", SHOW(meth));
-      dont_strip++;
-    } else {
-      methods.insert(meth);
-    }
-
-    if (has_anno(meth, force_inline)) {
-      inlinable.insert(meth);
-    }
-  };
 
   walk::methods(scope,
       [&](DexMethod* method) {
@@ -189,7 +113,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
 
         if (dont_inline) return;
 
-        can_inline_method(method, *code);
+        methods.insert(method);
       });
   if (m_virtual_inline) {
     auto non_virtual = devirtualize(scope);
@@ -200,7 +124,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
         non_virtual_no_code++;
         continue;
       }
-      can_inline_method(vmeth, *code);
+      methods.insert(vmeth);
     }
   }
 
@@ -217,9 +141,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   TRACE(SINL, 2, "Virtual methods non virtual count: %ld\n", non_virt_methods);
   TRACE(SINL, 2, "Non virtual no code count: %ld\n", non_virtual_no_code);
   TRACE(SINL, 2, "Non virtual no strip count: %ld\n", non_virt_dont_strip);
-  TRACE(SINL, 2, "Small methods: %ld\n", inlinable.size());
   TRACE(SINL, 2, "Don't strip inlinable methods count: %ld\n", dont_strip);
-  TRACE(SINL, 2, "Don't inline annotation count: %ld\n", no_inline_anno_count);
   return methods;
 }
 

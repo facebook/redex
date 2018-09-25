@@ -253,6 +253,8 @@ bool is_load_param(IROpcode);
 
 bool is_move_result_pseudo(IROpcode);
 
+bool is_move(IROpcode);
+
 IROpcode load_param_to_move(IROpcode);
 
 IROpcode invert_conditional_branch(IROpcode op);
