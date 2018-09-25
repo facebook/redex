@@ -44,7 +44,7 @@ template <class Input,
           class Output = std::nullptr_t>
 class WorkerState {
  public:
-  WorkerState(const Data& initial) : m_data(initial) {}
+  WorkerState(size_t id, const Data& initial) : m_id(id), m_data(initial) {}
 
   Data& get_data() {
     return m_data;
@@ -60,6 +60,10 @@ class WorkerState {
     m_queue.push(task);
   }
 
+  size_t worker_id() const {
+    return m_id;
+  }
+
  private:
   bool pop_task(Input& task) {
     boost::lock_guard<boost::mutex> guard(m_queue_mtx);
@@ -71,6 +75,7 @@ class WorkerState {
     return false;
   }
 
+  size_t m_id;
   std::queue<Input> m_queue;
   boost::mutex m_queue_mtx;
   Data m_data;
@@ -132,7 +137,7 @@ WorkQueue<Input, Data, Output>::WorkQueue(
   always_assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
     m_states.emplace_back(std::make_unique<WorkerState<Input, Data, Output>>(
-        data_initializer(i)));
+        i, data_initializer(i)));
   }
 }
 
