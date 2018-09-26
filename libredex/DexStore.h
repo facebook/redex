@@ -47,6 +47,7 @@ class DexStore {
   std::vector<DexClasses>& get_dexen();
   const std::vector<DexClasses>& get_dexen() const;
   std::vector<std::string> get_dependencies() const;
+  bool is_root_store() const;
 
   void add_classes(DexClasses classes);
 };
