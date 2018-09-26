@@ -115,6 +115,12 @@ class XStoreRefs {
    */
   std::vector<std::unordered_set<const DexType*>> m_xstores;
 
+  /**
+   * Pointers to original stores in the same order as used to populate
+   * m_xstores
+   */
+  std::vector<const DexStore*> m_stores;
+
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
 
@@ -128,6 +134,12 @@ class XStoreRefs {
       if (m_xstores[store_idx].count(type) > 0) return store_idx;
     }
     always_assert_log(false, "type %s not in the current APK", SHOW(type));
+  }
+
+  const DexStore* get_store(size_t idx) const { return m_stores[idx]; }
+
+  const DexStore* get_store(const DexType* type) const {
+    return m_stores[get_store_idx(type)];
   }
 
   /**
