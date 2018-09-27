@@ -22,6 +22,11 @@ class Type3 {
 class Type5 {
 }
 
+// NOTE: This test exercises the "legacy_reflection_reachability" option in
+// ReachableClasses.
+// See the following tests for the modern analysis:
+//  native/redex/test/instr/ReachableClassesTest.java
+//  native/redex/test/instr/ReachableClassesTestVerify.cpp
 public class ReachableClasses {
     public static void foo() throws Exception {
       Class cls;

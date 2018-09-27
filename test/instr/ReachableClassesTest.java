@@ -6,6 +6,7 @@ import static org.fest.assertions.api.Assertions.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.lang.reflect.Method;
 
 import com.facebook.redex.test.instr.KeepForRedexTest;
 
@@ -72,6 +73,34 @@ class E implements Duck {
   }
 }
 
+class Super {
+  public void foo() {
+
+  }
+
+  private void bar() {
+
+  }
+}
+
+class Sub extends Super {
+  public void foo() {
+
+  }
+
+  private void foo(int x) {
+
+  }
+
+  public void bar() {
+
+  }
+
+  private void bar(int x) {
+
+  }
+}
+
 @KeepForRedexTest
 public class ReachableClassesTest {
 
@@ -79,6 +108,8 @@ public class ReachableClassesTest {
   @KeepForRedexTest
   public void testAccessClassesWithReflection() throws Exception {
     List<Integer> values = new ArrayList<>();
+
+    // Constructors
 
     Class a = Class.forName("com.redex.reachable.A");
     Duck aa = (Duck) a.newInstance();
@@ -99,6 +130,13 @@ public class ReachableClassesTest {
     Class e = Class.forName("com.redex.reachable.E");
     Duck ee = (Duck) e.getDeclaredConstructors()[0].newInstance(42);
     values.add(ee.quack());
+
+    // getMethod() vs getDeclaredMethod()
+
+    // Should mark the public Sub.foo() and the Super.foo().
+    Method foo = Class.forName("com.redex.reachable.Sub").getMethod("foo");
+    // Should mark the public and private bar on Sub, but not the bar on Super.
+    Method bar = Class.forName("com.redex.reachable.Sub").getDeclaredMethod("bar");
 
     assertThat(values).containsExactly(100, 200, 300, 400, 500);
   }

@@ -60,16 +60,25 @@ struct DexItemIter<DexMethod*, F> {
 template<typename T>
 void blacklist(DexType* type, DexString *name, bool declared) {
   auto* cls = type_class(type);
-  if (cls) {
-    auto yield = [&](T t) {
-      if (t->get_name() != name) return;
-      TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-      t->rstate.set_keep();
-      if (!declared) {
-        // TOOD: handle not declared case, go up inheritance tree
-      }
-    };
-    DexItemIter<T, decltype(yield)>::iterate(cls, yield);
+  if (cls == nullptr) {
+    return;
+  }
+  auto yield = [&](T t) {
+    if (t->get_name() != name) {
+      return;
+    }
+    if (!is_public(t) && !declared) {
+      return;
+    }
+    TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
+    t->rstate.set_keep();
+  };
+  DexItemIter<T, decltype(yield)>::iterate(cls, yield);
+  if (!declared) {
+    auto super_cls = cls->get_super_class();
+    if (super_cls != nullptr) {
+      blacklist<T>(super_cls, name, declared);
+    }
   }
 }
 
@@ -183,18 +192,18 @@ void analyze_reflection(const Scope& scope) {
 
       switch (refl_type) {
       case GET_FIELD:
-        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, true);
+        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_FIELD:
-        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, false);
+        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, true);
         break;
       case GET_METHOD:
       case GET_CONSTRUCTOR:
-        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, true);
+        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_METHOD:
       case GET_DECLARED_CONSTRUCTOR:
-        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, false);
+        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, true);
         break;
       case INT_UPDATER:
       case LONG_UPDATER:
