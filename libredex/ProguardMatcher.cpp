@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <algorithm>
 #include <boost/regex.hpp>
 #include <iostream>
 #include <thread>
@@ -463,114 +464,62 @@ DexClass* find_single_class(const ProguardMap& pg_map,
   return type_class(typ);
 }
 
-std::vector<DexMethod*> all_method_matches(
-    RegexMap& regex_map,
-    const DexClass* cls,
-    const MemberSpecification& method_keep,
-    const boost::regex& method_regex) {
-  std::vector<DexMethod*> matches;
-  for (const auto& method : cls->get_vmethods()) {
-    if (method_level_match(regex_map, method_keep, method, method_regex)) {
-      matches.push_back(method);
-    }
-  }
-  for (const auto& method : cls->get_dmethods()) {
-    if (method_level_match(regex_map, method_keep, method, method_regex)) {
-      matches.push_back(method);
-    }
-  }
-  return matches;
+bool any_method_matches(RegexMap& regex_map,
+                        const DexClass* cls,
+                        const MemberSpecification& method_keep,
+                        const boost::regex& method_regex) {
+  auto match = [&](const DexMethod* method) {
+    return method_level_match(regex_map, method_keep, method, method_regex);
+  };
+  return std::any_of(
+             cls->get_vmethods().begin(), cls->get_vmethods().end(), match) ||
+         std::any_of(
+             cls->get_dmethods().begin(), cls->get_dmethods().end(), match);
 }
 
-// Find all matching methods in class cls.
-void matching_methods(RegexMap& regex_map,
-                      std::vector<MemberSpecification>& method_keeps,
-                      const DexClass* cls,
-                      bool search_super_classes) {
-  const DexClass* class_to_search = cls;
-  while (class_to_search != nullptr && !class_to_search->is_external()) {
-    for (auto& method_keep : method_keeps) {
-      auto qualified_method_regex = method_regex(method_keep);
-      const boost::regex& matcher =
-          register_matcher(regex_map, qualified_method_regex);
-      std::vector<DexMethod*> matched_methods =
-          all_method_matches(regex_map, class_to_search, method_keep, matcher);
-      if (matched_methods.empty()) {
-        continue;
-      }
-      // Record a match for this method level keep rule.
-      method_keep.mark_conditionally = true;
-    }
-    if (!search_super_classes) {
-      break;
-    }
-    auto typ = class_to_search->get_super_class();
-    if (typ == nullptr) {
-      break;
-    }
-    class_to_search = type_class(typ);
-  }
+// Check that each method keep matches at least one method in :cls.
+bool all_method_keeps_match(
+    RegexMap& regex_map,
+    const std::vector<MemberSpecification>& method_keeps,
+    const DexClass* cls) {
+  return std::all_of(method_keeps.begin(),
+                     method_keeps.end(),
+                     [&](const MemberSpecification& method_keep) {
+                       auto qualified_method_regex = method_regex(method_keep);
+                       const boost::regex& matcher =
+                           register_matcher(regex_map, qualified_method_regex);
+                       return any_method_matches(
+                           regex_map, cls, method_keep, matcher);
+                     });
 }
 
-std::vector<DexField*> all_field_matches(
-    RegexMap& regex_map,
-    const DexClass* cls,
-    const MemberSpecification& field_keep) {
+bool any_field_matches(RegexMap& regex_map,
+                       const DexClass* cls,
+                       const MemberSpecification& field_keep) {
   auto fieldtype_regex = field_regex(field_keep);
-  auto ifields = cls->get_ifields();
-  auto sfields = cls->get_sfields();
-  std::vector<DexField*> matches;
   const boost::regex& matcher = register_matcher(regex_map, fieldtype_regex);
-  for (const auto& field : ifields) {
-    if (field_level_match(regex_map, field_keep, field, matcher)) {
-      matches.push_back(field);
-    }
-  }
-  for (const auto& field : sfields) {
-    if (field_level_match(regex_map, field_keep, field, matcher)) {
-      matches.push_back(field);
-    }
-  }
-  return matches;
+  auto match = [&](const DexField* field) {
+    return field_level_match(regex_map, field_keep, field, matcher);
+  };
+  return std::any_of(
+             cls->get_ifields().begin(), cls->get_ifields().end(), match) ||
+         std::any_of(
+             cls->get_sfields().begin(), cls->get_sfields().end(), match);
 }
 
-// Find all matching fields in class cls.
-void matching_fields(RegexMap& regex_map,
-                     std::vector<MemberSpecification>& field_keeps,
-                     const DexClass* cls,
-                     bool search_super_classes) {
-  const DexClass* class_to_search = cls;
-  while (class_to_search != nullptr && !class_to_search->is_external()) {
-    for (auto& field_keep : field_keeps) {
-      auto matched_fields =
-          all_field_matches(regex_map, class_to_search, field_keep);
-      if (matched_fields.empty()) {
-        continue;
-      }
-      // Record a match for this field keep rule.
-      field_keep.mark_conditionally = true;
-    }
-    if (!search_super_classes) {
-      break;
-    }
-    auto typ = class_to_search->get_super_class();
-    if (typ == nullptr) {
-      break;
-    }
-    class_to_search = type_class(typ);
-  }
-}
-
-bool all_conditionally_matched(
-    const std::vector<MemberSpecification>& members) {
-  return std::all_of(
-      members.begin(), members.end(), [](const MemberSpecification& m) {
-        return m.mark_conditionally;
-      });
+// Check that each field keep matches at least one field in :cls.
+bool all_field_keeps_match(RegexMap& regex_map,
+                           const std::vector<MemberSpecification>& field_keeps,
+                           const DexClass* cls) {
+  return std::all_of(field_keeps.begin(),
+                     field_keeps.end(),
+                     [&](const MemberSpecification& field_keep) {
+                       return any_field_matches(regex_map, cls, field_keep);
+                     });
 }
 
 bool process_mark_conditionally(RegexMap& regex_map,
-                                KeepSpec& keep_rule,
+                                const KeepSpec& keep_rule,
                                 const DexClass* cls) {
   if (keep_rule.class_spec.fieldSpecifications.empty() &&
       keep_rule.class_spec.methodSpecifications.empty()) {
@@ -578,20 +527,10 @@ bool process_mark_conditionally(RegexMap& regex_map,
               << keep_rule.class_spec.className
               << " has no field or member specifications.\n";
   }
-  // Clear conditional marks.
-  for (auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
-    field_spec.mark_conditionally = false;
-  }
-  for (auto& method_spec : keep_rule.class_spec.methodSpecifications) {
-    method_spec.mark_conditionally = false;
-  }
-  matching_fields(
-      regex_map, keep_rule.class_spec.fieldSpecifications, cls, false);
-  matching_methods(
-      regex_map, keep_rule.class_spec.methodSpecifications, cls, false);
-  // Make sure every field and method keep rule is matched.
-  return all_conditionally_matched(keep_rule.class_spec.fieldSpecifications) &&
-         all_conditionally_matched(keep_rule.class_spec.methodSpecifications);
+  return all_field_keeps_match(
+             regex_map, keep_rule.class_spec.fieldSpecifications, cls) &&
+         all_method_keeps_match(
+             regex_map, keep_rule.class_spec.methodSpecifications, cls);
 }
 
 // Once a match has been made against a class i.e. the class name
@@ -607,7 +546,7 @@ bool process_mark_conditionally(RegexMap& regex_map,
 // m_keep_count, but the other boolean values are always overwritten. These WAW
 // (write-after-write) races are benign and do not affect the results.
 void mark_class_and_members_for_keep(RegexMap& regex_map,
-                                     KeepSpec& keep_rule,
+                                     const KeepSpec& keep_rule,
                                      DexClass* cls) {
   // First check to see if we need to mark conditionally to see if all
   // field and method rules match i.e. we have a -keepclasseswithmembers
@@ -675,7 +614,7 @@ void mark_class_and_members_for_keep(RegexMap& regex_map,
 
 // This function is also executed concurrently.
 void process_whyareyoukeeping(RegexMap& regex_map,
-                              KeepSpec& keep_rule,
+                              const KeepSpec& keep_rule,
                               DexClass* cls) {
   cls->rstate.set_whyareyoukeeping();
 
@@ -690,7 +629,7 @@ void process_whyareyoukeeping(RegexMap& regex_map,
 
 // This function is also executed concurrently.
 void process_assumenosideeffects(RegexMap& regex_map,
-                                 KeepSpec& keep_rule,
+                                 const KeepSpec& keep_rule,
                                  DexClass* cls) {
   cls->rstate.set_assumenosideeffects();
 
@@ -724,17 +663,17 @@ void build_extends_or_implements_hierarchy(const Scope& scope,
 
 void process_keep(
     const ProguardMap& pg_map,
-    std::vector<KeepSpec>& keep_rules,
+    const std::vector<KeepSpec>& keep_rules,
     const Scope& classes,
     const Scope& external_classes,
     const ClassHierarchy& hierarchy,
-    std::function<void(RegexMap&, KeepSpec&, DexClass*)> keep_processor,
+    std::function<void(RegexMap&, const KeepSpec&, DexClass*)> keep_processor,
     const std::string& name,
     bool process_external = false) {
   Timer t("Process keep for " + name);
 
   auto process_single_keep = [&keep_processor](ClassMatcher& class_match,
-                                               KeepSpec& keep_rule,
+                                               const KeepSpec& keep_rule,
                                                DexClass* cls,
                                                RegexMap& regex_map,
                                                bool process_external) {
@@ -748,8 +687,9 @@ void process_keep(
   };
 
   // We only parallelize if keep_rule needs to be applied to all classes.
-  auto wq = workqueue_foreach<KeepSpec*>(
-      [&process_single_keep, &classes, &external_classes, process_external](KeepSpec* keep_rule) {
+  auto wq = workqueue_foreach<const KeepSpec*>(
+      [&process_single_keep, &classes, &external_classes, process_external](
+          const KeepSpec* keep_rule) {
         RegexMap regex_map;
         ClassMatcher class_match(*keep_rule);
 
@@ -763,7 +703,7 @@ void process_keep(
         }
       });
 
-  for (auto& keep_rule : keep_rules) {
+  for (const auto& keep_rule : keep_rules) {
     RegexMap regex_map;
     ClassMatcher class_match(keep_rule);
 
@@ -827,27 +767,26 @@ inline bool operator==(const KeepSpec& lhs, const KeepSpec& rhs) {
          lhs.class_spec == rhs.class_spec;
 }
 
-void filter_duplicate_rules(std::vector<KeepSpec>* keep_rules) {
+std::vector<KeepSpec> filter_duplicate_rules(
+    const std::vector<KeepSpec>& keep_rules) {
   std::vector<KeepSpec> unique;
-  for (const auto& rule : *keep_rules) {
+  for (const auto& rule : keep_rules) {
     auto it = std::find(unique.begin(), unique.end(), rule);
     if (it == unique.end()) {
       unique.push_back(rule);
     }
   }
-  keep_rules->clear();
-  for (const auto& rule : unique) {
-    keep_rules->push_back(rule);
-  }
+  return unique;
 }
 
 void process_proguard_rules(const ProguardMap& pg_map,
                             const Scope& classes,
                             const Scope& external_classes,
-                            ProguardConfiguration* pg_config) {
+                            const ProguardConfiguration& pg_config) {
   // Filter out duplicate rules to speed up processing.
-  filter_duplicate_rules(&pg_config->keep_rules);
-  filter_duplicate_rules(&pg_config->assumenosideeffects_rules);
+  const auto& keep_rules = filter_duplicate_rules(pg_config.keep_rules);
+  const auto& assumenosideeffects_rules =
+      filter_duplicate_rules(pg_config.assumenosideeffects_rules);
   // Now process each of the different kinds of rules as well
   // as -assumenosideeffects and -whyareyoukeeping.
 
@@ -859,7 +798,7 @@ void process_proguard_rules(const ProguardMap& pg_map,
   build_extends_or_implements_hierarchy(external_classes, &hierarchy);
 
   process_keep(pg_map,
-               pg_config->whyareyoukeeping_rules,
+               pg_config.whyareyoukeeping_rules,
                classes,
                external_classes,
                hierarchy,
@@ -867,7 +806,7 @@ void process_proguard_rules(const ProguardMap& pg_map,
                "whyareyoukeeping");
 
   process_keep(pg_map,
-               pg_config->keep_rules,
+               keep_rules,
                classes,
                external_classes,
                hierarchy,
@@ -875,7 +814,7 @@ void process_proguard_rules(const ProguardMap& pg_map,
                "classes and members");
 
   process_keep(pg_map,
-               pg_config->assumenosideeffects_rules,
+               assumenosideeffects_rules,
                classes,
                external_classes,
                hierarchy,

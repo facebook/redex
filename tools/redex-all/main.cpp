@@ -679,7 +679,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   {
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
-                           &pg_config);
+                           pg_config);
   }
 }
 

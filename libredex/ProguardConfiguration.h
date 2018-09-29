@@ -22,7 +22,6 @@ struct MemberSpecification {
   std::string annotationType;
   std::string name;
   std::string descriptor;
-  bool mark_conditionally{false};
 };
 
 struct ClassSpecification {
