@@ -105,9 +105,12 @@ struct ConfigFiles {
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
 
-  bool save_move_map() const {
-    return m_move_map;
+  const std::unordered_map<std::string, unsigned int>& get_method_to_weight()
+      const {
+    return m_method_to_weight;
   }
+
+  bool save_move_map() const { return m_move_map; }
 
   const MethodMap& get_moved_methods_map() const {
     return m_moved_methods_map;
@@ -145,6 +148,7 @@ struct ConfigFiles {
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
   std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
+  void load_method_to_weight();
 
   bool m_move_map{false};
   bool m_load_class_lists_attempted{false};
@@ -152,9 +156,11 @@ struct ConfigFiles {
   MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_method_filename;
+  std::string m_profiled_methods_filename;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
   std::unordered_map<std::string, std::vector<std::string> > m_class_lists;
+  std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::string m_printseeds; // Filename to dump computed seeds.
 
   // global no optimizations annotations

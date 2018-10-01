@@ -6,15 +6,16 @@
  */
 
 #include <algorithm>
-#include <memory>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <list>
-#include <stdlib.h>
-#include <unordered_set>
-#include <functional>
-#include <exception>
 #include <assert.h>
+#include <exception>
+#include <fcntl.h>
+#include <fstream>
+#include <functional>
+#include <list>
+#include <memory>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <unordered_set>
 
 #ifdef _MSC_VER
 // TODO: Rewrite open/write/close with C/C++ standards. But it works for now.
@@ -133,21 +134,27 @@ void GatheredTypes::sort_dexmethod_emitlist_default_order(
 void GatheredTypes::sort_dexmethod_emitlist_cls_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
-    CustomSort<DexMethod, cmp_dmethod>(m_methods_in_cls_order, compare_dexmethods)
-  );
+                   CustomSort<DexMethod, cmp_dmethod>(m_methods_in_cls_order,
+                                                      compare_dexmethods));
+}
+
+void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
+    std::vector<DexMethod*>& lmeth) {
+  std::stable_sort(lmeth.begin(),
+                   lmeth.end(),
+                   dexmethods_profiled_comparator(m_method_to_weight));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
-    [](const DexMethod* a, const DexMethod* b) {
-      if (is_clinit(a) && !is_clinit(b)) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  );
+                   [](const DexMethod* a, const DexMethod* b) {
+                     if (is_clinit(a) && !is_clinit(b)) {
+                       return true;
+                     } else {
+                       return false;
+                     }
+                   });
 }
 
 DexOutputIdx* GatheredTypes::get_dodx(const uint8_t* base) {
@@ -291,7 +298,7 @@ void GatheredTypes::build_cls_map() {
 }
 
 void GatheredTypes::build_method_map() {
-  auto index = 0;
+  unsigned int index = 0;
   for (const auto& cls : *m_classes) {
     for (const auto& m : cls->get_dmethods()) {
       if (!m_methods_in_cls_order.count(m)) {
@@ -418,22 +425,24 @@ public:
     DexString* descriptor);
 
  public:
-  DexOutput(
-    const char* path,
-    DexClasses* classes,
-    LocatorIndex* locator_index,
-    size_t dex_number,
-    bool emit_debug_line_info,
-    const ConfigFiles& config_files,
-    PositionMapper* pos_mapper,
-    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::string& method_mapping_path,
-    const std::string& class_mapping_path,
-    const std::string& pg_mapping_path,
-    const std::string& bytecode_offset_path);
+  DexOutput(const char* path,
+            DexClasses* classes,
+            LocatorIndex* locator_index,
+            size_t dex_number,
+            bool emit_debug_line_info,
+            const ConfigFiles& config_files,
+            PositionMapper* pos_mapper,
+            std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+            std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
+                code_debug_lines,
+            const std::string& method_mapping_path,
+            const std::string& class_mapping_path,
+            const std::string& pg_mapping_path,
+            const std::string& bytecode_offset_path);
   ~DexOutput();
-  void prepare(SortMode string_mode, const std::vector<SortMode>& code_mode);
+  void prepare(SortMode string_mode,
+               const std::vector<SortMode>& code_mode,
+               const ConfigFiles& cfg);
   void write();
 };
 
@@ -766,6 +775,7 @@ static void sync_all(const Scope& scope) {
 }
 
 void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
+  TRACE(MAIN, 2, "generate_code_items\n");
   /*
    * Optimization note:  We should pass a sort routine to the
    * emitlist to optimize pagecache efficiency.
@@ -785,19 +795,26 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         TRACE(CUSTOMSORT, 2, "using class order for bytecode sorting\n");
         m_gtypes->sort_dexmethod_emitlist_cls_order(lmeth);
         break;
+      case SortMode::METHOD_PROFILED_ORDER:
+        TRACE(CUSTOMSORT, 2,
+              "using method profiled order for bytecode sorting\n");
+        m_gtypes->sort_dexmethod_emitlist_profiled_order(lmeth);
+        break;
       case SortMode::CLINIT_FIRST:
-        TRACE(CUSTOMSORT, 2, "sorting <clinit> sections before all other bytecode");
+        TRACE(CUSTOMSORT, 2,
+              "sorting <clinit> sections before all other bytecode");
         m_gtypes->sort_dexmethod_emitlist_clinit_order(lmeth);
         break;
 
       case SortMode::CLASS_STRINGS:
-        TRACE(CUSTOMSORT, 2, "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
+        TRACE(CUSTOMSORT, 2,
+              "Unsupport bytecode sorting method SortMode::CLASS_STRINGS\n");
         break;
       case SortMode::DEFAULT:
-        TRACE(CUSTOMSORT, 2, "using default sorting order");
+        TRACE(CUSTOMSORT, 2, "using default sorting order\n");
         m_gtypes->sort_dexmethod_emitlist_default_order(lmeth);
         break;
-    }
+      }
   }
   for (DexMethod* meth : lmeth) {
     if (meth->get_access() & (ACC_ABSTRACT | ACC_NATIVE)) {
@@ -1476,13 +1493,24 @@ void DexOutput::write_symbol_files() {
     m_pg_mapping_filename,
     m_classes
   );
-  write_bytecode_offset_mapping(
-    m_bytecode_offset_filename,
-    m_method_bytecode_offsets
-  );
+  write_bytecode_offset_mapping(m_bytecode_offset_filename,
+                                m_method_bytecode_offsets);
 }
 
-void DexOutput::prepare(SortMode string_mode, const std::vector<SortMode>& code_mode) {
+void GatheredTypes::set_method_to_weight(
+    const std::unordered_map<std::string, unsigned int>& method_to_weight) {
+  m_method_to_weight = method_to_weight;
+}
+
+void DexOutput::prepare(SortMode string_mode,
+                        const std::vector<SortMode>& code_mode,
+                        const ConfigFiles& cfg) {
+
+  if (std::find(code_mode.begin(), code_mode.end(),
+                SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
+    m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
+  }
+
   fix_jumbos(m_classes, dodx);
   init_header_offsets();
   generate_static_values();
@@ -1523,6 +1551,8 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
     return SortMode::CLASS_ORDER;
   } else if (sort_bytecode == "clinit_order") {
     return SortMode::CLINIT_FIRST;
+  } else if (sort_bytecode == "method_profiled_order") {
+    return SortMode::METHOD_PROFILED_ORDER;
   } else {
     return SortMode::DEFAULT;
   }
@@ -1571,22 +1601,21 @@ write_classes_to_dex(
     code_sort_mode.push_back(SortMode::DEFAULT);
   }
 
-  DexOutput dout = DexOutput(
-    filename.c_str(),
-    classes,
-    locator_index,
-    dex_number,
-    emit_debug_line_info,
-    cfg,
-    pos_mapper,
-    method_to_id,
-    code_debug_lines,
-    method_mapping_filename,
-    class_mapping_filename,
-    pg_mapping_filename,
-    bytecode_offset_filename);
+  DexOutput dout = DexOutput(filename.c_str(),
+                             classes,
+                             locator_index,
+                             dex_number,
+                             emit_debug_line_info,
+                             cfg,
+                             pos_mapper,
+                             method_to_id,
+                             code_debug_lines,
+                             method_mapping_filename,
+                             class_mapping_filename,
+                             pg_mapping_filename,
+                             bytecode_offset_filename);
 
-  dout.prepare(string_sort_mode, code_sort_mode);
+  dout.prepare(string_sort_mode, code_sort_mode, cfg);
   dout.write();
   return dout.m_stats;
 }
