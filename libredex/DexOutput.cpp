@@ -142,7 +142,7 @@ void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(),
                    lmeth.end(),
-                   dexmethods_profiled_comparator(m_method_to_weight));
+                   dexmethods_profiled_comparator(&m_method_to_weight));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(

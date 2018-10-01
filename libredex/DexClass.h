@@ -1185,13 +1185,13 @@ struct dexmethods_comparator {
 
 inline int get_method_weight_if_available(
     DexMethodRef* mref,
-    const std::unordered_map<std::string, unsigned int>& method_to_weight) {
+    std::unordered_map<std::string, unsigned int>* method_to_weight) {
 
   if (mref->is_def()) {
     DexMethod* method = static_cast<DexMethod*>(mref);
-    const std::string& deobfname = method->get_deobfuscated_name();
-    if (!deobfname.empty() && method_to_weight.count(deobfname)) {
-      return method_to_weight.at(deobfname);
+    const std::string& deobfname = method->get_fully_deobfuscated_name();
+    if (!deobfname.empty() && method_to_weight->count(deobfname)) {
+      return method_to_weight->at(deobfname);
     }
   }
 
@@ -1204,7 +1204,7 @@ inline int get_method_weight_if_available(
 inline bool compare_dexmethods_profiled(
     DexMethodRef* a,
     DexMethodRef* b,
-    const std::unordered_map<std::string, unsigned int>& method_to_weight) {
+    std::unordered_map<std::string, unsigned int>* method_to_weight) {
   if (a == nullptr) {
     return b != nullptr;
   } else if (b == nullptr) {
@@ -1218,10 +1218,10 @@ inline bool compare_dexmethods_profiled(
 }
 
 struct dexmethods_profiled_comparator {
-  std::unordered_map<std::string, unsigned int> method_to_weight;
+  std::unordered_map<std::string, unsigned int>* method_to_weight;
 
   dexmethods_profiled_comparator(
-      const std::unordered_map<std::string, unsigned int>& method_to_weight_val)
+      std::unordered_map<std::string, unsigned int>* method_to_weight_val)
       : method_to_weight(method_to_weight_val) {}
 
   bool operator()(DexMethodRef* a, DexMethodRef* b) const {
