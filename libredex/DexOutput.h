@@ -32,6 +32,7 @@ enum class SortMode {
   CLASS_ORDER,
   CLASS_STRINGS,
   CLINIT_FIRST,
+  METHOD_PROFILED_ORDER,
   DEFAULT
 };
 
@@ -144,6 +145,7 @@ class GatheredTypes {
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
   std::unordered_map<const DexMethod*, unsigned int> m_methods_in_cls_order;
+  std::unordered_map<std::string, unsigned int> m_method_to_weight;
 
   void gather_components();
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
@@ -170,6 +172,9 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_default_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
+  void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
+  void set_method_to_weight(
+      const std::unordered_map<std::string, unsigned int>& method_to_weight);
 
   std::unordered_set<DexString*> index_type_names();
 };

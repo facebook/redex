@@ -1176,6 +1176,52 @@ struct dexmethods_comparator {
   }
 };
 
+inline int get_method_weight_if_available(
+    DexMethodRef* mref,
+    std::unordered_map<std::string, unsigned int>* method_to_weight) {
+
+  if (mref->is_def()) {
+    DexMethod* method = static_cast<DexMethod*>(mref);
+    const std::string& deobfname = method->get_fully_deobfuscated_name();
+    if (!deobfname.empty() && method_to_weight->count(deobfname)) {
+      return method_to_weight->at(deobfname);
+    }
+  }
+
+  // If the method is not present in profiled order file we'll put it in the
+  // end of the code section
+  return 0;
+}
+
+/* Order based on method profile data */
+inline bool compare_dexmethods_profiled(
+    DexMethodRef* a,
+    DexMethodRef* b,
+    std::unordered_map<std::string, unsigned int>* method_to_weight) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
+
+  int weight_a = get_method_weight_if_available(a, method_to_weight);
+  int weight_b = get_method_weight_if_available(b, method_to_weight);
+
+  return weight_a > weight_b;
+}
+
+struct dexmethods_profiled_comparator {
+  std::unordered_map<std::string, unsigned int>* method_to_weight;
+
+  dexmethods_profiled_comparator(
+      std::unordered_map<std::string, unsigned int>* method_to_weight_val)
+      : method_to_weight(method_to_weight_val) {}
+
+  bool operator()(DexMethodRef* a, DexMethodRef* b) const {
+    return compare_dexmethods_profiled(a, b, method_to_weight);
+  }
+};
+
 /**
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
