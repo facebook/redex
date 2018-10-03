@@ -779,6 +779,7 @@ def finalize_redex(state):
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2', 'debug method id map', 'redex-debug-line-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt', 'class method info map', 'redex-class-method-info-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cfp-unsafe-references.txt', 'cfp unsafe references', 'redex-cfp-unsafe-references.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt', 'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
     copy_all_file_to_out_dir(state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
     if state.config_dict.get('proguard_map_output', '') != '':
