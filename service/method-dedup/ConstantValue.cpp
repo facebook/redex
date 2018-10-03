@@ -14,6 +14,8 @@
 
 namespace {
 
+constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
+
 std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
@@ -115,6 +117,14 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
   std::vector<std::string> vals_vec;
   boost::split(vals_vec, vals_str, [](char c) { return c == ':'; });
   always_assert(vals_vec.size() == kinds_str.length());
+
+  if (kinds_str.size() > MAX_NUM_CONST_VALUE) {
+    TRACE(TERA,
+          8,
+          "const value: skip large number of const values %ld\n",
+          kinds_str.size());
+    return;
+  }
 
   // Build kind_to_val pairs.
   std::vector<std::pair<std::string, std::string>> kind_to_val;
