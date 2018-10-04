@@ -53,6 +53,7 @@
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
+  TM(METH_DEDUP)         \
   TM(MMINL)              \
   TM(MMODE)              \
   TM(MORTIROLO)          \
