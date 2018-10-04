@@ -30,3 +30,7 @@
 /redexdump
 /stamp-h1
 /test-driver
+/.vs/
+/build-cmake/
+redex-src-strings-map.txt
+pyredex/__pycache__
