@@ -425,10 +425,10 @@ std::vector<DexClass*> create_scope_10() {
 
   // interface Intf1 implements Intf2 { void f(); }
   type_class(intf1_t)->set_interfaces(
-      DexTypeList::make_type_list(std::move(std::deque<DexType*>{intf2_t})));
+      DexTypeList::make_type_list(std::deque<DexType*>{intf2_t}));
   // interface Intf3 implements Intf4 { void f()); }
   type_class(intf3_t)->set_interfaces(
-      DexTypeList::make_type_list(std::move(std::deque<DexType*>{intf4_t})));
+      DexTypeList::make_type_list(std::deque<DexType*>{intf4_t}));
 
   return scope;
 }
