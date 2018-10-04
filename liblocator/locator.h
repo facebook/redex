@@ -85,7 +85,7 @@ class Locator {
                                             & ~(dexmask | clsmask);
 
   constexpr static const unsigned base = 94;
-  constexpr static const unsigned bias = '!';
+  constexpr static const unsigned bias = '!'; // 33
 
  public:
 
