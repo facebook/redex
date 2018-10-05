@@ -195,7 +195,7 @@ std::string get_merger_package_name(const DexType* type) {
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
       boost::starts_with(pkg_name, "Ldalvik")) {
-    return "Lcom/facebook";
+    return "Lcom/facebook/redex";
   }
   return pkg_name;
 }
