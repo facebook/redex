@@ -21,7 +21,7 @@
 // Forward declaration.
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots, bool is_const>
+template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
 } // namespace cc_impl
@@ -51,17 +51,10 @@ class ConcurrentContainer {
  public:
   static_assert(n_slots > 0, "The concurrent container has no slots");
 
-  using iterator =
-      cc_impl::ConcurrentContainerIterator<Container,
-                                           typename Container::iterator,
-                                           n_slots,
-                                           /* is_const */ false>;
+  using iterator = cc_impl::ConcurrentContainerIterator<Container, n_slots>;
 
   using const_iterator =
-      cc_impl::ConcurrentContainerIterator<Container,
-                                           typename Container::const_iterator,
-                                           n_slots,
-                                           /* is_const */ true>;
+      cc_impl::ConcurrentContainerIterator<const Container, n_slots>;
 
   virtual ~ConcurrentContainer() {}
 
@@ -264,7 +257,7 @@ class ConcurrentMapContainer
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&& ...args) {
+  bool emplace(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
@@ -337,7 +330,7 @@ class ConcurrentSet final
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&& ...args) {
+  bool emplace(Args&&... args) {
     Key key(std::forward<Args>(args)...);
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
@@ -348,25 +341,28 @@ class ConcurrentSet final
 
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots, bool is_const>
-class ConcurrentContainerIterator final
-    : public std::iterator<std::forward_iterator_tag,
-                           typename Iterator::value_type> {
-
-  using ContainerType =
-      typename std::conditional<is_const, const Container, Container>::type;
-
+template <typename Container, size_t n_slots>
+class ConcurrentContainerIterator final {
  public:
-  explicit ConcurrentContainerIterator(ContainerType* slots)
+  using base_iterator = std::conditional_t<std::is_const<Container>::value,
+                                           typename Container::const_iterator,
+                                           typename Container::iterator>;
+  using difference_type = std::ptrdiff_t;
+  using value_type = typename base_iterator::value_type;
+  using pointer = typename base_iterator::pointer;
+  using reference = typename base_iterator::reference;
+  using iterator_category = std::forward_iterator_tag;
+
+  explicit ConcurrentContainerIterator(Container* slots)
       : m_slots(slots),
         m_slot(n_slots - 1),
         m_position(m_slots[n_slots - 1].end()) {
     skip_empty_slots();
   }
 
-  ConcurrentContainerIterator(ContainerType* slots,
+  ConcurrentContainerIterator(Container* slots,
                               size_t slot,
-                              const Iterator& position)
+                              const base_iterator& position)
       : m_slots(slots), m_slot(slot), m_position(position) {
     skip_empty_slots();
   }
@@ -393,12 +389,22 @@ class ConcurrentContainerIterator final
     return !(*this == other);
   }
 
-  typename Iterator::reference operator*() {
+  reference operator*() {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return *m_position;
   }
 
-  typename Iterator::pointer operator->() {
+  pointer operator->() {
+    always_assert(m_position != m_slots[n_slots - 1].end());
+    return m_position.operator->();
+  }
+
+  const reference operator*() const {
+    always_assert(m_position != m_slots[n_slots - 1].end());
+    return *m_position;
+  }
+
+  const pointer operator->() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return m_position.operator->();
   }
@@ -410,9 +416,9 @@ class ConcurrentContainerIterator final
     }
   }
 
-  ContainerType* m_slots;
+  Container* m_slots;
   size_t m_slot;
-  Iterator m_position;
+  base_iterator m_position;
 };
 
 } // namespace cc_impl
