@@ -10,6 +10,7 @@
 #include "Debug.h"
 
 #include <algorithm>
+#include <boost/optional/optional.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <chrono>
@@ -65,14 +66,14 @@ class WorkerState {
   }
 
  private:
-  bool pop_task(Input& task) {
+  boost::optional<Input> pop_task() {
     boost::lock_guard<boost::mutex> guard(m_queue_mtx);
     if (!m_queue.empty()) {
-      task = std::move(m_queue.front());
+      auto task = std::move(m_queue.front());
       m_queue.pop();
-      return true;
+      return task;
     }
-    return false;
+    return boost::none;
   }
 
   size_t m_id;
@@ -203,10 +204,10 @@ Output WorkQueue<Input, Data, Output>::run_all(const Output& init_output) {
       auto have_task = false;
       for (auto idx : attempts) {
         auto other_state = m_states[idx].get();
-        Input task;
-        have_task = other_state->pop_task(task);
-        if (have_task) {
-          consume(state, task);
+        auto task = other_state->pop_task();
+        if (task) {
+          have_task = true;
+          consume(state, *task);
           break;
         }
       }
