@@ -53,20 +53,7 @@ struct ReachableObject {
       : type{ReachableObjectType::FIELD}, field{field} {}
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
-  std::string str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return show_deobfuscated(anno);
-    case ReachableObjectType::CLASS:
-      return show_deobfuscated(cls);
-    case ReachableObjectType::FIELD:
-      return show_deobfuscated(field);
-    case ReachableObjectType::METHOD:
-      return show_deobfuscated(method);
-    case ReachableObjectType::SEED:
-      return std::string("<SEED>");
-    }
-  }
+  std::string str() const;
 
   std::string type_str() const {
     switch (type) {
@@ -108,38 +95,13 @@ struct ReachableObject {
 
   friend bool operator==(const ReachableObject& lhs,
                          const ReachableObject& rhs) {
-    if (lhs.type != rhs.type) {
-      return false;
-    }
-    switch (lhs.type) {
-    case ReachableObjectType::ANNO:
-      return lhs.anno == rhs.anno;
-    case ReachableObjectType::CLASS:
-      return lhs.cls == rhs.cls;
-    case ReachableObjectType::FIELD:
-      return lhs.field == rhs.field;
-    case ReachableObjectType::METHOD:
-      return lhs.method == rhs.method;
-    case ReachableObjectType::SEED:
-      return true;
-    }
+    return lhs.type == rhs.type && lhs.anno == rhs.anno;
   }
 };
 
 struct ReachableObjectHash {
   std::size_t operator()(const ReachableObject& obj) const {
-    switch (obj.type) {
-    case ReachableObjectType::ANNO:
-      return std::hash<const DexAnnotation*>{}(obj.anno);
-    case ReachableObjectType::CLASS:
-      return std::hash<const DexClass*>{}(obj.cls);
-    case ReachableObjectType::FIELD:
-      return std::hash<const DexFieldRef*>{}(obj.field);
-    case ReachableObjectType::METHOD:
-      return std::hash<const DexMethodRef*>{}(obj.method);
-    case ReachableObjectType::SEED:
-      return 0;
-    }
+    return std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>(obj.anno));
   }
 };
 
@@ -162,9 +124,7 @@ using ReachableObjectGraph =
 
 class ReachableObjects {
  public:
-  const ReachableObjectGraph& retainers_of() const {
-    return m_retainers_of;
-  }
+  const ReachableObjectGraph& retainers_of() const { return m_retainers_of; }
 
   void mark(const DexClass* cls) { m_marked_classes.insert(cls); }
 

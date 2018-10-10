@@ -58,6 +58,21 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
 
 namespace reachability {
 
+std::string ReachableObject::str() const {
+  switch (type) {
+  case ReachableObjectType::ANNO:
+    return "[ANNO] " + show_deobfuscated(anno->type());
+  case ReachableObjectType::CLASS:
+    return show_deobfuscated(cls);
+  case ReachableObjectType::FIELD:
+    return show_deobfuscated(field);
+  case ReachableObjectType::METHOD:
+    return show_deobfuscated(method);
+  case ReachableObjectType::SEED:
+    return "<SEED>";
+  }
+}
+
 /*
  * Initializes the root set by marking and pushing nodes onto the work queue.
  * Also conditionally marks class member seeds.
