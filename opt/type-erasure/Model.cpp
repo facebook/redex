@@ -10,6 +10,7 @@
 #include <set>
 #include <sstream>
 
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "AnnoUtils.h"
@@ -146,6 +147,95 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   }
 
   return num_trimmed_types;
+}
+
+const std::vector<std::string> get_acceptible_prefixes(const JsonWrapper& jw) {
+  std::vector<std::string> acceptible_prefixes;
+  jw.get("acceptible_prefixes", {}, acceptible_prefixes);
+  return acceptible_prefixes;
+}
+
+bool is_android_sdk_type(const std::string& android_sdk_prefix,
+                         const std::vector<std::string>& acceptible_prefixes,
+                         const DexType* type) {
+  const std::string& name = type->str();
+  for (const auto& acceptible_prefix : acceptible_prefixes) {
+    if (boost::starts_with(name, acceptible_prefix)) {
+      return false;
+    }
+  }
+  return boost::starts_with(name, android_sdk_prefix);
+}
+
+void exclude_reference_to_android_sdk(const Json::Value& json_val,
+                                      const TypeSet& mergeables,
+                                      TypeSet& non_mergeables) {
+  JsonWrapper spec = JsonWrapper(json_val);
+  bool enabled = false;
+  spec.get("enabled", false, enabled);
+  if (!enabled) {
+    TRACE(TERA, 5, "Non mergeable (android_sdk) not enabled\n");
+    return;
+  }
+
+  std::string android_sdk_prefix = "Landroid/";
+  TRACE(TERA, 5, "Non mergeable (android_sdk) android_sdk_prefix %s\n",
+        android_sdk_prefix.c_str());
+  const std::vector<std::string> acceptible_prefixes =
+      get_acceptible_prefixes(spec);
+
+  std::vector<DexClass*> mergeable_classes;
+  for (const auto t : mergeables) {
+    auto cls = type_class(t);
+    mergeable_classes.push_back(cls);
+  }
+  // Check field references
+  walk::fields(mergeable_classes, [&](DexField* field) {
+    auto type = field->get_type();
+    if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes, type)) {
+      auto mergeable = field->get_class();
+      TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s\n",
+            SHOW(mergeable), SHOW(type));
+      non_mergeables.emplace(mergeable);
+    }
+  });
+
+  // Scan code references.
+  auto scanner = [&](DexMethod* meth) {
+    std::unordered_set<const DexType*> current_excluded;
+    auto code = meth->get_code();
+    if (!code) {
+      return current_excluded;
+    }
+
+    auto mergeable = meth->get_class();
+    for (const auto& mie : InstructionIterable(code)) {
+      std::vector<DexType*> gathered;
+      mie.insn->gather_types(gathered);
+      for (const auto referenced_type : gathered) {
+        if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes,
+                                referenced_type)) {
+          TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s\n",
+                SHOW(mergeable), SHOW(referenced_type));
+          current_excluded.insert(mergeable);
+        }
+      }
+    }
+
+    return current_excluded;
+  };
+  auto excluded_by_android_sdk_ref =
+      walk::parallel::reduce_methods<std::unordered_set<const DexType*>>(
+          mergeable_classes,
+          scanner,
+          [](std::unordered_set<const DexType*> left,
+             const std::unordered_set<const DexType*> right) {
+            left.insert(right.begin(), right.end());
+            return left;
+          });
+  for (const auto excluded : excluded_by_android_sdk_ref) {
+    non_mergeables.insert(excluded);
+  }
 }
 
 } // namespace
@@ -509,9 +599,15 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         }
       }
     });
-    m_metric.non_mergeables = m_non_mergeables.size();
-    TRACE(TERA, 3, "Non mergeables %ld\n", m_non_mergeables.size());
   }
+
+  if (!m_spec.exclude_reference_to_android_sdk.isNull()) {
+    exclude_reference_to_android_sdk(m_spec.exclude_reference_to_android_sdk,
+                                     m_types, m_non_mergeables);
+  }
+
+  m_metric.non_mergeables = m_non_mergeables.size();
+  TRACE(TERA, 3, "Non mergeables %ld\n", m_non_mergeables.size());
 }
 
 void Model::find_non_root_store_mergeables(const DexStoresVector& stores,

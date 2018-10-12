@@ -54,9 +54,9 @@ using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
  *     // a specification for the generated set that is treated specially
  *     // for reference analysis
  *     "generated" : {
- *       // Treat types under the same namespace specially. Skip type exclusion
- * check under the same namespace.
- *       // Assuming cross referencing under the same namespace are safe.s
+ *       // Treat types under the same namespace specially.
+ *       // Skip type exclusion check under the same namespace.
+ *       // Assuming cross referencing under the same namespace are safe.
  *       "namespace" : true,
  *       // other roots from which identify types that have
  *       // to be treated specially
@@ -108,6 +108,11 @@ struct ModelSpec {
   bool merge_types_with_static_fields{false};
   // Preserve debug info like line numbers.
   bool keep_debug_info{false};
+  // Exclude types with references to Android SDK types. The referenced type may
+  // or may not exist depending on the Android version the app runs on. That
+  // could cause us to merge a class that fails to verify on certain versions of
+  // Android. In this situation the entire merger type will fail to verify.
+  Json::Value exclude_reference_to_android_sdk;
 };
 
 /**

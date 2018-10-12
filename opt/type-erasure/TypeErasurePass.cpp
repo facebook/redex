@@ -160,6 +160,8 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model_spec.get("merge_types_with_static_fields", false,
                    model.merge_types_with_static_fields);
     model_spec.get("keep_debug_info", false, model.keep_debug_info);
+    model_spec.get("exclude_reference_to_android_sdk", Json::Value(),
+                   model.exclude_reference_to_android_sdk);
     if (max_count > 0) {
       model.max_count = boost::optional<size_t>(max_count);
     }
