@@ -548,11 +548,14 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
     }
     if (is_return(insn->opcode())) ret_count++;
   }
-  // no callees that have more than a return statement (normally one, the
-  // way dx generates code).
-  // That allows us to make a simple inline strategy where we don't have to
-  // worry about creating branches from the multiple returns to the main code
-  if (ret_count > 1) {
+  // The IRCode inliner can't handle callees with more than one return
+  // statement (normally one, the way dx generates code). That allows us to make
+  // a simple inline strategy where we don't have to worry about creating
+  // branches from the multiple returns to the main code
+  //
+  // d8 however, generates code with multiple return statements in general.
+  // The CFG inliner can handle multiple return callees.
+  if (ret_count > 1 && !m_config.use_cfg_inliner) {
     info.multi_ret++;
     log_nopt(INL_MULTIPLE_RETURNS, callee);
     return true;
