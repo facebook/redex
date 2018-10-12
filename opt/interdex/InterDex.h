@@ -61,7 +61,14 @@ class InterDex {
     return m_dexes_structure.get_num_scroll_dexes();
   }
 
-  DexClassesVector run();
+  /**
+   * Only call this if you know what you are doing.
+   * This will leave the current instance is in an unusable state.
+   */
+  DexClassesVector take_outdex() { return std::move(m_outdex); }
+
+  void run();
+  void add_dexes_from_store(const DexStore& store);
 
  private:
   void emit_class(const DexInfo& dex_info, DexClass* clazz, bool check_if_skip);

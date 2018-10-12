@@ -394,6 +394,21 @@ void load_root_dexen(
   }
 }
 
+void create_store(const std::string& store_name,
+                  DexStoresVector& stores,
+                  DexClasses classes) {
+  // First, remove the classes from other stores.
+  for (auto& store : stores) {
+    store.remove_classes(classes);
+  }
+
+  // Create a new store and add it to the list of stores.
+  DexStore store(store_name);
+  store.set_generated();
+  store.add_classes(std::move(classes));
+  stores.emplace_back(std::move(store));
+}
+
 /*
  * This exists because in the absence of a register allocator, we need each
  * transformation to keep the ins registers at the end of the frame. Once the

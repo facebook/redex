@@ -330,6 +330,16 @@ void load_root_dexen(
   bool balloon = false,
   bool verbose = true);
 
+/**
+ * Creates a generated store based on the given classes.
+ *
+ * NOTE: InterDex will take care of adding the classes to the root store.
+ * TODO: Add a way to define a real store.
+ */
+void create_store(const std::string& store_name,
+                  DexStoresVector& stores,
+                  DexClasses classes);
+
 /*
  * This exists because in the absence of a register allocator, we need each
  * transformation to keep the ins registers at the end of the frame. Once the

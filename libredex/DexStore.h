@@ -35,13 +35,12 @@ public:
 class DexStore {
   std::vector<DexClasses> m_dexen;
   DexMetadata m_metadata;
+  bool m_generated = false;
 
  public:
   DexStore(const DexMetadata metadata) :
     m_metadata(metadata) {};
   DexStore(const std::string name);
-  DexStore(const DexStore&) = delete;
-  DexStore(DexStore&&) = default;
 
   std::string get_name() const;
   std::vector<DexClasses>& get_dexen();
@@ -49,6 +48,10 @@ class DexStore {
   std::vector<std::string> get_dependencies() const;
   bool is_root_store() const;
 
+  void set_generated() { m_generated = true; }
+  bool is_generated() const { return m_generated; }
+
+  void remove_classes(const DexClasses& classes);
   void add_classes(DexClasses classes);
 };
 

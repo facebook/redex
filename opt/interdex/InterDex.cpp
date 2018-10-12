@@ -559,7 +559,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          not_already_included.end());
 }
 
-DexClassesVector InterDex::run() {
+void InterDex::run() {
   auto scope = build_class_scope(m_dexen);
 
   std::vector<DexType*> interdex_types = get_interdex_types(scope);
@@ -610,7 +610,16 @@ DexClassesVector InterDex::run() {
                     m_dexes_structure.get_num_dexes());
 
   print_stats(&m_dexes_structure);
-  return std::move(m_outdex);
+}
+
+void InterDex::add_dexes_from_store(const DexStore& store) {
+  const auto& dexes = store.get_dexen();
+  for (const DexClasses& classes : dexes) {
+    for (DexClass* cls : classes) {
+      emit_class(EMPTY_DEX_INFO, cls, false);
+    }
+  }
+  flush_out_dex(EMPTY_DEX_INFO);
 }
 
 /**
