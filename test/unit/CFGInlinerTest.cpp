@@ -205,13 +205,13 @@ TEST(CFGInliner, multi_return) {
       (if-ge v3 v4 :true)
 
       (move v2 v4)
-      (goto :out)
+
+      (:exit)
+      (return-void)
 
       (:true)
       (move v2 v3)
-
-      (:out)
-      (return-void)
+      (goto :exit)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -252,13 +252,13 @@ TEST(CFGInliner, multi_return_wide) {
       (if-gtz v8 :true)
 
       (move-wide v0 v6)
-      (goto :callee_end)
+
+      (:exit)
+      (return-wide v0)
 
       (:true)
       (move-wide v0 v4)
-
-      (:callee_end)
-      (return-wide v0)
+      (goto :exit)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -301,15 +301,15 @@ TEST(CFGInliner, multi_return_object) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-      (goto :callee_end)
+
+      (:exit)
+      (return-object v0)
 
       (:true)
       (new-instance "LBar;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-
-      (:callee_end)
-      (return-object v0)
+      (goto :exit)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -355,13 +355,13 @@ TEST(CFGInliner, both_multi_block) {
       (if-ge v3 v4 :true)
 
       (move v2 v4)
-      (goto :out)
+
+      (:exit)
+      (return-void)
 
       (:true)
       (move v2 v3)
-
-      (:out)
-      (return-void)
+      (goto :exit)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -408,17 +408,15 @@ TEST(CFGInliner, callee_diamond_caller_loop) {
       (move v2 v0)
       (if-nez v2 :true)
       (const v2 0)
-      (goto :inner_end)
-
-      (:true)
-      (const v2 -1)
 
       (:inner_end)
       (move v1 v2)
-      ; callee ends here
-
       (add-int v0 v0 v1)
       (goto :loop)
+
+      (:true)
+      (const v2 -1)
+      (goto :inner_end)
 
       (:end)
       (return-void)
@@ -540,11 +538,11 @@ TEST(CFGInliner, try_catch_caller_catch_chain) {
       (return v0)
       (.try_end a)
 
-      (.catch (a b) "LExcept;")
-      (return v1)
-
       (.catch (b))
       (return v0)
+
+      (.catch (a b) "LExcept;")
+      (return v1)
     )
   )";
   const auto& callee_str = R"(
@@ -570,11 +568,11 @@ TEST(CFGInliner, try_catch_caller_catch_chain) {
 
       (.try_end a)
 
-      (.catch (a b) "LExcept;")
-      (return v1)
-
       (.catch (b))
       (return v0)
+
+      (.catch (a b) "LExcept;")
+      (return v1)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -589,11 +587,11 @@ TEST(CFGInliner, try_catch_with_may_throws) {
       (return v0)
       (.try_end outer)
 
-      (.catch (outer all) "LOuterExcept;")
-      (return v1)
-
       (.catch (all))
       (return v0)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
     )
   )";
   const auto& callee_str = R"(
@@ -627,17 +625,18 @@ TEST(CFGInliner, try_catch_with_may_throws) {
       (throw v2)
       (.try_end inner)
 
-      (.catch (inner outer) "LInnerExcept")
-      (const v2 0)
-      (move v0 v2)
 
-      (:exit)
+      (.catch (all))
       (return v0)
 
       (.catch (outer all) "LOuterExcept;")
       (return v1)
 
-      (.catch (all))
+      (.catch (inner outer) "LInnerExcept")
+      (const v2 0)
+      (move v0 v2)
+
+      (:exit)
       (return v0)
     )
   )";
@@ -653,11 +652,11 @@ TEST(CFGInliner, try_catch_with_only_may_throws) {
       (return v0)
       (.try_end outer)
 
-      (.catch (outer all) "LOuterExcept;")
-      (return v1)
-
       (.catch (all))
       (return v0)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
     )
   )";
   const auto& callee_str = R"(
@@ -678,11 +677,11 @@ TEST(CFGInliner, try_catch_with_only_may_throws) {
       (return v0)
       (.try_end outer)
 
-      (.catch (outer all) "LOuterExcept;")
-      (return v1)
-
       (.catch (all))
       (return v0)
+
+      (.catch (outer all) "LOuterExcept;")
+      (return v1)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -709,12 +708,12 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
       (return v0)
       (.try_end inner1)
 
-      (.catch (inner1 inner2) "LExcept1;")
-      (const v0 0)
-      (return v0)
-
       (.catch (inner2) "LExcept2;")
       (const v0 1)
+      (return v0)
+
+      (.catch (inner1 inner2) "LExcept1;")
+      (const v0 0)
       (return v0)
     )
   )";
@@ -727,20 +726,20 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
       (goto :end_callee)
       (.try_end inner1)
 
-      (.catch (inner1 inner2) "LExcept1;")
-      (const v2 0)
-      (move v0 v2)
-      (goto :end_callee)
+      (.catch (outer))
+      (return v1)
 
       (.catch (inner2 outer) "LExcept2;")
       (const v2 1)
       (move v0 v2)
+      (goto :end_callee)
+
+      (.catch (inner1 inner2) "LExcept1;")
+      (const v2 0)
+      (move v0 v2)
 
       (:end_callee)
       (return v0)
-
-      (.catch (outer))
-      (return v1)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);

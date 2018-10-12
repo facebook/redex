@@ -1051,7 +1051,11 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
   std::ostringstream ss;
   ss << "CFG:\n";
   for (const auto& b : blocks) {
-    ss << " Block B" << b->id() << ":\n";
+    ss << " Block B" << b->id() << ":";
+    if (b == cfg.entry_block()) {
+      ss << " entry";
+    }
+    ss << "\n";
 
     ss << "   preds:";
     for (const auto& p : b->preds()) {

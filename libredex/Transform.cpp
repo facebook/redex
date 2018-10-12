@@ -109,7 +109,7 @@ size_t remove_unreachable_blocks(IRCode* code) {
 
   // remove unreachable blocks
   std::unordered_set<cfg::Block*> visited;
-  visit(blocks.at(0), visited);
+  visit(cfg.entry_block(), visited);
   for (size_t i = 1; i < blocks.size(); ++i) {
     auto& b = blocks.at(i);
     if (visited.find(b) != visited.end()) {
