@@ -130,10 +130,14 @@ class RemoveGotos {
 
     code->clear_cfg();
     auto final_opcode_count = code->count_opcodes();
-    always_assert_log(final_opcode_count <= init_opcode_count,
-                      "method %s got larger: %s",
-                      SHOW(method),
-                      SHOW(cfg));
+    if (final_opcode_count > init_opcode_count) {
+      TRACE(RMGOTO,
+            3,
+            "method %s got larger: (%d -> %d)\n",
+            SHOW(method),
+            init_opcode_count,
+            final_opcode_count);
+    }
     TRACE(RMGOTO, 4, "Final opcode count: %d\n", code->count_opcodes());
     TRACE(RMGOTO, 3, "output code\n%s", SHOW(code));
     return num_goto_removed;

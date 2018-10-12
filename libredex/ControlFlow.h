@@ -550,6 +550,12 @@ class ControlFlowGraph {
 
   // choose an order of blocks for output
   std::vector<Block*> order();
+  // helper functions
+  using Chain = std::vector<Block*>;
+  void build_chains(std::vector<std::unique_ptr<Chain>>* chains,
+                    std::unordered_map<Block*, Chain*>* block_to_chain);
+  std::vector<Block*> wto_chains(
+      const std::unordered_map<Block*, Chain*>& block_to_chain);
 
   // Materialize target instructions and gotos corresponding to control-flow
   // edges. Used while turning back into a linear representation.

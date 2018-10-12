@@ -173,11 +173,22 @@ class MethodItemEntryCloner {
   std::unordered_map<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
   // for remapping the parent position pointers
   std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  std::vector<DexPosition*> m_positions_to_fix;
 
  public:
   MethodItemEntryCloner();
   MethodItemEntry* clone(const MethodItemEntry* mei);
-  void fix_parent_position(DexPosition* pos);
+
+  /*
+   * This should to be called after the whole method is already cloned so that
+   * m_pos_map has all the positions in the method.
+   *
+   * Don't change any parent pointers that point to `ignore_pos`. This is used
+   * for inlining because the invoke position is the parent but it isn't in the
+   * callee. If you don't have any positions to ignore, nullptr is a safe
+   * default.
+   */
+  void fix_parent_positions(const DexPosition* ignore_pos = nullptr);
 };
 
 using MethodItemMemberListOption =

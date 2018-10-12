@@ -14,6 +14,7 @@
 
 #include "DexUtil.h"
 #include "Transform.h"
+#include "WeakTopologicalOrdering.h"
 
 namespace {
 
@@ -873,14 +874,7 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
   // We need a second pass because parent position pointers may refer to
   // positions in a block that would be processed later.
-  for (const auto& entry : new_cfg->m_blocks) {
-    const Block* block = entry.second;
-    for (auto& mie : *block) {
-      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-        cloner.fix_parent_position(mie.pos.get());
-      }
-    }
-  }
+  cloner.fix_parent_positions();
 
   // patch the edge pointers in the blocks to their new cfg counterparts
   for (auto& entry : new_cfg->m_blocks) {
@@ -922,38 +916,42 @@ InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle) {
 }
 
 std::vector<Block*> ControlFlowGraph::order() {
-  // TODO output in a better order
-  // The order should maximize PC locality, hot blocks should be fallthroughs
-  // and cold blocks (like exception handlers) should be jumps.
-  //
-  // We want something similar to reverse post order but RPO isn't well defined
-  // on cyclic graphs.
-  //   (A) First, it finds Strongly Connected Components (similar to WTO)
-  //   (B) It adds a node to the order upon the first traversal, not after
-  //       reaching it from ALL predecessors (as a topographical sort requires).
-  //       For example, we want catch blocks at the end, after the return block
-  //       that they may jump to.
-  //   (C) It recurses into a SCC before considering successors of the SCC
-  //   (D) It places default successors immediately after
+  // This is a modified Weak Topological Ordering (WTO). We create "chains" of
+  // blocks that will be kept together, then feed these chains to WTO for it to
+  // choose the ordering of the chains. Then, we deconstruct the chains to get
+  // an ordering of the blocks.
 
-  std::vector<Block*> ordering;
-  // "finished" blocks have been added to `ordering`
-  std::unordered_set<BlockId> finished_blocks;
+  // hold the chains of blocks here, though they mostly will be accessed via the
+  // map
+  std::vector<std::unique_ptr<Chain>> chains;
+  // keep track of which blocks are in each chain, for quick lookup.
+  std::unordered_map<Block*, Chain*> block_to_chain;
 
+  build_chains(&chains, &block_to_chain);
+  const auto& result = wto_chains(block_to_chain);
+
+  always_assert(result.size() == m_blocks.size());
+  return result;
+}
+
+void ControlFlowGraph::build_chains(
+    std::vector<std::unique_ptr<Chain>>* chains,
+    std::unordered_map<Block*, Chain*>* block_to_chain) {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
-    if (finished_blocks.count(b->id()) != 0) {
+    if (block_to_chain->count(b) != 0) {
       continue;
     }
 
     always_assert_log(!b->starts_with_move_result(), "%d is wrong %s", b->id(),
                       SHOW(*this));
-    ordering.push_back(b);
-    finished_blocks.insert(b->id());
+    auto unique = std::make_unique<Chain>();
+    Chain* chain = unique.get();
+    chains->push_back(std::move(unique));
 
-    // If the GOTO edge leads to a block with a move-result(-pseudo), then that
-    // block must be placed immediately after this one because we can't insert
-    // anything between an instruction and its move-result(-pseudo).
+    chain->push_back(b);
+    block_to_chain->emplace(b, chain);
+
     auto goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
     while (goto_edge != nullptr) {
       // make sure we handle a chain of blocks that all start with move-results
@@ -961,19 +959,63 @@ std::vector<Block*> ControlFlowGraph::order() {
       always_assert_log(m_blocks.count(goto_block->id()) > 0,
                         "bogus block reference %d -> %d in %s",
                         goto_edge->src()->id(), goto_block->id(), SHOW(*this));
-      if (goto_block->starts_with_move_result() &&
-          finished_blocks.count(goto_block->id()) == 0) {
-        ordering.push_back(goto_block);
-        finished_blocks.insert(goto_block->id());
+      if (block_to_chain->count(goto_block) == 0 &&
+          (goto_block->starts_with_move_result() || goto_block->same_try(b))) {
+        // If the goto edge leads to a block with a move-result(-pseudo), then
+        // that block must be placed immediately after this one because we can't
+        // insert anything between an instruction and its move-result(-pseudo).
+        //
+        // We also add gotos that are in the same try because we can minimize
+        // instructions (by using fallthroughs) without adding another try
+        // region. This is not required, but empirical evidence shows that it
+        // generates smaller dex files.
+        chain->push_back(goto_block);
+        block_to_chain->emplace(goto_block, chain);
         goto_edge = get_succ_edge_of_type(goto_block, EDGE_GOTO);
       } else {
-        goto_edge = nullptr;
+        break;
       }
     }
   }
-  always_assert(ordering.size() == m_blocks.size());
+}
 
-  return ordering;
+std::vector<Block*> ControlFlowGraph::wto_chains(
+    const std::unordered_map<Block*, Chain*>& block_to_chain) {
+  sparta::WeakTopologicalOrdering<Chain*> wto(
+      block_to_chain.at(entry_block()), [&block_to_chain](Chain* const& chain) {
+        // The chain successor function returns all the outgoing edges' target
+        // chains
+        std::vector<Chain*> result;
+        for (Block* b : *chain) {
+          auto edges = b->succs();
+          for (Edge* e : edges) {
+            const auto& succ_chain = block_to_chain.at(e->target());
+            if (succ_chain != chain) {
+              result.push_back(succ_chain);
+            }
+          }
+        }
+        return result;
+      });
+
+  // recursively iterate through the wto order and collect the blocks here
+  // This is a depth first traversal. TODO: would breadth first be better?
+  std::vector<Block*> wto_order;
+  std::function<void(const sparta::WtoComponent<Chain*>&)> get_order;
+  get_order = [&get_order, &wto_order](const sparta::WtoComponent<Chain*>& v) {
+    for (Block* b : *v.head_node()) {
+      wto_order.push_back(b);
+    }
+    if (v.is_scc()) {
+      for (const auto& inner : v) {
+        get_order(inner);
+      }
+    }
+  };
+  for (const auto& v : wto) {
+    get_order(v);
+  }
+  return wto_order;
 }
 
 // Add an MFLOW_TARGET at the end of each edge.

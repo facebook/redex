@@ -141,40 +141,15 @@ void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
 void CFGInliner::steal_contents(ControlFlowGraph* caller,
                                 Block* callsite,
                                 ControlFlowGraph* callee) {
-  // Make space in the caller's list of blocks because the cfg linearizes in ID
-  // order.
-  //
-  // This isn't required for correctness, but rather I expect this to
-  // perform better. In the future, the CFG will choose a smart order when
-  // linearizing, but right now it is lazy and just uses ID order.
-  // TODO: When ControlFlowGraph::order() is smart, this can be simplified.
-  std::vector<Block*> add_back_to_caller;
-  for (auto it = caller->m_blocks.begin(); it != caller->m_blocks.end();) {
-    Block* b = it->second;
-    if (b->id() > callsite->id()) {
-      b->m_id = b->m_id + callee->num_blocks();
-      add_back_to_caller.push_back(b);
-      it = caller->m_blocks.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  // Transfer ownership of the blocks and renumber their IDs.
-  // The id's are chosen to be immediately after the callsite.
-  uint32_t id = callsite->id() + 1;
-  for (Block* b : callee->blocks()) {
+  always_assert(!caller->m_blocks.empty());
+  for (auto& entry : callee->m_blocks) {
+    Block* b = entry.second;
     b->m_parent = caller;
-
+    size_t id = caller->m_blocks.rbegin()->first + 1;
     b->m_id = id;
     caller->m_blocks.emplace(id, b);
-    ++id;
   }
   callee->m_blocks.clear();
-
-  for (Block* b : add_back_to_caller) {
-    caller->m_blocks.emplace(b->id(), b);
-  }
 
   // transfer ownership of the edges
   for (Edge* e : callee->m_edges) {

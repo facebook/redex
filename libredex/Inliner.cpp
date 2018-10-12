@@ -938,16 +938,13 @@ class MethodSplicer {
 
   MethodItemEntry* clone(MethodItemEntry* mie) {
     auto result = m_mie_cloner.clone(mie);
-    if (result != nullptr && result->type == MFLOW_POSITION &&
-        result->pos->parent != nullptr) {
-      m_mie_cloner.fix_parent_position(result->pos.get());
-    }
     return result;
   }
 
   void operator()(IRList::iterator insert_pos,
                   IRList::iterator fcallee_start,
                   IRList::iterator fcallee_end) {
+    std::vector<DexPosition*> positions_to_fix;
     for (auto it = fcallee_start; it != fcallee_end; ++it) {
       if (should_skip_debug(&*it)) {
         continue;
@@ -956,37 +953,41 @@ class MethodSplicer {
           opcode::is_load_param(it->insn->opcode())) {
         continue;
       }
-      auto mei = clone(&*it);
-      transform::remap_registers(*mei, m_callee_reg_map);
-      if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
-        auto tentry = mei->tentry;
+      auto mie = clone(&*it);
+      transform::remap_registers(*mie, m_callee_reg_map);
+      if (mie->type == MFLOW_TRY && m_active_catch != nullptr) {
+        auto tentry = mie->tentry;
         // try ranges cannot be nested, so we flatten them here
         switch (tentry->type) {
           case TRY_START:
             m_mtcaller->insert_before(insert_pos,
                 *(new MethodItemEntry(TRY_END, m_active_catch)));
-            m_mtcaller->insert_before(insert_pos, *mei);
+            m_mtcaller->insert_before(insert_pos, *mie);
             break;
           case TRY_END:
-            m_mtcaller->insert_before(insert_pos, *mei);
+            m_mtcaller->insert_before(insert_pos, *mie);
             m_mtcaller->insert_before(insert_pos,
                 *(new MethodItemEntry(TRY_START, m_active_catch)));
             break;
         }
       } else {
-        if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
-          mei->pos->parent = m_invoke_position;
+        if (mie->type == MFLOW_POSITION && mie->pos->parent == nullptr) {
+          mie->pos->parent = m_invoke_position;
         }
         // if a handler list does not terminate in a catch-all, have it point to
         // the parent's active catch handler. TODO: Make this more precise by
         // checking if the parent catch type is a subtype of the callee's.
-        if (mei->type == MFLOW_CATCH && mei->centry->next == nullptr &&
-            mei->centry->catch_type != nullptr) {
-          mei->centry->next = m_active_catch;
+        if (mie->type == MFLOW_CATCH && mie->centry->next == nullptr &&
+            mie->centry->catch_type != nullptr) {
+          mie->centry->next = m_active_catch;
         }
-        m_mtcaller->insert_before(insert_pos, *mei);
+        m_mtcaller->insert_before(insert_pos, *mie);
       }
     }
+  }
+
+  void fix_parent_positions() {
+    m_mie_cloner.fix_parent_positions(m_invoke_position);
   }
 
  private:
@@ -1127,6 +1128,7 @@ void inline_method(IRCode* caller_code,
       caller_code->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }
   }
+  splice.fix_parent_positions();
   TRACE(INL, 5, "post-inline caller code:\n%s\n", SHOW(caller_code));
 }
 
