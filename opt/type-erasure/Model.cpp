@@ -884,6 +884,12 @@ std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
                                     s_num_interdex_groups);
     new_groups[index].emplace(pair.first);
   }
+
+  if (m_spec.merge_per_interdex_set == InterDexGroupingType::NON_HOT_SET) {
+    // Drop mergeables that are in the hot set.
+    new_groups[0].clear();
+  }
+
   return new_groups;
 }
 

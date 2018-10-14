@@ -64,6 +64,20 @@ bool verify_model_spec(const ModelSpec& model_spec) {
   return true;
 }
 
+InterDexGroupingType get_merge_per_interdex_type(
+    const std::string& merge_per_interdex_set) {
+
+  const static std::unordered_map<std::string, InterDexGroupingType>
+      string_to_grouping = {{"disabled", InterDexGroupingType::DISABLED},
+                            {"non-hot-set", InterDexGroupingType::NON_HOT_SET},
+                            {"full", InterDexGroupingType::FULL}};
+
+  always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
+                    "InterDex Grouping Type %s not found. Please check the list"
+                    " of accepted values.");
+  return string_to_grouping.at(merge_per_interdex_set);
+}
+
 } // namespace
 
 void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
@@ -144,8 +158,12 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model_spec.get("include_primary_dex", false, model.include_primary_dex);
     model_spec.get("dex_sharding", false, model.dex_sharding);
 
-    model_spec.get("merge_per_interdex_set", false,
-                   model.merge_per_interdex_set);
+    std::string merge_per_interdex_set;
+    model_spec.get("merge_per_interdex_set", "disabled",
+                   merge_per_interdex_set);
+    model.merge_per_interdex_set =
+        get_merge_per_interdex_type(merge_per_interdex_set);
+
     always_assert_log(!model.merge_per_interdex_set || model.needs_type_tag,
                       "Cannot group when type tag is not needed.");
     always_assert_log(!model.dex_sharding || !model.merge_per_interdex_set,

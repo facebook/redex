@@ -16,6 +16,12 @@
 
 using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
 
+enum InterDexGroupingType {
+  DISABLED = 0, // No interdex grouping.
+  NON_HOT_SET = 1, // Exclude hot set.
+  FULL = 2, // Apply interdex grouping on the entire input.
+};
+
 /**
  * A class hierarchy specification to model for erasure.
  * This is normally specified via config entries:
@@ -92,7 +98,7 @@ struct ModelSpec {
   bool dex_sharding{false};
   // Group splitting. This is looser than the per dex split and takes into
   // account the interdex order (if any provided).
-  bool merge_per_interdex_set{false};
+  InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
   // whether to perform type erasure on the primary dex.
   bool include_primary_dex{false};
   // Devirtualize/staticize non-virtual methods
@@ -182,7 +188,7 @@ class Model {
   bool is_dex_sharding_enabled() const { return m_spec.dex_sharding; }
 
   bool is_merge_per_interdex_set_enabled() const {
-    return m_spec.merge_per_interdex_set;
+    return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
   }
 
   bool needs_type_tag() const { return m_spec.needs_type_tag; }
