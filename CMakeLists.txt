@@ -46,13 +46,16 @@ file(GLOB_RECURSE redex_srcs
         "service/*.h"
         "opt/*.cpp"
         "opt/*.h"
-        "util/CommandProfiling.*"
-        "util/JemallocUtil.*"
-        "util/Sha1.*"
+        "util/CommandProfiling.cpp"
+        "util/CommandProfiling.h"
+        "util/JemallocUtil.cpp"
+        "util/JemallocUtil.h"
+        "util/Sha1.cpp"
+        "util/Sha1.h"
         "shared/*.cpp"
         "shared/*.h"
-        "liblocator/*.cpp"
-        "liblocator/*.h"
+        "liblocator/locator.cpp"
+        "liblocator/locator.h"
         )
 
 add_library(redex STATIC ${redex_srcs})
