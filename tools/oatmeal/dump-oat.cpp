@@ -1526,7 +1526,7 @@ class SamsungLookupTables {
   }
 
   static uint32_t numEntries(uint32_t num_classes) {
-    return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
+    return supportedSize(num_classes) ? roundUpToPowerOfTwo(num_classes) : 0u;
   }
 
   static uint32_t rawSize(uint32_t num_classes) {
@@ -1750,7 +1750,7 @@ class LookupTables {
   }
 
   static uint32_t numEntries(uint32_t num_classes) {
-    return supportedSize(num_classes) ? nextPowerOfTwo(num_classes) : 0u;
+    return supportedSize(num_classes) ? roundUpToPowerOfTwo(num_classes) : 0u;
   }
 
   template<typename DexFileType>
