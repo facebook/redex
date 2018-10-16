@@ -528,7 +528,7 @@ static int num_hash_buckets_064(int num_dynsymbols) {
   } else if (num_dynsymbols < 256) {
     return 16;
   } else {
-    return nextPowerOfTwo(num_dynsymbols / 32);
+    return roundUpToPowerOfTwo(num_dynsymbols / 32);
   }
 }
 

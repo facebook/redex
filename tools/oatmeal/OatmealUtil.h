@@ -69,12 +69,10 @@ bool is_aligned(uint32_t in) {
 }
 
 template <typename T>
-inline T nextPowerOfTwo(T in) {
-  // Turn off all but msb.
-  while ((in & (in - 1u)) != 0) {
-    in &= in - 1u;
-  }
-  return in << 1u;
+inline T roundUpToPowerOfTwo(T in) {
+  return (sizeof(T) == sizeof(uint32_t)) ?
+    (1u << (std::numeric_limits<T>::digits - __builtin_clz (in - 1))) :
+    (1Lu << (std::numeric_limits<T>::digits - __builtin_clzll (in - 1)));
 }
 
 template <typename T>
