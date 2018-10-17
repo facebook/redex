@@ -227,7 +227,6 @@ redex_all_SOURCES = \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
-	opt/reachability_graph/ReachabilityGraphPrinter.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \

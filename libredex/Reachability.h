@@ -55,44 +55,6 @@ struct ReachableObject {
 
   std::string str() const;
 
-  std::string type_str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return "ANNO";
-    case ReachableObjectType::CLASS:
-      return "CLASS";
-    case ReachableObjectType::FIELD:
-      return "FIELD";
-    case ReachableObjectType::METHOD:
-      return "METHOD";
-    case ReachableObjectType::SEED:
-      return "SEED";
-    }
-  }
-
-  std::string state_str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return "Annotation";
-    case ReachableObjectType::CLASS:
-      return cls->rstate.str();
-    case ReachableObjectType::FIELD:
-      if (field->is_def()) {
-        return static_cast<const DexField*>(field)->rstate.str();
-      } else {
-        return "DexFieldRef";
-      }
-    case ReachableObjectType::METHOD:
-      if (method->is_def()) {
-        return static_cast<const DexMethod*>(method)->rstate.str();
-      } else {
-        return "DexFieldRef";
-      }
-    case ReachableObjectType::SEED:
-      return "Seed";
-    }
-  }
-
   friend bool operator==(const ReachableObject& lhs,
                          const ReachableObject& rhs) {
     return lhs.type == rhs.type && lhs.anno == rhs.anno;
@@ -336,15 +298,5 @@ struct ObjectCounts {
  * objects removed by a mark-sweep.
  */
 ObjectCounts count_objects(const DexStoresVector& stores);
-
-// Dump reachability information to TRACE(REACH_DUMP, 5).
-void dump_info(DexStoresVector& stores,
-               const ReachableObjectGraph& retainers_of,
-               const std::string& dump_tag);
-
-void dump_graph(DexStoresVector& stores,
-                const ReachableObjectGraph& retainers_of,
-                const std::string& dump_tag,
-                std::ostream& os);
 
 } // namespace reachability
