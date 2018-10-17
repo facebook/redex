@@ -18,7 +18,7 @@
 
 namespace reachability {
 
-enum class ReachableObjectType {
+enum class ReachableObjectType : uint8_t {
   ANNO,
   CLASS,
   FIELD,
@@ -116,17 +116,27 @@ class ReachableObjects {
     return m_marked_fields.count_unsafe(field);
   }
 
+ private:
   template <class Seed>
   void record_is_seed(Seed* seed);
 
   template <class Parent, class Object>
   void record_reachability(Parent*, Object*);
 
- private:
+  template <class Object>
+  void record_reachability(Object* parent, Object* object);
+
+  void record_reachability(const DexFieldRef* member, const DexClass* cls);
+
+  void record_reachability(const DexMethodRef* member, const DexClass* cls);
+
   ConcurrentSet<const DexClass*> m_marked_classes;
   ConcurrentSet<const DexFieldRef*> m_marked_fields;
   ConcurrentSet<const DexMethodRef*> m_marked_methods;
   ReachableObjectGraph m_retainers_of;
+
+  friend class RootSetMarker;
+  friend class TransitiveClosureMarker;
 };
 
 struct ConditionallyMarked {
@@ -298,5 +308,7 @@ struct ObjectCounts {
  * objects removed by a mark-sweep.
  */
 ObjectCounts count_objects(const DexStoresVector& stores);
+
+void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of);
 
 } // namespace reachability

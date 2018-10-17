@@ -7,6 +7,11 @@
 
 #include "Reachability.h"
 
+#include <boost/bimap/bimap.hpp>
+#include <boost/bimap/unordered_set_of.hpp>
+#include <boost/range/adaptor/map.hpp>
+
+#include "BinarySerialization.h"
 #include "DexUtil.h"
 #include "Pass.h"
 #include "ReachableClasses.h"
@@ -16,6 +21,7 @@
 
 using namespace reachability;
 
+namespace bs = binary_serialization;
 namespace mog = method_override_graph;
 
 namespace {
@@ -61,7 +67,7 @@ namespace reachability {
 std::string ReachableObject::str() const {
   switch (type) {
   case ReachableObjectType::ANNO:
-    return "[ANNO] " + show_deobfuscated(anno->type());
+    return show_deobfuscated(anno->type());
   case ReachableObjectType::CLASS:
     return show_deobfuscated(cls);
   case ReachableObjectType::FIELD:
@@ -121,13 +127,11 @@ void RootSetMarker::push_seed(const DexClass* cls) {
 
 void RootSetMarker::push_seed(const DexField* field) {
   if (!field) return;
-  record_is_seed(field);
   m_cond_marked->fields.insert(field);
 }
 
 void RootSetMarker::push_seed(const DexMethod* method) {
   if (!method) return;
-  record_is_seed(method);
   m_cond_marked->methods.insert(method);
 }
 
@@ -203,10 +207,13 @@ void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
 
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
-  // FIXME: Bug! Even if cls is already marked, we need to record its
-  // reachability from parent to cls.
-  if (!cls || m_reachable_objects->marked(cls)) return;
+  if (!cls) {
+    return;
+  }
   record_reachability(parent, cls);
+  if (m_reachable_objects->marked(cls)) {
+    return;
+  }
   m_reachable_objects->mark(cls);
   m_worker_state->push_task(ReachableObject(cls));
 }
@@ -214,11 +221,16 @@ void TransitiveClosureMarker::push(const Parent* parent, const DexClass* cls) {
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent,
                                    const DexFieldRef* field) {
-  if (!field || m_reachable_objects->marked(field)) return;
+  if (!field) {
+    return;
+  }
+  record_reachability(parent, field);
+  if (m_reachable_objects->marked(field)) {
+    return;
+  }
   if (field->is_def()) {
     gather_and_push(static_cast<const DexField*>(field));
   }
-  record_reachability(parent, field);
   m_reachable_objects->mark(field);
   m_worker_state->push_task(ReachableObject(field));
 }
@@ -226,8 +238,13 @@ void TransitiveClosureMarker::push(const Parent* parent,
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent,
                                    const DexMethodRef* method) {
-  if (!method || m_reachable_objects->marked(method)) return;
+  if (!method) {
+    return;
+  }
   record_reachability(parent, method);
+  if (m_reachable_objects->marked(method)) {
+    return;
+  }
   m_reachable_objects->mark(method);
   m_worker_state->push_task(ReachableObject(method));
 }
@@ -486,16 +503,40 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
   return reachable_objects;
 }
 
-/*
- * We use templates to specialize record_reachability(parent, child) such
- * that:
- *
- *  1. it works for all combinations of parent, child in
- *     {DexAnnotation*, DexClass*, DexType*, DexMethod*, DexField*}
- *
- *  2. We record the reachability relationship iff
- *     m_record_reachability == true.
- */
+void ReachableObjects::record_reachability(const DexMethodRef* member,
+                                           const DexClass* cls) {
+  // Each class member trivially retains its containing class; let's filter out
+  // this uninteresting information from our diagnostics.
+  if (member->get_class() == cls->get_type()) {
+    return;
+  }
+  m_retainers_of.update(ReachableObject(cls),
+                        [&](const ReachableObject&, ReachableObjectSet& set,
+                            bool /* exists */) { set.emplace(member); });
+}
+
+void ReachableObjects::record_reachability(const DexFieldRef* member,
+                                           const DexClass* cls) {
+  if (member->get_class() == cls->get_type()) {
+    return;
+  }
+  m_retainers_of.update(ReachableObject(cls),
+                        [&](const ReachableObject&, ReachableObjectSet& set,
+                            bool /* exists */) { set.emplace(member); });
+}
+
+template <class Object>
+void ReachableObjects::record_reachability(Object* parent, Object* object) {
+  if (parent == object) {
+    return;
+  }
+  m_retainers_of.update(
+      ReachableObject(object),
+      [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
+        set.emplace(parent);
+      });
+}
+
 template <class Parent, class Object>
 void ReachableObjects::record_reachability(Parent* parent, Object* object) {
   m_retainers_of.update(
@@ -570,6 +611,36 @@ ObjectCounts count_objects(const DexStoresVector& stores) {
     }
   }
   return counts;
+}
+
+// Graph serialization helpers
+namespace {
+
+void write_reachable_object(std::ostream& os, const ReachableObject& obj) {
+  bs::write<uint8_t>(os, static_cast<uint8_t>(obj.type));
+  const auto& s = obj.str();
+  bs::write<uint32_t>(os, s.size());
+  os << s;
+}
+
+} // namespace
+
+void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
+  uint32_t magic = 0xfaceb000; // serves as endianess check
+  bs::write(os, magic);
+  uint32_t version = 1;
+  bs::write(os, version);
+  bs::GraphWriter<ReachableObject, ReachableObjectHash> gw(
+      write_reachable_object,
+      [&](const ReachableObject& obj) -> std::vector<ReachableObject> {
+        if (!retainers_of.count(obj)) {
+          return {};
+        }
+        const auto& preds = retainers_of.at(obj);
+        std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
+        return preds_vec;
+      });
+  gw.write(os, boost::adaptors::keys(retainers_of));
 }
 
 } // namespace reachability
