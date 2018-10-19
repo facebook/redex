@@ -22,6 +22,9 @@ struct MemberSpecification {
   std::string annotationType;
   std::string name;
   std::string descriptor;
+
+  friend bool operator==(const MemberSpecification& lhs,
+                         const MemberSpecification& rhs);
 };
 
 struct ClassSpecification {
@@ -35,6 +38,9 @@ struct ClassSpecification {
                                 // class extends or implements.
   std::vector<MemberSpecification> fieldSpecifications;
   std::vector<MemberSpecification> methodSpecifications;
+
+  friend bool operator==(const ClassSpecification& lhs,
+                         const ClassSpecification& rhs);
 };
 
 struct KeepSpec {
@@ -51,6 +57,8 @@ struct KeepSpec {
   // For debugging and analysis
   std::string source_filename;
   uint32_t source_line;
+
+  friend bool operator==(const KeepSpec& lhs, const KeepSpec& rhs);
 };
 
 struct ProguardConfiguration {
