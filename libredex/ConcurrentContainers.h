@@ -150,8 +150,20 @@ class ConcurrentContainer {
   }
 
  protected:
-  // Only derived classes may be instantiated.
+  // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
+
+  ConcurrentContainer(const ConcurrentContainer& container) {
+    for (size_t i = 0; i < n_slots; ++i) {
+      m_slots[i] = container.m_slots[i];
+    }
+  }
+
+  ConcurrentContainer(ConcurrentContainer&& container) {
+    for (size_t i = 0; i < n_slots; ++i) {
+      m_slots[i] = std::move(container.m_slots[i]);
+    }
+  }
 
   Container& get_container(size_t slot) { return m_slots[slot]; }
 
@@ -173,6 +185,13 @@ class ConcurrentMapContainer
     : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
  public:
   ConcurrentMapContainer() = default;
+
+  ConcurrentMapContainer(const ConcurrentMapContainer& container)
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
+
+  ConcurrentMapContainer(ConcurrentMapContainer&& container)
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
+            std::move(container)) {}
 
   template <typename InputIt>
   ConcurrentMapContainer(InputIt first, InputIt last) {
@@ -306,6 +325,20 @@ class ConcurrentSet final
                                  Hash,
                                  n_slots> {
  public:
+  ConcurrentSet() = default;
+
+  ConcurrentSet(const ConcurrentSet& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(set) {}
+
+  ConcurrentSet(ConcurrentSet&& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(std::move(set)) {}
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
