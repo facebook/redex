@@ -1192,6 +1192,7 @@ namespace {
 void write_method_mapping(
   const std::string& filename,
   const DexOutputIdx* dodx,
+  const DexClasses* classes,
   uint8_t* dex_signature,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id
 ) {
@@ -1200,6 +1201,7 @@ void write_method_mapping(
   assert_log(fd, "Can't open method mapping file %s: %s\n",
              filename.c_str(),
              strerror(errno));
+  std::unordered_set<DexClass*> classes_in_dex(classes->begin(), classes->end());
   for (auto& it : dodx->method_to_idx()) {
     auto method = it.first;
     auto idx = it.second;
@@ -1209,6 +1211,11 @@ void write_method_mapping(
     // system/framework class, so we can just return the name.
     auto const& typecls = method->get_class();
     auto const& cls = type_class(typecls);
+    if (classes_in_dex.count(cls) == 0) {
+      // We only want to emit IDs for the methods that are defined in this dex,
+      // and not for references to methods in other dexes.
+      continue;
+    }
     auto deobf_class = [&] {
       if (cls) {
         auto deobname = cls->get_deobfuscated_name();
@@ -1480,6 +1487,7 @@ void DexOutput::write_symbol_files() {
   write_method_mapping(
     m_method_mapping_filename,
     dodx,
+    m_classes,
     hdr.signature,
     m_method_to_id
   );
