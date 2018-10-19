@@ -30,7 +30,7 @@ std::unordered_set<const DexMethod*> get_overriding_methods(
 /*
  * Slow-ish; users should build the graph once and cache it somewhere.
  */
-std::unique_ptr<Graph> build_graph(const Scope&);
+std::unique_ptr<const Graph> build_graph(const Scope&);
 
 /*
  * The `children` edges point to the overriders / implementors of the current
@@ -47,6 +47,8 @@ class Graph {
   const ConcurrentMap<const DexMethod*, Node>& nodes() const { return m_nodes; }
 
   void add_edge(const DexMethod* overridden, const DexMethod* overriding);
+
+  void dump(std::ostream&) const;
 
  private:
   static Node empty_node;

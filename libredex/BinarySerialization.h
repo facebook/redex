@@ -39,6 +39,16 @@ void write_array(std::ostream& os, const Container& container) {
 }
 
 /*
+ * Write a simple header. Ideally we should use a single header format across
+ * all our binary files.
+ */
+inline void write_header(std::ostream& os, uint32_t version) {
+  uint32_t magic = 0xfaceb000; // serves as endianess check
+  write(os, magic);
+  write(os, version);
+}
+
+/*
  * Serialize a graph as an adjacency list. For a graph with N nodes, we will
  * emit N lines of the form
  *

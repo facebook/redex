@@ -626,10 +626,7 @@ void write_reachable_object(std::ostream& os, const ReachableObject& obj) {
 } // namespace
 
 void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
-  uint32_t magic = 0xfaceb000; // serves as endianess check
-  bs::write(os, magic);
-  uint32_t version = 1;
-  bs::write(os, version);
+  bs::write_header(os, /* version */ 1);
   bs::GraphWriter<ReachableObject, ReachableObjectHash> gw(
       write_reachable_object,
       [&](const ReachableObject& obj) -> std::vector<ReachableObject> {
