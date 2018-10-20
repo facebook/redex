@@ -29,7 +29,7 @@ file(GLOB includes
         "liblocator"
         "libresource"
         "shared"
-        "sparta/include",
+        "sparta/include"
         "tools/common"
         )
 
@@ -76,8 +76,8 @@ add_library(resource STATIC ${resource_srcs})
 
 file(GLOB redex_all_srcs
         "tools/redex-all/*.cpp"
-        "tools/redex-all/*.h",
-        "tools/common/*.cpp",
+        "tools/redex-all/*.h"
+        "tools/common/*.cpp"
         "tools/common/*.h"
         )
 
