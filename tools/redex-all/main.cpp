@@ -6,6 +6,7 @@
  */
 
 #include <cstring>
+#include <cinttypes>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -553,7 +554,7 @@ void write_debug_line_mapping(
 
     uint64_t method_id = method_to_id.at(method);
     // write human readable file
-    fprintf(fd, "0x%016lx %u\n", method_id, offset);
+    fprintf(fd, "0x%016" PRIx64 "%u\n", method_id, offset);
     readable_line_out << method->get_deobfuscated_name() << "\n";
     // write method id => offset info for binary file
     ofs.write((const char*)&method_id, bit_64_size);
