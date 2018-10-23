@@ -196,10 +196,6 @@ using MethodItemMemberListOption =
                                   boost::intrusive::list_member_hook<>,
                                   &MethodItemEntry::list_hook_>;
 
-struct IRListDisposer {
-  void operator()(MethodItemEntry* mie) { delete mie; }
-};
-
 class IRList {
  private:
   using IntrusiveList =
@@ -207,6 +203,10 @@ class IRList {
 
   IntrusiveList m_list;
   void remove_branch_targets(IRInstruction* branch_inst);
+
+  static void disposer(MethodItemEntry* mie) {
+    delete mie;
+  }
 
  public:
   using iterator = IntrusiveList::iterator;
@@ -335,9 +335,9 @@ class IRList {
     m_list.splice(pos, other.m_list, begin, end);
   }
 
-  void remove_and_dispose_if(
-      std::function<bool(const MethodItemEntry&)> predicate) {
-    m_list.remove_and_dispose_if(predicate, IRListDisposer());
+  template<typename Predicate>
+  void remove_and_dispose_if(Predicate predicate) {
+    m_list.remove_and_dispose_if(predicate, disposer);
   }
 
   void sanity_check() const;
@@ -359,9 +359,9 @@ class IRList {
 
   IRList::iterator erase(IRList::iterator it) { return m_list.erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {
-    return m_list.erase_and_dispose(it, IRListDisposer());
+    return m_list.erase_and_dispose(it, disposer);
   }
-  void clear_and_dispose() { m_list.clear_and_dispose(IRListDisposer()); }
+  void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {
     return m_list.iterator_to(mie);

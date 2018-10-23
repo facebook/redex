@@ -358,7 +358,6 @@ class ControlFlowGraph {
     edge->target()->m_preds.emplace_back(edge);
   }
 
-  using EdgePredicate = std::function<bool(const Edge* e)>;
   using EdgeSet = std::unordered_set<Edge*>;
 
   // Make `e` point to a new target block.
@@ -371,16 +370,54 @@ class ControlFlowGraph {
 
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists
+  template <typename EdgePredicate>
   Edge* get_pred_edge_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    for (Edge* e : block->preds()) {
+      if (predicate(e)) {
+        return e;
+      }
+    }
+    return nullptr;
+  }
+
+  template <typename EdgePredicate>
   Edge* get_succ_edge_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    for (Edge* e : block->succs()) {
+      if (predicate(e)) {
+        return e;
+      }
+    }
+    return nullptr;
+  }
 
   // return all edges for which predicate returns true
+  template <typename EdgePredicate>
   std::vector<Edge*> get_pred_edges_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    const auto& preds = block->preds();
+    std::vector<Edge*> result;
+    for (Edge* e : preds) {
+      if (predicate(e)) {
+        result.push_back(e);
+      }
+    }
+    return result;
+  }
+
+  template <typename EdgePredicate>
   std::vector<Edge*> get_succ_edges_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    const auto& succs = block->succs();
+    std::vector<Edge*> result;
+    for (Edge* e : succs) {
+      if (predicate(e)) {
+        result.push_back(e);
+      }
+    }
+    return result;
+  }
 
   // return the first edge of the given type
   // or nullptr if no such edge exists
@@ -399,14 +436,26 @@ class ControlFlowGraph {
   //   * These functions remove edges from the graph and free the memory
   //   * the `_if` functions take a predicate to decide which edges to delete
   void delete_edge(Edge* edge);
-  void delete_edge_if(Block* source,
-                      Block* target,
-                      const EdgePredicate& predicate);
-  void delete_succ_edge_if(Block* block, const EdgePredicate& predicate);
-  void delete_pred_edge_if(Block* block, const EdgePredicate& predicate);
   void delete_succ_edges(Block* b);
   void delete_pred_edges(Block* b);
   void delete_edges_between(Block* p, Block* s);
+
+  template <typename EdgePredicate>
+  void delete_edge_if(Block* source,
+                      Block* target,
+                      EdgePredicate predicate) {
+    free_edges(remove_edge_if(source, target, predicate));
+  }
+
+  template <typename EdgePredicate>
+  void delete_succ_edge_if(Block* block, EdgePredicate predicate) {
+    free_edges(remove_succ_edge_if(block, predicate));
+  }
+
+  template <typename EdgePredicate>
+  void delete_pred_edge_if(Block* block, EdgePredicate predicate) {
+    free_edges(remove_pred_edge_if(block, predicate));
+  }
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
@@ -615,19 +664,113 @@ class ControlFlowGraph {
   //   * They return which edges were removed (with the exception of
   //     `remove_edge`)
   void remove_edge(Edge* edge, bool cleanup = true);
-  EdgeSet remove_edge_if(Block* source,
-                         Block* target,
-                         const EdgePredicate& predicate,
-                         bool cleanup = true);
-  EdgeSet remove_succ_edge_if(Block* block,
-                              const EdgePredicate& predicate,
-                              bool cleanup = true);
-  EdgeSet remove_pred_edge_if(Block* block,
-                              const EdgePredicate& predicate,
-                              bool cleanup = true);
   EdgeSet remove_succ_edges(Block* b, bool cleanup = true);
   EdgeSet remove_pred_edges(Block* b, bool cleanup = true);
   EdgeSet remove_edges_between(Block* p, Block* s, bool cleanup = true);
+
+  template <typename EdgePredicate>
+  EdgeSet remove_edge_if(Block* source,
+                         Block* target,
+                         EdgePredicate predicate,
+                         bool cleanup = true) {
+    auto& forward_edges = source->m_succs;
+    EdgeSet to_remove;
+    forward_edges.erase(
+        std::remove_if(forward_edges.begin(),
+                       forward_edges.end(),
+                       [&target, &predicate, &to_remove](Edge* e) {
+                         if (e->target() == target && predicate(e)) {
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        forward_edges.end());
+
+    auto& reverse_edges = target->m_preds;
+    reverse_edges.erase(
+        std::remove_if(reverse_edges.begin(),
+                       reverse_edges.end(),
+                       [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+        reverse_edges.end());
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
+
+  template <typename EdgePredicate>
+  EdgeSet remove_pred_edge_if(Block* block,
+                              EdgePredicate predicate,
+                              bool cleanup = true) {
+    auto& reverse_edges = block->m_preds;
+
+    std::vector<Block*> source_blocks;
+    EdgeSet to_remove;
+    reverse_edges.erase(
+        std::remove_if(reverse_edges.begin(),
+                       reverse_edges.end(),
+                       [&source_blocks, &to_remove, &predicate](Edge* e) {
+                         if (predicate(e)) {
+                           source_blocks.push_back(e->src());
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        reverse_edges.end());
+
+    for (Block* source_block : source_blocks) {
+      auto& forward_edges = source_block->m_succs;
+      forward_edges.erase(
+          std::remove_if(
+              forward_edges.begin(), forward_edges.end(),
+              [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+          forward_edges.end());
+    }
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
+
+  template <typename EdgePredicate>
+  EdgeSet remove_succ_edge_if(Block* block,
+                              EdgePredicate predicate,
+                              bool cleanup = true) {
+    auto& forward_edges = block->m_succs;
+
+    std::vector<Block*> target_blocks;
+    std::unordered_set<Edge*> to_remove;
+    forward_edges.erase(
+        std::remove_if(forward_edges.begin(),
+                       forward_edges.end(),
+                       [&target_blocks, &to_remove, &predicate](Edge* e) {
+                         if (predicate(e)) {
+                           target_blocks.push_back(e->target());
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        forward_edges.end());
+
+    for (Block* target_block : target_blocks) {
+      auto& reverse_edges = target_block->m_preds;
+      reverse_edges.erase(
+          std::remove_if(
+              reverse_edges.begin(), reverse_edges.end(),
+              [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+          reverse_edges.end());
+    }
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
 
   // Assumes the edge is already removed.
   void free_edge(Edge* edge);
