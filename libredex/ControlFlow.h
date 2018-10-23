@@ -602,8 +602,9 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
-  // Delete edges that are never a predecessor or successor of a block
-  void delete_unreferenced_edges();
+  // Assert if there are edges that are never a predecessor or successor of a
+  // block
+  void no_unreferenced_edges() const;
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.
@@ -657,7 +658,7 @@ class ControlFlowGraph {
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
-  static constexpr bool DEBUG{true};
+  static constexpr bool DEBUG{false};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
@@ -704,14 +705,13 @@ class InstructionIteratorImpl {
 
   // go to beginning of next block, skipping empty blocks
   void to_next_block() {
-    while (
-        m_block != m_cfg.m_blocks.end() &&
-        m_it ==
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).end()) {
+    while (m_block != m_cfg.m_blocks.end() &&
+           m_it.unwrap() == m_block->second->m_entries.end()) {
       ++m_block;
       if (m_block != m_cfg.m_blocks.end()) {
-        m_it =
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).begin();
+        Block* b = m_block->second;
+        m_it = ir_list::InstructionIteratorImpl<is_const>(b->m_entries.begin(),
+                                                          b->m_entries.end());
       } else {
         m_it = ir_list::InstructionIteratorImpl<is_const>();
       }
@@ -779,11 +779,11 @@ class InstructionIteratorImpl {
   }
 
   void assert_not_end() const {
+    if (!ControlFlowGraph::DEBUG) {
+      return;
+    }
     always_assert_log(m_block != m_cfg.m_blocks.end(), "%s", SHOW(m_cfg));
-    always_assert_log(
-        m_it !=
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).end(),
-        "%s", SHOW(m_cfg));
+    always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(), "%s", SHOW(m_cfg));
   }
 
   bool is_end() const {

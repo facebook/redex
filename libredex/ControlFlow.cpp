@@ -516,6 +516,7 @@ void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
 void ControlFlowGraph::remove_unreachable_succ_edges() {
   // Remove edges between unreachable blocks and their succ blocks.
   std::unordered_set<Block*> visited;
+  visited.reserve(m_blocks.size());
   transform::visit(m_entry_block, visited);
   for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
     Block* b = it->second;
@@ -551,7 +552,6 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
   remove_empty_blocks();
-  delete_unreferenced_edges();
 
   recompute_registers_size();
 }
@@ -571,6 +571,8 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
         }
       }
       num_insns_removed += b->num_opcodes();
+      always_assert(b->succs().empty());
+      always_assert(b->preds().empty());
       delete b;
       it = m_blocks.erase(it);
     } else {
@@ -631,7 +633,7 @@ void ControlFlowGraph::remove_empty_blocks() {
   }
 }
 
-void ControlFlowGraph::delete_unreferenced_edges() {
+void ControlFlowGraph::no_unreferenced_edges() const {
   EdgeSet referenced;
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
@@ -642,15 +644,7 @@ void ControlFlowGraph::delete_unreferenced_edges() {
       referenced.insert(e);
     }
   }
-
-  for (auto it = m_edges.begin(); it != m_edges.end();) {
-    if (referenced.count(*it) == 0) {
-      delete *it;
-      it = m_edges.erase(it);
-    } else {
-      ++it;
-    }
-  }
+  always_assert(referenced == m_edges);
 }
 
 // Verify that
@@ -754,6 +748,7 @@ void ControlFlowGraph::sanity_check() const {
                       used_regs, m_registers_size, SHOW(*this));
   }
   no_dangling_dex_positions();
+  no_unreferenced_edges();
 }
 
 uint16_t ControlFlowGraph::compute_registers_size() const {
@@ -857,6 +852,9 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   new_cfg->set_registers_size(this->get_registers_size());
 
   std::unordered_map<const Edge*, Edge*> old_edge_to_new;
+  size_t num_edges = this->m_edges.size();
+  new_cfg->m_edges.reserve(num_edges);
+  old_edge_to_new.reserve(num_edges);
   for (const Edge* old_edge : this->m_edges) {
     // this shallowly copies block pointers inside, then we patch them later
     Edge* new_edge = new Edge(*old_edge);
@@ -926,6 +924,7 @@ std::vector<Block*> ControlFlowGraph::order() {
   std::vector<std::unique_ptr<Chain>> chains;
   // keep track of which blocks are in each chain, for quick lookup.
   std::unordered_map<Block*, Chain*> block_to_chain;
+  block_to_chain.reserve(m_blocks.size());
 
   build_chains(&chains, &block_to_chain);
   const auto& result = wto_chains(block_to_chain);

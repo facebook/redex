@@ -152,9 +152,8 @@ void CFGInliner::steal_contents(ControlFlowGraph* caller,
   callee->m_blocks.clear();
 
   // transfer ownership of the edges
-  for (Edge* e : callee->m_edges) {
-    caller->m_edges.insert(e);
-  }
+  caller->m_edges.reserve(caller->m_edges.size() + callee->m_edges.size());
+  caller->m_edges.insert(callee->m_edges.begin(), callee->m_edges.end());
   callee->m_edges.clear();
 }
 
