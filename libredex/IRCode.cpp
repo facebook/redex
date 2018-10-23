@@ -610,6 +610,10 @@ void IRCode::clear_cfg() {
   }
 }
 
+bool IRCode::editable_cfg_built() const {
+  return m_cfg != nullptr && m_cfg->editable();
+}
+
 namespace {
 
 using RegMap = transform::RegMap;
