@@ -84,35 +84,16 @@ static size_t remove_block(IRCode* code, cfg::Block* b) {
   return insns_removed;
 }
 
-void visit(cfg::Block* start, std::unordered_set<cfg::Block*>& visited) {
-  std::stack<cfg::Block*> to_visit;
-  to_visit.push(start);
-  while (!to_visit.empty()) {
-    cfg::Block* b = to_visit.top();
-    to_visit.pop();
-
-    if (visited.find(b) != visited.end()) {
-      continue;
-    }
-    visited.emplace(b);
-
-    for (auto& s : b->succs()) {
-      to_visit.push(s->target());
-    }
-  }
-}
-
 size_t remove_unreachable_blocks(IRCode* code) {
   auto& cfg = code->cfg();
   const auto& blocks = cfg.blocks();
   size_t insns_removed{0};
 
   // remove unreachable blocks
-  std::unordered_set<cfg::Block*> visited;
-  visit(cfg.entry_block(), visited);
+  const auto& visited = cfg.visit();
   for (size_t i = 1; i < blocks.size(); ++i) {
     auto& b = blocks.at(i);
-    if (visited.find(b) != visited.end()) {
+    if (visited.test(b->id())) {
       continue;
     }
     // Remove all successor edges. Note that we don't need to try and remove

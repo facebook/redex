@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/dynamic_bitset.hpp>
 #include <boost/optional/optional.hpp>
 #include <boost/range/sub_range.hpp>
 #include <type_traits>
@@ -504,6 +505,13 @@ class ControlFlowGraph {
 
   size_t num_blocks() const { return m_blocks.size(); }
 
+  /*
+   * Traverse the graph, starting from the entry node. Return a bitset with IDs
+   * of reachable blocks having 1 and IDs of unreachable blocks (or unused IDs)
+   * having 0.
+   */
+  boost::dynamic_bitset<> visit() const;
+
   // remove blocks with no predecessors
   // returns the number of instructions removed
   uint32_t remove_unreachable_blocks();
@@ -792,6 +800,9 @@ class ControlFlowGraph {
   void move_edge(Edge* edge, Block* new_source, Block* new_target);
 
   uint16_t compute_registers_size() const;
+
+  // Return the next unused block identifier
+  BlockId next_block_id() const;
 
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;

@@ -7,6 +7,7 @@
 
 #include "ControlFlow.h"
 
+#include <boost/dynamic_bitset.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 #include <iterator>
 #include <stack>
@@ -360,15 +361,15 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
                                              TryEnds& try_ends,
                                              TryCatches& try_catches,
                                              Boundaries& boundaries) {
-  // Find the block boundaries
+  // create the entry block
   auto* block = create_block();
   if (m_editable) {
     boundaries[block].first = ir->begin();
   } else {
     block->m_begin = ir->begin();
   }
-
   set_entry_block(block);
+
   bool in_try = false;
   for (auto it = ir->begin(); it != ir->end(); ++it) {
     if (it->type == MFLOW_TRY) {
@@ -513,14 +514,28 @@ void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
   TRACE(CFG, 5, "  build: catch edges added\n");
 }
 
+BlockId ControlFlowGraph::next_block_id() const {
+  // Choose the next largest id. Note that we can't use m_block.size() because
+  // we may have deleted some blocks from the cfg.
+  const auto& rbegin = m_blocks.rbegin();
+  return (rbegin == m_blocks.rend()) ? 0 : (rbegin->first + 1);
+}
+
 void ControlFlowGraph::remove_unreachable_succ_edges() {
   // Remove edges between unreachable blocks and their succ blocks.
-  std::unordered_set<Block*> visited;
-  visited.reserve(m_blocks.size());
-  transform::visit(m_entry_block, visited);
+  if (m_blocks.empty()) {
+    return;
+  }
+
+  const auto& visited = visit();
+  if (visited.all()) {
+    // All blocks are visited. No blocks need to have their succ edges removed.
+    return;
+  }
+
   for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
     Block* b = it->second;
-    if (visited.find(b) != visited.end()) {
+    if (visited.test(b->id())) {
       continue;
     }
 
@@ -528,6 +543,30 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
     delete_succ_edges(b);
   }
   TRACE(CFG, 5, "  build: unreachables removed\n");
+}
+
+/*
+ * Traverse the graph, starting from the entry node. Return a bitset with IDs of
+ * reachable blocks having 1 and IDs of unreachable blocks (or unused IDs)
+ * having 0.
+ */
+boost::dynamic_bitset<> ControlFlowGraph::visit() const {
+  std::stack<const cfg::Block*> to_visit;
+  boost::dynamic_bitset<> visited{next_block_id()};
+  to_visit.push(entry_block());
+  while (!to_visit.empty()) {
+    const cfg::Block* b = to_visit.top();
+    to_visit.pop();
+
+    if (visited.test_set(b->id())) {
+      continue;
+    }
+
+    for (Edge* e : b->succs()) {
+      to_visit.push(e->target());
+    }
+  }
+  return visited;
 }
 
 // Move the `MethodItemEntry`s from `ir` into the blocks, based on the
@@ -539,10 +578,9 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
   // fill the blocks between their boundaries
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
-    b->m_entries.splice_selection(b->m_entries.end(),
-                                  *ir,
-                                  boundaries.at(b).first,
-                                  boundaries.at(b).second);
+    const auto& boundary = boundaries.at(b);
+    b->m_entries.splice_selection(b->m_entries.end(), *ir, boundary.first,
+                                  boundary.second);
     always_assert_log(!b->empty(), "block %d is empty:\n%s\n", entry.first,
                       SHOW(*this));
   }
@@ -1296,10 +1334,7 @@ ControlFlowGraph::~ControlFlowGraph() {
 }
 
 Block* ControlFlowGraph::create_block() {
-  const auto& rbegin = m_blocks.rbegin();
-  // Choose the next largest id. Note that we can't use m_block.size() because
-  // we may have deleted some blocks from the cfg.
-  size_t id = (rbegin == m_blocks.rend()) ? 0 : (rbegin->first + 1);
+  size_t id = next_block_id();
   Block* b = new Block(this, id);
   m_blocks.emplace(id, b);
   return b;
