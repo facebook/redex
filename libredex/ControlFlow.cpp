@@ -581,11 +581,13 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
   }
 
   // We don't want to leave any dangling dex parent pointers behind
-  for (const auto& entry : m_blocks) {
-    for (const auto& mie : *entry.second) {
-      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr &&
-          deleted_positions.count(mie.pos->parent)) {
-        mie.pos->parent = nullptr;
+  if (!deleted_positions.empty()) {
+    for (const auto& entry : m_blocks) {
+      for (const auto& mie : *entry.second) {
+        if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr &&
+            deleted_positions.count(mie.pos->parent)) {
+          mie.pos->parent = nullptr;
+        }
       }
     }
   }

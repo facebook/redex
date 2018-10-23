@@ -1098,7 +1098,7 @@ unsigned dests_size(IROpcode op) {
     return 1;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return dex_opcode::dests_size(dex_op) && !opcode::may_throw(op);
+    return !opcode::may_throw(op) && dex_opcode::dests_size(dex_op);
   }
 }
 
