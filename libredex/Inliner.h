@@ -51,7 +51,9 @@ void inline_method(IRCode* caller,
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
  * success.
  */
-bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite);
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite);
 
 } // namespace inliner
 

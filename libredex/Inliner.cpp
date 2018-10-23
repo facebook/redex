@@ -313,18 +313,21 @@ void MultiMethodInliner::inline_inlinables(
       continue;
     }
 
-    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n",
-        SHOW(callee), caller->get_code()->get_registers_size(),
-        SHOW(caller),
-        callee->get_code()->get_registers_size());
-    // Logging before the call to inline_method to get the most relevant line
-    // number near callsite before callsite gets replaced. Should be ok as
-    // inline_method does not fail to inline.
-    log_opt(INLINED, caller, callsite->insn);
+    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n", SHOW(callee),
+          caller->get_code()->get_registers_size(), SHOW(caller),
+          callee->get_code()->get_registers_size());
+
     if (m_config.use_cfg_inliner) {
-      inliner::inline_with_cfg(caller->get_code(), callee->get_code(),
-                               callsite->insn);
+      bool success = inliner::inline_with_cfg(caller, callee, callsite->insn);
+      if (!success) {
+        continue;
+      }
     } else {
+      // Logging before the call to inline_method to get the most relevant line
+      // number near callsite before callsite gets replaced. Should be ok as
+      // inline_method does not fail to inline.
+      log_opt(INLINED, caller, callsite->insn);
+
       inliner::inline_method(caller->get_code(), callee->get_code(), callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
@@ -1194,9 +1197,11 @@ void inline_tail_call(DexMethod* caller,
   }
 }
 
-// return true on successfull inlining, false otherwise
-bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
-  auto& caller_cfg = caller->cfg();
+// return true on successful inlining, false otherwise
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite) {
+  auto& caller_cfg = caller_method->get_code()->cfg();
   const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
   if (callsite_it.is_end()) {
     // The callsite is not in the caller cfg. This is probably because the
@@ -1207,8 +1212,14 @@ bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
     // unreachable, and that block was deleted when the CFG was simplified.
     return false;
   }
-  const auto& callee_cfg = callee->cfg();
-  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_cfg);
+
+  // Logging before the call to inline_cfg to get the most relevant line
+  // number near callsite before callsite gets replaced. Should be ok as
+  // inline_cfg does not fail to inline.
+  log_opt(INLINED, caller_method, callsite);
+
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it,
+                              callee_method->get_code()->cfg());
   return true;
 }
 
