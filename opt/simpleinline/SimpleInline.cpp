@@ -5,24 +5,25 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "SimpleInline.h"
+
 #include <algorithm>
 #include <string>
 #include <vector>
 #include <map>
 #include <set>
 
-#include "SimpleInline.h"
-#include "Inliner.h"
+#include "ClassHierarchy.h"
 #include "Deleter.h"
 #include "DexClass.h"
+#include "DexUtil.h"
+#include "Inliner.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "DexUtil.h"
-#include "Resolver.h"
-#include "Walkers.h"
 #include "ReachableClasses.h"
+#include "Resolver.h"
 #include "VirtualScope.h"
-#include "ClassHierarchy.h"
+#include "Walkers.h"
 
 void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
@@ -37,10 +38,22 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
     return resolve_method(method, search, resolved_refs);
   };
 
+  if (m_inliner_config.use_cfg_inliner) {
+    walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+      code.build_cfg(/* editable */ true);
+    });
+  }
+
   // inline candidates
-  MultiMethodInliner inliner(
-      scope, stores, methods, resolver, m_inliner_config);
+  MultiMethodInliner inliner(scope, stores, methods, resolver,
+                             m_inliner_config);
   inliner.inline_methods();
+
+  if (m_inliner_config.use_cfg_inliner) {
+    walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+      code.clear_cfg();
+    });
+  }
 
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();

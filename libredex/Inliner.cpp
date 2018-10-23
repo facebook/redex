@@ -8,9 +8,10 @@
 #include "Inliner.h"
 
 #include "AnnoUtils.h"
-#include "ControlFlow.h"
 #include "CFGInliner.h"
+#include "ControlFlow.h"
 #include "DexUtil.h"
+#include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "Mutators.h"
 #include "OptData.h"
@@ -249,21 +250,28 @@ void MultiMethodInliner::inline_callees(
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
-  auto ii = InstructionIterable(caller->get_code());
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
-    if (!is_invoke(insn->opcode())) continue;
-    auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-    if (callee == nullptr) continue;
-    if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
-      continue;
-    }
-    always_assert(callee->is_concrete());
-    found++;
-    inlinables.push_back(std::make_pair(callee, it.unwrap()));
-    if (found == callees.size()) break;
-  }
+  editable_cfg_adapter::iterate_with_iterator(
+      caller->get_code(), [&](IRList::iterator it) {
+        auto insn = it->insn;
+        if (!is_invoke(insn->opcode())) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        if (callee == nullptr) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        if (std::find(callees.begin(), callees.end(), callee) ==
+            callees.end()) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        always_assert(callee->is_concrete());
+        found++;
+        inlinables.emplace_back(callee, it);
+        if (found == callees.size()) {
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
   if (found != callees.size()) {
     always_assert(found <= callees.size());
     info.not_found += callees.size() - found;
@@ -274,21 +282,20 @@ void MultiMethodInliner::inline_callees(
 
 void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
-  auto ii = InstructionIterable(caller->get_code());
-  auto end = ii.end();
-
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
-    if (insns.count(insn)) {
-      auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-      if (callee == nullptr) {
-        continue;
-      }
-      always_assert(callee->is_concrete());
-      inlinables.push_back(std::make_pair(callee, it.unwrap()));
-    }
-  }
+  editable_cfg_adapter::iterate_with_iterator(
+      caller->get_code(), [&](IRList::iterator it) {
+        auto insn = it->insn;
+        if (insns.count(insn)) {
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          if (callee == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          always_assert(callee->is_concrete());
+          inlinables.emplace_back(callee, it);
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
 
   inline_inlinables(caller, inlinables);
 }
@@ -449,13 +456,14 @@ bool MultiMethodInliner::should_inline(const DexMethod* caller,
  * most of them.
  */
 static size_t count_important_opcodes(const IRCode* code) {
-  size_t count {0};
-  for (auto& mie : InstructionIterable(code)) {
+  size_t count{0};
+  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
     auto op = mie.insn->opcode();
     if (!opcode::is_internal(op) && !opcode::is_move(op)) {
       ++count;
     }
-  }
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
   return count;
 }
 
@@ -524,30 +532,40 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
                                                const DexMethod* callee,
                                                const IRInstruction* invk_insn) {
   int ret_count = 0;
-  for (const auto& mie : InstructionIterable(callee->get_code())) {
-    auto insn = mie.insn;
-    if (create_vmethod(insn)) {
-      log_nopt(INL_CREATE_VMETH, caller, invk_insn);
-      return true;
-    }
-    if (nonrelocatable_invoke_super(insn, callee, caller)) {
-      log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
-      return true;
-    }
-    if (unknown_virtual(insn, callee, caller)) {
-      log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
-      return true;
-    }
-    if (unknown_field(insn, callee, caller)) {
-      log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
-      return true;
-    }
-    if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
-      info.throws++;
-      return true;
-    }
-    if (is_return(insn->opcode())) ret_count++;
-  }
+  bool can_inline = true;
+  editable_cfg_adapter::iterate(
+      callee->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (create_vmethod(insn)) {
+          log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (nonrelocatable_invoke_super(insn, callee, caller)) {
+          log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (unknown_virtual(insn, callee, caller)) {
+          log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (unknown_field(insn, callee, caller)) {
+          log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
+          info.throws++;
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (is_return(insn->opcode())) {
+          ++ret_count;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
   // The IRCode inliner can't handle callees with more than one return
   // statement (normally one, the way dx generates code). That allows us to make
   // a simple inline strategy where we don't have to worry about creating
@@ -558,9 +576,9 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
   if (ret_count > 1 && !m_config.use_cfg_inliner) {
     info.multi_ret++;
     log_nopt(INL_MULTIPLE_RETURNS, callee);
-    return true;
+    can_inline = false;
   }
-  return false;
+  return !can_inline;
 }
 
 /**
@@ -698,42 +716,52 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
 
 bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
   size_t store_idx = xstores.get_store_idx(callee->get_class());
-  for (const auto& mie : InstructionIterable(callee->get_code())) {
-    auto insn = mie.insn;
-    if (insn->has_type()) {
-      if (xstores.illegal_ref(store_idx, insn->get_type())) {
-        info.cross_store++;
-        return true;
-      }
-    } else if (insn->has_method()) {
-      auto meth = insn->get_method();
-      if (xstores.illegal_ref(store_idx, meth->get_class())) {
-        info.cross_store++;
-        return true;
-      }
-      auto proto = meth->get_proto();
-      if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
-        info.cross_store++;
-        return true;
-      }
-      auto args = proto->get_args();
-      if (args == nullptr) continue;
-      for (const auto& arg : args->get_type_list()) {
-        if (xstores.illegal_ref(store_idx, arg)) {
-          info.cross_store++;
-          return true;
+  bool has_cross_store_ref = false;
+  editable_cfg_adapter::iterate(
+      callee->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (insn->has_type()) {
+          if (xstores.illegal_ref(store_idx, insn->get_type())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+        } else if (insn->has_method()) {
+          auto meth = insn->get_method();
+          if (xstores.illegal_ref(store_idx, meth->get_class())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto proto = meth->get_proto();
+          if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto args = proto->get_args();
+          if (args == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          for (const auto& arg : args->get_type_list()) {
+            if (xstores.illegal_ref(store_idx, arg)) {
+              info.cross_store++;
+              has_cross_store_ref = true;
+              return editable_cfg_adapter::LOOP_BREAK;
+            }
+          }
+        } else if (insn->has_field()) {
+          auto field = insn->get_field();
+          if (xstores.illegal_ref(store_idx, field->get_class()) ||
+              xstores.illegal_ref(store_idx, field->get_type())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
         }
-      }
-    } else if (insn->has_field()) {
-      auto field = insn->get_field();
-      if (xstores.illegal_ref(store_idx, field->get_class()) ||
-          xstores.illegal_ref(store_idx, field->get_type())) {
-        info.cross_store++;
-        return true;
-      }
-    }
-  }
-  return false;
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  return has_cross_store_ref;
 }
 
 void MultiMethodInliner::invoke_direct_to_static() {
@@ -1168,13 +1196,7 @@ void inline_tail_call(DexMethod* caller,
 
 // return true on successfull inlining, false otherwise
 bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
-  // TODO build these earlier
-  // Once the CFGInliner is working fully, we can remove this section and
-  // rewrite the inliner with the new CFG completely.
-
-  caller->build_cfg(/* editable */ true);
   auto& caller_cfg = caller->cfg();
-
   const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
   if (callsite_it.is_end()) {
     // The callsite is not in the caller cfg. This is probably because the
@@ -1183,17 +1205,10 @@ bool inline_with_cfg(IRCode* caller, IRCode* callee, IRInstruction* callsite) {
     //
     // This could have happened if a previous inlining caused a block to be
     // unreachable, and that block was deleted when the CFG was simplified.
-    caller->clear_cfg();
     return false;
   }
-
-  callee->build_cfg(/* editable */ true);
   const auto& callee_cfg = callee->cfg();
-
   cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_cfg);
-
-  caller->clear_cfg();
-  callee->clear_cfg();
   return true;
 }
 
