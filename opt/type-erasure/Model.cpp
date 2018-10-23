@@ -49,6 +49,7 @@ void load_generated_types(const ModelSpec& spec,
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
     assert(cls != nullptr);
+    generated.insert(type);
     if (is_interface(cls)) {
       const auto& impls = type_system.get_implementors(type);
       generated.insert(impls.begin(), impls.end());
