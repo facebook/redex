@@ -944,8 +944,8 @@ void ControlFlowGraph::build_chains(
       continue;
     }
 
-    always_assert_log(!b->starts_with_move_result(), "%d is wrong %s", b->id(),
-                      SHOW(*this));
+    always_assert_log(!DEBUG || !b->starts_with_move_result(),
+                      "%d is wrong %s", b->id(), SHOW(*this));
     auto unique = std::make_unique<Chain>();
     Chain* chain = unique.get();
     chains->push_back(std::move(unique));
@@ -957,11 +957,10 @@ void ControlFlowGraph::build_chains(
     while (goto_edge != nullptr) {
       // make sure we handle a chain of blocks that all start with move-results
       auto goto_block = goto_edge->target();
-      always_assert_log(m_blocks.count(goto_block->id()) > 0,
+      always_assert_log(!DEBUG || m_blocks.count(goto_block->id()) > 0,
                         "bogus block reference %d -> %d in %s",
                         goto_edge->src()->id(), goto_block->id(), SHOW(*this));
-      if (block_to_chain->count(goto_block) == 0 &&
-          (goto_block->starts_with_move_result() || goto_block->same_try(b))) {
+      if (goto_block->starts_with_move_result() || goto_block->same_try(b)) {
         // If the goto edge leads to a block with a move-result(-pseudo), then
         // that block must be placed immediately after this one because we can't
         // insert anything between an instruction and its move-result(-pseudo).
@@ -970,8 +969,12 @@ void ControlFlowGraph::build_chains(
         // instructions (by using fallthroughs) without adding another try
         // region. This is not required, but empirical evidence shows that it
         // generates smaller dex files.
+        const auto& pair = block_to_chain->emplace(goto_block, chain);
+        bool was_already_there = !pair.second;
+        if (was_already_there) {
+          break;
+        }
         chain->push_back(goto_block);
-        block_to_chain->emplace(goto_block, chain);
         goto_edge = get_succ_edge_of_type(goto_block, EDGE_GOTO);
       } else {
         break;
@@ -985,16 +988,34 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
   sparta::WeakTopologicalOrdering<Chain*> wto(
       block_to_chain.at(entry_block()), [&block_to_chain](Chain* const& chain) {
         // The chain successor function returns all the outgoing edges' target
-        // chains
+        // chains. Where outgoing means that the edge does not go to this chain.
+        //
+        // FIXME: this algorithm ignores real infinite loops in the block graph
         std::vector<Chain*> result;
-        for (Block* b : *chain) {
-          auto edges = b->succs();
-          for (Edge* e : edges) {
+        result.reserve(chain->size());
+
+        const auto& end = chain->end();
+        for (auto it = chain->begin(); it != end;) {
+          Block* b = *it;
+          const auto& next_it = std::next(it);
+          Block* next = (next_it == end) ? nullptr : *next_it;
+
+          for (Edge* e : b->succs()) {
+            if (e->target() == next) {
+              // The most common intra-chain edge is a GOTO to the very next
+              // block. Let's cheaply detect this case and filter it early,
+              // before we have to do an expensive map lookup.
+              continue;
+            }
             const auto& succ_chain = block_to_chain.at(e->target());
+            // Filter out any edges within this chain. We don't want to
+            // erroneously create infinite loops in the chain graph that don't
+            // exist in the block graph.
             if (succ_chain != chain) {
               result.push_back(succ_chain);
             }
           }
+          it = next_it;
         }
         return result;
       });
@@ -1234,13 +1255,16 @@ bool ControlFlowGraph::catch_entries_equivalent_to_throw_edges(
     if (it == end) {
       return false;
     }
-
     auto edge = *it;
-    // TODO: use `find` instead of `count` and `at`
-    always_assert_log(catch_to_containing_block.count(mie) > 0,
+
+    if (mie->centry->catch_type != edge->m_throw_info->catch_type) {
+      return false;
+    }
+
+    const auto& search = catch_to_containing_block.find(mie);
+    always_assert_log(search != catch_to_containing_block.end(),
                       "%s not found in %s", SHOW(*mie), SHOW(*this));
-    if (mie->centry->catch_type != edge->m_throw_info->catch_type ||
-        catch_to_containing_block.at(mie) != edge->target()) {
+    if (search->second != edge->target()) {
       return false;
     }
 
