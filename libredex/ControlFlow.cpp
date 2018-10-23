@@ -347,6 +347,10 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
     remove_try_catch_markers();
     TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
     simplify();
+    // Often, the `registers_size` parameter passed into this constructor is
+    // incorrect. We recompute here to safeguard against this.
+    // TODO: fix the optimizations that don't track registers size correctly.
+    recompute_registers_size();
     TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
   } else {
     remove_unreachable_succ_edges();
@@ -590,8 +594,6 @@ void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
 void ControlFlowGraph::simplify() {
   remove_unreachable_blocks();
   remove_empty_blocks();
-
-  recompute_registers_size();
 }
 
 // remove blocks with no predecessors

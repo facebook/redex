@@ -60,8 +60,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   }
 
   // make sure the callee's registers don't overlap with the caller's
-  caller->recompute_registers_size();
-  remap_registers(&callee, caller->get_registers_size());
+  auto callee_regs_size = callee.get_registers_size();
+  auto caller_regs_size = caller->get_registers_size();
+  remap_registers(&callee, caller_regs_size);
 
   move_arg_regs(&callee, callsite->insn);
   const cfg::InstructionIterator& move_res = caller->move_result_of(callsite);
@@ -70,7 +71,6 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                       ? boost::none
                       : boost::optional<uint16_t>{move_res->insn->dest()});
 
-  auto callee_regs_size = callee.get_registers_size();
   TRACE(CFG, 3, "callee after remap %s\n", SHOW(callee));
 
   // delete the move-result before connecting the cfgs because it's in a block
@@ -84,7 +84,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   steal_contents(caller, callsite.block(), &callee);
   connect_cfgs(caller, callsite.block(), callee_blocks, callee_entry_block,
                callee_return_blocks, after_callee);
-  caller->set_registers_size(callee_regs_size);
+  caller->set_registers_size(callee_regs_size + caller_regs_size);
 
   TRACE(CFG, 3, "caller after connect %s\n", SHOW(*caller));
 
@@ -92,8 +92,6 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // remove the outgoing throw if we remove the callsite
   caller->remove_opcode(callsite);
 
-  TRACE(CFG, 3, "caller before simplify %s\n", SHOW(*caller));
-  caller->simplify();
   TRACE(CFG, 3, "final %s\n", SHOW(*caller));
 }
 
