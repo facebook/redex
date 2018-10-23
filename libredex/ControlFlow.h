@@ -37,7 +37,11 @@
  * `code->build_cfg(true)`
  *
  * The editable CFG takes the MethodItemEntries from the IRCode object and moves
- * them into the blocks. You can make all sorts of changes to the CFG and when
+ * them into the blocks. The editable CFG steals the code out of the IRCode
+ * object. After you've built the CFG in editable mode, you should use the CFG,
+ * not the IRCode. The IRCode is empty while the editable CFG exists.
+ *
+ * You can make all sorts of changes to the CFG and when
  * you're done, move it all back into an IRCode object with
  *
  * `code->clear_cfg()`
