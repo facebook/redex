@@ -32,18 +32,8 @@ class SimpleInlinePass : public Pass {
            false,
            m_inliner_config.inline_small_non_deletables);
 
-    std::vector<std::string> black_list;
-    jw.get("black_list", {}, black_list);
-    for (const auto& type_s : black_list) {
-      m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
-    }
-
-    std::vector<std::string> caller_black_list;
-    jw.get("caller_black_list", {}, caller_black_list);
-    for (const auto& type_s : caller_black_list) {
-      m_inliner_config.caller_black_list.emplace(
-          DexType::make_type(type_s.c_str()));
-    }
+    jw.get("black_list", {}, m_black_list);
+    jw.get("caller_black_list", {}, m_caller_black_list);
 
     std::vector<std::string> no_inline_annos;
     jw.get("no_inline_annos", {}, no_inline_annos);
@@ -65,6 +55,8 @@ class SimpleInlinePass : public Pass {
  private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope);
 
+  void populate_blacklist(const Scope&);
+
  private:
   // inline virtual methods
   bool m_virtual_inline;
@@ -79,4 +71,8 @@ class SimpleInlinePass : public Pass {
 
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;
+
+  // Prefixes of classes not to inline from / into
+  std::vector<std::string> m_black_list;
+  std::vector<std::string> m_caller_black_list;
 };
