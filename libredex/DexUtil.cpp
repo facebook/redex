@@ -71,6 +71,10 @@ DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
 }
 
+DexType* get_integer_type() {
+  return DexType::make_type("Ljava/lang/Integer;");
+}
+
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   always_assert_log(name.find("/") != std::string::npos,
@@ -187,7 +191,7 @@ bool is_init(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<init>") == 0;
 }
 
-bool is_clinit(const DexMethod* method) {
+bool is_clinit(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
 }
 

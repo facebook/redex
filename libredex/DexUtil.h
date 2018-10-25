@@ -83,6 +83,11 @@ DexType* get_class_type();
 DexType* get_enum_type();
 
 /**
+ * Return the DexType for an java.lang.Integer type.
+ */
+DexType* get_integer_type();
+
+/**
  * Return the package for a valid DexType.
  */
 std::string get_package_name(const DexType* type);
@@ -217,12 +222,12 @@ bool is_init(const DexMethodRef* method);
 /**
  * True if the method is a static constructor (matches the "<clinit>" name)
  */
-bool is_clinit(const DexMethod* method);
+bool is_clinit(const DexMethodRef* method);
 
 /**
  * Whether the method is a ctor or static ctor.
  */
-inline bool is_any_init(const DexMethod* method) {
+inline bool is_any_init(const DexMethodRef* method) {
   return is_init(method) || is_clinit(method);
 }
 
