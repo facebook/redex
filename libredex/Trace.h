@@ -39,6 +39,7 @@
   TM(DELMET)             \
   TM(DRAC)               \
   TM(EMPTY)              \
+  TM(ENUM)               \
   TM(FINALINLINE)        \
   TM(HOTNESS)            \
   TM(ICONSTP)            \
