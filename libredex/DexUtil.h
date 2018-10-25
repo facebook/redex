@@ -205,6 +205,11 @@ DexType* get_array_type(const DexType*);
 DexType* make_array_type(const DexType*);
 
 /**
+ * Return the array type of a given type in specified level.
+ */
+DexType* make_array_type(const DexType*, uint32_t level);
+
+/**
  * True if the method is a constructor (matches the "<init>" name)
  */
 bool is_init(const DexMethodRef* method);

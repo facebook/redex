@@ -273,6 +273,20 @@ DexType* make_array_type(const DexType* type) {
       DexString::make_string("[" + type->get_name()->str()));
 }
 
+DexType* make_array_type(const DexType* type, uint32_t level) {
+  always_assert(type != nullptr);
+  if (level == 0) {
+    return const_cast<DexType*>(type);
+  }
+  const auto elem_name = type->str();
+  const uint32_t size = elem_name.size() + level;
+  std::string name;
+  name.reserve(size+1);
+  name.append(level, '[');
+  name.append(elem_name.begin(), elem_name.end());
+  return DexType::make_type(name.c_str(), name.size());
+}
+
 void create_runtime_exception_block(
     DexString* except_str, std::vector<IRInstruction*>& block) {
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852

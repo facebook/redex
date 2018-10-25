@@ -140,8 +140,8 @@ DexProto* update_proto_reference(
   auto rtype = get_array_type_or_self(proto->get_rtype());
   if (old_to_new.count(rtype) > 0) {
     auto merger_type = old_to_new.at(rtype);
-    rtype = is_array(proto->get_rtype()) ? make_array_type(merger_type)
-                                         : const_cast<DexType*>(merger_type);
+    auto level = get_array_level(proto->get_rtype());
+    rtype = make_array_type(merger_type, level);
   } else {
     rtype = proto->get_rtype();
   }
@@ -150,9 +150,8 @@ DexProto* update_proto_reference(
     auto extracted_arg_type = get_array_type_or_self(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto merger_type = old_to_new.at(extracted_arg_type);
-      auto new_arg_type = is_array(arg_type)
-                              ? make_array_type(merger_type)
-                              : const_cast<DexType*>(merger_type);
+      auto level = get_array_level(arg_type);
+      auto new_arg_type = make_array_type(merger_type, level);
       lst.push_back(new_arg_type);
     } else {
       lst.push_back(arg_type);
@@ -287,15 +286,14 @@ void update_field_type_references(
   const auto update_fields = [&](const std::vector<DexField*>& fields) {
     for (const auto field : fields) {
       const auto ref_type = field->get_type();
-      const auto type =
-          is_array(ref_type) ? get_array_type(ref_type) : ref_type;
+      const auto type = get_array_type_or_self(ref_type);
       if (old_to_new.count(type) == 0) {
         continue;
       }
       DexFieldSpec spec;
       auto new_type = old_to_new.at(type);
-      auto new_type_incl_array =
-          is_array(ref_type) ? make_array_type(new_type) : new_type;
+      auto level = get_array_level(ref_type);
+      auto new_type_incl_array = make_array_type(new_type, level);
       spec.type = new_type_incl_array;
       field->change(spec);
       TRACE(REFU, 9, " updating field ref to %s\n", SHOW(type));
