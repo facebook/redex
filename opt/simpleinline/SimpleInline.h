@@ -30,18 +30,8 @@ class SimpleInlinePass : public Pass {
     jw.get("force_inline_annos", {}, m_force_inline_annos);
     jw.get("multiple_callers", false, m_multiple_callers);
 
-    std::vector<std::string> black_list;
-    jw.get("black_list", {}, black_list);
-    for (const auto& type_s : black_list) {
-      m_inliner_config.black_list.emplace(DexType::make_type(type_s.c_str()));
-    }
-
-    std::vector<std::string> caller_black_list;
-    jw.get("caller_black_list", {}, caller_black_list);
-    for (const auto& type_s : caller_black_list) {
-      m_inliner_config.caller_black_list.emplace(
-          DexType::make_type(type_s.c_str()));
-    }
+    jw.get("black_list", {}, m_black_list);
+    jw.get("caller_black_list", {}, m_caller_black_list);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -51,6 +41,8 @@ class SimpleInlinePass : public Pass {
       Scope& scope,
       const std::unordered_set<DexType*>& no_inline,
       const std::unordered_set<DexType*>& force_inline);
+
+  void populate_blacklist(const Scope&);
 
  private:
   // inline virtual methods
@@ -71,4 +63,8 @@ class SimpleInlinePass : public Pass {
 
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;
+
+  // Prefixes of classes not to inline from / into
+  std::vector<std::string> m_black_list;
+  std::vector<std::string> m_caller_black_list;
 };

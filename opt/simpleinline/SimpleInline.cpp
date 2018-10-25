@@ -6,6 +6,7 @@
  */
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
 #include <string>
 #include <vector>
 #include <map>
@@ -84,6 +85,8 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
   auto methods = gather_non_virtual_methods(scope, no_inline, force_inline);
   select_inlinable(
       scope, methods, resolved_refs, &inlinable, m_multiple_callers);
+
+  populate_blacklist(scope);
 
   auto resolver = [&](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);
@@ -221,6 +224,23 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   TRACE(SINL, 2, "Don't strip inlinable methods count: %ld\n", dont_strip);
   TRACE(SINL, 2, "Don't inline annotation count: %ld\n", no_inline_anno_count);
   return methods;
+}
+
+void SimpleInlinePass::populate_blacklist(const Scope& scope) {
+  walk::classes(scope, [this](const DexClass* cls) {
+    for (const auto& type_s : m_black_list) {
+      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
+        m_inliner_config.black_list.emplace(cls->get_type());
+        break;
+      }
+    }
+    for (const auto& type_s : m_caller_black_list) {
+      if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
+        m_inliner_config.caller_black_list.emplace(cls->get_type());
+        break;
+      }
+    }
+  });
 }
 
 static SimpleInlinePass s_pass;
