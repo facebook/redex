@@ -267,7 +267,7 @@ std::vector<std::string> ConfigFiles::load_coldstart_methods() {
 
 void ConfigFiles::load_method_to_weight() {
   std::ifstream infile(m_profiled_methods_filename.c_str());
-  assert_log(infile, "Can't open method profile file %s: %s\n",
+  assert_log(infile, "Can't open method profile file: %s\n",
              m_profiled_methods_filename.c_str());
 
   std::string deobfuscated_name;
