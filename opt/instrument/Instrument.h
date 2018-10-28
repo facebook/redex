@@ -28,6 +28,7 @@ class InstrumentPass : public Pass {
     for (const auto& e : list) {
       m_options.whitelist.insert(e);
     }
+    jw.get("blacklist_file_name", "", m_options.blacklist_file_name);
     jw.get("metadata_file_name", "instrument-mapping.txt",
            m_options.metadata_file_name);
     jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
@@ -42,6 +43,7 @@ class InstrumentPass : public Pass {
     std::string analysis_method_name;
     std::unordered_set<std::string> blacklist;
     std::unordered_set<std::string> whitelist;
+    std::string blacklist_file_name;
     std::string metadata_file_name;
     int64_t num_stats_per_method;
     bool only_cold_start_class;

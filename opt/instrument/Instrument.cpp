@@ -35,6 +35,10 @@ static bool debug = false;
 bool match_class_name(std::string cls_name,
                       const std::unordered_set<std::string>& set) {
   always_assert(cls_name.back() == ';');
+  // We also support exact class name (e.g., "Lcom/facebook/Debug;")
+  if (set.count(cls_name)) {
+    return true;
+  }
   cls_name.back() = '/';
   size_t pos = cls_name.find('/', 0);
   while (pos != std::string::npos) {
@@ -788,11 +792,34 @@ void do_basic_block_tracing(DexClass* analysis_cls,
         (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
 }
 
+std::unordered_set<std::string> load_blacklist_file(
+    const std::string& file_name) {
+  // Assume the file simply enumerates blacklisted names.
+  std::unordered_set<std::string> ret;
+  std::ifstream ifs(file_name);
+  assert_log(ifs, "Can't open blacklist file: %s\n", file_name.c_str());
+
+  std::string line;
+  while (ifs >> line) {
+    ret.insert(line);
+  }
+
+  TRACE(INSTRUMENT, 3, "Loaded %zu blacklist entries from %s\n", ret.size(),
+        file_name.c_str());
+  return ret;
+}
 } // namespace
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
+  // Append black listed classes from the file, if exists.
+  if (!m_options.blacklist_file_name.empty()) {
+    for (const auto& e : load_blacklist_file(m_options.blacklist_file_name)) {
+      m_options.blacklist.insert(e);
+    }
+  }
+
   if (m_options.analysis_class_name.empty()) {
     std::cerr << "[InstrumentPass] error: empty analysis class name."
               << std::endl;
