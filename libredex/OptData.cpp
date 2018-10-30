@@ -418,7 +418,8 @@ void OptDataMapper::init_opt_messages() {
       {CALLSITE_ARGS_REMOVED,
        "Updated callsite args for invoking updated method"},
       {METHOD_PARAMS_REMOVED,
-       "Removed unused params and updated method signature"}};
+       "Removed unused params and updated method signature"},
+      {ENUM_OPTIMIZED, "Enum is optimized to Integer objects"}};
   m_opt_msg_map = std::move(opt_msg_map);
 }
 

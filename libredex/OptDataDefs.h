@@ -18,6 +18,9 @@ enum OptReason : int {
   CALLSITE_ARGS_REMOVED,
   METHOD_PARAMS_REMOVED,
 
+  // OptimizeEnums
+  ENUM_OPTIMIZED,
+
   // OPT reason count
   N_OPT_REASONS,
 };
