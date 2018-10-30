@@ -80,6 +80,7 @@ struct ModelSpec {
   std::string name;
   // set of roots from which to find all model types
   const DexType* root;
+  TypeSet roots;
   // types to exclude from the model
   std::unordered_set<DexType*> exclude_types;
   // prefix for class generation
@@ -158,14 +159,34 @@ class Model {
   static void update_model(Model& model);
 
   const std::string get_name() const { return m_spec.name; }
-  const DexType* get_root() const { return m_root->type; }
+  const DexType* get_root() const {
+    if (m_root == nullptr) {
+      return nullptr;
+    }
+    return m_root->type;
+  }
+  const std::vector<const DexType*> get_roots() const {
+    std::vector<const DexType*> res;
+    for (const auto root_merger : m_roots) {
+      res.push_back(root_merger->type);
+    }
+    return res;
+  }
 
   template <class HierarchyWalkerFn = void(const MergerType&)>
   void walk_hierarchy(HierarchyWalkerFn walker) {
-    if (!m_root->dummy) {
-      walker(*m_root);
+    if (m_root) {
+      if (!m_root->dummy) {
+        walker(*m_root);
+      }
+      walk_hierarchy_helper(walker, m_root->type);
     }
-    walk_hierarchy_helper(walker, m_root->type);
+    for (const auto root_merger : m_roots) {
+      if (!root_merger->dummy) {
+        walker(*root_merger);
+      }
+      walk_hierarchy_helper(walker, root_merger->type);
+    }
   }
 
   const DexType* get_parent(const DexType* child) const {
@@ -251,7 +272,8 @@ class Model {
   ModelSpec m_spec;
 
   // the roots (base types) for the model
-  MergerType* m_root;
+  MergerType* m_root = nullptr;
+  std::vector<MergerType*> m_roots;
   // all types in this model
   TypeSet m_types;
   // the new generated class hierarchy during analysis.
@@ -312,8 +334,9 @@ class Model {
             ConfigFiles* cfg = nullptr);
 
   void build_hierarchy(const DexType* root);
+  void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
-  void build_mergers(const DexType* root);
+  MergerType* build_mergers(const DexType* root);
   void exclude_types(const std::unordered_set<DexType*>& exclude_types);
   void find_non_mergeables(const Scope& scope, const TypeSet& generated);
   void find_non_root_store_mergeables(const DexStoresVector& stores,

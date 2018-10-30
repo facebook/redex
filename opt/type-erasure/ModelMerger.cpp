@@ -48,21 +48,24 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
 }
 
 // TODO: find type tag field via annotation
-MergerToField get_type_tag_fields(const DexType* model_root_type,
-                                  const std::vector<const MergerType*>& mergers,
-                                  bool has_type_tag) {
+MergerToField get_type_tag_fields(
+    const std::vector<const DexType*>& model_root_types,
+    const std::vector<const MergerType*>& mergers,
+    bool has_type_tag) {
   MergerToField merger_to_type_tag_field;
-  for (auto merger : mergers) {
-    if (has_type_tag) {
-      auto cls = type_class(model_root_type);
-      auto field =
-          cls->find_field(EXTERNAL_TYPE_TAG_FIELD_NAME, get_int_type());
-      merger_to_type_tag_field[merger] = field;
-    } else {
-      auto cls = type_class(merger->type);
-      auto field =
-          cls->find_field(INTERNAL_TYPE_TAG_FIELD_NAME, get_int_type());
-      merger_to_type_tag_field[merger] = field;
+  for (const auto model_root_type : model_root_types) {
+    for (auto merger : mergers) {
+      if (has_type_tag) {
+        auto cls = type_class(model_root_type);
+        auto field =
+            cls->find_field(EXTERNAL_TYPE_TAG_FIELD_NAME, get_int_type());
+        merger_to_type_tag_field[merger] = field;
+      } else {
+        auto cls = type_class(merger->type);
+        auto field =
+            cls->find_field(INTERNAL_TYPE_TAG_FIELD_NAME, get_int_type());
+        merger_to_type_tag_field[merger] = field;
+      }
     }
   }
   return merger_to_type_tag_field;
@@ -658,8 +661,14 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   TypeTags type_tags = has_type_tag ? collect_type_tags(to_materialize)
                                     : gen_type_tags(to_materialize);
+  std::vector<const DexType*> model_roots;
+  if (model.get_root()) {
+    model_roots.push_back(model.get_root());
+  } else {
+    model_roots = model.get_roots();
+  }
   auto type_tag_fields =
-      get_type_tag_fields(model.get_root(), to_materialize, has_type_tag);
+      get_type_tag_fields(model_roots, to_materialize, has_type_tag);
   std::unordered_map<DexMethod*, std::string> method_debug_map;
   update_refs_to_mergeable_types(scope,
                                  to_materialize,

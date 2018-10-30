@@ -33,8 +33,14 @@ constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 
 std::string to_string(const ModelSpec& spec) {
   std::ostringstream ss;
-  ss << spec.name << "(root: " << SHOW(spec.root)
-     << ", exclude: " << spec.exclude_types.size()
+  ss << spec.name << "(roots: ";
+  if (spec.root) {
+    ss << SHOW(spec.root);
+  }
+  for (const auto root : spec.roots) {
+    ss << SHOW(root);
+  }
+  ss << ", exclude: " << spec.exclude_types.size()
      << ", prefix: " << spec.class_name_prefix
      << ", gen roots: " << spec.gen_types.size() << ")";
   return ss.str();
@@ -257,7 +263,12 @@ Model::Model(const Scope& scope,
              const TypeSystem& type_system,
              ConfigFiles& cfg)
     : m_spec(spec), m_type_system(type_system), m_scope(scope) {
-  m_type_system.get_all_children(spec.root, m_types);
+  if (spec.root) {
+    m_type_system.get_all_children(spec.root, m_types);
+  }
+  for (const auto root : spec.roots) {
+    m_type_system.get_all_children(root, m_types);
+  }
   init(scope, spec, type_system, &cfg);
   find_non_root_store_mergeables(stores, spec.include_primary_dex);
 }
@@ -266,12 +277,26 @@ void Model::init(const Scope& scope,
                  const ModelSpec& spec,
                  const TypeSystem& type_system,
                  ConfigFiles* cfg) {
-  build_hierarchy(spec.root);
+  if (spec.root) {
+    build_hierarchy(spec.root);
+  }
+  build_hierarchy(spec.roots);
 
-  build_interface_map(spec.root, {});
+  if (spec.root) {
+    build_interface_map(spec.root, {});
+  }
+  for (const auto root : spec.roots) {
+    build_interface_map(root, {});
+  }
   print_interface_maps(m_intf_to_classes, m_types);
 
-  build_mergers(spec.root);
+  if (spec.root) {
+    m_root = build_mergers(spec.root);
+  }
+  for (const auto root : spec.roots) {
+    MergerType* root_merger = build_mergers(root);
+    m_roots.push_back(root_merger);
+  }
 
   // load all generated types and find non mergeables
   TypeSet generated;
@@ -289,6 +314,19 @@ void Model::build_hierarchy(const DexType* root) {
     }
     const auto& cls = type_class(type);
     const auto& super = cls->get_super_class();
+    assert(super != nullptr && super != get_object_type());
+    m_hierarchy[super].insert(type);
+    m_parents[type] = super;
+  }
+}
+
+void Model::build_hierarchy(const TypeSet& roots) {
+  for (const auto& type : m_types) {
+    if (roots.count(type) > 0) {
+      continue;
+    }
+    const auto cls = type_class(type);
+    const auto super = cls->get_super_class();
     assert(super != nullptr && super != get_object_type());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
@@ -315,14 +353,15 @@ void Model::build_interface_map(const DexType* type, TypeSet implemented) {
   }
 }
 
-void Model::build_mergers(const DexType* root) {
+MergerType* Model::build_mergers(const DexType* root) {
   auto& merger = create_dummy_merger(root);
-  m_root = &merger;
   const auto& children = m_hierarchy.find(root);
-  if (children == m_hierarchy.end()) return;
-  for (const auto& child : children->second) {
-    create_dummy_mergers_if_children(child);
+  if (children != m_hierarchy.end()) {
+    for (const auto& child : children->second) {
+      create_dummy_mergers_if_children(child);
+    }
   }
+  return &merger;
 }
 
 void Model::build_interdex_groups(ConfigFiles* cfg) {
@@ -1081,28 +1120,54 @@ void Model::collect_methods() {
   // of the merger (if an existing type) distribute them across the
   // proper merger
   // collect all virtual scope up the hierarchy from a root
-  std::vector<const VirtualScope*> base_scopes;
-  const auto root_type = m_root->type;
-  // get the first existing type from roots (has a DexClass)
-  auto cls = type_class(root_type);
-  while (cls == nullptr) {
-    const auto parent = m_parents.find(root_type);
-    if (parent == m_parents.end()) break;
-    cls = type_class(parent->second);
-  }
-  // load all parents scopes
-  const auto& parents = m_type_system.parent_chain(cls->get_type());
-  if (parents.size() > 1) {
-    for (auto index = parents.size() - 1; index > 0; --index) {
-      const auto type = parents[index - 1];
-      for (const auto& virt_scope :
-           m_type_system.get_class_scopes().get(type)) {
-        base_scopes.emplace_back(virt_scope);
+  if (m_root) {
+    std::vector<const VirtualScope*> base_scopes;
+    const auto root_type = m_root->type;
+    // get the first existing type from roots (has a DexClass)
+    auto cls = type_class(root_type);
+    while (cls == nullptr) {
+      const auto parent = m_parents.find(root_type);
+      if (parent == m_parents.end()) break;
+      cls = type_class(parent->second);
+    }
+    // load all parents scopes
+    const auto& parents = m_type_system.parent_chain(cls->get_type());
+    if (parents.size() > 1) {
+      for (auto index = parents.size() - 1; index > 0; --index) {
+        const auto type = parents[index - 1];
+        for (const auto& virt_scope :
+             m_type_system.get_class_scopes().get(type)) {
+          base_scopes.emplace_back(virt_scope);
+        }
       }
     }
-  }
 
-  distribute_virtual_methods(m_root->type, base_scopes);
+    distribute_virtual_methods(m_root->type, base_scopes);
+  }
+  for (const MergerType* merger_root : m_roots) {
+    std::vector<const VirtualScope*> base_scopes;
+    const auto root_type = merger_root->type;
+    // get the first existing type from roots (has a DexClass)
+    auto cls = type_class(root_type);
+    while (cls == nullptr) {
+      const auto parent = m_parents.find(root_type);
+      if (parent == m_parents.end()) break;
+      cls = type_class(parent->second);
+    }
+    // load all parents scopes
+    const auto& parents = m_type_system.parent_chain(cls->get_type());
+    if (parents.size() > 1) {
+      for (auto index = parents.size() - 1; index > 0; --index) {
+        const auto type = parents[index - 1];
+        for (const auto& virt_scope :
+             m_type_system.get_class_scopes().get(type)) {
+          base_scopes.emplace_back(virt_scope);
+        }
+      }
+    }
+
+    distribute_virtual_methods(merger_root->type, base_scopes);
+  }
 }
 
 // virtual methods
@@ -1252,8 +1317,14 @@ std::string Model::print() const {
   }
   std::ostringstream ss;
   ss << m_spec.name << " Model: all types " << m_types.size()
-     << ", merge types " << m_mergers.size() << ", mergeables " << count << "\n"
-     << print(m_root->type, 1);
+     << ", merge types " << m_mergers.size() << ", mergeables " << count
+     << "\n";
+  if (m_root) {
+    ss << print(m_root->type, 1);
+  }
+  for (const auto root_merger : m_roots) {
+    ss << print(root_merger->type, 1);
+  }
   return ss.str();
 }
 

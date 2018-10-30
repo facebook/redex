@@ -37,6 +37,33 @@ std::vector<DexType*> get_types(const std::vector<std::string>& target_types) {
   return types;
 }
 
+void load_types(const std::vector<std::string>& type_names,
+                std::unordered_set<DexType*>& types) {
+  std::vector<DexType*> ts = get_types(type_names);
+  for (const auto& t : ts) {
+    const auto& cls = type_class(t);
+    if (cls == nullptr) {
+      fprintf(stderr, "[TERA] Missing definition for type\n%s\n", SHOW(t));
+      types.clear();
+      return;
+    }
+    types.insert(t);
+  }
+};
+
+void load_types(const std::vector<std::string>& type_names, TypeSet& types) {
+  std::vector<DexType*> ts = get_types(type_names);
+  for (const auto& t : ts) {
+    const auto& cls = type_class(t);
+    if (cls == nullptr) {
+      fprintf(stderr, "[TERA] Missing definition for type\n%s\n", SHOW(t));
+      types.clear();
+      return;
+    }
+    types.insert(t);
+  }
+};
+
 /**
  * Verify model specs are consistent
  */
@@ -54,11 +81,20 @@ bool verify_model_spec(const ModelSpec& model_spec) {
     return false;
   }
 
-  if (model_spec.root == nullptr) {
+  if (model_spec.root == nullptr && model_spec.roots.empty()) {
     fprintf(stderr,
             "[TERA] Wrong specification: model %s must have \"roots\"\n",
             model_spec.name.c_str());
     return false;
+  }
+
+  for (const auto root : model_spec.roots) {
+    if (root == nullptr) {
+      fprintf(stderr,
+              "[TERA] Wrong specification: model %s must have \"roots\"\n",
+              model_spec.name.c_str());
+      return false;
+    }
   }
 
   return true;
@@ -102,20 +138,6 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     return;
   }
 
-  const auto& load_types = [&](std::vector<std::string> type_names,
-                               std::unordered_set<DexType*>& types) {
-    std::vector<DexType*> ts = get_types(type_names);
-    for (const auto& t : ts) {
-      const auto& cls = type_class(t);
-      if (cls == nullptr) {
-        fprintf(stderr, "[TERA] Missing definition for type\n%s\n", SHOW(t));
-        types.clear();
-        return;
-      }
-      types.insert(t);
-    }
-  };
-
   // load each model spec for erasure
   for (auto it = models.begin(); it != models.end(); ++it) {
     const auto& value = *it;
@@ -137,6 +159,9 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     std::string root_name;
     model_spec.get("root", "", root_name);
     model.root = get_type(root_name);
+    std::vector<std::string> root_names;
+    model_spec.get("roots", {}, root_names);
+    load_types(root_names, model.roots);
     std::vector<std::string> excl_names;
     model_spec.get("exclude", {}, excl_names);
     load_types(excl_names, model.exclude_types);
@@ -200,6 +225,8 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
       m_model_specs.emplace_back(std::move(model));
     }
   }
+
+  TRACE(TERA, 1, "[TERA] valid model specs %ld\n", m_model_specs.size());
 }
 
 std::string ModelMerger::s_mapping_file;
@@ -230,11 +257,11 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   Model::build_interdex_groups(&cfg);
   for (ModelSpec& model_spec : m_model_specs) {
-    if (model_spec.enabled) {
-      if (is_interface(type_class(model_spec.root)))
-        handle_interface_as_root(model_spec, scope, stores);
-      erase_model(model_spec, scope, mgr, stores, cfg);
+    if (!model_spec.enabled) {
+      continue;
     }
+    handle_interface_as_root(model_spec, scope, stores);
+    erase_model(model_spec, scope, mgr, stores, cfg);
   }
   post_dexen_changes(scope, stores);
 }
@@ -247,7 +274,12 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
                                   DexStoresVector& stores,
                                   ConfigFiles& cfg) {
   TRACE(TERA, 2, "[TERA] erasing %s model\n", spec.name.c_str());
-  always_assert(!is_interface(type_class(spec.root)));
+  if (spec.root) {
+    always_assert(!is_interface(type_class(spec.root)));
+  }
+  for (const auto root : spec.roots) {
+    always_assert(!is_interface(type_class(root)));
+  }
   auto model = Model::build_model(scope, stores, spec, cfg);
   model.update_redex_stats(mgr);
 

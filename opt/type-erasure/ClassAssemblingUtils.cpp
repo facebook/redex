@@ -71,6 +71,67 @@ void change_super_class(DexClass* cls, DexType* super_type) {
   TRACE(TERA, 5, "Added super class %s to %s\n", SHOW(super_type), SHOW(cls));
 }
 
+std::string get_merger_package_name(const DexType* type) {
+  auto pkg_name = get_package_name(type);
+  // Avoid an Android OS like package name, which might confuse the custom class
+  // loader.
+  if (boost::starts_with(pkg_name, "Landroid") ||
+      boost::starts_with(pkg_name, "Ldalvik")) {
+    return "Lcom/facebook/redex";
+  }
+  return pkg_name;
+}
+
+DexType* create_empty_base_type(const ModelSpec& spec,
+                                const DexType* interface_root,
+                                const Scope& scope,
+                                const DexStoresVector& stores) {
+  auto cls = type_class(interface_root);
+  if (cls == nullptr) {
+    return nullptr;
+  }
+  if (!is_interface(cls)) {
+    TRACE(TERA, 1, "root %s is not an interface!\n", SHOW(interface_root));
+    return nullptr;
+  }
+
+  // Build a temporary type system.
+  TypeSystem type_system(scope);
+
+  // Create an empty base and add to the scope. Put the base class in the same
+  // package as the root interface.
+  auto base_type = DexType::make_type(
+      DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
+  auto base_class = create_class(base_type,
+                                 get_object_type(),
+                                 get_merger_package_name(interface_root),
+                                 std::vector<DexField*>(),
+                                 TypeSet(),
+                                 true);
+
+  TRACE(TERA, 3, "Created an empty base class %s for interface %s.\n",
+        SHOW(cls), SHOW(interface_root));
+
+  // Set it as the super class of implementors.
+  size_t num = 0;
+  XStoreRefs xstores(stores);
+
+  for (auto impl_type : type_system.get_implementors(interface_root)) {
+    auto& ifcs = type_system.get_implemented_interfaces(impl_type);
+    // Add an empty base class to qualified implementors
+    auto impl_cls = type_class(impl_type);
+    if (ifcs.size() == 1 && impl_cls &&
+        impl_cls->get_super_class() == get_object_type() &&
+        !is_in_non_root_store(impl_type, stores, xstores,
+                              spec.include_primary_dex)) {
+      change_super_class(impl_cls, base_type);
+      num++;
+    }
+  }
+
+  return num > 0 ? base_type : nullptr;
+}
+
 } // namespace
 
 DexClass* create_class(const DexType* type,
@@ -189,17 +250,6 @@ void cook_merger_fields_lookup(
   }
 }
 
-std::string get_merger_package_name(const DexType* type) {
-  auto pkg_name = get_package_name(type);
-  // Avoid an Android OS like package name, which might confuse the custom class
-  // loader.
-  if (boost::starts_with(pkg_name, "Landroid") ||
-      boost::starts_with(pkg_name, "Ldalvik")) {
-    return "Lcom/facebook/redex";
-  }
-  return pkg_name;
-}
-
 DexClass* create_merger_class(const DexType* type,
                               const DexType* super_type,
                               const std::vector<DexField*>& merger_fields,
@@ -307,54 +357,34 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
 void handle_interface_as_root(ModelSpec& spec,
                               Scope& scope,
                               DexStoresVector& stores) {
-  auto cls = type_class(spec.root);
-  if (cls == nullptr) {
+  if (spec.root && is_interface(type_class(spec.root))) {
+    auto empty_base = create_empty_base_type(spec, spec.root, scope, stores);
+    if (empty_base != nullptr) {
+      TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(spec.root),
+            SHOW(empty_base));
+      spec.root = empty_base;
+      add_class(type_class(empty_base), scope, stores);
+    }
+
     return;
   }
-  if (!is_interface(cls)) {
-    TRACE(TERA, 1, "root %s is not an interface!\n", SHOW(spec.root));
-    return;
-  }
 
-  // Build a temporary type system.
-  TypeSystem type_system(scope);
-
-  // Create an empty base and add to the scope. Put the base class in the same
-  // package as the root interface.
-  auto base_type = DexType::make_type(
-      DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
-  auto base_class = create_class(base_type,
-                                 get_object_type(),
-                                 get_merger_package_name(spec.root),
-                                 std::vector<DexField*>(),
-                                 TypeSet(),
-                                 true);
-
-  TRACE(TERA, 1, "Created an empty base class %s for interface %s.\n",
-        SHOW(cls), SHOW(spec.root));
-
-  // Set it as the super class of implementors.
-  size_t num = 0;
-  XStoreRefs xstores(stores);
-
-  for (auto impl_type : type_system.get_implementors(spec.root)) {
-    auto& ifcs = type_system.get_implemented_interfaces(impl_type);
-    // Add an empty base class to qualified implementors
-    auto impl_cls = type_class(impl_type);
-    if (ifcs.size() == 1 && impl_cls &&
-        impl_cls->get_super_class() == get_object_type() &&
-        !is_in_non_root_store(impl_type, stores, xstores,
-                              spec.include_primary_dex)) {
-      change_super_class(impl_cls, base_type);
-      num++;
+  TypeSet interface_roots;
+  for (const auto root : spec.roots) {
+    if (is_interface(type_class(root))) {
+      interface_roots.insert(root);
     }
   }
 
-  // Change the root from the interface to the added base class.
-  if (num > 0) {
-    TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(spec.root),
-          SHOW(base_type));
-    spec.root = base_type;
-    add_class(base_class, scope, stores);
+  for (const auto interface_root : interface_roots) {
+    auto empty_base =
+        create_empty_base_type(spec, interface_root, scope, stores);
+    if (empty_base != nullptr) {
+      TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(interface_root),
+            SHOW(empty_base));
+      spec.roots.erase(interface_root);
+      spec.roots.insert(empty_base);
+      add_class(type_class(empty_base), scope, stores);
+    }
   }
 }

@@ -149,6 +149,17 @@ class D extends Base {
   }
 }
 
+abstract class SecondBase {}
+class SecondA extends SecondBase {
+  int getA() { return 1; }
+}
+class SecondB extends SecondBase {
+  int getB() { return 2; }
+}
+class SecondC extends SecondBase {
+  int getC() { return 3; }
+}
+
 public class TypeErasureSimpleTest {
 
   @Test
@@ -336,5 +347,15 @@ public class TypeErasureSimpleTest {
 
     assertThat(a.toBeImplemented()).isEqualTo(true);
     assertThat(c.toBeImplemented()).isEqualTo(true);
+  }
+
+  @Test
+  public void testSecondRoot() {
+    SecondA a = new SecondA();
+    SecondB b = new SecondB();
+    SecondC c = new SecondC();
+    assertThat(a.getA()).isEqualTo(1);
+    assertThat(b.getB()).isEqualTo(2);
+    assertThat(c.getC()).isEqualTo(3);
   }
 }
