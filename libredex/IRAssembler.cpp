@@ -117,7 +117,8 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
 }
 
 s_expr to_s_expr(const DexPosition* pos) {
-  always_assert_log(pos->parent == nullptr, "Not yet implemented");
+  // TODO: Handle parent positions
+  // Right now, we just ignore the parent pointers
   return s_expr({
       s_expr(show(pos->method)),
       s_expr(pos->file->c_str()),
@@ -228,6 +229,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
 }
 
 std::unique_ptr<DexPosition> position_from_s_expr(const s_expr& e) {
+  // TODO: Handle parent positions
   std::string method_str;
   std::string file_str;
   std::string line_str;

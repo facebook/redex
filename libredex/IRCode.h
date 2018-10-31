@@ -277,6 +277,8 @@ class IRCode {
   IRList::const_iterator cend() const { return m_ir_list->cend(); }
   IRList::reverse_iterator rbegin() { return m_ir_list->rbegin(); }
   IRList::reverse_iterator rend() { return m_ir_list->rend(); }
+  IRList::const_reverse_iterator rbegin() const { return m_ir_list->rbegin(); }
+  IRList::const_reverse_iterator rend() const { return m_ir_list->rend(); }
 
   IRList::iterator erase(IRList::iterator it) { return m_ir_list->erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {

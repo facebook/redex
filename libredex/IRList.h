@@ -212,6 +212,7 @@ class IRList {
   using iterator = IntrusiveList::iterator;
   using const_iterator = IntrusiveList::const_iterator;
   using reverse_iterator = IntrusiveList::reverse_iterator;
+  using const_reverse_iterator = IntrusiveList::const_reverse_iterator;
   using difference_type = IntrusiveList::difference_type;
 
   IRList::iterator main_block();
@@ -350,6 +351,8 @@ class IRList {
   IRList::const_iterator cend() const { return m_list.cend(); }
   IRList::reverse_iterator rbegin() { return m_list.rbegin(); }
   IRList::reverse_iterator rend() { return m_list.rend(); }
+  IRList::const_reverse_iterator rbegin() const { return m_list.rbegin(); }
+  IRList::const_reverse_iterator rend() const { return m_list.rend(); }
 
   void gather_catch_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;

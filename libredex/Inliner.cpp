@@ -1068,6 +1068,17 @@ class MethodSplicer {
 
 namespace inliner {
 
+DexPosition* last_position_before(const IRList::const_iterator& it,
+                                  const IRCode* code) {
+  // we need to decrement the reverse iterator because it gets constructed
+  // as pointing to the element preceding pos
+  auto position_it = std::prev(IRList::const_reverse_iterator(it));
+  const auto& rend = code->rend();
+  while (++position_it != rend && position_it->type != MFLOW_POSITION)
+    ;
+  return position_it == rend ? nullptr : position_it->pos.get();
+}
+
 void inline_method(IRCode* caller_code,
                    IRCode* callee_code,
                    IRList::iterator pos) {
@@ -1085,14 +1096,7 @@ void inline_method(IRCode* caller_code,
   }
 
   // find the last position entry before the invoke.
-  // we need to decrement the reverse iterator because it gets constructed
-  // as pointing to the element preceding pos
-  auto position_it = --IRList::reverse_iterator(pos);
-  while (++position_it != caller_code->rend()
-      && position_it->type != MFLOW_POSITION);
-  std::unique_ptr<DexPosition> pos_nullptr;
-  auto& invoke_position =
-    position_it == caller_code->rend() ? pos_nullptr : position_it->pos;
+  const auto invoke_position = last_position_before(pos, caller_code);
   if (invoke_position) {
     TRACE(INL, 3, "Inlining call at %s:%d\n",
           invoke_position->file->c_str(),
@@ -1102,17 +1106,18 @@ void inline_method(IRCode* caller_code,
   // check if we are in a try block
   auto caller_catch = transform::find_active_catch(caller_code, pos);
 
-  // Copy the callee up to the return. Everything else we push at the end
-  // of the caller
-  auto splice = MethodSplicer(caller_code,
-                              callee_code,
-                              *callee_reg_map,
-                              invoke_position.get(),
-                              caller_catch);
-  auto ret_it = std::find_if(
+  const auto& ret_it = std::find_if(
       callee_code->begin(), callee_code->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
+
+  auto splice = MethodSplicer(caller_code,
+                              callee_code,
+                              *callee_reg_map,
+                              invoke_position,
+                              caller_catch);
+  // Copy the callee up to the return. Everything else we push at the end
+  // of the caller
   splice(pos, callee_code->begin(), ret_it);
 
   // try items can span across a return opcode
@@ -1155,6 +1160,19 @@ void inline_method(IRCode* caller_code,
     } else if (caller_catch != nullptr) {
       caller_code->push_back(*(new MethodItemEntry(TRY_START, caller_catch)));
     }
+
+    if (std::next(ret_it) != callee_code->end()) {
+      const auto return_position = last_position_before(ret_it, callee_code);
+      if (return_position) {
+        // If there are any opcodes between the callee's return and its next
+        // position, we need to re-mark them with the correct line number,
+        // otherwise they would inherit the line number from the end of the
+        // caller.
+        caller_code->push_back(*(new MethodItemEntry(
+            std::make_unique<DexPosition>(*return_position))));
+      }
+    }
+
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
     splice(caller_code->end(), std::next(ret_it), callee_code->end());

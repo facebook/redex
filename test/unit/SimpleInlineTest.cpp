@@ -10,10 +10,29 @@
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "Inliner.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 
 struct SimpleInlineTest : public RedexTest {};
+
+void test_inliner(const std::string& caller_str,
+                  const std::string& callee_str,
+                  const std::string& expected_str) {
+  auto caller = assembler::ircode_from_string(caller_str);
+  auto callee = assembler::ircode_from_string(callee_str);
+
+  const auto& callsite = std::find_if(
+      caller->begin(), caller->end(), [](const MethodItemEntry& mie) {
+        return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
+      });
+  inliner::inline_method(caller.get(), callee.get(), callsite);
+
+  auto expected = assembler::ircode_from_string(expected_str);
+
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(caller.get()));
+}
 
 /*
  * Test that we correctly insert move instructions that map caller args to
@@ -64,4 +83,61 @@ TEST_F(SimpleInlineTest, insertMoves) {
   EXPECT_EQ(*it->insn, *dasm(OPCODE_RETURN_VOID));
 
   EXPECT_EQ(caller_code->get_registers_size(), 5);
+}
+
+TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
+  DexMethod* caller =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
+  caller->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  DexMethod* callee =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.callee:()V"));
+  callee->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  const auto& caller_str = R"(
+    (
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v0 0)
+      (invoke-static () "LFoo;.bar:()V")
+      (return-void)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (.pos "LFoo;.callee:()V" "Foo.java" 123)
+      (const v0 1)
+      (if-eqz v0 :after)
+
+      (:exit)
+      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (const v1 2)
+      (return-void)
+
+      (:after)
+      (const v2 3)
+      (goto :exit)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (const v0 0)
+
+      (.pos "LFoo;.callee:()V" "Foo.java" 123)
+      (const v1 1)
+      (if-eqz v1 :after)
+
+      (:exit)
+      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (const v2 2)
+      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (return-void)
+
+      ; Check that this position was correctly added to the code after the
+      ; callee's return
+      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (:after)
+      (const v3 3)
+      (goto :exit)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
 }
