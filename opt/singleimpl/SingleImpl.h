@@ -14,6 +14,7 @@ struct SingleImplConfig {
   std::vector<std::string> package_white_list;
   std::vector<std::string> black_list;
   std::vector<std::string> package_black_list;
+  std::vector<std::string> anno_black_list;
   bool intf_anno;
   bool meth_anno;
   bool field_anno;
@@ -30,6 +31,7 @@ class SingleImplPass : public Pass {
     jw.get("package_white_list", {}, m_pass_config.package_white_list);
     jw.get("black_list", {}, m_pass_config.black_list);
     jw.get("package_black_list", {}, m_pass_config.package_black_list);
+    jw.get("anno_black_list", {}, m_pass_config.anno_black_list);
     jw.get("type_annotations", true, m_pass_config.intf_anno);
     jw.get("method_annotations", true, m_pass_config.meth_anno);
     jw.get("field_annotations", true, m_pass_config.field_anno);
