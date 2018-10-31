@@ -12,6 +12,7 @@
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
+#include "KeepReason.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "WorkQueue.h"
@@ -41,6 +42,7 @@ struct ReachableObject {
     const DexClass* cls;
     const DexFieldRef* field;
     const DexMethodRef* method;
+    const keep_reason::Reason* keep_reason;
   };
 
   explicit ReachableObject(const DexAnnotation* anno)
@@ -51,9 +53,11 @@ struct ReachableObject {
       : type{ReachableObjectType::METHOD}, method{method} {}
   explicit ReachableObject(const DexFieldRef* field)
       : type{ReachableObjectType::FIELD}, field{field} {}
+  explicit ReachableObject(const keep_reason::Reason* keep_reason)
+      : type(ReachableObjectType::SEED), keep_reason(keep_reason) {}
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
-  std::string str() const;
+  friend std::ostream& operator<<(std::ostream&, const ReachableObject&);
 
   friend bool operator==(const ReachableObject& lhs,
                          const ReachableObject& rhs) {

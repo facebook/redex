@@ -9,7 +9,11 @@
 
 #include <atomic>
 #include <boost/optional.hpp>
+#include <mutex>
 #include <string>
+
+#include "KeepReason.h"
+#include "RedexContext.h"
 
 namespace ir_meta_io {
 class IRMetaIO;
@@ -55,6 +59,9 @@ class ReferencedState {
 
   // The number of keep rules that touch this class.
   std::atomic<unsigned int> m_keep_count{0};
+
+  std::mutex m_keep_reasons_mtx;
+  keep_reason::ReasonPtrSet m_keep_reasons;
 
   // IR serialization class
   friend class ir_meta_io::IRMetaIO;
@@ -127,15 +134,39 @@ class ReferencedState {
   //
   // This differs from "by_string" reference since it is possible to rename
   // these string references, and potentially eliminate dead resource .xml files
-  void set_referenced_by_resource_xml() { m_byresources = true; }
-  void unset_referenced_by_resource_xml() { m_byresources = false; }
+  void set_referenced_by_resource_xml() {
+    m_byresources = true;
+    if (RedexContext::record_keep_reasons()) {
+      add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
+    }
+  }
   bool is_referenced_by_resource_xml() const { return m_byresources; }
 
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
 
   // ProGuard keep information.
-  void set_keep() { m_keep = true; }
+  void set_keep() { set_keep(keep_reason::UNKNOWN); }
+
+  /*
+   * The ...args are arguments to the keep_reason::Reason constructor.
+   * The typical Redex run does not care to keep the extra diagnostic
+   * information of the keep reasons, so it seems worthwhile to forward these
+   * arguments to avoid the construction of unused Reason objects when
+   * record_keep_reasons() is false.
+   */
+  template <class... Args>
+  void set_keep(Args&&... args) {
+    m_keep = true;
+    if (RedexContext::record_keep_reasons()) {
+      add_keep_reason(
+          RedexContext::make_keep_reason(std::forward<Args>(args)...));
+    }
+  }
+
+  const keep_reason::ReasonPtrSet& keep_reasons() const {
+    return m_keep_reasons;
+  }
 
   void set_keep_name() { m_keep_name = true; }
 
@@ -162,5 +193,12 @@ class ReferencedState {
   size_t get_interdex_subgroup() const { return m_interdex_subgroup.get(); }
   bool has_interdex_subgroup() const {
     return m_interdex_subgroup != boost::none;
+  }
+
+ private:
+  void add_keep_reason(const keep_reason::Reason* reason) {
+    always_assert(RedexContext::record_keep_reasons());
+    std::lock_guard<std::mutex> lock(m_keep_reasons_mtx);
+    m_keep_reasons.emplace(reason);
   }
 };

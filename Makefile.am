@@ -112,7 +112,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
-  libredex/DexStoreUtil.cpp \
+	libredex/DexStoreUtil.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
@@ -125,6 +125,7 @@ libredex_la_SOURCES = \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
+	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
@@ -136,6 +137,7 @@ libredex_la_SOURCES = \
 	libredex/PointsToSemantics.cpp \
 	libredex/PointsToSemanticsUtils.cpp \
 	libredex/PrintSeeds.cpp \
+	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
@@ -236,7 +238,7 @@ redex_all_SOURCES = \
 	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
-  opt/remove-interfaces/RemoveInterfacePass.cpp \
+	opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unread-fields/RemoveUnreadFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
@@ -264,15 +266,15 @@ redex_all_SOURCES = \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
-  opt/type-erasure/ApproximateShapeMerging.cpp \
-  opt/type-erasure/ClassAssemblingUtils.cpp \
-  opt/type-erasure/MergerType.cpp \
-  opt/type-erasure/MethodMerger.cpp \
-  opt/type-erasure/Model.cpp \
-  opt/type-erasure/ModelMerger.cpp \
-  opt/type-erasure/TypeErasureInterDexPlugin.cpp \
-  opt/type-erasure/TypeErasurePass.cpp \
-  opt/type-erasure/TypeTagUtils.cpp \
+	opt/type-erasure/ApproximateShapeMerging.cpp \
+	opt/type-erasure/ClassAssemblingUtils.cpp \
+	opt/type-erasure/MergerType.cpp \
+	opt/type-erasure/MethodMerger.cpp \
+	opt/type-erasure/Model.cpp \
+	opt/type-erasure/ModelMerger.cpp \
+	opt/type-erasure/TypeErasureInterDexPlugin.cpp \
+	opt/type-erasure/TypeErasurePass.cpp \
+	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
@@ -286,7 +288,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
-  service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \

@@ -64,18 +64,22 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
 
 namespace reachability {
 
-std::string ReachableObject::str() const {
-  switch (type) {
+std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
+  switch (obj.type) {
   case ReachableObjectType::ANNO:
-    return show_deobfuscated(anno->type());
+    return os << show_deobfuscated(obj.anno->type());
   case ReachableObjectType::CLASS:
-    return show_deobfuscated(cls);
+    return os << show_deobfuscated(obj.cls);
   case ReachableObjectType::FIELD:
-    return show_deobfuscated(field);
+    return os << show_deobfuscated(obj.field);
   case ReachableObjectType::METHOD:
-    return show_deobfuscated(method);
-  case ReachableObjectType::SEED:
-    return "<SEED>";
+    return os << show_deobfuscated(obj.method);
+  case ReachableObjectType::SEED: {
+    if (obj.keep_reason) {
+      return os << *obj.keep_reason;
+    }
+    return os << "<SEED>";
+  }
   }
 }
 
@@ -127,11 +131,13 @@ void RootSetMarker::push_seed(const DexClass* cls) {
 
 void RootSetMarker::push_seed(const DexField* field) {
   if (!field) return;
+  record_is_seed(field);
   m_cond_marked->fields.insert(field);
 }
 
 void RootSetMarker::push_seed(const DexMethod* method) {
   if (!method) return;
+  record_is_seed(method);
   m_cond_marked->methods.insert(method);
 }
 
@@ -530,29 +536,33 @@ void ReachableObjects::record_reachability(Object* parent, Object* object) {
   if (parent == object) {
     return;
   }
-  m_retainers_of.update(
-      ReachableObject(object),
-      [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        set.emplace(parent);
-      });
+  m_retainers_of.update(ReachableObject(object),
+                        [&](const ReachableObject&, ReachableObjectSet& set,
+                            bool /* exists */) { set.emplace(parent); });
 }
 
 template <class Parent, class Object>
 void ReachableObjects::record_reachability(Parent* parent, Object* object) {
-  m_retainers_of.update(
-      ReachableObject(object),
-      [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        set.emplace(parent);
-      });
+  m_retainers_of.update(ReachableObject(object),
+                        [&](const ReachableObject&, ReachableObjectSet& set,
+                            bool /* exists */) { set.emplace(parent); });
 }
 
 template <class Seed>
 void ReachableObjects::record_is_seed(Seed* seed) {
   assert(seed != nullptr);
+  const auto& keep_reasons = seed->rstate.keep_reasons();
   m_retainers_of.update(
       ReachableObject(seed),
       [&](const ReachableObject&, ReachableObjectSet& set, bool /* exists */) {
-        set.emplace(SEED_SINGLETON);
+        for (const auto& reason : keep_reasons) {
+          // -keepnames rules are irrelevant when analyzing reachability
+          if (reason->type == keep_reason::KEEP_RULE &&
+              reason->keep_rule->allowshrinking) {
+            continue;
+          }
+          set.emplace(reason);
+        }
       });
 }
 
@@ -560,9 +570,8 @@ void ReachableObjects::record_is_seed(Seed* seed) {
  * Remove unmarked fields from :fields and erase their definitions from
  * g_redex.
  */
-static void sweep_fields_if_unmarked(
-    std::vector<DexField*>& fields,
-    const ReachableObjects& reachables) {
+static void sweep_fields_if_unmarked(std::vector<DexField*>& fields,
+                                     const ReachableObjects& reachables) {
   auto p = [&](DexField* f) {
     if (reachables.marked_unsafe(f) == 0) {
       TRACE(RMU, 2, "Removing %s\n", SHOW(f));
@@ -618,7 +627,9 @@ namespace {
 
 void write_reachable_object(std::ostream& os, const ReachableObject& obj) {
   bs::write<uint8_t>(os, static_cast<uint8_t>(obj.type));
-  const auto& s = obj.str();
+  std::ostringstream ss;
+  ss << obj;
+  const auto& s = ss.str();
   bs::write<uint32_t>(os, s.size());
   os << s;
 }

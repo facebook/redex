@@ -306,7 +306,7 @@ class ProguardMatcher {
 
   void process_proguard_rules(const ProguardConfiguration& pg_config);
 
-  void process_keep(const std::vector<KeepSpec>& keep_rules,
+  void process_keep(const KeepSpecSet& keep_rules,
                     RuleType rule_type,
                     bool process_external = false);
 
@@ -485,7 +485,7 @@ void keep_clinits(DexClass* cls) {
         ++it;
       }
       if (!(it->insn->opcode() == OPCODE_RETURN_VOID && (++it) == ii.end())) {
-        method->rstate.set_keep();
+        method->rstate.set_keep(keep_reason::CLINIT);
       }
       break;
     }
@@ -637,7 +637,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   m_keep_rule.count++;
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
-    cls->rstate.set_keep();
+    cls->rstate.set_keep(&m_keep_rule);
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(
           PGR, 2, "whyareyoukeeping Class %s kept by %s\n",
@@ -693,7 +693,7 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     member->rstate.set_whyareyoukeeping();
     break;
   case RuleType::KEEP: {
-    member->rstate.set_keep();
+    member->rstate.set_keep(&m_keep_rule);
     if (member->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping %s kept by %s\n", SHOW(member),
             show_keep(m_keep_rule).c_str());
@@ -733,7 +733,7 @@ DexClass* ProguardMatcher::find_single_class(
   return type_class(typ);
 }
 
-void ProguardMatcher::process_keep(const std::vector<KeepSpec>& keep_rules,
+void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
                                    RuleType rule_type,
                                    bool process_external) {
   Timer t("Process keep for " + to_string(rule_type));
@@ -768,7 +768,8 @@ void ProguardMatcher::process_keep(const std::vector<KeepSpec>& keep_rules,
   });
 
   RegexMap regex_map;
-  for (const auto& keep_rule : keep_rules) {
+  for (const auto& keep_rule_ptr : keep_rules) {
+    const auto& keep_rule = *keep_rule_ptr;
     ClassMatcher class_match(keep_rule);
 
     // This case is very fast. Just process it immediately in the main thread.
@@ -804,37 +805,20 @@ void ProguardMatcher::process_keep(const std::vector<KeepSpec>& keep_rules,
   wq.run_all();
 }
 
-std::vector<KeepSpec> filter_duplicate_rules(
-    const std::vector<KeepSpec>& keep_rules) {
-  std::vector<KeepSpec> unique;
-  for (const auto& rule : keep_rules) {
-    auto it = std::find(unique.begin(), unique.end(), rule);
-    if (it == unique.end()) {
-      unique.push_back(rule);
-    }
-  }
-  return unique;
-}
-
 void ProguardMatcher::process_proguard_rules(
     const ProguardConfiguration& pg_config) {
-  // Filter out duplicate rules to speed up processing.
-  const auto& keep_rules = filter_duplicate_rules(pg_config.keep_rules);
-  const auto& assumenosideeffects_rules =
-      filter_duplicate_rules(pg_config.assumenosideeffects_rules);
-
   // Now process each of the different kinds of rules as well
   // as -assumenosideeffects and -whyareyoukeeping.
   process_keep(pg_config.whyareyoukeeping_rules, RuleType::WHY_ARE_YOU_KEEPING);
-  process_keep(keep_rules, RuleType::KEEP);
-  process_keep(assumenosideeffects_rules,
+  process_keep(pg_config.keep_rules, RuleType::KEEP);
+  process_keep(pg_config.assumenosideeffects_rules,
                RuleType::ASSUME_NO_SIDE_EFFECTS,
                /* process_external = */ true);
 
   // By default, keep all annotation classes.
   for (auto cls : m_classes) {
     if (is_annotation(cls)) {
-      cls->rstate.set_keep();
+      cls->rstate.set_keep(keep_reason::ANNO);
       if (cls->rstate.report_whyareyoukeeping()) {
         TRACE(PGR,
               2,
@@ -851,34 +835,6 @@ void ProguardMatcher::process_proguard_rules(
 } // namespace
 
 namespace redex {
-
-inline bool operator==(const MemberSpecification& lhs,
-                       const MemberSpecification& rhs) {
-  return lhs.requiredSetAccessFlags == rhs.requiredSetAccessFlags &&
-         lhs.requiredUnsetAccessFlags == rhs.requiredUnsetAccessFlags &&
-         lhs.annotationType == rhs.annotationType && lhs.name == rhs.name &&
-         lhs.descriptor == rhs.descriptor;
-}
-
-inline bool operator==(const ClassSpecification& lhs,
-                       const ClassSpecification& rhs) {
-  return lhs.className == rhs.className &&
-         lhs.annotationType == rhs.annotationType &&
-         lhs.extendsClassName == rhs.extendsClassName &&
-         lhs.extendsAnnotationType == rhs.extendsAnnotationType &&
-         lhs.setAccessFlags == rhs.setAccessFlags &&
-         lhs.unsetAccessFlags == rhs.unsetAccessFlags &&
-         lhs.fieldSpecifications == rhs.fieldSpecifications &&
-         lhs.methodSpecifications == rhs.methodSpecifications;
-}
-
-inline bool operator==(const KeepSpec& lhs, const KeepSpec& rhs) {
-  return lhs.includedescriptorclasses == rhs.includedescriptorclasses &&
-         lhs.allowshrinking == rhs.allowshrinking &&
-         lhs.allowoptimization == rhs.allowoptimization &&
-         lhs.allowobfuscation == rhs.allowobfuscation &&
-         lhs.class_spec == rhs.class_spec;
-}
 
 void process_proguard_rules(const ProguardMap& pg_map,
                             const Scope& classes,

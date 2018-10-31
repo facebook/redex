@@ -171,8 +171,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss1("-keep class Alpha");
   proguard_parser::parse(ss1, &config1);
   ASSERT_EQ(config1.keep_rules.size(), 1);
-  KeepSpec k = config1.keep_rules[0];
-  ClassSpecification cs = k.class_spec;
+  const auto* k = *config1.keep_rules.begin();
+  ClassSpecification cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha");
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -186,8 +186,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss2("-keep class Alpha.Beta");
   proguard_parser::parse(ss2, &config2);
   ASSERT_EQ(config2.keep_rules.size(), 1);
-  k = config2.keep_rules[0];
-  cs = k.class_spec;
+  k = *config2.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -203,8 +203,8 @@ TEST(ProguardParserTest, keep) {
       "Alpha.Beta");
   proguard_parser::parse(ss3, &config3);
   ASSERT_EQ(config3.keep_rules.size(), 1);
-  k = config3.keep_rules[0];
-  cs = k.class_spec;
+  k = *config3.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -219,8 +219,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss4("-keep enum Alpha.Beta");
   proguard_parser::parse(ss4, &config4);
   ASSERT_EQ(config4.keep_rules.size(), 1);
-  k = config4.keep_rules[0];
-  cs = k.class_spec;
+  k = *config4.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, ACC_ENUM);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -234,8 +234,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss5("-keep interface Alpha.Beta");
   proguard_parser::parse(ss5, &config5);
   ASSERT_EQ(config5.keep_rules.size(), 1);
-  k = config5.keep_rules[0];
-  cs = k.class_spec;
+  k = *config5.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, ACC_INTERFACE);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -249,8 +249,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss6("-keep public class Alpha.Beta");
   proguard_parser::parse(ss6, &config6);
   ASSERT_EQ(config6.keep_rules.size(), 1);
-  k = config6.keep_rules[0];
-  cs = k.class_spec;
+  k = *config6.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, ACC_PUBLIC);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -264,8 +264,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss7("-keep !public class Alpha.Beta");
   proguard_parser::parse(ss7, &config7);
   ASSERT_EQ(config7.keep_rules.size(), 1);
-  k = config7.keep_rules[0];
-  cs = k.class_spec;
+  k = *config7.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, 0);
   ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
@@ -279,8 +279,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss8("-keep !public final class Alpha.Beta");
   proguard_parser::parse(ss8, &config8);
   ASSERT_EQ(config8.keep_rules.size(), 1);
-  k = config8.keep_rules[0];
-  cs = k.class_spec;
+  k = *config8.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, ACC_FINAL);
   ASSERT_EQ(cs.unsetAccessFlags, ACC_PUBLIC);
@@ -294,8 +294,8 @@ TEST(ProguardParserTest, keep) {
   std::istringstream ss9("-keep abstract class Alpha.Beta");
   proguard_parser::parse(ss9, &config9);
   ASSERT_EQ(config9.keep_rules.size(), 1);
-  k = config9.keep_rules[0];
-  cs = k.class_spec;
+  k = *config9.keep_rules.begin();
+  cs = k->class_spec;
   ASSERT_EQ(cs.className, "Alpha.Beta");
   ASSERT_EQ(cs.setAccessFlags, ACC_ABSTRACT);
   ASSERT_EQ(cs.unsetAccessFlags, 0);
@@ -373,8 +373,9 @@ TEST(ProguardParserTest, annotationclass) {
   proguard_parser::parse(ss, &config);
   ASSERT_TRUE(config.ok);
   ASSERT_EQ(config.keep_rules.size(), 1);
-  ASSERT_EQ(config.keep_rules[0].class_spec.className, "*");
-  ASSERT_EQ(config.keep_rules[0].class_spec.setAccessFlags, ACC_ANNOTATION);
+  const auto& k = *config.keep_rules.begin();
+  ASSERT_EQ(k->class_spec.className, "*");
+  ASSERT_EQ(k->class_spec.setAccessFlags, ACC_ANNOTATION);
 }
 
 // Member specifications
@@ -385,8 +386,9 @@ TEST(ProguardParserTest, member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 1);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
   }
 
   {
@@ -395,8 +397,9 @@ TEST(ProguardParserTest, member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
   }
 
   {
@@ -405,8 +408,9 @@ TEST(ProguardParserTest, member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 0);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 1);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 0);
   }
 
   {
@@ -431,9 +435,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(IZLjava/lang/String;C)I", keep.descriptor);
   }
 
@@ -446,9 +451,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("()V", keep.descriptor);
   }
 
@@ -461,9 +467,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(I)V", keep.descriptor);
   }
 
@@ -476,9 +483,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(Ljava/lang/String;)V", keep.descriptor);
   }
 
@@ -491,9 +499,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(%)V", keep.descriptor);
   }
 
@@ -506,9 +515,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(Ljava/lang/Str?ng;)V", keep.descriptor);
   }
 
@@ -521,9 +531,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(Ljava/*/String;)V", keep.descriptor);
   }
 
@@ -536,9 +547,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(Ljava/**/String;)V", keep.descriptor);
   }
 
@@ -551,11 +563,12 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(***)V", keep.descriptor);
-    ASSERT_FALSE(config.keep_rules[0].allowshrinking);
+    ASSERT_FALSE(k->allowshrinking);
   }
 
   {
@@ -567,9 +580,10 @@ TEST(ProguardParserTest, method_member_specification) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_EQ(config.keep_rules[0].class_spec.fieldSpecifications.size(), 0);
-    ASSERT_EQ(config.keep_rules[0].class_spec.methodSpecifications.size(), 1);
-    auto keep = config.keep_rules[0].class_spec.methodSpecifications[0];
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_EQ(k->class_spec.fieldSpecifications.size(), 0);
+    ASSERT_EQ(k->class_spec.methodSpecifications.size(), 1);
+    auto keep = k->class_spec.methodSpecifications[0];
     ASSERT_EQ("(...)V", keep.descriptor);
   }
 }
@@ -584,7 +598,8 @@ TEST(ProguardParserTest, keepnames) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_TRUE(k->allowshrinking);
   }
 }
 
@@ -599,7 +614,8 @@ TEST(ProguardParserTest, keepclassmembernames) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_TRUE(k->allowshrinking);
   }
 }
 
@@ -613,7 +629,8 @@ TEST(ProguardParserTest, keepclasseswithmembernames) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_TRUE(config.keep_rules[0].allowshrinking);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_TRUE(k->allowshrinking);
   }
 }
 
@@ -625,7 +642,8 @@ TEST(ProguardParserTest, keep_annotation_classes) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
-    ASSERT_FALSE(config.keep_rules[0].allowshrinking);
-    ASSERT_EQ(config.keep_rules[0].class_spec.setAccessFlags, ACC_ANNOTATION);
+    const auto& k = *config.keep_rules.begin();
+    ASSERT_FALSE(k->allowshrinking);
+    ASSERT_EQ(k->class_spec.setAccessFlags, ACC_ANNOTATION);
   }
 }

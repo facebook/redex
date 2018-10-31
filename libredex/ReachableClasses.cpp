@@ -57,8 +57,15 @@ struct DexItemIter<DexMethod*, F> {
   }
 };
 
-template<typename T>
-void blacklist(DexType* type, DexString *name, bool declared) {
+/*
+ * Prevent a class from being deleted due to its being referenced via
+ * reflection. :reflecting_method is the method containing the reflection site.
+ */
+template <typename T>
+void blacklist(DexMethod* reflecting_method,
+               DexType* type,
+               DexString* name,
+               bool declared) {
   auto* cls = type_class(type);
   if (cls == nullptr) {
     return;
@@ -71,13 +78,13 @@ void blacklist(DexType* type, DexString *name, bool declared) {
       return;
     }
     TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-    t->rstate.set_keep();
+    t->rstate.set_keep(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<T, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist<T>(super_cls, name, declared);
+      blacklist<T>(reflecting_method, super_cls, name, declared);
     }
   }
 }
@@ -192,23 +199,23 @@ void analyze_reflection(const Scope& scope) {
 
       switch (refl_type) {
       case GET_FIELD:
-        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, false);
+        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_FIELD:
-        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, true);
+        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, true);
         break;
       case GET_METHOD:
       case GET_CONSTRUCTOR:
-        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, false);
+        blacklist<DexMethod*>(method, arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_METHOD:
       case GET_DECLARED_CONSTRUCTOR:
-        blacklist<DexMethod*>(arg_cls->dex_type, arg_str_value, true);
+        blacklist<DexMethod*>(method, arg_cls->dex_type, arg_str_value, true);
         break;
       case INT_UPDATER:
       case LONG_UPDATER:
       case REF_UPDATER:
-        blacklist<DexField*>(arg_cls->dex_type, arg_str_value, true);
+        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, true);
         break;
       }
     }
@@ -276,11 +283,11 @@ void mark_reachable_by_xml(const std::string& classname, bool is_manifest) {
   if (is_manifest) {
     // Mark these as permanantly reachable. We don't ever try to prune classes
     // from the manifest.
-    dclass->rstate.set_keep();
+    dclass->rstate.set_keep(keep_reason::MANIFEST);
     // Prevent renaming.
     dclass->rstate.increment_keep_count();
     for (DexMethod* dmethod : dclass->get_ctors()) {
-      dmethod->rstate.set_keep();
+      dmethod->rstate.set_keep(keep_reason::MANIFEST);
     }
   } else {
     // Setting "referenced_by_resource_xml" essentially behaves like keep,

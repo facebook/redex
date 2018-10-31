@@ -21,6 +21,7 @@
 
 #include "ConcurrentContainers.h"
 #include "DexMemberRefs.h"
+#include "KeepReason.h"
 
 class DexDebugInstruction;
 class DexString;
@@ -87,12 +88,22 @@ struct RedexContext {
   }
 
   /*
-   * This returns true if we want to enable features that will only go out
-   * in the next quarterly release.
+   * This returns true if we want to preserve keep reasons for better
+   * diagnostics.
    */
-  static bool next_release_gate() { return g_redex->m_next_release_gate; }
-  static void set_next_release_gate(bool v) {
-    g_redex->m_next_release_gate = v;
+  static bool record_keep_reasons() { return g_redex->m_record_keep_reasons; }
+  static void set_record_keep_reasons(bool v) {
+    g_redex->m_record_keep_reasons = v;
+  }
+
+  template <class... Args>
+  static keep_reason::Reason* make_keep_reason(Args&&... args) {
+    auto to_insert =
+        std::make_unique<keep_reason::Reason>(std::forward<Args>(args)...);
+    if (g_redex->s_keep_reasons.emplace(to_insert.get(), to_insert.get())) {
+      return to_insert.release();
+    }
+    return g_redex->s_keep_reasons.at(to_insert.get());
   }
 
  private:
@@ -170,7 +181,13 @@ struct RedexContext {
 
   const std::vector<const DexType*> m_empty_types;
 
-  bool m_next_release_gate{false};
+  ConcurrentMap<keep_reason::Reason*,
+                keep_reason::Reason*,
+                keep_reason::ReasonPtrHash,
+                keep_reason::ReasonPtrEqual>
+      s_keep_reasons;
+
+  bool m_record_keep_reasons{false};
 };
 
 class malformed_dex : public std::exception {

@@ -881,18 +881,18 @@ int main(int argc, char* argv[]) {
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
 
-    RedexContext::set_next_release_gate(
-        args.config.get("next_release_gate", false).asBool());
+    RedexContext::set_record_keep_reasons(
+        args.config.get("record_keep_reasons", false).asBool());
 
-    redex::ProguardConfiguration pg_config;
+    auto pg_config = std::make_unique<redex::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles cfg(args.config, args.out_dir);
 
-    redex_frontend(cfg, args, pg_config, stores, stats);
+    redex_frontend(cfg, args, *pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, pg_config, args.config, args.verify_none_mode,
-                        args.art_build);
+    PassManager manager(passes, std::move(pg_config), args.config,
+                        args.verify_none_mode, args.art_build);
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, cfg);
