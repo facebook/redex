@@ -50,6 +50,7 @@ struct AnalysisImpl : SingleImplAnalysis {
   void filter_proguard_special_interface();
   void filter_do_not_strip();
   void filter_list(const std::vector<std::string>& list, bool keep_match);
+  void filter_by_annotations(const std::vector<std::string>& black_list);
 
  private:
   const Scope& scope;
@@ -141,6 +142,24 @@ void AnalysisImpl::filter_proguard_special_interface() {
   }
 }
 
+void AnalysisImpl::filter_by_annotations(
+    const std::vector<std::string>& black_list) {
+  std::unordered_set<DexType*> anno_types;
+  for (const auto& s : black_list) {
+    auto ty = DexType::get_type(s.c_str());
+    if (ty != nullptr) {
+      anno_types.emplace(ty);
+    }
+  }
+
+  for (const auto& intf_it : single_impls) {
+    const auto intf = intf_it.first;
+    const auto intf_cls = type_class(intf);
+    if (has_anno(intf_cls, anno_types)) {
+      escape_interface(intf, FILTERED);
+    }
+  }
+}
 
 /**
  * Apply filters to the set of single impl found.
@@ -151,6 +170,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
   filter_list(config.package_white_list, true);
   filter_list(config.black_list, false);
   filter_list(config.package_black_list, false);
+  filter_by_annotations(config.anno_black_list);
   // TODO(T33109158): Better way to eliminate VerifyError.
   if (config.filter_proguard_special_interfaces) filter_proguard_special_interface();
 }

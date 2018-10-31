@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <functional>
 #include <vector>
+#include <unordered_set>
 
 #include "DexClass.h"
 #include "IRInstruction.h"
@@ -371,6 +372,17 @@ bool has_anno(const T* t, const DexType* anno_type) {
   if (t->get_anno_set() == nullptr) return false;
   for (const auto& anno : t->get_anno_set()->get_annotations()) {
     if (anno->type() == anno_type) {
+      return true;
+    }
+  }
+  return false;
+}
+
+template <typename T>
+bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
+  if (t->get_anno_set() == nullptr) return false;
+  for (const auto& anno : t->get_anno_set()->get_annotations()) {
+    if (anno_types.count(anno->type())) {
       return true;
     }
   }
