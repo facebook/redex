@@ -34,9 +34,6 @@ constexpr const char* CLASS_MARKER_DELIMITER = "DexEndMarker";
 std::string to_string(const ModelSpec& spec) {
   std::ostringstream ss;
   ss << spec.name << "(roots: ";
-  if (spec.root) {
-    ss << SHOW(spec.root);
-  }
   for (const auto root : spec.roots) {
     ss << SHOW(root);
   }
@@ -263,9 +260,6 @@ Model::Model(const Scope& scope,
              const TypeSystem& type_system,
              ConfigFiles& cfg)
     : m_spec(spec), m_type_system(type_system), m_scope(scope) {
-  if (spec.root) {
-    m_type_system.get_all_children(spec.root, m_types);
-  }
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
@@ -277,22 +271,12 @@ void Model::init(const Scope& scope,
                  const ModelSpec& spec,
                  const TypeSystem& type_system,
                  ConfigFiles* cfg) {
-  if (spec.root) {
-    build_hierarchy(spec.root);
-  }
   build_hierarchy(spec.roots);
-
-  if (spec.root) {
-    build_interface_map(spec.root, {});
-  }
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
   }
   print_interface_maps(m_intf_to_classes, m_types);
 
-  if (spec.root) {
-    m_root = build_mergers(spec.root);
-  }
   for (const auto root : spec.roots) {
     MergerType* root_merger = build_mergers(root);
     m_roots.push_back(root_merger);
@@ -1120,30 +1104,6 @@ void Model::collect_methods() {
   // of the merger (if an existing type) distribute them across the
   // proper merger
   // collect all virtual scope up the hierarchy from a root
-  if (m_root) {
-    std::vector<const VirtualScope*> base_scopes;
-    const auto root_type = m_root->type;
-    // get the first existing type from roots (has a DexClass)
-    auto cls = type_class(root_type);
-    while (cls == nullptr) {
-      const auto parent = m_parents.find(root_type);
-      if (parent == m_parents.end()) break;
-      cls = type_class(parent->second);
-    }
-    // load all parents scopes
-    const auto& parents = m_type_system.parent_chain(cls->get_type());
-    if (parents.size() > 1) {
-      for (auto index = parents.size() - 1; index > 0; --index) {
-        const auto type = parents[index - 1];
-        for (const auto& virt_scope :
-             m_type_system.get_class_scopes().get(type)) {
-          base_scopes.emplace_back(virt_scope);
-        }
-      }
-    }
-
-    distribute_virtual_methods(m_root->type, base_scopes);
-  }
   for (const MergerType* merger_root : m_roots) {
     std::vector<const VirtualScope*> base_scopes;
     const auto root_type = merger_root->type;
@@ -1319,9 +1279,6 @@ std::string Model::print() const {
   ss << m_spec.name << " Model: all types " << m_types.size()
      << ", merge types " << m_mergers.size() << ", mergeables " << count
      << "\n";
-  if (m_root) {
-    ss << print(m_root->type, 1);
-  }
   for (const auto root_merger : m_roots) {
     ss << print(root_merger->type, 1);
   }

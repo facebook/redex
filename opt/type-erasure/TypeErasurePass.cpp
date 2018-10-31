@@ -81,7 +81,7 @@ bool verify_model_spec(const ModelSpec& model_spec) {
     return false;
   }
 
-  if (model_spec.root == nullptr && model_spec.roots.empty()) {
+  if (model_spec.roots.empty()) {
     fprintf(stderr,
             "[TERA] Wrong specification: model %s must have \"roots\"\n",
             model_spec.name.c_str());
@@ -156,9 +156,6 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model_spec.get("min_count", 1, min_count);
     model.min_count = min_count > 0 ? min_count : 0;
     model_spec.get("name", "", model.name);
-    std::string root_name;
-    model_spec.get("root", "", root_name);
-    model.root = get_type(root_name);
     std::vector<std::string> root_names;
     model_spec.get("roots", {}, root_names);
     load_types(root_names, model.roots);
@@ -274,9 +271,6 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
                                   DexStoresVector& stores,
                                   ConfigFiles& cfg) {
   TRACE(TERA, 2, "[TERA] erasing %s model\n", spec.name.c_str());
-  if (spec.root) {
-    always_assert(!is_interface(type_class(spec.root)));
-  }
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));
   }

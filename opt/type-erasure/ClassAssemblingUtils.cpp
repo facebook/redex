@@ -357,18 +357,6 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
 void handle_interface_as_root(ModelSpec& spec,
                               Scope& scope,
                               DexStoresVector& stores) {
-  if (spec.root && is_interface(type_class(spec.root))) {
-    auto empty_base = create_empty_base_type(spec, spec.root, scope, stores);
-    if (empty_base != nullptr) {
-      TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(spec.root),
-            SHOW(empty_base));
-      spec.root = empty_base;
-      add_class(type_class(empty_base), scope, stores);
-    }
-
-    return;
-  }
-
   TypeSet interface_roots;
   for (const auto root : spec.roots) {
     if (is_interface(type_class(root))) {

@@ -79,7 +79,6 @@ struct ModelSpec {
   // name of the spec for debug/printing
   std::string name;
   // set of roots from which to find all model types
-  const DexType* root;
   TypeSet roots;
   // types to exclude from the model
   std::unordered_set<DexType*> exclude_types;
@@ -159,12 +158,6 @@ class Model {
   static void update_model(Model& model);
 
   const std::string get_name() const { return m_spec.name; }
-  const DexType* get_root() const {
-    if (m_root == nullptr) {
-      return nullptr;
-    }
-    return m_root->type;
-  }
   const std::vector<const DexType*> get_roots() const {
     std::vector<const DexType*> res;
     for (const auto root_merger : m_roots) {
@@ -175,12 +168,6 @@ class Model {
 
   template <class HierarchyWalkerFn = void(const MergerType&)>
   void walk_hierarchy(HierarchyWalkerFn walker) {
-    if (m_root) {
-      if (!m_root->dummy) {
-        walker(*m_root);
-      }
-      walk_hierarchy_helper(walker, m_root->type);
-    }
     for (const auto root_merger : m_roots) {
       if (!root_merger->dummy) {
         walker(*root_merger);
@@ -272,7 +259,6 @@ class Model {
   ModelSpec m_spec;
 
   // the roots (base types) for the model
-  MergerType* m_root = nullptr;
   std::vector<MergerType*> m_roots;
   // all types in this model
   TypeSet m_types;

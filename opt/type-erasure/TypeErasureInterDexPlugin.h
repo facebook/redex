@@ -21,8 +21,9 @@ class TypeErasureInterDexPlugin : public interdex::InterDexPassPlugin {
                             PassManager& mgr)
       : m_mgr(mgr) {
     for (auto& spec : model_spec) {
-      const DexType* root = spec.root;
-      m_root_to_model_spec.emplace(root, std::move(spec));
+      for (const auto root : spec.roots) {
+        m_root_to_model_spec.emplace(root, std::move(spec));
+      }
       always_assert_log(spec.enabled, "Only accepting enabled models!\n");
     }
   }

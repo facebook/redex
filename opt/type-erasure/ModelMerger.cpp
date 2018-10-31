@@ -661,14 +661,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
 
   TypeTags type_tags = has_type_tag ? collect_type_tags(to_materialize)
                                     : gen_type_tags(to_materialize);
-  std::vector<const DexType*> model_roots;
-  if (model.get_root()) {
-    model_roots.push_back(model.get_root());
-  } else {
-    model_roots = model.get_roots();
-  }
   auto type_tag_fields =
-      get_type_tag_fields(model_roots, to_materialize, has_type_tag);
+      get_type_tag_fields(model.get_roots(), to_materialize, has_type_tag);
   std::unordered_map<DexMethod*, std::string> method_debug_map;
   update_refs_to_mergeable_types(scope,
                                  to_materialize,
