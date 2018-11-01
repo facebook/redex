@@ -346,8 +346,8 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
   // TODO(emmasevastian): Handle this case in a better way.
   if (!stores.empty()) {
     DexClassesVector& root_store = stores.front().get_dexen();
-    DexClasses dc = {new_cls};
-    root_store.emplace_back(std::move(dc));
+    // Add the class to the last dex.
+    root_store.back().emplace_back(new_cls);
   }
 }
 
