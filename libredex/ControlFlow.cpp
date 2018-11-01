@@ -331,14 +331,8 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
   TryCatches try_catches;
-  Boundaries boundaries; // block boundaries (for editable == true)
 
-  find_block_boundaries(
-      ir, branch_to_targets, try_ends, try_catches, boundaries);
-
-  if (m_editable) {
-    fill_blocks(ir, boundaries);
-  }
+  find_block_boundaries(ir, branch_to_targets, try_ends, try_catches);
 
   connect_blocks(branch_to_targets);
   add_catch_edges(try_ends, try_catches);
@@ -363,23 +357,25 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
 void ControlFlowGraph::find_block_boundaries(IRList* ir,
                                              BranchToTargets& branch_to_targets,
                                              TryEnds& try_ends,
-                                             TryCatches& try_catches,
-                                             Boundaries& boundaries) {
+                                             TryCatches& try_catches) {
   // create the entry block
   auto* block = create_block();
+  IRList::iterator block_begin;
   if (m_editable) {
-    boundaries[block].first = ir->begin();
+    block_begin = ir->begin();
   } else {
     block->m_begin = ir->begin();
   }
   set_entry_block(block);
 
   bool in_try = false;
-  for (auto it = ir->begin(); it != ir->end(); ++it) {
+  IRList::iterator next;
+  for (auto it = ir->begin(); it != ir->end(); it = next) {
+    next = std::next(it);
     if (it->type == MFLOW_TRY) {
       if (it->tentry->type == TRY_START) {
         // Assumption: TRY_STARTs are only at the beginning of blocks
-        always_assert(!m_editable || it == boundaries[block].first);
+        always_assert(!m_editable || it == block_begin);
         always_assert(m_editable || it == block->m_begin);
         in_try = true;
       } else if (it->tentry->type == TRY_END) {
@@ -397,9 +393,12 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
     }
 
     // End the current block.
-    auto next = std::next(it);
     if (m_editable) {
-      boundaries[block].second = next;
+      // Steal the code from the ir and put it into the block.
+      // This is safe to do while iterating in ir because iterators in ir now
+      // point to elements of block->m_entries (and we already computed next).
+      block->m_entries.splice_selection(block->m_entries.end(), *ir,
+                                        block_begin, next);
     } else {
       block->m_end = next;
     }
@@ -411,7 +410,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
     // Start a new block at the next MethodItem.
     block = create_block();
     if (m_editable) {
-      boundaries[block].first = next;
+      block_begin = next;
     } else {
       block->m_begin = next;
     }
@@ -571,24 +570,6 @@ boost::dynamic_bitset<> ControlFlowGraph::visit() const {
     }
   }
   return visited;
-}
-
-// Move the `MethodItemEntry`s from `ir` into the blocks, based on the
-// information in `boundaries`.
-//
-// The CFG takes ownership of the `MethodItemEntry`s and `ir` is left empty.
-void ControlFlowGraph::fill_blocks(IRList* ir, const Boundaries& boundaries) {
-  always_assert(m_editable);
-  // fill the blocks between their boundaries
-  for (const auto& entry : m_blocks) {
-    Block* b = entry.second;
-    const auto& boundary = boundaries.at(b);
-    b->m_entries.splice_selection(b->m_entries.end(), *ir, boundary.first,
-                                  boundary.second);
-    always_assert_log(!b->empty(), "block %d is empty:\n%s\n", entry.first,
-                      SHOW(*this));
-  }
-  TRACE(CFG, 5, "  build: splicing finished\n");
 }
 
 void ControlFlowGraph::simplify() {

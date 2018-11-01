@@ -569,8 +569,6 @@ class ControlFlowGraph {
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
-  using Boundaries =
-      std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<BlockId, Block*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
@@ -582,8 +580,7 @@ class ControlFlowGraph {
   void find_block_boundaries(IRList* ir,
                              BranchToTargets& branch_to_targets,
                              TryEnds& try_ends,
-                             TryCatches& try_catches,
-                             Boundaries& boundaries);
+                             TryCatches& try_catches);
 
   // Add edges between blocks created by `find_block_boundaries`
   // For use by the constructor. You probably don't want to call this from
@@ -598,11 +595,6 @@ class ControlFlowGraph {
   // For use by the constructor. You probably don't want to call this from
   // elsewhere
   void remove_unreachable_succ_edges();
-
-  // Move MethodItemEntries from ir into their blocks
-  // For use by the constructor. You probably don't want to call this from
-  // elsewhere
-  void fill_blocks(IRList* ir, const Boundaries& boundaries);
 
   // remove all MFLOW_TRY and MFLOW_CATCH markers because that information is
   // moved into the edges.
