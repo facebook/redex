@@ -429,26 +429,32 @@ TEST(CFGInliner, try_catch_simple) {
   const auto& caller_str = R"(
     (
       (.try_start a)
+      (const v0 0)
       (invoke-static () "LCls;.foo:()V")
       (return v0)
       (.try_end a)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
   const auto& callee_str = R"(
     (
+      (const v0 0)
       (throw v0)
     )
   )";
   const auto& expected_str = R"(
     (
       (.try_start a)
+      (const v0 0)
+      (const v2 0)
       (throw v2)
       (.try_end a)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
@@ -459,27 +465,33 @@ TEST(CFGInliner, try_catch_with_return_reg) {
   const auto& caller_str = R"(
     (
       (.try_start a)
+      (const v0 0)
       (invoke-static () "LCls;.foo:()I")
       (.try_end a)
       (move-result v0)
       (return v0)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
   const auto& callee_str = R"(
     (
+      (const v0 0)
       (throw v0)
     )
   )";
   const auto& expected_str = R"(
     (
       (.try_start a)
+      (const v0 0)
+      (const v2 0)
       (throw v2)
       (.try_end a)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
@@ -496,6 +508,7 @@ TEST(CFGInliner, try_catch_with_arg_and_return_regs) {
       (.try_end a)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
@@ -523,6 +536,7 @@ TEST(CFGInliner, try_catch_with_arg_and_return_regs) {
       (.try_end a)
 
       (.catch (a))
+      (const v1 1)
       (return v1)
     )
   )";
@@ -542,6 +556,7 @@ TEST(CFGInliner, try_catch_caller_catch_chain) {
       (return v0)
 
       (.catch (a b) "LExcept;")
+      (const v1 1)
       (return v1)
     )
   )";
@@ -572,6 +587,7 @@ TEST(CFGInliner, try_catch_caller_catch_chain) {
       (return v0)
 
       (.catch (a b) "LExcept;")
+      (const v1 1)
       (return v1)
     )
   )";
@@ -591,6 +607,7 @@ TEST(CFGInliner, try_catch_with_may_throws) {
       (return v0)
 
       (.catch (outer all) "LOuterExcept;")
+      (const v1 1)
       (return v1)
     )
   )";
@@ -630,6 +647,7 @@ TEST(CFGInliner, try_catch_with_may_throws) {
       (return v0)
 
       (.catch (outer all) "LOuterExcept;")
+      (const v1 1)
       (return v1)
 
       (.catch (inner outer) "LInnerExcept")
@@ -656,6 +674,7 @@ TEST(CFGInliner, try_catch_with_only_may_throws) {
       (return v0)
 
       (.catch (outer all) "LOuterExcept;")
+      (const v1 1)
       (return v1)
     )
   )";
@@ -681,6 +700,7 @@ TEST(CFGInliner, try_catch_with_only_may_throws) {
       (return v0)
 
       (.catch (outer all) "LOuterExcept;")
+      (const v1 1)
       (return v1)
     )
   )";
@@ -697,6 +717,7 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
       (.try_end outer)
 
       (.catch (outer))
+      (const v1 1)
       (return v1)
     )
   )";
@@ -727,6 +748,7 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
       (.try_end inner1)
 
       (.catch (outer))
+      (const v1 1)
       (return v1)
 
       (.catch (inner2 outer) "LExcept2;")

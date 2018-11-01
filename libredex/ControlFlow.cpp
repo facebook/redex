@@ -339,12 +339,14 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
 
   if (m_editable) {
     remove_try_catch_markers();
-    TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
-    simplify();
+
     // Often, the `registers_size` parameter passed into this constructor is
     // incorrect. We recompute here to safeguard against this.
     // TODO: fix the optimizations that don't track registers size correctly.
     recompute_registers_size();
+
+    TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
+    simplify();
     TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
   } else {
     remove_unreachable_succ_edges();
@@ -582,6 +584,7 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
   uint32_t num_insns_removed = 0;
   remove_unreachable_succ_edges();
   std::unordered_set<DexPosition*> deleted_positions;
+  bool need_register_size_fix = false;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
     const auto& preds = b->preds();
@@ -589,6 +592,17 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       for (const auto& mie : *b) {
         if (mie.type == MFLOW_POSITION) {
           deleted_positions.insert(mie.pos.get());
+        } else if (mie.type == MFLOW_OPCODE) {
+          auto insn = mie.insn;
+          if (insn->dests_size()) {
+            // +1 because registers start at zero
+            auto size_required = insn->dest() + insn->dest_is_wide() + 1;
+            if (size_required >= m_registers_size) {
+              // We're deleting an instruction that may have been the max
+              // register of the entire function.
+              need_register_size_fix = true;
+            }
+          }
         }
       }
       num_insns_removed += b->num_opcodes();
@@ -599,6 +613,9 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
     } else {
       ++it;
     }
+  }
+  if (need_register_size_fix) {
+    recompute_registers_size();
   }
 
   // We don't want to leave any dangling dex parent pointers behind
@@ -776,22 +793,18 @@ void ControlFlowGraph::sanity_check() const {
 
 uint16_t ControlFlowGraph::compute_registers_size() const {
   uint16_t num_regs = 0;
-  const auto& check = [&num_regs](uint16_t reg, bool is_wide) {
-    auto highest_in_use = reg + is_wide;
-    if (highest_in_use >= num_regs) {
-      // +1 because registers start at v0
-      num_regs = highest_in_use + 1;
-    }
-  };
   for (const auto& mie : cfg::ConstInstructionIterable(*this)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
-      check(insn->dest(), insn->dest_is_wide());
-    }
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      check(insn->src(i), insn->src_is_wide(i));
+      // +1 because registers start at v0
+      uint16_t size_required = insn->dest() + insn->dest_is_wide() + 1;
+      num_regs = std::max(size_required, num_regs);
     }
   }
+  // We don't check the source registers because we shouldn't ever be using an
+  // undefined register. If the input code is well-formed, there shouldn't be a
+  // source register without an equivalent dest register. This is true for our
+  // IR because of the load-param opcodes.
   return num_regs;
 }
 
