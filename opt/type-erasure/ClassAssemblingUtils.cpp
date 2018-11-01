@@ -117,6 +117,10 @@ DexType* create_empty_base_type(const ModelSpec& spec,
   XStoreRefs xstores(stores);
 
   for (auto impl_type : type_system.get_implementors(interface_root)) {
+    if (type_class(impl_type)->is_external()) {
+      TRACE(TERA, 3, "Skip external implementer %s\n", SHOW(impl_type));
+      continue;
+    }
     auto& ifcs = type_system.get_implemented_interfaces(impl_type);
     // Add an empty base class to qualified implementors
     auto impl_cls = type_class(impl_type);
