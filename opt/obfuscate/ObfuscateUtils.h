@@ -560,34 +560,34 @@ private:
     return nullptr;
   }
 
-  T lookup_intf(R ref, DexClass* cls) {
+  /**
+   * Look up in the class and all its interfaces.
+   */
+  T find_def_in_class_and_intf(R ref, DexClass* cls) {
     if (cls == nullptr) return nullptr;
     auto found_def = find_def(ref, cls->get_type());
     if (found_def != nullptr) return found_def;
     for (auto& intf : cls->get_interfaces()->get_type_list()) {
-      auto found = lookup_intf(ref, type_class(intf));
+      auto found = find_def_in_class_and_intf(ref, type_class(intf));
       if (found != nullptr) return found;
     }
     return nullptr;
   }
-public:
 
+ public:
   // Does a lookup over the fields we renamed in the dex to see what the
- // reference should be reset with. Returns nullptr if there is no mapping.
- // Note: we also have to look in superclasses in the case that this is a ref
- T def_of_ref(R ref) {
-   DexClass* cls = type_class(ref->get_class());
-   if (cls == nullptr) return nullptr;
-   if (is_interface(cls)) {
-     return lookup_intf(ref, cls);
-   } else {
-     while (cls && !cls->is_external()) {
-       auto found = find_def(ref, cls->get_type());
-       if (found != nullptr) return found;
-       cls = type_class(cls->get_super_class());
-     }
-   }
-   return nullptr;
+  // reference should be reset with. Returns nullptr if there is no mapping.
+  // Note: we also have to look in superclasses in the case that this is a ref
+  T def_of_ref(R ref) {
+    DexClass* cls = type_class(ref->get_class());
+    while (cls && !cls->is_external()) {
+      auto found = find_def_in_class_and_intf(ref, cls);
+      if (found) {
+        return found;
+      }
+      cls = type_class(cls->get_super_class());
+    }
+    return nullptr;
   }
 
   // Debug print of the mapping
