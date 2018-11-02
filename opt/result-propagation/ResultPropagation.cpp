@@ -24,8 +24,8 @@ namespace {
 
 constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER =
     "num_methods_which_return_parameters";
-constexpr const char* METRIC_ELIMINATED_MOVE_RESULTS =
-    "num_eliminated_move_results";
+constexpr const char* METRIC_ERASED_MOVE_RESULTS = "num_erased_move_results";
+constexpr const char* METRIC_PATCHED_MOVE_RESULTS = "num_patched_move_results";
 constexpr const char* METRIC_UNVERIFIABLE_MOVE_RESULTS =
     "num_unverifiable_move_results";
 constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS =
@@ -356,6 +356,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
   // turn move-result-... into move instructions if the called method
   // is known to always return a particular parameter
   // TODO(T35815701): use cfg instead of code
+  std::vector<IRInstruction*> deletes;
   const auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); it++) {
     // do we have a sequence of invoke + move-result instruction?
@@ -399,8 +400,16 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
 
     // rewrite instruction
     const auto source_reg = insn->src(*param_index);
-    patch_move_result_to_move(peek, source_reg);
-    ++m_stats.eliminated_move_results;
+    if (peek->dest() == source_reg) {
+      deletes.push_back(peek);
+      ++m_stats.erased_move_results;
+    } else {
+      patch_move_result_to_move(peek, source_reg);
+      ++m_stats.patched_move_results;
+    }
+  }
+  for (auto const instr : deletes) {
+    code->remove_opcode(instr);
   }
 }
 
@@ -426,21 +435,23 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         return rp.get_stats();
       },
       [](ResultPropagation::Stats a, ResultPropagation::Stats b) {
-        a.eliminated_move_results += b.eliminated_move_results;
+        a.erased_move_results += b.erased_move_results;
+        a.patched_move_results += b.patched_move_results;
         a.unverifiable_move_results += b.unverifiable_move_results;
         return a;
       });
   mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER,
                   methods_which_return_parameter.size());
-  mgr.incr_metric(METRIC_ELIMINATED_MOVE_RESULTS,
-                  stats.eliminated_move_results);
+  mgr.incr_metric(METRIC_ERASED_MOVE_RESULTS, stats.erased_move_results);
+  mgr.incr_metric(METRIC_PATCHED_MOVE_RESULTS, stats.patched_move_results);
   mgr.incr_metric(METRIC_UNVERIFIABLE_MOVE_RESULTS,
                   stats.unverifiable_move_results);
   TRACE(RP, 1,
-        "result propagation --- potential methods: %d, eliminated moves: %d, "
+        "result propagation --- potential methods: %d, erased moves: %d, "
+        "patched moves: %d, "
         "unverifiable moves: %d\n",
-        methods_which_return_parameter.size(), stats.eliminated_move_results,
-        stats.unverifiable_move_results);
+        methods_which_return_parameter.size(), stats.erased_move_results,
+        stats.patched_move_results, stats.unverifiable_move_results);
 }
 
 const std::unordered_map<const DexMethod*, ParamIndex>

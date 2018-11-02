@@ -61,7 +61,8 @@ class ReturnParamResolver {
 class ResultPropagation {
  public:
   struct Stats {
-    size_t eliminated_move_results{0};
+    size_t erased_move_results{0};
+    size_t patched_move_results{0};
     size_t unverifiable_move_results{0};
   };
 
