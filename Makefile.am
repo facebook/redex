@@ -54,6 +54,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
+	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/simpleinline \
 	-I$(top_srcdir)/opt/singleimpl \
@@ -247,6 +248,7 @@ redex_all_SOURCES = \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \
 	opt/simpleinline/SimpleInline.cpp \

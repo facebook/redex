@@ -80,6 +80,7 @@
   TM(RMU)                \
   TM(RMUF)               \
   TM(RM_INTF)            \
+  TM(RP)                 \
   TM(SDIS)               \
   TM(SHORTEN)            \
   TM(SINK)               \
