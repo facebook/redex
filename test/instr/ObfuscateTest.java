@@ -13,6 +13,7 @@ import java.lang.reflect.*;
 import org.junit.Test;
 
 interface I1 {
+    public static int f1[] = {0};
     public void m1();
 }
 
@@ -33,5 +34,6 @@ public class ObfuscateTest {
   public void test() {
       A2 o = new C1();
       o.m1();
+      assertThat(C1.f1[0]).isEqualTo(0);
   }
 }
