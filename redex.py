@@ -32,7 +32,7 @@ from pipes import quote
 
 import pyredex.logger as logger
 import pyredex.unpacker as unpacker
-from pyredex.utils import abs_glob, make_temp_dir, remove_temp_dirs, sign_apk
+from pyredex.utils import abs_glob, make_temp_dir, remove_comments, remove_temp_dirs, sign_apk
 from pyredex.logger import log
 
 
@@ -518,23 +518,6 @@ Given an APK, produce a better APK!
     parser.add_argument('--output-ir', default='',
            help='Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder')
     return parser
-
-def remove_comments_from_line(l):
-    (found_backslash, in_quote) = (False, False)
-    for idx, c in enumerate(l):
-        if c == "\\" and not found_backslash:
-            found_backslash = True
-        elif c == "\"" and not found_backslash:
-            found_backslash = False
-            in_quote = not in_quote
-        elif c == "#" and not in_quote:
-            return l[:idx]
-        else:
-            found_backslash = False
-    return l
-
-def remove_comments(lines):
-    return "".join([remove_comments_from_line(l) + "\n" for l in lines])
 
 
 class State(object):
