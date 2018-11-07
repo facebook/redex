@@ -46,3 +46,22 @@ def sign_apk(keystore, keypass, keyalias, apk):
         ],
         stdout=sys.stderr
     )
+
+
+def remove_comments_from_line(l):
+    (found_backslash, in_quote) = (False, False)
+    for idx, c in enumerate(l):
+        if c == "\\" and not found_backslash:
+            found_backslash = True
+        elif c == "\"" and not found_backslash:
+            found_backslash = False
+            in_quote = not in_quote
+        elif c == "#" and not in_quote:
+            return l[:idx]
+        else:
+            found_backslash = False
+    return l
+
+
+def remove_comments(lines):
+    return "".join([remove_comments_from_line(l) + "\n" for l in lines])
