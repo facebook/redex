@@ -99,8 +99,6 @@ class CFGInliner {
    */
   static IROpcode return_to_move(IROpcode op);
 
-  static bool can_throw(IROpcode op);
-
   /*
    * Find the first debug position preceding the callsite
    */

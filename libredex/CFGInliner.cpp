@@ -275,7 +275,7 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
       const auto& mie = *it;
       const auto insn = mie.insn;
       const auto op = insn->opcode();
-      if (can_throw(op) && it.unwrap() != last) {
+      if (opcode::can_throw(op) && it.unwrap() != last) {
         const auto& cfg_it = callee->to_cfg_instruction_iterator(b, it);
         Block* new_block = callee->split_block(cfg_it);
         work_list.push_back(new_block);
@@ -328,7 +328,7 @@ void CFGInliner::add_callee_throws_to_caller(
       IRList::iterator last = callee_block->get_last_insn();
       if (last != callee_block->end()) {
         const auto op = last->insn->opcode();
-        if (can_throw(op)) {
+        if (opcode::can_throw(op)) {
           add_throw_edges(callee_block, /* starting_index */ 0);
         }
       }
@@ -376,10 +376,6 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
     not_reached();
   }
 }
-
-bool CFGInliner::can_throw(IROpcode op) {
-  return opcode::may_throw(op) || op == OPCODE_THROW;
-};
 
 DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
   auto search_block = [](Block* b,

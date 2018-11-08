@@ -64,8 +64,7 @@ bool ends_with_may_throw(cfg::Block* p) {
     if (last->type != MFLOW_OPCODE) {
       continue;
     }
-    return last->insn->opcode() == OPCODE_THROW ||
-           opcode::may_throw(last->insn->opcode());
+    return opcode::can_throw(last->insn->opcode());
   }
   return false;
 }
@@ -73,7 +72,7 @@ bool ends_with_may_throw(cfg::Block* p) {
 bool cannot_throw(cfg::Block* b) {
   for (const auto& mie : InstructionIterable(b)) {
     auto op = mie.insn->opcode();
-    if (op == OPCODE_THROW || opcode::may_throw(op)) {
+    if (opcode::can_throw(op)) {
       return false;
     }
   }
