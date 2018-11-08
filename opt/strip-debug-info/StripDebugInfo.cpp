@@ -41,14 +41,26 @@ bool is_debug_entry(const MethodItemEntry& mie) {
 
 } // namespace
 
-bool StripDebugInfoPass::method_passes_filter(DexMethod* meth) const {
-  return !m_use_whitelist ||
-         pattern_matches(meth->get_class()->get_name()->c_str(),
-                         m_cls_patterns) ||
-         pattern_matches(meth->get_name()->c_str(), m_meth_patterns);
+namespace strip_debug_info_impl {
+
+Stats& Stats::operator+=(const Stats& other) {
+  num_matches += other.num_matches;
+  num_pos_dropped += other.num_pos_dropped;
+  num_var_dropped += other.num_var_dropped;
+  num_prologue_dropped += other.num_prologue_dropped;
+  num_epilogue_dropped += other.num_epilogue_dropped;
+  num_empty_dropped += other.num_empty_dropped;
+  return *this;
 }
 
-bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
+bool StripDebugInfo::method_passes_filter(DexMethod* meth) const {
+  return !m_config.use_whitelist ||
+         pattern_matches(meth->get_class()->get_name()->c_str(),
+                         m_config.cls_patterns) ||
+         pattern_matches(meth->get_name()->c_str(), m_config.meth_patterns);
+}
+
+bool StripDebugInfo::should_remove(const MethodItemEntry& mei, Stats& stats) {
   bool remove = false;
   if (mei.type == MFLOW_DEBUG) {
     auto op = mei.dbgop->opcode();
@@ -58,19 +70,19 @@ bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
     case DBG_END_LOCAL:
     case DBG_RESTART_LOCAL:
       if (drop_local_variables()) {
-        ++m_num_var_dropped;
+        ++stats.num_var_dropped;
         remove = true;
       }
       break;
     case DBG_SET_PROLOGUE_END:
       if (drop_prologue()) {
-        ++m_num_prologue_dropped;
+        ++stats.num_prologue_dropped;
         remove = true;
       }
       break;
     case DBG_SET_EPILOGUE_BEGIN:
       if (drop_epilogue()) {
-        ++m_num_epilogue_dropped;
+        ++stats.num_epilogue_dropped;
         remove = true;
       }
       break;
@@ -79,7 +91,7 @@ bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
     }
   } else if (mei.type == MFLOW_POSITION) {
     if (drop_line_numbers()) {
-      ++m_num_pos_dropped;
+      ++stats.num_pos_dropped;
       remove = true;
     }
   }
@@ -99,89 +111,99 @@ bool StripDebugInfoPass::should_remove(const MethodItemEntry& mei) {
  * them of debug info is safe -- hence I'm gating their removal under the
  * drop_synth_aggressive flag.
  */
-bool StripDebugInfoPass::should_drop_for_synth(const DexMethod* method) const {
+bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
   if (!is_synthetic(method) && !is_bridge(method)) {
     return false;
   }
 
-  if (m_drop_synth_aggressive) {
+  if (m_config.drop_synth_aggressive) {
     return true;
   }
 
-  return m_drop_synth_conservative &&
+  return m_config.drop_synth_conservative &&
          (is_bridge(method) ||
           strstr(method->get_name()->c_str(), "access$") != nullptr);
 }
 
+
+Stats StripDebugInfo::run(Scope scope) {
+  Stats stats;
+  walk::code(scope, [&](DexMethod* meth, IRCode& code) {
+    if (!method_passes_filter(meth)) return;
+    stats += run(code, should_drop_for_synth(meth));
+  });
+  return stats;
+}
+
+Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
+  Stats stats;
+  ++stats.num_matches;
+  bool debug_info_empty = true;
+  bool force_discard = m_config.drop_all_dbg_info || should_drop_synth;
+
+  for (auto it = code.begin(); it != code.end();) {
+    const auto& mie = *it;
+    if (should_remove(mie, stats) || (force_discard && is_debug_entry(mie))) {
+      // Even though force_discard will drop the debug item below, preventing
+      // any of the debug entries for :meth to be output, we still want to
+      // erase those entries here so that transformations like inlining won't
+      // move these entries into a method that does have a debug item.
+      it = code.erase(it);
+    } else {
+      switch (mie.type) {
+      case MFLOW_DEBUG:
+        // Any debug information op other than an end sequence means
+        // we have debug info.
+        if (mie.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
+        break;
+      case MFLOW_POSITION:
+        // Any line position entry means we have debug info.
+        debug_info_empty = false;
+        break;
+      default:
+        break;
+      }
+      ++it;
+    }
+  }
+
+  if (m_config.drop_all_dbg_info ||
+      (debug_info_empty && m_config.drop_all_dbg_info_if_empty) ||
+      force_discard) {
+    ++stats.num_empty_dropped;
+    code.release_debug_item();
+  }
+  return stats;
+}
+
+} // namespace strip_debug_info_impl
+
 void StripDebugInfoPass::run_pass(DexStoresVector& stores,
                                   ConfigFiles& cfg,
                                   PassManager& mgr) {
-  m_num_matches = 0;
-  m_num_pos_dropped = 0;
-  m_num_var_dropped = 0;
-  m_num_prologue_dropped = 0;
-  m_num_epilogue_dropped = 0;
-  m_num_empty_dropped = 0;
   auto scope = build_class_scope(stores);
-  walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    if (!method_passes_filter(meth)) return;
-    ++m_num_matches;
-    bool debug_info_empty = true;
-    bool force_discard = m_drop_all_dbg_info || should_drop_for_synth(meth);
-
-    for (auto it = code.begin(); it != code.end();) {
-      const auto& mei = *it;
-      if (should_remove(mei) || (force_discard && is_debug_entry(mei))) {
-        // Even though force_discard will drop the debug item below, preventing
-        // any of the debug entries for :meth to be output, we still want to
-        // erase those entries here so that transformations like inlining won't
-        // move these entries into a method that does have a debug item.
-        it = code.erase(it);
-      } else {
-        switch (mei.type) {
-        case MFLOW_DEBUG:
-          // Any debug information op other than an end sequence means
-          // we have debug info.
-          if (mei.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
-          break;
-        case MFLOW_POSITION:
-          // Any line position entry means we have debug info.
-          debug_info_empty = false;
-          break;
-        default:
-          break;
-        }
-        ++it;
-      }
-    }
-
-    if (m_drop_all_dbg_info ||
-        (debug_info_empty && m_drop_all_dbg_info_if_empty) || force_discard) {
-      ++m_num_empty_dropped;
-      code.release_debug_item();
-    }
-  });
-
+  strip_debug_info_impl::StripDebugInfo impl(m_config);
+  auto stats = impl.run(scope);
   TRACE(DBGSTRIP,
         1,
         "matched on %d methods. Removed %d dbg line entries, %d dbg local var "
         "entries, %d dbg prologue start entries, %d "
         "epilogue end entries and %u empty dbg tables.\n",
-        m_num_matches,
-        m_num_pos_dropped,
-        m_num_var_dropped,
-        m_num_prologue_dropped,
-        m_num_epilogue_dropped,
-        m_num_empty_dropped);
+        stats.num_matches,
+        stats.num_pos_dropped,
+        stats.num_var_dropped,
+        stats.num_prologue_dropped,
+        stats.num_epilogue_dropped,
+        stats.num_empty_dropped);
 
-  mgr.incr_metric(METRIC_NUM_MATCHES, m_num_matches);
-  mgr.incr_metric(METRIC_POS_DROPPED, m_num_pos_dropped);
-  mgr.incr_metric(METRIC_VAR_DROPPED, m_num_var_dropped);
-  mgr.incr_metric(METRIC_PROLOGUE_DROPPED, m_num_prologue_dropped);
-  mgr.incr_metric(METRIC_EPILOGUE_DROPPED, m_num_epilogue_dropped);
-  mgr.incr_metric(METRIC_EMPTY_DROPPED, m_num_empty_dropped);
+  mgr.incr_metric(METRIC_NUM_MATCHES, stats.num_matches);
+  mgr.incr_metric(METRIC_POS_DROPPED, stats.num_pos_dropped);
+  mgr.incr_metric(METRIC_VAR_DROPPED, stats.num_var_dropped);
+  mgr.incr_metric(METRIC_PROLOGUE_DROPPED, stats.num_prologue_dropped);
+  mgr.incr_metric(METRIC_EPILOGUE_DROPPED, stats.num_epilogue_dropped);
+  mgr.incr_metric(METRIC_EMPTY_DROPPED, stats.num_empty_dropped);
 
-  if (m_drop_src_files) {
+  if (m_config.drop_src_files) {
     TRACE(DBGSTRIP, 1, "dropping src file strings\n");
     for (auto& dex : scope)
       dex->set_source_file(nullptr);
