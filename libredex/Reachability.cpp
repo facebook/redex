@@ -131,13 +131,11 @@ void RootSetMarker::push_seed(const DexClass* cls) {
 
 void RootSetMarker::push_seed(const DexField* field) {
   if (!field) return;
-  record_is_seed(field);
   m_cond_marked->fields.insert(field);
 }
 
 void RootSetMarker::push_seed(const DexMethod* method) {
   if (!method) return;
-  record_is_seed(method);
   m_cond_marked->methods.insert(method);
 }
 
