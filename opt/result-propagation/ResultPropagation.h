@@ -30,7 +30,10 @@ const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
 class ReturnParamResolver {
  public:
   ReturnParamResolver(const method_override_graph::Graph& graph)
-      : m_graph(graph) {}
+      : m_graph(graph),
+        m_string_builder_type(DexType::make_type("Ljava/lang/StringBuilder;")),
+        m_string_to_string_method(DexMethod::make_method(
+            "Ljava/lang/String;.toString:()Ljava/lang/String;")) {}
 
   /*
    * For an invocation given by an instruction, figure out whether
@@ -52,7 +55,11 @@ class ReturnParamResolver {
           methods_which_return_parameter) const;
 
  private:
+  bool returns_receiver(const DexMethodRef* method) const;
+
   const method_override_graph::Graph& m_graph;
+  const DexType* m_string_builder_type;
+  const DexMethodRef* m_string_to_string_method;
 };
 
 /*

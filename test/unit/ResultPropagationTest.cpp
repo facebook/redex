@@ -164,3 +164,16 @@ TEST(CFGInliner, return_unknown_irrelevant_invoke) {
   )";
   test_get_return_param_index(code_str, boost::none);
 }
+
+TEST(CFGInliner, return_receiver_of_framework_method) {
+  const auto& code_str = R"(
+    (
+      (load-param-object v0)
+      (const v1 "foo")
+      (invoke-virtual (v0 v1) "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/StringBuilder;")
+      (move-result v2)
+      (return v2)
+    )
+  )";
+  test_get_return_param_index(code_str, 0);
+}

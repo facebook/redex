@@ -287,13 +287,17 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     return boost::none;
   }
 
+  const auto opcode = insn->opcode();
+  if (opcode == OPCODE_INVOKE_VIRTUAL && returns_receiver(method)) {
+    return 0;
+  }
+
   const auto callee =
       resolve_method(method, opcode_to_search(insn), resolved_refs);
   if (callee == nullptr) {
     return boost::none;
   }
 
-  const auto opcode = insn->opcode();
   ParamDomain param = ParamDomain::bottom();
   if (is_abstract(callee)) {
     always_assert(opcode == OPCODE_INVOKE_VIRTUAL ||
@@ -329,6 +333,22 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   }
 
   return param.get_constant();
+}
+
+bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
+  // Hard-coded very special knowledge about certain framework methods
+
+  // StringBuilder methods with result type StringBuilder return the receiver
+  if (method->get_class() == m_string_builder_type &&
+      method->get_proto()->get_rtype() == method->get_class()) {
+    return true;
+  }
+
+  if (method == m_string_to_string_method) {
+    return true;
+  }
+
+  return false;
 }
 
 const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
