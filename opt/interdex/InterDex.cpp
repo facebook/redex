@@ -128,18 +128,22 @@ void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
-    interdex::FieldRefs* frefs) {
+    interdex::FieldRefs* frefs,
+    interdex::TypeRefs* trefs) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
+  std::vector<DexType*> type_refs;
   cls->gather_methods(method_refs);
   cls->gather_fields(field_refs);
+  cls->gather_types(type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_mrefs(cls, method_refs, field_refs);
+    plugin->gather_mrefs(cls, method_refs, field_refs, type_refs);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
   frefs->insert(field_refs.begin(), field_refs.end());
+  trefs->insert(type_refs.begin(), type_refs.end());
 }
 
 void print_stats(interdex::DexesStructure* dexes_structure) {
@@ -200,13 +204,15 @@ void InterDex::emit_class(const DexInfo& dex_info,
   // the current dex if we defined clazz in it.
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
-  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs);
+  TypeRefs clazz_trefs;
+  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs);
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
-      clazz_mrefs, clazz_frefs, clazz);
+      clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
   if (!fits_current_dex) {
     flush_out_dex(dex_info);
-    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz);
+    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
+                                          clazz);
   }
 }
 

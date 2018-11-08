@@ -85,7 +85,8 @@ bool TypeErasureInterDexPlugin::should_skip_class(const DexClass* clazz) {
  */
 void TypeErasureInterDexPlugin::gather_mrefs(const DexClass* cls,
                                              std::vector<DexMethodRef*>& mrefs,
-                                             std::vector<DexFieldRef*>& frefs) {
+                                             std::vector<DexFieldRef*>& frefs,
+                                             std::vector<DexType*>& trefs) {
 
   std::vector<DexMethod*> methods = cls->get_dmethods();
   const std::vector<DexMethod*>& vmethods = cls->get_vmethods();
@@ -131,6 +132,7 @@ void TypeErasureInterDexPlugin::gather_mrefs(const DexClass* cls,
       DexClass* current_cls = type_class(type);
       current_cls->gather_methods(mrefs);
       current_cls->gather_fields(frefs);
+      current_cls->gather_types(trefs);
 
       // As we might end up referencing some of the virtual parent methods,
       // include them too here.

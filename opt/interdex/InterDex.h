@@ -24,6 +24,7 @@ class InterDex {
            ConfigFiles& cfg,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
+           int64_t type_refs_limit,
            bool static_prune_classes,
            bool normal_primary_dex,
            bool emit_scroll_set_marker,
@@ -36,6 +37,7 @@ class InterDex {
         m_normal_primary_dex(normal_primary_dex),
         m_emit_canaries(emit_canaries) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
+    m_dexes_structure.set_type_refs_limit(type_refs_limit);
   }
 
   void set_mixed_mode_dex_statuses(

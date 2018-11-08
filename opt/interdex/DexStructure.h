@@ -18,6 +18,7 @@ namespace interdex {
 
 using MethodRefs = std::unordered_set<DexMethodRef*>;
 using FieldRefs = std::unordered_set<DexFieldRef*>;
+using TypeRefs = std::unordered_set<DexType*>;
 
 struct DexInfo {
   bool primary{false};
@@ -46,11 +47,14 @@ class DexStructure {
    */
   bool add_class_if_fits(const MethodRefs& clazz_mrefs,
                          const FieldRefs& clazz_frefs,
+                         const TypeRefs& clazz_trefs,
                          size_t linear_alloc_limit,
+                         size_t type_refs_limit,
                          DexClass* clazz);
 
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,
+                           const TypeRefs& clazz_trefs,
                            unsigned laclazz,
                            DexClass* clazz);
 
@@ -58,6 +62,7 @@ class DexStructure {
 
  private:
   size_t m_linear_alloc_size;
+  TypeRefs m_trefs;
   MethodRefs m_mrefs;
   FieldRefs m_frefs;
   std::vector<DexClass*> m_classes;
@@ -97,12 +102,17 @@ class DexesStructure {
     m_linear_alloc_limit = linear_alloc_limit;
   }
 
+  void set_type_refs_limit(int64_t type_refs_limit) {
+    m_type_refs_limit = type_refs_limit;
+  }
+
   /**
    * Tries to add the class to the current dex. If it can't, it returns false.
    * Throws if the class already exists in the dexes.
    */
   bool add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                                 const FieldRefs& clazz_frefs,
+                                const TypeRefs& clazz_trefs,
                                 DexClass* clazz);
 
   /*
@@ -111,9 +121,10 @@ class DexesStructure {
    */
   void add_class_no_checks(const MethodRefs& clazz_mrefs,
                            const FieldRefs& clazz_frefs,
+                           const TypeRefs& clazz_trefs,
                            DexClass* clazz);
   void add_class_no_checks(DexClass* clazz) {
-    add_class_no_checks(MethodRefs(), FieldRefs(), clazz);
+    add_class_no_checks(MethodRefs(), FieldRefs(), TypeRefs(), clazz);
   }
 
   /**
@@ -135,6 +146,7 @@ class DexesStructure {
   std::unordered_set<DexClass*> m_classes;
 
   int64_t m_linear_alloc_limit;
+  int64_t m_type_refs_limit;
 
   struct DexesInfo {
     size_t num_dexes{0};

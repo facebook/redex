@@ -133,6 +133,12 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   std::vector<std::string> mixed_mode_dexes;
   jw.get("mixed_mode_dexes", {}, mixed_mode_dexes);
   m_mixed_mode_dex_statuses = get_mixed_mode_dex_statuses(mixed_mode_dexes);
+
+  // Default to maximum number of type refs per dex, as allowed by Android.
+  // Notes: This flag was added to work around a bug in AOSP described in
+  //        https://phabricator.internmc.facebook.com/P60294798 and for this
+  //        it should be set to 1 << 15.
+  jw.get("type_refs_limit", 1 << 16, m_type_refs_limit);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -150,8 +156,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
 
   InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
-                    m_linear_alloc_limit, m_static_prune, m_normal_primary_dex,
-                    m_emit_scroll_set_marker, m_emit_canaries);
+                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
+                    m_normal_primary_dex, m_emit_scroll_set_marker,
+                    m_emit_canaries);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.

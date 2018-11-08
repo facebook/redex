@@ -40,7 +40,8 @@ class TypeErasureInterDexPlugin : public interdex::InterDexPassPlugin {
 
   void gather_mrefs(const DexClass* cls,
                     std::vector<DexMethodRef*>& mrefs,
-                    std::vector<DexFieldRef*>& frefs) override;
+                    std::vector<DexFieldRef*>& frefs,
+                    std::vector<DexType*>& trefs) override;
 
   DexClasses additional_classes(const DexClassesVector& outdex,
                                 const DexClasses& classes) override;
