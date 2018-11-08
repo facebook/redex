@@ -1040,15 +1040,19 @@ void DexProto::gather_strings(std::vector<DexString*>& lstring) const {
 
 void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
+    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& m : m_vmethods) {
+    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& f : m_sfields) {
+    f->gather_types_shallow(ltype);
     f->gather_types(ltype);
   }
   for (auto const& f : m_ifields) {
+    f->gather_types_shallow(ltype);
     f->gather_types(ltype);
   }
   ltype.push_back(m_super_class);
