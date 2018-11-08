@@ -1168,8 +1168,10 @@ void inline_method(IRCode* caller_code,
         // position, we need to re-mark them with the correct line number,
         // otherwise they would inherit the line number from the end of the
         // caller.
-        caller_code->push_back(*(new MethodItemEntry(
-            std::make_unique<DexPosition>(*return_position))));
+        auto new_pos = std::make_unique<DexPosition>(*return_position);
+        // We want its parent to be the same parent as other inlined code.
+        new_pos->parent = invoke_position;
+        caller_code->push_back(*(new MethodItemEntry(std::move(new_pos))));
       }
     }
 
