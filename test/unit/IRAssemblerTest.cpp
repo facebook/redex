@@ -293,3 +293,38 @@ TEST_F(IRAssemblerTest, try_catch_with_two_tries) {
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
+
+std::vector<DexPosition*> get_positions(const std::unique_ptr<IRCode>& code) {
+  std::vector<DexPosition*> positions;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_POSITION) {
+      positions.push_back(mie.pos.get());
+    }
+  }
+  return positions;
+}
+
+TEST_F(IRAssemblerTest, pos) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos "LFoo;.bar:()V" "Foo.java" "420")
+     (const v0 420)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  EXPECT_EQ(code->count_opcodes(), 1);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 1);
+  auto pos = positions[0];
+  EXPECT_EQ(show(pos->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos->line, 420);
+  EXPECT_EQ(pos->parent, nullptr);
+}

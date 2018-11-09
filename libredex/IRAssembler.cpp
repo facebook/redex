@@ -120,6 +120,7 @@ s_expr to_s_expr(const DexPosition* pos) {
   // TODO: Handle parent positions
   // Right now, we just ignore the parent pointers
   return s_expr({
+      s_expr(".pos"),
       s_expr(show(pos->method)),
       s_expr(pos->file->c_str()),
       s_expr(std::to_string(pos->line)),
