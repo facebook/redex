@@ -295,11 +295,7 @@ class IRInstruction final {
     }
   }
 
-  void gather_types(std::vector<DexType*>& ltype) const {
-    if (has_type()) {
-      ltype.push_back(m_type);
-    }
-  }
+  void gather_types(std::vector<DexType*>& ltype) const;
 
   void gather_fields(std::vector<DexFieldRef*>& lfield) const {
     if (has_field()) {
