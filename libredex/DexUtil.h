@@ -94,6 +94,12 @@ DexType* get_integer_type();
 std::string get_package_name(const DexType* type);
 
 /**
+ * Return the simple name w/o the package name and the ending ';' for a valid
+ * DexType. E.g., 'Lcom/facebook/Simple;' -> 'Simple'.
+ */
+std::string get_simple_name(const DexType* type);
+
+/**
  * Return true if the type is a primitive.
  */
 bool is_primitive(const DexType* type);

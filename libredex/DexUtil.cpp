@@ -84,6 +84,16 @@ std::string get_package_name(const DexType* type) {
   return name.substr(0, pos);
 }
 
+std::string get_simple_name(const DexType* type) {
+  std::string name = std::string(type->get_name()->c_str());
+  if (name.find("/") == std::string::npos) {
+    return name;
+  }
+  unsigned long pos_begin = name.find_last_of("/");
+  unsigned long pos_end = name.find_last_of(";");
+  return name.substr(pos_begin + 1, pos_end - pos_begin - 1);
+}
+
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();
   switch (name[0]) {
