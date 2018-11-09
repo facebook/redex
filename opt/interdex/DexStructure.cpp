@@ -97,12 +97,14 @@ namespace interdex {
 
 bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
                                               const FieldRefs& clazz_frefs,
+                                              const TypeRefs& clazz_trefs,
                                               DexClass* clazz) {
   always_assert_log(m_classes.count(clazz) == 0,
                     "Can't emit the same class twice!\n", SHOW(clazz));
 
-  if (m_current_dex.add_class_if_fits(clazz_mrefs, clazz_frefs,
-                                      m_linear_alloc_limit, clazz)) {
+  if (m_current_dex.add_class_if_fits(clazz_mrefs, clazz_frefs, clazz_trefs,
+                                      m_linear_alloc_limit, m_type_refs_limit,
+                                      clazz)) {
     update_stats(clazz_mrefs, clazz_frefs, clazz);
     m_classes.emplace(clazz);
     return true;
@@ -113,12 +115,14 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
 
 void DexesStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                          const FieldRefs& clazz_frefs,
+                                         const TypeRefs& clazz_trefs,
                                          DexClass* clazz) {
   always_assert_log(m_classes.count(clazz) == 0,
                     "Can't emit the same class twice: %s!\n", SHOW(clazz));
 
   auto laclazz = estimate_linear_alloc(clazz);
-  m_current_dex.add_class_no_checks(clazz_mrefs, clazz_frefs, laclazz, clazz);
+  m_current_dex.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
+                                    laclazz, clazz);
   m_classes.emplace(clazz);
   update_stats(clazz_mrefs, clazz_frefs, clazz);
 }
@@ -170,7 +174,9 @@ void DexesStructure::update_stats(const MethodRefs& clazz_mrefs,
 
 bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
                                      const FieldRefs& clazz_frefs,
+                                     const TypeRefs& clazz_trefs,
                                      size_t linear_alloc_limit,
+                                     size_t type_refs_limit,
                                      DexClass* clazz) {
 
   unsigned laclazz = estimate_linear_alloc(clazz);
@@ -184,6 +190,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
 
   auto extra_mrefs = set_difference(clazz_mrefs, m_mrefs);
   auto extra_frefs = set_difference(clazz_frefs, m_frefs);
+  auto extra_trefs = set_difference(clazz_trefs, m_trefs);
 
   if (m_mrefs.size() + extra_mrefs.size() >= MAX_METHOD_REFS ||
       m_frefs.size() + extra_frefs.size() >= MAX_FIELD_REFS) {
@@ -195,17 +202,27 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
     return false;
   }
 
-  add_class_no_checks(clazz_mrefs, clazz_frefs, laclazz, clazz);
+  if (m_trefs.size() + extra_trefs.size() >= type_refs_limit) {
+    TRACE(IDEX, 6,
+          "[warning]: Class won't fit current dex since it will go "
+          "over the type refs limit: %d : %s\n",
+          m_trefs.size() + extra_trefs.size(), SHOW(clazz));
+    return false;
+  }
+
+  add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs, laclazz, clazz);
   return true;
 }
 
 void DexStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                        const FieldRefs& clazz_frefs,
+                                       const TypeRefs& clazz_trefs,
                                        unsigned laclazz,
                                        DexClass* clazz) {
   TRACE(IDEX, 7, "Adding class: %s\n", SHOW(clazz));
   m_mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
   m_frefs.insert(clazz_frefs.begin(), clazz_frefs.end());
+  m_trefs.insert(clazz_trefs.begin(), clazz_trefs.end());
   m_linear_alloc_size += laclazz;
   m_classes.push_back(clazz);
 }
