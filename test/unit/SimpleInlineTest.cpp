@@ -121,19 +121,19 @@ TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
       (.pos "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
 
-      (.pos "LFoo;.callee:()V" "Foo.java" 123)
+      (.pos "LFoo;.callee:()V" "Foo.java" 123 0)
       (const v1 1)
       (if-eqz v1 :after)
 
       (:exit)
-      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (.pos "LFoo;.callee:()V" "Foo.java" 124 0)
       (const v2 2)
       (.pos "LFoo;.caller:()V" "Foo.java" 10)
       (return-void)
 
       ; Check that this position was correctly added to the code after the
       ; callee's return
-      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (.pos "LFoo;.callee:()V" "Foo.java" 124 0)
       (:after)
       (const v3 3)
       (goto :exit)
