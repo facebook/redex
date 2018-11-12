@@ -641,9 +641,16 @@ def prepare_redex(args):
     # through it looking for classnames.
     libs_to_extract = []
     temporary_libs_dir = None
+    xz_lib_name = 'libs.xzs'
+    zstd_lib_name = 'libs.zstd'
     for root, _, filenames in os.walk(extracted_apk_dir):
-        for filename in fnmatch.filter(filenames, 'libs.xzs'):
+        for filename in fnmatch.filter(filenames, xz_lib_name):
             libs_to_extract.append(join(root, filename))
+        for filename in fnmatch.filter(filenames, zstd_lib_name):
+            fullpath = join(root, filename)
+            # For voltron modules BUCK creates empty zstd files for each module
+            if os.path.getsize(fullpath) > 0:
+                libs_to_extract.append(fullpath)
     if len(libs_to_extract) > 0:
         libs_dir = join(extracted_apk_dir, 'lib')
         extracted_dir = join(libs_dir, '__extracted_libs__')
@@ -652,7 +659,10 @@ def prepare_redex(args):
         lib_count = 0
         for lib_to_extract in libs_to_extract:
             extract_path = join(extracted_dir, "lib_{}.so".format(lib_count))
-            cmd = 'xz -d --stdout {} > {}'.format(lib_to_extract, extract_path)
+            if lib_to_extract.endswith(xz_lib_name):
+                cmd = 'xz -d --stdout {} > {}'.format(lib_to_extract, extract_path)
+            else:
+                cmd = 'zstd -d {} -o {}'.format(lib_to_extract, extract_path)
             subprocess.check_call(cmd, shell=True)
             lib_count += 1
 
