@@ -7,6 +7,7 @@
 
 #include "IRTypeChecker.h"
 
+#include <boost/optional/optional_io.hpp>
 #include <cstdint>
 #include <functional>
 #include <iomanip>
@@ -18,6 +19,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexAccess.h"
@@ -29,6 +31,7 @@
 #include "Match.h"
 #include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "ReducedProductAbstractDomain.h"
 #include "Show.h"
 
 using namespace sparta;
@@ -133,8 +136,49 @@ using register_t = uint32_t;
 constexpr register_t RESULT_REGISTER =
     std::numeric_limits<register_t>::max() - 1;
 
-using TypeEnvironment =
+using BasicTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, TypeDomain>;
+
+using DexTypeDomain = ConstantAbstractDomain<const DexType*>;
+
+using DexTypeEnvironment =
+    PatriciaTreeMapAbstractEnvironment<register_t, DexTypeDomain>;
+
+class TypeEnvironment final
+    : public ReducedProductAbstractDomain<TypeEnvironment,
+                                          BasicTypeEnvironment,
+                                          DexTypeEnvironment> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  static void reduce_product(
+      std::tuple<BasicTypeEnvironment, DexTypeEnvironment>& /* product */) {}
+
+  TypeDomain get_type(register_t reg) const { return get<0>().get(reg); }
+
+  void set_type(register_t reg, const TypeDomain type) {
+    apply<0>([=](auto env) { env->set(reg, type); }, true);
+  }
+
+  void update_type(
+      register_t reg,
+      const std::function<TypeDomain(const TypeDomain&)>& operation) {
+    apply<0>([=](auto env) { env->update(reg, operation); }, true);
+  }
+
+  const DexType* get_concrete_type(register_t reg) const {
+    IRType ir_type = get_type(reg).element();
+    always_assert(ir_type == REFERENCE);
+    auto type_opt = get<1>().get(reg).get_constant();
+    always_assert(type_opt != boost::none);
+    return type_opt.get();
+  }
+
+  void set_concrete_type(register_t reg, const DexType* type) {
+    set_type(reg, TypeDomain(REFERENCE));
+    apply<1>([=](auto env) { env->set(reg, DexTypeDomain(type)); }, true);
+  }
+};
 
 // We abort the type checking process at the first error encountered.
 class TypeCheckingException final : public std::runtime_error {
@@ -260,18 +304,20 @@ class TypeInference final
     }
     case OPCODE_MOVE: {
       assume_scalar(current_state, insn->src(0), /* in_move */ true);
-      set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
+      set_type(
+          current_state, insn->dest(), current_state->get_type(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
-      set_type(current_state, insn->dest(), current_state->get(insn->src(0)));
+      set_type(
+          current_state, insn->dest(), current_state->get_type(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_WIDE: {
       assume_wide_scalar(current_state, insn->src(0));
-      TypeDomain td1 = current_state->get(insn->src(0));
-      TypeDomain td2 = current_state->get(insn->src(0) + 1);
+      TypeDomain td1 = current_state->get_type(insn->src(0));
+      TypeDomain td2 = current_state->get_type(insn->src(0) + 1);
       set_type(current_state, insn->dest(), td1);
       set_type(current_state, insn->dest() + 1, td2);
       break;
@@ -279,25 +325,28 @@ class TypeInference final
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case OPCODE_MOVE_RESULT: {
       assume_scalar(current_state, RESULT_REGISTER);
-      set_type(
-          current_state, insn->dest(), current_state->get(RESULT_REGISTER));
+      set_type(current_state,
+               insn->dest(),
+               current_state->get_type(RESULT_REGISTER));
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
       assume_reference(current_state, RESULT_REGISTER);
-      set_type(
-          current_state, insn->dest(), current_state->get(RESULT_REGISTER));
+      set_type(current_state,
+               insn->dest(),
+               current_state->get_type(RESULT_REGISTER));
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     case OPCODE_MOVE_RESULT_WIDE: {
       assume_wide_scalar(current_state, RESULT_REGISTER);
-      set_type(
-          current_state, insn->dest(), current_state->get(RESULT_REGISTER));
+      set_type(current_state,
+               insn->dest(),
+               current_state->get_type(RESULT_REGISTER));
       set_type(current_state,
                insn->dest() + 1,
-               current_state->get(RESULT_REGISTER + 1));
+               current_state->get_type(RESULT_REGISTER + 1));
       break;
     }
     case OPCODE_MOVE_EXCEPTION: {
@@ -881,52 +930,52 @@ class TypeInference final
                 register_t reg,
                 const TypeDomain& type) const {
     if (m_inference) {
-      state->set(reg, type);
+      state->set_type(reg, type);
     }
   }
 
   void set_integer(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(INT));
+      state->set_type(reg, TypeDomain(INT));
     }
   }
 
   void set_float(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(FLOAT));
+      state->set_type(reg, TypeDomain(FLOAT));
     }
   }
 
   void set_scalar(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(SCALAR));
+      state->set_type(reg, TypeDomain(SCALAR));
     }
   }
 
   void set_reference(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(REFERENCE));
+      state->set_type(reg, TypeDomain(REFERENCE));
     }
   }
 
   void set_long(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(LONG1));
-      state->set(reg + 1, TypeDomain(LONG2));
+      state->set_type(reg, TypeDomain(LONG1));
+      state->set_type(reg + 1, TypeDomain(LONG2));
     }
   }
 
   void set_double(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(DOUBLE1));
-      state->set(reg + 1, TypeDomain(DOUBLE2));
+      state->set_type(reg, TypeDomain(DOUBLE1));
+      state->set_type(reg + 1, TypeDomain(DOUBLE2));
     }
   }
 
   void set_wide_scalar(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
-      state->set(reg, TypeDomain(SCALAR1));
-      state->set(reg + 1, TypeDomain(SCALAR2));
+      state->set_type(reg, TypeDomain(SCALAR1));
+      state->set_type(reg + 1, TypeDomain(SCALAR2));
     }
   }
 
@@ -952,7 +1001,7 @@ class TypeInference final
                    IRType expected,
                    bool ignore_top = false) const {
     if (m_inference) {
-      state->update(reg, [this, expected](const TypeDomain& type) {
+      state->update_type(reg, [this, expected](const TypeDomain& type) {
         return refine_type(
             type, expected, /* const_type */ CONST, /* scalar_type */ SCALAR);
       });
@@ -961,7 +1010,7 @@ class TypeInference final
         // There's nothing to do for unreachable code.
         return;
       }
-      IRType actual = state->get(reg).element();
+      IRType actual = state->get_type(reg).element();
       if (ignore_top && actual == TOP) {
         return;
       }
@@ -974,13 +1023,13 @@ class TypeInference final
                         IRType expected1,
                         IRType expected2) const {
     if (m_inference) {
-      state->update(reg, [this, expected1](const TypeDomain& type) {
+      state->update_type(reg, [this, expected1](const TypeDomain& type) {
         return refine_type(type,
                            expected1,
                            /* const_type */ CONST1,
                            /* scalar_type */ SCALAR1);
       });
-      state->update(reg + 1, [this, expected2](const TypeDomain& type) {
+      state->update_type(reg + 1, [this, expected2](const TypeDomain& type) {
         return refine_type(type,
                            expected2,
                            /* const_type */ CONST2,
@@ -991,8 +1040,8 @@ class TypeInference final
         // There's nothing to do for unreachable code.
         return;
       }
-      IRType actual1 = state->get(reg).element();
-      IRType actual2 = state->get(reg + 1).element();
+      IRType actual1 = state->get_type(reg).element();
+      IRType actual2 = state->get_type(reg + 1).element();
       check_wide_type_match(reg,
                             actual1,
                             actual2,
@@ -1050,7 +1099,7 @@ class TypeInference final
       // There's nothing to do for unreachable code.
       return;
     }
-    IRType t = state->get(reg).element();
+    IRType t = state->get_type(reg).element();
     if (t == SCALAR) {
       // We can't say anything conclusive about a register that has SCALAR type,
       // so we just bail out.
@@ -1082,8 +1131,8 @@ class TypeInference final
       // There's nothing to do for unreachable code.
       return;
     }
-    IRType t1 = state->get(reg1).element();
-    IRType t2 = state->get(reg2).element();
+    IRType t1 = state->get_type(reg1).element();
+    IRType t2 = state->get_type(reg2).element();
     if (!((TypeDomain(t1).leq(TypeDomain(REFERENCE)) &&
            TypeDomain(t2).leq(TypeDomain(REFERENCE))) ||
           (TypeDomain(t1).leq(TypeDomain(SCALAR)) &&
@@ -1336,7 +1385,7 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
     // unreachable code and return BOTTOM.
     return BOTTOM;
   }
-  return it->second.get(reg).element();
+  return it->second.get_type(reg).element();
 }
 
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {
