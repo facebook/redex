@@ -38,14 +38,6 @@ class SimpleValueAbstractDomain
     : public sparta::AbstractDomainScaffolding<svad_impl::SimpleValue<T>,
                                                SimpleValueAbstractDomain<T>> {
  public:
-  static SimpleValueAbstractDomain<T> bottom() {
-    return SimpleValueAbstractDomain(sparta::AbstractValueKind::Bottom);
-  }
-
-  static SimpleValueAbstractDomain<T> top() {
-    return SimpleValueAbstractDomain<T>(sparta::AbstractValueKind::Top);
-  }
-
   static SimpleValueAbstractDomain<T> value(T value) {
     SimpleValueAbstractDomain<T> result;
     result.set_to_value(svad_impl::SimpleValue<T>(value));

@@ -120,14 +120,6 @@ class StringyDomain final
  public:
   friend std::ostream& operator<<(std::ostream& o, const StringyDomain& sd);
 
-  static StringyDomain bottom() {
-    return StringyDomain(sparta::AbstractValueKind::Bottom);
-  }
-
-  static StringyDomain top() {
-    return StringyDomain(sparta::AbstractValueKind::Top);
-  }
-
   static StringyDomain value(
       std::string suffix,
       boost::optional<string_register_t> base = boost::none,
@@ -195,18 +187,6 @@ class StringProdEnvironment final
   static void reduce_product(
       std::tuple<PointerReferenceEnvironment,
                  StringConstantEnvironment>& /* product */) {}
-
-  static StringProdEnvironment top() {
-    StringProdEnvironment p;
-    p.set_to_top();
-    return p;
-  }
-
-  static StringProdEnvironment bottom() {
-    StringProdEnvironment p;
-    p.set_to_bottom();
-    return p;
-  }
 
   StringyDomain eval(string_register_t reg) const {
     auto ptr = get<0>().get(reg);
