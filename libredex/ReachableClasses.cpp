@@ -646,6 +646,27 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
                });
 }
 
+void recompute_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir) {
+  walk::parallel::classes(scope, [](DexClass* cls) {
+    cls->rstate.unset_referenced_by_resource_xml();
+    for (auto* method : cls->get_dmethods()) {
+      method->rstate.unset_referenced_by_resource_xml();
+    }
+    for (auto* method : cls->get_vmethods()) {
+      method->rstate.unset_referenced_by_resource_xml();
+    }
+    for (auto* field : cls->get_ifields()) {
+      field->rstate.unset_referenced_by_resource_xml();
+    }
+    for (auto* field : cls->get_sfields()) {
+      field->rstate.unset_referenced_by_resource_xml();
+    }
+  });
+  analyze_reachable_from_xml_layouts(scope, apk_dir);
+}
+
 void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,

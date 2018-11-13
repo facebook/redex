@@ -16,7 +16,12 @@ void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
+
 void recompute_classes_reachable_from_code(const Scope& scope);
+
+void recompute_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir);
 
 // Note: The lack of convenience functions for DexType* is intentional. By doing
 // so, it implies you need to nullptr check. Which is evil because it sprinkles

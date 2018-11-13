@@ -37,6 +37,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
+	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/obfuscate \
 	-I$(top_srcdir)/opt/original_name \
@@ -47,7 +48,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
 	-I$(top_srcdir)/opt/remove-builders \
-  -I$(top_srcdir)/opt/remove-interfaces \
+	-I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
@@ -66,7 +67,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/track_resources \
-  -I$(top_srcdir)/opt/type-erasure \
+	-I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
@@ -220,6 +221,7 @@ redex_all_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/merge_interface/MergeInterface.cpp \
 	opt/obfuscate/Obfuscate.cpp \

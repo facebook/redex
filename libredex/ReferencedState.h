@@ -140,6 +140,12 @@ class ReferencedState {
       add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
     }
   }
+
+  void unset_referenced_by_resource_xml() {
+    m_byresources = false;
+    // TODO: Remove the XML-related keep reasons
+  }
+
   bool is_referenced_by_resource_xml() const { return m_byresources; }
 
   // A direct reference from code (not reflection)
