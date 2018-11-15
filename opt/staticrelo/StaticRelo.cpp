@@ -584,7 +584,9 @@ void do_mutations(PassManager& mgr,
       from_cls->remove_method(from_meth);
       DexMethodSpec spec;
       spec.cls = to_cls->get_type();
-      from_meth->change(spec, true /* rename_on_collision */);
+      from_meth->change(spec,
+                        true /* rename on collision */,
+                        true /* update deobfuscated name */);
       to_cls->add_method(from_meth);
       // Make the method public and make the target class public. They must
       // be public because the method may have been visible to other other

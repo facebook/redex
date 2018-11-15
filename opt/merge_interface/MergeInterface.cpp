@@ -351,7 +351,9 @@ void move_methods_to_interface(
     from_interface->remove_method(method_to_move);
     DexMethodSpec spec;
     spec.cls = target_intf_type;
-    method_to_move->change(spec, false /* rename_on_collision */);
+    method_to_move->change(spec,
+                           false /* rename on collision */,
+                           false /* update deobfuscated name */);
     target_interface->add_method(method_to_move);
   }
 }
@@ -477,7 +479,9 @@ void update_reference_for_code(
           } else {
             DexMethodSpec spec;
             spec.cls = target_type;
-            meth_ref->change(spec, false /* rename_on_collision */);
+            meth_ref->change(spec,
+                             false /* rename on collision */,
+                             false /* update deobfuscated name */);
           }
         }
         continue;

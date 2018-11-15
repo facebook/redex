@@ -65,7 +65,9 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
     auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
     DexMethodSpec spec;
     spec.proto = new_proto;
-    method->change(spec, true /* rename_on_collision */);
+    method->change(spec,
+                   true /* rename on collision */,
+                   true /* update deobfuscated name */);
 
     auto code = method->get_code();
     // If the debug info param count doesn't match the param count in the

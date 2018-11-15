@@ -113,7 +113,9 @@ void update_code_type_refs(
               proto, mergeable_to_merger);
           DexMethodSpec spec;
           spec.proto = new_proto;
-          meth_ref->change(spec, true);
+          meth_ref->change(spec,
+                           true /*rename on collision*/,
+                           true /*update_deobfuscated_name*/);
           continue;
         }
         always_assert_log(false,

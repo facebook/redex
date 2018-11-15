@@ -72,7 +72,9 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
   auto new_proto =
       DexProto::make_proto(meth->get_proto()->get_rtype(), new_type_list);
   spec.proto = new_proto;
-  meth->change(spec, true);
+  meth->change(spec,
+               true /* rename on collision */,
+               true /* update deobfuscated name */);
 }
 
 void fix_visibility_helper(DexMethod* method,

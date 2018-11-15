@@ -150,7 +150,9 @@ bool RemoveArgs::update_method_signature(
     }
 
     DexMethodSpec spec(method->get_class(), method->get_name(), updated_proto);
-    method->change(spec, /* rename on collision */ true);
+    method->change(spec,
+                   true /* rename on collision */,
+                   true /* update deobfuscated name */);
   }
 
   // We must also update debug info when we change the method proto.
