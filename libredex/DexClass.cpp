@@ -984,7 +984,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
-                   const std::string& dex_location)
+                   const std::string& location)
     : m_access_flags((DexAccessFlags)cdef->access_flags),
       m_super_class(idx->get_typeidx(cdef->super_idx)),
       m_self(idx->get_typeidx(cdef->typeidx)),
@@ -992,7 +992,7 @@ DexClass::DexClass(DexIdx* idx,
       m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
       m_anno(nullptr),
       m_external(false),
-      m_dex_location(dex_location) {
+      m_location(location) {
   load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
       load_static_values(idx, cdef->static_values_off));

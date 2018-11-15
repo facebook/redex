@@ -1016,13 +1016,13 @@ class DexClass {
   DexAnnotationSet* m_anno;
   bool m_external;
   std::string m_deobfuscated_name;
-  const std::string m_dex_location; // TODO: string interning
+  const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
   std::vector<DexField*> m_ifields;
   std::vector<DexMethod*> m_dmethods;
   std::vector<DexMethod*> m_vmethods;
 
-  DexClass(){};
+  DexClass(const std::string& location) : m_location(location){};
   void load_class_annotations(DexIdx* idx, uint32_t anno_off);
   void load_class_data_item(DexIdx* idx,
                             uint32_t cdi_off,
@@ -1032,9 +1032,7 @@ class DexClass {
 
  public:
   ReferencedState rstate;
-  DexClass(DexIdx* idx,
-           const dex_class_def* cdef,
-           const std::string& dex_location);
+  DexClass(DexIdx* idx, const dex_class_def* cdef, const std::string& location);
 
  public:
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
@@ -1107,9 +1105,8 @@ class DexClass {
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
-  const std::string& get_dex_location() const {
-    return m_dex_location;
-  }
+  // Returns the location of this class - can be dex/jar file.
+  const std::string& get_location() const { return m_location; }
 
   void set_access(DexAccessFlags access) {
     always_assert_log(!m_external,

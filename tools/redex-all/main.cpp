@@ -634,6 +634,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
           dex_stats_t dex_stats;
           DexClasses classes =
               load_classes_from_dex(file_path.c_str(), &dex_stats);
+
           input_totals += dex_stats;
           input_dexes_stats.push_back(dex_stats);
           store.add_classes(std::move(classes));
@@ -647,6 +648,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   Scope external_classes;
   if (!args.entry_data["jars"].empty()) {
     Timer t("Load library jars");
+    const JsonWrapper& json_cfg = cfg.get_json_config();
+    read_dup_class_whitelist(json_cfg);
+
     for (const auto& _library_jar : args.entry_data["jars"]) {
       const std::string library_jar = _library_jar.asString();
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
@@ -831,7 +835,7 @@ void dump_class_method_info_map(const std::string file_path,
   std::unordered_map<std::string /*location*/, int /*index*/> dexloc_map;
 
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
-    const auto& dexloc = cls->get_dex_location();
+    const auto& dexloc = cls->get_location();
     if (!dexloc_map.count(dexloc)) {
       dexloc_map[dexloc] = dexloc_map.size();
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;

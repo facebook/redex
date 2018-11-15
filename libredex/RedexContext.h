@@ -190,31 +190,33 @@ struct RedexContext {
   bool m_record_keep_reasons{false};
 };
 
-class malformed_dex : public std::exception {
+class duplicate_class : public std::exception {
  public:
-  malformed_dex(const std::string& class_name,
-                const std::string& dex_1,
-                const std::string& dex_2)
+  duplicate_class(const std::string& class_name,
+                  const std::string& location_1,
+                  const std::string& location_2)
       : m_class_name(class_name),
-        m_dex_1(dex_1),
-        m_dex_2(dex_2),
-        m_msg(make_msg(class_name, dex_1, dex_2)) {}
+        m_location_1(location_1),
+        m_location_2(location_2),
+        m_msg(make_msg(class_name, location_1, location_2)) {}
 
   virtual const char* what() const throw() { return m_msg.c_str(); }
 
   const std::string m_class_name;
-  const std::string m_dex_1;
-  const std::string m_dex_2;
+  const std::string m_location_1;
+  const std::string m_location_2;
 
  private:
   const std::string m_msg;
 
   std::string make_msg(const std::string& class_name,
-                       const std::string& dex_1,
-                       const std::string& dex_2) {
+                       const std::string& location_1,
+                       const std::string& location_2) {
     std::ostringstream oss;
-    oss << "Found duplicate class in two different dex files. Class "
-        << m_class_name;
+    oss << "Found duplicate class in two different files. Class "
+        << m_class_name << "\n"
+        << "  1: " << location_1 << "\n"
+        << "  2: " << location_2 << "\n";
 
     return oss.str();
   }

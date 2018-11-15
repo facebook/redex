@@ -273,14 +273,14 @@ void RedexContext::publish_class(DexClass* cls) {
   std::lock_guard<std::mutex> l(m_type_system_mutex);
   const DexType* type = cls->get_type();
   if (m_type_to_class.find(type) != end(m_type_to_class)) {
-    const auto& prev_loc = m_type_to_class[type]->get_dex_location();
-    const auto& cur_loc = cls->get_dex_location();
+    const auto& prev_loc = m_type_to_class[type]->get_location();
+    const auto& cur_loc = cls->get_location();
     if (prev_loc == cur_loc) {
       TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
     } else {
       std::string class_name = show(cls);
-      std::string dex_1 = m_type_to_class[type]->get_dex_location();
-      std::string dex_2 = cls->get_dex_location();
+      std::string dex_1 = m_type_to_class[type]->get_location();
+      std::string dex_2 = cls->get_location();
 
       TRACE(MAIN,
             1,
@@ -290,7 +290,7 @@ void RedexContext::publish_class(DexClass* cls) {
             dex_1.c_str(),
             dex_2.c_str());
 
-      throw malformed_dex(class_name, dex_1, dex_2);
+      throw duplicate_class(class_name, dex_1, dex_2);
     }
   }
   m_type_to_class.emplace(type, cls);
