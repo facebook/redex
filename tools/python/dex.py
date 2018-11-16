@@ -1813,7 +1813,7 @@ class File:
         classes = self.get_classes()
         if classes:
             for cls in classes:
-                if cls.is_abstract():
+                if options.skip_abstract and cls.is_abstract():
                     continue
                 cls.dump(f=f)
                 methods = cls.get_methods()
@@ -3927,6 +3927,12 @@ def main():
                       dest='proguard',
                       help='Specify a progard file to use for demangling.',
                       default=None)
+    parser.add_option('--skip-abstract',
+                      action='store_true',
+                      dest='skip_abstract',
+                      help='Don\'t print information coming from abstract'
+                      ' classes when passing --code, --debug or --all.',
+                      default=False)
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
