@@ -118,8 +118,17 @@ std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
   for (auto cls : *m_classes) {
+    TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s\n", cls->c_str());
     auto const& dmethods = cls->get_dmethods();
     auto const& vmethods = cls->get_vmethods();
+    if (traceEnabled(OPUT, 3)) {
+      for (const auto &dmeth : dmethods) {
+        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s\n", dmeth->c_str());
+      }
+      for (const auto &vmeth : vmethods) {
+        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s\n", vmeth->c_str());
+      }
+    }
     methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
     methlist.insert(methlist.end(), vmethods.begin(), vmethods.end());
   }
@@ -829,8 +838,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
-    m_code_item_emits.emplace_back(code,
-                                   (dex_code_item*)(m_output + m_offset));
+    m_code_item_emits.emplace_back(code, (dex_code_item*)(m_output + m_offset));
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
   }
@@ -1608,6 +1616,8 @@ write_classes_to_dex(
   if (code_sort_mode.empty()) {
     code_sort_mode.push_back(SortMode::DEFAULT);
   }
+
+  TRACE(OPUT, 3, "[write_classes_to_dex][filename] %s\n", filename.c_str());
 
   DexOutput dout = DexOutput(filename.c_str(),
                              classes,

@@ -105,7 +105,8 @@
   TM(IFCS_ANALYSIS)      \
   TM(UNREF_INTF)         \
   TM(OPT_STORES)         \
-  TM(MEINT)
+  TM(MEINT)              \
+  TM(OPUT)
 
 enum TraceModule : int {
 #define TM(x) x,
