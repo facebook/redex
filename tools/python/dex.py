@@ -742,6 +742,16 @@ class debug_info_item(AutoParser):
 
     def dump_debug_info(self, f=sys.stdout, prefix=None):
         ops = self.get_ops()
+        if prefix:
+            f.write(prefix)
+        f.write('    ')
+        f.write('line_start={}({}) param_size={}({}) param_name=[{}]\n'.format(
+            self.line_start,
+            get_uleb128_byte_size(self.line_start),
+            self.parameters_size,
+            get_uleb128_byte_size(self.parameters_size),
+            ", ".join(map(lambda x: str(x), self.parameter_names)),
+        ))
         for op in ops:
             if prefix:
                 f.write(prefix)
