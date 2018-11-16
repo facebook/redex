@@ -109,6 +109,10 @@ namespace facebook {
 // strings from the string table for every single class load event for renamed
 // classes.
 //
+// The X helps our hacked Dalvik classloader recognize that a
+// class name is the output of the redex renamer and thus will
+// never be found in the Android platform.
+//
 class Locator {
   // Number of bits in the locator we reserve for store number
   constexpr static const uint32_t strnr_bits = 16;
@@ -147,9 +151,17 @@ class Locator {
 
   static inline Locator decodeBackward(const char* endpos) noexcept;
 
+  // We use a base-62 encoding for global class indices.
+  constexpr static const uint32_t global_class_index_digits_base = 62;
+  // Encoded global class indices are of the form "LX/000000;" with at most
+  // six digits.
+  constexpr static const uint32_t global_class_index_digits_max = 6;
+  constexpr static const uint32_t encoded_global_class_index_max = 3 + global_class_index_digits_max + 1 + 1;
+  static void encodeGlobalClassIndex(
+      uint32_t globalClassIndex, size_t digits, char buf[encoded_global_class_index_max]) noexcept;
   constexpr static const uint32_t invalid_global_class_index = 0xFFFFFFFF;
-  static inline uint32_t decodeGlobalClassIndex(
-      const char* descriptor) noexcept;
+      static inline uint32_t decodeGlobalClassIndex(
+          const char* descriptor) noexcept;
 
   Locator(uint32_t str, uint32_t dex, uint32_t cls)
       : strnr(str), dexnr(dex), clsnr(cls) {}
@@ -162,7 +174,7 @@ Locator::decodeBackward(const char* endpos) noexcept
   // backward, we decode big-endian.
 
   uint64_t value = 0;
-  const uint8_t* pos = (uint8_t*) (endpos - 1);
+  const uint8_t* pos = (uint8_t*)(endpos - 1);
   while (*pos >= bias) {
     value = value * base + (*pos-- - bias);
   }

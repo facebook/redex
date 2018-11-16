@@ -91,7 +91,7 @@ class RenameClassesPassV2 : public Pass {
 
   int m_base_strings_size = 0;
   int m_ren_strings_size = 0;
-  int m_padding = 0;
+  int m_digits = 0;
 
   // Config and rules
   bool m_rename_annotations;
