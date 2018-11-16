@@ -244,8 +244,19 @@ void rename_classes(
   });
 }
 
-void RenameClassesPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RenameClassesPass::run_pass(DexStoresVector& stores,
+                                 ConfigFiles& cfg,
+                                 PassManager& mgr) {
+  const JsonWrapper& json_cfg = cfg.get_json_config();
+  if (json_cfg.get("emit_name_based_locators", false)) {
+    // TODO: Purge the old RenameClassesPass entirely everywhere.
+    fprintf(stderr,
+            "[RenameClassesPass] error: Configuration option "
+            "emit_locator_strings is not compatible with RenameClassesPass. "
+            "Upgrade to RenameClassesPassV2 instead.\n");
+    exit(EXIT_FAILURE);
+  }
+
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   std::unordered_set<const DexType*> untouchables;

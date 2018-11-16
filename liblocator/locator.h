@@ -65,6 +65,50 @@ namespace facebook {
 // class loader.
 //
 
+//
+// About name-based locators and global class indices
+//
+// Generally, we use locator strings when we cannot deduce a class' location
+// otherwise. Before resorting to locator strings, our class loaders will also
+// try to first check if a class name is the result of a systematic renaming
+// process done by Redex that also allows us to determine the locator
+// information.
+// A renamed class' type descriptor is of the form "LX/nnnnnn;" where nnnnnn is
+// a base-62 encoding of its "global class index".
+// (The X helps our hacked Dalvik classloader recognize that a
+// class name is the output of the redex renamer and thus will
+// never be found in the Android platform.)
+// The classes in each dex have global class indices in a particular range
+// that doesn't overlap with any other dex. Conceptually, non-renamed classes
+// that interleave with renamed classes also occupy a position in the global
+// class index space. As a result, if the know the first global class index of
+// each dex, we can compute the store, dex and (local) class index from the
+// global class index of a renamed class.
+//
+// Similar to how general class locator strings as stored just in front of type
+// descriptors in the string table, the global class index range information
+// for a dex is stored in the string table as well, as two locator strings
+// immediately preceeding the (empty) string with index 0, in the form of
+// the locator string for first class in the dex, and the locator string for
+// the last class in the dex.
+//
+// At runtime, all this kicks in when the manifest.txt file contains
+// the line
+//   .emit_name_based_locator_strings
+// This line is added by Redex when renaming for name-based locators is enabled.
+// Then, our various class loaders would load the range information on startup,
+// and for class load requests  always first check if a type descriptor
+// represents a global class index, and then find the dex into whose range the
+// index falls, and then derive the locator information as described.
+// Only for classes that didn't get renamed, and for which the global class
+// index cannot be determined, the old locator string scheme still applies.
+//
+// In the class loader, the name-based scheme brings with it a single
+// locator-string read for each dex at start up time (to learn about dex index
+// ranges), while also getting rid of the subsequent need to read locator
+// strings from the string table for every single class load event for renamed
+// classes.
+//
 class Locator {
   // Number of bits in the locator we reserve for store number
   constexpr static const uint32_t strnr_bits = 16;
@@ -103,7 +147,10 @@ class Locator {
 
   static inline Locator decodeBackward(const char* endpos) noexcept;
 
- private:
+  constexpr static const uint32_t invalid_global_class_index = 0xFFFFFFFF;
+  static inline uint32_t decodeGlobalClassIndex(
+      const char* descriptor) noexcept;
+
   Locator(uint32_t str, uint32_t dex, uint32_t cls)
       : strnr(str), dexnr(dex), clsnr(cls) {}
 };
@@ -126,4 +173,36 @@ Locator::decodeBackward(const char* endpos) noexcept
   return Locator(str, dex, cls);
 }
 
+uint32_t Locator::decodeGlobalClassIndex(const char* descriptor) noexcept {
+  // strip away array
+  while (*descriptor == '[')
+    ++descriptor;
+
+  // remaining descriptor would have form "LX/nnnnnn;"
+  if (descriptor[0] != 'L' || descriptor[1] != 'X' || descriptor[2] != '/') {
+    return invalid_global_class_index;
+  }
+  descriptor += 3;
+
+  uint64_t value = 0;
+  char c = *(descriptor++);
+  while (true) {
+    if (c >= '0' && c <= '9') {
+      value += c - '0';
+    } else if (c >= 'A' && c <= 'Z') {
+      value += c - 'A' + 10;
+    } else if (c >= 'a' && c <= 'z') {
+      value += c - 'a' + 10 + 26;
+    } else {
+      return invalid_global_class_index;
+    }
+
+    c = *(descriptor++);
+    if (c == ';') {
+      return *descriptor == '\0' ? value : invalid_global_class_index;
+    }
+    value *= 62;
+  }
 }
+
+} // namespace facebook

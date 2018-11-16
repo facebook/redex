@@ -21,6 +21,7 @@
 #include "RedexResources.h"
 #include "Walkers.h"
 #include "Warning.h"
+#include <locator.h>
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (62)
@@ -118,18 +119,18 @@ void unpackage_private(Scope &scope) {
   });
 }
 
-static char getident(int num) {
+static char getident(uint32_t num) {
   assert(num >= 0 && num < BASE);
   if (num < 10) {
-    return '0' + num;
-  } else if (num >= 10 && num < 36){
-    return 'A' + num - 10;
+    return num + '0';
+  } else if (num >= 10 && num < 36) {
+    return num - 10 + 'A';
   } else {
-    return 'a' + num - 26 - 10;
+    return num - 10 - 26 + 'a';
   }
 }
 
-void get_next_ident(char *out, int num) {
+void get_next_ident(char* out, uint32_t num) {
   char* ptr = out;
   while (num) {
     *ptr++ = getident(num % BASE);
@@ -144,12 +145,7 @@ void get_next_ident(char *out, int num) {
   }
 }
 
-static int s_base_strings_size = 0;
-static int s_ren_strings_size = 0;
-static int s_sequence = 0;
-static int s_padding = 0;
-
-}
+} // namespace
 
 // Returns idx of the vector of packages if the given class name matches, or -1
 // if not found.
@@ -718,7 +714,8 @@ void RenameClassesPassV2::rename_classes(
   unpackage_private(scope);
 
   AliasMap aliases;
-  for(auto clazz: scope) {
+  uint32_t sequence = 0;
+  for (auto clazz : scope) {
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
 
@@ -733,46 +730,59 @@ void RenameClassesPassV2::rename_classes(
       if (dont_rename_reason_to_metric_per_rule(reason.code)) {
         std::string str = metric + "::" + std::string(reason.rule);
         mgr.incr_metric(str, 1);
-        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n",
-            oldname->c_str(), str.c_str());
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n", oldname->c_str(),
+              str.c_str());
       } else {
-        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n",
-            oldname->c_str(), metric.c_str());
+        TRACE(RENAME, 2, "'%s' NOT RENAMED due to %s'\n", oldname->c_str(),
+              metric.c_str());
       }
+      sequence++;
       continue;
     }
 
     mgr.incr_metric(METRIC_RENAMED_CLASSES, 1);
 
     char clzname[MAX_CLASS_NAME_LENGTH + 1];
-    const char* padding = "0000000000000";
-    get_next_ident(clzname, s_sequence);
+    const char* padding = "000000";
+    always_assert(strlen(padding) == MAX_CLASS_NAME_LENGTH);
+    always_assert(sequence != facebook::Locator::invalid_global_class_index);
+
+    get_next_ident(clzname, sequence);
     // The X helps our hacked Dalvik classloader recognize that a
     // class name is the output of the redex renamer and thus will
     // never be found in the Android platform.
     char descriptor[MAX_DESCRIPTOR_LENGTH];
-    always_assert((s_padding + strlen("LX/;") + 1) < MAX_DESCRIPTOR_LENGTH);
+    always_assert((m_padding + strlen("LX/;") + 1) < MAX_DESCRIPTOR_LENGTH);
     sprintf(descriptor, "LX/%.*s%s;",
-        (s_padding < (int)strlen(clzname)) ? 0 :
-            s_padding - (int)strlen(clzname),
-        padding,
-        clzname);
-    s_sequence++;
+            (m_padding < (int)strlen(clzname))
+                ? 0
+                : m_padding - (int)strlen(clzname),
+            padding, clzname);
+
+    always_assert_log(facebook::Locator::decodeGlobalClassIndex(descriptor) ==
+                          sequence,
+                      "global class index didn't roundtrip; %s generated from "
+                      "%u parsed to %u",
+                      descriptor, sequence,
+                      facebook::Locator::decodeGlobalClassIndex(descriptor));
+
+    TRACE(RENAME, 2, "'%s' ->  %s (%u)'\n", oldname->c_str(), descriptor,
+          sequence);
+    sequence++;
 
     auto exists = DexString::get_string(descriptor);
-    always_assert_log(
-        !exists, "Collision on class %s (%s)", oldname->c_str(), descriptor);
+    always_assert_log(!exists, "Collision on class %s (%s)", oldname->c_str(),
+                      descriptor);
 
     auto dstring = DexString::make_string(descriptor);
     aliases.add_class_alias(clazz, dstring);
     dtype->assign_name_alias(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
-//    proguard_map.update_class_mapping(old_str, new_str);
-    s_base_strings_size += strlen(oldname->c_str());
-    s_ren_strings_size += strlen(dstring->c_str());
+    //    proguard_map.update_class_mapping(old_str, new_str);
+    m_base_strings_size += strlen(oldname->c_str());
+    m_ren_strings_size += strlen(dstring->c_str());
 
-    TRACE(RENAME, 2, "'%s' ->  %s'\n", oldname->c_str(), descriptor);
     while (1) {
       std::string arrayop("[");
       arrayop += oldname->c_str();
@@ -792,7 +802,6 @@ void RenameClassesPassV2::rename_classes(
       arraytype->assign_name_alias(dstring);
     }
   }
-
 
   /* Now rewrite all const-string strings for force renamed classes. */
   auto match = std::make_tuple(
@@ -949,20 +958,17 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
                     "scope size %uz too large", scope.size());
   int total_classes = scope.size();
 
-  s_base_strings_size = 0;
-  s_ren_strings_size = 0;
-  s_sequence = 0;
-  // encode the whole sequence as base 62, [0 - 9 + a - z + A - Z]
-  s_padding = std::ceil(std::log(total_classes) / std::log(BASE));
+  // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]
+  m_padding = std::ceil(std::log(total_classes) / std::log(BASE));
   TRACE(RENAME, 1,
         "Total classes in scope for renaming: %d chosen padding: %d\n",
-        total_classes, s_padding);
+        total_classes, m_padding);
 
   rename_classes(scope, cfg, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 
   TRACE(RENAME, 1, "String savings, at least %d-%d = %d bytes \n",
-      s_base_strings_size, s_ren_strings_size,
-      s_base_strings_size - s_ren_strings_size);
+        m_base_strings_size, m_ren_strings_size,
+        m_base_strings_size - m_ren_strings_size);
 }

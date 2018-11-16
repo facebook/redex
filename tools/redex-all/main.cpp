@@ -707,11 +707,15 @@ void redex_backend(const PassManager& manager,
   const JsonWrapper& json_cfg = cfg.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
+  bool emit_name_based_locators = false;
   if (json_cfg.get("emit_locator_strings", false)) {
-    TRACE(LOC,
-          1,
-          "Will emit class-locator strings for classloader optimization\n");
-    locator_index = new LocatorIndex(make_locator_index(stores));
+    emit_name_based_locators =
+        json_cfg.get("emit_name_based_locator_strings", false);
+    TRACE(LOC, 1,
+          "Will emit%s class-locator strings for classloader optimization\n",
+          emit_name_based_locators ? " name-based" : "");
+    locator_index =
+        new LocatorIndex(make_locator_index(stores, emit_name_based_locators));
   }
 
   dex_stats_t output_totals;
@@ -730,7 +734,8 @@ void redex_backend(const PassManager& manager,
       PositionMapper::make(pos_output, pos_output_v2));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  for (auto& store : stores) {
+  for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
+    auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::ostringstream ss;
@@ -751,6 +756,8 @@ void redex_backend(const PassManager& manager,
           ss.str(),
           &store.get_dexen()[i],
           locator_index,
+          emit_name_based_locators,
+          store_number,
           i,
           cfg,
           pos_mapper.get(),

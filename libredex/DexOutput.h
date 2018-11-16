@@ -26,7 +26,8 @@ typedef std::unordered_map<DexFieldRef*, uint32_t> dexfield_to_idx;
 typedef std::unordered_map<DexMethodRef*, uint32_t> dexmethod_to_idx;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
-LocatorIndex make_locator_index(DexStoresVector& stores);
+LocatorIndex make_locator_index(DexStoresVector& stores,
+                                bool emit_name_based_locators);
 
 enum class SortMode {
   CLASS_ORDER,
@@ -91,14 +92,16 @@ class DexOutputIdx {
 };
 
 dex_stats_t write_classes_to_dex(
-  std::string filename,
-  DexClasses* classes,
-  LocatorIndex* locator_index /* nullable */,
-  size_t dex_number,
-  const ConfigFiles& cfg,
-  PositionMapper* line_mapper,
-  std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);
+    std::string filename,
+    DexClasses* classes,
+    LocatorIndex* locator_index /* nullable */,
+    bool emit_name_based_locators,
+    size_t store_number,
+    size_t dex_number,
+    const ConfigFiles& cfg,
+    PositionMapper* line_mapper,
+    std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
