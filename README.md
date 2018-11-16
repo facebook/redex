@@ -185,7 +185,7 @@ source tree.
 
 # FAQ
 
-## I'm getting "Couldn't find zipalign. See README.md to resolve this"
+## I'm getting "Couldn't find zipalign. See README.md to resolve this." or other zipalign errors
 
 `zipalign` is an optimization step that is bundled with the Android SDK.  You
 need to tell redex where to find it.  For example, if you installed the SDK at
@@ -197,6 +197,8 @@ You can alternatively add `zipalign` to your PATH, for example:
 ```
 PATH=/path/to/android/sdk/build-tools/xx.y.zz:$PATH redex [... arguments ...]
 ```
+
+Additionally, it's possible zipalign itself failed. In this case the stderr will be reported to aid debugging (for example, zipalign fails if you provide an output path that already exists).
 
 ## My app fails to install with `Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]`
 

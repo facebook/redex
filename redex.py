@@ -272,13 +272,25 @@ def zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align):
     args = ['4', unaligned_apk_path, output_apk_path]
     if page_align:
         args = ['-p'] + args
+    success = False
     try:
-        subprocess.check_call(zipalign + args)
-    except subprocess.CalledProcessError:
-        print("Couldn't find zipalign. See README.md to resolve this.")
-        if not ignore_zipalign:
-            raise Exception('No zipalign executable found')
-        shutil.copy(unaligned_apk_path, output_apk_path)
+        p = subprocess.Popen(zipalign + args, stderr=subprocess.PIPE)
+        err = p.communicate()[1]
+        if p.returncode != 0:
+            error = err.decode(sys.getfilesystemencoding())
+            print("Failed to execute zipalign, stderr: {}".format(error))
+        else:
+            success = True
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            print("Couldn't find zipalign. See README.md to resolve this.")
+        else:
+            print("Failed to execute zipalign, strerror: {}".format(e.strerror))
+    finally:
+        if not success:
+            if not ignore_zipalign:
+                raise Exception('Zipalign failed to run')
+            shutil.copy(unaligned_apk_path, output_apk_path)
     os.remove(unaligned_apk_path)
 
 
