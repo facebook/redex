@@ -16,7 +16,7 @@ class FinalInlinePassV2 : public Pass {
   struct Config {
     std::unordered_set<const DexType*> black_list_types;
     bool aggressively_delete;
-    Config(): aggressively_delete(true) {}
+    Config() : aggressively_delete(true) {}
   };
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}

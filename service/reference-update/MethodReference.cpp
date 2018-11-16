@@ -43,10 +43,10 @@ void patch_callsite_var_additional_args(
   if (is_static(callee) || is_any_init(callee) || !is_private(callee)) {
     set_public(callee);
   }
-  always_assert_log(
-      is_public(callee) || callee->get_class() == caller->get_class(),
-      "Updating a call site of %s when not accessible from %s\n",
-      SHOW(callee), SHOW(caller));
+  always_assert_log(is_public(callee) ||
+                        callee->get_class() == caller->get_class(),
+                    "Updating a call site of %s when not accessible from %s\n",
+                    SHOW(callee), SHOW(caller));
 
   auto code = caller->get_code();
   std::vector<uint16_t> additional_arg_regs;
@@ -65,14 +65,14 @@ void patch_callsite_var_additional_args(
   for (size_t i = 0; i < call_insn->srcs_size(); i++) {
     args.push_back(call_insn->src(i));
   }
-    for (const auto additional_arg_reg : additional_arg_regs) {
-      args.push_back(additional_arg_reg);
-    }
+  for (const auto additional_arg_reg : additional_arg_regs) {
+    args.push_back(additional_arg_reg);
+  }
   auto invoke = make_invoke(callee, call_insn->opcode(), args);
   std::vector<IRInstruction*> new_call_insns;
-    for (const auto load_additional_arg : load_additional_args) {
-      new_call_insns.push_back(load_additional_arg);
-    }
+  for (const auto load_additional_arg : load_additional_args) {
+    new_call_insns.push_back(load_additional_arg);
+  }
   new_call_insns.push_back(invoke);
   code->insert_after(call_insn, new_call_insns);
 
@@ -116,9 +116,8 @@ void update_call_refs_simple(
   walk::parallel::code(scope, patcher);
 }
 
-void patch_callsite(
-    const CallSiteSpec& spec,
-    const boost::optional<uint32_t>& additional_arg) {
+void patch_callsite(const CallSiteSpec& spec,
+                    const boost::optional<uint32_t>& additional_arg) {
   std::vector<uint32_t> additional_args;
   if (additional_arg != boost::none) {
     additional_args.push_back(additional_arg.get());
@@ -158,14 +157,11 @@ CallSites collect_call_refs(const Scope& scope,
     return call_sites;
   };
 
-  CallSites call_sites =
-      walk::parallel::reduce_methods<CallSites>(
-          scope,
-          patcher,
-          [](CallSites left, CallSites right) {
-            left.insert(left.end(), right.begin(), right.end());
-            return left;
-          });
+  CallSites call_sites = walk::parallel::reduce_methods<CallSites>(
+      scope, patcher, [](CallSites left, CallSites right) {
+        left.insert(left.end(), right.begin(), right.end());
+        return left;
+      });
   return call_sites;
 }
 

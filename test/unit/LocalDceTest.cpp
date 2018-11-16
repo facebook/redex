@@ -9,8 +9,8 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "InstructionLowering.h"
 #include "IRCode.h"
+#include "InstructionLowering.h"
 #include "LocalDce.h"
 
 struct LocalDceTryTest : testing::Test {
@@ -26,9 +26,7 @@ struct LocalDceTryTest : testing::Test {
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
-  ~LocalDceTryTest() {
-    delete g_redex;
-  }
+  ~LocalDceTryTest() { delete g_redex; }
 };
 
 // We used to wrongly delete try items when just one of the the TRY_START /

@@ -62,9 +62,9 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
   return nullptr;
 }
 
-template<class DexMember>
-bool has_any_annotation(
-    DexMember* member, std::unordered_set<DexType*> anno_types) {
+template <class DexMember>
+bool has_any_annotation(DexMember* member,
+                        std::unordered_set<DexType*> anno_types) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return false;

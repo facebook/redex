@@ -8,8 +8,8 @@
 #include <gtest/gtest.h>
 #include <iterator>
 
-#include "Creators.h"
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "DedupBlocksPass.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
@@ -54,8 +54,8 @@ struct DedupBlocksTest : testing::Test {
   }
 
   DexMethod* get_fresh_method(const std::string& name) {
-    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
-        m_type, DexString::make_string(name), m_proto));
+    DexMethod* method = static_cast<DexMethod*>(
+        DexMethod::make_method(m_type, DexString::make_string(name), m_proto));
     method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
     m_creator->add_method(method);
@@ -63,12 +63,8 @@ struct DedupBlocksTest : testing::Test {
   }
 
   void run_dedup_blocks() {
-    std::vector<Pass*> passes = {
-      new DedupBlocksPass()
-    };
-    std::vector<DexClass*> classes = {
-      m_class
-    };
+    std::vector<Pass*> passes = {new DedupBlocksPass()};
+    std::vector<DexClass*> classes = {m_class};
     run_passes(passes, classes);
   }
 

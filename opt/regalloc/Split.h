@@ -7,19 +7,15 @@
 
 #pragma once
 
-#include "Interference.h"
 #include "IRCode.h"
+#include "Interference.h"
 #include "Liveness.h"
 
 namespace regalloc {
 
 using reg_t = uint16_t;
 
-enum BlockMode {
-  FALLTHROUGH,
-  BRANCH,
-  TRYCATCH
-};
+enum BlockMode { FALLTHROUGH, BRANCH, TRYCATCH };
 
 struct SplitConstraints {
   // Map of catch blocks and number of incoming control flow edges on

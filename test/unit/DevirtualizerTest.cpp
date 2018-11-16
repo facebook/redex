@@ -5,14 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <memory>
 #include <gtest/gtest.h>
+#include <memory>
 
-#include "DexClass.h"
 #include "Creators.h"
+#include "DexClass.h"
 #include "DexUtil.h"
-#include "VirtualScope.h"
 #include "ScopeHelper.h"
+#include "VirtualScope.h"
 
 namespace {
 
@@ -59,8 +59,8 @@ std::vector<DexClass*> create_scope_2() {
   auto void_void = DexProto::make_proto(void_t, args);
 
   auto interf_t = DexType::make_type("LInterf;");
-  auto interf_cls = create_internal_class(
-      interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf_cls =
+      create_internal_class(interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf_cls, "intf_meth1", void_void, ACC_PUBLIC);
   create_abstract_method(interf_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf_cls);
@@ -113,8 +113,8 @@ std::vector<DexClass*> create_scope_4() {
   auto void_void = DexProto::make_proto(void_t, args);
 
   auto interf_t = DexType::make_type("LInterf;");
-  auto interf_cls = create_internal_class(
-      interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf_cls =
+      create_internal_class(interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf_cls, "intf_meth1", void_void, ACC_PUBLIC);
   create_abstract_method(interf_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf_cls);
@@ -148,8 +148,8 @@ std::vector<DexClass*> create_scope_5() {
   auto void_void = DexProto::make_proto(void_t, args);
 
   auto interf_t = DexType::make_type("LInterf;");
-  auto interf_cls = create_internal_class(
-      interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf_cls =
+      create_internal_class(interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf_cls, "intf_meth1", void_void, ACC_PUBLIC);
   create_abstract_method(interf_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf_cls);
@@ -189,7 +189,7 @@ std::vector<DexClass*> create_scope_6() {
   always_assert_log(a_t != nullptr, "class A must be defined in scope already");
   auto interf_t = DexType::get_type("LInterf;");
   always_assert_log(a_t != nullptr,
-      "interface Interf must be defined in scope already");
+                    "interface Interf must be defined in scope already");
 
   auto c_t = DexType::make_type("LC;");
   auto c_cls = create_internal_class(c_t, a_t, {interf_t});
@@ -297,8 +297,8 @@ std::vector<DexClass*> create_scope_9() {
   always_assert_log(a_t != nullptr, "class A must be defined in scope already");
 
   auto interf1_t = DexType::make_type("LInterf1;");
-  auto interf1_cls = create_internal_class(
-      interf1_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf1_cls =
+      create_internal_class(interf1_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf1_cls, "intf_meth1", int_void, ACC_PUBLIC);
   scope.push_back(interf1_cls);
 
@@ -315,15 +315,15 @@ std::vector<DexClass*> create_scope_9() {
  * interface Interf { void intf_meth1(); void intf_meth2(); }
  * interface Interf1 { void intf_meth2(); }
  * class A { void override1() {} void final1() {} }
- * class AA extends A { void override1() {} void intf_meth1() {} void final1(int) {} }
- * class AAA extends AA implements Interf { void final2() {} void intf_meth2() {} }
- * class AAB extends AA implements Interf { void final2() {} }
- * class AABA extends AAB { void override1() void intf_meth2() {} }
- * class AB extends A { void override1() {} void final1(int) {} }
- * class ABA extends AB implements Interf {
- *    void override1() {} void intf_meth1() {} void final2() {} }
- * class ABAA extends ABA implements Interf1 { void intf_meth2() {} void final1(int) {} }
- * class ABAB extends AB { void intf_meth2() {} void final1(int) {} }
+ * class AA extends A { void override1() {} void intf_meth1() {} void
+ * final1(int) {} } class AAA extends AA implements Interf { void final2() {}
+ * void intf_meth2() {} } class AAB extends AA implements Interf { void final2()
+ * {} } class AABA extends AAB { void override1() void intf_meth2() {} } class
+ * AB extends A { void override1() {} void final1(int) {} } class ABA extends AB
+ * implements Interf { void override1() {} void intf_meth1() {} void final2() {}
+ * } class ABAA extends ABA implements Interf1 { void intf_meth2() {} void
+ * final1(int) {} } class ABAB extends AB { void intf_meth2() {} void
+ * final1(int) {} }
  */
 std::vector<DexClass*> create_scope_10() {
   std::vector<DexClass*> scope = create_empty_scope();
@@ -335,7 +335,6 @@ std::vector<DexClass*> create_scope_10() {
   auto void_void = DexProto::make_proto(void_t, no_args);
   auto int_args = DexTypeList::make_type_list({int_t});
   auto int_void = DexProto::make_proto(void_t, int_args);
-
 
   auto interf_t = DexType::make_type("LInterf;");
   auto interf1_t = DexType::make_type("LInterf1;");
@@ -350,12 +349,13 @@ std::vector<DexClass*> create_scope_10() {
   auto abab_t = DexType::make_type("LABAB;");
 
   // push interfaces
-  auto interf_cls = create_internal_class(
-      interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf_cls =
+      create_internal_class(interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf_cls, "intf_meth1", void_void, ACC_PUBLIC);
   create_abstract_method(interf_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf_cls);
-  auto interf1_cls = create_internal_class(interf1_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf1_cls =
+      create_internal_class(interf1_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf1_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf1_cls);
 
@@ -404,7 +404,7 @@ std::vector<DexClass*> create_scope_10() {
 // Assert utilities for tests
 //
 bool check_names(const std::vector<DexMethod*>& methods,
-    const std::vector<DexString*>& names) {
+                 const std::vector<DexString*>& names) {
   for (const auto& method : methods) {
     if (std::find(names.begin(), names.end(), method->get_name()) ==
         names.end()) {
@@ -415,7 +415,7 @@ bool check_names(const std::vector<DexMethod*>& methods,
 }
 
 bool check_classes(const std::vector<DexMethod*>& methods,
-    const std::vector<DexType*>& types) {
+                   const std::vector<DexType*>& types) {
   for (const auto& method : methods) {
     if (std::find(types.begin(), types.end(), method->get_class()) ==
         types.end()) {
@@ -425,7 +425,7 @@ bool check_classes(const std::vector<DexMethod*>& methods,
   return true;
 }
 
-}
+} // namespace
 
 //
 // Tests
@@ -522,10 +522,9 @@ TEST(InterfaceWithImplInBaseMultipleClasses3Final, empty) {
   EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[2]->get_name()->c_str(), "final1");
-  std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;") };
+  std::vector<DexType*> types = {DexType::get_type("LB;"),
+                                 DexType::get_type("LC;"),
+                                 DexType::get_type("LE;")};
   EXPECT_TRUE(check_classes(methods, types));
   delete g_redex;
 }
@@ -535,17 +534,14 @@ TEST(InterfaceWithImplInBaseMultipleClassesAndOverloads6Final, empty) {
   std::vector<DexClass*> scope = create_scope_8();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 6);
-  std::vector<DexString*> names = {
-      DexString::get_string("final1"),
-      DexString::get_string("intf_meth1"),
-      DexString::get_string("intf_meth2") };
+  std::vector<DexString*> names = {DexString::get_string("final1"),
+                                   DexString::get_string("intf_meth1"),
+                                   DexString::get_string("intf_meth2")};
   EXPECT_TRUE(check_names(methods, names));
   std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;"),
-      DexType::get_type("LF;"),
-      DexType::get_type("LG;") };
+      DexType::get_type("LB;"), DexType::get_type("LC;"),
+      DexType::get_type("LE;"), DexType::get_type("LF;"),
+      DexType::get_type("LG;")};
   EXPECT_TRUE(check_classes(methods, types));
   delete g_redex;
 }
@@ -559,10 +555,9 @@ TEST(InterfacesWithImplInBaseMultipleClassesAndOverloads3Final, empty) {
   EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[2]->get_name()->c_str(), "final1");
-  std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;") };
+  std::vector<DexType*> types = {DexType::get_type("LB;"),
+                                 DexType::get_type("LC;"),
+                                 DexType::get_type("LE;")};
   EXPECT_TRUE(check_classes(methods, types));
   delete g_redex;
 }
@@ -573,16 +568,13 @@ TEST(GenericRichHierarchy, empty) {
   // std::reverse(scope.begin(), scope.end());
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 5);
-  std::vector<DexString*> names = {
-      DexString::get_string("final1"),
-      DexString::get_string("final2") };
+  std::vector<DexString*> names = {DexString::get_string("final1"),
+                                   DexString::get_string("final2")};
   EXPECT_TRUE(check_names(methods, names));
   std::vector<DexType*> types = {
-      DexType::get_type("LA;"),
-      DexType::get_type("LAA;"),
-      DexType::get_type("LAAA;"),
-      DexType::get_type("LAAB;"),
-      DexType::get_type("LABA;") };
+      DexType::get_type("LA;"), DexType::get_type("LAA;"),
+      DexType::get_type("LAAA;"), DexType::get_type("LAAB;"),
+      DexType::get_type("LABA;")};
   EXPECT_TRUE(check_classes(methods, types));
   delete g_redex;
 }

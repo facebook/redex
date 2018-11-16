@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "DexAccess.h"
+#include "DexClass.h"
 
 const int OBJ_METH_NAMES = 9;
 const int OBJ_METHS = 11;
@@ -98,11 +98,9 @@ std::vector<DexClass*> create_scope_6();
  * interface Intf2 { void g(int); }
  * class java.lang.Object { // Object methods ... }
  * class A { void f() {} }
- *   class F extends A { void f(int) {} boolean equals(Object) {} void g(int) {} }
- *   class G extends F { void g(int) {} }
- *     class H extends G implements Intf2 { void g(int) {} }
- *       class I extends H { void g(int) {} }
- *       class J extends H {}
+ *   class F extends A { void f(int) {} boolean equals(Object) {} void g(int) {}
+ * } class G extends F { void g(int) {} } class H extends G implements Intf2 {
+ * void g(int) {} } class I extends H { void g(int) {} } class J extends H {}
  *     class K extends G { void g(int) {} }
  *   class L extends F { void g(int) {} }
  * class B implements Intf1 { void g() {} void f() {} }

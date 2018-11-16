@@ -9,11 +9,11 @@
 
 #include <boost/range/adaptor/map.hpp>
 
+#include "BinarySerialization.h"
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeSet.h"
 #include "Timer.h"
 #include "Walkers.h"
-#include "BinarySerialization.h"
 
 using namespace method_override_graph;
 

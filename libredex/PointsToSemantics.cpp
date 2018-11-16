@@ -83,36 +83,27 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
 
 namespace pts_impl {
 
-#define OP_STRING_TABLE                 \
-  {                                     \
-    OP_STRING(PTS_CONST_STRING),        \
-    OP_STRING(PTS_CONST_CLASS),         \
-    OP_STRING(PTS_NEW_OBJECT),          \
-    OP_STRING(PTS_GET_CLASS),           \
-    OP_STRING(PTS_CHECK_CAST),          \
-    OP_STRING(PTS_GET_EXCEPTION),       \
-    OP_STRING(PTS_LOAD_PARAM),          \
-    OP_STRING(PTS_RETURN),              \
-    OP_STRING(PTS_DISJUNCTION),         \
-    OP_STRING(PTS_IGET),                \
-    OP_STRING(PTS_SGET),                \
-    OP_STRING(PTS_IPUT),                \
-    OP_STRING(PTS_SPUT),                \
-    OP_STRING(PTS_IGET_SPECIAL),        \
-    OP_STRING(PTS_IPUT_SPECIAL),        \
-    OP_STRING(PTS_INVOKE_VIRTUAL),      \
-    OP_STRING(PTS_INVOKE_SUPER),        \
-    OP_STRING(PTS_INVOKE_DIRECT),       \
-    OP_STRING(PTS_INVOKE_INTERFACE),    \
-    OP_STRING(PTS_INVOKE_STATIC),       \
-  }                                     \
+#define OP_STRING_TABLE                                                        \
+  {                                                                            \
+    OP_STRING(PTS_CONST_STRING), OP_STRING(PTS_CONST_CLASS),                   \
+        OP_STRING(PTS_NEW_OBJECT), OP_STRING(PTS_GET_CLASS),                   \
+        OP_STRING(PTS_CHECK_CAST), OP_STRING(PTS_GET_EXCEPTION),               \
+        OP_STRING(PTS_LOAD_PARAM), OP_STRING(PTS_RETURN),                      \
+        OP_STRING(PTS_DISJUNCTION), OP_STRING(PTS_IGET), OP_STRING(PTS_SGET),  \
+        OP_STRING(PTS_IPUT), OP_STRING(PTS_SPUT), OP_STRING(PTS_IGET_SPECIAL), \
+        OP_STRING(PTS_IPUT_SPECIAL), OP_STRING(PTS_INVOKE_VIRTUAL),            \
+        OP_STRING(PTS_INVOKE_SUPER), OP_STRING(PTS_INVOKE_DIRECT),             \
+        OP_STRING(PTS_INVOKE_INTERFACE), OP_STRING(PTS_INVOKE_STATIC),         \
+  }
 
-#define OP_STRING(X) {X, #X}
+#define OP_STRING(X) \
+  { X, #X }
 std::unordered_map<PointsToOperationKind, std::string, std::hash<int>>
     op_to_string_table = OP_STRING_TABLE;
 #undef OP_STRING
 
-#define OP_STRING(X) {#X, X}
+#define OP_STRING(X) \
+  { #X, X }
 std::unordered_map<std::string, PointsToOperationKind> string_to_op_table =
     OP_STRING_TABLE;
 #undef OP_STRING
@@ -165,9 +156,7 @@ boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
   std::string name_str;
   std::string rtype_str;
   s_expr signature;
-  if (!s_patn({s_patn(&type_str),
-               s_patn(&name_str),
-               s_patn(&rtype_str),
+  if (!s_patn({s_patn(&type_str), s_patn(&name_str), s_patn(&rtype_str),
                s_patn({}, signature)})
            .match_with(e)) {
     return {};
@@ -620,7 +609,9 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
         o << "I";
         break;
       }
-      default: { always_assert(false); }
+      default: {
+        always_assert(false);
+      }
       }
       o << "}";
     }
@@ -993,7 +984,9 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_INTERFACE: {
       return is_object(insn->get_method()->get_proto()->get_rtype());
     }
-    default: { return false; }
+    default: {
+      return false;
+    }
     }
   }
 
@@ -1186,9 +1179,8 @@ class PointsToActionGenerator final {
     int32_t arg_pos = 0;
     for (DexType* dex_type : signature) {
       if (is_object(dex_type)) {
-        args.push_back(
-            {arg_pos,
-             get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});
+        args.push_back({arg_pos, get_variable_from_anchor_set(
+                                     state.get(insn->src(src_idx++)))});
       } else {
         // We skip this argument.
         ++src_idx;
@@ -1443,20 +1435,20 @@ class Shrinker final {
   VariableSet m_vars_to_keep;
 };
 
-#define KIND_STRING_TABLE         \
-  {                               \
-    KIND_STRING(PTS_APK),         \
-    KIND_STRING(PTS_ABSTRACT),    \
-    KIND_STRING(PTS_NATIVE),      \
-    KIND_STRING(PTS_STUB),        \
-  }                               \
+#define KIND_STRING_TABLE                                                     \
+  {                                                                           \
+    KIND_STRING(PTS_APK), KIND_STRING(PTS_ABSTRACT), KIND_STRING(PTS_NATIVE), \
+        KIND_STRING(PTS_STUB),                                                \
+  }
 
-#define KIND_STRING(X) {X, #X}
+#define KIND_STRING(X) \
+  { X, #X }
 std::unordered_map<MethodKind, std::string, std::hash<int>>
     method_kind_to_string_table = KIND_STRING_TABLE;
 #undef KIND_STRING
 
-#define KIND_STRING(X) {#X, X}
+#define KIND_STRING(X) \
+  { #X, X }
 std::unordered_map<std::string, MethodKind> string_to_method_kind_table =
     KIND_STRING_TABLE;
 #undef KIND_STRING
@@ -1497,10 +1489,9 @@ s_expr PointsToMethodSemantics::to_s_expr() const {
                  m_points_to_actions.end(),
                  std::back_inserter(actions),
                  [](const PointsToAction& a) { return a.to_s_expr(); });
-  return s_expr({dex_method_to_s_expr(m_dex_method),
-                 method_kind_to_s_expr(m_kind),
-                 s_expr(static_cast<int32_t>(m_variable_counter)),
-                 s_expr(actions)});
+  return s_expr(
+      {dex_method_to_s_expr(m_dex_method), method_kind_to_s_expr(m_kind),
+       s_expr(static_cast<int32_t>(m_variable_counter)), s_expr(actions)});
 }
 
 boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
@@ -1510,9 +1501,7 @@ boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
   std::string kind_str;
   int32_t var_counter;
   s_expr actions_expr;
-  if (!s_patn({s_patn(dex_method_expr),
-               s_patn(&kind_str),
-               s_patn(&var_counter),
+  if (!s_patn({s_patn(dex_method_expr), s_patn(&kind_str), s_patn(&var_counter),
                s_patn({}, actions_expr)})
            .match_with(e)) {
     return {};

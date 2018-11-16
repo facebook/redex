@@ -18,9 +18,9 @@ std::string dexdump_name_to_dot_name(const std::string& dexdump_name);
 
 template <class Container>
 void print_methods(std::ostream& output,
-                          const ProguardMap& pg_map,
-                          const std::string& class_name,
-                          const Container& methods);
+                   const ProguardMap& pg_map,
+                   const std::string& class_name,
+                   const Container& methods);
 
 void print_method(std::ostream& output,
                   const ProguardMap& pg_map,
@@ -29,9 +29,9 @@ void print_method(std::ostream& output,
 
 template <class Container>
 void print_fields(std::ostream& output,
-                         const ProguardMap& pg_map,
-                         const std::string& class_name,
-                         const Container& fields);
+                  const ProguardMap& pg_map,
+                  const std::string& class_name,
+                  const Container& fields);
 
 void print_field(std::ostream& output,
                  const ProguardMap& pg_map,
@@ -45,4 +45,4 @@ void print_class(std::ostream& output,
 void print_classes(std::ostream& output,
                    const ProguardMap& pg_map,
                    const Scope& classes);
-}
+} // namespace redex

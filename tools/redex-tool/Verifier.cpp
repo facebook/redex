@@ -5,20 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexClass.h"
+#include "DexUtil.h"
+#include "IRInstruction.h"
+#include "ReachableClasses.h"
 #include "Tool.h"
 #include "Walkers.h"
-#include "DexClass.h"
-#include "IRInstruction.h"
-#include "DexUtil.h"
-#include "ReachableClasses.h"
 
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 using refs_t = std::unordered_map<const DexClass*,
                                   std::set<DexClass*, dexclasses_comparator>>;
@@ -28,20 +28,20 @@ using allowed_store_map_t =
 
 namespace {
 
-const DexStore& find_store(const std::string& name, const DexStoresVector& stores) {
+const DexStore& find_store(const std::string& name,
+                           const DexStoresVector& stores) {
   for (auto& store : stores) {
     if (name == store.get_name()) {
       return store;
     }
   }
-  throw std::logic_error("Could not find store named "+name);
+  throw std::logic_error("Could not find store named " + name);
 }
 
-void build_allowed_stores_recurse(
-  const DexStoresVector& stores,
-  allowed_store_map_t& allowed_store_map,
-  const DexStore& store,
-  const DexStore& dep) {
+void build_allowed_stores_recurse(const DexStoresVector& stores,
+                                  allowed_store_map_t& allowed_store_map,
+                                  const DexStore& store,
+                                  const DexStore& dep) {
   // Insert dep and recurse
   allowed_store_map[dep.get_name()].insert(store.get_name());
   // Insert each dep and recurse
@@ -61,59 +61,60 @@ void build_allowed_stores_recurse(
  * STA -> { STC, STB, STA }
  *
  */
-void build_allowed_stores(
-  const DexStoresVector& stores,
-  allowed_store_map_t& allowed_store_map) {
+void build_allowed_stores(const DexStoresVector& stores,
+                          allowed_store_map_t& allowed_store_map) {
   for (const auto& store : stores) {
     build_allowed_stores_recurse(stores, allowed_store_map, store, store);
   }
 }
 
 /**
- * Helper function that scans all the opcodes in the application and produces a map of references
- * from the class containing the opcode to the class referenced by the opcode.
+ * Helper function that scans all the opcodes in the application and produces a
+ * map of references from the class containing the opcode to the class
+ * referenced by the opcode.
  *
  * @param scope all classes we're processing
  * @param dmethod_refs [out] all refs to dmethods in the application
  * @param class_refs [out] all refs to classes in the application
  *
  */
-void build_refs(
-    const Scope& scope,
-    refs_t& class_refs) {
+void build_refs(const Scope& scope, refs_t& class_refs) {
   // TODO: walk through annotations
   walk::opcodes(
-    scope,
-    [](const DexMethod*) { return true; },
-    [&](const DexMethod* meth, IRInstruction* insn) {
-      if (insn->has_type()) {
-        const auto tref = type_class(insn->get_type());
-        if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
-        return;
-      }
-      if (insn->has_field()) {
-        const auto tref = type_class(insn->get_field()->get_class());
-        if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
-        return;
-      }
-      if (insn->has_method()) {
-        // log methods class type, for virtual methods, this may not actually exist and true
-        // verification would require that the binding refers to a class that is valid.
-        const auto mref = type_class(insn->get_method()->get_class());
-        if (mref) class_refs[mref].emplace(type_class(meth->get_class()));
+      scope,
+      [](const DexMethod*) { return true; },
+      [&](const DexMethod* meth, IRInstruction* insn) {
+        if (insn->has_type()) {
+          const auto tref = type_class(insn->get_type());
+          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          return;
+        }
+        if (insn->has_field()) {
+          const auto tref = type_class(insn->get_field()->get_class());
+          if (tref) class_refs[tref].emplace(type_class(meth->get_class()));
+          return;
+        }
+        if (insn->has_method()) {
+          // log methods class type, for virtual methods, this may not actually
+          // exist and true verification would require that the binding refers
+          // to a class that is valid.
+          const auto mref = type_class(insn->get_method()->get_class());
+          if (mref) class_refs[mref].emplace(type_class(meth->get_class()));
 
-        // don't log return type or types of parameters for now, but this is how you might do it.
-        //const auto proto = insn->get_method()->get_proto();
-        // const auto rref = type_class(proto->get_rtype());
-        // if (rref) class_refs[rref].emplace(type_class(meth->get_class()));
-        // for (const auto arg : proto->get_args()->get_type_list()) {
-        //   const auto aref = type_class(arg);
-        //   if (aref) class_refs[aref].emplace(type_class(meth->get_class()));
-        // }
+          // don't log return type or types of parameters for now, but this is
+          // how you might do it.
+          // const auto proto = insn->get_method()->get_proto();
+          // const auto rref = type_class(proto->get_rtype());
+          // if (rref) class_refs[rref].emplace(type_class(meth->get_class()));
+          // for (const auto arg : proto->get_args()->get_type_list()) {
+          //   const auto aref = type_class(arg);
+          //   if (aref)
+          //   class_refs[aref].emplace(type_class(meth->get_class()));
+          // }
 
-        return;
-      }
-    });
+          return;
+        }
+      });
 }
 
 void verify(DexStoresVector& stores) {
@@ -129,7 +130,7 @@ void verify(DexStoresVector& stores) {
   }
   int references = 0;
   for (const auto& refs : class_refs) {
-    references += (int) refs.second.size();
+    references += (int)refs.second.size();
   }
 
   // Build allowed stor (references) map
@@ -147,15 +148,17 @@ void verify(DexStoresVector& stores) {
         always_assert(referer_store_it != cls_store_map.end());
         if (reference_store_it != cls_store_map.end()) {
           std::string referer_store_name = referer_store_it->second->get_name();
-          std::string reference_store_name = reference_store_it->second->get_name();
-          std::set<std::string> allowed_stores = allowed_store_map[reference_store_name];
+          std::string reference_store_name =
+              reference_store_it->second->get_name();
+          std::set<std::string> allowed_stores =
+              allowed_store_map[reference_store_name];
           if (allowed_stores.find(referer_store_name) == allowed_stores.end()) {
             fprintf(stderr,
-              "ILLEGAL REFERENCE from %s %s to %s %s\n",
-              store.get_name().c_str(),
-              referer->get_name()->c_str(),
-              reference_store_name.c_str(),
-              reference->get_name()->c_str());
+                    "ILLEGAL REFERENCE from %s %s to %s %s\n",
+                    store.get_name().c_str(),
+                    referer->get_name()->c_str(),
+                    reference_store_name.c_str(),
+                    reference->get_name()->c_str());
           }
         }
       }
@@ -163,7 +166,7 @@ void verify(DexStoresVector& stores) {
   }
 }
 
-} // namespace {
+} // namespace
 
 class Verifier : public Tool {
  public:
@@ -174,10 +177,9 @@ class Verifier : public Tool {
   }
 
   virtual void run(const po::variables_map& options) {
-    auto stores = init(
-      options["jars"].as<std::string>(),
-      options["apkdir"].as<std::string>(),
-      options["dexendir"].as<std::string>());
+    auto stores = init(options["jars"].as<std::string>(),
+                       options["apkdir"].as<std::string>(),
+                       options["dexendir"].as<std::string>());
     verify(stores);
   }
 

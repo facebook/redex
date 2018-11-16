@@ -449,9 +449,7 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
                         unsigned char binding,
                         unsigned char type,
                         int section_idx) {
-    Elf32_Sym sym = {str_idx,
-                     val,
-                     size,
+    Elf32_Sym sym = {str_idx, val, size,
                      // this is opposite of ELF_ST_BIND and ELF_ST_TYPE
                      static_cast<unsigned char>((binding << 4) | (type & 0xf)),
                      0, // must be zero
@@ -694,15 +692,10 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
   std::vector<Elf32_Phdr> prog_headers;
 
   // The bootstrapping program header
-  prog_headers.push_back(
-      Elf32_Phdr{PT_PHDR,
-                 sizeof(Elf32_Ehdr),
-                 sizeof(Elf32_Ehdr),
-                 sizeof(Elf32_Ehdr),
-                 static_cast<Elf32_Word>(sizeof(Elf32_Phdr) * num_prog_headers),
-                 static_cast<Elf32_Word>(sizeof(Elf32_Phdr) * num_prog_headers),
-                 PF_R,
-                 4});
+  prog_headers.push_back(Elf32_Phdr{
+      PT_PHDR, sizeof(Elf32_Ehdr), sizeof(Elf32_Ehdr), sizeof(Elf32_Ehdr),
+      static_cast<Elf32_Word>(sizeof(Elf32_Phdr) * num_prog_headers),
+      static_cast<Elf32_Word>(sizeof(Elf32_Phdr) * num_prog_headers), PF_R, 4});
 
   // LOAD start of elf file plus rodata.
   const auto rodata_addr = section_headers_.at(rodata_idx_).sh_addr;
@@ -718,27 +711,17 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
   case OatVersion::V_064:
   case OatVersion::V_067: {
     // LOAD text
-    prog_headers.push_back(Elf32_Phdr{PT_LOAD,
-                                      rodata_end,
-                                      rodata_end,
-                                      rodata_end,
-                                      0,
-                                      section_headers_.at(text_idx_).sh_size,
-                                      PF_R | PF_X,
-                                      0x1000});
+    prog_headers.push_back(Elf32_Phdr{
+        PT_LOAD, rodata_end, rodata_end, rodata_end, 0,
+        section_headers_.at(text_idx_).sh_size, PF_R | PF_X, 0x1000});
     break;
   }
   case OatVersion::V_079:
   case OatVersion::V_088: {
     // LOAD bss
-    prog_headers.push_back(Elf32_Phdr{PT_LOAD,
-                                      0,
-                                      rodata_end,
-                                      rodata_end,
-                                      0,
+    prog_headers.push_back(Elf32_Phdr{PT_LOAD, 0, rodata_end, rodata_end, 0,
                                       section_headers_.at(bss_idx_).sh_size,
-                                      PF_R | PF_W,
-                                      0x1000});
+                                      PF_R | PF_W, 0x1000});
   }
   // fallthrough
   case OatVersion::V_124:
@@ -748,14 +731,10 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
     const auto dynstr_addr = section_headers_.at(dynstr_idx_).sh_addr;
     const auto hash_addr = section_headers_.at(hash_idx_).sh_addr;
     const auto hash_size = section_headers_.at(hash_idx_).sh_size;
-    prog_headers.push_back(Elf32_Phdr{PT_LOAD,
-                                      dynstr_offset,
-                                      dynstr_addr,
-                                      dynstr_addr,
-                                      hash_addr + hash_size - dynstr_addr,
-                                      hash_addr + hash_size - dynstr_addr,
-                                      PF_R,
-                                      0x1000});
+    prog_headers.push_back(
+        Elf32_Phdr{PT_LOAD, dynstr_offset, dynstr_addr, dynstr_addr,
+                   hash_addr + hash_size - dynstr_addr,
+                   hash_addr + hash_size - dynstr_addr, PF_R, 0x1000});
     break;
   }
   case OatVersion::UNKNOWN:
@@ -766,22 +745,12 @@ void ElfWriter::write_program_headers(FileHandle& fh) {
   const auto dynamic_offset = section_headers_.at(dynamic_idx_).sh_offset;
   const auto dynamic_addr = section_headers_.at(dynamic_idx_).sh_addr;
   const auto dynamic_size = section_headers_.at(dynamic_idx_).sh_size;
-  prog_headers.push_back(Elf32_Phdr{PT_LOAD,
-                                    dynamic_offset,
-                                    dynamic_addr,
-                                    dynamic_addr,
-                                    dynamic_size,
-                                    dynamic_size,
-                                    PF_R | PF_W,
-                                    0x1000});
-  prog_headers.push_back(Elf32_Phdr{PT_DYNAMIC,
-                                    dynamic_offset,
-                                    dynamic_addr,
-                                    dynamic_addr,
-                                    dynamic_size,
-                                    dynamic_size,
-                                    PF_R | PF_W,
-                                    0x1000});
+  prog_headers.push_back(Elf32_Phdr{PT_LOAD, dynamic_offset, dynamic_addr,
+                                    dynamic_addr, dynamic_size, dynamic_size,
+                                    PF_R | PF_W, 0x1000});
+  prog_headers.push_back(Elf32_Phdr{PT_DYNAMIC, dynamic_offset, dynamic_addr,
+                                    dynamic_addr, dynamic_size, dynamic_size,
+                                    PF_R | PF_W, 0x1000});
 
   elf_header_.e_phentsize = sizeof(Elf32_Phdr);
   elf_header_.e_phnum = prog_headers.size();
@@ -803,15 +772,8 @@ Elf32_Word ElfWriter::add_section_header(Elf32_Word str_idx,
                                          Elf32_Word align,
                                          Elf32_Word entsize) {
 
-  section_headers_.push_back(Elf32_Shdr{str_idx,
-                                        sh_type,
-                                        sh_flags,
-                                        addr,
-                                        offset,
-                                        size,
-                                        link,
-                                        info,
-                                        align,
+  section_headers_.push_back(Elf32_Shdr{str_idx, sh_type, sh_flags, addr,
+                                        offset, size, link, info, align,
                                         entsize});
   return section_headers_.size() - 1;
 }

@@ -257,7 +257,9 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   scope.push_back(cls);
 
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
   FixpointIterator fp_iter(
       cg,
       [](const DexMethod* method,
@@ -681,7 +683,9 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -739,7 +743,9 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   auto expected = assembler::to_s_expr(m2->get_code());
 
@@ -793,7 +799,9 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   auto expected = assembler::to_s_expr(m2->get_code());
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -990,7 +998,9 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1042,7 +1052,9 @@ TEST_F(InterproceduralConstantPropagationTest, virtualMethodReturnValue) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   auto expected = assembler::to_s_expr(m1->get_code());
 
@@ -1092,7 +1104,9 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   creator.add_method(never_returns);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1156,7 +1170,9 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   creator.add_method(returns_constant);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;

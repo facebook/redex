@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -186,7 +186,6 @@ struct MethodBlock {
    */
   void check_cast(Location& src_and_dst, DexType* type);
 
-
   void instance_of(Location& obj, Location& dst, DexType* type);
 
   /**
@@ -353,7 +352,8 @@ struct MethodBlock {
 
   void push_instruction(IRInstruction* insn);
   MethodBlock* make_if_block(IRInstruction* insn);
-  MethodBlock* make_if_else_block(IRInstruction* insn, MethodBlock** true_block);
+  MethodBlock* make_if_else_block(IRInstruction* insn,
+                                  MethodBlock** true_block);
   MethodBlock* make_switch_block(IRInstruction* insn,
                                  std::map<SwitchIndices, MethodBlock*>& cases);
 
@@ -459,12 +459,12 @@ struct MethodCreator {
 
   IRList::iterator push_instruction(IRList::iterator curr, IRInstruction* insn);
   IRList::iterator make_if_block(IRList::iterator curr,
-                                    IRInstruction* insn,
-                                    IRList::iterator* false_block);
+                                 IRInstruction* insn,
+                                 IRList::iterator* false_block);
   IRList::iterator make_if_else_block(IRList::iterator curr,
-                                         IRInstruction* insn,
-                                         IRList::iterator* false_block,
-                                         IRList::iterator* true_block);
+                                      IRInstruction* insn,
+                                      IRList::iterator* false_block,
+                                      IRList::iterator* true_block);
   IRList::iterator make_switch_block(
       IRList::iterator curr,
       IRInstruction* opcode,
@@ -488,7 +488,7 @@ struct MethodCreator {
 struct ClassCreator {
   explicit ClassCreator(DexType* type, const std::string& location = "") {
     always_assert_log(type_class(type) == nullptr,
-        "class already exists for %s\n", SHOW(type));
+                      "class already exists for %s\n", SHOW(type));
     m_cls = new DexClass(location);
     m_cls->m_self = type;
     m_cls->m_access_flags = (DexAccessFlags)0;
@@ -503,16 +503,12 @@ struct ClassCreator {
   /**
    * Return the DexClass associated with this creator.
    */
-  DexClass* get_class() const {
-    return m_cls;
-  }
+  DexClass* get_class() const { return m_cls; }
 
   /**
    * Return the DexType associated with this creator.
    */
-  DexType* get_type() const {
-    return m_cls->get_type();
-  }
+  DexType* get_type() const { return m_cls->get_type(); }
 
   /**
    * Accessibility flags
@@ -522,16 +518,12 @@ struct ClassCreator {
   /**
    * Set the parent of the DexClass to be created.
    */
-  void set_super(DexType* super) {
-    m_cls->m_super_class = super;
-  }
+  void set_super(DexType* super) { m_cls->m_super_class = super; }
 
   /**
    * Set the access flags for the DexClass to be created.
    */
-  void set_access(DexAccessFlags access) {
-    m_cls->m_access_flags = access;
-  }
+  void set_access(DexAccessFlags access) { m_cls->m_access_flags = access; }
 
   /**
    * Set the external bit for the DexClass.
@@ -554,27 +546,22 @@ struct ClassCreator {
   /**
    * Add a DexField to the DexClass.
    */
-  void add_field(DexField* field) {
-    m_cls->add_field(field);
-  }
+  void add_field(DexField* field) { m_cls->add_field(field); }
 
   /**
    * Add a DexMethod to the DexClass.
    */
-  void add_method(DexMethod* method) {
-    m_cls->add_method(method);
-  }
+  void add_method(DexMethod* method) { m_cls->add_method(method); }
 
   /**
    * Create the DexClass. The creator should not be used after this call.
    */
   DexClass* create() {
-    always_assert_log(m_cls->m_self,
-                      "Self cannot be null in a DexClass");
+    always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
     if (m_cls->m_super_class == NULL) {
-      if(m_cls->m_self != get_object_type()) {
-        always_assert_log(m_cls->m_super_class,
-                          "No supertype found for %s", SHOW(m_cls->m_self));
+      if (m_cls->m_self != get_object_type()) {
+        always_assert_log(m_cls->m_super_class, "No supertype found for %s",
+                          SHOW(m_cls->m_self));
       }
     }
     m_cls->m_interfaces = DexTypeList::make_type_list(std::move(m_interfaces));
@@ -582,7 +569,7 @@ struct ClassCreator {
     return m_cls;
   }
 
-private:
+ private:
   DexClass* m_cls;
   std::deque<DexType*> m_interfaces;
 };

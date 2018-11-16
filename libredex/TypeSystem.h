@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "ClassHierarchy.h"
+#include "DexClass.h"
 #include "VirtualScope.h"
 
 #include <unordered_map>
@@ -47,7 +47,8 @@ class TypeSystem {
   const TypeSet& get_children(const DexType* type) const {
     const auto& children = m_class_scopes.get_class_hierarchy().find(type);
     return children != m_class_scopes.get_class_hierarchy().end()
-        ? children->second : empty_set;
+               ? children->second
+               : empty_set;
   }
 
   /**
@@ -163,8 +164,8 @@ class TypeSystem {
    * Return all the children of a given interface.
    * The type must be an interface (not a class).
    */
-  void get_all_interface_children(
-      const DexType* intf, TypeSet& children) const {
+  void get_all_interface_children(const DexType* intf,
+                                  TypeSet& children) const {
     const auto& direct_children = get_interface_children(intf);
     children.insert(direct_children.begin(), direct_children.end());
     for (const auto& child : direct_children) {
@@ -177,9 +178,7 @@ class TypeSystem {
    * The ClassScopes lifetime is tied to that of the TypeSystem, as
    * such it should not exceed it.
    */
-  const ClassScopes& get_class_scopes() const {
-    return m_class_scopes;
-  }
+  const ClassScopes& get_class_scopes() const { return m_class_scopes; }
 
   /**
    * Given a DexMethod return the scope the method is in.
@@ -215,11 +214,10 @@ class TypeSystem {
    * A call to select_from() with C with return only C.m() and D.m() which
    * are the only 2 methods in scope for C.
    */
-  std::vector<const DexMethod*> select_from(
-      const VirtualScope* scope, const DexType* type) const;
+  std::vector<const DexMethod*> select_from(const VirtualScope* scope,
+                                            const DexType* type) const;
 
  private:
   void make_instanceof_interfaces_table();
   void make_interfaces_table(const DexType* type);
-
 };

@@ -24,8 +24,7 @@ namespace regalloc {
 /*
  * Find the first instruction in a block (if any) that uses a given register.
  */
-static IRList::iterator find_first_use_in_block(reg_t use,
-                                                cfg::Block* block) {
+static IRList::iterator find_first_use_in_block(reg_t use, cfg::Block* block) {
   auto ii = InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
@@ -394,8 +393,8 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       }
       // Merge the child's node into the parent's
       ig->combine(parent, child);
-      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n",
-            parent, child, SHOW(insn));
+      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n", parent, child,
+            SHOW(insn));
       if (is_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
@@ -646,8 +645,8 @@ void Allocator::select_ranges(const IRCode* code,
                                            reg_transform->size,
                                            vreg_files,
                                            reg_transform->map);
-    fit_range_instruction(
-        ig, insn, range_base, vreg_files, reg_transform, spill_plan);
+    fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
+                          spill_plan);
   }
 }
 
@@ -681,8 +680,8 @@ void Allocator::select_params(const IRCode* code,
                                          reg_transform->size,
                                          vreg_files,
                                          reg_transform->map);
-  fit_params(
-      ig, param_insns, params_base, vreg_files, reg_transform, spill_plan);
+  fit_params(ig, param_insns, params_base, vreg_files, reg_transform,
+             spill_plan);
 }
 
 // Find out if there exist a
@@ -900,10 +899,9 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
  * If there are other instructions that define that range, the analysis is a
  * bit more complicated, so we just insert a load at the start of the method.
  */
-void Allocator::split_params(
-    const interference::Graph& ig,
-    const std::unordered_set<reg_t>& param_spills,
-    IRCode* code) {
+void Allocator::split_params(const interference::Graph& ig,
+                             const std::unordered_set<reg_t>& param_spills,
+                             IRCode* code) {
   auto load_locations = find_param_splits(param_spills, code);
   if (load_locations.size() == 0) {
     return;

@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "PassManager.h"
 #include "DexClass.h"
+#include "PassManager.h"
 
 class DelSuperPass : public Pass {
  public:

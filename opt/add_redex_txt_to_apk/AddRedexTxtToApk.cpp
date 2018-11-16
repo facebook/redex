@@ -32,7 +32,8 @@ void AddRedexTxtToApkPass::run_pass(DexStoresVector& /* unused */,
               << "http://fbredex.com/" << std::endl;
     redex_txt.close();
   } else {
-    opt_warn(CANT_WRITE_FILE, "Unable to write file %s\n", out_file_name.c_str());
+    opt_warn(
+        CANT_WRITE_FILE, "Unable to write file %s\n", out_file_name.c_str());
   }
 }
 

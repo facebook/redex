@@ -10,16 +10,16 @@
 #include <algorithm>
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
-#include "Walkers.h"
-#include "DexClass.h"
-#include "IRInstruction.h"
-#include "DexUtil.h"
-#include "ReachableClasses.h"
 #include "ClassHierarchy.h"
+#include "DexClass.h"
+#include "DexUtil.h"
+#include "IRInstruction.h"
+#include "ReachableClasses.h"
+#include "Walkers.h"
 
 #define MAX_DESCRIPTOR_LENGTH (1024)
 #define MAX_IDENT_CHAR (52)
@@ -47,7 +47,7 @@ static char getident(int num) {
   }
 }
 
-void get_next_ident(char *out, int &num) {
+void get_next_ident(char* out, int& num) {
   // *sigh* re-write when not tired.
   int low = num;
   int mid = (num / 52);
@@ -56,7 +56,7 @@ void get_next_ident(char *out, int &num) {
                     "Bailing, Ident %d, greater than maximum\n", num);
   if (top) {
     *out++ = getident(top - 1);
-    low -= (top *52*52);
+    low -= (top * 52 * 52);
   }
   if (mid) {
     mid -= (top * 52);
@@ -68,26 +68,24 @@ void get_next_ident(char *out, int &num) {
   num++;
 }
 
-void unpackage_private(Scope &scope) {
-  walk::methods(scope,
-      [&](DexMethod *method) {
-        if (is_package_protected(method)) set_public(method);
-      });
-  walk::fields(scope,
-      [&](DexField *field) {
-        if (is_package_protected(field)) set_public(field);
-      });
+void unpackage_private(Scope& scope) {
+  walk::methods(scope, [&](DexMethod* method) {
+    if (is_package_protected(method)) set_public(method);
+  });
+  walk::fields(scope, [&](DexField* field) {
+    if (is_package_protected(field)) set_public(field);
+  });
   for (auto clazz : scope) {
     if (is_package_protected(clazz)) set_public(clazz);
   }
 }
 
-bool should_rename(DexClass *clazz,
-    std::vector<std::string>& pre_patterns,
-    std::vector<std::string>& post_patterns,
-    std::unordered_set<const DexType*>& untouchables,
-    bool rename_annotations,
-    PassManager& mgr) {
+bool should_rename(DexClass* clazz,
+                   std::vector<std::string>& pre_patterns,
+                   std::vector<std::string>& post_patterns,
+                   std::unordered_set<const DexType*>& untouchables,
+                   bool rename_annotations,
+                   PassManager& mgr) {
   if (!rename_annotations && is_annotation(clazz)) {
     mgr.incr_metric(METRIC_CANT_RENAME_ANNOTATION, 1);
     return false;
@@ -138,20 +136,18 @@ bool should_rename(DexClass *clazz,
   return false;
 }
 
-void rename_classes(
-    Scope& scope,
-    std::vector<std::string>& pre_whitelist_patterns,
-    std::vector<std::string>& post_whitelist_patterns,
-    std::unordered_set<const DexType*>& untouchables,
-    bool rename_annotations,
-    PassManager& mgr) {
+void rename_classes(Scope& scope,
+                    std::vector<std::string>& pre_whitelist_patterns,
+                    std::vector<std::string>& post_whitelist_patterns,
+                    std::unordered_set<const DexType*>& untouchables,
+                    bool rename_annotations,
+                    PassManager& mgr) {
   unpackage_private(scope);
   int clazz_ident = 0;
   std::map<DexString*, DexString*, dexstrings_comparator> aliases;
-  for(auto clazz: scope) {
-    if (!should_rename(
-        clazz, pre_whitelist_patterns, post_whitelist_patterns,
-        untouchables, rename_annotations, mgr)) {
+  for (auto clazz : scope) {
+    if (!should_rename(clazz, pre_whitelist_patterns, post_whitelist_patterns,
+                       untouchables, rename_annotations, mgr)) {
       continue;
     }
     char clzname[4];
@@ -159,7 +155,6 @@ void rename_classes(
 
     auto dtype = clazz->get_type();
     auto oldname = dtype->get_name();
-
 
     // The X helps our hacked Dalvik classloader recognize that a
     // class name is the output of the redex renamer and thus will
@@ -179,7 +174,7 @@ void rename_classes(
     base_strings_size += strlen(dstring->c_str());
     TRACE(RENAME, 4, "'%s'->'%s'\n", oldname->c_str(), descriptor);
     while (1) {
-     std::string arrayop("[");
+      std::string arrayop("[");
       arrayop += oldname->c_str();
       oldname = DexString::get_string(arrayop.c_str());
       if (oldname == nullptr) {
@@ -196,7 +191,8 @@ void rename_classes(
       arraytype->assign_name_alias(dstring);
     }
   }
-  mgr.incr_metric(METRIC_RENAMED_CLASSES, match_short + match_long + match_inner);
+  mgr.incr_metric(METRIC_RENAMED_CLASSES,
+                  match_short + match_long + match_inner);
   /* Now we need to re-write the Signature annotations.  They use
    * Strings rather than Type's, so they have to be explicitly
    * handled.
@@ -208,7 +204,7 @@ void rename_classes(
    */
   for (auto apair : aliases) {
     char buf[MAX_DESCRIPTOR_LENGTH];
-    const char *sourcestr = apair.first->c_str();
+    const char* sourcestr = apair.first->c_str();
     size_t sourcelen = strlen(sourcestr);
     if (sourcestr[sourcelen - 1] != ';') continue;
     strcpy(buf, sourcestr);
@@ -221,8 +217,8 @@ void rename_classes(
     aliases[dstring] = target;
   }
   walk::annotations(scope, [&](DexAnnotation* anno) {
-    static DexType *dalviksig =
-      DexType::get_type("Ldalvik/annotation/Signature;");
+    static DexType* dalviksig =
+        DexType::get_type("Ldalvik/annotation/Signature;");
     if (anno->type() != dalviksig) return;
     auto elems = anno->anno_elems();
     for (auto elem : elems) {
@@ -235,8 +231,8 @@ void rename_classes(
         auto stringev = static_cast<DexEncodedValueString*>(strev);
         if (aliases.count(stringev->string())) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
-              stringev->string()->c_str(),
-              aliases[stringev->string()]->c_str());
+                stringev->string()->c_str(),
+                aliases[stringev->string()]->c_str());
           stringev->string(aliases[stringev->string()]);
         }
       }
@@ -270,17 +266,14 @@ void RenameClassesPass::run_pass(DexStoresVector& stores,
     }
   }
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, scope.size());
-  rename_classes(
-      scope, m_pre_filter_whitelist, m_post_filter_whitelist,
-      untouchables, m_rename_annotations, mgr);
+  rename_classes(scope, m_pre_filter_whitelist, m_post_filter_whitelist,
+                 untouchables, m_rename_annotations, mgr);
   TRACE(RENAME, 1,
-      "renamed classes: %d anon classes, %d from single char patterns, "
-      "%d from multi char patterns\n",
-      match_inner,
-      match_short,
-      match_long);
+        "renamed classes: %d anon classes, %d from single char patterns, "
+        "%d from multi char patterns\n",
+        match_inner, match_short, match_long);
   TRACE(RENAME, 1, "String savings, at least %d bytes \n",
-      base_strings_size - ren_strings_size);
+        base_strings_size - ren_strings_size);
 }
 
 static RenameClassesPass s_pass;

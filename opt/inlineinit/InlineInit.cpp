@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "Deleter.h"
 #include "InlineInit.h"
+#include "Deleter.h"
 #include "Inliner.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -47,7 +47,8 @@ void InlineInitPass::run_pass(DexStoresVector& stores,
                               PassManager& mgr) {
 
   if (!mgr.verify_none_enabled()) {
-    TRACE(INLINIT, 1, "Verify-none mode is disabled, skipping Inline Init...\n");
+    TRACE(
+        INLINIT, 1, "Verify-none mode is disabled, skipping Inline Init...\n");
     return;
   }
 

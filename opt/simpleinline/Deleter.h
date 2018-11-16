@@ -30,11 +30,10 @@ size_t delete_methods(
  * Walks all opcodes in scope to check if the method is called.
  * Uses the default resolver to map method references to method definitions.
  */
-inline size_t delete_methods(
-    std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable) {
+inline size_t delete_methods(std::vector<DexClass*>& scope,
+                             std::unordered_set<DexMethod*>& removable) {
   return delete_methods(scope, removable,
-      [](DexMethodRef* method, MethodSearch search) {
-        return resolve_method(method, search);
-  });
+                        [](DexMethodRef* method, MethodSearch search) {
+                          return resolve_method(method, search);
+                        });
 }

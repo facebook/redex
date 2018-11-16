@@ -24,14 +24,14 @@ void test(StripDebugInfoPass::Config config, const char* i, const char* o) {
   code->set_registers_size(3);
   StripDebugInfo(config).run(*code);
   auto expected_code = assembler::ircode_from_string(o);
-  EXPECT_EQ(
-      assembler::to_s_expr(code.get()),
-      assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(StripDebugInfoTest, noopWithoutDebugInfo) {
-  test({
-      .drop_all_dbg_info = true,
+  test(
+      {
+          .drop_all_dbg_info = true,
       },
       R"(
     (
@@ -51,12 +51,12 @@ TEST_F(StripDebugInfoTest, dropLineNumbersWithThrowing) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.baz:I"));
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.baz:I"));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  test({
-      .drop_line_nrs = true,
+  test(
+      {
+          .drop_line_nrs = true,
       },
       R"(
     (
@@ -78,8 +78,9 @@ TEST_F(StripDebugInfoTest, dropLineNumbersWithNonThrowing) {
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
-  test({
-      .drop_line_nrs = true,
+  test(
+      {
+          .drop_line_nrs = true,
       },
       R"(
     (

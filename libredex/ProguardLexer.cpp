@@ -20,8 +20,7 @@ namespace proguard_parser {
 
 bool is_deliminator(char ch) {
   return isspace(ch) || ch == '{' || ch == '}' || ch == '(' || ch == ')' ||
-         ch == ',' || ch == ';' || ch == ':' ||
-         ch == EOF;
+         ch == ',' || ch == ';' || ch == ':' || ch == EOF;
 }
 
 // An identifier can refer to a class name, a field name or a package name.
@@ -70,7 +69,8 @@ string read_path(istream& config, unsigned int* line) {
   return path;
 }
 
-vector<pair<string, unsigned int>> read_paths(istream& config, unsigned int* line) {
+vector<pair<string, unsigned int>> read_paths(istream& config,
+                                              unsigned int* line) {
   vector<pair<string, unsigned int>> paths;
   paths.push_back({read_path(config, line), *line});
   skip_whitespace(config, line);
@@ -270,7 +270,8 @@ vector<unique_ptr<Token>> lex(istream& config) {
         tokens.push_back(unique_ptr<Token>(new InJars(line)));
         vector<pair<string, unsigned int>> paths = read_paths(config, &line);
         for (const auto& path : paths) {
-          tokens.push_back(unique_ptr<Token>(new Filepath(path.second, path.first)));
+          tokens.push_back(
+              unique_ptr<Token>(new Filepath(path.second, path.first)));
         }
         continue;
       }
@@ -278,7 +279,8 @@ vector<unique_ptr<Token>> lex(istream& config) {
         tokens.push_back(unique_ptr<Token>(new OutJars(line)));
         vector<pair<string, unsigned int>> paths = read_paths(config, &line);
         for (const auto& path : paths) {
-          tokens.push_back(unique_ptr<Token>(new Filepath(path.second, path.first)));
+          tokens.push_back(
+              unique_ptr<Token>(new Filepath(path.second, path.first)));
         }
         continue;
       }
@@ -286,7 +288,8 @@ vector<unique_ptr<Token>> lex(istream& config) {
         tokens.push_back(unique_ptr<Token>(new LibraryJars(line)));
         vector<pair<string, unsigned int>> paths = read_paths(config, &line);
         for (const auto& path : paths) {
-          tokens.push_back(unique_ptr<Token>(new Filepath(path.second, path.first)));
+          tokens.push_back(
+              unique_ptr<Token>(new Filepath(path.second, path.first)));
         }
         continue;
       }
@@ -328,7 +331,8 @@ vector<unique_ptr<Token>> lex(istream& config) {
         tokens.push_back(unique_ptr<Token>(new KeepDirectories(line)));
         vector<pair<string, unsigned int>> paths = read_paths(config, &line);
         for (const auto& path : paths) {
-          tokens.push_back(unique_ptr<Token>(new Filepath(path.second, path.first)));
+          tokens.push_back(
+              unique_ptr<Token>(new Filepath(path.second, path.first)));
         }
         continue;
       }

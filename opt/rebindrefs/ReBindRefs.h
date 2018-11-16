@@ -14,5 +14,4 @@ class ReBindRefsPass : public Pass {
   ReBindRefsPass() : Pass("ReBindRefsPass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
 };

@@ -20,9 +20,7 @@ namespace {
 
 const IRInstruction* NULL_INSN = nullptr;
 
-void fields_mapping(IRList::iterator it,
-                    FieldsRegs* fregs,
-                    DexClass* builder) {
+void fields_mapping(IRList::iterator it, FieldsRegs* fregs, DexClass* builder) {
   always_assert(fregs != nullptr);
   always_assert(builder != nullptr);
   always_assert(it->type == MFLOW_OPCODE);
@@ -73,10 +71,10 @@ void fields_mapping(IRList::iterator it,
 std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
     const std::vector<cfg::Block*>& blocks, DexClass* builder) {
 
-  std::function<void(IRList::iterator, FieldsRegs*)> trans = [&](
-      IRList::iterator it, FieldsRegs* fregs) {
-    fields_mapping(it, fregs, builder);
-  };
+  std::function<void(IRList::iterator, FieldsRegs*)> trans =
+      [&](IRList::iterator it, FieldsRegs* fregs) {
+        fields_mapping(it, fregs, builder);
+      };
 
   return forwards_dataflow(blocks, FieldsRegs(builder), trans);
 }
@@ -550,8 +548,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
           continue;
         }
 
-      } else if (opcode == OPCODE_NEW_INSTANCE ||
-                 opcode == OPCODE_CHECK_CAST) {
+      } else if (opcode == OPCODE_NEW_INSTANCE || opcode == OPCODE_CHECK_CAST) {
         DexType* cls = insn->get_type();
         if (type_class(cls) == builder) {
           if (opcode == OPCODE_NEW_INSTANCE) num_builders++;
@@ -630,8 +627,7 @@ bool params_change_regs(DexMethod* method) {
   auto blocks = cfg::postorder_sort(code->cfg().blocks());
   std::reverse(blocks.begin(), blocks.end());
   uint16_t regs_size = code->get_registers_size();
-  const auto& param_insns =
-      InstructionIterable(code->get_param_instructions());
+  const auto& param_insns = InstructionIterable(code->get_param_instructions());
   always_assert(!is_static(method));
   // Skip the `this` param
   auto param_it = std::next(param_insns.begin());
@@ -741,8 +737,8 @@ std::vector<IRInstruction*> generate_load_params(
 DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   auto init = DexString::get_string("<init>");
   auto void_fields = make_proto_for(cls);
-  DexMethod* fields_constr = static_cast<DexMethod*>(DexMethod::make_method(
-      method->get_class(), init, void_fields));
+  DexMethod* fields_constr = static_cast<DexMethod*>(
+      DexMethod::make_method(method->get_class(), init, void_fields));
   fields_constr->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
 
   auto code = method->get_code();
@@ -755,8 +751,8 @@ DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   // Non-input registers for the method are all registers except the
   // 'this' register and the arguments (which in this case is just 1)
   uint16_t new_regs_size = regs_size - 2;
-  std::vector<IRInstruction*> load_params = generate_load_params(
-      fields, new_regs_size, field_to_reg);
+  std::vector<IRInstruction*> load_params =
+      generate_load_params(fields, new_regs_size, field_to_reg);
   new_code->set_registers_size(new_regs_size);
 
   std::vector<IRList::iterator> to_delete;
@@ -816,7 +812,7 @@ DexMethod* get_fields_constr(DexMethod* method, DexClass* cls) {
 }
 
 std::vector<IRList::iterator> get_invokes_for_method(IRCode* code,
-                                                        DexMethod* method) {
+                                                     DexMethod* method) {
   std::vector<IRList::iterator> fms;
   auto ii = InstructionIterable(code);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -839,7 +835,8 @@ std::vector<IRList::iterator> get_invokes_for_method(IRCode* code,
 
 /**
  * For the cases where the buildee accepts the builder as the only argument, we
- * create a new constructor, that will take all the builder's fields as arguments.
+ * create a new constructor, that will take all the builder's fields as
+ * arguments.
  */
 bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   DexType* buildee = get_buildee(builder->get_type());
@@ -847,9 +844,8 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   DexMethodRef* buildee_constr_ref = DexMethod::get_method(
       buildee,
       DexString::make_string("<init>"),
-      DexProto::make_proto(
-        get_void_type(),
-        DexTypeList::make_type_list({builder->get_type()})));
+      DexProto::make_proto(get_void_type(),
+                           DexTypeList::make_type_list({builder->get_type()})));
   if (!buildee_constr_ref || !buildee_constr_ref->is_def()) {
     // Nothing to search for.
     return true;
@@ -863,7 +859,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
 
   auto code = method->get_code();
   std::vector<IRList::iterator> buildee_constr_calls =
-    get_invokes_for_method(code, buildee_constr);
+      get_invokes_for_method(code, buildee_constr);
   if (buildee_constr_calls.size()) {
 
     DexMethod* fields_constr = get_fields_constr(buildee_constr, builder);
@@ -1025,13 +1021,12 @@ bool tainted_reg_escapes(
             // Don't consider builders that get passed to the buildee's
             // constructor. `update_buildee_constructor` will sort this
             // out later.
-            if (is_init(invoked) &&
-                invoked->get_class() == get_buildee(ty) &&
+            if (is_init(invoked) && invoked->get_class() == get_buildee(ty) &&
                 has_only_argument(invoked, ty)) {
 
               // If the 'fields constructor' already exist, don't continue.
-              if (get_fields_constr_if_exists(
-                    invoked, type_class(ty)) == nullptr) {
+              if (get_fields_constr_if_exists(invoked, type_class(ty)) ==
+                  nullptr) {
                 continue;
               }
             }
@@ -1201,7 +1196,7 @@ bool remove_builder_from(DexMethod* method,
 
   bool tried_constructor_inlining = false;
   while (get_non_trivial_init_methods(method->get_code(), builder->get_type())
-                 .size() > 0) {
+             .size() > 0) {
     tried_constructor_inlining = true;
 
     // Filter out builders for which the method contains super class invokes.

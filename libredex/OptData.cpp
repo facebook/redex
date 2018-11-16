@@ -194,9 +194,9 @@ void OptDataMapper::log_opt(OptReason opt,
 void OptDataMapper::log_nopt(NoptReason nopt,
                              const DexMethod* method,
                              const IRInstruction* insn) {
-   if (!m_logs_enabled) {
-     return;
-   }
+  if (!m_logs_enabled) {
+    return;
+  }
   std::lock_guard<std::mutex> guard(s_opt_log_mutex);
   always_assert_log(method != nullptr, "Can't log null method\n");
   always_assert_log(insn != nullptr, "Can't log null instruction\n");

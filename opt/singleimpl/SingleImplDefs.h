@@ -8,15 +8,15 @@
 #pragma once
 
 #include <memory>
-#include <vector>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
+#include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "SingleImpl.h"
-#include "ClassHierarchy.h"
 
 /**
  * Analyze and optimize data structures.
@@ -131,8 +131,10 @@ struct SingleImplAnalysis {
    * Create a SingleImplAnalysis from a given Scope.
    */
   static std::unique_ptr<SingleImplAnalysis> analyze(
-      const Scope& scope, const DexStoresVector& stores,
-      const TypeMap& single_impl, const TypeSet& intfs,
+      const Scope& scope,
+      const DexStoresVector& stores,
+      const TypeMap& single_impl,
+      const TypeSet& intfs,
       const ProguardMap& pg_map,
       const SingleImplConfig& config);
 
@@ -174,8 +176,7 @@ struct SingleImplAnalysis {
 /**
  * Run an optimization pass over a SingleImplAnalysis.
  */
-size_t optimize(
-    std::unique_ptr<SingleImplAnalysis> analysis,
-    const ClassHierarchy& ch,
-    Scope& scope,
-    const SingleImplConfig& config);
+size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis,
+                const ClassHierarchy& ch,
+                Scope& scope,
+                const SingleImplConfig& config);

@@ -42,8 +42,8 @@ DEBUG_ONLY bool method_breakup(
     for (auto callee : group) {
       callee->get_access() & ACC_STATIC ? stat++ : inst++;
     }
-    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
-        i, group.size(), inst, stat);
+    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n", i,
+          group.size(), inst, stat);
   }
   return true;
 }
@@ -51,17 +51,10 @@ DEBUG_ONLY bool method_breakup(
 // add any type on which an access is allowed and safe without accessibility
 // issues
 const char* safe_types_on_refs[] = {
-    "Ljava/lang/Object;",
-    "Ljava/lang/String;",
-    "Ljava/lang/Enum;",
-    "Ljava/lang/StringBuilder;",
-    "Ljava/lang/Boolean;",
-    "Ljava/lang/Class;",
-    "Ljava/lang/Long;",
-    "Ljava/lang/Integer;",
-    "Landroid/os/Bundle;",
-    "Ljava/nio/ByteBuffer;"
-};
+    "Ljava/lang/Object;",        "Ljava/lang/String;",  "Ljava/lang/Enum;",
+    "Ljava/lang/StringBuilder;", "Ljava/lang/Boolean;", "Ljava/lang/Class;",
+    "Ljava/lang/Long;",          "Ljava/lang/Integer;", "Landroid/os/Bundle;",
+    "Ljava/nio/ByteBuffer;"};
 
 /*
  * This is the maximum size of method that Dex bytecode can encode.
@@ -132,8 +125,8 @@ bool method_ok(DexType* type, DexMethodRef* meth) {
     if (strcmp(meth_name, "setVisibility") == 0) return true;
     return false;
   }
-  static auto il = DexType::get_type(
-      "Lcom/google/common/collect/ImmutableList;");
+  static auto il =
+      DexType::get_type("Lcom/google/common/collect/ImmutableList;");
   static auto al = DexType::get_type("Ljava/util/ArrayList;");
   if (il == type || al == type) {
     if (strcmp(meth_name, "get") == 0) return true;
@@ -165,7 +158,7 @@ bool method_ok(DexType* type, DexMethodRef* meth) {
   return false;
 }
 
-}
+} // namespace
 
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
@@ -173,23 +166,21 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const Config& config)
-        : resolver(resolve_fn)
-        , xstores(stores)
-        , m_scope(scope)
-        , m_config(config) {
+    : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-          if (callee != nullptr && callee->is_concrete() &&
-              candidates.find(callee) != candidates.end()) {
-            callee_caller[callee].push_back(meth);
-            caller_callee[meth].push_back(callee);
-          }
-        }
-      });
+                [&](DexMethod* meth, IRInstruction* insn) {
+                  if (is_invoke(insn->opcode())) {
+                    auto callee =
+                        resolver(insn->get_method(), opcode_to_search(insn));
+                    if (callee != nullptr && callee->is_concrete() &&
+                        candidates.find(callee) != candidates.end()) {
+                      callee_caller[callee].push_back(meth);
+                      caller_callee[meth].push_back(callee);
+                    }
+                  }
+                });
 }
 
 void MultiMethodInliner::inline_methods() {
@@ -332,9 +323,7 @@ void MultiMethodInliner::inline_inlinables(
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
-    TRACE(MMINL,
-          6,
-          "checking visibility usage of members in %s\n",
+    TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
           SHOW(callee));
     change_visibility(callee);
     info.calls_inlined++;
@@ -704,7 +693,8 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
     auto ref = insn->get_field();
     DexField* field = resolve_field(ref, is_sfield_op(insn->opcode())
-        ? FieldSearch::Static : FieldSearch::Instance);
+                                             ? FieldSearch::Static
+                                             : FieldSearch::Instance);
     if (field == nullptr) {
       info.escaped_field++;
       return true;
@@ -791,15 +781,15 @@ void MultiMethodInliner::invoke_direct_to_static() {
     mutators::make_static(method);
   }
   walk::opcodes(m_scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod*, IRInstruction* insn) {
-        auto op = insn->opcode();
-        if (op == OPCODE_INVOKE_DIRECT) {
-          if (m_make_static.count(
-              static_cast<DexMethod*>(insn->get_method()))) {
-            insn->set_opcode(OPCODE_INVOKE_STATIC);
-          }
-        }
-      });
+                [&](DexMethod*, IRInstruction* insn) {
+                  auto op = insn->opcode();
+                  if (op == OPCODE_INVOKE_DIRECT) {
+                    if (m_make_static.count(
+                            static_cast<DexMethod*>(insn->get_method()))) {
+                      insn->set_opcode(OPCODE_INVOKE_STATIC);
+                    }
+                  }
+                });
 }
 
 void adjust_opcode_counts(
@@ -830,10 +820,9 @@ using RegMap = transform::RegMap;
  * callee to M + k in the caller. It also inserts move instructions to map the
  * callee arguments to the newly allocated registers.
  */
-std::unique_ptr<RegMap> gen_callee_reg_map(
-    IRCode* caller_code,
-    const IRCode* callee_code,
-    IRList::iterator invoke_it) {
+std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
+                                           const IRCode* callee_code,
+                                           IRList::iterator invoke_it) {
   auto callee_reg_start = caller_code->get_registers_size();
   auto insn = invoke_it->insn;
   auto reg_map = std::make_unique<RegMap>();
@@ -844,16 +833,15 @@ std::unique_ptr<RegMap> gen_callee_reg_map(
   }
 
   // generate and insert the move instructions
-  auto param_insns =
-      InstructionIterable(callee_code->get_param_instructions());
+  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
     always_assert(param_it != param_end);
-    auto mov =
-        (new IRInstruction(opcode::load_param_to_move(param_it->insn->opcode())))
-            ->set_src(0, insn->src(i))
-            ->set_dest(callee_reg_start + param_it->insn->dest());
+    auto mov = (new IRInstruction(
+                    opcode::load_param_to_move(param_it->insn->opcode())))
+                   ->set_src(0, insn->src(i))
+                   ->set_dest(callee_reg_start + param_it->insn->dest());
     caller_code->insert_before(invoke_it, mov);
   }
   caller_code->set_registers_size(callee_reg_start +
@@ -895,13 +883,12 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
   auto insn = invoke_it->insn;
   auto callee_reg_start = caller_code->get_registers_size();
 
-  auto param_insns =
-      InstructionIterable(callee_code->get_param_instructions());
+  auto param_insns = InstructionIterable(callee_code->get_param_instructions());
   auto param_it = param_insns.begin();
   auto param_end = param_insns.end();
   for (size_t i = 0; i < insn->srcs_size(); ++i, ++param_it) {
-    always_assert_log(
-        param_it != param_end, "no param insns\n%s", SHOW(callee_code));
+    always_assert_log(param_it != param_end, "no param insns\n%s",
+                      SHOW(callee_code));
     reg_map[param_it->insn->dest()] = insn->src(i);
   }
   for (size_t i = 0; i < callee_code->get_registers_size(); ++i) {
@@ -919,7 +906,7 @@ void cleanup_callee_debug(IRCode* callee_code) {
   while (it != callee_code->end()) {
     auto& mei = *it++;
     if (mei.type == MFLOW_DEBUG) {
-      switch(mei.dbgop->opcode()) {
+      switch (mei.dbgop->opcode()) {
       case DBG_SET_PROLOGUE_END:
         callee_code->erase(callee_code->iterator_to(mei));
         break;
@@ -967,8 +954,7 @@ class MethodSplicer {
         m_mtcallee(mtcallee),
         m_callee_reg_map(callee_reg_map),
         m_invoke_position(invoke_position),
-        m_active_catch(active_catch) {
-  }
+        m_active_catch(active_catch) {}
 
   MethodItemEntry* clone(MethodItemEntry* mie) {
     auto result = m_mie_cloner.clone(mie);
@@ -993,16 +979,16 @@ class MethodSplicer {
         auto tentry = mie->tentry;
         // try ranges cannot be nested, so we flatten them here
         switch (tentry->type) {
-          case TRY_START:
-            m_mtcaller->insert_before(insert_pos,
-                *(new MethodItemEntry(TRY_END, m_active_catch)));
-            m_mtcaller->insert_before(insert_pos, *mie);
-            break;
-          case TRY_END:
-            m_mtcaller->insert_before(insert_pos, *mie);
-            m_mtcaller->insert_before(insert_pos,
-                *(new MethodItemEntry(TRY_START, m_active_catch)));
-            break;
+        case TRY_START:
+          m_mtcaller->insert_before(
+              insert_pos, *(new MethodItemEntry(TRY_END, m_active_catch)));
+          m_mtcaller->insert_before(insert_pos, *mie);
+          break;
+        case TRY_END:
+          m_mtcaller->insert_before(insert_pos, *mie);
+          m_mtcaller->insert_before(
+              insert_pos, *(new MethodItemEntry(TRY_START, m_active_catch)));
+          break;
         }
       } else {
         if (mie->type == MFLOW_POSITION && mie->pos->parent == nullptr) {
@@ -1090,7 +1076,8 @@ void inline_method(IRCode* caller_code,
   // find the move-result after the invoke, if any. Must be the first
   // instruction after the invoke
   auto move_res = pos;
-  while (move_res++ != caller_code->end() && move_res->type != MFLOW_OPCODE);
+  while (move_res++ != caller_code->end() && move_res->type != MFLOW_OPCODE)
+    ;
   if (!is_move_result(move_res->insn->opcode())) {
     move_res = caller_code->end();
   }
@@ -1098,8 +1085,7 @@ void inline_method(IRCode* caller_code,
   // find the last position entry before the invoke.
   const auto invoke_position = last_position_before(pos, caller_code);
   if (invoke_position) {
-    TRACE(INL, 3, "Inlining call at %s:%d\n",
-          invoke_position->file->c_str(),
+    TRACE(INL, 3, "Inlining call at %s:%d\n", invoke_position->file->c_str(),
           invoke_position->line);
   }
 
@@ -1111,11 +1097,8 @@ void inline_method(IRCode* caller_code,
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
 
-  auto splice = MethodSplicer(caller_code,
-                              callee_code,
-                              *callee_reg_map,
-                              invoke_position,
-                              caller_catch);
+  auto splice = MethodSplicer(caller_code, callee_code, *callee_reg_map,
+                              invoke_position, caller_catch);
   // Copy the callee up to the return. Everything else we push at the end
   // of the caller
   splice(pos, callee_code->begin(), ret_it);
@@ -1142,9 +1125,10 @@ void inline_method(IRCode* caller_code,
   // ensure that the caller's code after the inlined method retain their
   // original position
   if (invoke_position) {
-    caller_code->insert_before(pos,
-                    *(new MethodItemEntry(
-                        std::make_unique<DexPosition>(*invoke_position))));
+    caller_code->insert_before(
+        pos,
+        *(new MethodItemEntry(
+            std::make_unique<DexPosition>(*invoke_position))));
   }
 
   // remove invoke

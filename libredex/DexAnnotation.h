@@ -386,9 +386,7 @@ class DexAnnotationSet : public Gatherable {
     return m_annotations;
   }
   std::vector<DexAnnotation*>& get_annotations() { return m_annotations; }
-  void add_annotation(DexAnnotation* anno) {
-    m_annotations.emplace_back(anno);
-  }
+  void add_annotation(DexAnnotation* anno) { m_annotations.emplace_back(anno); }
   void vencode(DexOutputIdx* dodx,
                std::vector<uint32_t>& asetout,
                std::map<DexAnnotation*, uint32_t>& annoout);

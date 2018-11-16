@@ -16,4 +16,4 @@ enum class KeepThis {
 
 void make_static(DexMethod* method, KeepThis = KeepThis::Yes);
 
-}
+} // namespace mutators

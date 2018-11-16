@@ -27,4 +27,4 @@ using FieldStatsMap = std::unordered_map<DexField*, FieldStats>;
 
 FieldStatsMap analyze(const Scope& scope);
 
-}
+} // namespace field_op_tracker

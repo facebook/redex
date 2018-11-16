@@ -43,8 +43,7 @@ class StringIterator
   size_t get_instructions_removed() const { return m_instructions_removed; }
 
   Environment analyze_edge(
-      const EdgeId&,
-      const Environment& exit_state_at_source) const override {
+      const EdgeId&, const Environment& exit_state_at_source) const override {
     return exit_state_at_source;
   }
 

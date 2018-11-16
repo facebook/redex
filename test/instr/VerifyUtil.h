@@ -23,8 +23,8 @@ struct PreVerify : public RedexTest {
   PreVerify()
       : classes(load_classes_from_dex(std::getenv("dex_pre"),
                                       /* balloon */ false)),
-        resources(decode_resource_paths(std::getenv("extracted_resources"),
-                                        "pre")) {}
+        resources(
+            decode_resource_paths(std::getenv("extracted_resources"), "pre")) {}
 };
 
 struct PostVerify : public RedexTest {
@@ -42,8 +42,9 @@ DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_method_named(const DexClass& cls, const char* name);
 /* Find the first invoke instruction that calls a particular method name */
-DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
-    const char* mname);
+DexOpcodeMethod* find_invoke(const DexMethod* m,
+                             DexOpcode opcode,
+                             const char* mname);
 DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              std::vector<DexInstruction*>::iterator end,
                              DexOpcode opcode,

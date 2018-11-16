@@ -7,10 +7,10 @@
 
 #include <sstream>
 
-#include "DexDefs.h"
 #include "DexAccess.h"
-#include "DexDebugInstruction.h"
 #include "DexClass.h"
+#include "DexDebugInstruction.h"
+#include "DexDefs.h"
 #include "DexOutput.h"
 
 void DexDebugOpcodeSetFile::gather_strings(

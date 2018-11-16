@@ -67,7 +67,8 @@ void Transform::eliminate_redundant_sput(const ConstantEnvironment& env,
     }
     break;
   }
-  default: {}
+  default: {
+  }
   }
 }
 void Transform::simplify_instruction(const ConstantEnvironment& env,
@@ -110,7 +111,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     break;
   }
 
-  default: {}
+  default: {
+  }
   }
 }
 

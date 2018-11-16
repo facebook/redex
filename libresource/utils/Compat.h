@@ -32,11 +32,14 @@
 typedef off_t off64_t;
 
 static inline off64_t lseek64(int fd, off64_t offset, int whence) {
-    return lseek(fd, offset, whence);
+  return lseek(fd, offset, whence);
 }
 
-static inline ssize_t pread64(int fd, void* buf, size_t nbytes, off64_t offset) {
-    return pread(fd, buf, nbytes, offset);
+static inline ssize_t pread64(int fd,
+                              void* buf,
+                              size_t nbytes,
+                              off64_t offset) {
+  return pread(fd, buf, nbytes, offset);
 }
 
 #endif /* __APPLE__ */
@@ -73,12 +76,14 @@ static inline ssize_t pread64(int fd, void* buf, size_t nbytes, off64_t offset) 
  */
 #ifndef TEMP_FAILURE_RETRY
 /* Used to retry syscalls that can return EINTR. */
-#define TEMP_FAILURE_RETRY(exp) ({         \
-    typeof (exp) _rc;                      \
+#define TEMP_FAILURE_RETRY(exp)            \
+  ({                                       \
+    typeof(exp) _rc;                       \
     do {                                   \
-        _rc = (exp);                       \
+      _rc = (exp);                         \
     } while (_rc == -1 && errno == EINTR); \
-    _rc; })
+    _rc;                                   \
+  })
 #endif
 
 #endif /* __LIB_UTILS_COMPAT_H */

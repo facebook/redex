@@ -7,8 +7,8 @@
 
 #include <cstring>
 
-#include "ProguardRegex.h"
 #include "ProguardMap.h"
+#include "ProguardRegex.h"
 
 namespace redex {
 namespace proguard_parser {
@@ -17,7 +17,7 @@ namespace proguard_parser {
 // Example: "alpha*beta?gamma" -> "alpha.*beta.gamma"
 std::string form_member_regex(std::string proguard_regex) {
   // An empty string matches against any member name.
-  if (proguard_regex.empty())  {
+  if (proguard_regex.empty()) {
     return ".*";
   }
   std::string r;

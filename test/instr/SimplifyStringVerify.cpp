@@ -25,22 +25,22 @@ namespace {
 //
 // when computing the total number of code units, write it this order:
 // (how many times optimization runs) * (code units saved per run)
-#define TESTS                                                    \
-  WORK(test_Coalesce_InitVoid_AppendString, 4)                   \
-  WORK(test_Coalesce_AppendString_AppendString, 2 * 1 + 1 * 2)   \
-  WORK(test_CompileTime_StringLength, 4 * 2)                     \
-  WORK(test_Remove_AppendEmptyString, 1 * 3)                     \
-  WORK(test_Coalesce_Init_AppendChar, 4 * 2)                     \
-  WORK(test_Coalesce_AppendString_AppendInt, 6 * 1)              \
-  WORK(test_Coalesce_AppendString_AppendChar, 6 * 1)             \
-  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 1)          \
-  WORK(test_Coalesce_AppendString_AppendLongInt, 4 * 1)          \
-  WORK(test_CompileTime_StringCompare, 6 * 3)                    \
-  WORK(test_Replace_ValueOfBoolean, 2 * 2)                       \
-  WORK(test_Replace_ValueOfChar, 4 * 2)                          \
-  WORK(test_Replace_ValueOfInt, 8 * 2)                           \
-  WORK(test_Replace_ValueOfLongInt, 5 * 2)                       \
-  WORK(test_Replace_ValueOfFloat, 3 * 2)                         \
+#define TESTS                                                  \
+  WORK(test_Coalesce_InitVoid_AppendString, 4)                 \
+  WORK(test_Coalesce_AppendString_AppendString, 2 * 1 + 1 * 2) \
+  WORK(test_CompileTime_StringLength, 4 * 2)                   \
+  WORK(test_Remove_AppendEmptyString, 1 * 3)                   \
+  WORK(test_Coalesce_Init_AppendChar, 4 * 2)                   \
+  WORK(test_Coalesce_AppendString_AppendInt, 6 * 1)            \
+  WORK(test_Coalesce_AppendString_AppendChar, 6 * 1)           \
+  WORK(test_Coalesce_AppendString_AppendBoolean, 2 * 1)        \
+  WORK(test_Coalesce_AppendString_AppendLongInt, 4 * 1)        \
+  WORK(test_CompileTime_StringCompare, 6 * 3)                  \
+  WORK(test_Replace_ValueOfBoolean, 2 * 2)                     \
+  WORK(test_Replace_ValueOfChar, 4 * 2)                        \
+  WORK(test_Replace_ValueOfInt, 8 * 2)                         \
+  WORK(test_Replace_ValueOfLongInt, 5 * 2)                     \
+  WORK(test_Replace_ValueOfFloat, 3 * 2)                       \
   WORK(test_Replace_ValueOfDouble, 3 * 2)
 
 void load_method_sizes(DexClasses& classes,
@@ -53,12 +53,12 @@ void load_method_sizes(DexClasses& classes,
   {                                                       \
     auto method_##name = find_vmethod_named(*cls, #name); \
     ASSERT_NE(nullptr, method_##name);                    \
-    map[#name] = method_##name->get_dex_code()->size();\
+    map[#name] = method_##name->get_dex_code()->size();   \
   }
   TESTS
 #undef WORK
 }
-}
+} // namespace
 
 struct PrePostVerify : testing::Test {
   std::unordered_map<std::string, int> before_sizes;

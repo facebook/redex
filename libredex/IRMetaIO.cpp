@@ -217,7 +217,9 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
       deserialize_name_and_rstate((const char**)&ptr, method);
       break;
     }
-    default: { always_assert(false); }
+    default: {
+      always_assert(false);
+    }
     }
   }
 }
@@ -248,7 +250,7 @@ void dump(const Scope& classes, const std::string& output_dir) {
 
 bool load(const std::string& input_dir) {
   std::string input_file = input_dir + IRMETA_FILE_NAME;
-  std::ifstream istrm(input_file, std::ios::binary|std::ios::in);
+  std::ifstream istrm(input_file, std::ios::binary | std::ios::in);
   if (!istrm.is_open()) {
     std::cerr << "Can not open " << input_file << std::endl;
     return false;

@@ -7,9 +7,9 @@
 
 #include <boost/iostreams/device/mapped_file.hpp>
 
-#include "DexLoader.h"
-#include "DexDefs.h"
 #include "DexAccess.h"
+#include "DexDefs.h"
+#include "DexLoader.h"
 #include "IRCode.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -43,10 +43,10 @@ static void validate_dex_header(const dex_header* dh, size_t dexsize) {
     always_assert_log(false, "Bad dex magic %s\n", dh->magic);
   }
   always_assert_log(
-    dh->file_size == dexsize,
-    "Reported size in header (%z) does not match file size (%u)\n",
-    dexsize,
-    dh->file_size);
+      dh->file_size == dexsize,
+      "Reported size in header (%z) does not match file size (%u)\n",
+      dexsize,
+      dh->file_size);
 }
 
 struct class_load_work {
@@ -73,7 +73,7 @@ static std::vector<std::exception_ptr> exc_reducer(
   } else if (v2.empty()) {
     return v1;
   } else {
-    std::vector<std::exception_ptr> result (v1);
+    std::vector<std::exception_ptr> result(v1);
     result.insert(result.end(), v2.begin(), v2.end());
     return result;
   }
@@ -88,9 +88,8 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_protos += dh->proto_ids_size;
   stats->num_bytes += dh->file_size;
 
-  std::unordered_set<DexEncodedValueArray,
-                     boost::hash<DexEncodedValueArray>>
-    enc_arrays;
+  std::unordered_set<DexEncodedValueArray, boost::hash<DexEncodedValueArray>>
+      enc_arrays;
   std::set<DexTypeList*, dextypelists_comparator> type_lists;
   std::unordered_set<uint32_t> anno_offsets;
   for (uint32_t cidx = 0; cidx < dh->class_defs_size; ++cidx) {
@@ -99,7 +98,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     auto anno_off = class_def->annotations_off;
     if (anno_off) {
       const dex_annotations_directory_item* anno_dir =
-        (const dex_annotations_directory_item*)m_idx->get_uint_data(anno_off);
+          (const dex_annotations_directory_item*)m_idx->get_uint_data(anno_off);
       auto class_anno_off = anno_dir->class_annotations_off;
       if (class_anno_off) {
         const uint32_t* anno_data = m_idx->get_uint_data(class_anno_off);
@@ -139,8 +138,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         stats->num_static_values++;
       }
     }
-    stats->num_fields +=
-        clz->get_ifields().size() + clz->get_sfields().size();
+    stats->num_fields += clz->get_ifields().size() + clz->get_sfields().size();
     stats->num_methods +=
         clz->get_vmethods().size() + clz->get_dmethods().size();
     for (auto* meth : clz->get_vmethods()) {
@@ -195,7 +193,7 @@ DexClasses DexLoader::load_dex(const char* location, dex_stats_t* stats) {
   auto lwork = new class_load_work[dh->class_defs_size];
   auto wq =
       workqueue_mapreduce<class_load_work*, std::vector<std::exception_ptr>>(
-        class_work, exc_reducer);
+          class_work, exc_reducer);
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;

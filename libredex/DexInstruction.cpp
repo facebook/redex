@@ -282,7 +282,7 @@ uint16_t DexInstruction::src(int i) const {
     return m_arg[1];
   case FMT_f57c:
     assert(i <= 6);
-    switch(i) {
+    switch (i) {
     case 0:
       return (m_arg[0] >> 4) & 0xf;
     case 1:
@@ -526,11 +526,11 @@ int32_t DexInstruction::offset() const {
   case FMT_f20t:
   case FMT_f21t:
   case FMT_f22t:
-    return (int32_t) signext<16>(m_arg[0]);
+    return (int32_t)signext<16>(m_arg[0]);
   case FMT_f30t:
   case FMT_f31t: {
     auto offset = uint32_t(m_arg[0]) | (uint32_t(m_arg[1]) << 16);
-    return  (int32_t) signext<32>(offset);
+    return (int32_t)signext<32>(offset);
   }
   default:
     assert(false);
@@ -629,7 +629,8 @@ DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
 }
 
 void DexInstruction::verify_encoding() const {
-  auto test = m_count ? new DexInstruction(opcode()) : new DexInstruction(opcode(), 0);
+  auto test =
+      m_count ? new DexInstruction(opcode()) : new DexInstruction(opcode(), 0);
   if (dests_size()) {
     test->set_dest(dest());
   }
@@ -1091,8 +1092,7 @@ DexInstruction* DexInstruction::make_instruction(DexOpcode op) {
 }
 
 bool DexInstruction::operator==(const DexInstruction& that) const {
-  if (m_ref_type != that.m_ref_type ||
-      m_opcode != that.m_opcode ||
+  if (m_ref_type != that.m_ref_type || m_opcode != that.m_opcode ||
       m_count != that.m_count) {
     return false;
   }

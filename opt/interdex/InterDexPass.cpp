@@ -186,8 +186,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());
-  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT,
-                 interdex.get_num_scroll_dexes());
+  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT, interdex.get_num_scroll_dexes());
 
   plugins.clear();
 }

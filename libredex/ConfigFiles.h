@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 #include <json/json.h>
 
@@ -88,7 +88,8 @@ struct ConfigFiles {
     }
   }
 
-  const std::unordered_map<std::string, std::vector<std::string> >& get_all_class_lists() {
+  const std::unordered_map<std::string, std::vector<std::string>>&
+  get_all_class_lists() {
     ensure_class_lists_loaded();
     return m_class_lists;
   }
@@ -112,9 +113,7 @@ struct ConfigFiles {
 
   bool save_move_map() const { return m_move_map; }
 
-  const MethodMap& get_moved_methods_map() const {
-    return m_moved_methods_map;
-  }
+  const MethodMap& get_moved_methods_map() const { return m_moved_methods_map; }
 
   /* DEPRECATED! */
   void add_moved_methods(MethodTuple mt, DexClass* cls) {
@@ -129,13 +128,9 @@ struct ConfigFiles {
     return outdir + '/' + basename;
   }
 
-  std::string get_outdir() const {
-    return outdir;
-  }
+  std::string get_outdir() const { return outdir; }
 
-  const ProguardMap& get_proguard_map() const {
-    return m_proguard_map;
-  }
+  const ProguardMap& get_proguard_map() const { return m_proguard_map; }
 
   const std::string& get_printseeds() const { return m_printseeds; }
 
@@ -147,7 +142,7 @@ struct ConfigFiles {
 
   std::vector<std::string> load_coldstart_classes();
   std::vector<std::string> load_coldstart_methods();
-  std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
+  std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void load_method_to_weight();
 
   bool m_move_map{false};
@@ -159,7 +154,7 @@ struct ConfigFiles {
   std::string m_profiled_methods_filename;
   std::vector<std::string> m_coldstart_classes;
   std::vector<std::string> m_coldstart_methods;
-  std::unordered_map<std::string, std::vector<std::string> > m_class_lists;
+  std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::string m_printseeds; // Filename to dump computed seeds.
 

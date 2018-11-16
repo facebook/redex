@@ -8,8 +8,8 @@
 #pragma once
 
 #include <boost/functional/hash.hpp>
-#include <vector>
 #include <string>
+#include <vector>
 
 class DexType;
 class DexString;
@@ -48,7 +48,7 @@ struct DexFieldSpec {
       : cls(c), name(n), type(t) {}
 
   bool operator==(const DexFieldSpec& r) const {
-    return cls == r.cls && name == r.name && type  == r.type;
+    return cls == r.cls && name == r.name && type == r.type;
   };
 };
 
@@ -95,4 +95,4 @@ struct hash<DexFieldSpec> {
   }
 };
 
-}
+} // namespace std

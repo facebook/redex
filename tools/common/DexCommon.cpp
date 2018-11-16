@@ -6,13 +6,13 @@
  */
 
 #include "DexCommon.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static const char* dex_header_string = "dex\n035";
 

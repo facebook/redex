@@ -16,5 +16,7 @@ using TypeRelationship =
     std::unordered_map<DexClass*, std::unordered_set<DexClass*>>;
 using Scope = std::vector<DexClass*>;
 
-void optimize(Scope& scope, TypeRelationship& candidates,
-    std::vector<DexClass*>& untfs, std::unordered_set<DexClass*>& removed);
+void optimize(Scope& scope,
+              TypeRelationship& candidates,
+              std::vector<DexClass*>& untfs,
+              std::unordered_set<DexClass*>& removed);

@@ -24,9 +24,9 @@
 #include "utils/Log.h"
 
 #if defined(__MINGW32__) && !defined(__USE_MINGW_ANSI_STDIO)
-# define PRId32 "I32d"
-# define PRIx32 "I32x"
-# define PRId64 "I64d"
+#define PRId32 "I32d"
+#define PRIx32 "I32x"
+#define PRId64 "I64d"
 #else
 #include <inttypes.h>
 #endif
@@ -39,15 +39,15 @@
 
 #if defined(_MSC_VER)
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
 #include <io.h>
+#include <windows.h>
 #define strdup _strdup
 #endif
 
-#include <string.h>
-#include <memory.h>
-#include <errno.h>
 #include <assert.h>
+#include <errno.h>
+#include <memory.h>
+#include <string.h>
 
 using namespace android;
 
@@ -55,32 +55,31 @@ using namespace android;
 
 // Constructor.  Create an empty object.
 FileMap::FileMap(void)
-    : mFileName(NULL), mBasePtr(NULL), mBaseLength(0),
-      mDataPtr(NULL), mDataLength(0)
-{
-}
+    : mFileName(NULL),
+      mBasePtr(NULL),
+      mBaseLength(0),
+      mDataPtr(NULL),
+      mDataLength(0) {}
 
 // Destructor.
-FileMap::~FileMap(void)
-{
-    if (mFileName != NULL) {
-        free(mFileName);
-    }
+FileMap::~FileMap(void) {
+  if (mFileName != NULL) {
+    free(mFileName);
+  }
 #if defined(__MINGW32__) || defined(_MSC_VER)
-    if (mBasePtr && UnmapViewOfFile(mBasePtr) == 0) {
-        ALOGD("UnmapViewOfFile(%p) failed, error = %" PRIu32 "\n", mBasePtr,
-              GetLastError() );
-    }
-    if (mFileMapping != INVALID_HANDLE_VALUE) {
-        CloseHandle(mFileMapping);
-    }
+  if (mBasePtr && UnmapViewOfFile(mBasePtr) == 0) {
+    ALOGD("UnmapViewOfFile(%p) failed, error = %" PRIu32 "\n", mBasePtr,
+          GetLastError());
+  }
+  if (mFileMapping != INVALID_HANDLE_VALUE) {
+    CloseHandle(mFileMapping);
+  }
 #else
-    if (mBasePtr && munmap(mBasePtr, mBaseLength) != 0) {
-        ALOGD("munmap(%p, %zu) failed\n", mBasePtr, mBaseLength);
-    }
+  if (mBasePtr && munmap(mBasePtr, mBaseLength) != 0) {
+    ALOGD("munmap(%p, %zu) failed\n", mBasePtr, mBaseLength);
+  }
 #endif
 }
-
 
 // Create a new mapping on an open file.
 //
@@ -88,126 +87,132 @@ FileMap::~FileMap(void)
 // claim ownership of the fd.
 //
 // Returns "false" on failure.
-bool FileMap::create(const char* origFileName, int fd, off64_t offset, size_t length,
-        bool readOnly)
-{
+bool FileMap::create(const char* origFileName,
+                     int fd,
+                     off64_t offset,
+                     size_t length,
+                     bool readOnly) {
 #if defined(__MINGW32__) || defined(_MSC_VER)
-    int     adjust;
-    off64_t adjOffset;
-    size_t  adjLength;
+  int adjust;
+  off64_t adjOffset;
+  size_t adjLength;
 
-    if (mPageSize == -1) {
-        SYSTEM_INFO  si;
+  if (mPageSize == -1) {
+    SYSTEM_INFO si;
 
-        GetSystemInfo( &si );
-        mPageSize = si.dwAllocationGranularity;
-    }
+    GetSystemInfo(&si);
+    mPageSize = si.dwAllocationGranularity;
+  }
 
-    DWORD  protect = readOnly ? PAGE_READONLY : PAGE_READWRITE;
+  DWORD protect = readOnly ? PAGE_READONLY : PAGE_READWRITE;
 
-    mFileHandle  = (HANDLE) _get_osfhandle(fd);
-    mFileMapping = CreateFileMapping( mFileHandle, NULL, protect, 0, 0, NULL);
-    if (mFileMapping == NULL) {
-        ALOGE("CreateFileMapping(%p, %" PRIx32 ") failed with error %" PRId32 "\n",
-              mFileHandle, protect, GetLastError() );
-        return false;
-    }
+  mFileHandle = (HANDLE)_get_osfhandle(fd);
+  mFileMapping = CreateFileMapping(mFileHandle, NULL, protect, 0, 0, NULL);
+  if (mFileMapping == NULL) {
+    ALOGE("CreateFileMapping(%p, %" PRIx32 ") failed with error %" PRId32 "\n",
+          mFileHandle, protect, GetLastError());
+    return false;
+  }
 
-    adjust    = offset % mPageSize;
-    adjOffset = offset - adjust;
-    adjLength = length + adjust;
+  adjust = offset % mPageSize;
+  adjOffset = offset - adjust;
+  adjLength = length + adjust;
 
-    mBasePtr = MapViewOfFile( mFileMapping,
-                              readOnly ? FILE_MAP_READ : FILE_MAP_ALL_ACCESS,
-                              0,
-                              (DWORD)(adjOffset),
-                              adjLength );
-    if (mBasePtr == NULL) {
-        ALOGE("MapViewOfFile(%" PRId64 ", %zu) failed with error %" PRId32 "\n",
-              adjOffset, adjLength, GetLastError() );
-        CloseHandle(mFileMapping);
-        mFileMapping = INVALID_HANDLE_VALUE;
-        return false;
-    }
+  mBasePtr = MapViewOfFile(mFileMapping,
+                           readOnly ? FILE_MAP_READ : FILE_MAP_ALL_ACCESS,
+                           0,
+                           (DWORD)(adjOffset),
+                           adjLength);
+  if (mBasePtr == NULL) {
+    ALOGE("MapViewOfFile(%" PRId64 ", %zu) failed with error %" PRId32 "\n",
+          adjOffset, adjLength, GetLastError());
+    CloseHandle(mFileMapping);
+    mFileMapping = INVALID_HANDLE_VALUE;
+    return false;
+  }
 #else // !defined(__MINGW32__)
-    long long adjust;
-    int       prot, flags;
-    off64_t   adjOffset;
-    size_t    adjLength;
+  long long adjust;
+  int prot, flags;
+  off64_t adjOffset;
+  size_t adjLength;
 
-    void* ptr;
+  void* ptr;
 
-    assert(fd >= 0);
-    assert(offset >= 0);
-    assert(length > 0);
+  assert(fd >= 0);
+  assert(offset >= 0);
+  assert(length > 0);
 
-    // init on first use
+  // init on first use
+  if (mPageSize == -1) {
+    mPageSize = sysconf(_SC_PAGESIZE);
     if (mPageSize == -1) {
-        mPageSize = sysconf(_SC_PAGESIZE);
-        if (mPageSize == -1) {
-            ALOGE("could not get _SC_PAGESIZE\n");
-            return false;
-        }
+      ALOGE("could not get _SC_PAGESIZE\n");
+      return false;
     }
+  }
 
-    adjust = offset % mPageSize;
-    adjOffset = offset - adjust;
-    adjLength = length + adjust;
+  adjust = offset % mPageSize;
+  adjOffset = offset - adjust;
+  adjLength = length + adjust;
 
-    flags = MAP_SHARED;
-    prot = PROT_READ;
-    if (!readOnly)
-        prot |= PROT_WRITE;
+  flags = MAP_SHARED;
+  prot = PROT_READ;
+  if (!readOnly) prot |= PROT_WRITE;
 
-    ptr = mmap(NULL, adjLength, prot, flags, fd, adjOffset);
-    if (ptr == MAP_FAILED) {
-        ALOGE("mmap(%lld,%zu) failed: %s\n",
-            (long long)adjOffset, adjLength, strerror(errno));
-        return false;
-    }
-    mBasePtr = ptr;
+  ptr = mmap(NULL, adjLength, prot, flags, fd, adjOffset);
+  if (ptr == MAP_FAILED) {
+    ALOGE("mmap(%lld,%zu) failed: %s\n", (long long)adjOffset, adjLength,
+          strerror(errno));
+    return false;
+  }
+  mBasePtr = ptr;
 #endif // !defined(__MINGW32__)
 
-    mFileName = origFileName != NULL ? strdup(origFileName) : NULL;
-    mBaseLength = adjLength;
-    mDataOffset = offset;
-    mDataPtr = (char*) mBasePtr + adjust;
-    mDataLength = length;
+  mFileName = origFileName != NULL ? strdup(origFileName) : NULL;
+  mBaseLength = adjLength;
+  mDataOffset = offset;
+  mDataPtr = (char*)mBasePtr + adjust;
+  mDataLength = length;
 
-    assert(mBasePtr != NULL);
+  assert(mBasePtr != NULL);
 
-    ALOGV("MAP: base %p/%zu data %p/%zu\n",
-        mBasePtr, mBaseLength, mDataPtr, mDataLength);
+  ALOGV("MAP: base %p/%zu data %p/%zu\n", mBasePtr, mBaseLength, mDataPtr,
+        mDataLength);
 
-    return true;
+  return true;
 }
 
 // Provide guidance to the system.
 #if !defined(_WIN32)
-int FileMap::advise(MapAdvice advice)
-{
-    int cc, sysAdvice;
+int FileMap::advise(MapAdvice advice) {
+  int cc, sysAdvice;
 
-    switch (advice) {
-        case NORMAL:        sysAdvice = MADV_NORMAL;        break;
-        case RANDOM:        sysAdvice = MADV_RANDOM;        break;
-        case SEQUENTIAL:    sysAdvice = MADV_SEQUENTIAL;    break;
-        case WILLNEED:      sysAdvice = MADV_WILLNEED;      break;
-        case DONTNEED:      sysAdvice = MADV_DONTNEED;      break;
-        default:
-                            assert(false);
-                            return -1;
-    }
+  switch (advice) {
+  case NORMAL:
+    sysAdvice = MADV_NORMAL;
+    break;
+  case RANDOM:
+    sysAdvice = MADV_RANDOM;
+    break;
+  case SEQUENTIAL:
+    sysAdvice = MADV_SEQUENTIAL;
+    break;
+  case WILLNEED:
+    sysAdvice = MADV_WILLNEED;
+    break;
+  case DONTNEED:
+    sysAdvice = MADV_DONTNEED;
+    break;
+  default:
+    assert(false);
+    return -1;
+  }
 
-    cc = madvise(mBasePtr, mBaseLength, sysAdvice);
-    if (cc != 0)
-        ALOGW("madvise(%d) failed: %s\n", sysAdvice, strerror(errno));
-    return cc;
+  cc = madvise(mBasePtr, mBaseLength, sysAdvice);
+  if (cc != 0) ALOGW("madvise(%d) failed: %s\n", sysAdvice, strerror(errno));
+  return cc;
 }
 
 #else
-int FileMap::advise(MapAdvice /* advice */)
-{
-    return -1;
-}
+int FileMap::advise(MapAdvice /* advice */) { return -1; }
 #endif

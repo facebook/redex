@@ -158,7 +158,9 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
               EXPECT_EQ(0, live_out.size());
               break;
             }
-            default: { FAIL() << "Unexpected block"; }
+            default: {
+              FAIL() << "Unexpected block";
+            }
             }
 
             // Checking the live in/out variables at position instructions.

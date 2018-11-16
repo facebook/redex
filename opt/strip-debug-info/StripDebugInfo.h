@@ -8,8 +8,8 @@
 #pragma once
 
 #include "DexClass.h"
-#include "Pass.h"
 #include "IRCode.h"
+#include "Pass.h"
 
 class StripDebugInfoPass : public Pass {
  public:
@@ -25,10 +25,9 @@ class StripDebugInfoPass : public Pass {
     jw.get("drop_src_files", false, m_config.drop_src_files);
     jw.get("drop_prologue_end", false, m_config.drop_prologue_end);
     jw.get("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
-    jw.get(
-        "drop_all_dbg_info_if_empty",
-        false,
-        m_config.drop_all_dbg_info_if_empty);
+    jw.get("drop_all_dbg_info_if_empty",
+           false,
+           m_config.drop_all_dbg_info_if_empty);
     jw.get("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
     jw.get("drop_synth_conservative", false, m_config.drop_synth_conservative);
   }
@@ -55,6 +54,7 @@ class StripDebugInfoPass : public Pass {
     bool drop_synth_aggressive{false};
     bool drop_synth_conservative{false};
   };
+
  private:
   Config m_config;
 };

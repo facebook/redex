@@ -125,9 +125,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
   ImmutableSubcomponentAnalyzer analyzer(method, is_immutable_getter);
 
   auto get_a = DexMethod::make_method(
-    "Lcom/facebook/Structure;.getA:()Lcom/facebook/A;");
-  auto get_b = DexMethod::make_method(
-    "Lcom/facebook/A;.getB:()Lcom/facebook/B;");
+      "Lcom/facebook/Structure;.getA:()Lcom/facebook/A;");
+  auto get_b =
+      DexMethod::make_method("Lcom/facebook/A;.getB:()Lcom/facebook/B;");
 
   auto found = false;
   for (const auto& mie : InstructionIterable(code)) {
@@ -164,9 +164,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   auto method = make_ir_test_method();
 
   auto get_a = DexMethod::make_method(
-    "Lcom/facebook/Structure;.getA:()Lcom/facebook/A;");
-  auto get_b = DexMethod::make_method(
-    "Lcom/facebook/A;.getB:()Lcom/facebook/B;");
+      "Lcom/facebook/Structure;.getA:()Lcom/facebook/A;");
+  auto get_b =
+      DexMethod::make_method("Lcom/facebook/A;.getB:()Lcom/facebook/B;");
 
   AccessPath path_a{AccessPathKind::Parameter, 1, {get_a}};
   std::vector<DexMethodRef*> b_getters;
@@ -184,9 +184,8 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   EXPECT_EQ(state1.exit_state_bindings[1], path_a);
   EXPECT_EQ(state1.exit_state_bindings[0], path_b);
   auto state2 = snapshot[2];
-  EXPECT_EQ(
-    state2.entry_state_bindings.find(0),
-    state2.entry_state_bindings.end());
+  EXPECT_EQ(state2.entry_state_bindings.find(0),
+            state2.entry_state_bindings.end());
 
   delete g_redex;
 }

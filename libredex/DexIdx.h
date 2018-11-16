@@ -10,9 +10,9 @@
 #include <assert.h>
 #include <string>
 
+#include "Debug.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "Debug.h"
 
 class DexType;
 class DexTypeList;

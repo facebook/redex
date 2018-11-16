@@ -5,9 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 #include <gtest/gtest.h>
-
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -17,8 +15,8 @@
 #include "PassManager.h"
 #include "RedexContext.h"
 
-#include "Peephole.h"
 #include "LocalDce.h"
+#include "Peephole.h"
 
 /*
 
@@ -60,22 +58,22 @@ TEST(PropagationTest1, localDCE1) {
   root_store.add_classes(load_classes_from_dex(dexfile));
   DexClasses& classes = root_store.get_dexen().back();
   stores.emplace_back(std::move(root_store));
-  std::cout << "Loaded classes: " << classes.size() << std::endl ;
+  std::cout << "Loaded classes: " << classes.size() << std::endl;
 
   TRACE(DCE, 2, "Code before:\n");
-  for(const auto& cls : classes) {
+  for (const auto& cls : classes) {
     TRACE(DCE, 2, "Class %s\n", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s\n", dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s\n", SHOW(dm->get_code()));
       }
     }
   }
 
   std::vector<Pass*> passes = {
-    new PeepholePass(),
-    new LocalDcePass(),
+      new PeepholePass(),
+      new LocalDcePass(),
   };
 
   PassManager manager(passes);
@@ -86,12 +84,12 @@ TEST(PropagationTest1, localDCE1) {
   manager.run_passes(stores, dummy_cfg);
 
   TRACE(DCE, 2, "Code after:\n");
-  for(const auto& cls : classes) {
+  for (const auto& cls : classes) {
     TRACE(DCE, 2, "Class %s\n", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s\n", dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s\n", SHOW(dm->get_code()));
         for (auto& mie : InstructionIterable(dm->get_code())) {
           auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.
@@ -102,5 +100,4 @@ TEST(PropagationTest1, localDCE1) {
       }
     }
   }
-
 }

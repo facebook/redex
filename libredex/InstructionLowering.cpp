@@ -51,8 +51,7 @@ static std::array<DexOpcode, 3> move_opcode_tuple(IROpcode op) {
     return {
         {DOPCODE_MOVE_WIDE, DOPCODE_MOVE_WIDE_FROM16, DOPCODE_MOVE_WIDE_16}};
   case OPCODE_MOVE_OBJECT:
-    return {{DOPCODE_MOVE_OBJECT,
-             DOPCODE_MOVE_OBJECT_FROM16,
+    return {{DOPCODE_MOVE_OBJECT, DOPCODE_MOVE_OBJECT_FROM16,
              DOPCODE_MOVE_OBJECT_16}};
   default:
     not_reached();
@@ -447,20 +446,19 @@ Stats lower(DexMethod* method) {
 
 Stats run(DexStoresVector& stores) {
   auto scope = build_class_scope(stores);
-  return walk::parallel::reduce_methods<Stats>(
-      scope,
-      [](DexMethod* m) {
-        Stats stats;
-        if (m->get_code() == nullptr) {
-          return stats;
-        }
-        stats.accumulate(lower(m));
-        return stats;
-      },
-      [](Stats a, Stats b) {
-        a.accumulate(b);
-        return a;
-      });
+  return walk::parallel::reduce_methods<Stats>(scope,
+                                               [](DexMethod* m) {
+                                                 Stats stats;
+                                                 if (m->get_code() == nullptr) {
+                                                   return stats;
+                                                 }
+                                                 stats.accumulate(lower(m));
+                                                 return stats;
+                                               },
+                                               [](Stats a, Stats b) {
+                                                 a.accumulate(b);
+                                                 return a;
+                                               });
 }
 
 } // namespace instruction_lowering

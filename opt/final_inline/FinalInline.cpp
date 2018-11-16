@@ -51,8 +51,8 @@ class FinalInlineImpl {
 
   std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
     std::vector<DexFieldRef*> field_refs;
-    walk::methods(scope,
-                 [&](DexMethod* method) { method->gather_fields(field_refs); });
+    walk::methods(
+        scope, [&](DexMethod* method) { method->gather_fields(field_refs); });
     sort_unique(field_refs);
     /* Okay, now we have a complete list of field refs
      * for this particular dex.  Map to the def actually invoked.

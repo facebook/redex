@@ -16,8 +16,8 @@
 
 #include <boost/optional.hpp>
 
-#include "DexClass.h"
 #include "ControlFlow.h"
+#include "DexClass.h"
 
 namespace isa_impl {
 
@@ -179,12 +179,12 @@ class ImmutableSubcomponentAnalyzer final {
   /*
    * If the given access path has been computed before and exists in the
    * instruction's entry state, returns the registers which store the path.
-  */
-  std::set<size_t> find_access_path_registers(
-    IRInstruction* insn,
-    const AccessPath& path) const;
+   */
+  std::set<size_t> find_access_path_registers(IRInstruction* insn,
+                                              const AccessPath& path) const;
 
-  std::unordered_map<cfg::BlockId, BlockStateSnapshot> get_block_state_snapshot() const;
+  std::unordered_map<cfg::BlockId, BlockStateSnapshot>
+  get_block_state_snapshot() const;
 
  private:
   std::unique_ptr<isa_impl::Analyzer> m_analyzer;

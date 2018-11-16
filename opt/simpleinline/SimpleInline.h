@@ -38,15 +38,13 @@ class SimpleInlinePass : public Pass {
     std::vector<std::string> no_inline_annos;
     jw.get("no_inline_annos", {}, no_inline_annos);
     for (const auto& type_s : no_inline_annos) {
-      m_inliner_config.no_inline.emplace(
-          DexType::make_type(type_s.c_str()));
+      m_inliner_config.no_inline.emplace(DexType::make_type(type_s.c_str()));
     }
 
     std::vector<std::string> force_inline_annos;
     jw.get("force_inline_annos", {}, force_inline_annos);
     for (const auto& type_s : force_inline_annos) {
-      m_inliner_config.force_inline.emplace(
-          DexType::make_type(type_s.c_str()));
+      m_inliner_config.force_inline.emplace(DexType::make_type(type_s.c_str()));
     }
   }
 

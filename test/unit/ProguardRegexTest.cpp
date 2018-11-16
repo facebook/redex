@@ -14,7 +14,8 @@
 using namespace redex;
 
 TEST(ProguardRegexTest, members) {
-  { boost::regex matcher("alpha");
+  {
+    boost::regex matcher("alpha");
     ASSERT_FALSE(boost::regex_match("pha", matcher));
     ASSERT_TRUE(boost::regex_match("alpha", matcher));
   }
@@ -99,7 +100,8 @@ TEST(ProguardRegexTest, types) {
     ASSERT_FALSE(boost::regex_match("void", matcher));
   }
 
-  { auto proguard_regex = "com.*.redex.test.proguard.Delta";
+  {
+    auto proguard_regex = "com.*.redex.test.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -110,7 +112,8 @@ TEST(ProguardRegexTest, types) {
     ASSERT_EQ(1, m.size());
   }
 
-  { auto proguard_regex = "com.*.redex.*.proguard.Delta";
+  {
+    auto proguard_regex = "com.*.redex.*.proguard.Delta";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
@@ -137,12 +140,14 @@ TEST(ProguardRegexTest, types) {
     ASSERT_EQ(1, m.size());
   }
 
-  { auto proguard_regex = "com.**.proguard.**";
+  {
+    auto proguard_regex = "com.**.proguard.**";
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     boost::cmatch m;
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
+    ASSERT_TRUE(boost::regex_match(
+        "Lcom/facebook/redex/test/proguard/Delta;", m, matcher));
     ASSERT_EQ(1, m.size());
   }
 
@@ -227,7 +232,8 @@ TEST(ProguardRegexTest, types) {
     auto descriptor = proguard_parser::convert_wildcard_type(proguard_regex);
     auto r = proguard_parser::form_type_regex(descriptor);
     boost::regex matcher(r);
-    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta$B;", matcher));
+    ASSERT_TRUE(boost::regex_match("Lcom/facebook/redex/test/proguard/Delta$B;",
+                                   matcher));
   }
 
   // Check convert_wildcard_type

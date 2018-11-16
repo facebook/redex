@@ -43,8 +43,7 @@ TEST_F(PostVerify, TestClassesUsedByReflectionKept) {
     EXPECT_EQ(vmethods.size(), 1) << "Expected 1 vmethod for Super!";
     // Should have deleted the private dmethod bar.
     auto dmethods = cls->get_dmethods();
-    EXPECT_EQ(dmethods.size(), 1)
-        << "Super should only have an <init> method!";
+    EXPECT_EQ(dmethods.size(), 1) << "Super should only have an <init> method!";
     EXPECT_STREQ(dmethods.front()->c_str(), "<init>")
         << "Super should only have an <init> method!";
   }

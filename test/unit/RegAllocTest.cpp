@@ -697,10 +697,10 @@ TEST_F(RegAllocTest, Spill) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
-    {0, 16},
-    {1, 16},
-    {2, 256},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+      {0, 16},
+      {1, 16},
+      {2, 256},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
@@ -750,9 +750,9 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
-    {0, 16},
-    {1, 0},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+      {0, 16},
+      {1, 0},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());

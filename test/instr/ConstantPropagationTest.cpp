@@ -65,7 +65,7 @@ TEST_F(PostVerify, ConstantPropagation) {
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
-    if(meth->get_name()->str().find("if") == std::string::npos) {
+    if (meth->get_name()->str().find("if") == std::string::npos) {
       continue;
     }
     IRCode* code = new IRCode(meth);

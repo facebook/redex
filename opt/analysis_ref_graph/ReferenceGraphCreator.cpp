@@ -9,42 +9,41 @@
 
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
-#include "Walkers.h"
 #include "DexClass.h"
-#include "IRInstruction.h"
 #include "DexUtil.h"
+#include "IRInstruction.h"
 #include "Resolver.h"
+#include "Walkers.h"
 
 void CreateReferenceGraphPass::build_super_and_interface_refs(
-    const Scope& scope,
-    refs_t& class_refs) {
+    const Scope& scope, refs_t& class_refs) {
   for (const auto* child : scope) {
     std::function<void(const DexType*)> recurse =
-      [&class_refs, &child, &recurse] (const DexType* super) {
-        if (super != nullptr) {
-          class_refs[child].emplace(super);
-          const auto super_cls_or_int = type_class(super);
-          if (super_cls_or_int != nullptr) {
-            recurse(super_cls_or_int->get_super_class());
-            for (const auto* interface : super_cls_or_int->get_interfaces()->get_type_list()) {
-              recurse(interface);
+        [&class_refs, &child, &recurse](const DexType* super) {
+          if (super != nullptr) {
+            class_refs[child].emplace(super);
+            const auto super_cls_or_int = type_class(super);
+            if (super_cls_or_int != nullptr) {
+              recurse(super_cls_or_int->get_super_class());
+              for (const auto* interface :
+                   super_cls_or_int->get_interfaces()->get_type_list()) {
+                recurse(interface);
+              }
             }
           }
-        }
-    };
+        };
     recurse(child->get_type());
   }
 }
 
 template <class T>
-void CreateReferenceGraphPass::get_annots(
-    const T* thing_with_annots,
-    const DexClass* enclosing_class,
-    refs_t& class_refs) {
+void CreateReferenceGraphPass::get_annots(const T* thing_with_annots,
+                                          const DexClass* enclosing_class,
+                                          refs_t& class_refs) {
   const auto& thing_anno_set = thing_with_annots->get_anno_set();
   if (thing_anno_set != nullptr) {
     for (const auto* annot : thing_anno_set->get_annotations()) {
@@ -54,9 +53,8 @@ void CreateReferenceGraphPass::get_annots(
 }
 
 CreateReferenceGraphPass::MethodWalkerFn
-CreateReferenceGraphPass::method_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::method_ref_builder(const Scope& scope,
+                                             refs_t& class_refs) {
   return ([this, &class_refs](const DexMethod* method) {
     const auto* enclosing_class = type_class(method->get_class());
     // do not add annotations to a method call. Only to method definition
@@ -71,9 +69,8 @@ CreateReferenceGraphPass::method_ref_builder(
 }
 
 CreateReferenceGraphPass::FieldWalkerFn
-CreateReferenceGraphPass::field_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::field_ref_builder(const Scope& scope,
+                                            refs_t& class_refs) {
   return ([this, &class_refs](DexField* field) {
     const auto* enclosing_class = type_class(field->get_class());
 
@@ -89,40 +86,36 @@ CreateReferenceGraphPass::field_ref_builder(
   });
 }
 
-void CreateReferenceGraphPass::build_class_annot_refs(
-    const Scope& scope,
-    refs_t& class_refs) {
+void CreateReferenceGraphPass::build_class_annot_refs(const Scope& scope,
+                                                      refs_t& class_refs) {
   for (const auto* cls : scope) {
     get_annots(cls, cls, class_refs);
   }
 }
 
 CreateReferenceGraphPass::MethodWalkerFn
-CreateReferenceGraphPass::method_annot_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::method_annot_ref_builder(const Scope& scope,
+                                                   refs_t& class_refs) {
   return ([this, &scope, &class_refs](const DexMethod* meth) {
-   for (const auto* cls : scope) {
-     get_annots(meth, cls, class_refs);
+    for (const auto* cls : scope) {
+      get_annots(meth, cls, class_refs);
     }
   });
 }
 
 CreateReferenceGraphPass::FieldWalkerFn
-CreateReferenceGraphPass::field_annot_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::field_annot_ref_builder(const Scope& scope,
+                                                  refs_t& class_refs) {
   return ([this, &scope, &class_refs](const DexField* field) {
     for (const auto* cls : scope) {
-     get_annots(field, cls, class_refs);
+      get_annots(field, cls, class_refs);
     }
   });
 }
 
 CreateReferenceGraphPass::MethodWalkerFn
-CreateReferenceGraphPass::exception_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::exception_ref_builder(const Scope& scope,
+                                                refs_t& class_refs) {
   return ([&class_refs](const DexMethod* meth) {
     const auto* enclosing_class = type_class(meth->get_class());
 
@@ -135,9 +128,8 @@ CreateReferenceGraphPass::exception_ref_builder(
 }
 
 CreateReferenceGraphPass::InstructionWalkerFn
-CreateReferenceGraphPass::instruction_ref_builder(
-    const Scope& scope,
-    refs_t& class_refs) {
+CreateReferenceGraphPass::instruction_ref_builder(const Scope& scope,
+                                                  refs_t& class_refs) {
   return ([this, &class_refs](const DexMethod* meth, IRInstruction* insn) {
     const auto* enclosing_class = type_class(meth->get_class());
 
@@ -175,7 +167,8 @@ CreateReferenceGraphPass::instruction_ref_builder(
   });
 }
 
-void CreateReferenceGraphPass::gather_all(const Scope& scope, refs_t& class_refs) {
+void CreateReferenceGraphPass::gather_all(const Scope& scope,
+                                          refs_t& class_refs) {
   for (const auto* cls : scope) {
     std::vector<DexType*> types;
     cls->gather_types(types);
@@ -185,7 +178,8 @@ void CreateReferenceGraphPass::gather_all(const Scope& scope, refs_t& class_refs
   }
 }
 
-void CreateReferenceGraphPass::build_refs(const Scope& scope, refs_t& class_refs) {
+void CreateReferenceGraphPass::build_refs(const Scope& scope,
+                                          refs_t& class_refs) {
   if (CreateReferenceGraphPass::config.gather_all) {
     gather_all(scope, class_refs);
   } else {
@@ -201,18 +195,15 @@ void CreateReferenceGraphPass::build_refs(const Scope& scope, refs_t& class_refs
     }
     if (CreateReferenceGraphPass::config.refs_in_code) {
       walk::methods(scope, exception_ref_builder(scope, class_refs));
-      walk::opcodes(
-        scope,
-        [](const DexMethod*) { return true; },
-        instruction_ref_builder(scope, class_refs)
-      );
+      walk::opcodes(scope,
+                    [](const DexMethod*) { return true; },
+                    instruction_ref_builder(scope, class_refs));
     }
   }
 }
 
 void CreateReferenceGraphPass::createAndOutputRefGraph(
-    DexStore& store,
-    type_to_store_map_t type_to_store) {
+    DexStore& store, type_to_store_map_t type_to_store) {
   refs_t class_refs;
   auto scope = build_class_scope(store.get_dexen());
   build_refs(scope, class_refs);
@@ -227,22 +218,20 @@ void CreateReferenceGraphPass::createAndOutputRefGraph(
       } else {
         target_store_name = "external";
       }
-      TRACE(
-        ANALYSIS_REF_GRAPH,
-        5,
-        "%s:%s->%s:%s\n",
-        store.get_name().c_str(),
-        source->get_deobfuscated_name().c_str(),
-        target_store_name.c_str(),
-        target->get_name()->c_str());
+      TRACE(ANALYSIS_REF_GRAPH,
+            5,
+            "%s:%s->%s:%s\n",
+            store.get_name().c_str(),
+            source->get_deobfuscated_name().c_str(),
+            target_store_name.c_str(),
+            target->get_name()->c_str());
     }
   }
 }
 
-void CreateReferenceGraphPass::run_pass(
-    DexStoresVector& stores,
-    ConfigFiles& cfg, /* unused */
-    PassManager& mgr /* unused */) {
+void CreateReferenceGraphPass::run_pass(DexStoresVector& stores,
+                                        ConfigFiles& cfg, /* unused */
+                                        PassManager& mgr /* unused */) {
 
   type_to_store_map_t type_to_store;
   for (auto& store : stores) {

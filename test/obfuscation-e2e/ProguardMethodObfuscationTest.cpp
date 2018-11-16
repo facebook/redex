@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <string>
-#include <array>
 
 #include "DexClass.h"
 #include "DexLoader.h"
@@ -40,7 +40,7 @@ TEST(ProguardTest, obfuscation) {
 
   ProguardObfuscationTest tester(dexfile, mapping_file);
   ASSERT_TRUE(tester.configure_proguard(configuration_file))
-    << "Proguard configuration failed";
+      << "Proguard configuration failed";
 
   // Make sure the fields class Alpha are renamed.
   const std::string alphaName = "Lcom/facebook/redex/test/proguard/Alpha;";
@@ -52,34 +52,24 @@ TEST(ProguardTest, obfuscation) {
     ".doubleWombat:()I",
     ".doubleWombat:(I)I",
     ".tripleWombat:()I" };*/
-  std::vector<std::string> renamed = {
-    ".unreflectedI4:()V",
-    ".someDmethod:()I",
-    ".anotherDmethod:(I)V",
-    ".privateDmethod:()I" };
+  std::vector<std::string> renamed = {".unreflectedI4:()V", ".someDmethod:()I",
+                                      ".anotherDmethod:(I)V",
+                                      ".privateDmethod:()I"};
   const std::vector<std::string> reflected = {
-    ".reflectedI1:()V",
-    ".reflectedI2:()V",
-    ".reflectedI3:()V",
-    ".reflected1:()V",
-    ".reflected2:()V",
-    ".reflected3:()V",
-    ".reflected4:()V",
-    ".reflected5:()V",
-    ".reflected6:()V" };
+      ".reflectedI1:()V", ".reflectedI2:()V", ".reflectedI3:()V",
+      ".reflected1:()V",  ".reflected2:()V",  ".reflected3:()V",
+      ".reflected4:()V",  ".reflected5:()V",  ".reflected6:()V"};
   if (!strcmp("rename", refl_strategy)) {
     renamed.insert(renamed.end(), reflected.begin(), reflected.end());
   } else {
     for (const std::string& methodName : reflected) {
-      ASSERT_FALSE(tester.method_is_renamed(
-        alpha,
-        alphaName + methodName)) << alphaName + methodName << " obfuscated";
+      ASSERT_FALSE(tester.method_is_renamed(alpha, alphaName + methodName))
+          << alphaName + methodName << " obfuscated";
     }
   }
   for (const std::string& methodName : renamed) {
-    ASSERT_TRUE(tester.method_is_renamed(
-        alpha,
-        alphaName + methodName)) << alphaName + methodName << " not obfuscated";
+    ASSERT_TRUE(tester.method_is_renamed(alpha, alphaName + methodName))
+        << alphaName + methodName << " not obfuscated";
   }
 
   ASSERT_FALSE(tester.method_is_renamed(alpha, alphaName + ".<init>:()V"));
@@ -90,8 +80,8 @@ TEST(ProguardTest, obfuscation) {
   const std::string betaName = "Lcom/facebook/redex/test/proguard/Beta;";
   auto beta = tester.find_class_named(betaName);
   ASSERT_NE(nullptr, beta);
-  ASSERT_FALSE(tester.method_is_renamed(beta,
-    betaName + ".doubleWombatBeta:()I"));
+  ASSERT_FALSE(
+      tester.method_is_renamed(beta, betaName + ".doubleWombatBeta:()I"));
   ASSERT_FALSE(tester.method_is_renamed(beta, betaName + ".<init>:()V"));
   delete g_redex;
 }

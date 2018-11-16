@@ -13,9 +13,9 @@
 #include "utils/Unicode.h"
 
 #include <sstream>
-#include <vector>
 #include <string.h>
 #include <string>
+#include <vector>
 
 /**
  * Return a proto string in the form
@@ -281,12 +281,17 @@ class DexDebugInstructionReader {
   virtual void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
     return handle_default(op);
   }
-  virtual void handle_start_local(DexDebugItemOpcode op, uint32_t arg1,
-      uint32_t arg2, uint32_t arg3) {
+  virtual void handle_start_local(DexDebugItemOpcode op,
+                                  uint32_t arg1,
+                                  uint32_t arg2,
+                                  uint32_t arg3) {
     return handle_default(op);
   }
-  virtual void handle_start_local_extended(DexDebugItemOpcode op, uint32_t arg1,
-      uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+  virtual void handle_start_local_extended(DexDebugItemOpcode op,
+                                           uint32_t arg1,
+                                           uint32_t arg2,
+                                           uint32_t arg3,
+                                           uint32_t arg4) {
     return handle_default(op);
   }
   virtual void handle_end_local(DexDebugItemOpcode op, uint32_t arg1) {
@@ -305,6 +310,7 @@ class DexDebugInstructionReader {
     return handle_default(op);
   }
   virtual void handle_default(DexDebugItemOpcode op) = 0;
+
  public:
   virtual ~DexDebugInstructionReader() {}
 
@@ -366,9 +372,7 @@ class DexDebugInstructionReader {
 uint32_t count_debug_instructions(const uint8_t*& encdata) {
   struct DexDebugInstructionCounter : public DexDebugInstructionReader {
     int sum;
-    void handle_default(DexDebugItemOpcode op) {
-      sum++;
-    }
+    void handle_default(DexDebugItemOpcode op) { sum++; }
   };
   auto counter = DexDebugInstructionCounter();
   counter.read(encdata);
@@ -391,12 +395,14 @@ void disassemble_debug(ddump_data* rd, uint32_t offset) {
     void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
       redump("DBG_ADVANCE_LINE %d\n", arg);
     }
-    void handle_start_local(DexDebugItemOpcode op, uint32_t reg,
-        uint32_t name_idx, uint32_t type_idx) {
+    void handle_start_local(DexDebugItemOpcode op,
+                            uint32_t reg,
+                            uint32_t name_idx,
+                            uint32_t type_idx) {
       redump("DBG_START_LOCAL %d\n", reg);
     }
-    void handle_start_local_extended(DexDebugItemOpcode op, uint32_t reg,
-        uint32_t, uint32_t, uint32_t) {
+    void handle_start_local_extended(
+        DexDebugItemOpcode op, uint32_t reg, uint32_t, uint32_t, uint32_t) {
       redump("DBG_START_LOCAL_EXTENDED %d\n", reg);
     }
     void handle_end_local(DexDebugItemOpcode op, uint32_t reg) {
@@ -441,13 +447,13 @@ static const char string_data_header[] = "u16len [contents]";
 static void dump_string_data_item(const uint8_t** pos_inout) {
   const uint8_t* pos = *pos_inout;
   uint32_t utf16_code_point_count = read_uleb128(&pos); // Not byte count!
-  size_t utf8_length = strlen((char*) pos);
+  size_t utf8_length = strlen((char*)pos);
   std::string cleansed_data;
   const char* string_to_print;
   if (raw) { // Output whatever bytes we have
-    string_to_print = (char*) pos;
+    string_to_print = (char*)pos;
   } else if (escape) { // Escape non-printable characters.
-    cleansed_data.reserve(utf8_length);  // Avoid some reallocation.
+    cleansed_data.reserve(utf8_length); // Avoid some reallocation.
     for (size_t i = 0; i < utf8_length; i++) {
       if (isprint(pos[i])) {
         cleansed_data.push_back(pos[i]);
@@ -460,7 +466,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     string_to_print = cleansed_data.c_str();
   } else { // Translate to UTF-8; strip control characters
     std::vector<char32_t> code_points;
-    const char* enc_pos = (char*) pos;
+    const char* enc_pos = (char*)pos;
     uint32_t cp;
     while ((cp = mutf8_next_code_point(enc_pos))) {
       if (cp < ' ' || cp == 255 /* DEL */) {
@@ -468,8 +474,8 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
       }
       code_points.push_back(cp);
     }
-    ssize_t nr_utf8_bytes = utf32_to_utf8_length(
-      &code_points[0], code_points.size());
+    ssize_t nr_utf8_bytes =
+        utf32_to_utf8_length(&code_points[0], code_points.size());
     if (nr_utf8_bytes < 0 && utf8_length == 0) {
       cleansed_data = "";
     } else if (nr_utf8_bytes < 0) {
@@ -480,7 +486,7 @@ static void dump_string_data_item(const uint8_t** pos_inout) {
     }
     string_to_print = cleansed_data.c_str();
   }
-  redump("%03u [%s]\n", (unsigned) utf16_code_point_count, string_to_print);
+  redump("%03u [%s]\n", (unsigned)utf16_code_point_count, string_to_print);
   *pos_inout = pos + utf8_length + 1;
 }
 
@@ -499,8 +505,7 @@ void dump_stringdata(ddump_data* rd, bool print_headers) {
   // in the string data section is a ULEB128 length followed by a
   // NUL-terminated modified-UTF-8 encoded string.
 
-  const uint8_t* str_data_ptr =
-    (uint8_t*) (rd->dexmmap) + string_data->offset;
+  const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + string_data->offset;
   for (uint32_t i = 0; i < string_data->size; ++i) {
     dump_string_data_item(&str_data_ptr);
   }
@@ -518,7 +523,7 @@ void dump_strings(ddump_data* rd, bool print_headers) {
   uint32_t tmp_str_id_off = 0;
   for (uint32_t i = 0; i < size; ++i) {
     const uint8_t* str_data_ptr = (uint8_t*)(rd->dexmmap) + tmp_str_id_off;
-    length += strlen((char*) str_data_ptr);
+    length += strlen((char*)str_data_ptr);
     tmp_str_id_off += 4;
   }
 
@@ -712,8 +717,8 @@ static void dump_class_annotations(ddump_data* rd, dex_class_def* df) {
           dex_string_by_type_idx(rd, rd->dex_method_ids[midx].classidx);
       const char* mname =
           dex_string_by_idx(rd, rd->dex_method_ids[midx].nameidx);
-      redump(
-          "    Method '%s', Type '%s' Parameter Annotations:\n", mtype, mname);
+      redump("    Method '%s', Type '%s' Parameter Annotations:\n", mtype,
+             mname);
       int param = 0;
       while (asrefsize--) {
         uint32_t aoff = *asref++;

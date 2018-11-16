@@ -10,9 +10,9 @@
 #include <algorithm>
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -43,64 +43,62 @@ namespace {
 
 const char* dont_rename_reason_to_metric(DontRenameReasonCode reason) {
   switch (reason) {
-    case DontRenameReasonCode::Annotated:
-      return "num_dont_rename_annotated";
-    case DontRenameReasonCode::Annotations:
-      return "num_dont_rename_annotations";
-    case DontRenameReasonCode::Specific:
-      return "num_dont_rename_specific";
-    case DontRenameReasonCode::Packages:
-      return "num_dont_rename_packages";
-    case DontRenameReasonCode::Hierarchy:
-      return "num_dont_rename_hierarchy";
-    case DontRenameReasonCode::Resources:
-      return "num_dont_rename_resources";
-    case DontRenameReasonCode::ClassNameLiterals:
-      return "num_dont_rename_class_name_literals";
-    case DontRenameReasonCode::Canaries:
-      return "num_dont_rename_canaries";
-    case DontRenameReasonCode::NativeBindings:
-      return "num_dont_rename_native_bindings";
-    case DontRenameReasonCode::ClassForTypesWithReflection:
-      return "num_dont_rename_class_for_types_with_reflection";
-    case DontRenameReasonCode::ProguardCantRename:
-      return "num_dont_rename_pg_cant_rename";
-    case DontRenameReasonCode::SerdeRelationships:
-      return "num_dont_rename_serde_relationships";
-    default:
-      always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
+  case DontRenameReasonCode::Annotated:
+    return "num_dont_rename_annotated";
+  case DontRenameReasonCode::Annotations:
+    return "num_dont_rename_annotations";
+  case DontRenameReasonCode::Specific:
+    return "num_dont_rename_specific";
+  case DontRenameReasonCode::Packages:
+    return "num_dont_rename_packages";
+  case DontRenameReasonCode::Hierarchy:
+    return "num_dont_rename_hierarchy";
+  case DontRenameReasonCode::Resources:
+    return "num_dont_rename_resources";
+  case DontRenameReasonCode::ClassNameLiterals:
+    return "num_dont_rename_class_name_literals";
+  case DontRenameReasonCode::Canaries:
+    return "num_dont_rename_canaries";
+  case DontRenameReasonCode::NativeBindings:
+    return "num_dont_rename_native_bindings";
+  case DontRenameReasonCode::ClassForTypesWithReflection:
+    return "num_dont_rename_class_for_types_with_reflection";
+  case DontRenameReasonCode::ProguardCantRename:
+    return "num_dont_rename_pg_cant_rename";
+  case DontRenameReasonCode::SerdeRelationships:
+    return "num_dont_rename_serde_relationships";
+  default:
+    always_assert_log(false, "Unexpected DontRenameReasonCode: %d", reason);
   }
 }
 
 bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
   switch (reason) {
-    case DontRenameReasonCode::Annotated:
-    case DontRenameReasonCode::Packages:
-    case DontRenameReasonCode::Hierarchy:
-      // Set to true to add more detailed metrics for renamer if needed
-      return false;
-    default:
-      return false;
+  case DontRenameReasonCode::Annotated:
+  case DontRenameReasonCode::Packages:
+  case DontRenameReasonCode::Hierarchy:
+    // Set to true to add more detailed metrics for renamer if needed
+    return false;
+  default:
+    return false;
   }
 }
 
-void unpackage_private(Scope &scope) {
-  walk::methods(scope,
-      [&](DexMethod *method) {
-        if (is_package_protected(method)) set_public(method);
-      });
-  walk::fields(scope,
-      [&](DexField *field) {
-        if (is_package_protected(field)) set_public(field);
-      });
+void unpackage_private(Scope& scope) {
+  walk::methods(scope, [&](DexMethod* method) {
+    if (is_package_protected(method)) set_public(method);
+  });
+  walk::fields(scope, [&](DexField* field) {
+    if (is_package_protected(field)) set_public(field);
+  });
   for (auto clazz : scope) {
     if (!clazz->is_external()) {
       set_public(clazz);
     }
   }
 
-  static DexType *dalvikinner =
-    DexType::get_type("Ldalvik/annotation/InnerClass;");
+  static DexType* dalvikinner =
+      DexType::get_type("Ldalvik/annotation/InnerClass;");
 
   walk::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalvikinner) return;
@@ -112,7 +110,7 @@ void unpackage_private(Scope &scope) {
         elem.encoded_value->value(
             (elem.encoded_value->value() & ~VISIBILITY_MASK) | ACC_PUBLIC);
         TRACE(RENAME, 3, "Fix InnerClass accessFlags %s => %08x\n",
-            elem.string->c_str(), elem.encoded_value->value());
+              elem.string->c_str(), elem.encoded_value->value());
       }
     }
   });
@@ -139,8 +137,8 @@ bool referenced_by_layouts(const DexClass* clazz) {
 
 // Returns true if this class is a layout, and allowed for renaming via config.
 bool is_allowed_layout_class(
-  const DexClass* clazz,
-  const std::vector<std::string>& allow_layout_rename_packages) {
+    const DexClass* clazz,
+    const std::vector<std::string>& allow_layout_rename_packages) {
   always_assert(referenced_by_layouts(clazz));
   auto idx = find_matching_package(clazz->get_name()->str(),
                                    allow_layout_rename_packages);
@@ -169,14 +167,14 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   std::unordered_set<std::string> dont_rename_class_name_literals;
 
   // Gather strings from const-string opcodes
-  auto match = std::make_tuple(
-    m::const_string(/* const-string {vX}, <any string> */)
-  );
-  walk::matching_opcodes(scope, match,
-      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
+  auto match =
+      std::make_tuple(m::const_string(/* const-string {vX}, <any string> */));
+  walk::matching_opcodes(
+      scope, match,
+      [&](const DexMethod*, const std::vector<IRInstruction*>& insns) {
         IRInstruction* const_string = insns[0];
         auto classname = JavaNameUtil::external_to_internal(
-          const_string->get_string()->c_str());
+            const_string->get_string()->c_str());
         if (DexType::get_type(classname)) {
           TRACE(RENAME, 4,
                 "Found const-string of: %s, marking %s unrenameable\n",
@@ -209,7 +207,8 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
     }
   }
 
-  walk::opcodes(scope,
+  walk::opcodes(
+      scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* m, IRInstruction* insn) {
         if (insn->has_method()) {
@@ -219,11 +218,11 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           if (refl_map.count(callee_method_cls) == 0) return;
           std::string classname = m->get_class()->get_name()->str();
           TRACE(RENAME, 4,
-            "Found %s with known reflection usage. marking reachable\n",
-            classname.c_str());
+                "Found %s with known reflection usage. marking reachable\n",
+                classname.c_str());
           dont_rename_class_for_types_with_reflection.insert(classname);
         }
-  });
+      });
   return dont_rename_class_for_types_with_reflection;
 }
 
@@ -267,8 +266,8 @@ RenameClassesPassV2::build_force_rename_hierarchies(
     auto base_name = base_class->get_name()->c_str();
     force_rename_hierarchies[base_class->get_type()] = base_name;
     TypeSet children_and_implementors;
-    get_all_children_or_implementors(
-        class_hierarchy, scope, base_class, children_and_implementors);
+    get_all_children_or_implementors(class_hierarchy, scope, base_class,
+                                     children_and_implementors);
     for (const auto& cls : children_and_implementors) {
       force_rename_hierarchies[cls] = base_name;
     }
@@ -304,8 +303,8 @@ RenameClassesPassV2::build_dont_rename_hierarchies(
     auto base_name = base_class->get_name()->c_str();
     dont_rename_hierarchies[base_class->get_type()] = base_name;
     TypeSet children_and_implementors;
-    get_all_children_or_implementors(
-        class_hierarchy, scope, base_class, children_and_implementors);
+    get_all_children_or_implementors(class_hierarchy, scope, base_class,
+                                     children_and_implementors);
     for (const auto& cls : children_and_implementors) {
       dont_rename_hierarchies[cls] = base_name;
     }
@@ -357,9 +356,8 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
       }
     }
 
-    bool dont_rename =
-      ((deser || flatbuf_deser) && !has_deser_finder) ||
-      ((ser || flatbuf_ser) && !has_ser_finder);
+    bool dont_rename = ((deser || flatbuf_deser) && !has_deser_finder) ||
+                       ((ser || flatbuf_ser) && !has_ser_finder);
 
     if (dont_rename) {
       dont_rename_serde_relationships.insert(cls->get_type());
@@ -378,7 +376,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
   std::unordered_set<const DexType*> dont_rename_native_bindings;
   // find all classes with native methods, and all types mentioned
   // in protos of native methods
-  for(auto clazz: scope) {
+  for (auto clazz : scope) {
     for (auto meth : clazz->get_dmethods()) {
       if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
@@ -432,6 +430,7 @@ RenameClassesPassV2::build_dont_rename_annotated() {
 class AliasMap {
   std::map<DexString*, DexString*, dexstrings_comparator> m_class_name_map;
   std::map<DexString*, DexString*, dexstrings_comparator> m_extras_map;
+
  public:
   void add_class_alias(DexClass* cls, DexString* alias) {
     m_class_name_map.emplace(cls->get_name(), alias);
@@ -484,19 +483,20 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   }
 }
 
-void RenameClassesPassV2::eval_classes(
-    Scope& scope,
-    const ClassHierarchy& class_hierarchy,
-    ConfigFiles& cfg,
-    bool rename_annotations,
-    PassManager& mgr) {
+void RenameClassesPassV2::eval_classes(Scope& scope,
+                                       const ClassHierarchy& class_hierarchy,
+                                       ConfigFiles& cfg,
+                                       bool rename_annotations,
+                                       PassManager& mgr) {
   auto force_rename_hierarchies =
       build_force_rename_hierarchies(mgr, scope, class_hierarchy);
 
-  auto dont_rename_serde_relationships = build_dont_rename_serde_relationships(scope);
+  auto dont_rename_serde_relationships =
+      build_dont_rename_serde_relationships(scope);
   auto dont_rename_resources =
-    build_dont_rename_resources(mgr, force_rename_hierarchies);
-  auto dont_rename_class_name_literals = build_dont_rename_class_name_literals(scope);
+      build_dont_rename_resources(mgr, force_rename_hierarchies);
+  auto dont_rename_class_name_literals =
+      build_dont_rename_class_name_literals(scope);
   auto dont_rename_class_for_types_with_reflection =
       build_dont_rename_for_types_with_reflection(scope,
                                                   cfg.get_proguard_map());
@@ -508,7 +508,7 @@ void RenameClassesPassV2::eval_classes(
 
   std::string norule = "";
 
-  for(auto clazz: scope) {
+  for (auto clazz : scope) {
     // Short circuit force renames
     if (force_rename_hierarchies.count(clazz->get_type())) {
       m_force_rename_classes.insert(clazz);
@@ -517,8 +517,8 @@ void RenameClassesPassV2::eval_classes(
 
     // Don't rename annotations
     if (!rename_annotations && is_annotation(clazz)) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::Annotations, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Annotations,
+                                      norule};
       continue;
     }
 
@@ -526,8 +526,8 @@ void RenameClassesPassV2::eval_classes(
     bool annotated = false;
     for (const auto& anno : dont_rename_annotated) {
       if (has_anno(clazz, anno)) {
-        m_dont_rename_reasons[clazz] =
-            { DontRenameReasonCode::Annotated, anno->str() };
+        m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Annotated,
+                                        anno->str()};
         annotated = true;
         break;
       }
@@ -541,27 +541,25 @@ void RenameClassesPassV2::eval_classes(
     // to cover both configuration options (either we're relying on aapt to
     // compute resource reachability, or we're doing it ourselves).
     if (dont_rename_resources.count(clsname) ||
-          (referenced_by_layouts(clazz)
-            && !is_allowed_layout_class(clazz, m_allow_layout_rename_packages))) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::Resources, norule };
+        (referenced_by_layouts(clazz) &&
+         !is_allowed_layout_class(clazz, m_allow_layout_rename_packages))) {
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Resources, norule};
       continue;
     }
 
     // Don't rename anythings in the direct name blacklist (hierarchy ignored)
     if (m_dont_rename_specific.count(clsname)) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::Specific, strname };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Specific, strname};
       continue;
     }
 
     // Don't rename anything if it falls in a blacklisted package
     bool package_blacklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
-      if (strname.rfind("L"+pkg) == 0) {
-        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s\n",
-            clsname, pkg.c_str());
-        m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Packages, pkg };
+      if (strname.rfind("L" + pkg) == 0) {
+        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname,
+              pkg.c_str());
+        m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
         package_blacklisted = true;
         break;
       }
@@ -569,43 +567,43 @@ void RenameClassesPassV2::eval_classes(
     if (package_blacklisted) continue;
 
     if (dont_rename_class_name_literals.count(clsname)) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::ClassNameLiterals, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ClassNameLiterals,
+                                      norule};
       continue;
     }
 
     if (dont_rename_class_for_types_with_reflection.count(clsname)) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::ClassForTypesWithReflection, norule };
+      m_dont_rename_reasons[clazz] = {
+          DontRenameReasonCode::ClassForTypesWithReflection, norule};
       continue;
     }
 
     if (dont_rename_canaries.count(clsname)) {
-      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Canaries, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Canaries, norule};
       continue;
     }
 
     if (dont_rename_native_bindings.count(clazz->get_type())) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::NativeBindings, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::NativeBindings,
+                                      norule};
       continue;
     }
 
     if (dont_rename_hierarchies.count(clazz->get_type())) {
       std::string rule = dont_rename_hierarchies[clazz->get_type()];
-      m_dont_rename_reasons[clazz] = { DontRenameReasonCode::Hierarchy, rule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Hierarchy, rule};
       continue;
     }
 
     if (dont_rename_serde_relationships.count(clazz->get_type())) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::SerdeRelationships, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::SerdeRelationships,
+                                      norule};
       continue;
     }
 
     if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
-      m_dont_rename_reasons[clazz] =
-          { DontRenameReasonCode::ProguardCantRename, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
+                                      norule};
       continue;
     }
   }
@@ -617,9 +615,7 @@ void RenameClassesPassV2::eval_classes(
  * previous Redex passes and did not exist when the initial evaluation happened.
  */
 void RenameClassesPassV2::eval_classes_post(
-    Scope& scope,
-    const ClassHierarchy& class_hierarchy,
-    PassManager& mgr) {
+    Scope& scope, const ClassHierarchy& class_hierarchy, PassManager& mgr) {
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
   std::string norule = "";
@@ -642,8 +638,8 @@ void RenameClassesPassV2::eval_classes_post(
     bool package_blacklisted = false;
     for (const auto& pkg : m_dont_rename_packages) {
       if (strname.rfind("L" + pkg) == 0) {
-        TRACE(
-            RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname, pkg.c_str());
+        TRACE(RENAME, 2, "%s blacklisted by pkg rule %s\n", clsname,
+              pkg.c_str());
         m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Packages, pkg};
         package_blacklisted = true;
         break;
@@ -660,8 +656,8 @@ void RenameClassesPassV2::eval_classes_post(
     // Don't rename anything if something changed and the class cannot be
     // renamed anymore.
     if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
-      m_dont_rename_reasons[clazz] =
-        { DontRenameReasonCode::ProguardCantRename, norule };
+      m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
+                                      norule};
     }
   }
 }
@@ -677,11 +673,10 @@ void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
   eval_classes(scope, class_hierarchy, cfg, m_rename_annotations, mgr);
 }
 
-void RenameClassesPassV2::rename_classes(
-    Scope& scope,
-    ConfigFiles& cfg,
-    bool rename_annotations,
-    PassManager& mgr) {
+void RenameClassesPassV2::rename_classes(Scope& scope,
+                                         ConfigFiles& cfg,
+                                         bool rename_annotations,
+                                         PassManager& mgr) {
   // Make everything public
   unpackage_private(scope);
 
@@ -695,7 +690,7 @@ void RenameClassesPassV2::rename_classes(
       mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'\n", oldname->c_str());
     } else if (m_dont_rename_reasons.find(clazz) !=
-          m_dont_rename_reasons.end()) {
+               m_dont_rename_reasons.end()) {
       auto reason = m_dont_rename_reasons[clazz];
       std::string metric = dont_rename_reason_to_metric(reason.code);
       mgr.incr_metric(metric, 1);
@@ -798,7 +793,7 @@ void RenameClassesPassV2::rename_classes(
             mgr.incr_metric(METRIC_REWRITTEN_CONST_STRINGS, 1);
             insn->set_string(alias_to);
             TRACE(RENAME, 3, "Rewrote const-string \"%s\" to \"%s\"\n",
-                str->c_str(), alias_to->c_str());
+                  str->c_str(), alias_to->c_str());
           }
         }
       });
@@ -818,7 +813,7 @@ void RenameClassesPassV2::rename_classes(
    */
   for (const auto& apair : aliases.get_class_map()) {
     char buf[MAX_DESCRIPTOR_LENGTH];
-    const char *sourcestr = apair.first->c_str();
+    const char* sourcestr = apair.first->c_str();
     size_t sourcelen = strlen(sourcestr);
     if (sourcestr[sourcelen - 1] != ';') continue;
     strcpy(buf, sourcestr);
@@ -830,8 +825,8 @@ void RenameClassesPassV2::rename_classes(
     auto target = DexString::make_string(buf);
     aliases.add_alias(dstring, target);
   }
-  static DexType *dalviksig =
-    DexType::get_type("Ldalvik/annotation/Signature;");
+  static DexType* dalviksig =
+      DexType::get_type("Ldalvik/annotation/Signature;");
   walk::annotations(scope, [&](DexAnnotation* anno) {
     if (anno->type() != dalviksig) return;
     auto elems = anno->anno_elems();
@@ -845,8 +840,8 @@ void RenameClassesPassV2::rename_classes(
         auto stringev = static_cast<DexEncodedValueString*>(strev);
         if (aliases.has(stringev->string())) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
-              stringev->string()->c_str(),
-              aliases.at(stringev->string())->c_str());
+                stringev->string()->c_str(),
+                aliases.at(stringev->string())->c_str());
           stringev->string(aliases.at(stringev->string()));
         }
       }
@@ -858,16 +853,15 @@ void RenameClassesPassV2::rename_classes(
   sanity_check(scope, aliases);
 }
 
-void RenameClassesPassV2::rename_classes_in_layouts(
-  const AliasMap& aliases,
-  PassManager& mgr) {
+void RenameClassesPassV2::rename_classes_in_layouts(const AliasMap& aliases,
+                                                    PassManager& mgr) {
   // Sync up ResStringPool entries in XML layouts. Class names should appear in
   // their "external" name, i.e. java.lang.String instead of Ljava/lang/String;
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : aliases.get_class_map()) {
     aliases_for_layouts.emplace(
-      JavaNameUtil::internal_to_external(apair.first->str()),
-      JavaNameUtil::internal_to_external(apair.second->str()));
+        JavaNameUtil::internal_to_external(apair.first->str()),
+        JavaNameUtil::internal_to_external(apair.second->str()));
   }
   ssize_t layout_bytes_delta = 0;
   size_t num_layout_renamed = 0;
@@ -879,23 +873,22 @@ void RenameClassesPassV2::rename_classes_in_layouts(
     size_t num_renamed = 0;
     ssize_t out_delta = 0;
     TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());
-    rename_classes_in_layout(path, aliases_for_layouts, &num_renamed, &out_delta);
-    TRACE(
-      RENAME,
-      3,
-      "Renamed %zu ResStringPool entries in layout %s\n",
-      num_renamed,
-      path.c_str());
+    rename_classes_in_layout(path, aliases_for_layouts, &num_renamed,
+                             &out_delta);
+    TRACE(RENAME,
+          3,
+          "Renamed %zu ResStringPool entries in layout %s\n",
+          num_renamed,
+          path.c_str());
     layout_bytes_delta += out_delta;
     num_layout_renamed += num_renamed;
   }
   mgr.incr_metric("layout_bytes_delta", layout_bytes_delta);
-  TRACE(
-    RENAME,
-    2,
-    "Renamed %zu ResStringPool entries, delta %zi bytes\n",
-    num_layout_renamed,
-    layout_bytes_delta);
+  TRACE(RENAME,
+        2,
+        "Renamed %zu ResStringPool entries, delta %zi bytes\n",
+        num_layout_renamed,
+        layout_bytes_delta);
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores,
@@ -911,12 +904,15 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
 
-  always_assert_log(scope.size() < std::pow(Locator::global_class_index_digits_base, Locator::global_class_index_digits_max),
+  always_assert_log(scope.size() <
+                        std::pow(Locator::global_class_index_digits_base,
+                                 Locator::global_class_index_digits_max),
                     "scope size %uz too large", scope.size());
   int total_classes = scope.size();
 
   // encode the whole sequence as base 62: [0 - 9], [A - Z], [a - z]
-  m_digits = std::ceil(std::log(total_classes) / std::log(Locator::global_class_index_digits_base));
+  m_digits = std::ceil(std::log(total_classes) /
+                       std::log(Locator::global_class_index_digits_base));
   TRACE(RENAME, 1,
         "Total classes in scope for renaming: %d chosen number of digits: %d\n",
         total_classes, m_digits);

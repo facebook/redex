@@ -8,42 +8,38 @@
 #include <stdio.h>
 #include <unordered_set>
 
-#include "Walkers.h"
-#include "ReachableClasses.h"
-#include "RemoveEmptyClasses.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "ReachableClasses.h"
+#include "RemoveEmptyClasses.h"
+#include "Walkers.h"
 
 constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
-  "num_empty_classes_removed";
+    "num_empty_classes_removed";
 
 bool is_empty_class(DexClass* cls,
                     std::unordered_set<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
-  cls->get_vmethods().empty() &&
-  cls->get_sfields().empty() &&
-  cls->get_ifields().empty();
+                     cls->get_vmethods().empty() &&
+                     cls->get_sfields().empty() && cls->get_ifields().empty();
   uint32_t access = cls->get_access();
   auto name = cls->get_type()->get_name()->c_str();
   TRACE(EMPTY, 4, ">> Empty Analysis for %s\n", name);
   TRACE(EMPTY, 4, "   no methods or fields: %d\n", empty_class);
   TRACE(EMPTY, 4, "   can delete: %d\n", can_delete(cls));
   TRACE(EMPTY, 4, "   not interface: %d\n",
-      !(access & DexAccessFlags::ACC_INTERFACE));
+        !(access & DexAccessFlags::ACC_INTERFACE));
   TRACE(EMPTY, 4, "   references: %d\n",
-      class_references.count(cls->get_type()));
-  bool remove =
-         empty_class &&
-         can_delete(cls) &&
-         !(access & DexAccessFlags::ACC_INTERFACE) &&
-         class_references.count(cls->get_type()) == 0;
+        class_references.count(cls->get_type()));
+  bool remove = empty_class && can_delete(cls) &&
+                !(access & DexAccessFlags::ACC_INTERFACE) &&
+                class_references.count(cls->get_type()) == 0;
   TRACE(EMPTY, 4, "   remove: %d\n", remove);
   return remove;
 }
 
-void process_annotation(
-    std::unordered_set<const DexType*>* class_references,
-    DexAnnotation* annotation) {
+void process_annotation(std::unordered_set<const DexType*>* class_references,
+                        DexAnnotation* annotation) {
   std::vector<DexType*> ltype;
   annotation->gather_types(ltype);
   for (DexType* dextype : ltype) {
@@ -107,13 +103,15 @@ size_t remove_empty_classes(Scope& classes) {
   // which should not be deleted even if they are deemed to be empty.
   std::unordered_set<const DexType*> class_references;
 
-  walk::annotations(classes, [&](DexAnnotation* annotation)
-    { process_annotation(&class_references, annotation); });
+  walk::annotations(classes, [&](DexAnnotation* annotation) {
+    process_annotation(&class_references, annotation);
+  });
 
   walk::code(classes,
-            [](DexMethod*) { return true; },
-            [&](DexMethod* meth, IRCode& code)
-               { process_code(&class_references, meth, code); });
+             [](DexMethod*) { return true; },
+             [&](DexMethod* meth, IRCode& code) {
+               process_code(&class_references, meth, code);
+             });
 
   size_t classes_before_size = classes.size();
 
@@ -125,18 +123,23 @@ size_t remove_empty_classes(Scope& classes) {
 
   TRACE(EMPTY, 3, "About to erase classes.\n");
   classes.erase(remove_if(classes.begin(), classes.end(),
-    [&](DexClass* cls) { return is_empty_class(cls, class_references); }),
-    classes.end());
+                          [&](DexClass* cls) {
+                            return is_empty_class(cls, class_references);
+                          }),
+                classes.end());
 
   auto num_classes_removed = classes_before_size - classes.size();
   TRACE(EMPTY, 1, "Empty classes removed: %ld\n", num_classes_removed);
   return num_classes_removed;
 }
 
-void RemoveEmptyClassesPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RemoveEmptyClassesPass::run_pass(DexStoresVector& stores,
+                                      ConfigFiles& cfg,
+                                      PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(EMPTY, 1, "RemoveEmptyClassesPass not run because no ProGuard configuration was provided.");
+    TRACE(EMPTY, 1,
+          "RemoveEmptyClassesPass not run because no ProGuard configuration "
+          "was provided.");
     return;
   }
   auto scope = build_class_scope(stores);

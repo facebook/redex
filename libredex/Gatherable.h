@@ -19,7 +19,7 @@ class Gatherable {
  protected:
   Gatherable() {}
 
-  virtual ~Gatherable() {};
+  virtual ~Gatherable(){};
 
  public:
   virtual void gather_strings(std::vector<DexString*>& lstring) const {}

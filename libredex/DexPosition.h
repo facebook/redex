@@ -32,7 +32,7 @@ struct DexPosition final {
 
 class PositionMapper {
  public:
-  virtual ~PositionMapper() {};
+  virtual ~PositionMapper(){};
   virtual DexString* get_source_file(const DexClass*) = 0;
   virtual uint32_t position_to_line(DexPosition*) = 0;
   virtual void register_position(DexPosition* pos) = 0;
@@ -53,10 +53,12 @@ class RealPositionMapper : public PositionMapper {
   std::string m_filename_v2;
   std::vector<DexPosition*> m_positions;
   std::unordered_map<DexPosition*, int64_t> m_pos_line_map;
+
  protected:
   uint32_t get_line(DexPosition*);
   void write_map_v1();
   void write_map_v2();
+
  public:
   RealPositionMapper(const std::string& filename,
                      const std::string& filename_v2)
@@ -70,9 +72,7 @@ class RealPositionMapper : public PositionMapper {
 class NoopPositionMapper : public PositionMapper {
  public:
   virtual DexString* get_source_file(const DexClass*);
-  virtual uint32_t position_to_line(DexPosition* pos) {
-    return pos->line;
-  }
+  virtual uint32_t position_to_line(DexPosition* pos) { return pos->line; }
   virtual void register_position(DexPosition* pos) {}
   virtual void write_map() {}
 };

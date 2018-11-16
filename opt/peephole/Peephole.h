@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include <vector>
 #include "Pass.h"
+#include <vector>
 
 class PeepholePass : public Pass {
  public:

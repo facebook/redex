@@ -47,8 +47,8 @@ class Analyzer;
 enum AbstractObjectKind {
   OBJECT, // An object created with `new`
   STRING, // A string literal
-  CLASS,  // A java.lang.Class object
-  FIELD,  // A java.lang.reflect.Field object
+  CLASS, // A java.lang.Class object
+  FIELD, // A java.lang.reflect.Field object
   METHOD, // A java.lang.reflect.Method object
 };
 

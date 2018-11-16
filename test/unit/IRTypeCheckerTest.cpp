@@ -546,10 +546,8 @@ TEST_F(IRTypeCheckerTest, polymorphicConstants3) {
 TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_MOVE_WIDE, {1_v, 7_v}),
-      dasm(OPCODE_MOVE_WIDE, {0_v, 1_v}),
-      dasm(OPCODE_MOVE_WIDE, {0_v, 10_v}),
-      dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
+      dasm(OPCODE_MOVE_WIDE, {1_v, 7_v}),  dasm(OPCODE_MOVE_WIDE, {0_v, 1_v}),
+      dasm(OPCODE_MOVE_WIDE, {0_v, 10_v}), dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
   add_code(insns);

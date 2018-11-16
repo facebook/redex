@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstring>
 #include <cinttypes>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -176,8 +176,9 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("printseeds,q",
                    po::value<std::vector<std::string>>(),
                    "file to report seeds computed by redex");
-  od.add_options()("used-js-assets", po::value<std::vector<std::string>>(),
-                   "A JSON file (or files) containing a list of resources used by JS");
+  od.add_options()(
+      "used-js-assets", po::value<std::vector<std::string>>(),
+      "A JSON file (or files) containing a list of resources used by JS");
   od.add_options()("warn,w",
                    po::value<std::vector<int>>(),
                    "warning level:\n"
@@ -312,7 +313,8 @@ Arguments parse_args(int argc, char* argv[]) {
   // overwrite values read from the config file regardless of the order of
   // arguments.
   if (vm.count("apkdir")) {
-    args.entry_data["apk_dir"] = args.config["apk_dir"] = take_last(vm["apkdir"]);
+    args.entry_data["apk_dir"] = args.config["apk_dir"] =
+        take_last(vm["apkdir"]);
   }
 
   if (vm.count("printseeds")) {
@@ -320,7 +322,8 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   if (vm.count("used-js-assets")) {
-    const auto& js_assets_lists = vm["used-js-assets"].as<std::vector<std::string>>();
+    const auto& js_assets_lists =
+        vm["used-js-assets"].as<std::vector<std::string>>();
     Json::Value array(Json::arrayValue);
     for (const auto& list : js_assets_lists) {
       array.append(list);
@@ -876,7 +879,6 @@ int main(int argc, char* argv[]) {
   Json::Value stats;
   {
     Timer redex_all_main_timer("redex-all main()");
-
 
     g_redex = new RedexContext();
 

@@ -48,9 +48,7 @@ class VirtualRegistersFile {
    */
   bool is_free(reg_t pos, size_t width) const;
 
-  reg_t size() const {
-    return m_free.size();
-  }
+  reg_t size() const { return m_free.size(); }
 
   friend std::ostream& operator<<(std::ostream&, const VirtualRegistersFile&);
 

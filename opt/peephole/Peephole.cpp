@@ -633,8 +633,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(
-              false, "Unexpected string directive: 0x%x", replace_info.string);
+          always_assert_log(false, "Unexpected string directive: 0x%x",
+                            replace_info.string);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
@@ -657,8 +657,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(
-              false, "Unexpected literal directive 0x%x", replace_info.literal);
+          always_assert_log(false, "Unexpected literal directive 0x%x",
+                            replace_info.literal);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::type) {
@@ -670,8 +670,8 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          always_assert_log(
-              false, "Unexpected type directive 0x%x", replace_info.type);
+          always_assert_log(false, "Unexpected type directive 0x%x",
+                            replace_info.type);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
@@ -682,8 +682,8 @@ struct Matcher {
         case Field::B:
           replace->set_field(matched_fields.at(Field::B));
         default:
-          always_assert_log(
-              false, "Unexpected field directive 0x%x", replace_info.field);
+          always_assert_log(false, "Unexpected field directive 0x%x",
+                            replace_info.field);
         }
       }
     }
@@ -744,16 +744,16 @@ DexPattern invoke_StringBuilder_append(Register instance,
   return {{OPCODE_INVOKE_VIRTUAL},
           {instance, argument},
           {},
-          DexMethod::make_method(
-              LjavaStringBuilder, "append", LjavaStringBuilder, {param_type})};
+          DexMethod::make_method(LjavaStringBuilder, "append",
+                                 LjavaStringBuilder, {param_type})};
 };
 
 DexPattern invoke_String_valueOf(Register argument, const char* param_type) {
   return {{OPCODE_INVOKE_STATIC},
           {argument},
           {},
-          DexMethod::make_method(
-              LjavaString, "valueOf", LjavaString, {param_type})};
+          DexMethod::make_method(LjavaString, "valueOf", LjavaString,
+                                 {param_type})};
 };
 
 DexPattern invoke_String_equals(Register instance, Register argument) {
@@ -799,10 +799,7 @@ DexPattern const_literal(uint16_t opcode, Register dest, Literal literal) {
 };
 
 DexPattern const_wide(Register dest, Literal literal) {
-  return {{OPCODE_CONST_WIDE},
-          {},
-          {dest},
-          literal};
+  return {{OPCODE_CONST_WIDE}, {}, {dest}, literal};
 };
 
 DexPattern const_integer(Register dest, Literal literal) {
@@ -828,23 +825,19 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It coalesces init(void) and append(string) into init(string).
       // new StringBuilder().append("...") = new StringBuilder("...")
       {"Coalesce_InitVoid_AppendString",
-       {invoke_StringBuilder_init(Register::A),
-        const_string(String::A),
+       {invoke_StringBuilder_init(Register::A), const_string(String::A),
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::A)},
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_init_String(Register::A, Register::B)}},
 
       // It coalesces consecutive two append(string) to a single append call.
       // StringBuilder.append("A").append("B") = StringBuilder.append("AB")
       {"Coalesce_AppendString_AppendString",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_string(String::B),
+        move_result_object(Register::C), const_string(String::B),
         move_result_pseudo_object(Register::D),
         invoke_StringBuilder_append(Register::C, Register::D, LjavaString),
         move_result_object(Register::E)},
@@ -869,11 +862,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // (2) the last instruction of the replacement is not an invoke AND
       // (3) the instruction after the pattern may be a move_result_object
       {"Coalesce_AppendString_AppendString_WithoutMoveResult",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_string(String::B),
+        move_result_object(Register::C), const_string(String::B),
         move_result_pseudo_object(Register::D),
         invoke_StringBuilder_append(Register::C, Register::D, LjavaString)},
        // pre opt write order: B, C, D
@@ -892,10 +883,8 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It evaluates the length of a literal in compile time.
       // "stringA".length() ==> length_of_stringA
       {"CompileTime_StringLength",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::A),
-        invoke_String_length(Register::A),
-        move_result(Register::B)},
+       {const_string(String::A), move_result_pseudo_object(Register::A),
+        invoke_String_length(Register::A), move_result(Register::B)},
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
         const_literal(OPCODE_CONST, Register::B, Literal::Length_String_A)}},
@@ -903,8 +892,7 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing
       {"Remove_AppendEmptyString",
-       {const_string(String::empty),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::empty), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C)},
        {const_string(String::empty), // maybe dead
@@ -912,8 +900,7 @@ static const std::vector<Pattern>& get_string_patterns() {
         move_object(Register::C, Register::A)}}, // maybe dead
 
       {"Remove_AppendEmptyString_WithoutMoveResult",
-       {const_string(String::empty),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::empty), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString)},
        {const_string(String::empty),
         move_result_pseudo_object(Register::B)}}, // maybe dead
@@ -943,11 +930,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It coalesces append(string) and append(integer) into append(string).
       // StringBuilder.append("...").append(I) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendInt",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_integer(Register::D, Literal::A),
+        move_result_object(Register::C), const_integer(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "I"),
         move_result_object(Register::E)},
        // pre opt write order: B, C, D, E
@@ -963,11 +948,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // post opt write order B, B, C, D, E
 
       {"Coalesce_AppendString_AppendInt_WithoutMoveResult",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_integer(Register::D, Literal::A),
+        move_result_object(Register::C), const_integer(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "I")},
        // pre opt write order: B, C, D
        {// (2 + 3 + 1 + [1, 2, 3] + 3) - (2 + 3 + 2 + 1 + [1, 2, 3]) = 1
@@ -983,11 +966,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It coalesces append(string) and append(char) into append(string).
       // StringBuilder.append("...").append(C) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendChar",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_char(Register::D, Literal::A),
+        move_result_object(Register::C), const_char(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "C"),
         move_result_object(Register::E)},
        // pre opt write order: B, C, D, A
@@ -1003,11 +984,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // post opt write order: B, B, C, D, E
 
       {"Coalesce_AppendString_AppendChar_WithoutMoveResult",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_char(Register::D, Literal::A),
+        move_result_object(Register::C), const_char(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "C")},
        // pre opt write order: B, C, D
        {// (2 + 3 + 1 + [1, 2, 3] + 3) - (2 + 3 + 2 + 1 + [1, 2, 3]) = 1
@@ -1023,8 +1002,7 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It coalesces append(string) and append(boolean) into append(string).
       // StringBuilder.append("...").append(Z) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendBoolean",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
         const_literal(OPCODE_CONST, Register::D, Literal::A),
@@ -1042,8 +1020,7 @@ static const std::vector<Pattern>& get_string_patterns() {
       // post opt write order: B, B, C, D, E
 
       {"Coalesce_AppendString_AppendBoolean_WithoutMoveResult",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
         move_result_object(Register::C),
         const_literal(OPCODE_CONST, Register::D, Literal::A),
@@ -1061,11 +1038,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It coalesces append(string) and append(long int) into append(string).
       // StringBuilder.append("...").append(J) = StringBuilder.append("....")
       {"Coalesce_AppendString_AppendLongInt",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_wide(Register::D, Literal::A),
+        move_result_object(Register::C), const_wide(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "J"),
         move_result_object(Register::E)},
        // pre opt write order: B, C, D, E
@@ -1081,11 +1056,9 @@ static const std::vector<Pattern>& get_string_patterns() {
       // post opt write order: B, B, C, D, E
 
       {"Coalesce_AppendString_AppendLongInt_WithoutMoveResult",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::C),
-        const_wide(Register::D, Literal::A),
+        move_result_object(Register::C), const_wide(Register::D, Literal::A),
         invoke_StringBuilder_append(Register::C, Register::D, "J")},
        // pre opt write order: B, C, D
        {// (2 + 3 + 1 + [2, 3, 5] + 3) - (2 + 3 + 2 + 1 + [2, 3, 5]) = 1
@@ -1101,18 +1074,16 @@ static const std::vector<Pattern>& get_string_patterns() {
       // It evaluates the identify of two literal strings in compile time.
       // "stringA".equals("stringB") ==> true or false
       {"CompileTime_StringCompare",
-       {const_string(String::A),
-        move_result_pseudo_object(Register::A),
-        const_string(String::B),
-        move_result_pseudo_object(Register::B),
+       {const_string(String::A), move_result_pseudo_object(Register::A),
+        const_string(String::B), move_result_pseudo_object(Register::B),
         invoke_String_equals(Register::A, Register::B),
         move_result(Register::C)},
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
         const_string(String::B), // maybe dead
         move_result_pseudo_object(Register::B),
-        const_literal(
-            OPCODE_CONST, Register::C, Literal::Compare_Strings_A_B)}},
+        const_literal(OPCODE_CONST, Register::C,
+                      Literal::Compare_Strings_A_B)}},
 
       // It replaces valueOf on a boolean value by "true" or "false" directly.
       // String.valueof(true/false) ==> "true" or "false"
@@ -1373,10 +1344,7 @@ static bool first_instruction_literal_is(const Matcher& m) {
 }
 
 DexPattern mul_lit(Register src, Register dst) {
-  return {{OPCODE_MUL_INT_LIT8,
-           OPCODE_MUL_INT_LIT16},
-          {src},
-          {dst}};
+  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}};
 }
 
 std::vector<DexPattern> div_lit(Register src, Register dst) {
@@ -1429,15 +1397,12 @@ const std::vector<Pattern>& get_arith_patterns() {
 }
 
 const DexPattern invoke_class_get_simple_name() {
-  return {{OPCODE_INVOKE_VIRTUAL,
-           OPCODE_INVOKE_SUPER,
-           OPCODE_INVOKE_DIRECT,
-           OPCODE_INVOKE_STATIC,
-           OPCODE_INVOKE_INTERFACE},
+  return {{OPCODE_INVOKE_VIRTUAL, OPCODE_INVOKE_SUPER, OPCODE_INVOKE_DIRECT,
+           OPCODE_INVOKE_STATIC, OPCODE_INVOKE_INTERFACE},
           {Register::A},
           {},
-          DexMethod::make_method(
-              "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {})};
+          DexMethod::make_method("Ljava/lang/Class;", "getSimpleName",
+                                 "Ljava/lang/String;", {})};
 }
 
 DexPattern const_class(Type type) {
@@ -1447,10 +1412,8 @@ DexPattern const_class(Type type) {
 const std::vector<Pattern>& get_func_patterns() {
   static const std::vector<Pattern> kFuncPatterns = {
       {"Remove_LangClass_GetSimpleName",
-       {const_class(Type::A),
-        move_result_pseudo_object(Register::A),
-        invoke_class_get_simple_name(),
-        move_result_object(Register::B)},
+       {const_class(Type::A), move_result_pseudo_object(Register::A),
+        invoke_class_get_simple_name(), move_result_object(Register::B)},
        {DexPattern::copy_matched_instruction(0), // const_class (maybe dead)
         move_result_pseudo_object(Register::A),
         const_string(String::Type_A_get_simple_name),
@@ -1483,8 +1446,8 @@ class PeepholeOptimizer {
   int m_stats_inserted = 0;
 
  public:
-  explicit PeepholeOptimizer(
-      PassManager& mgr, const std::vector<std::string>& disabled_peepholes)
+  explicit PeepholeOptimizer(PassManager& mgr,
+                             const std::vector<std::string>& disabled_peepholes)
       : m_mgr(mgr) {
     for (const auto& pattern_list : patterns::get_all_patterns()) {
       for (const Pattern& pattern : pattern_list) {
@@ -1597,7 +1560,7 @@ class PeepholeOptimizer {
     }
   }
 };
-}
+} // namespace
 
 void PeepholePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& /*cfg*/,

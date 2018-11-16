@@ -49,20 +49,22 @@ class RenameClassesPassV2 : public Pass {
     jw.get("dont_rename_types_with_reflection", {},
            m_dont_rename_types_with_reflection);
     m_dont_rename_specific.insert(dont_rename_specific.begin(),
-        dont_rename_specific.end());
+                                  dont_rename_specific.end());
   }
 
   virtual void eval_pass(DexStoresVector& stores,
-      ConfigFiles& cfg, PassManager& mgr) override;
+                         ConfigFiles& cfg,
+                         PassManager& mgr) override;
   virtual void run_pass(DexStoresVector& stores,
-      ConfigFiles& cfg, PassManager& mgr) override;
+                        ConfigFiles& cfg,
+                        PassManager& mgr) override;
 
  private:
   std::unordered_map<const DexType*, std::string>
   build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
 
   std::unordered_set<std::string> build_dont_rename_resources(
-    PassManager&, std::unordered_map<const DexType*, std::string>&);
+      PassManager&, std::unordered_map<const DexType*, std::string>&);
   std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
   std::unordered_set<std::string> build_dont_rename_for_types_with_reflection(
       Scope&, const ProguardMap&);

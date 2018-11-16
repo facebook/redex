@@ -26,7 +26,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
                         PassManager& mgr) {
 
   auto scope = build_class_scope(stores);
-  field_op_tracker::FieldStatsMap field_stats = field_op_tracker::analyze(scope);
+  field_op_tracker::FieldStatsMap field_stats =
+      field_op_tracker::analyze(scope);
 
   uint32_t unread_fields = 0;
   for (auto& pair : field_stats) {
@@ -49,27 +50,27 @@ void PassImpl::run_pass(DexStoresVector& stores,
 
   // Remove the writes to unread fields.
   const auto& const_field_stats = field_stats;
-  walk::parallel::code(
-      scope, [&const_field_stats](const DexMethod*, IRCode& code) {
-        for (auto& mie : InstructionIterable(code)) {
-          auto insn = mie.insn;
-          if (!insn->has_field()) {
-            continue;
-          }
-          auto field = resolve_field(insn->get_field());
-          if (!can_remove(field)) {
-            continue;
-          }
-          auto it = const_field_stats.find(field);
-          if (it == const_field_stats.end()) {
-            continue;
-          }
-          if (it->second.reads == 0) {
-            TRACE(RMUF, 5, "Removing %s\n", SHOW(insn));
-            code.remove_opcode(code.iterator_to(mie));
-          }
-        }
-      });
+  walk::parallel::code(scope,
+                       [&const_field_stats](const DexMethod*, IRCode& code) {
+                         for (auto& mie : InstructionIterable(code)) {
+                           auto insn = mie.insn;
+                           if (!insn->has_field()) {
+                             continue;
+                           }
+                           auto field = resolve_field(insn->get_field());
+                           if (!can_remove(field)) {
+                             continue;
+                           }
+                           auto it = const_field_stats.find(field);
+                           if (it == const_field_stats.end()) {
+                             continue;
+                           }
+                           if (it->second.reads == 0) {
+                             TRACE(RMUF, 5, "Removing %s\n", SHOW(insn));
+                             code.remove_opcode(code.iterator_to(mie));
+                           }
+                         }
+                       });
 }
 
 static PassImpl s_pass;

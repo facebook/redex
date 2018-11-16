@@ -7,19 +7,20 @@
 
 #pragma once
 
+#include "ClassHierarchy.h"
+#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "DexAccess.h"
 #include "ReachableClasses.h"
-#include "ClassHierarchy.h"
 #include <list>
 
-constexpr int kMaxIdentChar (52);
+constexpr int kMaxIdentChar(52);
 
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
 typedef std::unordered_map<std::string,
-    std::unordered_map<std::string, std::string>> NameMapping;
+                           std::unordered_map<std::string, std::string>>
+    NameMapping;
 
 // Renames a field in the Dex
 void rename_field(DexField* field, const std::string& new_name);
@@ -32,8 +33,8 @@ void rename_method(DexMethod* method, const std::string& new_name);
 template <class T>
 bool should_rename_elem(const T* member) {
   auto cls = type_class(member->get_class());
-  return can_rename(member) && !member->is_external() &&
-      cls != nullptr && !cls->is_external();
+  return can_rename(member) && !member->is_external() && cls != nullptr &&
+         !cls->is_external();
 }
 
 /*
@@ -45,27 +46,30 @@ bool should_rename_elem(const T* member) {
  */
 template <class T>
 class DexNameWrapper {
-protected:
+ protected:
   T dex_elem;
   // the new name that we're trying to give this element
   bool has_new_name{false};
   std::string name{"INVALID_DEFAULT_NAME"};
 
-public:
+ public:
   // Default constructor is only ever used for map template to work correctly
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
-  virtual ~DexNameWrapper() { }
+  virtual ~DexNameWrapper() {}
   DexNameWrapper(DexNameWrapper&& other) = default;
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
   // the pointer it is passed
-  explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) { }
+  explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) {}
 
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
   DexNameWrapper& operator=(DexNameWrapper&& other) = default;
 
-  inline T get() { always_assert(dex_elem != nullptr); return dex_elem; }
+  inline T get() {
+    always_assert(dex_elem != nullptr);
+    return dex_elem;
+  }
   inline const T get() const {
     always_assert(dex_elem != nullptr);
     return dex_elem;
@@ -81,7 +85,7 @@ public:
     has_new_name = true;
     name = new_name;
     // Uncomment this line for debug renaming
-    //name = std::string(SHOW(dex_elem->get_name())) + "_" + new_name;
+    // name = std::string(SHOW(dex_elem->get_name())) + "_" + new_name;
   }
 
   // Meant to be overridden, but we don't want this class to be abstract
@@ -109,18 +113,15 @@ using DexFieldWrapper = DexNameWrapper<DexField*>;
 using DexMethodWrapper = DexNameWrapper<DexMethod*>;
 
 class FieldNameWrapper : public DexFieldWrapper {
-public:
+ public:
   FieldNameWrapper() = default;
-  explicit FieldNameWrapper(DexField* elem) :
-      DexFieldWrapper(elem) { }
+  explicit FieldNameWrapper(DexField* elem) : DexFieldWrapper(elem) {}
 
-  bool should_rename() override {
-    return true;
-  }
+  bool should_rename() override { return true; }
 };
 
 class MethodNameWrapper : public DexMethodWrapper {
-private:
+ private:
   int n_links = 1;
   // Allows us to link wrappers together to show groups of wrappers that
   // have to be renamed together. If there is a non-null next pointer, any calls
@@ -141,10 +142,11 @@ private:
     if (next == nullptr) return this;
     return next->find_end_link();
   }
-public:
+
+ public:
   MethodNameWrapper() = default;
-  explicit MethodNameWrapper(DexMethod* dex_elem) :
-      DexNameWrapper<DexMethod*>(dex_elem), next(nullptr) {
+  explicit MethodNameWrapper(DexMethod* dex_elem)
+      : DexNameWrapper<DexMethod*>(dex_elem), next(nullptr) {
     // Make sure on construction any external elements are unrenamable
     renamable = should_rename_elem(dex_elem);
   }
@@ -186,8 +188,8 @@ public:
       // renamable
       if (!renamable || !other->should_rename()) {
         TRACE(OBFUSCATE, 4, "Elem %s marking\n\t%s unrenamable\n",
-            SHOW(renamable ? other->get() : this->get()),
-            SHOW(renamable ? this->get() : other->get()));
+              SHOW(renamable ? other->get() : this->get()),
+              SHOW(renamable ? this->get() : other->get()));
         other->mark_unrenamable();
       }
     } else {
@@ -235,12 +237,12 @@ public:
  */
 template <class T>
 class NameGenerator {
-protected:
+ protected:
   int ctr{1};
   inline char get_ident(int num) {
     if (num < 26) {
       return 'A' + num;
-    } else {//if (num >= 26 && num < 52){
+    } else { // if (num >= 26 && num < 52){
       return 'a' + num - 26;
     }
   }
@@ -264,15 +266,15 @@ protected:
       }
       ctr += 1;
       TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s\n",
-          res.c_str());
+            res.c_str());
     } while (ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
     return res;
   }
 
-public:
+ public:
   NameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-      ids_to_avoid(ids_to_avoid), used_ids(used_ids) {}
+                std::unordered_set<std::string>& used_ids)
+      : ids_to_avoid(ids_to_avoid), used_ids(used_ids) {}
   virtual ~NameGenerator() = default;
 
   // We want to rename the DexField pointed to by this wrapper.
@@ -293,10 +295,10 @@ public:
 // provided.
 template <class T>
 class SimpleNameGenerator : public NameGenerator<T> {
-public:
+ public:
   SimpleNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-    NameGenerator<T>(ids_to_avoid, used_ids) {}
+                      std::unordered_set<std::string>& used_ids)
+      : NameGenerator<T>(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexNameWrapper<T>* wrap) override {
     if (wrap->is_modified()) return;
@@ -321,10 +323,10 @@ public:
 };
 
 class MethodNameGenerator : public SimpleNameGenerator<DexMethod*> {
-public:
+ public:
   MethodNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-    SimpleNameGenerator<DexMethod*>(ids_to_avoid, used_ids) { }
+                      std::unordered_set<std::string>& used_ids)
+      : SimpleNameGenerator<DexMethod*>(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexMethodWrapper* wrap) override {
     if (wrap->is_modified()) return;
@@ -332,14 +334,11 @@ public:
       std::string new_name(this->next_name());
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
-      TRACE(OBFUSCATE, 3,
-            "\tTrying method name %s for %s\n",
-            wrap->get_name(),
+      TRACE(OBFUSCATE, 3, "\tTrying method name %s for %s\n", wrap->get_name(),
             SHOW(wrap->get()));
-    } while (DexMethod::get_method(
-        wrap->get()->get_class(),
-        DexString::make_string(wrap->get_name()),
-        wrap->get()->get_proto()) != nullptr);
+    } while (DexMethod::get_method(wrap->get()->get_class(),
+                                   DexString::make_string(wrap->get_name()),
+                                   wrap->get()->get_proto()) != nullptr);
     TRACE(OBFUSCATE,
           2,
           "\tIntending to rename method %s (%s) to %s ids to avoid %d\n",
@@ -354,8 +353,8 @@ public:
 class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
  public:
   FieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-    SimpleNameGenerator<DexField*>(ids_to_avoid, used_ids) { }
+                     std::unordered_set<std::string>& used_ids)
+      : SimpleNameGenerator<DexField*>(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexFieldWrapper* wrap) override {
     if (wrap->is_modified()) return;
@@ -363,14 +362,11 @@ class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
       std::string new_name(this->next_name());
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
-      TRACE(OBFUSCATE, 2,
-            "\tTrying field name %s for %s\n",
-            wrap->get_name(),
+      TRACE(OBFUSCATE, 2, "\tTrying field name %s for %s\n", wrap->get_name(),
             SHOW(wrap->get()));
-    } while (DexField::get_field(
-        wrap->get()->get_class(),
-        DexString::make_string(wrap->get_name()),
-        wrap->get()->get_type()) != nullptr);
+    } while (DexField::get_field(wrap->get()->get_class(),
+                                 DexString::make_string(wrap->get_name()),
+                                 wrap->get()->get_type()) != nullptr);
     // Keep spinning on a name until you find one that isn't used at all
     TRACE(OBFUSCATE,
           2,
@@ -391,10 +387,11 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
   std::map<DexField*, DexFieldWrapper*, dexfields_comparator> fields;
   std::map<DexField*, DexFieldWrapper*, dexfields_comparator>
       static_final_null_fields;
+
  public:
   StaticFieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
-      std::unordered_set<std::string>& used_ids) :
-    NameGenerator(ids_to_avoid, used_ids) {}
+                           std::unordered_set<std::string>& used_ids)
+      : NameGenerator(ids_to_avoid, used_ids) {}
 
   void find_new_name(DexFieldWrapper* wrap) override {
     DexField* field = wrap->get();
@@ -410,7 +407,8 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
     // such that the static final null fields are at the end
     std::vector<std::string> names;
     for (unsigned int i = 0;
-        i < fields.size() + static_final_null_fields.size(); ++i)
+         i < fields.size() + static_final_null_fields.size();
+         ++i)
       names.emplace_back(this->next_name());
     TRACE(OBFUSCATE, 3, "Static Generator\n");
     unsigned int i = 0;
@@ -421,8 +419,8 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
       this->used_ids.insert(new_name);
       DexField* field = wrap->get();
       TRACE(OBFUSCATE, 3, "\tIntending to rename field (%s) %s:%s to %s\n",
-          SHOW(field->get_type()), SHOW(field->get_class()),
-          SHOW(field->get_name()), new_name.c_str());
+            SHOW(field->get_type()), SHOW(field->get_class()),
+            SHOW(field->get_name()), new_name.c_str());
     }
     for (auto& pair : static_final_null_fields) {
       DexFieldWrapper* wrap = pair.second;
@@ -431,9 +429,9 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
       this->used_ids.insert(new_name);
       DexField* field = wrap->get();
       TRACE(OBFUSCATE, 3,
-          "\tIntending to rename static null field (%s) %s:%s to %s\n",
-          SHOW(field->get_type()), SHOW(field->get_class()),
-          SHOW(field->get_name()), new_name.c_str());
+            "\tIntending to rename static null field (%s) %s:%s to %s\n",
+            SHOW(field->get_type()), SHOW(field->get_class()),
+            SHOW(field->get_name()), new_name.c_str());
     }
   }
 
@@ -450,14 +448,16 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
 // K - DexType/DexProto - the type of the key we're using in the map
 template <class T, class R, class S, class K>
 class DexElemManager {
-protected:
+ protected:
   // Map from class_name -> type -> old_name ->
   //   DexNameWrapper (contains new name)
   // Note: unique_ptr necessary here to avoid object slicing
-  std::unordered_map<DexType*,
-      std::unordered_map<K,
-          std::unordered_map<DexString*,
-              std::unique_ptr<DexNameWrapper<T>>>>> elements;
+  std::unordered_map<
+      DexType*,
+      std::unordered_map<
+          K,
+          std::unordered_map<DexString*, std::unique_ptr<DexNameWrapper<T>>>>>
+      elements;
   using RefCtrFn = std::function<S(const std::string&)>;
   using SigGetFn = std::function<K(R)>;
   using ElemCtrFn = std::function<DexNameWrapper<T>*(T&)>;
@@ -467,28 +467,26 @@ protected:
 
   bool mark_all_unrenamable;
 
-public:
-  DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr) :
-      sig_getter_fn(get_sig),
-      ref_getter_fn(ref_ctr),
-      elemCtr(elem_ctr),
-      mark_all_unrenamable(false) { }
+ public:
+  DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr)
+      : sig_getter_fn(get_sig),
+        ref_getter_fn(ref_ctr),
+        elemCtr(elem_ctr),
+        mark_all_unrenamable(false) {}
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
-  //void lock_elements() { mark_all_unrenamable = true; }
-  //void unlock_elements() { mark_all_unrenamable = false; }
+  // void lock_elements() { mark_all_unrenamable = true; }
+  // void unlock_elements() { mark_all_unrenamable = false; }
 
-  inline bool contains_elem(
-      DexType* cls, K sig, DexString* name) {
-    return elements.count(cls) > 0 &&
-      elements[cls].count(sig) > 0 &&
-      elements[cls][sig].count(name) > 0;
+  inline bool contains_elem(DexType* cls, K sig, DexString* name) {
+    return elements.count(cls) > 0 && elements[cls].count(sig) > 0 &&
+           elements[cls][sig].count(name) > 0;
   }
 
   inline bool contains_elem(R elem) {
-    return contains_elem(
-        elem->get_class(), sig_getter_fn(elem), elem->get_name());
+    return contains_elem(elem->get_class(), sig_getter_fn(elem),
+                         elem->get_name());
   }
 
   inline DexNameWrapper<T>* emplace(T elem) {
@@ -497,16 +495,17 @@ public:
     if (mark_all_unrenamable)
       elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
           ->mark_unrenamable();
-    return elements[
-        elem->get_class()][sig_getter_fn(elem)][elem->get_name()].get();
+    return elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
+        .get();
   }
 
   // Mirrors the map get operator, but ensures we create correct wrappers
   // if they don't exist
   inline DexNameWrapper<T>* operator[](T elem) {
-    return contains_elem(elem) ?
-      elements[elem->get_class()]
-        [sig_getter_fn(elem)][elem->get_name()].get() : emplace(elem);
+    return contains_elem(elem) ? elements[elem->get_class()]
+                                         [sig_getter_fn(elem)][elem->get_name()]
+                                             .get()
+                               : emplace(elem);
   }
 
   // Commits all the renamings in elements to the dex by modifying the
@@ -524,7 +523,7 @@ public:
               !wrap->should_commit() ||
               strcmp(wrap->get()->get_name()->c_str(), wrap->get_name()) == 0) {
             TRACE(OBFUSCATE, 2, "Not committing %s to %s\n", SHOW(wrap->get()),
-                wrap->get_name());
+                  wrap->get_name());
             continue;
           }
           auto elem = wrap->get();
@@ -550,15 +549,14 @@ public:
     return renamings;
   }
 
-private:
+ private:
   // Returns the def for that class and ref if it exists, nullptr otherwise
   T find_def(R ref, DexType* cls) {
     if (cls == nullptr) return nullptr;
     if (contains_elem(cls, sig_getter_fn(ref), ref->get_name())) {
       DexNameWrapper<T>* wrap =
-        elements[cls][sig_getter_fn(ref)][ref->get_name()].get();
-      if (wrap->is_modified())
-        return wrap->get();
+          elements[cls][sig_getter_fn(ref)][ref->get_name()].get();
+      if (wrap->is_modified()) return wrap->get();
     }
     return nullptr;
   }
@@ -599,12 +597,11 @@ private:
     for (auto& class_itr : elements) {
       for (auto& type_itr : class_itr.second) {
         for (auto& name_wrap : type_itr.second) {
-          TRACE(OBFUSCATE, 2, " (%s) %s\n",
-              SHOW(type_itr.first),
-              name_wrap.second->get_printable().c_str());
-              /*SHOW(class_itr.first),
-              SHOW(name_wrap.first),
-              name_wrap.second->get_name());*/
+          TRACE(OBFUSCATE, 2, " (%s) %s\n", SHOW(type_itr.first),
+                name_wrap.second->get_printable().c_str());
+          /*SHOW(class_itr.first),
+          SHOW(name_wrap.first),
+          name_wrap.second->get_name());*/
         }
       }
     }
@@ -621,7 +618,7 @@ DexMethodManager new_dex_method_manager();
 // Look at a list of members and check if there is a renamable member
 template <class T, class R, class S, class K>
 bool contains_renamable_elem(const std::vector<T>& elems,
-    DexElemManager<T, R, S, K>& name_mapping) {
+                             DexElemManager<T, R, S, K>& name_mapping) {
   for (T e : elems)
     if (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
         name_mapping[e]->should_rename())
@@ -629,11 +626,10 @@ bool contains_renamable_elem(const std::vector<T>& elems,
   return false;
 }
 
-
 // Static state of the renamer (wrapper for args for obfuscation)
 template <class T>
 class RenamingContext {
-public:
+ public:
   const std::vector<T>& elems;
   const std::unordered_set<std::string>& ids_to_avoid;
   const bool operate_on_privates;
@@ -653,7 +649,6 @@ public:
   virtual bool can_rename_elem(T elem) const {
     return can_rename(elem) && operate_on_privates == is_private(elem);
   }
-
 };
 
 typedef RenamingContext<DexField*> FieldRenamingContext;
@@ -664,28 +659,30 @@ class MethodRenamingContext : public RenamingContext<DexMethod*> {
   DexString* initstr = DexString::get_string("<init>");
   DexString* clinitstr = DexString::get_string("<clinit>");
   DexMethodManager& name_mapping;
-public:
- MethodRenamingContext(std::vector<DexMethod*>& elems,
-                       std::unordered_set<std::string>& ids_to_avoid,
-                       NameGenerator<DexMethod*>& name_gen,
-                       DexMethodManager& name_mapping,
-                       bool operate_on_privates)
-     : RenamingContext<DexMethod*>(
-           elems, ids_to_avoid, name_gen, operate_on_privates),
-       name_mapping(name_mapping) {}
 
- // For methods we have to make sure we don't rename <init> or <clinit> ever
- virtual bool can_rename_elem(DexMethod* elem) const override {
-   return should_rename_elem(elem) && operate_on_privates == is_private(elem) &&
-          elem->get_name() != initstr && elem->get_name() != clinitstr &&
-          name_mapping[elem]->should_rename();
+ public:
+  MethodRenamingContext(std::vector<DexMethod*>& elems,
+                        std::unordered_set<std::string>& ids_to_avoid,
+                        NameGenerator<DexMethod*>& name_gen,
+                        DexMethodManager& name_mapping,
+                        bool operate_on_privates)
+      : RenamingContext<DexMethod*>(
+            elems, ids_to_avoid, name_gen, operate_on_privates),
+        name_mapping(name_mapping) {}
+
+  // For methods we have to make sure we don't rename <init> or <clinit> ever
+  virtual bool can_rename_elem(DexMethod* elem) const override {
+    return should_rename_elem(elem) &&
+           operate_on_privates == is_private(elem) &&
+           elem->get_name() != initstr && elem->get_name() != clinitstr &&
+           name_mapping[elem]->should_rename();
   }
 };
 
 // State of the renaming that we need to modify as we rename more fields
 template <class T, class R, class S, class K>
 class ObfuscationState {
-public:
+ public:
   // Ids that we've used in renaming
   std::unordered_set<std::string> used_ids;
   // Ids to avoid in renaming
@@ -694,16 +691,18 @@ public:
   virtual ~ObfuscationState() = default;
 
   virtual void populate_ids_to_avoid(DexClass* base,
-      DexElemManager<T, R, S, K>& name_manager, bool visitSubclasses,
-      const ClassHierarchy& ch) = 0;
+                                     DexElemManager<T, R, S, K>& name_manager,
+                                     bool visitSubclasses,
+                                     const ClassHierarchy& ch) = 0;
 };
 
-class FieldObfuscationState :
-    public ObfuscationState<DexField*, DexFieldRef*, DexFieldSpec, DexType*> {
-public:
+class FieldObfuscationState
+    : public ObfuscationState<DexField*, DexFieldRef*, DexFieldSpec, DexType*> {
+ public:
   void populate_ids_to_avoid(DexClass* base,
-      DexFieldManager& name_manager, bool /* unused */,
-      const ClassHierarchy& ch) override {
+                             DexFieldManager& name_manager,
+                             bool /* unused */,
+                             const ClassHierarchy& ch) override {
     for (auto f : base->get_ifields())
       ids_to_avoid.insert(name_manager[f]->get_name());
     for (auto f : base->get_sfields())
@@ -712,10 +711,11 @@ public:
 };
 
 enum HierarchyDirection {
-  VisitNeither      = 0,
-  VisitSuperClasses = (1<<0),
-  VisitSubClasses   = (1<<1),
-  VisitBoth         = VisitSuperClasses | VisitSubClasses };
+  VisitNeither = 0,
+  VisitSuperClasses = (1 << 0),
+  VisitSubClasses = (1 << 1),
+  VisitBoth = VisitSuperClasses | VisitSubClasses
+};
 
 // Walks the class hierarchy starting at this class and including
 // superclasses (including external ones) and/or subclasses based on
@@ -724,12 +724,11 @@ enum HierarchyDirection {
 // Visitor - the lambda to call on each element
 // get_list - the function to get a list of elements to operate on from a class
 template <typename Visitor>
-void walk_hierarchy(
-    DexClass* cls,
-    Visitor on_member,
-    bool visit_private,
-    HierarchyDirection h_dir,
-    const ClassHierarchy& ch) {
+void walk_hierarchy(DexClass* cls,
+                    Visitor on_member,
+                    bool visit_private,
+                    HierarchyDirection h_dir,
+                    const ClassHierarchy& ch) {
   if (!cls) return;
   auto visit = [&](DexClass* cls) {
     for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
@@ -740,7 +739,8 @@ void walk_hierarchy(
     for (const auto meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
       if (!is_private(meth) || visit_private)
         on_member(const_cast<DexMethod*>(meth));
-    }};
+    }
+  };
 
   visit(cls);
 
@@ -759,30 +759,34 @@ void walk_hierarchy(
   if (h_dir & HierarchyDirection::VisitSubClasses) {
     for (auto subcls_type : get_children(ch, cls->get_type())) {
       walk_hierarchy(type_class(subcls_type), on_member, visit_private,
-          HierarchyDirection::VisitSubClasses, ch);
+                     HierarchyDirection::VisitSubClasses, ch);
     }
   }
 }
 
-class MethodObfuscationState :
-    public ObfuscationState<DexMethod*, DexMethodRef*, DexMethodSpec, DexProto*> {
-public:
+class MethodObfuscationState : public ObfuscationState<DexMethod*,
+                                                       DexMethodRef*,
+                                                       DexMethodSpec,
+                                                       DexProto*> {
+ public:
   // Essentially what this does is walks the hierarchy collecting names of
   // public methods in superclasses and any methods in this class (and
   // subclasses if visitSubclasses is specified)
   void populate_ids_to_avoid(DexClass* base,
-      DexMethodManager& name_manager, bool visitSubclasses,
-      const ClassHierarchy& ch) override {
-    auto visit_member =
-        [&](DexMethod* m) {
-          auto wrap(name_manager[m]);
-          if (wrap->name_has_changed())
-            ids_to_avoid.insert(SHOW(wrap->get()->get_name()));
-          ids_to_avoid.insert(wrap->get_name()); };
-    walk_hierarchy(
-        base, visit_member, false, HierarchyDirection::VisitSuperClasses, ch);
+                             DexMethodManager& name_manager,
+                             bool visitSubclasses,
+                             const ClassHierarchy& ch) override {
+    auto visit_member = [&](DexMethod* m) {
+      auto wrap(name_manager[m]);
+      if (wrap->name_has_changed())
+        ids_to_avoid.insert(SHOW(wrap->get()->get_name()));
+      ids_to_avoid.insert(wrap->get_name());
+    };
+    walk_hierarchy(base, visit_member, false,
+                   HierarchyDirection::VisitSuperClasses, ch);
     walk_hierarchy(base, visit_member, true,
-        visitSubclasses ? HierarchyDirection::VisitSubClasses :
-          HierarchyDirection::VisitNeither, ch);
+                   visitSubclasses ? HierarchyDirection::VisitSubClasses
+                                   : HierarchyDirection::VisitNeither,
+                   ch);
   }
 };

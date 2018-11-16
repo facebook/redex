@@ -9,8 +9,8 @@
 
 #include <stack>
 
-#include "Interference.h"
 #include "IRCode.h"
+#include "Interference.h"
 #include "Liveness.h"
 #include "Split.h"
 #include "Transform.h"
@@ -103,7 +103,7 @@ class Allocator {
 
   Allocator() = default; // use default config
 
-  Allocator(const Config& config): m_config(config) {}
+  Allocator(const Config& config) : m_config(config) {}
 
   bool coalesce(interference::Graph*, IRCode*);
 

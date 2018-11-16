@@ -171,19 +171,21 @@ class Analyzer final
       if (insn->get_method() == m_for_name) {
         auto class_name = current_state->get(insn->src(0)).get_constant();
         if (class_name && class_name->kind == STRING) {
-          auto internal_name = DexString::make_string(
-            JavaNameUtil::external_to_internal(class_name->dex_string->str()));
-          current_state->set(
-              RESULT_REGISTER,
-              AbstractObjectDomain(AbstractObject(
-                  CLASS, DexType::make_type(internal_name))));
+          auto internal_name =
+              DexString::make_string(JavaNameUtil::external_to_internal(
+                  class_name->dex_string->str()));
+          current_state->set(RESULT_REGISTER,
+                             AbstractObjectDomain(AbstractObject(
+                                 CLASS, DexType::make_type(internal_name))));
           break;
         }
       }
       default_semantics(insn, current_state);
       break;
     }
-    default: { default_semantics(insn, current_state); }
+    default: {
+      default_semantics(insn, current_state);
+    }
     }
   }
 

@@ -23,7 +23,8 @@
 using namespace facebook::redex::outliner;
 namespace fs = boost::filesystem;
 
-constexpr static const char ARTIFACTS_FILENAME[] = "redex-outliner-artifacts.bin";
+constexpr static const char ARTIFACTS_FILENAME[] =
+    "redex-outliner-artifacts.bin";
 constexpr static const char MSG_1[] = "this is a test";
 constexpr static const char MSG_2[] = "this is another test";
 
@@ -44,7 +45,7 @@ TEST_F(PostVerify, native_outliner_artifacts) {
   fseek(fdin, 0L, SEEK_END);
   int length = ftell(fdin);
   fseek(fdin, 0L, SEEK_SET);
-  char *data = new char[length];
+  char* data = new char[length];
   fread(data, sizeof(char), length, fdin);
   fclose(fdin);
 
@@ -56,14 +57,15 @@ TEST_F(PostVerify, native_outliner_artifacts) {
   for (auto outlined_throw : *(outlined_throws->outlined_throws())) {
     if ("java/lang/RuntimeException" == outlined_throw->type()->str()) {
       foundOutlinedRuntimeException |= outlined_throw->msg()->str() == MSG_1;
-    } else if ("java/lang/IllegalArgumentException" == outlined_throw->type()->str()) {
+    } else if ("java/lang/IllegalArgumentException" ==
+               outlined_throw->type()->str()) {
       foundOutlinedError |= outlined_throw->msg()->str() == MSG_2;
     }
   }
   EXPECT_TRUE(foundOutlinedRuntimeException);
   EXPECT_TRUE(foundOutlinedError);
 
-  delete [] data;
+  delete[] data;
 }
 
 /*

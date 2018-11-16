@@ -128,17 +128,13 @@ class IRInstruction final {
   uint16_t size() const;
 
   bool operator==(const IRInstruction&) const;
-  bool operator!=(const IRInstruction& that) const {
-    return !(*this == that);
-  }
+  bool operator!=(const IRInstruction& that) const { return !(*this == that); }
 
   bool has_string() const {
     return opcode::ref(m_opcode) == opcode::Ref::String;
   }
   bool has_type() const { return opcode::ref(m_opcode) == opcode::Ref::Type; }
-  bool has_field() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Field;
-  }
+  bool has_field() const { return opcode::ref(m_opcode) == opcode::Ref::Field; }
   bool has_method() const {
     return opcode::ref(m_opcode) == opcode::Ref::Method;
   }
@@ -274,9 +270,7 @@ class IRInstruction final {
     return this;
   }
 
-  bool has_data() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Data;
-  }
+  bool has_data() const { return opcode::ref(m_opcode) == opcode::Ref::Data; }
 
   DexOpcodeData* get_data() const {
     always_assert(has_data());

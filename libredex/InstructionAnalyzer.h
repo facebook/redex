@@ -28,7 +28,7 @@
   X(move)             \
   X(move_result)      \
   X(move_exception)   \
-  X(return)           \
+  X(return )          \
   X(monitor)          \
   X(const)            \
   X(const_string)     \

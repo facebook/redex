@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "dex.h"
 #include "OatmealUtil.h"
+#include "dex.h"
 #include "memory-accounter.h"
 
 constexpr uint32_t kVdexMagicNum = 0x78656476;
@@ -32,18 +32,17 @@ struct PACK VdexFileHeader {
 
   void print() const {
     // version_ has a newline character at idx 4.
-    printf("VdexFileHeader: {magic: 0x%08x, \
+    printf(
+        "VdexFileHeader: {magic: 0x%08x, \
       version: %s, \
       dex_files_no: 0x%08x (%u), \
       dex_size_: 0x%08x (%u), \
       verifier_deps_size_: 0x%08x (%u), \
       quickening_info_size_: 0x%08x (%u)}\n",
-      *(reinterpret_cast<const uint32_t *>(magic_)),
-      reinterpret_cast<const char*>(version_),
-      number_of_dex_files_, number_of_dex_files_,
-      dex_size_, dex_size_,
-      verifier_deps_size_, verifier_deps_size_,
-      quickening_info_size_, quickening_info_size_);
+        *(reinterpret_cast<const uint32_t*>(magic_)),
+        reinterpret_cast<const char*>(version_), number_of_dex_files_,
+        number_of_dex_files_, dex_size_, dex_size_, verifier_deps_size_,
+        verifier_deps_size_, quickening_info_size_, quickening_info_size_);
   }
 };
 
