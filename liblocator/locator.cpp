@@ -52,4 +52,40 @@ Locator::encode(char buf[encoded_max]) noexcept
   return len;
 }
 
+static char getDigit(uint32_t num) {
+  assert(num >= 0 && num < Locator::global_class_index_digits_base);
+  if (num < 10) {
+    return num + '0';
+  } else if (num >= 10 && num < 36) {
+    return num - 10 + 'A';
+  } else {
+    return num - 10 - 26 + 'a';
+  }
+}
+
+void Locator::encodeGlobalClassIndex(
+    uint32_t globalClassIndex, size_t digits, char buf[encoded_global_class_index_max]) noexcept
+{
+  assert(digits > 0 && digits <= global_class_index_digits_max);
+
+  char* pos = buf;
+  *pos++ = 'L';
+  *pos++ = 'X';
+  *pos++ = '/';
+
+  uint32_t num = globalClassIndex;
+  char* digit_pos = pos + digits;
+  do {
+    *--digit_pos = getDigit(num % global_class_index_digits_base);
+    num /= global_class_index_digits_base;
+  } while (digit_pos != pos);
+  assert(num == 0);
+  pos += digits;
+
+  *pos++ = ';';
+  *pos++ = '\0';
+
+  assert(pos - buf <= encoded_global_class_index_max);
+}
+
 }
