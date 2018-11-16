@@ -1820,7 +1820,7 @@ class File:
                 dc = options.dump_code or options.dump_all
                 ddi = options.debug or options.dump_all
                 for method in methods:
-                    if options.dump_code or options.dump_all:
+                    if dc or ddi:
                         method.dump(f=f, dump_code=dc, dump_debug_info=ddi)
                 f.write('\n')
 
