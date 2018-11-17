@@ -14,12 +14,13 @@ namespace {
 
 void check_directory(std::string& dir) {
   if (!boost::filesystem::is_directory(dir.c_str())) {
-    std::cerr << "error: not a writable directory: " << dir << std::endl;
+    std::cerr << "error: not a writable directory: " << dir
+              << std::endl;
     exit(EXIT_FAILURE);
   }
 }
 
-} // namespace
+}
 
 std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename) {
   check_directory(m_apk_dir);

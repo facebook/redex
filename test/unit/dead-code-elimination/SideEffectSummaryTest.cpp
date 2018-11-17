@@ -101,6 +101,5 @@ TEST_F(SideEffectSummaryTest, unknownWrite) {
       (return-void)
     )
   )");
-  EXPECT_EQ(analyze_code_effects(code.get()),
-            Summary(EFF_WRITE_MAY_ESCAPE, {}));
+  EXPECT_EQ(analyze_code_effects(code.get()), Summary(EFF_WRITE_MAY_ESCAPE, {}));
 }

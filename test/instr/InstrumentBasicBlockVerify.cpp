@@ -16,12 +16,11 @@
 #include "Walkers.h"
 
 TEST_F(PreVerify, InstrumentBBVerify) {
-  ASSERT_NE(
-      find_class_named(classes,
-                       "Lcom/facebook/redextest/InstrumentBasicBlockAnalysis;"),
-      nullptr);
-  auto cls = find_class_named(
-      classes, "Lcom/facebook/redextest/InstrumentBasicBlockTarget;");
+  ASSERT_NE(find_class_named(classes,
+                             "Lcom/facebook/redextest/InstrumentBasicBlockAnalysis;"),
+            nullptr);
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redextest/InstrumentBasicBlockTarget;");
   ASSERT_NE(cls, nullptr);
 
   walk::methods(std::vector<DexClass*>{cls}, [](DexMethod* method) {
@@ -31,12 +30,11 @@ TEST_F(PreVerify, InstrumentBBVerify) {
 }
 
 TEST_F(PostVerify, InstrumentBBVerify) {
-  ASSERT_NE(
-      find_class_named(classes,
-                       "Lcom/facebook/redextest/InstrumentBasicBlockAnalysis;"),
-      nullptr);
-  auto cls = find_class_named(
-      classes, "Lcom/facebook/redextest/InstrumentBasicBlockTarget;");
+  ASSERT_NE(find_class_named(classes,
+                             "Lcom/facebook/redextest/InstrumentBasicBlockAnalysis;"),
+            nullptr);
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redextest/InstrumentBasicBlockTarget;");
   ASSERT_NE(cls, nullptr);
 
   bool found_testFunc2 = false;

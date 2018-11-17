@@ -13,10 +13,10 @@
 
 #include <json/json.h>
 
-#include "DexLoader.h"
 #include "DexOutput.h"
-#include "IRCode.h"
+#include "DexLoader.h"
 #include "InstructionLowering.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
 
 void EquivalenceTest::generate(DexClass* cls) {

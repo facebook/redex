@@ -131,28 +131,28 @@ TEST_F(IRAssemblerTest, use_switch_and_branch) {
 
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s,
-            "((sparse-switch v0 (:L1 :L2 :L3)) "
-            "(:L0) "
-            "(return-void) "
+      "((sparse-switch v0 (:L1 :L2 :L3)) "
+      "(:L0) "
+      "(return-void) "
 
-            "(:L1 0) "
-            "(const v0 0) "
-            "(if-eqz v0 :L4) "
-            "(goto :L0) "
+      "(:L1 0) "
+      "(const v0 0) "
+      "(if-eqz v0 :L4) "
+      "(goto :L0) "
 
-            "(:L2 1) "
-            "(const v1 1) "
-            "(goto :L0) "
+      "(:L2 1) "
+      "(const v1 1) "
+      "(goto :L0) "
 
-            "(:L3 2) "
-            "(const v2 2) "
-            "(goto :L0) "
+      "(:L3 2) "
+      "(const v2 2) "
+      "(goto :L0) "
 
-            "(const v3 3) "
-            "(goto :L0) "
+      "(const v3 3) "
+      "(goto :L0) "
 
-            "(:L4) "
-            "(const v4 4))");
+      "(:L4) "
+      "(const v4 4))");
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
 

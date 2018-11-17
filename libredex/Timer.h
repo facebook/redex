@@ -19,7 +19,9 @@ struct Timer {
 
   using times_t = std::vector<std::pair<std::string, double>>;
   // there should be no currently running Timers when this function is called
-  static const times_t& get_times() { return s_times; }
+  static const times_t& get_times() {
+    return s_times;
+  }
 
  private:
   static std::mutex s_lock;

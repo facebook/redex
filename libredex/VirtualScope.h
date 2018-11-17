@@ -7,13 +7,14 @@
 
 #pragma once
 
-#include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "ClassHierarchy.h"
 #include "Timer.h"
+#include <vector>
 #include <map>
 #include <unordered_map>
-#include <vector>
+
 
 /**
  * Flags to mark virtual method state.
@@ -43,36 +44,36 @@
 enum VirtualFlags : uint16_t {
   // the top method definition (DexMehthod) in a VirtualScope.
   // This is where the method was first introduced for the virtual scope.
-  TOP_DEF = 0x0,
+  TOP_DEF =         0x0,
   // the method is an override, it has a parent
-  OVERRIDE = 0X1,
+  OVERRIDE =        0X1,
   // the method contributes to an implementation of an interface
-  IMPL = 0X2,
+  IMPL =            0X2,
   // the method is final, does not have any override, it's a leaf
-  FINAL = 0X4,
+  FINAL =           0X4,
   // the method is an implementation of an interface at the point
   // where the interface is defined. Effectively at the 'implements' class
-  MIRANDA = 0x8,
+  MIRANDA =         0x8,
   // the method may escape context/scope. This happens when a class
   // implements an unknown interface in which case the entire branch
   // up to object will have to escape
-  ESCAPED = 0x100,
+  ESCAPED =         0x100,
 };
 inline VirtualFlags operator|=(VirtualFlags& a, const VirtualFlags b) {
-  return (a = static_cast<VirtualFlags>(static_cast<uint16_t>(a) |
-                                        static_cast<uint16_t>(b)));
+  return (a = static_cast<VirtualFlags>(
+      static_cast<uint16_t>(a) | static_cast<uint16_t>(b)));
 }
 inline VirtualFlags operator&=(VirtualFlags& a, const VirtualFlags b) {
-  return (a = static_cast<VirtualFlags>(static_cast<uint16_t>(a) &
-                                        static_cast<uint16_t>(b)));
+  return (a = static_cast<VirtualFlags>(
+      static_cast<uint16_t>(a) & static_cast<uint16_t>(b)));
 }
 inline VirtualFlags operator|(const VirtualFlags a, const VirtualFlags b) {
-  return static_cast<VirtualFlags>(static_cast<uint16_t>(a) |
-                                   static_cast<uint16_t>(b));
+  return static_cast<VirtualFlags>(
+      static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
 }
 inline VirtualFlags operator&(const VirtualFlags a, const VirtualFlags b) {
-  return static_cast<VirtualFlags>(static_cast<uint16_t>(a) &
-                                   static_cast<uint16_t>(b));
+  return static_cast<VirtualFlags>(
+      static_cast<uint16_t>(a) & static_cast<uint16_t>(b));
 }
 
 // (DexMethod, VirtualFlags)
@@ -200,8 +201,8 @@ SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy);
 /**
  * Given a DexMethod return the scope the method is in.
  */
-const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
-                                       const DexMethod* meth);
+const VirtualScope& find_virtual_scope(
+    const SignatureMap& sig_map, const DexMethod* meth);
 
 /**
  * Given a VirtualScope and a type, return the list of methods that
@@ -218,8 +219,8 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
  * A call to select_from() with C with return only C.m() and D.m() which
  * are the only 2 methods in scope for C.
  */
-std::vector<const DexMethod*> select_from(const VirtualScope* scope,
-                                          const DexType* type);
+std::vector<const DexMethod*> select_from(
+    const VirtualScope* scope, const DexType* type);
 
 /*
  * Map from a class to the virtual scopes introduced by that class.
@@ -230,11 +231,10 @@ std::vector<const DexMethod*> select_from(const VirtualScope* scope,
  * the type. So the number of VirtualScope is always smaller or
  * equals to the number of vmethods (unimplemented interface aside).
  */
-using Scopes =
-    std::unordered_map<const DexType*, std::vector<const VirtualScope*>>;
-using InterfaceScopes =
-    std::unordered_map<const DexType*,
-                       std::vector<std::vector<const VirtualScope*>>>;
+using Scopes = std::unordered_map<
+    const DexType*, std::vector<const VirtualScope*>>;
+using InterfaceScopes = std::unordered_map<
+    const DexType*, std::vector<std::vector<const VirtualScope*>>>;
 
 class ClassScopes {
  private:
@@ -285,10 +285,10 @@ class ClassScopes {
    * scopes and an interface set for each pair of (method_name, method_sig).
    */
   template <class AllInterfaceScopesWalkerFn =
-                void(const DexString*,
-                     const DexProto*,
-                     const std::vector<const VirtualScope*>&,
-                     const TypeSet&)>
+      void(const DexString*,
+          const DexProto*,
+          const std::vector<const VirtualScope*>&,
+          const TypeSet&)>
   void walk_all_intf_scopes(AllInterfaceScopesWalkerFn walker) const {
     for (const auto& names_it : m_sig_map) {
       for (const auto sig_it : names_it.second) {
@@ -311,10 +311,11 @@ class ClassScopes {
    * The walk is top down the class hierarchy starting from the
    * specified type.
    */
-  template <class VirtualScopeWalkerFn = void(const DexType*,
-                                              const VirtualScope*)>
-  void walk_virtual_scopes(const DexType* type,
-                           VirtualScopeWalkerFn walker) const {
+  template <class VirtualScopeWalkerFn =
+      void(const DexType*, const VirtualScope*)>
+  void walk_virtual_scopes(
+      const DexType* type,
+      VirtualScopeWalkerFn walker) const {
     const auto& scopes_it = m_scopes.find(type);
     // first walk all scopes in type
     if (scopes_it != m_scopes.end()) {
@@ -322,8 +323,9 @@ class ClassScopes {
         walker(type, scope);
       }
     }
-    always_assert_log(m_hierarchy.find(type) != m_hierarchy.end(),
-                      "no entry in ClassHierarchy for type %s\n", SHOW(type));
+    always_assert_log(
+        m_hierarchy.find(type) != m_hierarchy.end(),
+        "no entry in ClassHierarchy for type %s\n", SHOW(type));
     // recursively call for each child
     for (const auto& child : m_hierarchy.at(type)) {
       walk_virtual_scopes(child, walker);
@@ -334,8 +336,8 @@ class ClassScopes {
    * Walk every VirtualScope starting from java.lang.Object and call the walker
    * function for each scope.
    */
-  template <class VirtualScopeWalkerFn = void(const DexType*,
-                                              const VirtualScope*)>
+  template <class VirtualScopeWalkerFn =
+      void(const DexType*, const VirtualScope*)>
   void walk_virtual_scopes(VirtualScopeWalkerFn walker) const {
     walk_virtual_scopes(get_object_type(), walker);
   }
@@ -345,16 +347,18 @@ class ClassScopes {
    * The walk is top down the class hierarchy starting from the given type.
    */
   template <class VirtualScopesWalkerFn =
-                void(const DexType*, const std::vector<const VirtualScope*>&)>
-  void walk_class_scopes(const DexType* type,
-                         VirtualScopesWalkerFn walker) const {
+      void(const DexType*, const std::vector<const VirtualScope*>&)>
+  void walk_class_scopes(
+      const DexType* type,
+      VirtualScopesWalkerFn walker) const {
     const auto& scopes_it = m_scopes.find(type);
     // first walk all scopes in type
     if (scopes_it != m_scopes.end()) {
       walker(type, scopes_it->second);
     }
-    always_assert_log(m_hierarchy.find(type) != m_hierarchy.end(),
-                      "no entry in ClassHierarchy for type %s\n", SHOW(type));
+    always_assert_log(
+        m_hierarchy.find(type) != m_hierarchy.end(),
+        "no entry in ClassHierarchy for type %s\n", SHOW(type));
     // recursively call for each child
     for (const auto& child : m_hierarchy.at(type)) {
       walk_class_scopes(child, walker);
@@ -366,7 +370,7 @@ class ClassScopes {
    * The walk is top down the class hierarchy starting from java.lang.Object.
    */
   template <class VirtualScopesWalkerFn =
-                void(const DexType*, const std::vector<const VirtualScope*>&)>
+      void(const DexType*, const std::vector<const VirtualScope*>&)>
   void walk_class_scopes(VirtualScopesWalkerFn walker) const {
     walk_class_scopes(get_object_type(), walker);
   }
@@ -388,21 +392,27 @@ class ClassScopes {
    * The ClassHierarchy lifetime is tied to that of the ClassScopes, as
    * such it should not exceed it.
    */
-  const ClassHierarchy& get_class_hierarchy() const { return m_hierarchy; }
+  const ClassHierarchy& get_class_hierarchy() const {
+    return m_hierarchy;
+  }
 
   /**
    * Return the InterfaceMap known when building the scopes.
    * The InterfaceMap lifetime is tied to that of the ClassScopes, as
    * such it should not exceed it.
    */
-  const InterfaceMap& get_interface_map() const { return m_interface_map; }
+  const InterfaceMap& get_interface_map() const {
+    return m_interface_map;
+  }
 
   /**
    * Return the SignatureMap known when building the scopes.
    * The SignatureMap lifetime is tied to that of the ClassScopes, as
    * such it should not exceed it.
    */
-  const SignatureMap& get_signature_map() const { return m_sig_map; }
+  const SignatureMap& get_signature_map() const {
+    return m_sig_map;
+  }
 
  private:
   void build_class_scopes(const DexType* type);

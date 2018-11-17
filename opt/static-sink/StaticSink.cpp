@@ -14,23 +14,22 @@
 #include <unordered_set>
 #include <vector>
 
-#include "ClassHierarchy.h"
-#include "ConfigFiles.h"
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "ReachableClasses.h"
 #include "Resolver.h"
+#include "ConfigFiles.h"
+#include "ReachableClasses.h"
 #include "Walkers.h"
 #include "Warning.h"
+#include "ClassHierarchy.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 
 namespace {
 
 /*
- * Parse a string representing a type list.  Assumes the same format used by
- * dexdump, e.g.,
+ * Parse a string representing a type list.  Assumes the same format used by dexdump, e.g.,
  * "[[ILjava/lang/String;B" would become (int[][], String, boolean)
  */
 DexTypeList* parse_type_list_string(const char* str) {
@@ -40,7 +39,7 @@ DexTypeList* parse_type_list_string(const char* str) {
     if (*p == 'L') {
       auto end = strchr(p, ';');
       type_list.push_back(
-          DexType::get_type(std::string(p, end - p + 1).c_str()));
+        DexType::get_type(std::string(p, end - p + 1).c_str()));
       p = end + 1;
     } else if (*p == '[') {
       auto end = p + 1;
@@ -50,11 +49,11 @@ DexTypeList* parse_type_list_string(const char* str) {
       if (*end == 'L') {
         auto clsend = strchr(end, ';');
         type_list.push_back(
-            DexType::get_type(std::string(p, clsend - p + 1).c_str()));
+          DexType::get_type(std::string(p, clsend - p + 1).c_str()));
         p = clsend + 1;
       } else {
         type_list.push_back(
-            DexType::get_type(std::string(p, end - p + 1).c_str()));
+          DexType::get_type(std::string(p, end - p + 1).c_str()));
         p = end + 1;
       }
     } else {
@@ -73,7 +72,8 @@ DexTypeList* parse_type_list_string(const char* str) {
  * Parse a vector of strings into the corresponding DexMethods.
  */
 std::unordered_set<DexMethod*> strings_to_dexmethods(
-    std::vector<std::string> method_list) {
+  std::vector<std::string> method_list
+) {
   std::unordered_set<DexMethod*> methods;
   for (auto const& mstr : method_list) {
     // Format: class.method(arglist)rtype
@@ -81,7 +81,8 @@ std::unordered_set<DexMethod*> strings_to_dexmethods(
     auto lparen = mstr.find('(');
     auto rparen = mstr.find(')');
 
-    if (dot == std::string::npos || lparen == std::string::npos ||
+    if (dot == std::string::npos ||
+        lparen == std::string::npos ||
         rparen == std::string::npos) {
       opt_warn(COLDSTART_STATIC, "%s\n", mstr.c_str());
       continue;
@@ -115,8 +116,10 @@ std::unordered_set<DexMethod*> strings_to_dexmethods(
   return methods;
 }
 
-std::vector<DexClass*> get_coldstart_classes(const DexClassesVector& dexen,
-                                             ConfigFiles& cfg) {
+std::vector<DexClass*> get_coldstart_classes(
+  const DexClassesVector& dexen,
+  ConfigFiles& cfg
+) {
   auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::vector<DexClass*> coldstart_classes;
@@ -141,8 +144,10 @@ std::vector<DexMethod*> get_noncoldstart_statics(
   for (auto const& cls : classes) {
     for (auto& method : cls->get_dmethods()) {
       if (is_static(method)) {
-        if (!is_clinit(method) && coldstart_methods.count(method) == 0 &&
-            can_delete(cls) && can_delete(method)) {
+        if (!is_clinit(method) &&
+            coldstart_methods.count(method) == 0 &&
+            can_delete(cls) &&
+            can_delete(method)) {
           noncold_methods.push_back(method);
         } else {
           keep_statics++;
@@ -150,28 +155,34 @@ std::vector<DexMethod*> get_noncoldstart_statics(
       }
     }
   }
-  TRACE(SINK, 1, "statics that are used (or can't be moved): %d\n",
-        keep_statics);
+  TRACE(SINK, 1,
+          "statics that are used (or can't be moved): %d\n",
+          keep_statics);
   return noncold_methods;
 }
 
-void remove_primary_dex_refs(const DexClasses& primary_dex,
-                             std::vector<DexMethod*>& statics) {
+void remove_primary_dex_refs(
+    const DexClasses& primary_dex,
+    std::vector<DexMethod*>& statics) {
   std::unordered_set<DexMethod*> ref_set;
-  walk::opcodes(primary_dex,
-                [](DexMethod*) { return true; },
-                [&](DexMethod*, IRInstruction* insn) {
-                  if (insn->has_method()) {
-                    auto callee = resolve_method(insn->get_method(),
-                                                 opcode_to_search(insn));
-                    if (callee != nullptr) {
-                      ref_set.insert(callee);
-                    }
-                  }
-                });
-  statics.erase(std::remove_if(statics.begin(), statics.end(),
-                               [&](DexMethod* m) { return ref_set.count(m); }),
-                statics.end());
+  walk::opcodes(
+    primary_dex,
+    [](DexMethod*) { return true; },
+    [&](DexMethod*, IRInstruction* insn) {
+      if (insn->has_method()) {
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn));
+        if (callee != nullptr) {
+          ref_set.insert(callee);
+        }
+      }
+    }
+  );
+  statics.erase(
+    std::remove_if(
+      statics.begin(), statics.end(),
+      [&](DexMethod* m) { return ref_set.count(m); }),
+    statics.end());
 }
 
 bool allow_field_access(DexFieldRef* field) {
@@ -192,7 +203,9 @@ bool allow_method_access(DexMethod* meth) {
   if (!meth->is_concrete()) {
     return false;
   }
-  if (!is_static(meth) && !is_constructor(meth) && !is_public(meth)) {
+  if (!is_static(meth) &&
+      !is_constructor(meth) &&
+      !is_public(meth)) {
     return false;
   }
   auto methcls = type_class(meth->get_class());
@@ -278,8 +291,8 @@ DexClass* move_statics_out(
   for (auto& meth : statics) {
     auto it = sink_map.find(meth);
     auto sink_class = it == sink_map.end() ? holder : it->second;
-    if (find_collision(ch, meth->get_name(), meth->get_proto(), sink_class,
-                       false)) {
+    if (find_collision(
+            ch, meth->get_name(), meth->get_proto(), sink_class, false)) {
       collision_count++;
       continue;
     }
@@ -304,11 +317,11 @@ DexClass* move_statics_out(
   }
 
   TRACE(SINK, 1,
-        "cannot move:\n"
-        "  collision: %-d\n"
-        "  native:    %-d\n"
-        "  access:    %-d\n",
-        collision_count, native_count, access_count);
+    "cannot move:\n"
+    "  collision: %-d\n"
+    "  native:    %-d\n"
+    "  access:    %-d\n",
+    collision_count, native_count, access_count);
   TRACE(SINK, 1, "moved %lu methods\n", moved_count);
   return holder;
 }
@@ -321,20 +334,22 @@ std::unordered_map<DexMethod*, DexClass*> get_sink_map(
   std::unordered_set<DexClass*> class_set(classes.begin(), classes.end());
   std::unordered_set<DexMethod*> static_set(statics.begin(), statics.end());
   auto scope = build_class_scope(stores);
-  walk::opcodes(scope,
-                [&](DexMethod* m) {
-                  auto cls = type_class(m->get_class());
-                  return class_set.count(cls) == 0 && is_public(cls);
-                },
-                [&](DexMethod* m, IRInstruction* insn) {
-                  if (insn->has_method()) {
-                    auto callee = resolve_method(insn->get_method(),
-                                                 opcode_to_search(insn));
-                    if (callee != nullptr && static_set.count(callee)) {
-                      statics_to_callers[callee] = type_class(m->get_class());
-                    }
-                  }
-                });
+  walk::opcodes(
+    scope,
+    [&](DexMethod* m) {
+      auto cls = type_class(m->get_class());
+      return class_set.count(cls) == 0 && is_public(cls);
+    },
+    [&](DexMethod* m, IRInstruction* insn) {
+      if (insn->has_method()) {
+        auto callee =
+            resolve_method(insn->get_method(), opcode_to_search(insn));
+        if (callee != nullptr && static_set.count(callee)) {
+          statics_to_callers[callee] = type_class(m->get_class());
+        }
+      }
+    }
+  );
   return statics_to_callers;
 }
 
@@ -356,15 +371,11 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
   TRACE(SINK, 1, "vmethods in coldstart classes: %d\n", num_vmethods);
 }
 
-} // namespace
+}
 
-void StaticSinkPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& cfg,
-                              PassManager& mgr) {
+void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(SINK, 1,
-          "StaticSinkPass not run because no ProGuard configuration was "
-          "provided.");
+    TRACE(SINK, 1, "StaticSinkPass not run because no ProGuard configuration was provided.");
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(build_class_scope(stores));
@@ -382,7 +393,7 @@ void StaticSinkPass::run_pass(DexStoresVector& stores,
   TRACE(SINK, 1, "statics with sinkable callsite: %lu\n", sink_map.size());
   auto holder = move_statics_out(ch, statics, sink_map);
   TRACE(SINK, 1, "methods in static holder: %lu\n",
-        holder->get_dmethods().size());
+          holder->get_dmethods().size());
   DexClasses dc(1);
   dc.at(0) = holder;
   root_store.emplace_back(std::move(dc));

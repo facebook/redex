@@ -219,7 +219,7 @@ void class_type_stats(SingleImpls& single_impls) {
           "top level single implemented with parent:\n%s",
           top_level.str().c_str());
 }
-} // namespace
+}
 
 void print_stats(SingleImpls& single_impls) {
   // interface stats

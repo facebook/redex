@@ -173,7 +173,8 @@ void RedexContext::mutate_field(DexFieldRef* field,
   if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
     uint32_t i = 0;
     while (true) {
-      r.name = DexString::make_string(("f$" + std::to_string(i++)).c_str());
+      r.name = DexString::make_string(
+          ("f$" + std::to_string(i++)).c_str());
       if (s_field_map.find(r) == s_field_map.end()) {
         break;
       }

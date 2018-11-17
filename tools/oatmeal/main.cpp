@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "OatmealUtil.h"
 #include "dump-oat.h"
 #include "memory-accounter.h"
+#include "OatmealUtil.h"
 #include "vdex.h"
 
 #include <getopt.h>
@@ -266,8 +266,7 @@ int dump(const Arguments& args) {
   auto ma_scope = MemoryAccounter::NewScope(oatfile_buffer);
 
   CHECK(oatfile_buffer.len > 4);
-  if (*(reinterpret_cast<const uint32_t*>(oatfile_buffer.ptr)) ==
-      kVdexMagicNum) {
+  if (*(reinterpret_cast<const uint32_t*>(oatfile_buffer.ptr)) == kVdexMagicNum) {
     auto vdexfile = VdexFile::parse(oatfile_buffer);
     vdexfile->print();
     return 0;

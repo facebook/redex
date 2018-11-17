@@ -6,8 +6,8 @@
  */
 
 #include "DexAsm.h"
-#include "IRCode.h"
 #include "LocalDce.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
 
 class DceTest : public EquivalenceTest {

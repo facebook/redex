@@ -47,13 +47,17 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   TRACE(EMPTY, 3, "Loaded classes: %ld\n", classes.size());
   // Report the classes that were loaded through tracing.
   for (const auto& cls : classes) {
-    TRACE(EMPTY, 3, "Input class: %s\n", cls->get_type()->get_name()->c_str());
+    TRACE(EMPTY, 3, "Input class: %s\n",
+        cls->get_type()->get_name()->c_str());
   }
 
   std::vector<Pass*> passes;
   Json::Value conf_obj;
 
-  PassManager manager(passes, conf_obj);
+  PassManager manager(
+    passes,
+    conf_obj
+  );
   manager.set_testing_mode();
 
   ConfigFiles dummy_cfg(conf_obj);
@@ -66,8 +70,7 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   auto type1 = type_class(DexType::get_type("Lcom/facebook/redextest/Type1;"));
   auto type2 = type_class(DexType::get_type("Lcom/facebook/redextest/Type2;"));
   auto type3 = type_class(DexType::get_type("Lcom/facebook/redextest/Type3;"));
-  auto type4 =
-      type_class(DexType::get_type("Lcom/facebook/redextest/Type3$Type4;"));
+  auto type4 = type_class(DexType::get_type("Lcom/facebook/redextest/Type3$Type4;"));
   auto type5 = type_class(DexType::get_type("Lcom/facebook/redextest/Type5;"));
 
   ASSERT_TRUE(can_rename(type1));

@@ -9,8 +9,8 @@
 
 #include <algorithm>
 #include <functional>
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
 
 #include "DexClass.h"
 #include "IRInstruction.h"
@@ -319,10 +319,13 @@ void post_dexen_changes(const Scope& v, T& dexen) {
   std::unordered_set<DexClass*> clookup(v.begin(), v.end());
   for (auto& classes : dexen) {
     classes.erase(
-        std::remove_if(classes.begin(),
-                       classes.end(),
-                       [&](DexClass* cls) { return !clookup.count(cls); }),
-        classes.end());
+      std::remove_if(
+        classes.begin(),
+        classes.end(),
+        [&](DexClass* cls) {
+          return !clookup.count(cls);
+        }),
+      classes.end());
   }
   if (debug) {
     std::unordered_set<DexClass*> dlookup;
@@ -338,10 +341,11 @@ void post_dexen_changes(const Scope& v, T& dexen) {
 };
 void post_dexen_changes(const Scope& v, DexStoresVector& stores);
 
-void load_root_dexen(DexStore& store,
-                     const std::string& dexen_dir_str,
-                     bool balloon = false,
-                     bool verbose = true);
+void load_root_dexen(
+  DexStore& store,
+  const std::string& dexen_dir_str,
+  bool balloon = false,
+  bool verbose = true);
 
 /**
  * Creates a generated store based on the given classes.
@@ -407,7 +411,8 @@ struct dex_stats_t {
   int num_instructions = 0;
 };
 
-dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
+dex_stats_t&
+  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
 namespace JavaNameUtil {
 
@@ -435,4 +440,4 @@ inline std::string package_name(const std::string& type_name) {
     return nice_name;
   }
 }
-} // namespace JavaNameUtil
+}

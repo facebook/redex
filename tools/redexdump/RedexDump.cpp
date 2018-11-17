@@ -6,13 +6,13 @@
  */
 
 #include "RedexDump.h"
-#include <getopt.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
+#include <getopt.h>
 
-#include "Formatters.h"
 #include "PrintUtil.h"
+#include "Formatters.h"
 
 static const char ddump_usage_string[] =
     "ReDex, DEX Dump tool\n"
@@ -45,7 +45,8 @@ static const char ddump_usage_string[] =
     "printing options:\n"
     "--clean: suppress indices and offsets\n"
     "--no-headers: suppress headers\n"
-    "--raw: print all bytes, even control characters\n";
+    "--raw: print all bytes, even control characters\n"
+  ;
 
 int main(int argc, char* argv[]) {
 
@@ -67,83 +68,87 @@ int main(int argc, char* argv[]) {
 
   char c;
   static const struct option options[] = {
-      {"all", no_argument, nullptr, 'a'},
-      {"string", no_argument, nullptr, 's'},
-      {"stringdata", no_argument, nullptr, 'S'},
-      {"type", no_argument, nullptr, 't'},
-      {"proto", no_argument, nullptr, 'p'},
-      {"field", no_argument, nullptr, 'f'},
-      {"meth", no_argument, nullptr, 'm'},
-      {"clsdef", no_argument, nullptr, 'c'},
-      {"clsdata", no_argument, nullptr, 'C'},
-      {"code", no_argument, nullptr, 'x'},
-      {"enarr", no_argument, nullptr, 'e'},
-      {"anno", no_argument, nullptr, 'A'},
-      {"debug", no_argument, nullptr, 'd'},
-      {"ddebug", required_argument, nullptr, 'D'},
-      {"clean", no_argument, (int*)&clean, 1},
-      {"raw", no_argument, (int*)&raw, 1},
-      {"escape", no_argument, (int*)&escape, 1},
-      {"no-headers", no_argument, &no_headers, 1},
-      {"help", no_argument, nullptr, 'h'},
-      {nullptr, 0, nullptr, 0},
+    { "all", no_argument, nullptr, 'a' },
+    { "string", no_argument, nullptr, 's' },
+    { "stringdata", no_argument, nullptr, 'S' },
+    { "type", no_argument, nullptr, 't' },
+    { "proto", no_argument, nullptr, 'p' },
+    { "field", no_argument, nullptr, 'f' },
+    { "meth", no_argument, nullptr, 'm' },
+    { "clsdef", no_argument, nullptr, 'c' },
+    { "clsdata", no_argument, nullptr, 'C' },
+    { "code", no_argument, nullptr, 'x' },
+    { "enarr", no_argument, nullptr, 'e' },
+    { "anno", no_argument, nullptr, 'A' },
+    { "debug", no_argument, nullptr, 'd' },
+    { "ddebug", required_argument, nullptr, 'D' },
+    { "clean", no_argument, (int*)&clean, 1 },
+    { "raw", no_argument, (int*)&raw, 1 },
+    { "escape", no_argument, (int*)&escape, 1 },
+    { "no-headers", no_argument, &no_headers, 1 },
+    { "help", no_argument, nullptr, 'h' },
+    { nullptr, 0, nullptr, 0 },
   };
 
-  while ((c = getopt_long(argc, argv, "asStpfmcCxeAdDh", &options[0],
-                          nullptr)) != -1) {
+  while ((c = getopt_long(
+            argc,
+            argv,
+            "asStpfmcCxeAdDh",
+            &options[0],
+            nullptr)) != -1) {
     switch (c) {
-    case 'a':
-      all = true;
-      break;
-    case 's':
-      string = true;
-      break;
-    case 'S':
-      stringdata = true;
-      break;
-    case 't':
-      type = true;
-      break;
-    case 'p':
-      proto = true;
-      break;
-    case 'f':
-      field = true;
-      break;
-    case 'm':
-      meth = true;
-      break;
-    case 'c':
-      clsdef = true;
-      break;
-    case 'C':
-      clsdata = true;
-      break;
-    case 'x':
-      code = true;
-      break;
-    case 'e':
-      enarr = true;
-      break;
-    case 'A':
-      anno = true;
-      break;
-    case 'd':
-      redexdump_debug = true;
-      break;
-    case 'D':
-      sscanf(optarg, "%x", &ddebug_offset);
-      break;
-    case 'h':
-      puts(ddump_usage_string);
-      return 0;
-    case '?':
-      return 1; // getopt_long has printed an error
-    case 0:
-      // we're handling a long-only option
-      break;
-    default:
-      abort();
+      case 'a':
+        all = true;
+        break;
+      case 's':
+        string = true;
+        break;
+      case 'S':
+        stringdata = true;
+        break;
+      case 't':
+        type = true;
+        break;
+      case 'p':
+        proto = true;
+        break;
+      case 'f':
+        field = true;
+        break;
+      case 'm':
+        meth = true;
+        break;
+      case 'c':
+        clsdef = true;
+        break;
+      case 'C':
+        clsdata = true;
+        break;
+      case 'x':
+        code = true;
+        break;
+      case 'e':
+        enarr = true;
+        break;
+      case 'A':
+        anno = true;
+        break;
+      case 'd':
+        redexdump_debug = true;
+        break;
+      case 'D':
+        sscanf(optarg, "%x", &ddebug_offset);
+        break;
+      case 'h':
+        puts(ddump_usage_string);
+        return 0;
+      case '?':
+        return 1; // getopt_long has printed an error
+      case 0:
+        // we're handling a long-only option
+        break;
+      default:
+        abort();
     }
   }
 

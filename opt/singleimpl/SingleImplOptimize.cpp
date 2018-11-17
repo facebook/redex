@@ -5,25 +5,25 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <functional>
-#include <memory>
-#include <set>
 #include <stdio.h>
+#include <memory>
 #include <string>
+#include <functional>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
-#include "ClassHierarchy.h"
+#include "SingleImpl.h"
+#include "SingleImplUtil.h"
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Resolver.h"
-#include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
+#include "ClassHierarchy.h"
 
 namespace {
 
@@ -73,9 +73,9 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
                                               param_anno.second);
     }
   }
-  new_method->make_concrete(orig_method->get_access(),
-                            orig_method->release_code(),
-                            orig_method->is_virtual());
+  new_method->make_concrete(
+      orig_method->get_access(), orig_method->release_code(),
+      orig_method->is_virtual());
 }
 
 /**
@@ -107,7 +107,8 @@ void remove_interface(DexType* intf, SingleImplData& data) {
         // different package. Make the interface public then
         auto type_cls = type_class(type);
         if (type_cls != nullptr) {
-          if (!is_public(cls)) set_public(type_cls);
+          if(!is_public(cls))
+            set_public(type_cls);
           TRACE(INTF, 4, "(REMI) make PUBLIC - %s\n", SHOW(type));
         }
         new_intfs.insert(type);
@@ -120,8 +121,8 @@ void remove_interface(DexType* intf, SingleImplData& data) {
   collect_interfaces(type_class(intf));
 
   std::deque<DexType*> revisited_intfs;
-  std::copy(new_intfs.begin(), new_intfs.end(),
-            std::back_inserter(revisited_intfs));
+  std::copy(
+      new_intfs.begin(), new_intfs.end(), std::back_inserter(revisited_intfs));
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
   TRACE(INTF, 3, "(REMI)\t=> %s\n", SHOW(cls));
@@ -135,12 +136,14 @@ bool must_set_method_annotations(const SingleImplConfig& config) {
   return config.meth_anno;
 }
 
-} // namespace
+}
 
 struct OptimizationImpl {
-  OptimizationImpl(std::unique_ptr<SingleImplAnalysis> analysis,
-                   const ClassHierarchy& ch)
-      : single_impls(std::move(analysis)), ch(ch) {}
+  OptimizationImpl(
+      std::unique_ptr<SingleImplAnalysis> analysis,
+      const ClassHierarchy& ch)
+          : single_impls(std::move(analysis))
+          , ch(ch) {}
 
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 
@@ -181,8 +184,8 @@ struct OptimizationImpl {
 void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     assert(!single_impls->is_escaped(field->get_class()));
-    auto f = static_cast<DexField*>(
-        DexField::make_field(field->get_class(), field->get_name(), data.cls));
+    auto f = static_cast<DexField*>(DexField::make_field(
+        field->get_class(), field->get_name(), data.cls));
     assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s\n", SHOW(field));
     f->set_deobfuscated_name(field->get_deobfuscated_name());
@@ -206,8 +209,8 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
     assert(!single_impls->is_escaped(field->get_class()));
-    DexFieldRef* f =
-        DexField::make_field(field->get_class(), field->get_name(), data.cls);
+    DexFieldRef* f = DexField::make_field(
+        field->get_class(), field->get_name(), data.cls);
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
       assert(f != opcode->get_field());
@@ -221,7 +224,8 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
  * Rewrite all methods sigs by creating new ones. Remove old methods and push
  * the new to the proper class method list.
  */
-void OptimizationImpl::set_method_defs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_method_defs(DexType* intf,
+                                       SingleImplData& data) {
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s\n", SHOW(method));
     auto meth = method;
@@ -246,8 +250,8 @@ void OptimizationImpl::set_method_defs(DexType* intf, SingleImplData& data) {
           SHOW(meth->get_proto()),
           SHOW(proto));
     assert(proto != meth->get_proto());
-    auto new_meth = static_cast<DexMethod*>(
-        DexMethod::make_method(meth->get_class(), meth->get_name(), proto));
+    auto new_meth = static_cast<DexMethod*>(DexMethod::make_method(
+        meth->get_class(), meth->get_name(), proto));
     // new_meth may have already existed in RedexContext, so
     // we need to make sure it isn't concrete.
     // TODO: this is horrible. After we remove methods, we shouldn't
@@ -269,7 +273,8 @@ void OptimizationImpl::set_method_defs(DexType* intf, SingleImplData& data) {
 /**
  * Rewrite all method refs.
  */
-void OptimizationImpl::set_method_refs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_method_refs(DexType* intf,
+                                       SingleImplData& data) {
   for (auto mrefit : data.methodrefs) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF)  %s\n", SHOW(method));
@@ -294,12 +299,11 @@ void OptimizationImpl::set_method_refs(DexType* intf, SingleImplData& data) {
     // Still we need to change the opcodes where we assert the new method
     // to go in the opcode is in fact different than what was there.
     auto proto = get_or_make_proto(intf, data.cls, new_meth->get_proto());
-    auto created_meth = DexMethod::make_method(new_meth->get_class(),
-                                               new_meth->get_name(), proto);
+    auto created_meth = DexMethod::make_method(
+            new_meth->get_class(), new_meth->get_name(), proto);
     if (created_meth->is_def() && method->is_def()) {
-      static_cast<DexMethod*>(created_meth)
-          ->set_deobfuscated_name(
-              static_cast<DexMethod*>(method)->get_deobfuscated_name());
+      static_cast<DexMethod*>(created_meth)->set_deobfuscated_name(
+          static_cast<DexMethod*>(method)->get_deobfuscated_name());
       static_cast<DexMethod*>(created_meth)->rstate =
           static_cast<DexMethod*>(method)->rstate;
     }
@@ -347,8 +351,9 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     TRACE(INTF, 3, "(MITF) interface method %s\n", SHOW(meth));
     auto new_meth = resolve_virtual(impl, meth->get_name(), meth->get_proto());
     if (!new_meth) {
-      new_meth = static_cast<DexMethod*>(DexMethod::make_method(
-          impl->get_type(), meth->get_name(), meth->get_proto()));
+      new_meth = static_cast<DexMethod*>(
+          DexMethod::make_method(
+              impl->get_type(), meth->get_name(), meth->get_proto()));
       // new_meth may not be new, because RedexContext keeps methods around
       // after they are deleted. clear all pre-existing method state.
       // See related TODO by searching for "this is horrible" in this file.
@@ -389,16 +394,13 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
 }
 
 /**
- * Rewrite annotations that are referring to update methods or deleted
- * interfaces.
+ * Rewrite annotations that are referring to update methods or deleted interfaces.
  */
-void OptimizationImpl::rewrite_annotations(Scope& scope,
-                                           const SingleImplConfig& config) {
+void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig& config) {
   // TODO: this is a hack to fix a problem with enclosing methods only.
   //       There are more dalvik annotations to review.
   //       The infrastructure is here but the code for all cases not yet
-  auto enclosingMethod =
-      DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
+  auto enclosingMethod = DexType::get_type("Ldalvik/annotation/EnclosingMethod;");
   if (enclosingMethod == nullptr) return; // nothing to do
   if (!must_set_method_annotations(config)) return;
   for (const auto& cls : scope) {
@@ -517,23 +519,23 @@ EscapeReason OptimizationImpl::can_optimize(DexType* intf,
 /**
  * Remove any chance for collisions.
  */
-void OptimizationImpl::rename_possible_collisions(DexType* intf,
-                                                  SingleImplData& data) {
+void OptimizationImpl::rename_possible_collisions(
+    DexType* intf, SingleImplData& data) {
 
   const auto& rename = [](DexMethodRef* meth, DexString* name) {
     DexMethodSpec spec;
     spec.cls = meth->get_class();
     spec.name = name;
     spec.proto = meth->get_proto();
-    meth->change(spec, false /* rename on collision */,
-                 true /* update deob name */);
+    meth->change(
+        spec, false /* rename on collision */, true /* update deob name */);
   };
 
   TRACE(INTF, 9, "Changing name related to %s\n", SHOW(intf));
   for (const auto& meth : data.methoddefs) {
     if (!can_rename(meth)) {
       TRACE(INTF, 9, "Changing name but cannot rename %s, give up\n",
-            SHOW(meth));
+          SHOW(meth));
       return;
     }
   }
@@ -547,7 +549,7 @@ void OptimizationImpl::rename_possible_collisions(DexType* intf,
     DexString* possible_name = nullptr;
     static std::string sufx("$r");
     static int intf_id = 0;
-    while (true) {
+    while(true) {
       const auto& str = name->str() + sufx + std::to_string(intf_id++);
       possible_name = DexString::get_string(str.c_str());
       if (possible_name == nullptr) {
@@ -570,11 +572,11 @@ void OptimizationImpl::rename_possible_collisions(DexType* intf,
     static auto init = DexString::make_string("<init>");
     always_assert(refs_it.first->get_name() != init);
     auto name = new_name(refs_it.first->get_name());
-    TRACE(INTF, 9, "Changing name for %s to %s\n", SHOW(refs_it.first),
-          SHOW(name));
+    TRACE(INTF, 9, "Changing name for %s to %s\n",
+        SHOW(refs_it.first), SHOW(name));
     if (names.count(refs_it.first->get_name()) == 0) {
       TRACE(INTF, 9, "Changing name on missing method def %s",
-            SHOW(refs_it.first));
+          SHOW(refs_it.first));
     }
     rename(refs_it.first, name);
   }
@@ -596,8 +598,8 @@ void OptimizationImpl::do_optimize(DexType* intf, SingleImplData& data) {
 /**
  * Run an optimization step.
  */
-size_t OptimizationImpl::optimize(Scope& scope,
-                                  const SingleImplConfig& config) {
+size_t OptimizationImpl::optimize(
+    Scope& scope, const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
   for (auto intf : to_optimize) {
@@ -631,10 +633,10 @@ size_t OptimizationImpl::optimize(Scope& scope,
 /**
  * Entry point for an optimization pass.
  */
-size_t optimize(std::unique_ptr<SingleImplAnalysis> analysis,
-                const ClassHierarchy& ch,
-                Scope& scope,
-                const SingleImplConfig& config) {
+size_t optimize(
+    std::unique_ptr<SingleImplAnalysis> analysis,
+    const ClassHierarchy& ch,
+    Scope& scope, const SingleImplConfig& config) {
   OptimizationImpl optimizer(std::move(analysis), ch);
   return optimizer.optimize(scope, config);
 }

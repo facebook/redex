@@ -37,7 +37,9 @@ std::unique_ptr<PositionMap> read_map(const char* filename) {
               << ") with error: " << strerror(errno) << std::endl;
     return nullptr;
   }
-  BOOST_SCOPE_EXIT_ALL(=, &buf) { munmap(mapping, buf.st_size); };
+  BOOST_SCOPE_EXIT_ALL(=, &buf) {
+    munmap(mapping, buf.st_size);
+  };
   if (magic != 0xfaceb000) {
     std::cerr << "Magic number mismatch\n";
     return nullptr;

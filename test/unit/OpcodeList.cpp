@@ -7,14 +7,14 @@
 
 #include "OpcodeList.h"
 
-std::vector<DexOpcode> all_dex_opcodes{
-#define OP(op, ...) DOPCODE_##op,
-    DOPS
+std::vector<DexOpcode> all_dex_opcodes {
+#define OP(op, ...) DOPCODE_ ## op,
+  DOPS
 #undef OP
 };
 
-std::vector<IROpcode> all_opcodes{
-#define OP(op, ...) OPCODE_##op,
-    OPS
+std::vector<IROpcode> all_opcodes {
+#define OP(op, ...) OPCODE_ ## op,
+  OPS
 #undef OP
 };

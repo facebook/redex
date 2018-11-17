@@ -200,7 +200,8 @@ TEST_F(StaticReloV2Test, staticMethodRefedByMany) {
   DexClass* classA = create_class("A");
   DexMethod* method_a = create_method(classA, "a", ACC_PUBLIC | ACC_STATIC);
   DexClass* classOther1 = create_class("Other1");
-  DexMethod* method_b = create_method(classOther1, "b", ACC_PUBLIC);
+  DexMethod* method_b =
+      create_method(classOther1, "b", ACC_PUBLIC);
   DexClass* classOther2 = create_class("Other2");
   DexMethod* method_c = create_method(classOther2, "c", ACC_PUBLIC);
 

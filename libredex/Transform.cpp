@@ -68,6 +68,7 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
   }
 }
 
+
 void remap_registers(IRCode* code, const RegMap& reg_map) {
   for (auto& mei : *code) {
     remap_registers(mei, reg_map);

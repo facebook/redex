@@ -9,9 +9,9 @@
 
 #include <memory>
 
-#include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"
+#include "DexPosition.h"
 
 namespace cfg {
 
@@ -54,8 +54,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     if (first == after_callee->end() || first->type != MFLOW_POSITION) {
       // but don't add if there's already a position at the front of this
       // block
-      after_callee->m_entries.push_front(*(new MethodItemEntry(
-          std::make_unique<DexPosition>(*callsite_dbg_pos))));
+      after_callee->m_entries.push_front(
+          *(new MethodItemEntry(std::make_unique<DexPosition>(*callsite_dbg_pos))));
     }
   }
 
@@ -180,8 +180,7 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 4, "connecting %d, %d in %s\n", pred->id(), succ->id(),
-            SHOW(*cfg));
+      TRACE(CFG, 4, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
       if (preds.size() == 1 && succ->preds().size() == 1 &&

@@ -4,26 +4,34 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include <fstream>
-#include <iostream>
 #include <json/json.h>
+#include <iostream>
+#include <fstream>
 
 #include "DexStore.h"
 #include "DexUtil.h"
 
 constexpr const char* ROOT_STORE_NAME = "classes";
 
-DexStore::DexStore(const std::string name) { m_metadata.set_id(name); }
+DexStore::DexStore(const std::string name) {
+  m_metadata.set_id(name);
+}
 
-std::string DexStore::get_name() const { return m_metadata.get_id(); }
+std::string DexStore::get_name() const {
+  return m_metadata.get_id();
+}
 
 bool DexStore::is_root_store() const {
   return m_metadata.get_id() == ROOT_STORE_NAME;
 }
 
-std::vector<DexClasses>& DexStore::get_dexen() { return m_dexen; }
+std::vector<DexClasses>& DexStore::get_dexen() {
+  return m_dexen;
+}
 
-const std::vector<DexClasses>& DexStore::get_dexen() const { return m_dexen; }
+const std::vector<DexClasses>& DexStore::get_dexen() const {
+  return m_dexen;
+}
 
 std::vector<std::string> DexStore::get_dependencies() const {
   return m_metadata.get_dependencies();

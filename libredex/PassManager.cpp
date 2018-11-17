@@ -54,12 +54,11 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
     : PassManager(
           passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
 
-PassManager::PassManager(
-    const std::vector<Pass*>& passes,
-    std::unique_ptr<redex::ProguardConfiguration> pg_config,
-    const Json::Value& config,
-    bool verify_none_mode,
-    bool is_art_build)
+PassManager::PassManager(const std::vector<Pass*>& passes,
+                         std::unique_ptr<redex::ProguardConfiguration> pg_config,
+                         const Json::Value& config,
+                         bool verify_none_mode,
+                         bool is_art_build)
     : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),

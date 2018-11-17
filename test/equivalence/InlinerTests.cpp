@@ -9,16 +9,17 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
-#include "IRCode.h"
 #include "Inliner.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
 #include "Util.h"
 
 class InlinerTestAliasedInputs : public EquivalenceTest {
   DexMethod* m_callee;
-
  public:
-  std::string test_name() override { return "InlinerTestAliasedInputs"; }
+  std::string test_name() override {
+    return "InlinerTestAliasedInputs";
+  }
 
   void setup(DexClass* cls) override {
     auto ret = DexType::make_type("I");
@@ -80,10 +81,8 @@ REGISTER_TEST(InlinerTestAliasedInputs);
 
 class InlinerTestLargeIfOffset : public EquivalenceTest {
   const size_t NOP_COUNT = 1 << 15;
-
  protected:
   DexMethod* m_callee;
-
  public:
   void setup(DexClass* cls) override {
     auto ret = DexType::make_type("V");

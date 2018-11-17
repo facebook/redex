@@ -133,4 +133,4 @@ IRInstruction* dasm(IROpcode opcode,
   return insn;
 }
 
-} // namespace dex_asm
+}

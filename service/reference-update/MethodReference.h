@@ -53,4 +53,4 @@ void update_call_refs_simple(
 
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees);
-} // namespace method_reference
+}

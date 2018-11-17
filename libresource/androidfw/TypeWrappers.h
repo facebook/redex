@@ -22,52 +22,59 @@
 namespace android {
 
 struct TypeVariant {
-  TypeVariant(const ResTable_type* data) : data(data) {}
+    TypeVariant(const ResTable_type* data)
+        : data(data) {}
 
-  class iterator {
-   public:
-    iterator& operator=(const iterator& rhs) {
-      mTypeVariant = rhs.mTypeVariant;
-      mIndex = rhs.mIndex;
-      return *this;
+    class iterator {
+    public:
+        iterator& operator=(const iterator& rhs) {
+            mTypeVariant = rhs.mTypeVariant;
+            mIndex = rhs.mIndex;
+            return *this;
+        }
+
+        bool operator==(const iterator& rhs) const {
+            return mTypeVariant == rhs.mTypeVariant && mIndex == rhs.mIndex;
+        }
+
+        bool operator!=(const iterator& rhs) const {
+            return mTypeVariant != rhs.mTypeVariant || mIndex != rhs.mIndex;
+        }
+
+        iterator operator++(int) {
+            uint32_t prevIndex = mIndex;
+            operator++();
+            return iterator(mTypeVariant, prevIndex);
+        }
+
+        const ResTable_entry* operator->() const {
+            return operator*();
+        }
+
+        uint32_t index() const {
+            return mIndex;
+        }
+
+        iterator& operator++();
+        const ResTable_entry* operator*() const;
+
+    private:
+        friend struct TypeVariant;
+        iterator(const TypeVariant* tv, uint32_t index)
+            : mTypeVariant(tv), mIndex(index) {}
+        const TypeVariant* mTypeVariant;
+        uint32_t mIndex;
+    };
+
+    iterator beginEntries() const {
+        return iterator(this, 0);
     }
 
-    bool operator==(const iterator& rhs) const {
-      return mTypeVariant == rhs.mTypeVariant && mIndex == rhs.mIndex;
+    iterator endEntries() const {
+        return iterator(this, dtohl(data->entryCount));
     }
 
-    bool operator!=(const iterator& rhs) const {
-      return mTypeVariant != rhs.mTypeVariant || mIndex != rhs.mIndex;
-    }
-
-    iterator operator++(int) {
-      uint32_t prevIndex = mIndex;
-      operator++();
-      return iterator(mTypeVariant, prevIndex);
-    }
-
-    const ResTable_entry* operator->() const { return operator*(); }
-
-    uint32_t index() const { return mIndex; }
-
-    iterator& operator++();
-    const ResTable_entry* operator*() const;
-
-   private:
-    friend struct TypeVariant;
-    iterator(const TypeVariant* tv, uint32_t index)
-        : mTypeVariant(tv), mIndex(index) {}
-    const TypeVariant* mTypeVariant;
-    uint32_t mIndex;
-  };
-
-  iterator beginEntries() const { return iterator(this, 0); }
-
-  iterator endEntries() const {
-    return iterator(this, dtohl(data->entryCount));
-  }
-
-  const ResTable_type* data;
+    const ResTable_type* data;
 };
 
 } // namespace android

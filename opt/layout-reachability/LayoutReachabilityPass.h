@@ -11,10 +11,11 @@
 #include "PassManager.h"
 
 class LayoutReachabilityPass : Pass {
- public:
+public:
   LayoutReachabilityPass() : Pass("LayoutReachabilityPass") {}
 
-  virtual void configure_pass(const JsonWrapper&) override {}
+  virtual void configure_pass(const JsonWrapper&) override {
+  }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

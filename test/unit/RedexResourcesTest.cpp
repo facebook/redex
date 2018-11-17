@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
 #include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <gtest/gtest.h>
 
 #include "Debug.h"
 #include "RedexResources.h"
@@ -25,10 +25,10 @@ TEST(RedexResources, ReadXmlTagsAndAttributes) {
   std::unordered_multimap<std::string, std::string> attribute_values;
 
   collect_layout_classes_and_attributes_for_file(
-      std::getenv("test_layout_path"),
-      attributes_to_find,
-      classes,
-      attribute_values);
+    std::getenv("test_layout_path"),
+    attributes_to_find,
+    classes,
+    attribute_values);
 
   EXPECT_EQ(classes.size(), 3);
   EXPECT_EQ(classes.count("Lcom/example/test/CustomViewGroup;"), 1);

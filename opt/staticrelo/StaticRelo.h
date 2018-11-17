@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "PassManager.h"
+#include "DexClass.h"
 
 class StaticReloPass : public Pass {
  public:

@@ -9,30 +9,26 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
-#include <map>
-#include <set>
 #include <string>
 #include <vector>
+#include <map>
+#include <set>
 
 #include "ClassHierarchy.h"
 #include "Deleter.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Inliner.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "Inliner.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-void SimpleInlinePass::run_pass(DexStoresVector& stores,
-                                ConfigFiles& cfg,
-                                PassManager& mgr) {
+void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(SINL, 1,
-          "SimpleInlinePass not run because no ProGuard configuration was "
-          "provided.");
+    TRACE(SINL, 1, "SimpleInlinePass not run because no ProGuard configuration was provided.");
     return;
   }
   auto scope = build_class_scope(stores);
@@ -57,8 +53,9 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores,
   inliner.inline_methods();
 
   if (m_inliner_config.use_cfg_inliner) {
-    walk::parallel::code(scope,
-                         [](DexMethod*, IRCode& code) { code.clear_cfg(); });
+    walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
+      code.clear_cfg();
+    });
   }
 
   // delete all methods that can be deleted
@@ -73,18 +70,19 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores,
   TRACE(SINL, 3, "override inputs %ld\n", inliner.get_info().write_over_ins);
   TRACE(SINL, 3, "escaped virtual %ld\n", inliner.get_info().escaped_virtual);
   TRACE(SINL, 3, "known non public virtual %ld\n",
-        inliner.get_info().non_pub_virtual);
+      inliner.get_info().non_pub_virtual);
   TRACE(SINL, 3, "non public ctor %ld\n", inliner.get_info().non_pub_ctor);
   TRACE(SINL, 3, "unknown field %ld\n", inliner.get_info().escaped_field);
   TRACE(SINL, 3, "non public field %ld\n", inliner.get_info().non_pub_field);
   TRACE(SINL, 3, "throws %ld\n", inliner.get_info().throws);
   TRACE(SINL, 3, "multiple returns %ld\n", inliner.get_info().multi_ret);
   TRACE(SINL, 3, "references cross stores %ld\n",
-        inliner.get_info().cross_store);
+      inliner.get_info().cross_store);
   TRACE(SINL, 3, "not found %ld\n", inliner.get_info().not_found);
   TRACE(SINL, 3, "caller too large %ld\n", inliner.get_info().caller_too_large);
-  TRACE(SINL, 1, "%ld inlined calls over %ld methods and %ld methods removed\n",
-        inliner.get_info().calls_inlined, inlined_count, deleted);
+  TRACE(SINL, 1,
+      "%ld inlined calls over %ld methods and %ld methods removed\n",
+      inliner.get_info().calls_inlined, inlined_count, deleted);
 
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
@@ -112,26 +110,27 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
 
-  walk::methods(scope, [&](DexMethod* method) {
-    all_methods++;
-    if (method->is_virtual()) return;
+  walk::methods(scope,
+      [&](DexMethod* method) {
+        all_methods++;
+        if (method->is_virtual()) return;
 
-    auto code = method->get_code();
-    bool dont_inline = code == nullptr;
+        auto code = method->get_code();
+        bool dont_inline = code == nullptr;
 
-    direct_methods++;
-    if (code == nullptr) direct_no_code++;
-    if (is_constructor(method)) {
-      (is_static(method)) ? clinit++ : init++;
-      dont_inline = true;
-    } else {
-      (is_static(method)) ? static_methods++ : private_methods++;
-    }
+        direct_methods++;
+        if (code == nullptr) direct_no_code++;
+        if (is_constructor(method)) {
+          (is_static(method)) ? clinit++ : init++;
+          dont_inline = true;
+        } else {
+          (is_static(method)) ? static_methods++ : private_methods++;
+        }
 
-    if (dont_inline) return;
+        if (dont_inline) return;
 
-    methods.insert(method);
-  });
+        methods.insert(method);
+      });
   if (m_virtual_inline) {
     auto non_virtual = devirtualize(scope);
     non_virt_methods = non_virtual.size();
@@ -150,7 +149,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   TRACE(SINL, 2, "Virtual methods count: %ld\n", all_methods - direct_methods);
   TRACE(SINL, 2, "Direct methods no code: %ld\n", direct_no_code);
   TRACE(SINL, 2, "Direct methods with code: %ld\n",
-        direct_methods - direct_no_code);
+      direct_methods - direct_no_code);
   TRACE(SINL, 2, "Constructors with or without code: %ld\n", init);
   TRACE(SINL, 2, "Static constructors: %ld\n", clinit);
   TRACE(SINL, 2, "Static methods: %ld\n", static_methods);

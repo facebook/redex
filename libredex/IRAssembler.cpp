@@ -20,7 +20,8 @@ namespace {
 #define OP(OP, KIND, STR) {OPCODE_##OP, STR},
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
-        OPS{IOPCODE_LOAD_PARAM, "load-param"},
+        OPS
+        {IOPCODE_LOAD_PARAM, "load-param"},
         {IOPCODE_LOAD_PARAM_OBJECT, "load-param-object"},
         {IOPCODE_LOAD_PARAM_WIDE, "load-param-wide"},
         {IOPCODE_MOVE_RESULT_PSEUDO, "move-result-pseudo"},
@@ -31,7 +32,8 @@ std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
 
 #define OP(OP, KIND, STR) {STR, OPCODE_##OP},
 std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
-    OPS{"load-param", IOPCODE_LOAD_PARAM},
+    OPS
+    {"load-param", IOPCODE_LOAD_PARAM},
     {"load-param-object", IOPCODE_LOAD_PARAM_OBJECT},
     {"load-param-wide", IOPCODE_LOAD_PARAM_WIDE},
     {"move-result-pseudo", IOPCODE_MOVE_RESULT_PSEUDO},
@@ -51,7 +53,9 @@ uint16_t reg_from_str(const std::string& reg_str) {
   return reg;
 }
 
-std::string reg_to_str(uint16_t reg) { return "v" + std::to_string(reg); }
+std::string reg_to_str(uint16_t reg) {
+  return "v" + std::to_string(reg);
+}
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
@@ -116,15 +120,15 @@ namespace {
 
 s_expr _to_s_expr(const DexPosition* pos, uint32_t parent_idx) {
   return s_expr({
-      s_expr(".pos"),
-      s_expr(show(pos->method)),
-      s_expr(pos->file->c_str()),
-      s_expr(std::to_string(pos->line)),
-      s_expr(std::to_string(parent_idx)),
+    s_expr(".pos"),
+    s_expr(show(pos->method)),
+    s_expr(pos->file->c_str()),
+    s_expr(std::to_string(pos->line)),
+    s_expr(std::to_string(parent_idx)),
   });
 }
 
-} // namespace
+}
 
 std::vector<s_expr> to_s_exprs(
     const DexPosition* pos,
@@ -137,7 +141,7 @@ std::vector<s_expr> to_s_exprs(
       if (*pos_emitted == *snay) {
         // Shane thought he could hide from us... hah! a quick linear search
         // got him
-        return {_to_s_expr(pos, i)};
+        return { _to_s_expr(pos, i) };
       }
     }
     auto result = to_s_exprs(snay, positions_emitted);
@@ -145,12 +149,14 @@ std::vector<s_expr> to_s_exprs(
     return result;
   } else {
     positions_emitted->push_back(pos);
-    return {s_expr({
+    return {
+      s_expr({
         s_expr(".pos"),
         s_expr(show(pos->method)),
         s_expr(pos->file->c_str()),
         s_expr(std::to_string(pos->line)),
-    })};
+      })
+    };
   }
 }
 
@@ -257,19 +263,17 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
 }
 
 std::unique_ptr<DexPosition> position_from_s_expr(
-    const s_expr& e, const std::vector<DexPosition*>& positions) {
+    const s_expr& e,
+    const std::vector<DexPosition*>& positions) {
   std::string method_str;
   std::string file_str;
   std::string line_str;
   s_expr parent_expr;
-  s_patn(
-      {
-          s_patn(&method_str),
-          s_patn(&file_str),
-          s_patn(&line_str),
-      },
-      parent_expr)
-      .must_match(e, "Expected 3 or 4 args for position directive");
+  s_patn({
+      s_patn(&method_str),
+      s_patn(&file_str),
+      s_patn(&line_str),
+  }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
   auto* dex_method =
       static_cast<DexMethod*>(DexMethod::make_method(method_str));
   // We should ideally allow DexPosition to take non-concrete methods too...
@@ -283,9 +287,8 @@ std::unique_ptr<DexPosition> position_from_s_expr(
   if (!parent_expr.is_nil()) {
     std::string parent_str;
     s_patn({
-               s_patn(&parent_str),
-           })
-        .must_match(e, "Expected 4th arg of pos directive to be a string");
+        s_patn(&parent_str),
+    }).must_match(e, "Expected 4th arg of pos directive to be a string");
     uint32_t parent_idx = UINT32_MAX;
     std::istringstream parent_in(parent_str);
     parent_in >> parent_idx;
@@ -353,8 +356,9 @@ std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
         s_patn({s_patn({s_patn(&this_catch)}, maybe_next)}, type_expr)
             .must_match(tail, "catch marker missing a name list");
         // FIXME?
-        result.emplace(this_catch,
-                       new MethodItemEntry(static_cast<DexType*>(nullptr)));
+        result.emplace(
+            this_catch,
+            new MethodItemEntry(static_cast<DexType*>(nullptr)));
       }
     }
   }
@@ -421,31 +425,31 @@ s_expr to_s_expr(const IRCode* code) {
   // Gather jump targets and give them string names
   for (auto it = code->cbegin(); it != code->cend(); ++it) {
     switch (it->type) {
-    case MFLOW_TARGET: {
-      auto bt = it->target;
-      always_assert_log(bt->src != nullptr, "%s", SHOW(code));
+      case MFLOW_TARGET: {
+        auto bt = it->target;
+        always_assert_log(bt->src != nullptr, "%s", SHOW(code));
 
-      // Don't generate redundant labels. If we would duplicate the previous
-      // label, steal its name instead of generating another
-      if (it != code->begin()) {
-        auto prev = std::prev(it);
-        if (can_merge(prev, it)) {
-          auto& label_strs = label_refs.at(prev->target->src->insn);
-          if (label_strs.size() > 0) {
-            const auto& label_name = label_strs.back();
-            label_refs[bt->src->insn].push_back(label_name);
-            break;
+        // Don't generate redundant labels. If we would duplicate the previous
+        // label, steal its name instead of generating another
+        if (it != code->begin()) {
+          auto prev = std::prev(it);
+          if (can_merge(prev, it)) {
+            auto& label_strs = label_refs.at(prev->target->src->insn);
+            if (label_strs.size() > 0) {
+              const auto& label_name = label_strs.back();
+              label_refs[bt->src->insn].push_back(label_name);
+              break;
+            }
           }
         }
+        label_refs[bt->src->insn].push_back(generate_label_name());
+        break;
       }
-      label_refs[bt->src->insn].push_back(generate_label_name());
-      break;
-    }
-    case MFLOW_CATCH:
-      catch_names.emplace(&*it, generate_catch_name());
-      break;
-    default:
-      break;
+      case MFLOW_CATCH:
+        catch_names.emplace(&*it, generate_catch_name());
+        break;
+      default:
+        break;
     }
   }
 
@@ -454,73 +458,72 @@ s_expr to_s_expr(const IRCode* code) {
   std::vector<const DexPosition*> positions_emitted;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
-    case MFLOW_OPCODE:
-      exprs.emplace_back(::to_s_expr(it->insn, label_refs));
-      break;
-    case MFLOW_TRY:
-      exprs.emplace_back(create_try_expr(
-          it->tentry->type, catch_names.at(it->tentry->catch_start)));
-      break;
-    case MFLOW_CATCH:
-      exprs.emplace_back(create_catch_expr(&*it, catch_names));
-      break;
-    case MFLOW_DEBUG:
-      always_assert_log(false, "Not yet implemented");
-    case MFLOW_POSITION:
-      for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
-        exprs.push_back(e);
-      }
-      break;
-    case MFLOW_TARGET: {
-      auto branch_target = it->target;
-      auto insn = branch_target->src->insn;
-      const auto& label_strs = label_refs.at(insn);
-
-      if (branch_target->type == BRANCH_MULTI) {
-        // Claim one of the labels.
-        // Doesn't matter which one as long as no other s_expr re-uses it.
-        auto& index = unused_label_index[insn];
-        auto label_str = label_strs[index];
-        ++index;
-
-        const s_expr& label =
-            s_expr({s_expr(label_str),
-                    s_expr(std::to_string(branch_target->case_key))});
-
-        // Don't duplicate labels even if some crazy person has two switches
-        // that share targets :O
-        if (exprs.empty() || exprs.back() != label) {
-          exprs.emplace_back(label);
+      case MFLOW_OPCODE:
+        exprs.emplace_back(::to_s_expr(it->insn, label_refs));
+        break;
+      case MFLOW_TRY:
+        exprs.emplace_back(create_try_expr(
+            it->tentry->type, catch_names.at(it->tentry->catch_start)));
+        break;
+      case MFLOW_CATCH:
+        exprs.emplace_back(create_catch_expr(&*it, catch_names));
+        break;
+      case MFLOW_DEBUG:
+        always_assert_log(false, "Not yet implemented");
+      case MFLOW_POSITION:
+        for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
+          exprs.push_back(e);
         }
-      } else {
-        always_assert(branch_target->type == BRANCH_SIMPLE);
-        always_assert_log(
-            label_strs.size() == 1,
-            "Expecting 1 label string, actually have %d. code:\n%s",
-            label_strs.size(),
-            SHOW(code));
-        const s_expr& label = s_expr({s_expr(label_strs[0])});
+        break;
+      case MFLOW_TARGET: {
+        auto branch_target = it->target;
+        auto insn = branch_target->src->insn;
+        const auto& label_strs = label_refs.at(insn);
 
-        // Two gotos to the same destination will produce two MFLOW_TARGETs
-        // but we only need one label in the s expression syntax.
-        if (exprs.empty() || exprs.back() != label) {
-          exprs.push_back(label);
+        if (branch_target->type == BRANCH_MULTI) {
+          // Claim one of the labels.
+          // Doesn't matter which one as long as no other s_expr re-uses it.
+          auto& index = unused_label_index[insn];
+          auto label_str = label_strs[index];
+          ++index;
+
+          const s_expr& label =
+              s_expr({s_expr(label_str),
+                      s_expr(std::to_string(branch_target->case_key))});
+
+          // Don't duplicate labels even if some crazy person has two switches
+          // that share targets :O
+          if (exprs.empty() || exprs.back() != label) {
+            exprs.emplace_back(label);
+          }
+        } else {
+          always_assert(branch_target->type == BRANCH_SIMPLE);
+          always_assert_log(
+              label_strs.size() == 1,
+              "Expecting 1 label string, actually have %d. code:\n%s",
+              label_strs.size(),
+              SHOW(code));
+          const s_expr& label = s_expr({s_expr(label_strs[0])});
+
+          // Two gotos to the same destination will produce two MFLOW_TARGETs
+          // but we only need one label in the s expression syntax.
+          if (exprs.empty() || exprs.back() != label) {
+            exprs.push_back(label);
+          }
         }
+        break;
       }
-      break;
-    }
-    case MFLOW_FALLTHROUGH:
-      break;
-    case MFLOW_DEX_OPCODE:
-      not_reached();
+      case MFLOW_FALLTHROUGH:
+        break;
+      case MFLOW_DEX_OPCODE:
+        not_reached();
     }
   }
 
   return s_expr(exprs);
 }
 
-static boost::optional<uint16_t> largest_reg_operand(
-    const IRInstruction* insn) {
+static boost::optional<uint16_t> largest_reg_operand(const IRInstruction* insn) {
   boost::optional<uint16_t> max_reg;
   if (insn->dests_size()) {
     max_reg = insn->dest();

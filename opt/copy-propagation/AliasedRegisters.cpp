@@ -311,16 +311,19 @@ bool AliasedRegisters::equals(const AliasedRegisters& other) const {
          leq(other);
 }
 
-AbstractValueKind AliasedRegisters::narrow_with(const AliasedRegisters& other) {
+AbstractValueKind AliasedRegisters::narrow_with(
+    const AliasedRegisters& other) {
   return meet_with(other);
 }
 
-AbstractValueKind AliasedRegisters::widen_with(const AliasedRegisters& other) {
+AbstractValueKind AliasedRegisters::widen_with(
+    const AliasedRegisters& other) {
   return join_with(other);
 }
 
 // alias group union
-AbstractValueKind AliasedRegisters::meet_with(const AliasedRegisters& other) {
+AbstractValueKind AliasedRegisters::meet_with(
+    const AliasedRegisters& other) {
 
   const auto& iters = boost::edges(other.m_graph);
   const auto& begin = iters.first;
@@ -357,7 +360,8 @@ void AliasedRegisters::merge_groups_of(const Value& r1,
 }
 
 // edge intersection
-AbstractValueKind AliasedRegisters::join_with(const AliasedRegisters& other) {
+AbstractValueKind AliasedRegisters::join_with(
+    const AliasedRegisters& other) {
 
   // fill `deletes` with edges that aren't in `other`
   std::vector<std::pair<vertex_t, vertex_t>> deletes;

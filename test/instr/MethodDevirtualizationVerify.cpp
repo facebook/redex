@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "VerifyUtil.h"
 #include <gtest/gtest.h>
+#include "VerifyUtil.h"
 
 const char* const CLASS_A = "Lcom/facebook/redextest/A;";
 const char* const CLASS_B = "Lcom/facebook/redextest/B;";

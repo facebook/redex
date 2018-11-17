@@ -32,8 +32,8 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <map>
 #include <string>
+#include <map>
 #include <vector>
 
 #include <thread>
@@ -74,17 +74,16 @@ class TinyPRNG {
   uint32_t m_next_rand = 0;
 };
 
-} // namespace
+}
 
 #ifdef __APPLE__
 typedef void* (*MallocFn)(size_t);
-static auto libc_malloc =
-    reinterpret_cast<MallocFn>(dlsym(RTLD_NEXT, "malloc"));
+static auto libc_malloc = reinterpret_cast<MallocFn>(dlsym(RTLD_NEXT, "malloc"));
 #endif
 
 #ifdef __linux__
 extern "C" {
-extern void* __libc_malloc(size_t size);
+extern void *__libc_malloc(size_t size);
 }
 
 static auto libc_malloc = __libc_malloc;
@@ -120,6 +119,7 @@ class MallocDebug {
   }
 
  private:
+
   struct Block {
     void* ptr;
     size_t size;
@@ -143,7 +143,7 @@ class MallocDebug {
 
     while (vec.size() < block_count) {
       auto ptr = libc_malloc(next_size);
-      vec.push_back(Block{ptr, next_size});
+      vec.push_back(Block { ptr, next_size });
     }
 
     auto idx = m_rand.next_rand() % block_count;
@@ -153,13 +153,15 @@ class MallocDebug {
     always_assert(block.size >= size);
     return block.ptr;
   }
+
 };
 
 thread_local MallocDebug malloc_debug;
 
-} // namespace
+}
 
 extern "C" {
 
 void* malloc(size_t sz) { return malloc_debug.malloc(sz); }
+
 }

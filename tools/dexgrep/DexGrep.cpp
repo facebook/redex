@@ -6,8 +6,8 @@
  */
 
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
+#include <cstdlib>
 #include <getopt.h>
 
 #include "DexCommon.h"
@@ -20,19 +20,24 @@ int main(int argc, char* argv[]) {
   bool files_only = false;
   char c;
   static const struct option options[] = {
-      {"files-without-match", no_argument, nullptr, 'l'},
+    { "files-without-match", no_argument, nullptr, 'l' },
   };
-  while ((c = getopt_long(argc, argv, "hl", &options[0], nullptr)) != -1) {
+  while ((c = getopt_long(
+            argc,
+            argv,
+            "hl",
+            &options[0],
+            nullptr)) != -1) {
     switch (c) {
-    case 'l':
-      files_only = true;
-      break;
-    case 'h':
-      print_usage();
-      return 0;
-    default:
-      print_usage();
-      return 1;
+      case 'l':
+        files_only = true;
+        break;
+      case 'h':
+        print_usage();
+        return 0;
+      default:
+        print_usage();
+        return 1;
     }
   }
 

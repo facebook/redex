@@ -164,7 +164,7 @@ void RealPositionMapper::write_map_v2() {
     auto full_method_name = pos->method->get_deobfuscated_name();
     // strip out the args and return type
     auto qualified_method_name =
-        full_method_name.substr(0, full_method_name.find(":"));
+      full_method_name.substr(0, full_method_name.find(":"));
     auto class_name = JavaNameUtil::internal_to_external(
         qualified_method_name.substr(0, qualified_method_name.rfind(".")));
     auto method_name =

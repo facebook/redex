@@ -24,8 +24,8 @@ void JsonWrapper::get(const char* name, size_t dflt, size_t& param) const {
 }
 
 void JsonWrapper::get(const char* name,
-                      const std::string& dflt,
-                      std::string& param) const {
+                     const std::string& dflt,
+                     std::string& param) const {
   param = m_config.get(name, dflt).asString();
 }
 
@@ -70,8 +70,8 @@ bool JsonWrapper::get(const char* name, bool dflt) const {
 }
 
 void JsonWrapper::get(const char* name,
-                      const std::vector<std::string>& dflt,
-                      std::vector<std::string>& param) const {
+                     const std::vector<std::string>& dflt,
+                     std::vector<std::string>& param) const {
   auto it = m_config[name];
   if (it == Json::nullValue) {
     param = dflt;
@@ -84,8 +84,8 @@ void JsonWrapper::get(const char* name,
 }
 
 void JsonWrapper::get(const char* name,
-                      const std::vector<std::string>& dflt,
-                      std::unordered_set<std::string>& param) const {
+                     const std::vector<std::string>& dflt,
+                     std::unordered_set<std::string>& param) const {
   auto it = m_config[name];
   param.clear();
   if (it == Json::nullValue) {
@@ -133,8 +133,8 @@ void JsonWrapper::get(
 }
 
 void JsonWrapper::get(const char* name,
-                      const Json::Value dflt,
-                      Json::Value& param) const {
+                     const Json::Value dflt,
+                     Json::Value& param) const {
   param = m_config.get(name, dflt);
 }
 
@@ -197,18 +197,17 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   std::vector<std::string> coldstart_classes;
 
   std::ifstream input(file);
-  if (!input) {
+  if (!input){
     return std::vector<std::string>();
   }
   std::string clzname;
   while (input >> clzname) {
-    long position = clzname.length() - lentail;
+		long position = clzname.length() - lentail;
     always_assert_log(position >= 0,
                       "Bailing, invalid class spec '%s' in interdex file %s\n",
                       clzname.c_str(), file);
     clzname.replace(position, lentail, ";");
-    coldstart_classes.emplace_back(
-        m_proguard_map.translate_class("L" + clzname));
+    coldstart_classes.emplace_back(m_proguard_map.translate_class("L" + clzname));
   }
   return coldstart_classes;
 }
@@ -216,9 +215,8 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 /**
  * Read a map of {list_name : class_list} from json
  */
-std::unordered_map<std::string, std::vector<std::string>>
-ConfigFiles::load_class_lists() {
-  std::unordered_map<std::string, std::vector<std::string>> lists;
+std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_class_lists() {
+  std::unordered_map<std::string, std::vector<std::string> > lists;
   std::string class_lists_filename;
   this->m_json.get("class_lists", "", class_lists_filename);
 
@@ -230,16 +228,14 @@ ConfigFiles::load_class_lists() {
   Json::Reader reader;
   Json::Value root;
   bool parsing_succeeded = reader.parse(input, root);
-  always_assert_log(
-      parsing_succeeded, "Failed to parse class list json from file: %s\n%s",
-      class_lists_filename.c_str(), reader.getFormattedErrorMessages().c_str());
+  always_assert_log(parsing_succeeded, "Failed to parse class list json from file: %s\n%s",
+                    class_lists_filename.c_str(),
+                    reader.getFormattedErrorMessages().c_str());
 
   for (Json::ValueIterator it = root.begin(); it != root.end(); ++it) {
     std::vector<std::string> class_list;
     Json::Value current_list = *it;
-    for (Json::ValueIterator list_it = current_list.begin();
-         list_it != current_list.end();
-         ++list_it) {
+    for (Json::ValueIterator list_it = current_list.begin(); list_it != current_list.end(); ++list_it) {
       lists[it.key().asString()].push_back((*list_it).asString());
     }
   }

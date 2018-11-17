@@ -12,21 +12,19 @@
 #include "Walkers.h"
 
 size_t delete_methods(
-    std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable,
+    std::vector<DexClass*>& scope, std::unordered_set<DexMethod*>& removable,
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod* meth, IRInstruction* insn) {
-                  if (is_invoke(insn->opcode())) {
-                    auto callee =
-                        resolver(insn->get_method(), opcode_to_search(insn));
-                    if (callee != nullptr) {
-                      removable.erase(callee);
-                    }
-                  }
-                });
+      [&](DexMethod* meth, IRInstruction* insn) {
+        if (is_invoke(insn->opcode())) {
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          if (callee != nullptr) {
+            removable.erase(callee);
+          }
+        }
+      });
 
   size_t deleted = 0;
   for (auto callee : removable) {
@@ -34,8 +32,8 @@ size_t delete_methods(
     if (!can_delete(callee)) continue;
     auto cls = type_class(callee->get_class());
     always_assert_log(cls != nullptr,
-                      "%s is concrete but does not have a DexClass\n",
-                      SHOW(callee));
+        "%s is concrete but does not have a DexClass\n",
+        SHOW(callee));
     if (callee->is_virtual()) {
       cls->remove_method(callee);
     } else {

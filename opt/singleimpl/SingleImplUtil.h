@@ -9,8 +9,8 @@
 
 #include "SingleImplDefs.h"
 
-#include "DexClass.h"
 #include <unordered_map>
+#include "DexClass.h"
 
 template <typename Container, typename Value>
 inline bool exists(const Container& c, const Value& v) {

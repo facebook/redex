@@ -8,9 +8,9 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
+#include "InstructionLowering.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "InstructionLowering.h"
 #include "RedexTest.h"
 
 struct IRCodeTest : public RedexTest {};

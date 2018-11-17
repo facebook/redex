@@ -72,8 +72,8 @@ void create_object_class() {
   // an assertion. This only happens in tests when no external jars are
   // available
   // protected java.lang.Object.clone()Ljava/lang/Object;
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, clone, void_object));
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, clone, void_object));
   method->set_access(ACC_PROTECTED);
   method->set_virtual(true);
   method->set_external();
@@ -104,15 +104,15 @@ void create_object_class() {
   object_methods.push_back(method);
 
   // public native java.lang.Object.hashCode()I
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, hashCode, void_int));
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, hashCode, void_int));
   method->set_access(ACC_PUBLIC | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, notify, void_void));
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, notify, void_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE);
   method->set_virtual(true);
   method->set_external();
@@ -135,16 +135,16 @@ void create_object_class() {
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait()V
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, wait, void_void));
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, wait, void_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
   object_methods.push_back(method);
 
   // public final java.lang.Object.wait(J)V
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method(type, wait, long_void));
+  method = static_cast<DexMethod*>(
+      DexMethod::make_method(type, wait, long_void));
   method->set_access(ACC_PUBLIC | ACC_FINAL);
   method->set_virtual(true);
   method->set_external();
@@ -907,7 +907,7 @@ void ClassScopes::build_interface_scopes() {
 }
 
 InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
-  InterfaceScope intf_scope;
+  InterfaceScope  intf_scope;
   DexType* intf = meth->get_class();
   const auto& scopes = m_sig_map.at(meth->get_name()).at(meth->get_proto());
   always_assert(scopes.size() > 0); // at least the method itself

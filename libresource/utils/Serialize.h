@@ -5,16 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#ifndef _FB_ANDROID_SERIALIZE_H
-#define _FB_ANDROID_SERIALIZE_H
+ #ifndef _FB_ANDROID_SERIALIZE_H
+ #define _FB_ANDROID_SERIALIZE_H
 
-#include "utils/ByteOrder.h"
-#include "utils/Debug.h"
-#include "utils/Log.h"
-#include "utils/String16.h"
-#include "utils/String8.h"
-#include "utils/Unicode.h"
-#include "utils/Vector.h"
+ #include "utils/ByteOrder.h"
+ #include "utils/Debug.h"
+ #include "utils/Log.h"
+ #include "utils/String16.h"
+ #include "utils/String8.h"
+ #include "utils/Unicode.h"
+ #include "utils/Vector.h"
 
 namespace android {
 
@@ -25,5 +25,5 @@ void push_u8_length(android::Vector<char>& cVec, size_t len);
 void encode_string8(android::Vector<char>& cVec, android::String8 s);
 void encode_string16(android::Vector<char>& cVec, android::String16 s);
 
-} // namespace android
+}
 #endif

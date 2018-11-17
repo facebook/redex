@@ -49,79 +49,79 @@ namespace android {
  * of a FileMap hierarchy.
  */
 class FileMap {
- public:
-  FileMap(void);
+public:
+    FileMap(void);
 
-  /*
-   * Create a new mapping on an open file.
-   *
-   * Closing the file descriptor does not unmap the pages, so we don't
-   * claim ownership of the fd.
-   *
-   * Returns "false" on failure.
-   */
-  bool create(const char* origFileName,
-              int fd,
-              off64_t offset,
-              size_t length,
-              bool readOnly);
+    /*
+     * Create a new mapping on an open file.
+     *
+     * Closing the file descriptor does not unmap the pages, so we don't
+     * claim ownership of the fd.
+     *
+     * Returns "false" on failure.
+     */
+    bool create(const char* origFileName, int fd,
+                off64_t offset, size_t length, bool readOnly);
 
-  ~FileMap(void);
+    ~FileMap(void);
 
-  /*
-   * Return the name of the file this map came from, if known.
-   */
-  const char* getFileName(void) const { return mFileName; }
+    /*
+     * Return the name of the file this map came from, if known.
+     */
+    const char* getFileName(void) const { return mFileName; }
 
-  /*
-   * Get a pointer to the piece of the file we requested.
-   */
-  void* getDataPtr(void) const { return mDataPtr; }
+    /*
+     * Get a pointer to the piece of the file we requested.
+     */
+    void* getDataPtr(void) const { return mDataPtr; }
 
-  /*
-   * Get the length we requested.
-   */
-  size_t getDataLength(void) const { return mDataLength; }
+    /*
+     * Get the length we requested.
+     */
+    size_t getDataLength(void) const { return mDataLength; }
 
-  /*
-   * Get the data offset used to create this map.
-   */
-  off64_t getDataOffset(void) const { return mDataOffset; }
+    /*
+     * Get the data offset used to create this map.
+     */
+    off64_t getDataOffset(void) const { return mDataOffset; }
 
-  /*
-   * This maps directly to madvise() values, but allows us to avoid
-   * including <sys/mman.h> everywhere.
-   */
-  enum MapAdvice { NORMAL, RANDOM, SEQUENTIAL, WILLNEED, DONTNEED };
+    /*
+     * This maps directly to madvise() values, but allows us to avoid
+     * including <sys/mman.h> everywhere.
+     */
+    enum MapAdvice {
+        NORMAL, RANDOM, SEQUENTIAL, WILLNEED, DONTNEED
+    };
 
-  /*
-   * Apply an madvise() call to the entire file.
-   *
-   * Returns 0 on success, -1 on failure.
-   */
-  int advise(MapAdvice advice);
+    /*
+     * Apply an madvise() call to the entire file.
+     *
+     * Returns 0 on success, -1 on failure.
+     */
+    int advise(MapAdvice advice);
 
- protected:
- private:
-  // these are not implemented
-  FileMap(const FileMap& src);
-  const FileMap& operator=(const FileMap& src);
+protected:
 
-  char* mFileName; // original file name, if known
-  void* mBasePtr; // base of mmap area; page aligned
-  size_t mBaseLength; // length, measured from "mBasePtr"
-  off64_t mDataOffset; // offset used when map was created
-  void* mDataPtr; // start of requested data, offset from base
-  size_t mDataLength; // length, measured from "mDataPtr"
+private:
+    // these are not implemented
+    FileMap(const FileMap& src);
+    const FileMap& operator=(const FileMap& src);
+
+    char*       mFileName;      // original file name, if known
+    void*       mBasePtr;       // base of mmap area; page aligned
+    size_t      mBaseLength;    // length, measured from "mBasePtr"
+    off64_t     mDataOffset;    // offset used when map was created
+    void*       mDataPtr;       // start of requested data, offset from base
+    size_t      mDataLength;    // length, measured from "mDataPtr"
 #if defined(__MINGW32__)
-  HANDLE mFileHandle; // Win32 file handle
-  HANDLE mFileMapping; // Win32 file mapping handle
+    HANDLE      mFileHandle;    // Win32 file handle
+    HANDLE      mFileMapping;   // Win32 file mapping handle
 #elif defined(_MSC_VER)
-  void* mFileHandle;
-  void* mFileMapping;
+    void*       mFileHandle;
+    void*       mFileMapping;
 #endif
 
-  static long mPageSize;
+    static long mPageSize;
 };
 
 }; // namespace android

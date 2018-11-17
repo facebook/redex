@@ -36,8 +36,8 @@
  *
  */
 class Vinfo {
- public:
-  using methods_t = std::unordered_set<const DexMethod*>;
+public:
+  using methods_t = std::unordered_set<const DexMethod *>;
   struct vinfo_t {
     const DexMethod* decl = nullptr;
     const DexMethod* override_of = nullptr;
@@ -95,6 +95,6 @@ class Vinfo {
    */
   const methods_t& get_override_methods(const DexMethod* meth);
 
- private:
+private:
   vinfos_t m_vinfos;
 };

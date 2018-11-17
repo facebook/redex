@@ -9,9 +9,9 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "Inliner.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "Inliner.h"
 #include "RedexTest.h"
 
 struct SimpleInlineTest : public RedexTest {};

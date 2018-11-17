@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include "DexAccess.h"
-#include "DexDefs.h"
 #include <stdint.h>
+#include "DexDefs.h"
+#include "DexAccess.h"
 
 typedef uint32_t symdstr; // Offset into symtool string table.
 

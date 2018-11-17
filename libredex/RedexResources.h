@@ -18,30 +18,33 @@
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
 std::string read_entire_file(const std::string& filename);
-void write_entire_file(const std::string& filename,
-                       const std::string& contents);
-void* map_file(const char* path,
-               int& file_descriptor,
-               size_t& length,
-               const bool mode_write = false);
-size_t write_serialized_data(const android::Vector<char>& cVec,
-                             int file_descriptor,
-                             void* file_pointer,
-                             const size_t& length);
+void write_entire_file(const std::string& filename, const std::string& contents);
+void* map_file(
+    const char* path,
+    int& file_descriptor,
+    size_t& length,
+    const bool mode_write = false);
+size_t write_serialized_data(
+    const android::Vector<char>& cVec,
+    int file_descriptor,
+    void* file_pointer,
+    const size_t& length);
 void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
 
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
-bool has_raw_attribute_value(const android::ResXMLTree& parser,
-                             const android::String16& attribute_name,
-                             android::Res_value& out_value);
+bool has_raw_attribute_value(
+    const android::ResXMLTree& parser,
+    const android::String16& attribute_name,
+    android::Res_value& out_value);
 std::unordered_set<std::string> get_manifest_classes(
     const std::string& filename);
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory);
 std::unordered_set<std::string> get_layout_classes(
     const std::string& apk_directory);
-std::unordered_set<std::string> get_xml_files(const std::string& directory);
+std::unordered_set<std::string> get_xml_files(
+    const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
 // Checks if the file is in a res/raw folder. Such a file won't be considered
@@ -75,8 +78,8 @@ void collect_layout_classes_and_attributes_for_file(
 // Convenience method for copying values in a multimap to a set, for a
 // particular key.
 std::set<std::string> multimap_values_to_set(
-    const std::unordered_multimap<std::string, std::string>& map,
-    const std::string& key);
+  const std::unordered_multimap<std::string, std::string>& map,
+  const std::string& key);
 
 // Given the bytes of a binary XML file, replace the entries (if any) in the
 // ResStringPool. Writes result to the given Vector output param.
@@ -98,21 +101,22 @@ int rename_classes_in_layout(
     size_t* out_num_renamed,
     ssize_t* out_size_delta);
 
+
 /**
  * Follows the reference links for a resource for all configurations.
  * Returns all the nodes visited, as well as all the string values seen.
  */
 void walk_references_for_resource(
-    uint32_t resID,
-    std::unordered_set<uint32_t>& nodes_visited,
-    std::unordered_set<std::string>& leaf_string_values,
-    android::ResTable* table);
+   uint32_t resID,
+   std::unordered_set<uint32_t>& nodes_visited,
+   std::unordered_set<std::string>& leaf_string_values,
+   android::ResTable* table);
 
 std::unordered_set<uint32_t> get_js_resources(
-    const std::string& directory,
-    const std::vector<std::string>& js_assets_lists,
-    const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
+   const std::string& directory,
+   const std::vector<std::string>& js_assets_lists,
+   const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
-    std::vector<std::string> prefixes,
-    std::map<std::string, std::vector<uint32_t>> name_to_ids);
+   std::vector<std::string> prefixes,
+   std::map<std::string, std::vector<uint32_t>> name_to_ids);

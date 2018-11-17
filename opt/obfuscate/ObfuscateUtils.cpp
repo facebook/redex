@@ -6,10 +6,10 @@
  */
 
 #include "ObfuscateUtils.h"
-#include "DexClass.h"
 #include "Trace.h"
-#include "Walkers.h"
 #include <algorithm>
+#include "Walkers.h"
+#include "DexClass.h"
 
 DexFieldManager new_dex_field_manager() {
   return DexFieldManager(

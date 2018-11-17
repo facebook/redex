@@ -80,7 +80,8 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
 }
 
 template <class Container>
-DexField* find_field_named(const Container& fields, const char* name) {
+DexField* find_field_named(const Container& fields,
+                           const char* name) {
   TRACE(PGR, 8, "==> Searching for field %s\n", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
     auto deobfuscated_field = f->get_deobfuscated_name();
@@ -149,12 +150,10 @@ TEST(ProguardTest, assortment) {
 
   // Check the top level Android activity class
   {
-    auto proguard_test = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/ProguardTest;");
+    auto proguard_test = find_class_named(classes, "Lcom/facebook/redex/test/proguard/ProguardTest;");
     ASSERT_NE(nullptr, proguard_test);
     ASSERT_TRUE(keep(proguard_test));
-    auto init = find_dmethod_named(
-        proguard_test,
+    auto init = find_dmethod_named(proguard_test,
         "Lcom/facebook/redex/test/proguard/ProguardTest;.<init>:()V");
     ASSERT_NE(nullptr, init);
     ASSERT_TRUE(keep(init));
@@ -169,8 +168,7 @@ TEST(ProguardTest, assortment) {
   }
 
   // Beta is not used so should not have a keep marker.
-  auto beta =
-      find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
+  auto beta = find_class_named(classes, "Lcom/facebook/redex/test/proguard/Beta;");
   ASSERT_NE(nullptr, beta);
   ASSERT_FALSE(keep(beta));
 
@@ -221,9 +219,9 @@ TEST(ProguardTest, assortment) {
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>:(I)V");
     ASSERT_NE(nullptr, init_I);
     ASSERT_FALSE(keep(init_I));
-    auto init_S = find_dmethod_named(delta,
-                                     "Lcom/facebook/redex/test/proguard/"
-                                     "Delta;.<init>:(Ljava/lang/String;)V");
+    auto init_S = find_dmethod_named(
+        delta,
+        "Lcom/facebook/redex/test/proguard/Delta;.<init>:(Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
     ASSERT_FALSE(allowobfuscation(init_S));
@@ -327,17 +325,15 @@ TEST(ProguardTest, assortment) {
         delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombat:I");
     ASSERT_NE(nullptr, fuzzyWombat);
     auto fuzzyWombatValue = find_vmethod_named(
-        delta_g,
-        "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombatValue:()I");
+        delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombatValue:()I");
     ASSERT_NE(nullptr, fuzzyWombatValue);
     ASSERT_TRUE(keep(fuzzyWombatValue));
     ASSERT_TRUE(allowobfuscation(fuzzyWombatValue));
     // Check that the constructor is not renamed.
-    auto init_V =
-        find_dmethod_named(delta_g,
-                           "Lcom/facebook/redex/test/proguard/"
-                           "Delta$G;.<init>:(Lcom/facebook/redex/test/"
-                           "proguard/Delta;)V");
+    auto init_V = find_dmethod_named(delta_g,
+                                     "Lcom/facebook/redex/test/proguard/"
+                                     "Delta$G;.<init>:(Lcom/facebook/redex/test/"
+                                     "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
     ASSERT_FALSE(allowobfuscation(init_V));
   }
@@ -474,10 +470,9 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(gamma2));
 
     // Test handling of methods.
-    auto omega_1 =
-        find_vmethod_named(delta_j,
-                           "Lcom/facebook/redex/test/proguard/"
-                           "Delta$J;.omega:(IZLjava/lang/String;C)I");
+    auto omega_1 = find_vmethod_named(delta_j,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Delta$J;.omega:(IZLjava/lang/String;C)I");
     ASSERT_NE(nullptr, omega_1);
     ASSERT_TRUE(keep(omega_1));
     auto omega_2 = find_vmethod_named(
@@ -496,10 +491,9 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(omega_4));
 
     // Check handling of ...
-    auto theta_1 =
-        find_vmethod_named(delta_j,
-                           "Lcom/facebook/redex/test/proguard/"
-                           "Delta$J;.theta:(IZLjava/lang/String;C)I");
+    auto theta_1 = find_vmethod_named(delta_j,
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Delta$J;.theta:(IZLjava/lang/String;C)I");
     ASSERT_NE(nullptr, theta_1);
     ASSERT_TRUE(keep(theta_1));
     auto theta_2 = find_vmethod_named(
@@ -513,11 +507,10 @@ TEST(ProguardTest, assortment) {
     ASSERT_TRUE(keep(theta_3));
 
     // Check handling of constructor fors inner class.
-    auto init_V =
-        find_dmethod_named(delta_j,
-                           "Lcom/facebook/redex/test/proguard/"
-                           "Delta$J;.<init>:(Lcom/facebook/redex/test/"
-                           "proguard/Delta;)V");
+    auto init_V = find_dmethod_named(delta_j,
+                                     "Lcom/facebook/redex/test/proguard/"
+                                     "Delta$J;.<init>:(Lcom/facebook/redex/test/"
+                                     "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
     ASSERT_TRUE(keep(init_V));
     ASSERT_FALSE(allowobfuscation(init_V));
@@ -526,11 +519,10 @@ TEST(ProguardTest, assortment) {
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
                                      "proguard/Delta;I)V");
     ASSERT_EQ(nullptr, init_I);
-    auto init_S =
-        find_dmethod_named(delta_j,
-                           "Lcom/facebook/redex/test/proguard/"
-                           "Delta$J;.<init>:(Lcom/facebook/redex/test/"
-                           "proguard/Delta;Ljava/lang/String;)V");
+    auto init_S = find_dmethod_named(delta_j,
+                                     "Lcom/facebook/redex/test/proguard/"
+                                     "Delta$J;.<init>:(Lcom/facebook/redex/test/"
+                                     "proguard/Delta;Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     ASSERT_TRUE(keep(init_S));
     ASSERT_FALSE(allowobfuscation(init_S));
@@ -555,9 +547,9 @@ TEST(ProguardTest, assortment) {
         delta_j, "Lcom/facebook/redex/test/proguard/Delta$J;.zeta0:()V");
     ASSERT_NE(nullptr, zeta0);
     ASSERT_TRUE(keep(zeta0));
-    auto zeta1 = find_vmethod_named(delta_j,
-                                    "Lcom/facebook/redex/test/proguard/"
-                                    "Delta$J;.zeta1:()Ljava/lang/String;");
+    auto zeta1 = find_vmethod_named(
+        delta_j,
+        "Lcom/facebook/redex/test/proguard/Delta$J;.zeta1:()Ljava/lang/String;");
     ASSERT_NE(nullptr, zeta1);
     ASSERT_FALSE(keep(zeta1));
   }
@@ -658,9 +650,9 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, delta_q2);
     ASSERT_TRUE(keep(delta_q2));
 
-    // Check DontKillMe
-    auto delta_r =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$R;");
+   // Check DontKillMe
+    auto delta_r = find_class_named(
+        classes, "Lcom/facebook/redex/test/proguard/Delta$R;");
     ASSERT_NE(nullptr, delta_r);
 
     // Check handling of extends for classes with annotation filters.
@@ -673,94 +665,83 @@ TEST(ProguardTest, assortment) {
     ASSERT_NE(nullptr, delta_s1);
     ASSERT_FALSE(keep(delta_s1));
 
-    // Check assumenosideeffects
-    auto delta_u =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$U;");
-    ASSERT_NE(nullptr, delta_u);
-    ASSERT_TRUE(keep(delta_u));
-    auto logger = find_vmethod_named(
-        delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.logger:()V");
-    ASSERT_NE(nullptr, logger);
-    ASSERT_FALSE(keep(logger));
-    ASSERT_TRUE(assumenosideeffects(logger));
-    auto mutator = find_vmethod_named(
-        delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.mutator:()V");
-    ASSERT_NE(nullptr, mutator);
-    ASSERT_TRUE(keep(mutator));
-    ASSERT_FALSE(assumenosideeffects(mutator));
+   // Check assumenosideeffects
+   auto delta_u = find_class_named(
+          classes, "Lcom/facebook/redex/test/proguard/Delta$U;");
+   ASSERT_NE(nullptr, delta_u);
+   ASSERT_TRUE(keep(delta_u));
+   auto logger = find_vmethod_named(delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.logger:()V");
+   ASSERT_NE(nullptr, logger);
+   ASSERT_FALSE(keep(logger));
+   ASSERT_TRUE(assumenosideeffects(logger));
+   auto mutator = find_vmethod_named(delta_u, "Lcom/facebook/redex/test/proguard/Delta$U;.mutator:()V");
+   ASSERT_NE(nullptr, mutator);
+   ASSERT_TRUE(keep(mutator));
+   ASSERT_FALSE(assumenosideeffects(mutator));
 
-    // Check keepclasseswithmembers on Delta.X class
-    auto delta_x =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$X;");
-    ASSERT_NE(nullptr, delta_x);
+   // Check keepclasseswithmembers on Delta.X class
+  auto delta_x = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X;");
+  ASSERT_NE(nullptr, delta_x);
 
-    auto delta_x_x1 = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Delta$X$X1;");
-    ASSERT_NE(nullptr, delta_x_x1);
-    ASSERT_TRUE(keep(delta_x_x1));
-    auto delta_x_x1_init = find_dmethod_named(
-        delta_x_x1,
-        "Lcom/facebook/redex/test/proguard/Delta$X$X1;.<init>:(Lcom/facebook/"
-        "redex/test/proguard/Delta$X;)V");
-    ASSERT_NE(nullptr, delta_x_x1_init);
-    ASSERT_TRUE(keep(delta_x_x1_init));
+  auto delta_x_x1 = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X$X1;");
+  ASSERT_NE(nullptr, delta_x_x1);
+  ASSERT_TRUE(keep(delta_x_x1));
+  auto delta_x_x1_init = find_dmethod_named(delta_x_x1, "Lcom/facebook/redex/test/proguard/Delta$X$X1;.<init>:(Lcom/facebook/redex/test/proguard/Delta$X;)V");
+  ASSERT_NE(nullptr, delta_x_x1_init);
+  ASSERT_TRUE(keep(delta_x_x1_init));
 
-    auto delta_x_x2 = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Delta$X$X2;");
-    ASSERT_NE(nullptr, delta_x_x2);
-    ASSERT_FALSE(keep(delta_x_x2));
+  auto delta_x_x2 = find_class_named(
+         classes, "Lcom/facebook/redex/test/proguard/Delta$X$X2;");
+  ASSERT_NE(nullptr, delta_x_x2);
+  ASSERT_FALSE(keep(delta_x_x2));
+
   }
 
   { // keepclasseswithmembers test
-    auto delta_v =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$V;");
-    ASSERT_NE(nullptr, delta_v);
-    ASSERT_TRUE(keep(delta_v));
-    auto goat = find_instance_field_named(
-        delta_v,
-        "Lcom/facebook/redex/test/proguard/Delta$V;.goat:Lcom/facebook/redex/"
-        "test/proguard/Delta$VT;");
-    ASSERT_NE(nullptr, goat);
-    ASSERT_TRUE(keep(goat));
-    auto sheep = find_instance_field_named(
-        delta_v,
-        "Lcom/facebook/redex/test/proguard/Delta$V;.sheep:Lcom/facebook/redex/"
-        "test/proguard/Delta$VT;");
-    ASSERT_NE(nullptr, sheep);
-    ASSERT_TRUE(keep(sheep));
-    auto lama = find_instance_field_named(
-        delta_v, "Lcom/facebook/redex/test/proguard/Delta$V;.lama:I");
-    ASSERT_NE(nullptr, lama);
-    ASSERT_FALSE(keep(lama));
+   auto delta_v = find_class_named(
+              classes, "Lcom/facebook/redex/test/proguard/Delta$V;");
+   ASSERT_NE(nullptr, delta_v);
+   ASSERT_TRUE(keep(delta_v));
+   auto goat = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.goat:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, goat);
+   ASSERT_TRUE(keep(goat));
+   auto sheep = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.sheep:Lcom/facebook/redex/test/proguard/Delta$VT;");
+   ASSERT_NE(nullptr, sheep);
+   ASSERT_TRUE(keep(sheep));
+   auto lama = find_instance_field_named(delta_v,
+             "Lcom/facebook/redex/test/proguard/Delta$V;.lama:I");
+   ASSERT_NE(nullptr, lama);
+   ASSERT_FALSE(keep(lama));
   }
 
   { // More keepclasseswithmembers for the E0, E1, .. E7 classes
     auto delta_e7 = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Delta$E7;");
+                  classes, "Lcom/facebook/redex/test/proguard/Delta$E7;");
     ASSERT_NE(nullptr, delta_e7);
     ASSERT_TRUE(keep(delta_e7));
-    auto e7_crab = find_instance_field_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.crab:I");
+    auto e7_crab = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.crab:I");
     ASSERT_NE(nullptr, e7_crab);
     ASSERT_TRUE(keep(e7_crab));
-    auto e7_seahorse = find_instance_field_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.seahorse:I");
+    auto e7_seahorse = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.seahorse:I");
     ASSERT_NE(nullptr, e7_seahorse);
     ASSERT_TRUE(keep(e7_seahorse));
-    auto e7_octopus = find_instance_field_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.octopus:I");
+    auto e7_octopus = find_instance_field_named(delta_e7,
+              "Lcom/facebook/redex/test/proguard/Delta$E7;.octopus:I");
     ASSERT_NE(nullptr, e7_octopus);
     ASSERT_FALSE(keep(e7_octopus));
-    auto e7_shark = find_vmethod_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.shark:()I");
+    auto e7_shark = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.shark:()I");
     ASSERT_NE(nullptr, e7_shark);
     ASSERT_TRUE(keep(e7_shark));
-    auto e7_tuna1 = find_vmethod_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna1:()I");
+    auto e7_tuna1 = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna1:()I");
     ASSERT_NE(nullptr, e7_tuna1);
     ASSERT_TRUE(keep(e7_tuna1));
-    auto e7_tuna2 = find_vmethod_named(
-        delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna2:()I");
+    auto e7_tuna2 = find_vmethod_named(delta_e7, "Lcom/facebook/redex/test/proguard/Delta$E7;.tuna2:()I");
     ASSERT_NE(nullptr, e7_tuna2);
     ASSERT_TRUE(keep(e7_tuna2));
   }
@@ -791,110 +772,111 @@ TEST(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota;");
     ASSERT_NE(nullptr, iota);
 
-    auto iota_alpha = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Iota$Alpha;");
+    auto iota_alpha =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Alpha;");
     ASSERT_NE(nullptr, iota_alpha);
     ASSERT_TRUE(keep(iota_alpha));
     auto alpha_encode = find_vmethod_named(iota_alpha,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Alpha;.encode:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.encode:(I)I");
     ASSERT_NE(nullptr, alpha_encode);
     ASSERT_TRUE(keep(alpha_encode));
 
     auto alpha_decode = find_vmethod_named(iota_alpha,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Alpha;.decode:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.decode:(I)I");
     ASSERT_NE(nullptr, alpha_decode);
     ASSERT_TRUE(keep(alpha_decode));
 
     auto alpha_wombat = find_vmethod_named(iota_alpha,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Alpha;.wombat:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Alpha;.wombat:(I)I");
     ASSERT_EQ(nullptr, alpha_wombat);
 
-    auto iota_beta = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Iota$Beta;");
+    auto iota_beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Beta;");
     ASSERT_NE(nullptr, iota_beta);
     ASSERT_FALSE(keep(iota_beta));
 
-    auto iota_MySerializable = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Iota$MySerializable;");
+    auto iota_MySerializable =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$MySerializable;");
     ASSERT_NE(nullptr, iota_MySerializable);
 
-    auto iota_someother = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Iota$SomeOther;");
+    auto iota_someother =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$SomeOther;");
     ASSERT_NE(nullptr, iota_someother);
     ASSERT_TRUE(keep(iota_someother));
-    auto iota_someother_init = find_dmethod_named(
-        iota_someother,
-        "Lcom/facebook/redex/test/proguard/Iota$SomeOther;.<init>:(Lcom/"
-        "facebook/redex/test/proguard/Iota;)V");
+    auto iota_someother_init =
+        find_dmethod_named(iota_someother,
+                           "Lcom/facebook/redex/test/proguard/Iota$SomeOther;.<init>:(Lcom/facebook/redex/test/proguard/Iota;)V");
     ASSERT_NE(nullptr, iota_someother_init);
 
     // Iota.Gamma does not have a keep directive, but it is indirectly used
     // in the constructor for SomeOther.
-    auto iota_gamma = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Iota$Gamma;");
+    auto iota_gamma =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Iota$Gamma;");
     ASSERT_NE(nullptr, iota_gamma);
     ASSERT_FALSE(keep(iota_gamma));
 
     auto gamma_encode = find_vmethod_named(iota_gamma,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Gamma;.encode:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.encode:(I)I");
     ASSERT_NE(nullptr, gamma_encode);
     ASSERT_TRUE(keep(gamma_encode));
 
     auto gamma_decode = find_vmethod_named(iota_gamma,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Gamma;.decode:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.decode:(I)I");
     ASSERT_NE(nullptr, gamma_decode);
     ASSERT_TRUE(keep(gamma_decode));
 
     auto gamma_numbat = find_vmethod_named(iota_gamma,
-                                           "Lcom/facebook/redex/test/proguard/"
-                                           "Iota$Gamma;.numbat:(I)I");
+                                      "Lcom/facebook/redex/test/proguard/"
+                                      "Iota$Gamma;.numbat:(I)I");
     ASSERT_EQ(nullptr, gamma_numbat);
 
-    { // keepclasseswithmembers tests
-      auto omega =
-          find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega;");
-      ASSERT_NE(nullptr, omega);
 
-      auto omega_alpha = find_class_named(
-          classes, "Lcom/facebook/redex/test/proguard/Omega$Alpha;");
-      ASSERT_NE(nullptr, omega_alpha);
-      ASSERT_TRUE(keep(omega_alpha));
-      auto omega_alpha_red = find_vmethod_named(
-          omega_alpha,
-          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.red:()V");
-      ASSERT_NE(nullptr, omega_alpha_red);
-      ASSERT_TRUE(keep(omega_alpha_red));
-      auto omega_alpha_green0 = find_vmethod_named(
-          omega_alpha,
-          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green0:()V");
-      ASSERT_NE(nullptr, omega_alpha_green0);
-      ASSERT_TRUE(keep(omega_alpha_green0));
-      auto omega_alpha_green1 = find_vmethod_named(
-          omega_alpha,
-          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green1:()V");
-      ASSERT_NE(nullptr, omega_alpha_green1);
-      ASSERT_TRUE(keep(omega_alpha_green1));
-      auto omega_alpha_blue = find_vmethod_named(
-          omega_alpha,
-          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue:()V");
-      ASSERT_NE(nullptr, omega_alpha_blue);
-      ASSERT_FALSE(keep(omega_alpha_blue));
+   { // keepclasseswithmembers tests
+    auto omega =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega;");
+    ASSERT_NE(nullptr, omega);
 
-      auto omega_beta = find_class_named(
-          classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
-      ASSERT_NE(nullptr, omega_beta);
-      ASSERT_FALSE(keep(omega_beta));
+    auto omega_alpha =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Alpha;");
+    ASSERT_NE(nullptr, omega_alpha);
+    ASSERT_TRUE(keep(omega_alpha));
+    auto omega_alpha_red =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.red:()V");
+    ASSERT_NE(nullptr, omega_alpha_red);
+    ASSERT_TRUE(keep(omega_alpha_red));
+    auto omega_alpha_green0 =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green0:()V");
+    ASSERT_NE(nullptr, omega_alpha_green0);
+    ASSERT_TRUE(keep(omega_alpha_green0));
+    auto omega_alpha_green1 =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green1:()V");
+    ASSERT_NE(nullptr, omega_alpha_green1);
+    ASSERT_TRUE(keep(omega_alpha_green1));
+    auto omega_alpha_blue =
+        find_vmethod_named(
+            omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue:()V");
+    ASSERT_NE(nullptr, omega_alpha_blue);
+    ASSERT_FALSE(keep(omega_alpha_blue));
 
-      auto omega_gamma = find_class_named(
-          classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
-      ASSERT_NE(nullptr, omega_gamma);
-      ASSERT_FALSE(keep(omega_gamma));
-    }
+    auto omega_beta =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
+    ASSERT_NE(nullptr, omega_beta);
+    ASSERT_FALSE(keep(omega_beta));
+
+    auto omega_gamma =
+        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
+    ASSERT_NE(nullptr, omega_gamma);
+    ASSERT_FALSE(keep(omega_gamma));
+ }
+
   }
 
   delete g_redex;

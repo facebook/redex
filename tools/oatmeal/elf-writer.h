@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "OatmealUtil.h"
 #include "dump-oat.h"
+#include "OatmealUtil.h"
 
 #include <museum/5.0.0/bionic/libc/linux/elf.h>
 

@@ -164,49 +164,27 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
  */
 
 //                              is_load  is_get  is_put  is_invoke
-#define PTS_OPS                                                               \
-  PTS_OP(PTS_CONST_STRING, true, false, false, false)                         \
-  I PTS_OP(PTS_CONST_CLASS, true, false, false, false) I PTS_OP(              \
-      PTS_GET_EXCEPTION, true, false, false, false)                           \
-      I PTS_OP(PTS_NEW_OBJECT, true, false, false, false) I PTS_OP(           \
-          PTS_LOAD_PARAM, true, false, false, false)                          \
-          I PTS_OP(PTS_GET_CLASS, false, false, false, false) I PTS_OP(       \
-              PTS_CHECK_CAST, false, false, false, false) I PTS_OP(PTS_IGET,  \
-                                                                   false,     \
-                                                                   true,      \
-                                                                   false,     \
-                                                                   false)     \
-              I PTS_OP(PTS_IGET_SPECIAL, false, true, false, false) I PTS_OP( \
-                  PTS_SGET, false, true, false, false)                        \
-                  I PTS_OP(PTS_IPUT, false, false, true, false) I PTS_OP(     \
-                      PTS_IPUT_SPECIAL, false, false, true, false)            \
-                      I PTS_OP(PTS_SPUT, false, false, true, false) I PTS_OP( \
-                          PTS_INVOKE_VIRTUAL, false, false, false, true)      \
-                          I PTS_OP(                                           \
-                              PTS_INVOKE_SUPER, false, false, false, true)    \
-                              I PTS_OP(PTS_INVOKE_DIRECT,                     \
-                                       false,                                 \
-                                       false,                                 \
-                                       false,                                 \
-                                       true) I PTS_OP(PTS_INVOKE_INTERFACE,   \
-                                                      false,                  \
-                                                      false,                  \
-                                                      false,                  \
-                                                      true)                   \
-                                  I PTS_OP(PTS_INVOKE_STATIC,                 \
-                                           false,                             \
-                                           false,                             \
-                                           false,                             \
-                                           true) I PTS_OP(PTS_RETURN,         \
-                                                          false,              \
-                                                          false,              \
-                                                          false,              \
-                                                          false)              \
-                                      I PTS_OP(PTS_DISJUNCTION,               \
-                                               false,                         \
-                                               false,                         \
-                                               false,                         \
-                                               false)
+#define PTS_OPS \
+   PTS_OP(PTS_CONST_STRING,     true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_CONST_CLASS,      true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_GET_EXCEPTION,    true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_NEW_OBJECT,       true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_LOAD_PARAM,       true ,   false,  false,  false    ) \
+I  PTS_OP(PTS_GET_CLASS,        false,   false,  false,  false    ) \
+I  PTS_OP(PTS_CHECK_CAST,       false,   false,  false,  false    ) \
+I  PTS_OP(PTS_IGET,             false,   true ,  false,  false    ) \
+I  PTS_OP(PTS_IGET_SPECIAL,     false,   true ,  false,  false    ) \
+I  PTS_OP(PTS_SGET,             false,   true ,  false,  false    ) \
+I  PTS_OP(PTS_IPUT,             false,   false,  true ,  false    ) \
+I  PTS_OP(PTS_IPUT_SPECIAL,     false,   false,  true ,  false    ) \
+I  PTS_OP(PTS_SPUT,             false,   false,  true ,  false    ) \
+I  PTS_OP(PTS_INVOKE_VIRTUAL,   false,   false,  false,  true     ) \
+I  PTS_OP(PTS_INVOKE_SUPER,     false,   false,  false,  true     ) \
+I  PTS_OP(PTS_INVOKE_DIRECT,    false,   false,  false,  true     ) \
+I  PTS_OP(PTS_INVOKE_INTERFACE, false,   false,  false,  true     ) \
+I  PTS_OP(PTS_INVOKE_STATIC,    false,   false,  false,  true     ) \
+I  PTS_OP(PTS_RETURN,           false,   false,  false,  false    ) \
+I  PTS_OP(PTS_DISJUNCTION,      false,   false,  false,  false    )
 
 #define MAX_PTS_OPS sizeof(unsigned long long) * 8
 

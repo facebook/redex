@@ -8,21 +8,21 @@
 #include "Unterface.h"
 
 #include <algorithm>
-#include <cctype>
-#include <functional>
 #include <map>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
 #include <vector>
+#include <functional>
+#include <unordered_set>
+#include <unordered_map>
+#include <cctype>
+#include <utility>
 
-#include "ClassHierarchy.h"
 #include "DexClass.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
-#include "UnterfaceOpt.h"
+#include "DexUtil.h"
 #include "Walkers.h"
+#include "UnterfaceOpt.h"
+#include "ClassHierarchy.h"
 
 namespace {
 
@@ -160,7 +160,8 @@ Trait match_interfaces(DexClass* cls, std::unordered_set<DexClass*> intfs) {
       }
     }
     return NO_MATCH_INTERFACE_METHODS;
-  next:;
+  next:
+    ;
   }
   return MATCHES_INTERFACE_METHODS;
 }
@@ -172,20 +173,24 @@ Trait match_interfaces(DexClass* cls, std::unordered_set<DexClass*> intfs) {
 using ClassSet = std::unordered_set<DexClass*>;
 using ClassTraits = std::unordered_map<DexClass*, Trait>;
 
-using IntfFilter = std::function<bool(DexClass*)>;
-using ImplsFilter = std::function<bool(std::unordered_set<DexClass*>&)>;
+using IntfFilter = std::function<bool (DexClass*)>;
+using ImplsFilter = std::function<bool (std::unordered_set<DexClass*>&)>;
 
 /**
  * Info about interfaces and their implementations.
  */
 class InterfaceImplementations {
- public:
+public:
   InterfaceImplementations(Scope& scope);
   TypeRelationship match(IntfFilter intf_filter, ImplsFilter impls_filter);
 
-  Trait get_intf_traits(DexClass* intf) { return intf_traits[intf]; }
+  Trait get_intf_traits(DexClass* intf) {
+    return intf_traits[intf];
+  }
 
-  Trait get_impl_traits(DexClass* intf) { return impl_traits[intf]; }
+  Trait get_impl_traits(DexClass* intf) {
+    return impl_traits[intf];
+  }
 
   // debug and tracing helper
   void analyze_candidates(TypeRelationship& candidates, const char* name);
@@ -194,7 +199,7 @@ class InterfaceImplementations {
     return true;
   }
 
- private:
+private:
   Scope& scope;
   ClassHierarchy ch;
   ClassSet ifset;
@@ -203,21 +208,21 @@ class InterfaceImplementations {
   TypeRelationship impl_to_intfs;
   ClassTraits impl_traits;
 
- private:
+private:
   // initializers...
   void load_interfaces();
   void compute_interface_traits();
   void load_implementors();
   void compute_implementor_traits();
   // lazy initializers...
-  void compute_lazy_traits(DexClass* intf,
-                           std::unordered_set<DexClass*>& impls);
+  void compute_lazy_traits(
+      DexClass* intf, std::unordered_set<DexClass*>& impls);
   // helpers...
   void find_implementor(DexClass* clazz, DexClass* intf);
 };
 
-TypeRelationship InterfaceImplementations::match(IntfFilter intf_filter,
-                                                 ImplsFilter impls_filter) {
+TypeRelationship InterfaceImplementations::match(
+    IntfFilter intf_filter, ImplsFilter impls_filter) {
   TypeRelationship intf_impls;
   for (auto intf_it : intf_traits) {
     if (!intf_filter(intf_it.first)) continue;
@@ -280,8 +285,8 @@ void InterfaceImplementations::load_implementors() {
   }
 }
 
-void InterfaceImplementations::find_implementor(DexClass* clazz,
-                                                DexClass* intf) {
+void InterfaceImplementations::find_implementor(
+    DexClass* clazz, DexClass* intf) {
   auto parents = intf->get_interfaces()->get_type_list();
   for (auto parent_type : parents) {
     auto parent = type_class(parent_type);
@@ -329,25 +334,27 @@ void InterfaceImplementations::compute_lazy_traits(
 // Debug and tracing utilities
 //
 
-void InterfaceImplementations::analyze_candidates(TypeRelationship& candidates,
-                                                  const char* name) {
+void InterfaceImplementations::analyze_candidates(
+    TypeRelationship& candidates, const char* name) {
   std::vector<DexClass*> intfs;
   size_t impl_count = 0;
   for (auto& impls : candidates) {
     impl_count += impls.second.size();
     intfs.push_back(impls.first);
   }
-  std::sort(intfs.begin(), intfs.end(), [&](DexClass* first, DexClass* second) {
-    return candidates[first].size() > candidates[second].size();
-  });
+  std::sort(intfs.begin(), intfs.end(),
+      [&](DexClass* first, DexClass* second) {
+        return candidates[first].size() > candidates[second].size();
+      });
 
   // implementations
-  TRACE(UNTF, 5, "**** %s\n** Interfaces: %ld, Implementors: %ld\n", name,
-        candidates.size(), impl_count);
+  TRACE(UNTF, 5,
+      "**** %s\n** Interfaces: %ld, Implementors: %ld\n",
+      name, candidates.size(), impl_count);
   TRACE(UNTF, 6, "[impls] interface (meths)\n");
   for (int i = 0; i < 20; i++) {
     TRACE(UNTF, 6, "[%ld] %s (%ld)\n", intf_to_impls[intfs[i]].size(),
-          SHOW(intfs[i]->get_type()), intfs[i]->get_vmethods().size());
+        SHOW(intfs[i]->get_type()), intfs[i]->get_vmethods().size());
   }
 
   // signatures
@@ -362,8 +369,8 @@ void InterfaceImplementations::analyze_candidates(TypeRelationship& candidates,
     for (auto proto : protos) {
       unique_sig[proto.first]++;
       if (proto.second > 1) {
-        multiple_sig[proto.first] =
-            std::max(multiple_sig[proto.first], proto.second);
+        multiple_sig[proto.first] = std::max(multiple_sig[proto.first],
+            proto.second);
       }
     }
   }
@@ -372,12 +379,13 @@ void InterfaceImplementations::analyze_candidates(TypeRelationship& candidates,
   for (auto& proto : unique_sig) {
     sigs.push_back(proto.first);
   }
-  std::sort(sigs.begin(), sigs.end(), [&](DexProto* first, DexProto* second) {
-    return unique_sig[first] > unique_sig[second];
-  });
+  std::sort(sigs.begin(), sigs.end(),
+      [&](DexProto* first, DexProto* second) {
+        return unique_sig[first] > unique_sig[second];
+      });
 
-  TRACE(UNTF, 5, "** Unique signatures %ld\nsignature [count]\n",
-        unique_sig.size());
+  TRACE(UNTF, 5,
+      "** Unique signatures %ld\nsignature [count]\n", unique_sig.size());
   for (int i = 0; i < 20; i++) {
     TRACE(UNTF, 6, "%s [%ld]\n", SHOW(sigs[i]), unique_sig[sigs[i]]);
   }
@@ -386,11 +394,12 @@ void InterfaceImplementations::analyze_candidates(TypeRelationship& candidates,
   for (auto& proto : multiple_sig) {
     sigs.push_back(proto.first);
   }
-  std::sort(sigs.begin(), sigs.end(), [&](DexProto* first, DexProto* second) {
-    return multiple_sig[first] > multiple_sig[second];
-  });
+  std::sort(sigs.begin(), sigs.end(),
+      [&](DexProto* first, DexProto* second) {
+        return multiple_sig[first] > multiple_sig[second];
+      });
   TRACE(UNTF, 5, "** Multiple signature needed %ld\nsignature [count]\n",
-        multiple_sig.size());
+      multiple_sig.size());
   for (int i = 0; i < 10; i++) {
     TRACE(UNTF, 6, "%s [%ld]\n", SHOW(sigs[i]), multiple_sig[sigs[i]]);
   }
@@ -422,35 +431,38 @@ TypeRelationship exclude(InterfaceImplementations& interfaces,
       });
 }
 
-} // namespace
+}
 
-void UnterfacePass::run_pass(DexStoresVector& stores,
-                             ConfigFiles& cfg,
-                             PassManager& mgr) {
+void UnterfacePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
 
   InterfaceImplementations interfaces(scope);
   assert(interfaces.print_all());
 
   auto one_level = exclude(interfaces,
-                           HAS_SUPER | HAS_CHILDREN | NO_VMETHODS,
-                           IMPL_MULTIPLE_INTERFACES | HAS_SUPER | HAS_CHILDREN |
-                               IS_ABSTRACT | NO_MATCH_INTERFACE_METHODS |
-                               HAS_MULTIPLE_INSTANCE_FIELDS |
-                               MULTIPLE_ARGS_CTOR | HAS_CLINIT | NO_VMETHODS |
-                               HAS_STATIC_FIELDS | HAS_DIRECT_METHODS);
+      HAS_SUPER | HAS_CHILDREN | NO_VMETHODS,
+      IMPL_MULTIPLE_INTERFACES |
+          HAS_SUPER |
+          HAS_CHILDREN |
+          IS_ABSTRACT |
+          NO_MATCH_INTERFACE_METHODS |
+          HAS_MULTIPLE_INSTANCE_FIELDS |
+          MULTIPLE_ARGS_CTOR |
+          HAS_CLINIT |
+          NO_VMETHODS |
+          HAS_STATIC_FIELDS |
+          HAS_DIRECT_METHODS);
   interfaces.analyze_candidates(one_level, "No hierarchy, perfect match");
 
   // optimize
   std::vector<DexClass*> untfs;
   std::unordered_set<DexClass*> removed;
-  // optimize(scope, candidates, untfs, removed);
+  //optimize(scope, candidates, untfs, removed);
 
   // write back
   DexClassesVector outdex;
   DexClasses& orig_classes = stores[0].get_dexen()[0];
-  DexClasses classes(
-      (size_t)(orig_classes.size() + untfs.size() - removed.size()));
+  DexClasses classes((size_t)(orig_classes.size() + untfs.size() - removed.size()));
   int pos = 0;
   for (size_t i = 0; i < orig_classes.size(); ++i) {
     auto cls = orig_classes.at(i);

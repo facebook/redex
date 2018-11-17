@@ -25,8 +25,11 @@ namespace register_type_impl {
  *           \    |   /
  *            CONFLICT
  */
-Lattice lattice({RegisterType::CONFLICT, RegisterType::ZERO,
-                 RegisterType::NORMAL, RegisterType::WIDE, RegisterType::OBJECT,
+Lattice lattice({RegisterType::CONFLICT,
+                 RegisterType::ZERO,
+                 RegisterType::NORMAL,
+                 RegisterType::WIDE,
+                 RegisterType::OBJECT,
                  RegisterType::UNKNOWN},
                 {{RegisterType::CONFLICT, RegisterType::OBJECT},
                  {RegisterType::CONFLICT, RegisterType::NORMAL},

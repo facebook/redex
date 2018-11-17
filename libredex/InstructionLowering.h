@@ -48,4 +48,4 @@ bool try_2addr_conversion(MethodItemEntry*);
 
 } // namespace impl
 
-} // namespace instruction_lowering
+} // namespace select_instructions

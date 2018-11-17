@@ -125,6 +125,7 @@ bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
           strstr(method->get_name()->c_str(), "access$") != nullptr);
 }
 
+
 Stats StripDebugInfo::run(Scope scope) {
   Stats stats;
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {

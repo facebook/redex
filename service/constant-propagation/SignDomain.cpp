@@ -21,8 +21,13 @@ namespace sign_domain {
  *            EMPTY
  */
 
-Lattice lattice({Interval::EMPTY, Interval::LTZ, Interval::GTZ, Interval::EQZ,
-                 Interval::LEZ, Interval::GEZ, Interval::ALL},
+Lattice lattice({Interval::EMPTY,
+                 Interval::LTZ,
+                 Interval::GTZ,
+                 Interval::EQZ,
+                 Interval::LEZ,
+                 Interval::GEZ,
+                 Interval::ALL},
                 {{Interval::EMPTY, Interval::LTZ},
                  {Interval::EMPTY, Interval::GTZ},
                  {Interval::EMPTY, Interval::EQZ},

@@ -47,7 +47,9 @@ class WorkerState {
  public:
   WorkerState(size_t id, const Data& initial) : m_id(id), m_data(initial) {}
 
-  Data& get_data() { return m_data; }
+  Data& get_data() {
+    return m_data;
+  }
 
   /*
    * Add more items to the queue of the currently-running worker. When a
@@ -59,7 +61,9 @@ class WorkerState {
     m_queue.push(task);
   }
 
-  size_t worker_id() const { return m_id; }
+  size_t worker_id() const {
+    return m_id;
+  }
 
  private:
   boost::optional<Input> pop_task() {
@@ -110,7 +114,9 @@ class WorkQueue {
 
   void add_item(Input task);
 
-  void set_mapper(Mapper mapper) { m_mapper = mapper; }
+  void set_mapper(Mapper mapper) {
+    m_mapper = mapper;
+  }
 
   void set_reducer(std::function<Output(Output&, Output)> reducer) {
     m_reducer = reducer;

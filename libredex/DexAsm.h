@@ -18,14 +18,19 @@
 
 namespace dex_asm {
 
-enum OperandTag { VREG, LITERAL };
+enum OperandTag {
+  VREG,
+  LITERAL
+};
 
 struct Operand {
   OperandTag tag;
   uint64_t v;
 };
 
-inline Operand operator"" _v(unsigned long long v) { return {VREG, v}; }
+inline Operand operator "" _v(unsigned long long v) {
+  return {VREG, v};
+}
 
 inline Operand operator"" _L(unsigned long long v) { return {LITERAL, v}; }
 

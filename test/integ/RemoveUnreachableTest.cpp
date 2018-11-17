@@ -24,38 +24,47 @@
 
 #include "RemoveUnreachable.h"
 
-template <typename C>
+template<typename C>
 DexClass* find_class(const C& classes, const char* name) {
   auto const it = std::find_if(
-      classes.begin(), classes.end(),
-      [&name](const DexClass* cls) { return !strcmp(cls->c_str(), name); });
+    classes.begin(), classes.end(),
+    [&name](const DexClass* cls) {
+      return !strcmp(cls->c_str(), name);
+    });
   return it == classes.end() ? nullptr : *it;
 }
 
-template <typename C>
-DexField* find_ifield(const C& classes,
-                      const char* cls,
-                      const char* type,
-                      const char* name) {
+template<typename C>
+DexField* find_ifield(
+  const C& classes,
+  const char* cls,
+  const char* type,
+  const char* name
+) {
   auto const& c = find_class(classes, cls);
   auto const& ifields = c->get_ifields();
-  auto const it = std::find(ifields.begin(), ifields.end(),
-                            DexField::make_field(DexType::make_type(cls),
-                                                 DexString::make_string(name),
-                                                 DexType::make_type(type)));
+  auto const it = std::find(
+    ifields.begin(), ifields.end(),
+    DexField::make_field(
+      DexType::make_type(cls),
+      DexString::make_string(name),
+      DexType::make_type(type)));
   return it == ifields.end() ? nullptr : *it;
 }
 
-template <typename C>
-DexMethod* find_vmethod(const C& classes,
-                        const char* cls,
-                        const char* rtype,
-                        const char* name,
-                        const std::vector<const char*>& args) {
+template<typename C>
+DexMethod* find_vmethod(
+  const C& classes,
+  const char* cls,
+  const char* rtype,
+  const char* name,
+  const std::vector<const char*>& args
+) {
   auto const& c = find_class(classes, cls);
   auto const& vmethods = c->get_vmethods();
-  auto const it = std::find(vmethods.begin(), vmethods.end(),
-                            DexMethod::make_method(cls, name, rtype, args));
+  auto const it = std::find(
+    vmethods.begin(), vmethods.end(),
+    DexMethod::make_method(cls, name, rtype, args));
   return it == vmethods.end() ? nullptr : *it;
 }
 
@@ -77,7 +86,7 @@ TEST(RemoveUnreachableTest, synthetic) {
 
   redex::ProguardConfiguration pg_config;
   std::string ss =
-      R"(-keep class A {
+  R"(-keep class A {
        int foo;
        <init>();
        int bar();
@@ -101,11 +110,10 @@ TEST(RemoveUnreachableTest, synthetic) {
   ASSERT_TRUE(pg_config.ok);
   ASSERT_FALSE(pg_config.keep_rules.empty());
 
-  apply_deobfuscated_names(root_store.get_dexen(),
-                           dummy_cfg.get_proguard_map());
+  apply_deobfuscated_names(root_store.get_dexen(), dummy_cfg.get_proguard_map());
 
   std::vector<Pass*> passes = {
-      new RemoveUnreachablePass(),
+    new RemoveUnreachablePass(),
   };
 
   // Make sure some unreachable things exist before we start.

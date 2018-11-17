@@ -70,7 +70,7 @@ class LocalDcePass : public Pass {
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
- private:
+private:
   static std::unordered_set<DexMethodRef*> find_pure_methods();
   std::unordered_set<DexMethod*> m_do_not_optimize_methods;
 };

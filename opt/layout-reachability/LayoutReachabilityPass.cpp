@@ -8,9 +8,10 @@
 #include "LayoutReachabilityPass.h"
 #include "ReachableClasses.h"
 
-void LayoutReachabilityPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& cfg,
-                                      PassManager& mgr) {
+void LayoutReachabilityPass::run_pass(
+  DexStoresVector& stores,
+  ConfigFiles& cfg,
+  PassManager& mgr) {
   TRACE(PGR, 1, "Recomputing layout classes\n");
   std::string apk_dir;
   cfg.get_json_config().get("apk_dir", "", apk_dir);

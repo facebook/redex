@@ -56,8 +56,8 @@ void get_interfaces(TypeSet& interfaces, DexClass* cls) {
 }
 
 // Collect candidate interfaces that could be safe to remove
-TypeSet collect_interfaces(const Scope& scope,
-                           UnreferencedInterfacesPass::Metric& metric) {
+TypeSet collect_interfaces(
+    const Scope& scope, UnreferencedInterfacesPass::Metric& metric) {
   TypeSet candidates;
   for (const auto& cls : scope) {
     if (!is_interface(cls)) continue;
@@ -108,25 +108,27 @@ void remove_referenced(const Scope& scope,
     }
   };
 
-  walk::fields(scope, [&](DexField* field) {
-    check_type(field->get_type(), metric.field_refs);
-  });
-  walk::methods(scope, [&](DexMethod* meth) {
-    const auto proto = meth->get_proto();
-    check_type(proto->get_rtype(), metric.sig_refs);
-    for (const auto& type : proto->get_args()->get_type_list()) {
-      check_type(type, metric.sig_refs);
-    }
-  });
-  walk::annotations(scope, [&](DexAnnotation* anno) {
-    std::vector<DexType*> types_in_anno;
-    anno->gather_types(types_in_anno);
-    for (const auto& type : types_in_anno) {
-      check_type(type, metric.anno_refs);
-    }
-  });
-  walk::opcodes(
-      scope,
+  walk::fields(scope,
+      [&](DexField* field) {
+        check_type(field->get_type(), metric.field_refs);
+      });
+  walk::methods(scope,
+      [&](DexMethod* meth) {
+        const auto proto = meth->get_proto();
+        check_type(proto->get_rtype(), metric.sig_refs);
+        for (const auto& type : proto->get_args()->get_type_list()) {
+          check_type(type, metric.sig_refs);
+        }
+      });
+  walk::annotations(scope,
+      [&](DexAnnotation* anno) {
+        std::vector<DexType*> types_in_anno;
+        anno->gather_types(types_in_anno);
+        for (const auto& type : types_in_anno) {
+          check_type(type, metric.anno_refs);
+        }
+      });
+  walk::opcodes(scope,
       [](DexMethod*) { return true; },
       [&](DexMethod*, IRInstruction* insn) {
         if (insn->has_type()) {
@@ -137,9 +139,9 @@ void remove_referenced(const Scope& scope,
         const auto opcode = insn->opcode();
         DexMethod* meth = nullptr;
         if (opcode == OPCODE_INVOKE_VIRTUAL) {
-          meth = resolve_method(insn->get_method(), MethodSearch::Virtual);
+          meth =  resolve_method(insn->get_method(), MethodSearch::Virtual);
         } else if (opcode == OPCODE_INVOKE_INTERFACE) {
-          meth = resolve_method(insn->get_method(), MethodSearch::Interface);
+          meth =  resolve_method(insn->get_method(), MethodSearch::Interface);
         } else {
           return;
         }
@@ -192,8 +194,8 @@ void get_impls(DexType* intf,
 };
 
 void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
-  TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s\n", SHOW(cls),
-        SHOW(cls->get_interfaces()));
+  TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s\n",
+      SHOW(cls), SHOW(cls->get_interfaces()));
   std::unordered_set<DexType*> new_intfs;
   for (const auto& intf : cls->get_interfaces()->get_type_list()) {
     if (removable.count(intf) == 0) {
@@ -213,9 +215,8 @@ void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
 
 } // namespace
 
-void UnreferencedInterfacesPass::run_pass(DexStoresVector& stores,
-                                          ConfigFiles& /*cfg*/,
-                                          PassManager& mgr) {
+void UnreferencedInterfacesPass::run_pass(
+    DexStoresVector& stores, ConfigFiles& /*cfg*/, PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   auto removable = collect_interfaces(scope, m_metric);
@@ -240,7 +241,8 @@ void UnreferencedInterfacesPass::run_pass(DexStoresVector& stores,
   TRACE(UNREF_INTF, 1, "signature references %ld\n", m_metric.sig_refs);
   TRACE(UNREF_INTF, 1, "instruction references %ld\n", m_metric.insn_refs);
   TRACE(UNREF_INTF, 1, "annotation references %ld\n", m_metric.anno_refs);
-  TRACE(UNREF_INTF, 1, "unresolved methods %ld\n", m_metric.unresolved_meths);
+  TRACE(UNREF_INTF, 1, "unresolved methods %ld\n",
+      m_metric.unresolved_meths);
   TRACE(UNREF_INTF, 1, "updated implementations %ld\n", m_metric.updated_impls);
   TRACE(UNREF_INTF, 1, "removable %ld\n", m_metric.removed);
 

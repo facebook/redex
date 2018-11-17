@@ -336,6 +336,6 @@ class DiffMethodSizes : public Tool {
   }
 };
 
-} // namespace
+} // namespace {
 
 static DiffMethodSizes s_diff_method_sizes;

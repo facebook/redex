@@ -25,8 +25,8 @@ int main(int argc, char** argv) {
       auto idx = std::stoi(matches[2]) - 1;
       auto stack = get_stack(*map, idx);
       for (auto pos : stack) {
-        std::cout << matches[1] << "(" << pos.filename << ":" << pos.line << ")"
-                  << std::endl;
+        std::cout << matches[1] << "(" << pos.filename << ":" << pos.line
+                  << ")" << std::endl;
       }
     } else {
       std::cout << line << std::endl;

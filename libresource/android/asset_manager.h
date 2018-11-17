@@ -67,15 +67,16 @@ typedef struct AAsset AAsset;
 
 /** Available access modes for opening assets with {@link AAssetManager_open} */
 enum {
-  /** No specific information about how data will be accessed. **/
-  AASSET_MODE_UNKNOWN = 0,
-  /** Read chunks, and seek forward and backward. */
-  AASSET_MODE_RANDOM = 1,
-  /** Read sequentially, with an occasional forward seek. */
-  AASSET_MODE_STREAMING = 2,
-  /** Caller plans to ask for a read-only buffer with all data. */
-  AASSET_MODE_BUFFER = 3
+    /** No specific information about how data will be accessed. **/
+    AASSET_MODE_UNKNOWN      = 0,
+    /** Read chunks, and seek forward and backward. */
+    AASSET_MODE_RANDOM       = 1,
+    /** Read sequentially, with an occasional forward seek. */
+    AASSET_MODE_STREAMING    = 2,
+    /** Caller plans to ask for a read-only buffer with all data. */
+    AASSET_MODE_BUFFER       = 3
 };
+
 
 /**
  * Open the named directory within the asset hierarchy.  The directory can then
@@ -165,17 +166,14 @@ off_t AAsset_getLength(AAsset* asset);
 off64_t AAsset_getLength64(AAsset* asset);
 
 /**
- * Report the total amount of asset data that can be read from the current
- * position.
+ * Report the total amount of asset data that can be read from the current position.
  */
 off_t AAsset_getRemainingLength(AAsset* asset);
 
 /**
- * Report the total amount of asset data that can be read from the current
- * position.
+ * Report the total amount of asset data that can be read from the current position.
  *
- * Uses a 64-bit number instead of a 32-bit number as AAsset_getRemainingLength
- * does.
+ * Uses a 64-bit number instead of a 32-bit number as AAsset_getRemainingLength does.
  */
 off64_t AAsset_getRemainingLength64(AAsset* asset);
 
@@ -198,20 +196,20 @@ int AAsset_openFileDescriptor(AAsset* asset, off_t* outStart, off_t* outLength);
  * Returns < 0 if direct fd access is not possible (for example, if the asset is
  * compressed).
  */
-int AAsset_openFileDescriptor64(AAsset* asset,
-                                off64_t* outStart,
-                                off64_t* outLength);
+int AAsset_openFileDescriptor64(AAsset* asset, off64_t* outStart, off64_t* outLength);
 
 /**
- * Returns whether this asset's internal buffer is allocated in ordinary RAM
- * (i.e. not mmapped).
+ * Returns whether this asset's internal buffer is allocated in ordinary RAM (i.e. not
+ * mmapped).
  */
 int AAsset_isAllocated(AAsset* asset);
+
+
 
 #ifdef __cplusplus
 };
 #endif
 
-#endif // ANDROID_ASSET_MANAGER_H
+#endif      // ANDROID_ASSET_MANAGER_H
 
 /** @} */

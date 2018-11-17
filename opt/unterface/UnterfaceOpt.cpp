@@ -7,9 +7,9 @@
 
 #include "UnterfaceOpt.h"
 
-#include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Creators.h"
 #include "Walkers.h"
 
 namespace {
@@ -28,9 +28,9 @@ struct Unterface {
         obj_field(nullptr),
         ctor(nullptr) {
     std::sort(impls.begin(), impls.end(),
-              [](const DexClass* first, const DexClass* second) {
-                return compare_dextypes(first->get_type(), second->get_type());
-              });
+        [](const DexClass* first, const DexClass* second) {
+          return compare_dextypes(first->get_type(), second->get_type());
+        });
   }
 
   // interface to optimize
@@ -41,7 +41,7 @@ struct Unterface {
   ClassCreator* untf;
   // switch field
   DexField* sw_field;
-  // object field
+  //object field
   DexField* obj_field;
   // unterface ctor
   DexMethod* ctor;
@@ -57,8 +57,7 @@ DexMethodRef* obj_ctor() {
   static DexMethodRef* ctor = DexMethod::make_method(
       get_object_type(),
       DexString::make_string("<init>"),
-      DexProto::make_proto(
-          get_void_type(),
+      DexProto::make_proto(get_void_type(),
           DexTypeList::make_type_list(std::deque<DexType*>())));
   return ctor;
 }
@@ -73,9 +72,9 @@ DexProto* get_updated_proto(DexProto* proto, DexType* impl, DexType* untf) {
       new_args.push_back(arg);
     }
   }
-  return DexProto::make_proto(proto->get_rtype() == impl ? untf
-                                                         : proto->get_rtype(),
-                              DexTypeList::make_type_list(std::move(new_args)));
+  return DexProto::make_proto(
+      proto->get_rtype() == impl ? untf : proto->get_rtype(),
+      DexTypeList::make_type_list(std::move(new_args)));
 }
 
 // TODO: come up with a good story for names
@@ -86,9 +85,9 @@ DexString* get_name(DexString* base) {
 
 bool find_impl(DexType* type, Unterface& unterface) {
   return std::find_if(unterface.impls.begin(), unterface.impls.end(),
-                      [&](const DexClass* impl) {
-                        return impl->get_type() == type;
-                      }) != unterface.impls.end();
+      [&](const DexClass* impl) {
+        return impl->get_type() == type;
+      }) != unterface.impls.end();
 };
 
 /**
@@ -109,7 +108,8 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
     case OPCODE_NEW_INSTANCE:
       if (find_impl(insn->get_type(), unterface)) {
         auto new_inst = new IRInstruction(OPCODE_NEW_INSTANCE);
-        new_inst->set_type(unterface.untf->get_type())->set_dest(insn->dest());
+        new_inst->set_type(unterface.untf->get_type())
+            ->set_dest(insn->dest());
         code->replace_opcode(insn, new_inst);
         last = new_inst;
       } else {
@@ -173,9 +173,10 @@ void do_update_method(DexMethod* meth, Unterface& unterface) {
  */
 void update_impl_refereces(Scope& scope, Unterface& unterface) {
   std::vector<DexMethod*> to_change;
-  walk::code(
-      scope,
-      [&](DexMethod* meth) { return !find_impl(meth->get_class(), unterface); },
+  walk::code(scope,
+      [&](DexMethod* meth) {
+        return !find_impl(meth->get_class(), unterface);
+      },
       [&](DexMethod* meth, IRCode& code) {
         for (auto& mie : InstructionIterable(&code)) {
           auto insn = mie.insn;
@@ -260,10 +261,10 @@ void build_invoke(Unterface& unterface) {
     auto ret = proto->get_rtype();
 
     MethodCreator* mc = new MethodCreator(unterface.untf->get_type(),
-                                          vmeth->get_name(), vmeth->get_proto(),
-                                          vmeth->get_access() & ~ACC_ABSTRACT);
-    auto ret_loc =
-        ret != get_void_type() ? mc->make_local(ret) : Location::empty();
+        vmeth->get_name(), vmeth->get_proto(),
+        vmeth->get_access() & ~ACC_ABSTRACT);
+    auto ret_loc = ret != get_void_type() ?
+        mc->make_local(ret) : Location::empty();
     auto mb = mc->get_main_block();
     auto switch_loc = mc->make_local(get_int_type());
     mb->iget(unterface.sw_field, mc->get_local(0), switch_loc);
@@ -282,8 +283,8 @@ void build_invoke(Unterface& unterface) {
       std::vector<Location> args;
       args.push_back(mc->get_local(0));
       for (int loc = 0;
-           loc < static_cast<int>(proto->get_args()->get_type_list().size());
-           loc++) {
+          loc < static_cast<int>(proto->get_args()->get_type_list().size());
+          loc++) {
         args.push_back(mc->get_local(loc + 1));
       }
       case_block.second->invoke(
@@ -332,7 +333,7 @@ void update_code(DexClass* cls, DexMethod* meth, DexField* new_field) {
     std::vector<IRInstruction*> ops;
     ops.push_back(check_cast);
     TRACE(UNTF, 8, "Changed %s to\n%s\n%s\n", show(fop).c_str(),
-          show(new_fop).c_str(), show(check_cast).c_str());
+        show(new_fop).c_str(), show(check_cast).c_str());
     code->insert_after(new_fop, ops);
   }
 }
@@ -383,13 +384,12 @@ void move_methods(Unterface& unterface) {
     for (auto vmeth : impl->get_vmethods()) {
       // create the static method on the unterface class to host the
       // vmethod original code
-      const std::string& smeth_name =
-          vmeth->get_name()->str() + std::to_string(i) + std::to_string(j++);
+      const std::string& smeth_name = vmeth->get_name()->str() +
+                                      std::to_string(i) + std::to_string(j++);
       auto name = DexString::make_string(smeth_name.c_str());
-      auto smeth = MethodCreator::make_static_from(
-          name,
+      auto smeth = MethodCreator::make_static_from(name,
           get_updated_proto(vmeth->get_proto(), impl->get_type(),
-                            unterface.untf->get_type()),
+              unterface.untf->get_type()),
           vmeth, unterface.untf->get_class());
       unterface.methods[impl].push_back(smeth);
       update_code(impl, smeth, unterface.obj_field);
@@ -426,8 +426,8 @@ void move_methods(Unterface& unterface) {
  */
 void make_unterface_class(Unterface& unterface) {
   TRACE(UNTF, 8, "Make unterface for %s\n", SHOW(unterface.intf));
-  auto untf_type =
-      DexType::make_type(get_name(unterface.intf->get_type()->get_name()));
+  auto untf_type = DexType::make_type(get_name(
+      unterface.intf->get_type()->get_name()));
   auto untf_cls = new ClassCreator(untf_type);
   untf_cls->set_super(get_object_type());
   untf_cls->set_access(ACC_PUBLIC);
@@ -449,10 +449,10 @@ void make_unterface_class(Unterface& unterface) {
   unterface.obj_field = obj_field;
 
   std::deque<DexType*> args{get_object_type(), get_int_type()};
-  auto proto = DexProto::make_proto(
-      get_void_type(), DexTypeList::make_type_list(std::move(args)));
+  auto proto = DexProto::make_proto(get_void_type(),
+      DexTypeList::make_type_list(std::move(args)));
   auto cr_ctor = new MethodCreator(untf_type, DexString::make_string("<init>"),
-                                   proto, ACC_PUBLIC | ACC_CONSTRUCTOR);
+      proto, ACC_PUBLIC | ACC_CONSTRUCTOR);
   auto mb = cr_ctor->get_main_block();
   auto self = cr_ctor->get_local(0);
   auto obj = cr_ctor->get_local(1);
@@ -483,12 +483,10 @@ void optimize_interface(Scope& scope, Unterface& unterface) {
   update_impl_refereces(scope, unterface);
 }
 
-} // namespace
+}
 
-void optimize(Scope& scope,
-              TypeRelationship& candidates,
-              std::vector<DexClass*>& untfs,
-              std::unordered_set<DexClass*>& removed) {
+void optimize(Scope& scope, TypeRelationship& candidates,
+    std::vector<DexClass*>& untfs, std::unordered_set<DexClass*>& removed) {
   for (auto& cand_it : candidates) {
     Unterface unterface(cand_it.first, cand_it.second);
     optimize_interface(scope, unterface);

@@ -7,9 +7,9 @@
 
 #include "WorkQueue.h"
 
+#include <thread>
 #include <chrono>
 #include <random>
-#include <thread>
 
 //==========
 // Test for performance

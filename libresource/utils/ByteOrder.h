@@ -38,30 +38,31 @@
  * intent is to allow us to avoid byte swapping on the device.
  */
 
-static inline uint32_t android_swap_long(uint32_t v) {
-  return (v << 24) | ((v << 8) & 0x00FF0000) | ((v >> 8) & 0x0000FF00) |
-         (v >> 24);
+static inline uint32_t android_swap_long(uint32_t v)
+{
+    return (v<<24) | ((v<<8)&0x00FF0000) | ((v>>8)&0x0000FF00) | (v>>24);
 }
 
-static inline uint16_t android_swap_short(uint16_t v) {
-  return (v << 8) | (v >> 8);
+static inline uint16_t android_swap_short(uint16_t v)
+{
+    return (v<<8) | (v>>8);
 }
 
 #define DEVICE_BYTE_ORDER LITTLE_ENDIAN
 
 #if BYTE_ORDER == DEVICE_BYTE_ORDER
 
-#define dtohl(x) (x)
-#define dtohs(x) (x)
-#define htodl(x) (x)
-#define htods(x) (x)
+#define	dtohl(x)	(x)
+#define	dtohs(x)	(x)
+#define	htodl(x)	(x)
+#define	htods(x)	(x)
 
 #else
 
-#define dtohl(x) (android_swap_long(x))
-#define dtohs(x) (android_swap_short(x))
-#define htodl(x) (android_swap_long(x))
-#define htods(x) (android_swap_short(x))
+#define	dtohl(x)	(android_swap_long(x))
+#define	dtohs(x)	(android_swap_short(x))
+#define	htodl(x)	(android_swap_long(x))
+#define	htods(x)	(android_swap_short(x))
 
 #endif
 

@@ -54,9 +54,9 @@
  * it will have a lower block id).
  *
  * We could delete the line number information inside the canonical block, but
- * arguably, having stack traces that point to similar looking code (in a
- * different location) is better than having stack traces point to the nearest
- * line of source code before or after the merged block.
+ * arguably, having stack traces that point to similar looking code (in a different
+ * location) is better than having stack traces point to the nearest line of
+ * source code before or after the merged block.
  *
  * Deleting the line info would also make things complicated if `cleanup()` is
  * inlined into `getBar()`. We would be unable to reconstruct the inlined stack
@@ -69,12 +69,14 @@ using hash_t = std::size_t;
 
 struct BlockEquals {
   bool operator()(cfg::Block* b1, cfg::Block* b2) const {
-    return same_successors(b1, b2) && b1->same_try(b2) && same_code(b1, b2);
+    return same_successors(b1, b2) && b1->same_try(b2) &&
+           same_code(b1, b2);
   }
 
   // Structural equality of opcodes
   static bool same_code(cfg::Block* b1, cfg::Block* b2) {
-    return InstructionIterable(b1).structural_equals(InstructionIterable(b2));
+    return InstructionIterable(b1).structural_equals(
+        InstructionIterable(b2));
   }
 
   // The blocks must also have the exact same successors
@@ -86,10 +88,12 @@ struct BlockEquals {
       return false;
     }
     for (const cfg::Edge* b1_succ : b1_succs) {
-      const auto& in_b2 = std::find_if(
-          b2_succs.begin(), b2_succs.end(), [&](const cfg::Edge* e) {
-            return e->equals_ignore_source(*b1_succ);
-          });
+      const auto& in_b2 =
+          std::find_if(b2_succs.begin(),
+                       b2_succs.end(),
+                       [&](const cfg::Edge* e) {
+                         return e->equals_ignore_source(*b1_succ);
+                       });
       if (in_b2 == b2_succs.end()) {
         // b1 has a succ that b2 doesn't. Note that both the succ blocks and
         // the edge types have to match
@@ -440,7 +444,7 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "} end duplicate blocks set\n");
   }
 };
-} // namespace
+}
 
 void DedupBlocksPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* unused */,

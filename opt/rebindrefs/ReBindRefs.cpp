@@ -24,47 +24,61 @@ namespace {
 
 DexMethodRef* object_array_clone() {
   static DexMethodRef* clone = DexMethod::make_method(
-      "[Ljava/lang/Object;", "clone", "Ljava/lang/Object;", {});
+    "[Ljava/lang/Object;",
+    "clone",
+    "Ljava/lang/Object;",
+    {});
   return clone;
 }
 
 DexMethodRef* object_equals() {
   static DexMethodRef* equals = DexMethod::make_method(
-      "Ljava/lang/Object;", "equals", "Z", {"Ljava/lang/Object;"});
+    "Ljava/lang/Object;",
+    "equals",
+    "Z",
+    {"Ljava/lang/Object;"});
   return equals;
 }
 
 DexMethodRef* object_hashCode() {
-  static DexMethodRef* hashCode =
-      DexMethod::make_method("Ljava/lang/Object;", "hashCode", "I", {});
+  static DexMethodRef* hashCode = DexMethod::make_method(
+    "Ljava/lang/Object;",
+    "hashCode",
+    "I",
+    {});
   return hashCode;
 }
 
 DexMethodRef* object_getClass() {
   static DexMethodRef* getClass = DexMethod::make_method(
-      "Ljava/lang/Object;", "getClass", "Ljava/lang/Class;", {});
+    "Ljava/lang/Object;",
+    "getClass",
+    "Ljava/lang/Class;",
+    {});
   return getClass;
 }
 
 bool is_object_equals(DexMethodRef* mref) {
   static DexString* equals = DexString::make_string("equals");
-  static DexProto* bool_obj =
-      DexProto::make_proto(DexType::make_type("Z"),
-                           DexTypeList::make_type_list({get_object_type()}));
+  static DexProto* bool_obj = DexProto::make_proto(
+    DexType::make_type("Z"),
+    DexTypeList::make_type_list({get_object_type()}));
   return mref->get_name() == equals && mref->get_proto() == bool_obj;
 }
 
 bool is_object_hashCode(DexMethodRef* mref) {
   static DexString* hashCode = DexString::make_string("hashCode");
-  static DexProto* int_void =
-      DexProto::make_proto(get_int_type(), DexTypeList::make_type_list({}));
+  static DexProto* int_void = DexProto::make_proto(
+    get_int_type(),
+    DexTypeList::make_type_list({}));
   return mref->get_name() == hashCode && mref->get_proto() == int_void;
 }
 
 bool is_object_getClass(DexMethodRef* mref) {
   static DexString* getClass = DexString::make_string("getClass");
-  static DexProto* cls_void =
-      DexProto::make_proto(get_class_type(), DexTypeList::make_type_list({}));
+  static DexProto* cls_void = DexProto::make_proto(
+    get_class_type(),
+    DexTypeList::make_type_list({}));
   return mref->get_name() == getClass && mref->get_proto() == cls_void;
 }
 
@@ -74,9 +88,8 @@ bool is_object_getClass(DexMethodRef* mref) {
  * not be visible.
  * Walk up the hierarchy chain as long as the method is public.
  */
-DexMethod* bind_to_visible_ancestor(const DexClass* cls,
-                                    const DexString* name,
-                                    const DexProto* proto) {
+DexMethod* bind_to_visible_ancestor(
+    const DexClass* cls, const DexString* name, const DexProto* proto) {
   DexMethod* top_impl = nullptr;
   while (cls) {
     for (const auto& cls_meth : cls->get_vmethods()) {
@@ -88,8 +101,8 @@ DexMethod* bind_to_visible_ancestor(const DexClass* cls,
         }
         if (top_impl != nullptr) {
           auto top_vis = top_impl->get_access() & VISIBILITY_MASK;
-          auto top_cls_vis =
-              type_class(top_impl->get_class())->get_access() & VISIBILITY_MASK;
+          auto top_cls_vis = type_class(top_impl->get_class())->get_access()
+              & VISIBILITY_MASK;
           if (top_vis != curr_vis || top_cls_vis != curr_cls_vis) {
             return top_impl;
           }
@@ -107,41 +120,42 @@ struct Rebinder {
   Rebinder(Scope& scope, PassManager& mgr) : m_scope(scope), m_pass_mgr(mgr) {}
 
   void rewrite_refs() {
-    walk::opcodes(m_scope,
-                  [](DexMethod*) { return true; },
-                  [&](DexMethod* m, IRInstruction* insn) {
-                    bool top_ancestor = false;
-                    switch (insn->opcode()) {
-                    case OPCODE_INVOKE_VIRTUAL:
-                      top_ancestor = true;
-                      // fallthrough
-                    case OPCODE_INVOKE_SUPER:
-                    case OPCODE_INVOKE_INTERFACE:
-                    case OPCODE_INVOKE_STATIC:
-                      rebind_method(insn, opcode_to_search(insn), top_ancestor);
-                      break;
-                    case OPCODE_SGET:
-                    case OPCODE_SGET_WIDE:
-                    case OPCODE_SGET_OBJECT:
-                    case OPCODE_SGET_BOOLEAN:
-                    case OPCODE_SGET_BYTE:
-                    case OPCODE_SGET_CHAR:
-                    case OPCODE_SGET_SHORT:
-                      rebind_field(insn, FieldSearch::Static);
-                      break;
-                    case OPCODE_IGET:
-                    case OPCODE_IGET_WIDE:
-                    case OPCODE_IGET_OBJECT:
-                    case OPCODE_IGET_BOOLEAN:
-                    case OPCODE_IGET_BYTE:
-                    case OPCODE_IGET_CHAR:
-                    case OPCODE_IGET_SHORT:
-                      rebind_field(insn, FieldSearch::Instance);
-                      break;
-                    default:
-                      break;
-                    }
-                  });
+    walk::opcodes(
+      m_scope,
+      [](DexMethod*) { return true; },
+      [&](DexMethod* m, IRInstruction* insn) {
+        bool top_ancestor = false;
+        switch (insn->opcode()) {
+          case OPCODE_INVOKE_VIRTUAL:
+            top_ancestor = true;
+            // fallthrough
+          case OPCODE_INVOKE_SUPER:
+          case OPCODE_INVOKE_INTERFACE:
+          case OPCODE_INVOKE_STATIC:
+            rebind_method(insn, opcode_to_search(insn), top_ancestor);
+            break;
+          case OPCODE_SGET:
+          case OPCODE_SGET_WIDE:
+          case OPCODE_SGET_OBJECT:
+          case OPCODE_SGET_BOOLEAN:
+          case OPCODE_SGET_BYTE:
+          case OPCODE_SGET_CHAR:
+          case OPCODE_SGET_SHORT:
+            rebind_field(insn, FieldSearch::Static);
+            break;
+          case OPCODE_IGET:
+          case OPCODE_IGET_WIDE:
+          case OPCODE_IGET_OBJECT:
+          case OPCODE_IGET_BOOLEAN:
+          case OPCODE_IGET_BYTE:
+          case OPCODE_IGET_CHAR:
+          case OPCODE_IGET_SHORT:
+            rebind_field(insn, FieldSearch::Instance);
+            break;
+          default:
+            break;
+        }
+      });
   }
 
   void print_stats() {
@@ -154,7 +168,7 @@ struct Rebinder {
   }
 
  private:
-  template <typename T>
+  template<typename T>
   struct RefStats {
     int count = 0;
     std::unordered_set<T> in;
@@ -166,11 +180,14 @@ struct Rebinder {
       out.emplace(tout);
     }
 
-    void insert(T tin) { insert(tin, T()); }
+    void insert(T tin) {
+      insert(tin, T());
+    }
 
     void print(const char* tag, PassManager* mgr) {
-      TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]\n",
-            tag, count, in.size(), out.size());
+      TRACE(BIND, 1,
+              "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]\n",
+              tag, count, in.size(), out.size());
 
       if (mgr) {
         using std::string;
@@ -179,16 +196,15 @@ struct Rebinder {
         string rebound_metric = tagStr + string("_rebound");
         mgr->incr_metric(count_metric, count);
 
-        auto rebound =
-            static_cast<ssize_t>(in.size()) - static_cast<ssize_t>(out.size());
+        auto rebound = static_cast<ssize_t>(in.size()) -
+          static_cast<ssize_t>(out.size());
         mgr->incr_metric(rebound_metric, rebound);
       }
     }
   };
 
-  void rebind_method(IRInstruction* mop,
-                     MethodSearch search,
-                     bool top_ancestor) {
+  void rebind_method(
+      IRInstruction* mop, MethodSearch search, bool top_ancestor) {
     const auto mref = mop->get_method();
     if (search == MethodSearch::Virtual && top_ancestor) {
       auto mtype = mref->get_class();
@@ -206,17 +222,18 @@ struct Rebinder {
         return;
       }
       auto cls = type_class(mtype);
-      real_ref =
-          bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
+      real_ref = bind_to_visible_ancestor(
+          cls, mref->get_name(), mref->get_proto());
       rebind_method_opcode(mop, mref, real_ref);
       return;
     }
     rebind_method_opcode(mop, mref, resolve_method(mref, search));
   }
 
-  void rebind_method_opcode(IRInstruction* mop,
-                            DexMethodRef* mref,
-                            DexMethodRef* real_ref) {
+  void rebind_method_opcode(
+      IRInstruction* mop,
+      DexMethodRef* mref,
+      DexMethodRef* real_ref) {
     if (!real_ref || real_ref == mref || real_ref->is_external()) {
       return;
     }
@@ -231,14 +248,15 @@ struct Rebinder {
 
   bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
     static auto clone = DexString::make_string("clone");
-    return is_array(mtype) && mref->get_name() == clone &&
-           !is_primitive(get_array_type(mtype));
+    return is_array(mtype) &&
+        mref->get_name() == clone &&
+        !is_primitive(get_array_type(mtype));
   }
 
   DexMethodRef* rebind_array_clone(DexMethodRef* mref) {
-    DexMethodRef* real_ref = object_array_clone();
-    m_array_clone_refs.insert(mref, real_ref);
-    return real_ref;
+   DexMethodRef* real_ref = object_array_clone();
+   m_array_clone_refs.insert(mref, real_ref);
+   return real_ref;
   }
 
   DexMethodRef* rebind_object_methods(DexMethodRef* mref) {
@@ -265,7 +283,11 @@ struct Rebinder {
         if (cls->is_external()) return;
         set_public(cls);
       }
-      TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(fref), SHOW(real_ref));
+      TRACE(BIND,
+            2,
+            "Rebinding %s\n\t=>%s\n",
+            SHOW(fref),
+            SHOW(real_ref));
       insn->set_field(real_ref);
       m_frefs.insert(fref, real_ref);
     }
@@ -282,11 +304,10 @@ struct Rebinder {
   RefStats<DexMethodRef*> m_getClass_refs;
 };
 
-} // namespace
+}
 
-void ReBindRefsPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& cfg,
-                              PassManager& mgr) {
+void ReBindRefsPass::run_pass(
+    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   Rebinder rb(scope, mgr);
   rb.rewrite_refs();

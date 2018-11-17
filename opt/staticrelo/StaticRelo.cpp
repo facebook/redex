@@ -14,17 +14,17 @@
 #include <set>
 #include <string>
 #include <tuple>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
 
-#include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
-#include "DexUtil.h"
 #include "IRInstruction.h"
-#include "Match.h"
+#include "DexUtil.h"
 #include "Resolver.h"
+#include "Match.h"
+#include "ConfigFiles.h"
 #include "Walkers.h"
 
 namespace {
@@ -33,6 +33,7 @@ namespace {
 #define METRIC_NUM_DELETED_CLASSES "**num_deleted_classes**"
 #define METRIC_NUM_MOVED_METHODS "num_moved_methods"
 #define METRIC_NUM_DELETED_METHODS "num_deleted_methods"
+
 
 // Counters for this optimization
 static int s_meth_could_not_move_count;
@@ -44,8 +45,7 @@ static int s_single_ref_moved_count;
 /** map of dmethod or class (T) -> method/opcode referencing dmethod or class */
 template <typename T>
 using refs_t = std::unordered_map<
-    const T*,
-    std::vector<std::pair<const DexMethod*, IRInstruction*>>>;
+  const T*, std::vector<std::pair<const DexMethod*, IRInstruction*> > >;
 
 /** all relocation candidate classes */
 using candidates_t = std::set<DexClass*, dexclasses_comparator>;
@@ -57,10 +57,9 @@ using candidates_t = std::set<DexClass*, dexclasses_comparator>;
  * @param p A match_t<DexClass, ...> built up by m::* routines
  * @param v Visitor function
  */
-template <typename P, typename V = void(DexClass*)>
-void visit_classes(const Scope& scope,
-                   const m::match_t<DexClass, P>& p,
-                   const V& v) {
+template<typename P, typename V = void(DexClass*)>
+void visit_classes(
+  const Scope& scope, const m::match_t<DexClass, P>& p, const V& v) {
   for (const auto& cls : scope) {
     if (p.matches(cls)) {
       v(cls);
@@ -75,17 +74,17 @@ void visit_classes(const Scope& scope,
  * @param p A match_t<IRInstruction, ...> built up by m::* routines
  * @param v Visitor function
  */
-template <typename P, typename V = void(DexMethod*, IRInstruction*)>
-void visit_opcodes(const Scope& scope,
-                   const m::match_t<IRInstruction, P>& p,
-                   const V& v) {
-  walk::opcodes(scope,
-                [](const DexMethod*) { return true; },
-                [&](const DexMethod* m, IRInstruction* insn) {
-                  if (p.matches(insn)) {
-                    v(m, insn);
-                  }
-                });
+template<typename P, typename V = void(DexMethod*, IRInstruction*)>
+void visit_opcodes(
+  const Scope& scope, const m::match_t<IRInstruction, P>& p, const V& v) {
+  walk::opcodes(
+    scope,
+    [](const DexMethod*) { return true; },
+    [&](const DexMethod* m, IRInstruction* insn) {
+      if (p.matches(insn)) {
+        v(m, insn);
+      }
+    });
 }
 
 /**
@@ -95,9 +94,9 @@ void visit_opcodes(const Scope& scope,
  * @return Unordered map of DexClass* -> dex index
  */
 std::unordered_map<const DexClass*, size_t> build_class_to_dex_map(
-    const DexClassesVector& dexen) {
+  const DexClassesVector& dexen) {
   std::unordered_map<const DexClass*, size_t> map;
-  for (size_t i = 0, N = dexen.size(); i < N; ++i) {
+  for (size_t i = 0, N = dexen.size() ; i < N ; ++i) {
     for (const auto& cls : dexen[i]) {
       map[cls] = i;
     }
@@ -114,7 +113,8 @@ std::unordered_map<const DexClass*, size_t> build_class_to_dex_map(
  *         Lower rank is earlier in cold start class load.
  */
 std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
-    const DexClassesVector& dexen, ConfigFiles& cfg) {
+  const DexClassesVector& dexen,
+  ConfigFiles& cfg) {
   auto interdex_list = cfg.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::unordered_map<const DexClass*, size_t> coldstart_classes;
@@ -139,17 +139,20 @@ std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
  * @param scope all classes we're processing
  * @param dmethod_refs [out] all refs to dmethods in the application
  * @param class_refs [out] all refs to classes in the application
- * @param referenced_types [out] all refs not coming from instructions (e.g.
- * catch blocks)
+ * @param referenced_types [out] all refs not coming from instructions (e.g. catch blocks)
  *
  */
-void build_refs(const Scope& scope,
-                refs_t<DexMethodRef>& dmethod_refs,
-                refs_t<DexClass>& class_refs,
-                std::unordered_set<DexClass*>& referenced_types) {
+void build_refs(
+    const Scope& scope,
+    refs_t<DexMethodRef>& dmethod_refs,
+    refs_t<DexClass>& class_refs,
+    std::unordered_set<DexClass*>& referenced_types) {
   // Looking for direct/static invokes or class refs
-  auto match = m::invoke_static() || m::invoke_direct() || m::has_type();
-  visit_opcodes(scope, match, [&](const DexMethod* meth, IRInstruction* insn) {
+  auto match =
+    m::invoke_static()
+    || m::invoke_direct()
+    || m::has_type();
+  visit_opcodes(scope, match, [&](const DexMethod* meth, IRInstruction* insn){
     if (insn->has_type()) {
       const auto tref = type_class(insn->get_type());
       if (tref) class_refs[tref].push_back(std::make_pair(meth, insn));
@@ -159,15 +162,16 @@ void build_refs(const Scope& scope,
     }
   });
   // collect all exceptions and add to the set of references for the app
-  walk::code(scope, [&](DexMethod* method, IRCode& code) {
-    std::vector<DexType*> exceptions;
-    code.gather_catch_types(exceptions);
-    for (const auto& exception : exceptions) {
-      auto cls = type_class(exception);
-      if (cls == nullptr || cls->is_external()) continue;
-      referenced_types.insert(cls);
-    }
-  });
+  walk::code(scope,
+      [&](DexMethod* method, IRCode& code) {
+        std::vector<DexType*> exceptions;
+        code.gather_catch_types(exceptions);
+        for (const auto& exception : exceptions) {
+          auto cls = type_class(exception);
+          if (cls == nullptr || cls->is_external()) continue;
+          referenced_types.insert(cls);
+        }
+      });
 }
 
 /**
@@ -176,46 +180,50 @@ void build_refs(const Scope& scope,
  *
  * @param scope all classes we're processing
  * @param class_refs class refs for the application
- * @param referenced_types all refs not coming from instructions (e.g. catch
- * blocks)
+ * @param referenced_types all refs not coming from instructions (e.g. catch blocks)
  * @param dont_optimize_annos set of anno types which, if present on a method,
  *                            should prevent use from relocating that method.
  * @return an unordered set of DexClass which are static relocation candidates
  */
 candidates_t build_candidates(
-    const Scope& scope,
-    const refs_t<DexClass>& class_refs,
-    const std::unordered_set<DexClass*>& referenced_types,
-    const std::unordered_set<DexType*>& dont_optimize_annos) {
+  const Scope& scope,
+  const refs_t<DexClass>& class_refs,
+  const std::unordered_set<DexClass*>& referenced_types,
+  const std::unordered_set<DexType*>& dont_optimize_annos) {
   candidates_t candidates;
 
   auto match =
-      // N.B. For now, we cheat by only finding final classes. This lets us
-      // ensure that we only need to fix up references for this exact class
-      // versus any of its derivatives. Although in theory ReBindRefs should
-      // be making this guarantee for us?
-      m::is_final<DexClass>() && !m::is_external<DexClass>() &&
-      !m::is_interface() && !m::is_enum() && m::has_class_data() &&
-      !m::any_vmethods(m::any<DexMethod>())
-      // No dmethods which are annotated with anything in dont_optimize_annos
-      && !m::any_dmethods(m::any_annos<DexMethod>(
-             m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)))) &&
-      !m::any_sfields(m::any<DexField>()) &&
-      !m::any_ifields(m::any<DexField>())
-      // The only non-static dmethods should be default constructor
-      && m::all_dmethods((m::is_static<DexMethod>() && !m::is_constructor()) ||
-                         m::is_default_constructor())
-      // Our class must not be referenced anywhere
-      && !m::in<DexClass>(class_refs) &&
-      !m::in<DexClass>(referenced_types)
-      // Make sure this class is not prohibited from being deleted. Granted,
-      // we could still move methods and not delete the class, but let's
-      // simplify things for now.
-      && !m::keep<DexClass>() &&
-      !m::any_annos<DexClass>(
-          m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
+    // N.B. For now, we cheat by only finding final classes. This lets us
+    // ensure that we only need to fix up references for this exact class
+    // versus any of its derivatives. Although in theory ReBindRefs should
+    // be making this guarantee for us?
+    m::is_final<DexClass>()
+    && !m::is_external<DexClass>()
+    && !m::is_interface()
+    && !m::is_enum()
+    && m::has_class_data()
+    && !m::any_vmethods(m::any<DexMethod>())
+    // No dmethods which are annotated with anything in dont_optimize_annos
+    && !m::any_dmethods(
+      m::any_annos<DexMethod>(
+        m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos))))
+    && !m::any_sfields(m::any<DexField>())
+    && !m::any_ifields(m::any<DexField>())
+    // The only non-static dmethods should be default constructor
+    && m::all_dmethods(
+      (m::is_static<DexMethod>() && !m::is_constructor())
+      || m::is_default_constructor())
+    // Our class must not be referenced anywhere
+    && !m::in<DexClass>(class_refs)
+    && !m::in<DexClass>(referenced_types)
+    // Make sure this class is not prohibited from being deleted. Granted,
+    // we could still move methods and not delete the class, but let's
+    // simplify things for now.
+    && !m::keep<DexClass>()
+    && !m::any_annos<DexClass>(
+        m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
 
-  visit_classes(scope, match, [&](DexClass* cls) {
+  visit_classes(scope, match, [&](DexClass* cls){
     TRACE(RELO, 5, "RELO %s is a candidate\n", SHOW(cls->get_type()));
     candidates.insert(cls);
   });
@@ -233,8 +241,8 @@ candidates_t build_candidates(
  * @return Unordered map of  dex idx -> target DexClass* for relocation
  */
 std::unordered_map<size_t, DexClass*> build_dex_to_target_map(
-    const candidates_t& candidates,
-    const std::unordered_map<const DexClass*, size_t>& cls_to_dex) {
+  const candidates_t& candidates,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex) {
   std::unordered_map<size_t, DexClass*> map;
   for (DexClass* cls : candidates) {
     size_t dex = cls_to_dex.at(cls);
@@ -255,8 +263,9 @@ std::unordered_map<size_t, DexClass*> build_dex_to_target_map(
  * @param methods A vector of methods to check for collision
  * @return true if method name/proto matches a name/proto pair in methods.
  */
-bool does_method_collide(const DexMethod* method,
-                         const std::vector<DexMethod*> methods) {
+bool does_method_collide(
+  const DexMethod* method,
+  const std::vector<DexMethod*> methods) {
   for (auto other_method : methods) {
     if (method->get_name() == other_method->get_name() &&
         method->get_proto() == other_method->get_proto()) {
@@ -273,8 +282,8 @@ bool does_method_collide(const DexMethod* method,
  * @param target_methods [out] A map of class to methods
  */
 void add_target_methods(
-    DexClass* target,
-    std::unordered_map<DexClass*, std::vector<DexMethod*>>& target_methods) {
+  DexClass* target,
+  std::unordered_map<DexClass*, std::vector<DexMethod*> >& target_methods) {
   if (target_methods.find(target) != target_methods.cend()) {
     // Already added target methods
     return;
@@ -310,36 +319,36 @@ void add_target_methods(
  * @return The relocation target, or nullptr if there is no valid target
  */
 DexClass* select_relocation_target(
-    const DexMethod* meth,
-    DexClass* default_target,
-    const refs_t<DexMethodRef>& dmethod_refs,
-    const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
-    const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
-    std::unordered_map<DexClass*, std::vector<DexMethod*>>& target_methods) {
-  /*
-    const auto& refs = dmethod_refs.at(meth);
-    if (refs.size() == 1) {
-      const auto& ref = refs.at(0);
-      DexClass* target = type_class(ref.first->get_class());
-      always_assert(target);
-      always_assert(!target->is_external());
-      // Add target methods
-      add_target_methods(target, target_methods);
-      // Can't collide
-      // N.B. [] rather than .at because target might not have any methods
-      if (!does_method_collide(meth, target_methods[target])) {
-        // Can't leave primary dex
-        DexClass* donor = type_class(meth->get_class());
-        if (!(cls_to_dex.at(donor) == 0 && cls_to_dex.at(target) != 0)) {
-          s_single_ref_moved_count++;
-          return target;
-        }
+  const DexMethod* meth,
+  DexClass* default_target,
+  const refs_t<DexMethodRef>& dmethod_refs,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
+  std::unordered_map<DexClass*, std::vector<DexMethod*> >& target_methods) {
+/*
+  const auto& refs = dmethod_refs.at(meth);
+  if (refs.size() == 1) {
+    const auto& ref = refs.at(0);
+    DexClass* target = type_class(ref.first->get_class());
+    always_assert(target);
+    always_assert(!target->is_external());
+    // Add target methods
+    add_target_methods(target, target_methods);
+    // Can't collide
+    // N.B. [] rather than .at because target might not have any methods
+    if (!does_method_collide(meth, target_methods[target])) {
+      // Can't leave primary dex
+      DexClass* donor = type_class(meth->get_class());
+      if (!(cls_to_dex.at(donor) == 0 && cls_to_dex.at(target) != 0)) {
+        s_single_ref_moved_count++;
+        return target;
       }
     }
-  */
+  }
+*/
   // If not opportunity to relocate to a single call site, try the default
   // relocation target
-  // N.B. [] rather than .at because default_target might not have any methods
+    // N.B. [] rather than .at because default_target might not have any methods
   if (!does_method_collide(meth, target_methods[default_target])) {
     return default_target;
   }
@@ -427,17 +436,17 @@ void make_references_public(const DexMethod* from_meth) {
  * @param meth_deletes [out] Set of methods to delete outright
  * @param cls_deletes [out] Set of classes to delete outright
  */
-void build_mutations(
-    const candidates_t& candidates,
-    const refs_t<DexMethodRef>& dmethod_refs,
-    const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
-    const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
-    const std::unordered_map<size_t, DexClass*>& dex_to_target,
-    std::unordered_map<DexMethod*, DexClass*>& meth_moves,
-    std::unordered_set<DexMethod*>& meth_deletes,
-    std::unordered_set<DexClass*>& cls_deletes) {
+ void build_mutations(
+  const candidates_t& candidates,
+  const refs_t<DexMethodRef>& dmethod_refs,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_pgo_order,
+  const std::unordered_map<const DexClass*, size_t>& cls_to_dex,
+  const std::unordered_map<size_t, DexClass*>& dex_to_target,
+  std::unordered_map<DexMethod*, DexClass*>& meth_moves,
+  std::unordered_set<DexMethod*>& meth_deletes,
+  std::unordered_set<DexClass*>& cls_deletes) {
   std::unordered_map<DexClass*, size_t> target_relocations;
-  std::unordered_map<DexClass*, std::vector<DexMethod*>> target_methods;
+  std::unordered_map<DexClass*, std::vector<DexMethod*> > target_methods;
   // Load the targets' existing methods into target_methods
   for (auto it : dex_to_target) {
     DexClass* target = it.second;
@@ -478,13 +487,13 @@ void build_mutations(
         // If there's no relocation_target, we can't delete the class, and don't
         // move the method. We also need to make the method public as other
         // methods that were moved away may refer back to it.
-        DexClass* relocation_target =
-            select_relocation_target(meth,
-                                     default_relocation_target,
-                                     dmethod_refs,
-                                     cls_to_pgo_order,
-                                     cls_to_dex,
-                                     target_methods);
+        DexClass* relocation_target = select_relocation_target(
+          meth,
+          default_relocation_target,
+          dmethod_refs,
+          cls_to_pgo_order,
+          cls_to_dex,
+          target_methods);
         if (!relocation_target) {
           s_meth_could_not_move_count++;
           set_public(meth);
@@ -492,8 +501,8 @@ void build_mutations(
           continue;
         }
         always_assert_log(relocation_target->has_class_data(),
-                          "Relocation target %s has no class data\n",
-                          SHOW(relocation_target->get_type()));
+            "Relocation target %s has no class data\n",
+            SHOW(relocation_target->get_type()));
         target_methods[relocation_target].push_back(meth);
         meth_moves[meth] = relocation_target;
         target_relocations[relocation_target]++;
@@ -511,14 +520,14 @@ void build_mutations(
     s_max_relocation_load = std::max(kv.second, s_max_relocation_load);
   }
   float target_relocations_count = target_relocations.size();
-  s_avg_relocation_load = target_relocations_count
-                              ? total_relocations / target_relocations_count
-                              : 0.0f;
+  s_avg_relocation_load = target_relocations_count ?
+    total_relocations/target_relocations_count : 0.0f;
 }
 
-void delete_classes(Scope& scope,
-                    DexClassesVector& dexen,
-                    const std::unordered_set<DexClass*>& cls_deletes) {
+void delete_classes(
+  Scope& scope,
+  DexClassesVector& dexen,
+  const std::unordered_set<DexClass*>& cls_deletes) {
   Scope tscope(scope);
   scope.clear();
   for (DexClass* cls : tscope) {
@@ -532,12 +541,13 @@ void delete_classes(Scope& scope,
 }
 
 void record_move_data(DexMethod* from_meth,
-                      DexClass* from_cls,
-                      DexClass* to_cls,
-                      ConfigFiles& cfg) {
-  MethodTuple from_tuple = std::make_tuple(from_cls->get_type()->get_name(),
-                                           from_meth->get_name(),
-                                           from_cls->get_source_file());
+    DexClass* from_cls,
+    DexClass* to_cls,
+    ConfigFiles& cfg) {
+  MethodTuple from_tuple = std::make_tuple(
+      from_cls->get_type()->get_name(),
+      from_meth->get_name(),
+      from_cls->get_source_file());
   cfg.add_moved_methods(from_tuple, to_cls);
 }
 
@@ -562,8 +572,8 @@ void do_mutations(PassManager& mgr,
     if (is_static(from_meth)) {
       auto from_cls = type_class(from_meth->get_class());
       always_assert(from_cls != to_cls);
-      TRACE(RELO, 5, "RELO Relocating %s to %s\n", SHOW(from_meth),
-            SHOW(to_cls->get_type()));
+      TRACE(RELO, 5, "RELO Relocating %s to %s\n",
+        SHOW(from_meth), SHOW(to_cls->get_type()));
       if (from_cls->get_type()->get_name()->c_str() == nullptr ||
           from_meth->get_name()->c_str() == nullptr) {
         TRACE(RELO, 5, "skipping class move\n");
@@ -595,7 +605,9 @@ void do_mutations(PassManager& mgr,
 }
 
 std::unordered_set<DexType*> get_dont_optimize_annos(
-    const std::vector<std::string>& dont_list, ConfigFiles& cfg) {
+  const std::vector<std::string>& dont_list,
+  ConfigFiles& cfg
+) {
   std::unordered_set<DexType*> dont;
   for (const auto& anno : cfg.get_no_optimizations_annos()) {
     dont.emplace(anno);
@@ -609,13 +621,9 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 
 } // namespace
 
-void StaticReloPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& cfg,
-                              PassManager& mgr) {
+void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(RELO, 1,
-          "StaticReloPass not run because no ProGuard configuration was "
-          "provided.");
+    TRACE(RELO, 1, "StaticReloPass not run because no ProGuard configuration was provided.");
     return;
   }
   // Clear out counter
@@ -625,14 +633,14 @@ void StaticReloPass::run_pass(DexStoresVector& stores,
   s_single_ref_total_count = 0;
   s_single_ref_moved_count = 0;
 
-  // relocate statics on a per-dex store basis
+  //relocate statics on a per-dex store basis
   for (auto& store : stores) {
     DexClassesVector& dexen = store.get_dexen();
     auto scope = build_class_scope(dexen);
     auto cls_to_dex = build_class_to_dex_map(dexen);
     auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
-    auto dont_optimize_annos =
-        get_dont_optimize_annos(m_dont_optimize_annos, cfg);
+    auto dont_optimize_annos = get_dont_optimize_annos(
+      m_dont_optimize_annos, cfg);
 
     // Make one pass through all code to find dmethod refs and class refs,
     // needed later on for refining eligibility as well as performing the
@@ -649,20 +657,22 @@ void StaticReloPass::run_pass(DexStoresVector& stores,
     mgr.incr_metric(METRIC_NUM_CANDIDATE_CLASSES, candidates.size());
 
     // Find the relocation target for each dex
-    auto dex_to_target = build_dex_to_target_map(candidates, cls_to_dex);
+    auto dex_to_target = build_dex_to_target_map(
+      candidates, cls_to_dex);
 
     // Build up all the mutations for relocation
     std::unordered_map<DexMethod*, DexClass*> meth_moves;
     std::unordered_set<DexMethod*> meth_deletes;
     std::unordered_set<DexClass*> cls_deletes;
-    build_mutations(candidates,
-                    dmethod_refs,
-                    cls_to_pgo_order,
-                    cls_to_dex,
-                    dex_to_target,
-                    meth_moves,
-                    meth_deletes,
-                    cls_deletes);
+    build_mutations(
+      candidates,
+      dmethod_refs,
+      cls_to_pgo_order,
+      cls_to_dex,
+      dex_to_target,
+      meth_moves,
+      meth_deletes,
+      cls_deletes);
     mgr.incr_metric(METRIC_NUM_DELETED_CLASSES, cls_deletes.size());
     mgr.incr_metric(METRIC_NUM_DELETED_METHODS, meth_deletes.size());
 
@@ -671,24 +681,25 @@ void StaticReloPass::run_pass(DexStoresVector& stores,
   }
 
   // Final report
-  TRACE(RELO,
-        1,
-        "RELO :) Deleted %d methods\n"
-        "RELO :) Moved %d methods\n"
-        "RELO :) Deleted %d classes\n"
-        "RELO :) Moved %d/%d methods to single call site targets\n"
-        "RELO :| On average relocated %f methods onto all targets\n"
-        "RELO :| Max %d methods relocated onto any one target\n"
-        "RELO :( Could not move %d methods\n"
-        "aliasing criteria\n",
-        mgr.get_metric(METRIC_NUM_DELETED_METHODS),
-        mgr.get_metric(METRIC_NUM_MOVED_METHODS),
-        mgr.get_metric(METRIC_NUM_DELETED_CLASSES),
-        s_single_ref_moved_count,
-        s_single_ref_total_count,
-        s_avg_relocation_load,
-        s_max_relocation_load,
-        s_meth_could_not_move_count);
+  TRACE(
+    RELO,
+    1,
+    "RELO :) Deleted %d methods\n"
+    "RELO :) Moved %d methods\n"
+    "RELO :) Deleted %d classes\n"
+    "RELO :) Moved %d/%d methods to single call site targets\n"
+    "RELO :| On average relocated %f methods onto all targets\n"
+    "RELO :| Max %d methods relocated onto any one target\n"
+    "RELO :( Could not move %d methods\n"
+    "aliasing criteria\n",
+    mgr.get_metric(METRIC_NUM_DELETED_METHODS),
+    mgr.get_metric(METRIC_NUM_MOVED_METHODS),
+    mgr.get_metric(METRIC_NUM_DELETED_CLASSES),
+    s_single_ref_moved_count,
+    s_single_ref_total_count,
+    s_avg_relocation_load,
+    s_max_relocation_load,
+    s_meth_could_not_move_count);
 }
 
 static StaticReloPass s_pass;

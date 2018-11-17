@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/thread/thread.hpp>
 #include <gtest/gtest.h>
+#include <boost/thread/thread.hpp>
 #include <vector>
 
 #include "Trace.h"

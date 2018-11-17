@@ -353,9 +353,7 @@ void MethodBlock::ret(Location loc) {
   push_instruction(ret);
 }
 
-void MethodBlock::ret_void() {
-  push_instruction(new IRInstruction(OPCODE_RETURN_VOID));
-}
+void MethodBlock::ret_void() { push_instruction(new IRInstruction(OPCODE_RETURN_VOID)); }
 
 void MethodBlock::ret(DexType* rtype, Location loc) {
   if (rtype != get_void_type()) {
@@ -520,7 +518,8 @@ MethodBlock* MethodBlock::switch_op(
 }
 
 void MethodCreator::load_locals(DexMethod* meth) {
-  auto ii = InstructionIterable(meth->get_code()->get_param_instructions());
+  auto ii = InstructionIterable(
+      meth->get_code()->get_param_instructions());
   auto it = ii.begin();
   if (!is_static(meth)) {
     make_local_at(meth->get_class(), it->insn->dest());
@@ -557,9 +556,10 @@ MethodBlock* MethodBlock::make_if_block(IRInstruction* insn) {
   return new MethodBlock(false_block, mc);
 }
 
-IRList::iterator MethodCreator::make_if_block(IRList::iterator curr,
-                                              IRInstruction* insn,
-                                              IRList::iterator* false_block) {
+IRList::iterator MethodCreator::make_if_block(
+    IRList::iterator curr,
+    IRInstruction* insn,
+    IRList::iterator* false_block) {
   return meth_code->make_if_block(++curr, insn, false_block);
 }
 
@@ -603,9 +603,10 @@ IRList::iterator MethodCreator::make_switch_block(
 }
 
 MethodCreator::MethodCreator(DexMethod* meth)
-    : method(meth), meth_code(meth->get_code()) {
+    : method(meth)
+    , meth_code(meth->get_code()) {
   always_assert_log(meth->is_concrete(),
-                    "Method must be concrete or use the other ctor");
+      "Method must be concrete or use the other ctor");
   load_locals(meth);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }
@@ -648,7 +649,7 @@ DexMethod* MethodCreator::create() {
     }
   }
   // now allocate the rest at the start
-  size_t temp_reg{0};
+  size_t temp_reg {0};
   for (size_t i = 0; i < meth_code->get_registers_size(); ++i) {
     if (reg_map.find(i) != reg_map.end()) {
       continue;

@@ -137,7 +137,7 @@ Scope build_scope(DexStoresVector& stores, bool include_primary_dex) {
   }
   return v;
 }
-} // namespace
+}
 
 void Outliner::run_pass(DexStoresVector& stores,
                         ConfigFiles& /* unused */,
@@ -194,7 +194,7 @@ void Outliner::run_pass(DexStoresVector& stores,
 
           /*
               Nice code you got there. Be a shame if someone ever put an
-              infinite loop into it.
+	      infinite loop into it.
 
               (We have to emit a branch of some sort here to appease the
                verifier - all blocks either need to exit the method or

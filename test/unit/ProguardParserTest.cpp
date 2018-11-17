@@ -603,6 +603,7 @@ TEST(ProguardParserTest, keepnames) {
   }
 }
 
+
 TEST(ProguardParserTest, keepclassmembernames) {
   {
     ProguardConfiguration config;
@@ -636,7 +637,8 @@ TEST(ProguardParserTest, keepclasseswithmembernames) {
 TEST(ProguardParserTest, keep_annotation_classes) {
   {
     ProguardConfiguration config;
-    std::istringstream ss("-keep @interface *");
+    std::istringstream ss(
+        "-keep @interface *");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);

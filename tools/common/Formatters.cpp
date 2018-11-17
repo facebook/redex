@@ -9,9 +9,9 @@
 
 #include "DexEncoding.h"
 
-#include <iomanip>
 #include <ios>
 #include <sstream>
+#include <iomanip>
 
 struct type_to_string {
   uint16_t type;
@@ -20,25 +20,27 @@ struct type_to_string {
 
 #define GMAP_TYPE(NAME) \
   { NAME, #NAME }
-type_to_string GMapTypes[] = {GMAP_TYPE(TYPE_HEADER_ITEM),
-                              GMAP_TYPE(TYPE_STRING_ID_ITEM),
-                              GMAP_TYPE(TYPE_TYPE_ID_ITEM),
-                              GMAP_TYPE(TYPE_PROTO_ID_ITEM),
-                              GMAP_TYPE(TYPE_FIELD_ID_ITEM),
-                              GMAP_TYPE(TYPE_METHOD_ID_ITEM),
-                              GMAP_TYPE(TYPE_CLASS_DEF_ITEM),
-                              GMAP_TYPE(TYPE_MAP_LIST),
-                              GMAP_TYPE(TYPE_TYPE_LIST),
-                              GMAP_TYPE(TYPE_ANNOTATION_SET_REF_LIST),
-                              GMAP_TYPE(TYPE_ANNOTATION_SET_ITEM),
-                              GMAP_TYPE(TYPE_CLASS_DATA_ITEM),
-                              GMAP_TYPE(TYPE_CODE_ITEM),
-                              GMAP_TYPE(TYPE_STRING_DATA_ITEM),
-                              GMAP_TYPE(TYPE_DEBUG_INFO_ITEM),
-                              GMAP_TYPE(TYPE_ANNOTATION_ITEM),
-                              GMAP_TYPE(TYPE_ENCODED_ARRAY_ITEM),
-                              GMAP_TYPE(TYPE_ANNOTATIONS_DIR_ITEM),
-                              {0, nullptr}};
+type_to_string GMapTypes[] = {
+  GMAP_TYPE(TYPE_HEADER_ITEM),
+  GMAP_TYPE(TYPE_STRING_ID_ITEM),
+  GMAP_TYPE(TYPE_TYPE_ID_ITEM),
+  GMAP_TYPE(TYPE_PROTO_ID_ITEM),
+  GMAP_TYPE(TYPE_FIELD_ID_ITEM),
+  GMAP_TYPE(TYPE_METHOD_ID_ITEM),
+  GMAP_TYPE(TYPE_CLASS_DEF_ITEM),
+  GMAP_TYPE(TYPE_MAP_LIST),
+  GMAP_TYPE(TYPE_TYPE_LIST),
+  GMAP_TYPE(TYPE_ANNOTATION_SET_REF_LIST),
+  GMAP_TYPE(TYPE_ANNOTATION_SET_ITEM),
+  GMAP_TYPE(TYPE_CLASS_DATA_ITEM),
+  GMAP_TYPE(TYPE_CODE_ITEM),
+  GMAP_TYPE(TYPE_STRING_DATA_ITEM),
+  GMAP_TYPE(TYPE_DEBUG_INFO_ITEM),
+  GMAP_TYPE(TYPE_ANNOTATION_ITEM),
+  GMAP_TYPE(TYPE_ENCODED_ARRAY_ITEM),
+  GMAP_TYPE(TYPE_ANNOTATIONS_DIR_ITEM),
+  {0, nullptr}
+};
 
 /* nullptr terminated structure for looking up the name
  * of a map section. Think of it like ELF sections, but
@@ -157,7 +159,7 @@ const char* check_size(uint8_t value_type, uint8_t value_arg) {
   }
   return (value_arg < valid_size) ? s_empty_string : s_invalid_size;
 }
-} // namespace
+}
 
 std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem) {
   std::ostringstream ss;

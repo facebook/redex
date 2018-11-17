@@ -596,7 +596,8 @@ static void analyze_if(const IRInstruction* insn,
 }
 
 ConstantEnvironment FixpointIterator::analyze_edge(
-    const EdgeId& edge, const ConstantEnvironment& exit_state_at_source) const {
+    const EdgeId& edge,
+    const ConstantEnvironment& exit_state_at_source) const {
   auto env = exit_state_at_source;
   auto last_insn_it = edge->src()->get_last_insn();
   if (last_insn_it == edge->src()->end()) {

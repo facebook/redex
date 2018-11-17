@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexClass.h"
 #include "DexAnnotation.h"
 #include "Debug.h"
-#include "DexClass.h"
 #include "DexIdx.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -142,7 +142,7 @@ void DexAnnotationSet::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 uint64_t read_evarg(const uint8_t*& encdata,
                     uint8_t evarg,
                     bool sign_extend /* = false */
-) {
+                    ) {
   uint64_t v = *encdata++;
   int shift = 8;
   while (evarg--) {
@@ -323,7 +323,7 @@ static DexAnnotationElement get_annotation_element(DexIdx* idx,
 DexEncodedValueArray* get_encoded_value_array(DexIdx* idx,
                                               const uint8_t*& encdata) {
   uint32_t size = read_uleb128(&encdata);
-  auto* evlist = new std::deque<DexEncodedValue*>();
+  auto *evlist = new std::deque<DexEncodedValue*>();
   for (uint32_t i = 0; i < size; i++) {
     DexEncodedValue* adev = DexEncodedValue::get_encoded_value(idx, encdata);
     evlist->push_back(adev);
@@ -350,19 +350,19 @@ bool DexEncodedValue::is_evtype_primitive() const {
 
 bool DexEncodedValue::is_zero() const {
   switch (m_evtype) {
-  case DEVT_BYTE:
-  case DEVT_SHORT:
-  case DEVT_CHAR:
-  case DEVT_INT:
-  case DEVT_LONG:
-  case DEVT_FLOAT:
-  case DEVT_DOUBLE:
-  case DEVT_BOOLEAN:
-    return m_value == 0;
-  case DEVT_NULL:
-    return true;
-  default:
-    return false;
+    case DEVT_BYTE:
+    case DEVT_SHORT:
+    case DEVT_CHAR:
+    case DEVT_INT:
+    case DEVT_LONG:
+    case DEVT_FLOAT:
+    case DEVT_DOUBLE:
+    case DEVT_BOOLEAN:
+      return m_value == 0;
+    case DEVT_NULL:
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -510,12 +510,12 @@ DexAnnotationSet* DexAnnotationSet::get_annotation_set(DexIdx* idx,
 void DexAnnotationDirectory::calc_internals() {
   int cntviz = 0;
   auto updateCount = [this](DexAnnotationSet* das) {
-    unsigned long ca, cv;
-    das->viz_counts(ca, cv);
-    m_anno_count += ca;
-    m_aset_size += 4 + 4 * (ca);
-    m_aset_count++;
-    return cv;
+      unsigned long ca, cv;
+      das->viz_counts(ca, cv);
+      m_anno_count += ca;
+      m_aset_size += 4 + 4 * (ca);
+      m_aset_count++;
+      return cv;
   };
   if (m_class) {
     cntviz += updateCount(m_class);
@@ -635,18 +635,19 @@ void DexAnnotationDirectory::vencode(
   uint32_t cntam = 0;
   uint32_t cntamp = 0;
   if (m_class) {
-    always_assert_log(asetmap.count(m_class) != 0, "Uninitialized aset %p '%s'",
+    always_assert_log(asetmap.count(m_class) != 0,
+                      "Uninitialized aset %p '%s'",
                       m_class, show(m_class).c_str());
     classoff = asetmap[m_class];
   }
   if (m_field) {
-    cntaf = (uint32_t)m_field->size();
+    cntaf = (uint32_t) m_field->size();
   }
   if (m_method) {
-    cntam = (uint32_t)m_method->size();
+    cntam = (uint32_t) m_method->size();
   }
   if (m_method_param) {
-    cntamp = (uint32_t)m_method_param->size();
+    cntamp = (uint32_t) m_method_param->size();
   }
   annodirout.push_back(classoff);
   annodirout.push_back(cntaf);
@@ -661,7 +662,8 @@ void DexAnnotationDirectory::vencode(
     for (auto const& p : *m_field) {
       DexAnnotationSet* das = p.second;
       annodirout.push_back(dodx->fieldidx(p.first));
-      always_assert_log(asetmap.count(das) != 0, "Uninitialized aset %p '%s'",
+      always_assert_log(asetmap.count(das) != 0,
+                        "Uninitialized aset %p '%s'",
                         das, show(das).c_str());
       annodirout.push_back(asetmap[das]);
     }
@@ -673,7 +675,8 @@ void DexAnnotationDirectory::vencode(
       DexAnnotationSet* das = p.second;
       uint32_t midx = dodx->methodidx(m);
       annodirout.push_back(midx);
-      always_assert_log(asetmap.count(das) != 0, "Uninitialized aset %p '%s'",
+      always_assert_log(asetmap.count(das) != 0,
+                        "Uninitialized aset %p '%s'",
                         das, show(das).c_str());
       annodirout.push_back(asetmap[das]);
     }
@@ -685,8 +688,8 @@ void DexAnnotationDirectory::vencode(
     for (auto const& p : *m_method_param) {
       ParamAnnotations* pa = p.second;
       annodirout.push_back(dodx->methodidx(p.first));
-      always_assert_log(xrefmap.count(pa) != 0,
-                        "Uninitialized ParamAnnotations %p", pa);
+      always_assert_log(
+          xrefmap.count(pa) != 0, "Uninitialized ParamAnnotations %p", pa);
       annodirout.push_back(xrefmap[pa]);
     }
   }
@@ -702,8 +705,8 @@ void DexAnnotationSet::vencode(DexOutputIdx* dodx,
                                std::vector<uint32_t>& asetout,
                                std::map<DexAnnotation*, uint32_t>& annoout) {
   asetout.push_back((uint32_t)m_annotations.size());
-  std::sort(m_annotations.begin(), m_annotations.end(),
-            type_annotation_compare);
+  std::sort(
+      m_annotations.begin(), m_annotations.end(), type_annotation_compare);
   for (auto anno : m_annotations) {
     always_assert_log(annoout.count(anno) != 0,
                       "Uninitialized annotation %p '%s', bailing\n",
@@ -724,7 +727,7 @@ static void uleb_append(std::vector<uint8_t>& bytes, uint32_t v) {
 void DexAnnotation::vencode(DexOutputIdx* dodx, std::vector<uint8_t>& bytes) {
   bytes.push_back(m_viz);
   uleb_append(bytes, dodx->typeidx(m_type));
-  uleb_append(bytes, (uint32_t)m_anno_elems.size());
+  uleb_append(bytes, (uint32_t) m_anno_elems.size());
   for (auto elem : m_anno_elems) {
     DexString* string = elem.string;
     DexEncodedValue* ev = elem.encoded_value;
@@ -774,7 +777,7 @@ std::string show_helper(const EncodedAnnotations* annos, bool deobfuscated) {
   }
   return ss.str();
 }
-} // namespace
+}
 
 std::string show(const EncodedAnnotations* annos) {
   return show_helper(annos, false);

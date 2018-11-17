@@ -74,7 +74,8 @@ static IRInstructionList op_lit(IROpcode opcode,
   return IRInstructionList{
       dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode,
-           {Operand{VREG, dst_reg}, 0_v,
+           {Operand{VREG, dst_reg},
+            0_v,
             Operand{LITERAL, static_cast<uint64_t>(literal)}}),
   };
 }
@@ -309,12 +310,13 @@ TEST_F(PeepholeTest, RemovePutGetPair) {
                                OPCODE_IPUT_CHAR,
                                OPCODE_IGET_BYTE,
                                IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper_nochange("remove_put_get_char_diff_register_nochange",
-                               OPCODE_IPUT_CHAR,
-                               OPCODE_IGET_CHAR,
-                               IOPCODE_MOVE_RESULT_PSEUDO,
-                               false,
-                               false);
+  put_get_test_helper_nochange(
+      "remove_put_get_char_diff_register_nochange",
+      OPCODE_IPUT_CHAR,
+      OPCODE_IGET_CHAR,
+      IOPCODE_MOVE_RESULT_PSEUDO,
+      false,
+      false);
 
   put_get_test_helper_nochange(
       "remove_put_get_char_volatile_field_register_nochange",
@@ -370,8 +372,9 @@ static void sputget_peep_hole_test_negative(const std::string& field_desc,
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetInt) {
-  sputget_peep_hole_test("LFoo;.bar:I",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:I",
+    R"(
        (
         (const v0 1)
         (sput v0 "LFoo;.bar:I")
@@ -380,7 +383,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetInt) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const v0 1)
         (sput v0 "LFoo;.bar:I")
@@ -390,8 +393,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetInt) {
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetByte) {
-  sputget_peep_hole_test("LFoo;.bar:B",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:B",
+    R"(
        (
         (const v0 1)
         (sput-byte v0 "LFoo;.bar:B")
@@ -400,7 +404,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetByte) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const v0 1)
         (sput-byte v0 "LFoo;.bar:B")
@@ -410,8 +414,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetByte) {
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetBool) {
-  sputget_peep_hole_test("LFoo;.bar:Z",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:Z",
+    R"(
        (
         (const v0 1)
         (sput-boolean v0 "LFoo;.bar:Z")
@@ -420,7 +425,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetBool) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const v0 1)
         (sput-boolean v0 "LFoo;.bar:Z")
@@ -430,8 +435,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetBool) {
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetChar) {
-  sputget_peep_hole_test("LFoo;.bar:C",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:C",
+    R"(
        (
         (const v0 1)
         (sput-char v0 "LFoo;.bar:C")
@@ -440,7 +446,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetChar) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const v0 1)
         (sput-char v0 "LFoo;.bar:C")
@@ -450,8 +456,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetChar) {
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetShort) {
-  sputget_peep_hole_test("LFoo;.bar:S",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:S",
+    R"(
        (
         (const v0 1)
         (sput-short v0 "LFoo;.bar:S")
@@ -460,7 +467,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetShort) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const v0 1)
         (sput-short v0 "LFoo;.bar:S")
@@ -470,8 +477,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetShort) {
 }
 
 TEST(PeepholeTestS, RemoveStaticPutGetLong) {
-  sputget_peep_hole_test("LFoo;.bar:J",
-                         R"(
+  sputget_peep_hole_test(
+    "LFoo;.bar:J",
+    R"(
        (
         (const-wide v0 1)
         (sput-wide v0 "LFoo;.bar:J")
@@ -480,7 +488,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetLong) {
         (return-void)
        )
       )",
-                         R"(
+    R"(
        (
         (const-wide v0 1)
         (sput-wide v0 "LFoo;.bar:J")
@@ -491,8 +499,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetLong) {
 
 TEST(PeepholeTestS, RemoveStaticPutGetNegativeIntByte) {
   // Negative (put & get byte)
-  sputget_peep_hole_test_negative("LFoo;.bar:I",
-                                  R"(
+  sputget_peep_hole_test_negative(
+    "LFoo;.bar:I",
+    R"(
        (
         (const v0 1)
         (sput v0 "LFoo;.bar:I")
@@ -505,8 +514,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeIntByte) {
 
 TEST(PeepholeTestS, RemoveStaticPutGetNegativeCharByte) {
   // Negative (put char & get byte)
-  sputget_peep_hole_test_negative("LFoo;.bar:C",
-                                  R"(
+  sputget_peep_hole_test_negative(
+    "LFoo;.bar:C",
+    R"(
        (
         (const v0 1)
         (sput-char v0 "LFoo;.bar:C")
@@ -519,8 +529,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeCharByte) {
 
 TEST(PeepholeTestS, RemoveStaticPutGetNegativeRegMismatch) {
   // Negative (different reg)
-  sputget_peep_hole_test_negative("LFoo;.bar:I",
-                                  R"(
+  sputget_peep_hole_test_negative(
+    "LFoo;.bar:I",
+    R"(
        (
         (const v0 1)
         (sput v0 "LFoo;.bar:I")
@@ -533,8 +544,9 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeRegMismatch) {
 
 TEST(PeepholeTestS, RemoveStaticPutGetNegativeVolatile) {
   // Negative (volatile)
-  sputget_peep_hole_test_negative("LFoo;.bar:I",
-                                  R"(
+  sputget_peep_hole_test_negative(
+    "LFoo;.bar:I",
+    R"(
        (
         (const v0 1)
         (sput v0 "LFoo;.bar:I")
@@ -543,7 +555,7 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeVolatile) {
         (return-void)
        )
       )",
-                                  true);
+    true);
 }
 
 static void aputget_peep_hole_test(const std::string& code_str,

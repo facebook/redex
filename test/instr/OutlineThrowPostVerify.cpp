@@ -6,10 +6,10 @@
  */
 
 #include <cstdint>
-#include <cstdlib>
-#include <gtest/gtest.h>
 #include <iostream>
+#include <cstdlib>
 #include <memory>
+#include <gtest/gtest.h>
 #include <string>
 
 #include "DexInstruction.h"
@@ -17,5 +17,5 @@
 #include "VerifyUtil.h"
 
 TEST_F(PostVerify, OutlineThrow) {
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
+  std::cout << "Loaded classes: " << classes.size() << std::endl ;
 }

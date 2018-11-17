@@ -28,6 +28,7 @@
 #include <mutex>
 #include <unordered_map>
 
+
 uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
@@ -428,8 +429,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     auto& dextry = *it;
     always_assert(dextry->m_start_addr < code->insns_size);
     dti[tryno].start_addr = dextry->m_start_addr;
-    always_assert(dextry->m_start_addr + dextry->m_insn_count <=
-                  code->insns_size);
+    always_assert(dextry->m_start_addr + dextry->m_insn_count <= code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
       catches_map[dextry->m_catches] = hemit - handler_base;

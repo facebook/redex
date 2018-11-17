@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include "PassManager.h"
+#include "DexClass.h"
 
 /**
  * Remove internal interfaces that have no reference anywhere in code

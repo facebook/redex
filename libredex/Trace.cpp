@@ -13,8 +13,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <iostream>
 #include <mutex>
+#include <iostream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -26,7 +26,7 @@ struct Tracer {
   bool m_show_timestamps{false};
   bool m_show_tracemodule{false};
   const char* m_method_filter;
-  std::unordered_map<int /*TraceModule*/, std::string> m_module_id_name_map;
+  std::unordered_map<int/*TraceModule*/, std::string> m_module_id_name_map;
 
   Tracer() {
     const char* traceenv = getenv("TRACE");
@@ -109,10 +109,10 @@ struct Tracer {
  private:
   void init_trace_modules(const char* traceenv) {
     std::unordered_map<std::string, int> module_id_map;
-#define TM(x) module_id_map[#x] = x;
+#define TM(x) module_id_map[ #x ] = x;
     TMS
 #undef TM
-        char* tracespec = strdup(traceenv);
+    char* tracespec = strdup(traceenv);
     const char* sep = ",: ";
     const char* tok = strtok(tracespec, sep);
     const char* module = nullptr;
@@ -164,10 +164,12 @@ struct Tracer {
 };
 
 static Tracer tracer;
-} // namespace
+}
 
 #ifdef NDEBUG
-bool traceEnabled(TraceModule, int) { return false; }
+bool traceEnabled(TraceModule, int) {
+  return false;
+}
 #else
 bool traceEnabled(TraceModule module, int level) {
   return tracer.traceEnabled(module, level);

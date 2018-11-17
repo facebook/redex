@@ -6,9 +6,9 @@
  */
 
 #include <algorithm>
+#include <cstring>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <cstring>
 #include <gtest/gtest.h>
 #include <sstream>
 
@@ -16,10 +16,9 @@
 #include "VerifyUtil.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
-  auto it =
-      std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
-        return !strcmp(name, cls->get_name()->c_str());
-      });
+  auto it = std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls){
+    return !strcmp(name, cls->get_name()->c_str());
+  });
   return it == classes.end() ? nullptr : *it;
 }
 
@@ -49,26 +48,26 @@ DexMethod* find_method_named(const DexClass& cls, const char* name) {
   return find_vmethod_named(cls, name);
 }
 
-DexOpcodeMethod* find_invoke(const DexMethod* m,
-                             DexOpcode opcode,
-                             const char* target_mname) {
+DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
+    const char* target_mname) {
   auto insns = m->get_dex_code()->get_instructions();
   return find_invoke(insns.begin(), insns.end(), opcode, target_mname);
 }
 
-DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
-                             std::vector<DexInstruction*>::iterator end,
-                             DexOpcode opcode,
-                             const char* target_mname) {
-  auto it =
-      std::find_if(begin, end, [opcode, target_mname](DexInstruction* insn) {
-        if (insn->opcode() != opcode) {
-          return false;
-        }
-        auto mname =
-            static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
-        return mname == DexString::get_string(target_mname);
-      });
+DexOpcodeMethod* find_invoke(
+    std::vector<DexInstruction*>::iterator begin,
+    std::vector<DexInstruction*>::iterator end,
+    DexOpcode opcode,
+    const char* target_mname) {
+  auto it = std::find_if(begin, end,
+    [opcode, target_mname](DexInstruction* insn) {
+      if (insn->opcode() != opcode) {
+        return false;
+      }
+      auto mname =
+        static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+      return mname == DexString::get_string(target_mname);
+    });
   return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
 }
 

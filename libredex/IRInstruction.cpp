@@ -30,9 +30,10 @@ IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
 // because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_opcode == that.m_opcode &&
-         m_string == that.m_string && // just test one member of the union
-         m_srcs == that.m_srcs && m_dest == that.m_dest &&
-         m_literal == that.m_literal;
+    m_string == that.m_string && // just test one member of the union
+    m_srcs == that.m_srcs &&
+    m_dest == that.m_dest &&
+    m_literal == that.m_literal;
 }
 
 uint16_t IRInstruction::size() const {
@@ -194,12 +195,12 @@ void IRInstruction::denormalize_registers() {
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     std::vector<uint16_t> srcs;
-    size_t args_idx{0};
-    size_t srcs_idx{0};
+    size_t args_idx {0};
+    size_t srcs_idx {0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       srcs.push_back(src(srcs_idx++));
     }
-    bool has_wide{false};
+    bool has_wide {false};
     for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
       if (is_wide_type(args.at(args_idx))) {
@@ -214,7 +215,7 @@ void IRInstruction::denormalize_registers() {
 }
 
 bit_width_t required_bit_width(uint16_t v) {
-  bit_width_t result{1};
+  bit_width_t result {1};
   while (v >>= 1) {
     ++result;
   }

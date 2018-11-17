@@ -43,7 +43,8 @@ std::unique_ptr<std::unordered_map<IRInstruction*, T>> forwards_dataflow(
     }
   }
 
-  auto insn_in_map = std::make_unique<std::unordered_map<IRInstruction*, T>>();
+  auto insn_in_map =
+      std::make_unique<std::unordered_map<IRInstruction*, T>>();
   for (const auto& block : blocks) {
     auto insn_in = bottom;
     if (block->id() == 0) {

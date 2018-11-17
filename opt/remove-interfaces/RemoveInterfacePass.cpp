@@ -141,8 +141,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
     MethodBlock* curr_block;
 
     if (idx < targets.size() - 1) {
-      mb->instance_of(self_loc, type_test_loc,
-                      const_cast<DexType*>(target_type));
+      mb->instance_of(
+          self_loc, type_test_loc, const_cast<DexType*>(target_type));
       curr_block = mb->if_testz(OPCODE_IF_EQZ, type_test_loc);
     } else {
       // Last case

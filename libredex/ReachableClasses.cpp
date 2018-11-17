@@ -11,9 +11,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <string>
 #include <unordered_set>
 
 #include "ClassHierarchy.h"
+#include "Walkers.h"
 #include "DexClass.h"
 #include "Match.h"
 #include "RedexResources.h"
@@ -25,10 +27,11 @@ namespace {
 
 using namespace sra;
 
-template <typename T, typename F>
-struct DexItemIter {};
+template<typename T, typename F>
+struct DexItemIter {
+};
 
-template <typename F>
+template<typename F>
 struct DexItemIter<DexField*, F> {
   static void iterate(DexClass* cls, F& yield) {
     if (cls->is_external()) return;
@@ -41,7 +44,7 @@ struct DexItemIter<DexField*, F> {
   }
 };
 
-template <typename F>
+template<typename F>
 struct DexItemIter<DexMethod*, F> {
   static void iterate(DexClass* cls, F& yield) {
     if (cls->is_external()) return;
@@ -100,12 +103,9 @@ void analyze_reflection(const Scope& scope) {
   };
 
   const auto JAVA_LANG_CLASS = "Ljava/lang/Class;";
-  const auto ATOMIC_INT_FIELD_UPDATER =
-      "Ljava/util/concurrent/atomic/AtomicIntegerFieldUpdater;";
-  const auto ATOMIC_LONG_FIELD_UPDATER =
-      "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
-  const auto ATOMIC_REF_FIELD_UPDATER =
-      "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
+  const auto ATOMIC_INT_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicIntegerFieldUpdater;";
+  const auto ATOMIC_LONG_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicLongFieldUpdater;";
+  const auto ATOMIC_REF_FIELD_UPDATER = "Ljava/util/concurrent/atomic/AtomicReferenceFieldUpdater;";
 
   const std::unordered_map<std::string,
                            std::unordered_map<std::string, ReflectionType>>
@@ -222,9 +222,9 @@ void analyze_reflection(const Scope& scope) {
   });
 }
 
-template <typename DexMember>
+template<typename DexMember>
 void mark_only_reachable_directly(DexMember* m) {
-  m->rstate.ref_by_type();
+   m->rstate.ref_by_type();
 }
 
 /**
@@ -306,8 +306,9 @@ void mark_reachable_by_xml(const std::string& classname, bool is_manifest) {
 // https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r15/core/java/android/view/View.java#5331
 // Returns true if it matches that criteria, and it's in the set of known
 // attribute values.
-bool matches_onclick_method(const DexMethod* dmethod,
-                            const std::set<std::string>& names_to_keep) {
+bool matches_onclick_method(
+  const DexMethod* dmethod,
+  const std::set<std::string>& names_to_keep) {
   auto prototype = dmethod->get_proto();
   auto args_list = prototype->get_args();
   if (args_list->size() == 1) {
@@ -329,7 +330,8 @@ bool matches_onclick_method(const DexMethod* dmethod,
 // is overkill. We only need to keep methods "foo" defined on a subclass of
 // android.content.Context that accept 1 argument (an android.view.View).
 void mark_onclick_attributes_reachable(
-    const Scope& scope, const std::set<std::string>& onclick_attribute_values) {
+  const Scope& scope,
+  const std::set<std::string>& onclick_attribute_values) {
   if (onclick_attribute_values.size() == 0) {
     return;
   }
@@ -340,18 +342,19 @@ void mark_onclick_attributes_reachable(
   TypeSet children;
   get_all_children(class_hierarchy, type_context, children);
 
-  for (const auto& t : children) {
+  for (const auto &t : children) {
     auto dclass = type_class(t);
     if (dclass->is_external()) {
       continue;
     }
     // Methods are invoked via reflection. Only public methods are relevant.
-    for (const auto& m : dclass->get_vmethods()) {
+    for (const auto &m : dclass->get_vmethods()) {
       if (matches_onclick_method(m, onclick_attribute_values)) {
-        TRACE(PGR,
-              2,
-              "Keeping vmethod %s due to onClick attribute in XML.\n",
-              SHOW(m));
+        TRACE(
+          PGR,
+          2,
+          "Keeping vmethod %s due to onClick attribute in XML.\n",
+          SHOW(m));
         m->rstate.set_referenced_by_resource_xml();
       }
     }
@@ -362,27 +365,34 @@ void mark_onclick_attributes_reachable(
 // with their constructors.
 // 2) Marks candidate methods that could be called via android:onClick
 // attributes.
-void analyze_reachable_from_xml_layouts(const Scope& scope,
-                                        const std::string& apk_dir) {
+void analyze_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir) {
   std::unordered_set<std::string> layout_classes;
   std::unordered_set<std::string> attrs_to_read;
   // Method names used by reflection
   attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
   std::unordered_multimap<std::string, std::string> attribute_values;
-  collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
-                                        attribute_values);
+  collect_layout_classes_and_attributes(
+    apk_dir,
+    attrs_to_read,
+    layout_classes,
+    attribute_values);
   for (std::string classname : layout_classes) {
     TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
     mark_reachable_by_xml(classname, false);
   }
-  auto attr_values =
-      multimap_values_to_set(attribute_values, ONCLICK_ATTRIBUTE);
+  auto attr_values = multimap_values_to_set(
+    attribute_values,
+    ONCLICK_ATTRIBUTE);
   mark_onclick_attributes_reachable(scope, attr_values);
 }
 
 template <typename DexMember>
-bool anno_set_contains(DexMember m,
-                       const std::unordered_set<DexType*>& keep_annotations) {
+bool anno_set_contains(
+  DexMember m,
+  const std::unordered_set<DexType*>& keep_annotations
+) {
   auto const& anno_set = m->get_anno_set();
   if (anno_set == nullptr) return false;
   auto const& annos = anno_set->get_annotations();
@@ -395,7 +405,9 @@ bool anno_set_contains(DexMember m,
 }
 
 void keep_annotated_classes(
-    const Scope& scope, const std::unordered_set<DexType*>& keep_annotations) {
+  const Scope& scope,
+  const std::unordered_set<DexType*>& keep_annotations
+) {
   for (auto const& cls : scope) {
     if (anno_set_contains(cls, keep_annotations)) {
       mark_only_reachable_directly(cls);
@@ -426,15 +438,16 @@ void keep_annotated_classes(
 /*
  * This method handles the keep_class_members from the configuration file.
  */
-void keep_class_members(const Scope& scope,
-                        const std::vector<std::string>& keep_class_mems) {
+void keep_class_members(
+    const Scope& scope,
+    const std::vector<std::string>& keep_class_mems) {
   for (auto const& cls : scope) {
     const std::string& name = cls->get_type()->get_name()->str();
     for (auto const& class_mem : keep_class_mems) {
       std::string class_mem_str = std::string(class_mem.c_str());
       std::size_t pos = class_mem_str.find(name);
       if (pos != std::string::npos) {
-        std::string rem_str = class_mem_str.substr(pos + name.size());
+        std::string rem_str = class_mem_str.substr(pos+name.size());
         for (auto const& f : cls->get_sfields()) {
           if (rem_str.find(f->get_name()->str()) != std::string::npos) {
             mark_only_reachable_directly(f);
@@ -546,16 +559,16 @@ void init_permanently_reachable_classes(
         });
   }
 
-  std::unordered_set<DexType*> annotation_types(no_optimizations_anno.begin(),
-                                                no_optimizations_anno.end());
+  std::unordered_set<DexType*> annotation_types(
+    no_optimizations_anno.begin(),
+    no_optimizations_anno.end());
 
   for (auto const& annostr : annotations) {
     DexType* anno = DexType::get_type(annostr.c_str());
     if (anno) {
       annotation_types.insert(anno);
     } else {
-      fprintf(stderr, "WARNING: keep annotation %s not found\n",
-              annostr.c_str());
+      fprintf(stderr, "WARNING: keep annotation %s not found\n", annostr.c_str());
     }
   }
 
@@ -612,7 +625,7 @@ void init_permanently_reachable_classes(
   }
 }
 
-} // namespace
+}
 
 /**
  * Walks all the code of the app, finding classes that are reachable from
@@ -624,16 +637,18 @@ void init_permanently_reachable_classes(
  */
 void recompute_classes_reachable_from_code(const Scope& scope) {
   // Matches methods marked as native
-  walk::methods(scope, [&](DexMethod* meth) {
-    if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
-      TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
-      mark_reachable_by_classname(meth->get_class());
-    }
-  });
+  walk::methods(scope,
+               [&](DexMethod* meth) {
+                 if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
+                   TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
+                   mark_reachable_by_classname(meth->get_class());
+                 }
+               });
 }
 
-void recompute_reachable_from_xml_layouts(const Scope& scope,
-                                          const std::string& apk_dir) {
+void recompute_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir) {
   walk::parallel::classes(scope, [](DexClass* cls) {
     cls->rstate.unset_referenced_by_resource_xml();
     for (auto* method : cls->get_dmethods()) {

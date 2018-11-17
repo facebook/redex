@@ -7,8 +7,8 @@
 
 #include "LocalDce.h"
 
-#include <array>
 #include <iostream>
+#include <array>
 #include <unordered_set>
 #include <vector>
 
@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"

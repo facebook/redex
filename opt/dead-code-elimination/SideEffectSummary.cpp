@@ -133,9 +133,7 @@ class SummaryBuilder final {
       }
       break;
     }
-    default: {
-      break;
-    }
+    default: { break; }
     }
   }
 

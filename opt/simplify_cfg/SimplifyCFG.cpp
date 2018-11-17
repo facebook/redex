@@ -13,27 +13,28 @@
 #include "Walkers.h"
 
 void SimplifyCFGPass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& /* unused */,
-                               PassManager& mgr) {
+                           ConfigFiles& /* unused */,
+                           PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
-  auto total_insns_removed = walk::parallel::reduce_methods<int64_t, Scope>(
-      scope,
-      [](DexMethod* m) -> int64_t {
-        auto code = m->get_code();
-        if (code == nullptr) {
-          return 0;
-        }
+  auto total_insns_removed =
+      walk::parallel::reduce_methods<int64_t, Scope>(
+          scope,
+          [](DexMethod* m) -> int64_t {
+            auto code = m->get_code();
+            if (code == nullptr) {
+              return 0;
+            }
 
-        int64_t before_insns = code->count_opcodes();
+            int64_t before_insns = code->count_opcodes();
 
-        // build and linearize the CFG
-        code->build_cfg(/* editable */ true);
-        code->clear_cfg();
+            // build and linearize the CFG
+            code->build_cfg(/* editable */ true);
+            code->clear_cfg();
 
-        int64_t after_insns = code->count_opcodes();
-        return before_insns - after_insns;
-      },
-      [](int64_t a, int64_t b) { return a + b; });
+            int64_t after_insns = code->count_opcodes();
+            return before_insns - after_insns;
+          },
+          [](int64_t a, int64_t b) { return a + b; });
   mgr.set_metric("insns_removed", total_insns_removed);
 }
 
