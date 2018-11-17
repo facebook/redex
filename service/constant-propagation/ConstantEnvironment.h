@@ -63,8 +63,8 @@ using ConstantValue = sparta::DisjointUnionAbstractDomain<SignedConstantDomain,
                                                           StringDomain,
                                                           AbstractHeapPointer>;
 
-// For storing non-escaping static fields.
-using StaticFieldEnvironment =
+// For storing non-escaping static and instance fields.
+using FieldEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<const DexField*, ConstantValue>;
 
 using ConstantRegisterEnvironment =
@@ -93,7 +93,7 @@ using ConstantHeap = sparta::PatriciaTreeMapAbstractEnvironment<
 class ConstantEnvironment final
     : public sparta::ReducedProductAbstractDomain<ConstantEnvironment,
                                                   ConstantRegisterEnvironment,
-                                                  StaticFieldEnvironment,
+                                                  FieldEnvironment,
                                                   ConstantHeap> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
@@ -107,11 +107,11 @@ class ConstantEnvironment final
   ConstantEnvironment(std::initializer_list<std::pair<reg_t, ConstantValue>> l)
       : ReducedProductAbstractDomain(
             std::make_tuple(ConstantRegisterEnvironment(l),
-                            StaticFieldEnvironment(),
+                            FieldEnvironment(),
                             ConstantHeap())) {}
 
   static void reduce_product(std::tuple<ConstantRegisterEnvironment,
-                                        StaticFieldEnvironment,
+                                        FieldEnvironment,
                                         ConstantHeap>&) {}
   /*
    * Getters and setters
@@ -121,7 +121,7 @@ class ConstantEnvironment final
     return ReducedProductAbstractDomain::get<0>();
   }
 
-  const StaticFieldEnvironment& get_field_environment() const {
+  const FieldEnvironment& get_field_environment() const {
     return ReducedProductAbstractDomain::get<1>();
   }
 
@@ -178,7 +178,7 @@ class ConstantEnvironment final
   }
 
   ConstantEnvironment& mutate_field_environment(
-      std::function<void(StaticFieldEnvironment*)> f) {
+      std::function<void(FieldEnvironment*)> f) {
     apply<1>(f);
     return *this;
   }
@@ -195,7 +195,7 @@ class ConstantEnvironment final
 
   ConstantEnvironment& set(const DexField* field, const ConstantValue& value) {
     return mutate_field_environment(
-        [&](StaticFieldEnvironment* env) { env->set(field, value); });
+        [&](FieldEnvironment* env) { env->set(field, value); });
   }
 
   /*
@@ -248,7 +248,7 @@ class ConstantEnvironment final
 
   ConstantEnvironment& clear_field_environment() {
     return mutate_field_environment(
-        [](StaticFieldEnvironment* env) { env->set_to_top(); });
+        [](FieldEnvironment* env) { env->set_to_top(); });
   }
 };
 

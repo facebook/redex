@@ -60,9 +60,9 @@ class Transform final {
 
   void replace_with_const(const ConstantEnvironment&, IRList::iterator);
 
-  void eliminate_redundant_sput(const ConstantEnvironment&,
-                                const WholeProgramState& wps,
-                                IRList::iterator);
+  void eliminate_redundant_put(const ConstantEnvironment&,
+                               const WholeProgramState& wps,
+                               IRList::iterator);
 
   void eliminate_dead_branch(const intraprocedural::FixpointIterator&,
                              const ConstantEnvironment&,

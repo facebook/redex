@@ -34,9 +34,9 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   ++m_stats.materialized_consts;
 }
 
-void Transform::eliminate_redundant_sput(const ConstantEnvironment& env,
-                                         const WholeProgramState& wps,
-                                         IRList::iterator it) {
+void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
+                                        const WholeProgramState& wps,
+                                        IRList::iterator it) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
   case OPCODE_SPUT:
@@ -45,15 +45,22 @@ void Transform::eliminate_redundant_sput(const ConstantEnvironment& env,
   case OPCODE_SPUT_CHAR:
   case OPCODE_SPUT_OBJECT:
   case OPCODE_SPUT_SHORT:
-  case OPCODE_SPUT_WIDE: {
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_IPUT_WIDE: {
     auto* field = resolve_field(insn->get_field());
     if (!field) {
       break;
     }
-    // WholeProgramState tells us the abstract value of a static field across
-    // all program traces outside their class initializers; the
+    // WholeProgramState tells us the abstract value of a field across
+    // all program traces outside their class's <clinit> or <init>; the
     // ConstantEnvironment tells us the abstract value
-    // of a non-escaping static field at this particular program point.
+    // of a non-escaping field at this particular program point.
     auto existing_val = m_config.class_under_init == field->get_class()
                             ? env.get(field)
                             : wps.get_field_value(field);
@@ -70,6 +77,7 @@ void Transform::eliminate_redundant_sput(const ConstantEnvironment& env,
   default: {}
   }
 }
+
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
                                      IRList::iterator it) {
@@ -183,7 +191,7 @@ Transform::Stats Transform::apply(
       continue;
     }
     for (auto& mie : InstructionIterable(block)) {
-      eliminate_redundant_sput(env, wps, code->iterator_to(mie));
+      eliminate_redundant_put(env, wps, code->iterator_to(mie));
       intra_cp.analyze_instruction(mie.insn, &env);
       simplify_instruction(env, wps, code->iterator_to(mie));
     }

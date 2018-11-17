@@ -100,4 +100,26 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
   }
 }
 
+/**
+ * Bind all eligible fields to SignedConstantDomain(0) in :env, since all
+ * fields are initialized to zero by default at runtime. This function is
+ * much simpler than set_ifield_values since there are no DexEncodedValues
+ * to handle.
+ */
+void set_ifield_values(const DexClass* cls,
+                       const EligibleIfields& eligible_ifields,
+                       ConstantEnvironment* env) {
+  always_assert(!cls->is_external());
+  if (cls->get_ctors().size() != 1) {
+    return;
+  }
+  for (auto* ifield : cls->get_ifields()) {
+    if (!eligible_ifields.count(ifield)) {
+      // If the field is not a eligible ifield, move on.
+      continue;
+    }
+    env->set(ifield, SignedConstantDomain(0));
+  }
+}
+
 } // namespace constant_propagation

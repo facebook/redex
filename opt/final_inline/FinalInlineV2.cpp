@@ -99,8 +99,57 @@ Scope reverse_tsort_by_clinit_deps(const Scope& scope) {
   return result;
 }
 
+/**
+ * Similar to reverse_tsort_by_clinit_deps(...), but since we are currently
+ * only dealing with instance field from class that only have one <init>
+ * so stop when we are at a class that don't have exactly one constructor,
+ * we are not dealing with them now so we won't have knowledge about their
+ * instance field.
+ */
+Scope reverse_tsort_by_init_deps(const Scope& scope) {
+  std::unordered_set<const DexClass*> scope_set(scope.begin(), scope.end());
+  Scope result;
+  std::unordered_set<const DexClass*> visiting;
+  std::unordered_set<const DexClass*> visited;
+  std::function<void(DexClass*)> visit = [&](DexClass* cls) {
+    if (visited.count(cls) != 0 || scope_set.count(cls) == 0) {
+      return;
+    }
+    visiting.emplace(cls);
+    const auto& ctors = cls->get_ctors();
+    if (ctors.size() == 1) {
+      auto ctor = ctors[0];
+      if (ctor != nullptr && ctor->get_code() != nullptr) {
+        for (auto& mie : InstructionIterable(ctor->get_code())) {
+          auto insn = mie.insn;
+          if (is_iget(insn->opcode())) {
+            auto dependee_cls = type_class(insn->get_field()->get_class());
+            if (dependee_cls == nullptr || dependee_cls == cls) {
+              continue;
+            }
+            visit(dependee_cls);
+          }
+        }
+      }
+    }
+    visiting.erase(cls);
+    result.emplace_back(cls);
+    visited.emplace(cls);
+  };
+  for (DexClass* cls : scope) {
+    visit(cls);
+  }
+  return result;
+}
+
 using CombinedAnalyzer =
     InstructionAnalyzerCombiner<cp::ClinitFieldAnalyzer,
+                                cp::WholeProgramAwareAnalyzer,
+                                StringAnalyzer,
+                                cp::PrimitiveAnalyzer>;
+
+using CombinedInitAnalyzer =
+    InstructionAnalyzerCombiner<cp::InitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
                                 StringAnalyzer,
                                 cp::PrimitiveAnalyzer>;
@@ -148,7 +197,7 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
   const DexField* m_field;
 };
 
-void encode_values(DexClass* cls, StaticFieldEnvironment field_env) {
+void encode_values(DexClass* cls, FieldEnvironment field_env) {
   for (auto* field : cls->get_sfields()) {
     auto value = field_env.get(field);
     auto encoded_value =
@@ -215,18 +264,134 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
   return wps;
 }
 
+/*
+ * Similar to analyze_and_simplify_clinits().
+ * This method determines the values of the instance fields after the <init>
+ * has finished running and generates their encoded_value equivalents.
+ *
+ * Unlike static field, if instance field were changed outside of <init>, the
+ * instance field might have different value for different class instance. And
+ * for class with multiple <init>, the outcome of ifields might be different
+ * based on which constructor was used when initializing the instance. So
+ * we are only considering class with only one <init>.
+ */
+cp::WholeProgramState analyze_and_simplify_inits(
+    const Scope& scope, const cp::EligibleIfields& eligible_ifields) {
+  cp::WholeProgramState wps;
+  for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
+    if (cls->is_external()) {
+      continue;
+    }
+    ConstantEnvironment env;
+    auto ctors = cls->get_ctors();
+    if (ctors.size() != 1) {
+      continue;
+    }
+    cp::set_ifield_values(cls, eligible_ifields, &env);
+    auto ctor = ctors[0];
+    if (ctor->get_code() != nullptr) {
+      auto* code = ctor->get_code();
+      code->build_cfg(/* editable */ false);
+      auto& cfg = code->cfg();
+      cfg.calculate_exit_block();
+      cp::intraprocedural::FixpointIterator intra_cp(
+          cfg, CombinedInitAnalyzer(cls->get_type(), &wps, nullptr, nullptr));
+      intra_cp.run(env);
+      env = intra_cp.get_exit_state_at(cfg.exit_block());
+
+      // Remove redundant iputs in inits
+      cp::Transform::Config transform_config;
+      transform_config.class_under_init = cls->get_type();
+      cp::Transform(transform_config).apply(intra_cp, wps, code);
+      // Delete the instructions rendered dead by the removal of those iputs.
+      LocalDcePass::run(code);
+    }
+    wps.collect_instance_finals(
+        cls, eligible_ifields, env.get_field_environment());
+  }
+  return wps;
+}
+
 } // namespace final_inline
 
 namespace {
 
-size_t inline_static_final_gets(
+cp::EligibleIfields gather_ifield_candidates(const Scope& scope) {
+  cp::EligibleIfields eligible_ifields;
+  std::unordered_set<DexField*> ifields_candidates;
+  walk::fields(scope, [&](DexField* field) {
+    // Collect non-final instance field candidates that are non external,
+    // and can be deleted.
+    if (is_static(field) || field->is_external() || !can_delete(field) ||
+        is_volatile(field)) {
+      return;
+    }
+    if (is_final(field)) {
+      eligible_ifields.emplace(field);
+      return;
+    }
+    DexClass* field_cls = type_class(field->get_class());
+    if (field_cls != nullptr && field_cls->get_ctors().size() != 1) {
+      // Class with multiple constructors, ignore it now.
+      return;
+    }
+    ifields_candidates.emplace(field);
+  });
+
+  walk::code(scope, [&](DexMethod* method, IRCode& code) {
+    // Remove candidate field if it was written in code other than its class'
+    // init function.
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      auto op = insn->opcode();
+      if (is_iput(op)) {
+        auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+        if (field == nullptr ||
+            (is_init(method) && method->get_class() == field->get_class())) {
+          // If couldn't resolve the field, or this method is this field's
+          // class's init function, move on.
+          continue;
+        }
+        // We assert that final fields are not modified outside of <init>
+        // methods. javac seems to enforce this, but it's unclear if the JVM
+        // spec actually forbids that. Doing the check here simplifies the
+        // constant propagation analysis later -- we can determine the values
+        // of these fields without analyzing any methods invoked from the
+        // <init> methods.
+        always_assert_log(!is_final(field),
+                          "FinalInlinePassV2: encountered one final instance "
+                          "field been changed outside of its class's <init> "
+                          "file, for temporary solution set "
+                          "\"inline_instance_field\" in \"FinalInlinePassV2\" "
+                          "to be false.");
+        ifields_candidates.erase(field);
+      }
+    }
+  });
+  for (DexField* field : ifields_candidates) {
+    eligible_ifields.emplace(field);
+  }
+  return eligible_ifields;
+}
+
+size_t inline_final_gets(
     const Scope& scope,
     const cp::WholeProgramState& wps,
-    const std::unordered_set<const DexType*>& black_list_types) {
+    const std::unordered_set<const DexType*>& black_list_types,
+    cp::FieldType field_type) {
   size_t inlined_count{0};
   walk::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (is_clinit(method)) {
-      return;
+    if (field_type == cp::FieldType::INSTANCE) {
+      if (is_init(method)) {
+        DexClass* method_cls = type_class(method->get_class());
+        if (method_cls == nullptr || method_cls->get_ctors().size() == 1) {
+          return;
+        }
+      }
+    } else {
+      if (is_clinit(method)) {
+        return;
+      }
     }
     std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
         replacements;
@@ -234,8 +399,8 @@ size_t inline_static_final_gets(
       auto it = code.iterator_to(mie);
       auto insn = mie.insn;
       auto op = insn->opcode();
-      if (is_sget(op)) {
-        auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if (is_iget(op) || is_sget(op)) {
+        auto field = resolve_field(insn->get_field());
         if (field == nullptr || black_list_types.count(field->get_class())) {
           continue;
         }
@@ -292,11 +457,21 @@ void aggressively_delete_static_finals(const Scope& scope) {
 size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(scope);
-    return inline_static_final_gets(scope, wps, config.black_list_types);
+    return inline_final_gets(
+        scope, wps, config.black_list_types, cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return 0;
   }
+}
+
+size_t FinalInlinePassV2::run_inline_ifields(
+    const Scope& scope,
+    const cp::EligibleIfields& eligible_ifields,
+    Config config) {
+  auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
+  return inline_final_gets(
+      scope, wps, config.black_list_types, cp::FieldType::INSTANCE);
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
@@ -310,13 +485,19 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto inlined_count = run(scope, m_config);
-
+  auto inlined_sfields_count = run(scope, m_config);
+  size_t inlined_ifields_count{0};
+  if (m_config.inline_instance_field) {
+    cp::EligibleIfields eligible_ifields = gather_ifield_candidates(scope);
+    inlined_ifields_count =
+        run_inline_ifields(scope, eligible_ifields, m_config);
+  }
   if (m_config.aggressively_delete) {
     aggressively_delete_static_finals(scope);
   }
 
-  mgr.incr_metric("num_finals_inlined", inlined_count);
+  mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
+  mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);
 }
 
 static FinalInlinePassV2 s_pass;

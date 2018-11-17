@@ -15,25 +15,29 @@ using namespace constant_propagation;
 namespace {
 
 /*
- * Walk all the static fields in :cls, copying their bindings in :field_env over
- * to :field_partition.
+ * Walk all the static or instance fields in :cls, copying their bindings in
+ * :field_env over to :field_partition.
  */
 void set_fields_in_partition(const DexClass* cls,
-                             const StaticFieldEnvironment& field_env,
-                             ConstantStaticFieldPartition* field_partition) {
+                             const FieldEnvironment& field_env,
+                             const FieldType& field_type,
+                             ConstantFieldPartition* field_partition) {
   // Note that we *must* iterate over the list of fields in the class and not
   // the bindings in field_env here. This ensures that fields whose values are
   // unknown (and therefore implicitly represented by Top in the field_env)
   // get correctly bound to Top in field_partition (which defaults its
   // bindings to Bottom).
-  for (auto& field : cls->get_sfields()) {
+  const auto& fields =
+      field_type == FieldType::STATIC ? cls->get_sfields() : cls->get_ifields();
+  for (auto& field : fields) {
     auto value = field_env.get(field);
     if (!value.is_top()) {
-      TRACE(ICONSTP, 2, "%s has value %s after <clinit>\n", SHOW(field),
-            SHOW(value));
+      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>\n",
+            SHOW(field), SHOW(value));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(ICONSTP, 2, "%s has unknown value after <clinit>\n", SHOW(field));
+      TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>\n",
+            SHOW(field));
     }
     field_partition->set(field, value);
   }
@@ -47,7 +51,7 @@ void set_fields_in_partition(const DexClass* cls,
  */
 void analyze_clinits(const Scope& scope,
                      const interprocedural::FixpointIterator& fp_iter,
-                     ConstantStaticFieldPartition* field_partition) {
+                     ConstantFieldPartition* field_partition) {
   for (DexClass* cls : scope) {
     auto& dmethods = cls->get_dmethods();
     auto clinit = cls->get_clinit();
@@ -57,15 +61,34 @@ void analyze_clinits(const Scope& scope,
       ConstantEnvironment env;
       set_encoded_values(cls, &env);
       set_fields_in_partition(cls, env.get_field_environment(),
-                              field_partition);
+                              FieldType::STATIC, field_partition);
       continue;
     }
     IRCode* code = clinit->get_code();
     auto& cfg = code->cfg();
     auto intra_cp = fp_iter.get_intraprocedural_analysis(clinit);
     auto env = intra_cp->get_exit_state_at(cfg.exit_block());
-    set_fields_in_partition(cls, env.get_field_environment(), field_partition);
+    set_fields_in_partition(cls, env.get_field_environment(), FieldType::STATIC,
+                            field_partition);
   }
+}
+
+bool analyze_gets_helper(const WholeProgramState* whole_program_state,
+                         const IRInstruction* insn,
+                         ConstantEnvironment* env) {
+  if (whole_program_state == nullptr) {
+    return false;
+  }
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  auto value = whole_program_state->get_field_value(field);
+  if (value.is_top()) {
+    return false;
+  }
+  env->set(RESULT_REGISTER, value);
+  return true;
 }
 
 } // namespace
@@ -171,8 +194,8 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
   });
 }
 
-void WholeProgramState::collect_static_finals(
-    const DexClass* cls, StaticFieldEnvironment field_env) {
+void WholeProgramState::collect_static_finals(const DexClass* cls,
+                                              FieldEnvironment field_env) {
   for (auto* field : cls->get_sfields()) {
     if (is_static(field) && is_final(field) && !field->is_external()) {
       m_known_fields.emplace(field);
@@ -180,26 +203,46 @@ void WholeProgramState::collect_static_finals(
       field_env.set(field, ConstantValue::top());
     }
   }
-  set_fields_in_partition(cls, field_env, &m_field_partition);
+  set_fields_in_partition(cls, field_env, FieldType::STATIC,
+                          &m_field_partition);
+}
+
+void WholeProgramState::collect_instance_finals(
+    const DexClass* cls,
+    const EligibleIfields& eligible_ifields,
+    FieldEnvironment field_env) {
+  always_assert(!cls->is_external());
+  if (cls->get_ctors().size() != 1) {
+    // Not dealing with instance field in class not having exact 1 constructor
+    // now. TODO(suree404): Might be able to improve?
+    for (auto* field : cls->get_ifields()) {
+      field_env.set(field, ConstantValue::top());
+    }
+  } else {
+    for (auto* field : cls->get_ifields()) {
+      if (eligible_ifields.count(field)) {
+        m_known_fields.emplace(field);
+      } else {
+        field_env.set(field, ConstantValue::top());
+      }
+    }
+  }
+  set_fields_in_partition(cls, field_env, FieldType::INSTANCE,
+                          &m_field_partition);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_sget(
     const WholeProgramState* whole_program_state,
     const IRInstruction* insn,
     ConstantEnvironment* env) {
-  if (whole_program_state == nullptr) {
-    return false;
-  }
-  auto field = resolve_field(insn->get_field());
-  if (field == nullptr) {
-    return false;
-  }
-  auto value = whole_program_state->get_field_value(field);
-  if (value.is_top()) {
-    return false;
-  }
-  env->set(RESULT_REGISTER, value);
-  return true;
+  return analyze_gets_helper(whole_program_state, insn, env);
+}
+
+bool WholeProgramAwareAnalyzer::analyze_iget(
+    const WholeProgramState* whole_program_state,
+    const IRInstruction* insn,
+    ConstantEnvironment* env) {
+  return analyze_gets_helper(whole_program_state, insn, env);
 }
 
 bool WholeProgramAwareAnalyzer::analyze_invoke(
