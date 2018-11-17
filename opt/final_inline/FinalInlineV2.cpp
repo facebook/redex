@@ -316,6 +316,69 @@ cp::WholeProgramState analyze_and_simplify_inits(
 
 namespace {
 
+/**
+ * This function adds instance fields in cls_to_check that the method
+ * accessed in blacklist_ifields.
+ */
+void get_ifields_read(const DexType* ifield_cls,
+                      const DexMethod* method,
+                      std::unordered_set<DexField*>* blacklist_ifields) {
+  if (method == nullptr || method->get_code() == nullptr) {
+    return;
+  }
+  for (auto& mie : InstructionIterable(method->get_code())) {
+    auto insn = mie.insn;
+    if (is_iget(insn->opcode())) {
+      auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
+      if (field != nullptr && field->get_class() == ifield_cls) {
+        blacklist_ifields->emplace(field);
+      }
+    }
+  }
+}
+
+/**
+ * This function add ifields like x in following example in blacklist to avoid
+ * inlining them.
+ *   class Foo {
+ *     final int x;
+ *     Foo() {
+ *       bar();
+ *       x = 1;
+ *     }
+ *     bar() {
+ *       // x is zero here, we don't want FinalInline to make it take value 1.
+ *       if (x == 1) { ... }
+ *     }
+ *   }
+ */
+std::unordered_set<DexField*> get_ifields_read_in_callees(const Scope& scope) {
+  std::unordered_set<DexField*> return_ifields;
+  walk::classes(scope, [&](DexClass* cls) {
+    if (cls->is_external()) {
+      return;
+    }
+    auto ctors = cls->get_ctors();
+    if (ctors.size() != 1) {
+      // We are not inlining ifields in multi-ctors class so can also ignore
+      // them here.
+      return;
+    }
+    auto ctor = ctors[0];
+    if (ctor->get_code() != nullptr) {
+      auto* code = ctor->get_code();
+      for (auto& mie : InstructionIterable(code)) {
+        auto insn = mie.insn;
+        if (is_invoke(insn->opcode())) {
+          auto callee = resolve_method(insn->get_method(), MethodSearch::Any);
+          get_ifields_read(cls->get_type(), callee, &return_ifields);
+        }
+      }
+    }
+  });
+  return return_ifields;
+}
+
 cp::EligibleIfields gather_ifield_candidates(const Scope& scope) {
   cp::EligibleIfields eligible_ifields;
   std::unordered_set<DexField*> ifields_candidates;
@@ -370,6 +433,11 @@ cp::EligibleIfields gather_ifield_candidates(const Scope& scope) {
   });
   for (DexField* field : ifields_candidates) {
     eligible_ifields.emplace(field);
+  }
+  std::unordered_set<DexField*> blacklist_ifields =
+      get_ifields_read_in_callees(scope);
+  for (DexField* field : blacklist_ifields) {
+    eligible_ifields.erase(field);
   }
   return eligible_ifields;
 }
