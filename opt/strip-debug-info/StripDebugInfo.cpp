@@ -125,7 +125,6 @@ bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
           strstr(method->get_name()->c_str(), "access$") != nullptr);
 }
 
-
 Stats StripDebugInfo::run(Scope scope) {
   Stats stats;
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
@@ -138,8 +137,8 @@ Stats StripDebugInfo::run(Scope scope) {
 Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
   Stats stats;
   ++stats.num_matches;
-  bool debug_info_empty = true;
   bool force_discard = m_config.drop_all_dbg_info || should_drop_synth;
+  bool found_parent_position = false;
 
   for (auto it = code.begin(); it != code.end();) {
     const auto& mie = *it;
@@ -150,20 +149,79 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
       // move these entries into a method that does have a debug item.
       it = code.erase(it);
     } else {
-      switch (mie.type) {
-      case MFLOW_DEBUG:
-        // Any debug information op other than an end sequence means
-        // we have debug info.
-        if (mie.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
-        break;
-      case MFLOW_POSITION:
-        // Any line position entry means we have debug info.
-        debug_info_empty = false;
-        break;
-      default:
-        break;
+      if (!found_parent_position && mie.type == MFLOW_POSITION &&
+          mie.pos->parent != nullptr) {
+        found_parent_position = true;
       }
       ++it;
+    }
+  }
+
+  if (drop_line_numbers_preceeding_safe()) {
+    // This option is only safe when preceeding all inline stages because it
+    // will not handle parent positions properly.
+    if (found_parent_position) {
+      fprintf(stderr,
+              "WARNING: Attempted to drop line number preceeding non-throwing"
+              " instructions after an inline pass occurred. Please move the"
+              " StripDebugInfoPass before any inlining passes in order for"
+              " drop_line_numbers_preceeding_safe to take affect. Skipping for"
+              " now");
+    } else {
+      // Algo as follows:
+      //  Iterate through entries looking for a position, once one is found
+      //  check all the opcodes that it "owns" to make sure they're all
+      //  non-throwy. Once we run into a new position, that's the end of the
+      //  last position's run as "owner" and so if no opcode that it owns
+      //  can throw then we're safe to remove it.
+      IRList::iterator last_position = code.end();
+      bool found_first = false;
+      for (auto it = code.begin(); it != code.end(); ++it) {
+        const auto& mie = *it;
+        switch (mie.type) {
+        case MFLOW_OPCODE:
+          if (opcode::can_throw(mie.insn->opcode())) {
+            last_position = code.end();
+          }
+          break;
+        case MFLOW_POSITION:
+          if (!found_first) {
+            found_first = true;
+          } else {
+            if (last_position != code.end()) {
+              ++stats.num_pos_dropped;
+              code.erase_and_dispose(last_position);
+            }
+            last_position = it;
+          }
+          break;
+        default:
+          break;
+        }
+      }
+      // If we got to the end with a position that we can delete then
+      // delete it.
+      if (last_position != code.end()) {
+        code.erase_and_dispose(last_position);
+      }
+    }
+  }
+
+  bool debug_info_empty = true;
+  for (auto it = code.begin(); it != code.end(); it++) {
+    const auto& mie = *it;
+    switch (mie.type) {
+    case MFLOW_DEBUG:
+      // Any debug information op other than an end sequence means
+      // we have debug info.
+      if (mie.dbgop->opcode() != DBG_END_SEQUENCE) debug_info_empty = false;
+      break;
+    case MFLOW_POSITION:
+      // Any line position entry means we have debug info.
+      debug_info_empty = false;
+      break;
+    default:
+      break;
     }
   }
 

@@ -8,8 +8,8 @@
 #pragma once
 
 #include "DexClass.h"
-#include "Pass.h"
 #include "IRCode.h"
+#include "Pass.h"
 
 class StripDebugInfoPass : public Pass {
  public:
@@ -25,12 +25,14 @@ class StripDebugInfoPass : public Pass {
     jw.get("drop_src_files", false, m_config.drop_src_files);
     jw.get("drop_prologue_end", false, m_config.drop_prologue_end);
     jw.get("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
-    jw.get(
-        "drop_all_dbg_info_if_empty",
-        false,
-        m_config.drop_all_dbg_info_if_empty);
+    jw.get("drop_all_dbg_info_if_empty",
+           false,
+           m_config.drop_all_dbg_info_if_empty);
     jw.get("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
     jw.get("drop_synth_conservative", false, m_config.drop_synth_conservative);
+    jw.get("drop_line_numbers_preceeding_safe",
+           false,
+           m_config.drop_line_nrs_preceeding_safe);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -54,7 +56,9 @@ class StripDebugInfoPass : public Pass {
     bool drop_all_dbg_info_if_empty{false};
     bool drop_synth_aggressive{false};
     bool drop_synth_conservative{false};
+    bool drop_line_nrs_preceeding_safe{false};
   };
+
  private:
   Config m_config;
 };
@@ -93,6 +97,9 @@ class StripDebugInfo {
   }
   bool drop_line_numbers() const {
     return m_config.drop_line_nrs || m_config.drop_all_dbg_info;
+  }
+  bool drop_line_numbers_preceeding_safe() const {
+    return m_config.drop_line_nrs_preceeding_safe || m_config.drop_all_dbg_info;
   }
   bool method_passes_filter(DexMethod* meth) const;
   bool should_remove(const MethodItemEntry& mei, Stats& stats);
