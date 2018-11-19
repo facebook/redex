@@ -73,7 +73,7 @@ struct RedexContext {
 
   void erase_method(DexMethodRef*);
   void mutate_method(DexMethodRef* method,
-                     const DexMethodSpec& ref,
+                     const DexMethodSpec& new_spec,
                      bool rename_on_collision,
                      bool update_deobfuscated_name);
 

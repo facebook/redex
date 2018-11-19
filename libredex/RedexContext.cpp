@@ -9,6 +9,7 @@
 
 #include <exception>
 #include <mutex>
+#include <regex>
 #include <unordered_set>
 
 #include "Debug.h"
@@ -250,26 +251,57 @@ void RedexContext::erase_method(DexMethodRef* method) {
 }
 
 void RedexContext::mutate_method(DexMethodRef* method,
-                                 const DexMethodSpec& ref,
+                                 const DexMethodSpec& new_spec,
                                  bool rename_on_collision,
                                  bool update_deobfuscated_name) {
   std::lock_guard<std::mutex> lock(s_method_lock);
-  DexMethodSpec& r = method->m_spec;
-  s_method_map.erase(r);
+  DexMethodSpec old_spec = method->m_spec;
+  s_method_map.erase(method->m_spec);
 
-  r.cls = ref.cls != nullptr ? ref.cls : method->m_spec.cls;
-  r.name = ref.name != nullptr ? ref.name : method->m_spec.name;
-  r.proto = ref.proto != nullptr ? ref.proto : method->m_spec.proto;
-  if (s_method_map.find(r) != s_method_map.end() && rename_on_collision) {
-    uint32_t i = 0;
-    while (true) {
-      r.name = DexString::make_string(("r$" + std::to_string(i++)).c_str());
-      if (s_method_map.find(r) == s_method_map.end()) {
-        break;
+  DexMethodSpec& r = method->m_spec;
+  r.cls = new_spec.cls != nullptr ? new_spec.cls : method->m_spec.cls;
+  r.name = new_spec.name != nullptr ? new_spec.name : method->m_spec.name;
+  r.proto = new_spec.proto != nullptr ? new_spec.proto : method->m_spec.proto;
+
+  if (s_method_map.count(r) && rename_on_collision) {
+    if (new_spec.cls == nullptr) {
+      // Either method prototype or name is going to be changed, and we hit a
+      // collision. Make an unique name: "m$[name]$[0-9]+".
+      uint32_t i = 0;
+      do {
+        r.name = DexString::make_string(
+            ("m$" + std::string(r.name->c_str()) + "$" + std::to_string(i++))
+                .c_str());
+      } while (s_method_map.count(r));
+    } else {
+      // We are about to change its class. Use a better name to remeber its
+      // original source class on a collision. Tokenize the class name into
+      // parts, and use them until no more collison.
+      //
+      // "com/facebook/foo/Bar;" => {"com", "facebook", "foo", "Bar"}
+      std::string cls_name = show_deobfuscated(old_spec.cls);
+      std::regex separator{"[/;]"};
+      std::vector<std::string> parts;
+      std::copy(std::sregex_token_iterator(cls_name.begin(), cls_name.end(),
+                                           separator, -1),
+                std::sregex_token_iterator(),
+                std::back_inserter(parts));
+
+      // Make a name like "m$[name]$Bar$foo".
+      std::stringstream ss;
+      ss << "m$" << *old_spec.name;
+      for (auto part = parts.rbegin(); part != parts.rend(); ++part) {
+        ss << "$" << *part;
+        r.name = DexString::make_string(ss.str());
+        if (!s_method_map.count(r)) {
+          break;
+        }
       }
+      // By this time, it should be no collision anymore.
     }
   }
-  always_assert_log(s_method_map.find(r) == s_method_map.end(),
+
+  always_assert_log(!s_method_map.count(r),
                     "Another method of the same signature already exists");
   s_method_map.emplace(r, method);
 

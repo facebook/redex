@@ -306,8 +306,8 @@ TEST_F(PostVerify, InlineInvokeDirect) {
     classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto noninlinable_invoke_direct =
-      find_invoke(m, DOPCODE_INVOKE_STATIC, "r$0");
-  EXPECT_NE(nullptr, noninlinable_invoke_direct);
+      find_invoke(m, DOPCODE_INVOKE_STATIC, "m$noninlinable$0");
+  EXPECT_NE(nullptr, noninlinable_invoke_direct) << show(m->get_dex_code());
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto noninlinable = static_cast<DexMethod*>(
       noninlinable_invoke_direct->get_method());
@@ -321,12 +321,17 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   // verify that we've replaced the instance noninlinable() method with r$0
   ASSERT_EQ(1,
             std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
-              return !strcmp("noninlinable", m->get_name()->c_str());
+              return m->get_name()->str() == "noninlinable";
             }));
+
+  DexMethod* check = nullptr;
   ASSERT_EQ(1,
-            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
-              return !strcmp("r$0", m->get_name()->c_str());
-            }));
+            std::count_if(dmethods.begin(), dmethods.end(),
+                          [&check](DexMethod* m) {
+                            check = m;
+                            return m->get_name()->str() == "m$noninlinable$0";
+                          }))
+      << show(m->get_dex_code());
 }
 
 /*
