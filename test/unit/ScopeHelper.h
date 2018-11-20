@@ -19,6 +19,14 @@ using Scope = std::vector<DexClass*>;
 Scope create_empty_scope();
 
 /**
+ * Creates a DexClass with the given specifications.
+ */
+DexClass* create_class(DexType* type,
+                       DexType* super,
+                       std::vector<DexType*> interfaces,
+                       DexAccessFlags access,
+                       bool external = false);
+/**
  * Create a DexClass with the given specification.
  * The class is marked internal and available to redex for optimizations.
  */

@@ -192,9 +192,13 @@ DexClass* create_java_lang_object() {
   return obj_cls;
 }
 
-DexClass* create_class(DexType* type, DexType* super,
-    std::vector<DexType*> interfaces, DexAccessFlags access,
-    bool external = false) {
+} // namespace
+
+DexClass* create_class(DexType* type,
+                       DexType* super,
+                       std::vector<DexType*> interfaces,
+                       DexAccessFlags access,
+                       bool external) {
   ClassCreator creator(type);
   creator.set_access(access);
   if (external) creator.set_external();
@@ -204,8 +208,6 @@ DexClass* create_class(DexType* type, DexType* super,
     creator.add_interface(interface);
   }
   return creator.create();
-}
-
 }
 
 Scope create_empty_scope() {
