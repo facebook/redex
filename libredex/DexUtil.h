@@ -89,6 +89,11 @@ DexType* get_enum_type();
 DexType* get_integer_type();
 
 /**
+ * Return the DexType for an java.lang.Throwable type.
+ */
+DexType* get_throwable_type();
+
+/**
  * Return the package for a valid DexType.
  */
 std::string get_package_name(const DexType* type);
@@ -210,6 +215,15 @@ const DexType* get_array_type_or_self(const DexType*);
  * an array.
  */
 DexType* get_array_type(const DexType*);
+
+/**
+ * According to the description in the Java 7 spec:
+ * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html Given an array
+ * type, it's components are referenced directly via array access expressions
+ * that use integer index values. The component type of an array may itself be
+ * an array type.
+ */
+DexType* get_array_component_type(const DexType*);
 
 /**
  * Return the array type of a given type.

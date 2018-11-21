@@ -75,6 +75,10 @@ DexType* get_integer_type() {
   return DexType::make_type("Ljava/lang/Integer;");
 }
 
+DexType* get_throwable_type() {
+  return DexType::make_type("Ljava/lang/Throwable;");
+}
+
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   always_assert_log(name.find("/") != std::string::npos,
@@ -278,6 +282,13 @@ DexType* get_array_type(const DexType* type) {
   while (*name == '[') {
     name++;
   }
+  return DexType::make_type(name);
+}
+
+DexType* get_array_component_type(const DexType* type) {
+  if (!is_array(type)) return nullptr;
+  auto name = type->get_name()->c_str();
+  name++;
   return DexType::make_type(name);
 }
 

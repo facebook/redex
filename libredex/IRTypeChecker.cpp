@@ -166,17 +166,12 @@ class TypeEnvironment final
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  const DexType* get_concrete_type(register_t reg) const {
-    IRType ir_type = get_type(reg).element();
-    always_assert(ir_type == REFERENCE);
-    auto type_opt = get<1>().get(reg).get_constant();
-    always_assert(type_opt != boost::none);
-    return type_opt.get();
+  boost::optional<const DexType*> get_concrete_type(register_t reg) const {
+    return get<1>().get(reg).get_constant();
   }
 
-  void set_concrete_type(register_t reg, const DexType* type) {
-    set_type(reg, TypeDomain(REFERENCE));
-    apply<1>([=](auto env) { env->set(reg, DexTypeDomain(type)); }, true);
+  void set_concrete_type(register_t reg, const DexTypeDomain& dex_type) {
+    apply<1>([=](auto env) { env->set(reg, dex_type); }, true);
   }
 };
 
@@ -222,11 +217,13 @@ class TypeInference final
           // If the method is not static, the first parameter corresponds to
           // `this`.
           first_param = false;
+          set_reference(&init_state, insn->dest(), dex_method->get_class());
         } else {
           // This is a regular parameter of the method.
+          const DexType* type = *sig_it;
           always_assert(sig_it++ != signature.end());
+          set_reference(&init_state, insn->dest(), type);
         }
-        set_reference(&init_state, insn->dest());
         break;
       }
       case IOPCODE_LOAD_PARAM: {
@@ -310,8 +307,14 @@ class TypeInference final
     }
     case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
-      set_type(
-          current_state, insn->dest(), current_state->get_type(insn->src(0)));
+      if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
+        const auto& dex_type_opt =
+            current_state->get_concrete_type(insn->src(0));
+        set_reference(current_state, insn->dest(), dex_type_opt);
+      } else {
+        set_type(
+            current_state, insn->dest(), current_state->get_type(insn->src(0)));
+      }
       break;
     }
     case OPCODE_MOVE_WIDE: {
@@ -333,9 +336,9 @@ class TypeInference final
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
       assume_reference(current_state, RESULT_REGISTER);
-      set_type(current_state,
-               insn->dest(),
-               current_state->get_type(RESULT_REGISTER));
+      set_reference(current_state,
+                    insn->dest(),
+                    current_state->get_concrete_type(RESULT_REGISTER));
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
@@ -350,7 +353,9 @@ class TypeInference final
       break;
     }
     case OPCODE_MOVE_EXCEPTION: {
-      set_reference(current_state, insn->dest());
+      // We don't know where to grab the type of the just-caught exception.
+      // Simply set to j.l.Throwable here.
+      set_reference(current_state, insn->dest(), get_throwable_type());
       break;
     }
     case OPCODE_RETURN_VOID: {
@@ -381,7 +386,10 @@ class TypeInference final
       set_type(current_state, insn->dest() + 1, TypeDomain(CONST2));
       break;
     }
-    case OPCODE_CONST_STRING:
+    case OPCODE_CONST_STRING: {
+      set_reference(current_state, RESULT_REGISTER, get_string_type());
+      break;
+    }
     case OPCODE_CONST_CLASS: {
       set_reference(current_state, RESULT_REGISTER);
       break;
@@ -393,7 +401,7 @@ class TypeInference final
     }
     case OPCODE_CHECK_CAST: {
       assume_reference(current_state, insn->src(0));
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
     case OPCODE_INSTANCE_OF:
@@ -403,12 +411,12 @@ class TypeInference final
       break;
     }
     case OPCODE_NEW_INSTANCE: {
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
     case OPCODE_NEW_ARRAY: {
       assume_integer(current_state, insn->src(0));
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
     case OPCODE_FILLED_NEW_ARRAY: {
@@ -424,7 +432,7 @@ class TypeInference final
           assume_scalar(current_state, insn->src(i));
         }
       }
-      set_reference(current_state, RESULT_REGISTER);
+      set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
     case OPCODE_FILL_ARRAY_DATA: {
@@ -511,7 +519,13 @@ class TypeInference final
     case OPCODE_AGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      set_reference(current_state, RESULT_REGISTER);
+      const auto dex_type_opt = current_state->get_concrete_type(insn->src(0));
+      if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
+        const auto etype = get_array_component_type(*dex_type_opt);
+        set_reference(current_state, RESULT_REGISTER, etype);
+      } else {
+        set_reference(current_state, RESULT_REGISTER);
+      }
       break;
     }
     case OPCODE_APUT: {
@@ -571,7 +585,9 @@ class TypeInference final
     }
     case OPCODE_IGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
-      set_reference(current_state, RESULT_REGISTER);
+      always_assert(insn->has_field());
+      const auto field = insn->get_field();
+      set_reference(current_state, RESULT_REGISTER, field->get_type());
       break;
     }
     case OPCODE_IPUT: {
@@ -628,7 +644,9 @@ class TypeInference final
       break;
     }
     case OPCODE_SGET_OBJECT: {
-      set_reference(current_state, RESULT_REGISTER);
+      always_assert(insn->has_field());
+      const auto field = insn->get_field();
+      set_reference(current_state, RESULT_REGISTER, field->get_type());
       break;
     }
     case OPCODE_SPUT: {
@@ -695,7 +713,7 @@ class TypeInference final
         break;
       }
       if (is_object(return_type)) {
-        set_reference(current_state, RESULT_REGISTER);
+        set_reference(current_state, RESULT_REGISTER, return_type);
         break;
       }
       if (is_integer(return_type)) {
@@ -911,6 +929,15 @@ class TypeInference final
     }
   }
 
+  void traceState(TypeEnvironment* state) const {
+    if (!traceEnabled(TYPE, 9)) {
+      return;
+    }
+    std::ostringstream out;
+    out << *state << std::endl;
+    TRACE(TYPE, 9, "%s\n", out.str().c_str());
+  }
+
  private:
   void populate_type_environments() {
     // We reserve enough space for the map in order to avoid repeated rehashing
@@ -955,6 +982,18 @@ class TypeInference final
   void set_reference(TypeEnvironment* state, register_t reg) const {
     if (m_inference) {
       state->set_type(reg, TypeDomain(REFERENCE));
+    }
+  }
+
+  void set_reference(
+      TypeEnvironment* state,
+      register_t reg,
+      const boost::optional<const DexType*>& dex_type_opt) const {
+    if (m_inference) {
+      state->set_type(reg, TypeDomain(REFERENCE));
+      const DexTypeDomain dex_type =
+          dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
+      state->set_concrete_type(reg, dex_type);
     }
   }
 
@@ -1374,6 +1413,12 @@ void IRTypeChecker::run() {
     }
   }
   m_complete = true;
+
+  if (traceEnabled(TYPE, 5)) {
+    std::ostringstream out;
+    m_type_inference->print(out);
+    TRACE(TYPE, 5, "%s\n", out.str().c_str());
+  }
 }
 
 IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
