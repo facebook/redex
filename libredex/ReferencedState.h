@@ -21,8 +21,15 @@ class IRMetaIO;
 
 class ReferencedState {
  private:
-  bool m_bytype{false};
+  // Whether this DexMember is referenced by one of the strings in the native
+  // libraries. Note that this doesn't allow us to distinguish
+  // native -> Java references from Java -> native refs.
   bool m_bystring{false};
+  // This is a superset of m_bystring -- i.e. it's true if m_bystring is true.
+  // It also gets set ot true if this DexMember is referenced by one of the
+  // "keep_" settings in the Redex config.
+  bool m_bytype{false};
+  // Whether it is referenced from an XML layout.
   bool m_byresources{false};
 
   // Flag that specifies if this member is used for mix-mode compilation.
@@ -30,7 +37,8 @@ class ReferencedState {
 
   // ProGuard keep settings
   //
-  // Specify classes and class members that are entry-points.
+  // Whether any keep rule has matched this. This applies for both `-keep` and
+  // `-keepnames`.
   bool m_keep{false};
   // assumenosideeffects allows certain methods to be removed.
   bool m_assumenosideeffects{false};
@@ -96,23 +104,35 @@ class ReferencedState {
 
   std::string str() const;
 
+  /*** YOU PROBABLY SHOULDN'T USE THIS ***/
+  // This is a conservative estimate about what cannot be deleted. Not all
+  // passes respect this -- most critically, RMU doesn't. RMU uses root()
+  // instead, ignoring our over-conservative native libraries analysis. You
+  // probably don't want to use this method unless root() turns out to be
+  // somehow insufficient.
   bool can_delete() const {
     return !m_bytype && !m_byresources && (!m_keep || allowshrinking());
   }
+
+  // Like can_delete(), this is also over-conservative. We don't yet have a
+  // better alternative, but we should create one.
   bool can_rename() const {
     return !m_keep_name && !m_bystring && (!m_keep || allowobfuscation()) &&
            !allowshrinking();
   }
 
   // ProGuard keep options
-  bool keep() const { return m_keep || m_byresources; }
 
-  // ProGaurd keep option modifiers
+  // Does any keep rule (whether -keep or -keepnames) match this DexMember?
+  bool has_keep() const { return m_keep || m_byresources; }
+
+  // ProGuard keep option modifiers
   bool allowshrinking() const {
-    return !m_unset_allowshrinking && m_set_allowshrinking;
+    return !m_unset_allowshrinking && m_set_allowshrinking && !m_byresources;
   }
   bool allowobfuscation() const {
-    return !m_unset_allowobfuscation && m_set_allowobfuscation;
+    return !m_unset_allowobfuscation && m_set_allowobfuscation &&
+           !m_byresources;
   }
   bool assumenosideeffects() const { return m_assumenosideeffects; }
 
@@ -130,7 +150,7 @@ class ReferencedState {
   // A class referenced by resource XML can take the following forms in .xml
   // files under the res/ directory:
   // <com.facebook.FooView />
-  // <fragmnet android:name="com.facebook.BarFragment" />
+  // <fragment android:name="com.facebook.BarFragment" />
   //
   // This differs from "by_string" reference since it is possible to rename
   // these string references, and potentially eliminate dead resource .xml files
@@ -151,10 +171,14 @@ class ReferencedState {
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
 
-  // ProGuard keep information.
-  void set_keep() { set_keep(keep_reason::UNKNOWN); }
+  void set_root() { set_root(keep_reason::UNKNOWN); }
+
+  void set_has_keep() { set_has_keep(keep_reason::UNKNOWN); }
 
   /*
+   * Mark this DexMember as an entry point that should not be deleted or
+   * renamed.
+   *
    * The ...args are arguments to the keep_reason::Reason constructor.
    * The typical Redex run does not care to keep the extra diagnostic
    * information of the keep reasons, so it seems worthwhile to forward these
@@ -162,7 +186,22 @@ class ReferencedState {
    * record_keep_reasons() is false.
    */
   template <class... Args>
-  void set_keep(Args&&... args) {
+  void set_root(Args&&... args) {
+    m_keep = true;
+    unset_allowshrinking();
+    unset_allowobfuscation();
+    if (RedexContext::record_keep_reasons()) {
+      add_keep_reason(
+          RedexContext::make_keep_reason(std::forward<Args>(args)...));
+    }
+  }
+
+  /*
+   * This should only be called from ProguardMatcher, and is used whenever we
+   * encounter a keep rule (regardless of whether it's `-keep` or `-keepnames`).
+   */
+  template <class... Args>
+  void set_has_keep(Args&&... args) {
     m_keep = true;
     if (RedexContext::record_keep_reasons()) {
       add_keep_reason(

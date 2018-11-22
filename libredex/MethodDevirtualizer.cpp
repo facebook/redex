@@ -196,8 +196,8 @@ void MethodDevirtualizer::verify_and_split(
     std::unordered_set<DexMethod*>& using_this,
     std::unordered_set<DexMethod*>& not_using_this) {
   for (const auto m : candidates) {
-    if (!m_config.ignore_keep && keep(m)) {
-      TRACE(VIRT, 2, "failed to devirt method %s: keep %d\n", SHOW(m), keep(m));
+    if (!m_config.ignore_keep && has_keep(m)) {
+      TRACE(VIRT, 2, "failed to devirt method %s: keep\n", SHOW(m));
       continue;
     }
     if (m->is_external() || is_abstract(m) || is_native(m)) {

@@ -78,7 +78,7 @@ void blacklist(DexMethod* reflecting_method,
       return;
     }
     TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
-    t->rstate.set_keep(keep_reason::REFLECTION, reflecting_method);
+    t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<T, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
@@ -283,11 +283,11 @@ void mark_reachable_by_xml(const std::string& classname, bool is_manifest) {
   if (is_manifest) {
     // Mark these as permanantly reachable. We don't ever try to prune classes
     // from the manifest.
-    dclass->rstate.set_keep(keep_reason::MANIFEST);
+    dclass->rstate.set_root(keep_reason::MANIFEST);
     // Prevent renaming.
     dclass->rstate.increment_keep_count();
     for (DexMethod* dmethod : dclass->get_ctors()) {
-      dmethod->rstate.set_keep(keep_reason::MANIFEST);
+      dmethod->rstate.set_root(keep_reason::MANIFEST);
     }
   } else {
     // Setting "referenced_by_resource_xml" essentially behaves like keep,

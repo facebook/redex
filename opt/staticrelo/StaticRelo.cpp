@@ -219,7 +219,7 @@ candidates_t build_candidates(
     // Make sure this class is not prohibited from being deleted. Granted,
     // we could still move methods and not delete the class, but let's
     // simplify things for now.
-    && !m::keep<DexClass>()
+    && !m::has_keep<DexClass>()
     && !m::any_annos<DexClass>(
         m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
 

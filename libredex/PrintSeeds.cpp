@@ -19,10 +19,9 @@ void print_method_seeds(std::ostream& output,
                         const bool allowobfuscation_filter) {
 
   for (DexMethod* method : methods) {
-    if (keep(method) ||
-      (allowshrinking_filter && !allowshrinking(method)) ||
-      (allowobfuscation_filter && !allowobfuscation(method))
-    ) {
+    if (has_keep(method) ||
+        (allowshrinking_filter && !allowshrinking(method)) ||
+        (allowobfuscation_filter && !allowobfuscation(method))) {
       return;
     }
     redex::print_method(output, pg_map, class_name, method);
@@ -37,10 +36,8 @@ void print_field_seeds(std::ostream& output,
                        const bool allowshrinking_filter,
                        const bool allowobfuscation_filter) {
   for (DexField* field : fields) {
-    if (!keep(field) ||
-      (allowshrinking_filter && !allowshrinking(field)) ||
-      (allowobfuscation_filter && !allowobfuscation(field))
-    ) {
+    if (!has_keep(field) || (allowshrinking_filter && !allowshrinking(field)) ||
+        (allowobfuscation_filter && !allowobfuscation(field))) {
       return;
     }
     redex::print_field(output, pg_map, class_name, field);
@@ -82,7 +79,7 @@ void redex::print_seeds(std::ostream& output,
       deob = cls->get_name()->c_str();
     }
     std::string name = redex::dexdump_name_to_dot_name(deob);
-    if (keep(cls)) {
+    if (has_keep(cls)) {
       show_class(
           output, cls, name, allowshrinking_filter, allowobfuscation_filter);
     }
