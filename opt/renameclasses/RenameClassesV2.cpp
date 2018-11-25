@@ -480,7 +480,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   if (sketchy_strings > 0) {
     fprintf(stderr,
             "WARNING: Found a number of sketchy class-like strings after class "
-            "renaming. Re-run with TRACE=RENAME:2 for more details.");
+            "renaming. Re-run with TRACE=RENAME:2 for more details.\n");
   }
 }
 

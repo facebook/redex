@@ -11,11 +11,13 @@
 #include "DexUtil.h"
 #include "Match.h"
 #include "Show.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /*
@@ -587,16 +589,6 @@ void patch_static_field(DexClass& analysis_cls,
   TRACE(INSTRUMENT, 2, "%s was patched: %d\n", field_name, new_number);
 }
 
-void write_method_index_file(const std::string& file_name,
-                             const std::vector<DexMethod*>& id_vector) {
-  std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
-  for (size_t i = 0; i < id_vector.size(); ++i) {
-    // We use intentionally obfuscated name to guarantee the uniqueness.
-    ofs << i << "," << show(id_vector[i]) << std::endl;
-  }
-  TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
-}
-
 void write_basic_block_index_file(
     const std::string& file_name,
     const std::map<int, std::pair<std::string, int>>& id_name_map) {
@@ -616,24 +608,44 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   const auto& method_onMethodBegin_map = find_and_verify_analysis_method(
       *analysis_cls, options.analysis_method_name);
 
-  // This is set to 1 because current method level tracing invoke call has only
+  // This is set to 1 because current method-level tracing invoke call has only
   // 1 argument.
   always_assert(method_onMethodBegin_map.count(1));
   auto method_onMethodBegin = method_onMethodBegin_map.at(1);
-  // Instrument and build the method id map at the same time.
-  std::vector<DexMethod*> method_id_vector;
+
+  // Write metadata file with more information.
+  const auto& file_name = cfg.metafile(options.metadata_file_name);
+  std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
+
   int method_id = 0;
   int excluded = 0;
-  auto scope = build_class_scope(stores);
-  walk::methods(scope, [&](DexMethod* method) {
+  std::unordered_set<std::string> method_names;
+
+  auto worker = [&](DexMethod* method, size_t& total_size) -> int {
+    const auto& name = method->get_deobfuscated_name();
+    always_assert_log(
+        !method_names.count(name),
+        "Deobfuscated method names must be unique, but found duplicate: %s",
+        SHOW(name));
+    method_names.insert(name);
+
     if (method->get_code() == nullptr) {
-      return;
+      ofs << "M,-1," << name << ",0,\"" << vshow(method->get_access(), true)
+          << "\"\n";
+      return 0;
     }
+
+    const size_t sum_opcode_sizes =
+        method->get_code()->sum_non_internal_opcode_sizes();
+    total_size += sum_opcode_sizes;
+
     if (method == method_onMethodBegin ||
         method == analysis_cls->get_clinit()) {
       ++excluded;
       TRACE(INSTRUMENT, 2, "Excluding analysis method: %s\n", SHOW(method));
-      return;
+      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
+          << "MYSELF " << vshow(method->get_access(), true) << "\"\n";
+      return 0;
     }
 
     // Handle whitelist and blacklist.
@@ -645,7 +657,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       } else {
         ++excluded;
         TRACE(INSTRUMENT, 8, "Whitelist: excluded: %s\n", SHOW(method));
-        return;
+        return 0;
       }
     }
 
@@ -655,16 +667,66 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     if (is_included(method_name, cls_name, options.blacklist)) {
       ++excluded;
       TRACE(INSTRUMENT, 7, "Blacklist: excluded: %s\n", SHOW(method));
-      return;
+      ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
+          << "BLACKLIST " << vshow(method->get_access(), true) << "\"\n";
+      return 0;
     }
 
-    method_id_vector.push_back(method);
     TRACE(INSTRUMENT, 5, "%d: %s\n", method_id, SHOW(method));
-
     instrument_onMethodBegin(method, method_id * options.num_stats_per_method,
                              method_onMethodBegin);
+
+    // Emit metadata to the file.
+    ofs << "M," << method_id << "," << name << "," << sum_opcode_sizes << ",\""
+        << vshow(method->get_access(), true /*is_method*/) << "\"\n";
     ++method_id;
-  });
+    return 1;
+  };
+
+  auto scope = build_class_scope(stores);
+  TypeSystem ts(scope);
+  for (const auto& cls : scope) {
+    const auto& cls_name = cls->get_deobfuscated_name();
+    always_assert_log(
+        !method_names.count(cls_name),
+        "Deobfuscated class names must be unique, but found duplicate: %s",
+        SHOW(cls_name));
+    method_names.insert(cls_name);
+
+    int instrumented = 0;
+    size_t total_size = 0;
+    for (auto dmethod : cls->get_dmethods()) {
+      instrumented += worker(dmethod, total_size);
+    }
+    for (auto vmethod : cls->get_vmethods()) {
+      instrumented += worker(vmethod, total_size);
+    }
+
+    ofs << "C," << cls_name << "," << total_size << ","
+        << (instrumented == 0 ? "NONE" : std::to_string(instrumented)) << ","
+        << cls->get_dmethods().size() << "," << cls->get_vmethods().size()
+        << ",\"" << vshow(cls->get_access(), false /*is_method*/) << "\"\n";
+
+    // Enumerate all super and interface classes for this class.
+    const auto& obj_type = DexType::get_type("Ljava/lang/Object;");
+    std::stringstream ss;
+    for (const auto& e : ts.parent_chain(cls->get_type())) {
+      // Exclude myself and obvious java.lang.Object.
+      if (e != obj_type && e != cls->get_type()) {
+        ss << show_deobfuscated(e) << " ";
+      }
+    }
+    if (ss.tellp() > 0) {
+      ofs << "P," << cls_name << ",\"" << ss.str() << "\"\n";
+    }
+    ss = std::stringstream();
+    for (const auto& e : ts.get_all_super_interfaces(cls->get_type())) {
+      ss << show_deobfuscated(e) << " ";
+    }
+    if (ss.tellp() > 0) {
+      ofs << "I," << cls_name << ",\"" << ss.str() << "\"\n";
+    }
+  }
 
   TRACE(INSTRUMENT,
         1,
@@ -679,8 +741,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Patch method count constant.
   patch_static_field(*analysis_cls, "sMethodCount", method_id);
 
-  write_method_index_file(cfg.metafile(options.metadata_file_name),
-                          method_id_vector);
+  ofs.close();
+  TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 
   pm.incr_metric("Instrumented", method_id);
   pm.incr_metric("Excluded", excluded);

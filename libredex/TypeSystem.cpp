@@ -86,6 +86,12 @@ void TypeSystem::get_all_super_interfaces(
   }
 }
 
+TypeSet TypeSystem::get_all_super_interfaces(const DexType* intf) const {
+  TypeSet supers;
+  get_all_super_interfaces(intf, supers);
+  return supers;
+}
+
 TypeSet TypeSystem::get_local_interfaces(const TypeSet& classes) {
   // Collect all implemented interfaces.
   TypeSet implemented_intfs = get_implemented_interfaces(classes);

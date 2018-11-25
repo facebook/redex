@@ -261,6 +261,9 @@ class IRCode {
    * all the instructions.
    */
   size_t sum_opcode_sizes() const { return m_ir_list->sum_opcode_sizes(); }
+  size_t sum_non_internal_opcode_sizes() const {
+    return m_ir_list->sum_non_internal_opcode_sizes();
+  }
 
   /*
    * Returns the number of instructions.
