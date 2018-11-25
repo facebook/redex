@@ -123,7 +123,10 @@ void rename(DexMethodRef* meth, DexString* name) {
       def->set_deobfuscated_name(meth->get_name()->c_str());
     }
   }
-  meth->change(spec);
+  // We should not update deobfuscated name here!
+  meth->change(spec,
+               false /* rename on collision */,
+               false /* update deobfuscated name */);
 }
 
 /**

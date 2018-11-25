@@ -527,7 +527,8 @@ void OptimizationImpl::rename_possible_collisions(
     spec.cls = meth->get_class();
     spec.name = name;
     spec.proto = meth->get_proto();
-    meth->change(spec, false);
+    meth->change(
+        spec, false /* rename on collision */, true /* update deob name */);
   };
 
   TRACE(INTF, 9, "Changing name related to %s\n", SHOW(intf));

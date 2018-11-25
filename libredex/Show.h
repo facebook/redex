@@ -144,5 +144,5 @@ std::string show_context(IRCode const*, IRInstruction const*);
 std::string vshow(const DexClass*);
 std::string vshow(const DexMethod*, bool include_annotations = true);
 std::string vshow(const DexField*);
-std::string vshow(uint32_t acc); // for modifiers
+std::string vshow(uint32_t acc, bool is_method = true); // DexAccessFlags
 std::string vshow(const DexType*);

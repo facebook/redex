@@ -40,7 +40,9 @@ void fix_colliding_method(
 
     DexMethodSpec spec;
     spec.proto = new_proto;
-    meth->change(spec, false);
+    meth->change(spec,
+                 false /* rename on collision */,
+                 false /* update deobfuscated name */);
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
@@ -227,7 +229,9 @@ void update_method_signature_type_references(
     spec.proto = new_proto;
     if (!is_init(meth) && !meth->is_virtual()) {
       TRACE(REFU, 9, "sig: updating non ctor/virt method %s\n", SHOW(meth));
-      meth->change(spec, true);
+      meth->change(spec,
+                   true /* rename on collision */,
+                   true /* update deobfuscated name */);
       return;
     }
 
@@ -236,7 +240,9 @@ void update_method_signature_type_references(
     auto existing_meth = DexMethod::get_method(type, name, new_proto);
     if (existing_meth == nullptr) {
       TRACE(REFU, 9, "sig: updating method %s\n", SHOW(meth));
-      meth->change(spec, true);
+      meth->change(spec,
+                   true /* rename on collision */,
+                   true /* update deobfuscated name */);
       return;
     }
 
@@ -267,7 +273,9 @@ void update_method_signature_type_references(
       DexMethodSpec spec;
       spec.proto = new_proto;
       TRACE(REFU, 9, "sig: updating non virt method %s\n", SHOW(meth));
-      meth->change(spec, true);
+      meth->change(spec,
+                   true /* rename on collision */,
+                   true /* update deobfuscated name */);
       continue;
     }
     // We cannot handle the renaming of true virtuals.

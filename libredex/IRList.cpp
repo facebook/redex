@@ -374,6 +374,18 @@ size_t IRList::sum_opcode_sizes() const {
   return size;
 }
 
+// TODO(jhendrick): Keep naming consistent with "count_opcodes" in handling
+// internal opcodes.
+size_t IRList::sum_non_internal_opcode_sizes() const {
+  size_t size {0};
+  for (const auto& mie : m_list) {
+    if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
+      size += mie.insn->size();
+    }
+  }
+  return size;
+}
+
 size_t IRList::count_opcodes() const {
   size_t count {0};
   for (const auto& mie : m_list) {

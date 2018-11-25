@@ -308,7 +308,9 @@ DexClass* move_statics_out(
     type_class(meth->get_class())->remove_method(meth);
     DexMethodSpec spec;
     spec.cls = sink_class->get_type();
-    meth->change(spec);
+    meth->change(spec,
+                 false /* rename on collision */,
+                 false /* update deobfuscated name */);
     set_public(meth);
     sink_class->add_method(meth);
     moved_count++;

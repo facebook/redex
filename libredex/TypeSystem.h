@@ -32,7 +32,6 @@ class TypeSystem {
   static const TypeVector empty_vec;
 
   ClassScopes m_class_scopes;
-  ClassHierarchy m_intf_parents;
   ClassHierarchy m_intf_children;
   InstanceOfTable m_instanceof_table;
   TypeToTypeSet m_interfaces;
@@ -148,6 +147,7 @@ class TypeSystem {
    * DexClass.
    */
   void get_all_super_interfaces(const DexType* intf, TypeSet& supers) const;
+  TypeSet get_all_super_interfaces(const DexType* intf) const;
 
   /**
    * Return the direct children of a given interface.
