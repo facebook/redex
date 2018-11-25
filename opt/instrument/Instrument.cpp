@@ -709,22 +709,23 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
     // Enumerate all super and interface classes for this class.
     const auto& obj_type = DexType::get_type("Ljava/lang/Object;");
-    std::stringstream ss;
+    std::stringstream ss_parents;
     for (const auto& e : ts.parent_chain(cls->get_type())) {
       // Exclude myself and obvious java.lang.Object.
       if (e != obj_type && e != cls->get_type()) {
-        ss << show_deobfuscated(e) << " ";
+        ss_parents << show_deobfuscated(e) << " ";
       }
     }
-    if (ss.tellp() > 0) {
-      ofs << "P," << cls_name << ",\"" << ss.str() << "\"\n";
+    if (ss_parents.tellp() > 0) {
+      ofs << "P," << cls_name << ",\"" << ss_parents.str() << "\"\n";
     }
-    ss = std::stringstream();
+
+    std::stringstream ss_interfaces;
     for (const auto& e : ts.get_all_super_interfaces(cls->get_type())) {
-      ss << show_deobfuscated(e) << " ";
+      ss_interfaces << show_deobfuscated(e) << " ";
     }
-    if (ss.tellp() > 0) {
-      ofs << "I," << cls_name << ",\"" << ss.str() << "\"\n";
+    if (ss_interfaces.tellp() > 0) {
+      ofs << "I," << cls_name << ",\"" << ss_interfaces.str() << "\"\n";
     }
   }
 
