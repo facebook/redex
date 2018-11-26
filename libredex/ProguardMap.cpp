@@ -118,6 +118,12 @@ bool literal(const char*& p, char s) {
   return false;
 }
 
+bool comment(const std::string& line) {
+  auto p = line.c_str();
+  whitespace(p);
+  return literal(p, '#');
+}
+
 /**
  * Proguard would generate some special sequences when a coalesced interface is used.
  * https://sourceforge.net/p/proguard/code/ci/default/tree/core/src/proguard/classfile/editor/ClassReferenceFixer.java#l554
@@ -186,6 +192,9 @@ void ProguardMap::parse_proguard_map(std::istream& fp) {
       continue;
     }
     if (parse_method(line)) {
+      continue;
+    }
+    if (comment(line)) {
       continue;
     }
     always_assert_log(false,

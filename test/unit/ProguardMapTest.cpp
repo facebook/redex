@@ -42,3 +42,15 @@ TEST(ProguardMapTest, empty) {
   EXPECT_EQ(true, pm.is_special_interface("La_vcard/android/syncml/pim/VBuilder;"));
   EXPECT_EQ(false, pm.is_special_interface("Lcom/not/Found;"));
 }
+
+TEST(ProguardMapTest, HandlesGeneratedComments) {
+  std::stringstream ss(
+      "# compiler: R8\n"
+      "# compiler_version: 1.3.23\n"
+      "# min_api: 15\n"
+      "com.foo.bar -> A:\n"
+      "    int do1 -> a\n");
+  ProguardMap pm(ss);
+  EXPECT_EQ("LA;", pm.translate_class("Lcom/foo/bar;"));
+  EXPECT_EQ("LA;.a:I", pm.translate_field("Lcom/foo/bar;.do1:I"));
+}
