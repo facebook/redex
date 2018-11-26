@@ -21,6 +21,7 @@ public class FinalInlineV2Test {
     assertThat(Encodable.S_STRING).isEqualTo("string");
     assertThat(Encodable.S_LONG).isEqualTo(0x1000200030004000L);
     assertThat(Encodable.S_DOUBLE).isEqualTo(1.0000000000000002);
+    assertThat(Encodable.S_FLOAT).isEqualTo(-2.0f);
   }
 }
 
@@ -35,6 +36,7 @@ class Encodable {
   public static String S_STRING = "string";
   public static long S_LONG = 0x1000200030004000L;
   public static double S_DOUBLE = 1.0000000000000002;
+  public static float S_FLOAT = -2.0f;
 }
 
 class UnEncodable {
