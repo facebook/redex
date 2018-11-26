@@ -10,9 +10,9 @@ package redex;
 import static org.fest.assertions.api.Assertions.*;
 import org.junit.Test;
 
-public class ReplaceEncodableClinitTest {
+public class FinalInlineV2Test {
   @Test
-  public void test() {
+  public void testFinalInline() {
     assertThat(Encodable.S_BOOL).isEqualTo(true);
     assertThat(Encodable.S_BYTE).isEqualTo((byte) 'b');
     assertThat(Encodable.S_CHAR).isEqualTo('c');
@@ -25,6 +25,8 @@ public class ReplaceEncodableClinitTest {
 }
 
 class Encodable {
+  // Don't mark the fields final here so that javac or d8 won't do the inlining.
+  // Use AccessMarkingPass to set them to final (because there are no writes).
   public static boolean S_BOOL = true;
   public static byte S_BYTE = 'b';
   public static char S_CHAR = 'c';
