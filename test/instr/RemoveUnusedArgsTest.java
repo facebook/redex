@@ -44,6 +44,8 @@ class FooUser {
 }
 
 class Statics {
+  private static String greeting;
+  private static double wide;
   public static void static1() {
     String hello = "I don't have arguments!";
   }
@@ -53,12 +55,14 @@ class Statics {
     if (truthy) {
       bonjour = "Je use the argument";
     }
+    Statics.greeting = bonjour;
   }
 
   public static void static3(Object obj, double wide_param) {
     String ciao = "Je ne sais pas Italian; two arguments";
     wide_param *= 2.0;
     ciao = "wide_param is alive, obj is dead";
+    Statics.wide = wide_param;
   }
 }
 
@@ -78,6 +82,7 @@ class StaticsUser {
 }
 
 class Privates {
+  private double save;
   public void use_private_first() {
     private1(1.0, 2.0);
   }
@@ -88,12 +93,12 @@ class Privates {
 
   // first
   private void private1(double x, double y) {
-    x = x + y;
+    this.save = x + y;
   }
 
   // second
   private void private1(int c, double x, double y) {
-    x = x * y;
+    this.save = x * y;
   }
 }
 
