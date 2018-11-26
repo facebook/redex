@@ -62,6 +62,9 @@ public class SimpleInlineTest {
   private void throwsInElse() throws Exception {
     if (mHello != null) {
       String y = "x";
+      // We need this return here because we're testing what happens to code
+      // after the first return statement
+      return;
     } else {
       wrapsThrow();
     }
