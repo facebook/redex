@@ -587,3 +587,33 @@ TEST_F(IRTypeCheckerTest, filledNewArray) {
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
 }
+
+TEST_F(IRTypeCheckerTest, zeroOrReference) {
+  using namespace dex_asm;
+  std::vector<IRInstruction*> insns = {
+      dasm(OPCODE_CONST_CLASS, DexType::make_type("Lbar;")),
+      dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}),
+      dasm(OPCODE_MONITOR_ENTER, {0_v}),
+      dasm(OPCODE_CONST, {1_v, 0_L}),
+      dasm(OPCODE_MONITOR_EXIT, {0_v}),
+      dasm(OPCODE_RETURN_OBJECT, {0_v}),
+      dasm(OPCODE_MOVE_EXCEPTION, {1_v}),
+      dasm(OPCODE_MONITOR_EXIT, {0_v}),
+      dasm(OPCODE_THROW, {1_v}),
+  };
+  add_code(insns);
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_TRUE(checker.good()) << checker.what();
+  EXPECT_EQ("OK", checker.what());
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[2], 0));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[3], 0));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[4], 0));
+  EXPECT_EQ(ZERO, checker.get_type(insns[4], 1));
+  EXPECT_EQ(REFERENCE, checker.get_type(insns[5], 0));
+  EXPECT_EQ(ZERO, checker.get_type(insns[5], 1));
+  EXPECT_EQ(BOTTOM, checker.get_type(insns[6], 0));
+  EXPECT_EQ(BOTTOM, checker.get_type(insns[6], 1));
+  EXPECT_EQ(BOTTOM, checker.get_type(insns[7], 1));
+  EXPECT_EQ(BOTTOM, checker.get_type(insns[8], 1));
+}

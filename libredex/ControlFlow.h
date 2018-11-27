@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/dynamic_bitset.hpp>
 #include <boost/optional/optional.hpp>
 #include <boost/range/sub_range.hpp>
 #include <type_traits>
@@ -37,7 +38,11 @@
  * `code->build_cfg(true)`
  *
  * The editable CFG takes the MethodItemEntries from the IRCode object and moves
- * them into the blocks. You can make all sorts of changes to the CFG and when
+ * them into the blocks. The editable CFG steals the code out of the IRCode
+ * object. After you've built the CFG in editable mode, you should use the CFG,
+ * not the IRCode. The IRCode is empty while the editable CFG exists.
+ *
+ * You can make all sorts of changes to the CFG and when
  * you're done, move it all back into an IRCode object with
  *
  * `code->clear_cfg()`
@@ -145,6 +150,10 @@ class Edge final {
            equals_ignore_source_and_target(that);
   }
 
+  bool operator!=(const Edge& that) const {
+    return !(*this == that);
+  }
+
   bool equals_ignore_source(const Edge& that) const {
     return m_target == that.m_target && equals_ignore_source_and_target(that);
   }
@@ -191,7 +200,8 @@ class Block final {
     m_entries.clear_and_dispose();
   }
 
-  Block(const Block& b);
+  // copy constructor
+  Block(const Block& b, MethodItemEntryCloner* cloner);
 
   BlockId id() const { return m_id; }
   const std::vector<Edge*>& preds() const {
@@ -240,7 +250,9 @@ class Block final {
 
   uint32_t num_opcodes() const;
 
+  // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
+  // return an iterator to the first MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_first_insn();
 
   // including move-result-pseudo
@@ -347,7 +359,6 @@ class ControlFlowGraph {
     edge->target()->m_preds.emplace_back(edge);
   }
 
-  using EdgePredicate = std::function<bool(const Edge* e)>;
   using EdgeSet = std::unordered_set<Edge*>;
 
   // Make `e` point to a new target block.
@@ -360,16 +371,54 @@ class ControlFlowGraph {
 
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists
+  template <typename EdgePredicate>
   Edge* get_pred_edge_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    for (Edge* e : block->preds()) {
+      if (predicate(e)) {
+        return e;
+      }
+    }
+    return nullptr;
+  }
+
+  template <typename EdgePredicate>
   Edge* get_succ_edge_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    for (Edge* e : block->succs()) {
+      if (predicate(e)) {
+        return e;
+      }
+    }
+    return nullptr;
+  }
 
   // return all edges for which predicate returns true
+  template <typename EdgePredicate>
   std::vector<Edge*> get_pred_edges_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    const auto& preds = block->preds();
+    std::vector<Edge*> result;
+    for (Edge* e : preds) {
+      if (predicate(e)) {
+        result.push_back(e);
+      }
+    }
+    return result;
+  }
+
+  template <typename EdgePredicate>
   std::vector<Edge*> get_succ_edges_if(
-      const Block* block, const EdgePredicate& predicate) const;
+      const Block* block, EdgePredicate predicate) const {
+    const auto& succs = block->succs();
+    std::vector<Edge*> result;
+    for (Edge* e : succs) {
+      if (predicate(e)) {
+        result.push_back(e);
+      }
+    }
+    return result;
+  }
 
   // return the first edge of the given type
   // or nullptr if no such edge exists
@@ -388,14 +437,26 @@ class ControlFlowGraph {
   //   * These functions remove edges from the graph and free the memory
   //   * the `_if` functions take a predicate to decide which edges to delete
   void delete_edge(Edge* edge);
-  void delete_edge_if(Block* source,
-                      Block* target,
-                      const EdgePredicate& predicate);
-  void delete_succ_edge_if(Block* block, const EdgePredicate& predicate);
-  void delete_pred_edge_if(Block* block, const EdgePredicate& predicate);
   void delete_succ_edges(Block* b);
   void delete_pred_edges(Block* b);
   void delete_edges_between(Block* p, Block* s);
+
+  template <typename EdgePredicate>
+  void delete_edge_if(Block* source,
+                      Block* target,
+                      EdgePredicate predicate) {
+    free_edges(remove_edge_if(source, target, predicate));
+  }
+
+  template <typename EdgePredicate>
+  void delete_succ_edge_if(Block* block, EdgePredicate predicate) {
+    free_edges(remove_succ_edge_if(block, predicate));
+  }
+
+  template <typename EdgePredicate>
+  void delete_pred_edge_if(Block* block, EdgePredicate predicate) {
+    free_edges(remove_pred_edge_if(block, predicate));
+  }
 
   bool blocks_are_in_same_try(const Block* b1, const Block* b2) const;
 
@@ -444,6 +505,13 @@ class ControlFlowGraph {
 
   size_t num_blocks() const { return m_blocks.size(); }
 
+  /*
+   * Traverse the graph, starting from the entry node. Return a bitset with IDs
+   * of reachable blocks having 1 and IDs of unreachable blocks (or unused IDs)
+   * having 0.
+   */
+  boost::dynamic_bitset<> visit() const;
+
   // remove blocks with no predecessors
   // returns the number of instructions removed
   uint32_t remove_unreachable_blocks();
@@ -453,13 +521,10 @@ class ControlFlowGraph {
   void simplify();
 
   // SIGABORT if the internal state of the CFG is invalid
-  void sanity_check();
+  void sanity_check() const;
 
   // SIGABORT if there are dangling parent pointers to deleted DexPositions
   void no_dangling_dex_positions() const;
-
-  // SIGABORT if m_registers_size is wrong
-  void check_registers_size();
 
   uint32_t num_opcodes() const;
 
@@ -495,13 +560,15 @@ class ControlFlowGraph {
   cfg::InstructionIterator to_cfg_instruction_iterator(
       Block* b, const ir_list::InstructionIterator& list_it);
 
+  // Search all the instructions in this CFG for the given one. Return an
+  // iterator to it, or end, if it isn't in the graph.
+  InstructionIterator find_insn(IRInstruction* insn);
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
   using TryEnds = std::vector<std::pair<TryEntry*, Block*>>;
   using TryCatches = std::unordered_map<CatchEntry*, Block*>;
-  using Boundaries =
-      std::unordered_map<Block*, std::pair<IRList::iterator, IRList::iterator>>;
   using Blocks = std::map<BlockId, Block*>;
   friend class InstructionIteratorImpl<false>;
   friend class InstructionIteratorImpl<true>;
@@ -513,8 +580,7 @@ class ControlFlowGraph {
   void find_block_boundaries(IRList* ir,
                              BranchToTargets& branch_to_targets,
                              TryEnds& try_ends,
-                             TryCatches& try_catches,
-                             Boundaries& boundaries);
+                             TryCatches& try_catches);
 
   // Add edges between blocks created by `find_block_boundaries`
   // For use by the constructor. You probably don't want to call this from
@@ -530,11 +596,6 @@ class ControlFlowGraph {
   // elsewhere
   void remove_unreachable_succ_edges();
 
-  // Move MethodItemEntries from ir into their blocks
-  // For use by the constructor. You probably don't want to call this from
-  // elsewhere
-  void fill_blocks(IRList* ir, const Boundaries& boundaries);
-
   // remove all MFLOW_TRY and MFLOW_CATCH markers because that information is
   // moved into the edges.
   // Assumes m_editable is true
@@ -542,6 +603,12 @@ class ControlFlowGraph {
 
   // choose an order of blocks for output
   std::vector<Block*> order();
+  // helper functions
+  using Chain = std::vector<Block*>;
+  void build_chains(std::vector<std::unique_ptr<Chain>>* chains,
+                    std::unordered_map<Block*, Chain*>* block_to_chain);
+  std::vector<Block*> wto_chains(
+      const std::unordered_map<Block*, Chain*>& block_to_chain);
 
   // Materialize target instructions and gotos corresponding to control-flow
   // edges. Used while turning back into a linear representation.
@@ -584,8 +651,9 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
-  // Delete edges that are never a predecessor or successor of a block
-  void delete_unreferenced_edges();
+  // Assert if there are edges that are never a predecessor or successor of a
+  // block
+  void no_unreferenced_edges() const;
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.
@@ -596,19 +664,113 @@ class ControlFlowGraph {
   //   * They return which edges were removed (with the exception of
   //     `remove_edge`)
   void remove_edge(Edge* edge, bool cleanup = true);
-  EdgeSet remove_edge_if(Block* source,
-                         Block* target,
-                         const EdgePredicate& predicate,
-                         bool cleanup = true);
-  EdgeSet remove_succ_edge_if(Block* block,
-                              const EdgePredicate& predicate,
-                              bool cleanup = true);
-  EdgeSet remove_pred_edge_if(Block* block,
-                              const EdgePredicate& predicate,
-                              bool cleanup = true);
   EdgeSet remove_succ_edges(Block* b, bool cleanup = true);
   EdgeSet remove_pred_edges(Block* b, bool cleanup = true);
   EdgeSet remove_edges_between(Block* p, Block* s, bool cleanup = true);
+
+  template <typename EdgePredicate>
+  EdgeSet remove_edge_if(Block* source,
+                         Block* target,
+                         EdgePredicate predicate,
+                         bool cleanup = true) {
+    auto& forward_edges = source->m_succs;
+    EdgeSet to_remove;
+    forward_edges.erase(
+        std::remove_if(forward_edges.begin(),
+                       forward_edges.end(),
+                       [&target, &predicate, &to_remove](Edge* e) {
+                         if (e->target() == target && predicate(e)) {
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        forward_edges.end());
+
+    auto& reverse_edges = target->m_preds;
+    reverse_edges.erase(
+        std::remove_if(reverse_edges.begin(),
+                       reverse_edges.end(),
+                       [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+        reverse_edges.end());
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
+
+  template <typename EdgePredicate>
+  EdgeSet remove_pred_edge_if(Block* block,
+                              EdgePredicate predicate,
+                              bool cleanup = true) {
+    auto& reverse_edges = block->m_preds;
+
+    std::vector<Block*> source_blocks;
+    EdgeSet to_remove;
+    reverse_edges.erase(
+        std::remove_if(reverse_edges.begin(),
+                       reverse_edges.end(),
+                       [&source_blocks, &to_remove, &predicate](Edge* e) {
+                         if (predicate(e)) {
+                           source_blocks.push_back(e->src());
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        reverse_edges.end());
+
+    for (Block* source_block : source_blocks) {
+      auto& forward_edges = source_block->m_succs;
+      forward_edges.erase(
+          std::remove_if(
+              forward_edges.begin(), forward_edges.end(),
+              [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+          forward_edges.end());
+    }
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
+
+  template <typename EdgePredicate>
+  EdgeSet remove_succ_edge_if(Block* block,
+                              EdgePredicate predicate,
+                              bool cleanup = true) {
+    auto& forward_edges = block->m_succs;
+
+    std::vector<Block*> target_blocks;
+    std::unordered_set<Edge*> to_remove;
+    forward_edges.erase(
+        std::remove_if(forward_edges.begin(),
+                       forward_edges.end(),
+                       [&target_blocks, &to_remove, &predicate](Edge* e) {
+                         if (predicate(e)) {
+                           target_blocks.push_back(e->target());
+                           to_remove.insert(e);
+                           return true;
+                         }
+                         return false;
+                       }),
+        forward_edges.end());
+
+    for (Block* target_block : target_blocks) {
+      auto& reverse_edges = target_block->m_preds;
+      reverse_edges.erase(
+          std::remove_if(
+              reverse_edges.begin(), reverse_edges.end(),
+              [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
+          reverse_edges.end());
+    }
+
+    if (cleanup) {
+      cleanup_deleted_edges(to_remove);
+    }
+    return to_remove;
+  }
 
   // Assumes the edge is already removed.
   void free_edge(Edge* edge);
@@ -629,6 +791,11 @@ class ControlFlowGraph {
   // edge
   void move_edge(Edge* edge, Block* new_source, Block* new_target);
 
+  uint16_t compute_registers_size() const;
+
+  // Return the next unused block identifier
+  BlockId next_block_id() const;
+
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;
   EdgeSet m_edges;
@@ -637,6 +804,7 @@ class ControlFlowGraph {
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
+  static constexpr bool DEBUG{false};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
@@ -683,14 +851,13 @@ class InstructionIteratorImpl {
 
   // go to beginning of next block, skipping empty blocks
   void to_next_block() {
-    while (
-        m_block != m_cfg.m_blocks.end() &&
-        m_it ==
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).end()) {
+    while (m_block != m_cfg.m_blocks.end() &&
+           m_it.unwrap() == m_block->second->m_entries.end()) {
       ++m_block;
       if (m_block != m_cfg.m_blocks.end()) {
-        m_it =
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).begin();
+        Block* b = m_block->second;
+        m_it = ir_list::InstructionIteratorImpl<is_const>(b->m_entries.begin(),
+                                                          b->m_entries.end());
       } else {
         m_it = ir_list::InstructionIteratorImpl<is_const>();
       }
@@ -758,11 +925,11 @@ class InstructionIteratorImpl {
   }
 
   void assert_not_end() const {
+    if (!ControlFlowGraph::DEBUG) {
+      return;
+    }
     always_assert_log(m_block != m_cfg.m_blocks.end(), "%s", SHOW(m_cfg));
-    always_assert_log(
-        m_it !=
-            ir_list::InstructionIterableImpl<is_const>(m_block->second).end(),
-        "%s", SHOW(m_cfg));
+    always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(), "%s", SHOW(m_cfg));
   }
 
   bool is_end() const {
@@ -787,8 +954,10 @@ class InstructionIteratorImpl {
 // Blocks are iterated in an undefined order
 template <bool is_const>
 class InstructionIterableImpl {
-  using Cfg = typename std::conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
-  using Iterator = typename std::conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
+  using Cfg = typename std::
+      conditional<is_const, const ControlFlowGraph, ControlFlowGraph>::type;
+  using Iterator = typename std::
+      conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
   Cfg& m_cfg;
 
  public:

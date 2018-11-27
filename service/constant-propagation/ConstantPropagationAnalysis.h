@@ -137,6 +137,23 @@ class ClinitFieldAnalyzer final
                              ConstantEnvironment* env);
 };
 
+/*
+ * Handle instance fields in <init> methods.
+ */
+class InitFieldAnalyzer final
+    : public InstructionAnalyzerBase<InitFieldAnalyzer,
+                                     ConstantEnvironment,
+                                     DexType* /* class_under_init */> {
+ public:
+  static bool analyze_iget(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_iput(const DexType* class_under_init,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+};
+
 struct EnumFieldAnalyzerState {
   const DexMethod* enum_equals;
   EnumFieldAnalyzerState()

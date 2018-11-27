@@ -317,6 +317,34 @@ bool ClinitFieldAnalyzer::analyze_invoke(const DexType* class_under_init,
   return false;
 }
 
+bool InitFieldAnalyzer::analyze_iget(const DexType* class_under_init,
+                                     const IRInstruction* insn,
+                                     ConstantEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  if (field->get_class() == class_under_init) {
+    env->set(RESULT_REGISTER, env->get(field));
+    return true;
+  }
+  return false;
+}
+
+bool InitFieldAnalyzer::analyze_iput(const DexType* class_under_init,
+                                     const IRInstruction* insn,
+                                     ConstantEnvironment* env) {
+  auto field = resolve_field(insn->get_field());
+  if (field == nullptr) {
+    return false;
+  }
+  if (field->get_class() == class_under_init) {
+    env->set(field, env->get(insn->src(0)));
+    return true;
+  }
+  return false;
+}
+
 bool EnumFieldAnalyzer::analyze_sget(const EnumFieldAnalyzerState&,
                                      const IRInstruction* insn,
                                      ConstantEnvironment* env) {

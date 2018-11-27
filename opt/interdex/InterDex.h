@@ -35,7 +35,6 @@ class InterDex {
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
-        m_emit_scroll_set_marker(emit_scroll_set_marker),
         m_emit_canaries(emit_canaries) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
@@ -60,7 +59,18 @@ class InterDex {
     return m_dexes_structure.get_num_coldstart_dexes();
   }
 
-  DexClassesVector run();
+  size_t get_num_scroll_dexes() const {
+    return m_dexes_structure.get_num_scroll_dexes();
+  }
+
+  /**
+   * Only call this if you know what you are doing.
+   * This will leave the current instance is in an unusable state.
+   */
+  DexClassesVector take_outdex() { return std::move(m_outdex); }
+
+  void run();
+  void add_dexes_from_store(const DexStore& store);
 
  private:
   void emit_class(const DexInfo& dex_info, DexClass* clazz, bool check_if_skip);
@@ -98,7 +108,6 @@ class InterDex {
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
-  bool m_emit_scroll_set_marker;
   bool m_emit_canaries;
 
   MixedModeInfo m_mixed_mode_info;

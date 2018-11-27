@@ -135,7 +135,7 @@ Json::Value default_config() {
       "ReBindRefsPass",        "BridgePass",     "SynthPass",
       "FinalInlinePass",       "DelSuperPass",   "SingleImplPass",
       "SimpleInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
-      "ShortenSrcStringsPass",
+      "ShortenSrcStringsPass", "RegAllocPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
   Json::Value cfg;
@@ -554,7 +554,7 @@ void write_debug_line_mapping(
 
     uint64_t method_id = method_to_id.at(method);
     // write human readable file
-    fprintf(fd, "0x%016" PRIx64 "%u\n", method_id, offset);
+    fprintf(fd, "0x%016" PRIx64 " %u\n", method_id, offset);
     readable_line_out << method->get_deobfuscated_name() << "\n";
     // write method id => offset info for binary file
     ofs.write((const char*)&method_id, bit_64_size);
@@ -634,6 +634,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
           dex_stats_t dex_stats;
           DexClasses classes =
               load_classes_from_dex(file_path.c_str(), &dex_stats);
+
           input_totals += dex_stats;
           input_dexes_stats.push_back(dex_stats);
           store.add_classes(std::move(classes));
@@ -647,6 +648,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   Scope external_classes;
   if (!args.entry_data["jars"].empty()) {
     Timer t("Load library jars");
+    const JsonWrapper& json_cfg = cfg.get_json_config();
+    read_dup_class_whitelist(json_cfg);
+
     for (const auto& _library_jar : args.entry_data["jars"]) {
       const std::string library_jar = _library_jar.asString();
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
@@ -672,15 +676,15 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
+    Timer t("Processing proguard rules");
+    process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
+                           pg_config);
+  }
+  {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
     init_reachable_classes(scope, cfg.get_json_config(),
                            cfg.get_no_optimizations_annos());
-  }
-  {
-    Timer t("Processing proguard rules");
-    process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
-                           &pg_config);
   }
 }
 
@@ -703,11 +707,15 @@ void redex_backend(const PassManager& manager,
   const JsonWrapper& json_cfg = cfg.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
+  bool emit_name_based_locators = false;
   if (json_cfg.get("emit_locator_strings", false)) {
-    TRACE(LOC,
-          1,
-          "Will emit class-locator strings for classloader optimization\n");
-    locator_index = new LocatorIndex(make_locator_index(stores));
+    emit_name_based_locators =
+        json_cfg.get("emit_name_based_locator_strings", false);
+    TRACE(LOC, 1,
+          "Will emit%s class-locator strings for classloader optimization\n",
+          emit_name_based_locators ? " name-based" : "");
+    locator_index =
+        new LocatorIndex(make_locator_index(stores, emit_name_based_locators));
   }
 
   dex_stats_t output_totals;
@@ -726,7 +734,8 @@ void redex_backend(const PassManager& manager,
       PositionMapper::make(pos_output, pos_output_v2));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  for (auto& store : stores) {
+  for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
+    auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
       std::ostringstream ss;
@@ -747,6 +756,8 @@ void redex_backend(const PassManager& manager,
           ss.str(),
           &store.get_dexen()[i],
           locator_index,
+          emit_name_based_locators,
+          store_number,
           i,
           cfg,
           pos_mapper.get(),
@@ -799,7 +810,7 @@ void dump_class_method_info_map(const std::string file_path,
       "# Class information is also interned.\n"
       "#\n"
       "# First column can be M, C, and I.\n"
-      "# - C => Class index and nformation\n"
+      "# - C => Class index and information\n"
       "# - M => Method information\n"
       "# - I,DEXLOC => Dex location string index\n"
       "#\n"
@@ -831,7 +842,7 @@ void dump_class_method_info_map(const std::string file_path,
   std::unordered_map<std::string /*location*/, int /*index*/> dexloc_map;
 
   walk::classes(build_class_scope(stores), [&](const DexClass* cls) {
-    const auto& dexloc = cls->get_dex_location();
+    const auto& dexloc = cls->get_location();
     if (!dexloc_map.count(dexloc)) {
       dexloc_map[dexloc] = dexloc_map.size();
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
@@ -881,18 +892,18 @@ int main(int argc, char* argv[]) {
     //       list of library JARS.
     Arguments args = parse_args(argc, argv);
 
-    RedexContext::set_next_release_gate(
-        args.config.get("next_release_gate", false).asBool());
+    RedexContext::set_record_keep_reasons(
+        args.config.get("record_keep_reasons", false).asBool());
 
-    redex::ProguardConfiguration pg_config;
+    auto pg_config = std::make_unique<redex::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles cfg(args.config, args.out_dir);
 
-    redex_frontend(cfg, args, pg_config, stores, stats);
+    redex_frontend(cfg, args, *pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
-    PassManager manager(passes, pg_config, args.config, args.verify_none_mode,
-                        args.art_build);
+    PassManager manager(passes, std::move(pg_config), args.config,
+                        args.verify_none_mode, args.art_build);
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, cfg);

@@ -121,6 +121,7 @@ std::string show(const ir_list::InstructionIterable&);
 std::string show(const SwitchIndices& si);
 
 // Variants of show that use deobfuscated names
+std::string show_deobfuscated(const DexType* t);
 std::string show_deobfuscated(const DexClass*);
 std::string show_deobfuscated(const DexAnnotation*);
 std::string show_deobfuscated(const DexFieldRef*);

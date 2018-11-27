@@ -165,6 +165,8 @@ class IRCode {
   // if the cfg was editable, linearize it back into m_ir_list
   void clear_cfg();
 
+  bool editable_cfg_built() const;
+
   /* Generate DexCode from IRCode */
   std::unique_ptr<DexCode> sync(const DexMethod*);
 
@@ -278,6 +280,8 @@ class IRCode {
   IRList::const_iterator cend() const { return m_ir_list->cend(); }
   IRList::reverse_iterator rbegin() { return m_ir_list->rbegin(); }
   IRList::reverse_iterator rend() { return m_ir_list->rend(); }
+  IRList::const_reverse_iterator rbegin() const { return m_ir_list->rbegin(); }
+  IRList::const_reverse_iterator rend() const { return m_ir_list->rend(); }
 
   IRList::iterator erase(IRList::iterator it) { return m_ir_list->erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {

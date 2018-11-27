@@ -67,7 +67,8 @@ bool ConstantLifting::is_applicable_to_constant_lifting(
 std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const Scope& scope,
     const TypeTags* type_tags,
-    const std::vector<DexMethod*>& methods) {
+    const std::vector<DexMethod*>& methods,
+    const size_t stud_method_threshold) {
   MethodOrderedSet lifted;
   MethodToConstants lifted_constants;
   for (auto method : methods) {
@@ -77,26 +78,29 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto vals_str = parse_str_anno_value(
         method, s_method_meta_anno, CONST_VALUE_ANNO_ATTR_NAME);
 
-    ConstantValues const_vals(
-        type_tags, kinds_str, vals_str, method->get_code());
+    ConstantValues const_vals(type_tags,
+                              kinds_str,
+                              vals_str,
+                              stud_method_threshold,
+                              method->get_code());
     auto const_loads = const_vals.collect_constant_loads(method->get_code());
     if (const_loads.size() == 0) {
       // No matching constant found.
-      TRACE(TERA,
+      TRACE(METH_DEDUP,
             5,
             "  no matching constant %s found in %s\n",
             const_vals.to_str().c_str(),
             SHOW(method));
-      TRACE(TERA, 9, "%s\n", SHOW(method->get_code()));
+      TRACE(METH_DEDUP, 9, "%s\n", SHOW(method->get_code()));
       continue;
     }
     lifted.insert(method);
     lifted_constants.emplace(method, const_vals);
-    TRACE(TERA,
+    TRACE(METH_DEDUP,
           5,
           "constant lifting: const value %s\n",
           const_vals.to_str().c_str());
-    TRACE(TERA, 9, "    in %s\n", SHOW(method));
+    TRACE(METH_DEDUP, 9, "    in %s\n", SHOW(method));
 
     // Add constant to arg list.
     auto old_proto = method->get_proto();
@@ -111,7 +115,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     while (overlaps_with_an_existing_virtual_scope(
         method->get_class(), name, new_proto)) {
       name = DexString::make_string(name->c_str() + suffix);
-      TRACE(TERA,
+      TRACE(METH_DEDUP,
             9,
             "constant lifting method name updated to %s\n",
             name->c_str());
@@ -153,7 +157,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       code->replace_opcode(insn, move_const_arg);
     }
   }
-  TRACE(TERA,
+  TRACE(METH_DEDUP,
         5,
         "constant lifting applied to %ld among %ld\n",
         lifted.size(),
@@ -202,7 +206,11 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       // remove original call.
       code->remove_opcode(insn);
     }
-    TRACE(TERA, 9, " patched call site in %s\n%s\n", SHOW(meth), SHOW(code));
+    TRACE(METH_DEDUP,
+          9,
+          " patched call site in %s\n%s\n",
+          SHOW(meth),
+          SHOW(code));
   }
 
   return stub_methods;

@@ -7,12 +7,15 @@
 
 #include "CFGInliner.h"
 
+#include <memory>
+
+#include "IRList.h"
 #include "IROpcode.h"
+#include "DexPosition.h"
 
 namespace cfg {
 
 // TODO:
-//  * handle debug positions
 //  * should this really be a friend class to ControlFlowGraph, Block, and Edge?
 
 /*
@@ -27,7 +30,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
 
-  TRACE(CFG, 3, "caller %s\ncallee %s\n", SHOW(*caller), SHOW(callee));
+  TRACE(CFG, 3, "caller %s\n", SHOW(*caller));
+  TRACE(CFG, 3, "callee %s\n", SHOW(callee));
 
   if (caller->get_succ_edge_of_type(callsite.block(), EDGE_THROW) != nullptr) {
     split_on_callee_throws(&callee);
@@ -41,9 +45,24 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   Block* after_callee = maybe_split_block(caller, callsite);
   TRACE(CFG, 3, "caller after split %s\n", SHOW(*caller));
 
+  DexPosition* callsite_dbg_pos = get_dbg_pos(callsite);
+  if (callsite_dbg_pos) {
+    set_dbg_pos_parents(&callee, callsite_dbg_pos);
+    // ensure that the caller's code after the inlined method retain their
+    // original position
+    const auto& first = after_callee->begin();
+    if (first == after_callee->end() || first->type != MFLOW_POSITION) {
+      // but don't add if there's already a position at the front of this
+      // block
+      after_callee->m_entries.push_front(
+          *(new MethodItemEntry(std::make_unique<DexPosition>(*callsite_dbg_pos))));
+    }
+  }
+
   // make sure the callee's registers don't overlap with the caller's
-  caller->recompute_registers_size();
-  remap_registers(&callee, caller->get_registers_size());
+  auto callee_regs_size = callee.get_registers_size();
+  auto caller_regs_size = caller->get_registers_size();
+  remap_registers(&callee, caller_regs_size);
 
   move_arg_regs(&callee, callsite->insn);
   const cfg::InstructionIterator& move_res = caller->move_result_of(callsite);
@@ -52,7 +71,6 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                       ? boost::none
                       : boost::optional<uint16_t>{move_res->insn->dest()});
 
-  auto callee_regs_size = callee.get_registers_size();
   TRACE(CFG, 3, "callee after remap %s\n", SHOW(callee));
 
   // delete the move-result before connecting the cfgs because it's in a block
@@ -66,7 +84,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   steal_contents(caller, callsite.block(), &callee);
   connect_cfgs(caller, callsite.block(), callee_blocks, callee_entry_block,
                callee_return_blocks, after_callee);
-  caller->set_registers_size(callee_regs_size);
+  caller->set_registers_size(callee_regs_size + caller_regs_size);
 
   TRACE(CFG, 3, "caller after connect %s\n", SHOW(*caller));
 
@@ -74,8 +92,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // remove the outgoing throw if we remove the callsite
   caller->remove_opcode(callsite);
 
-  TRACE(CFG, 3, "caller before simplify %s\n", SHOW(*caller));
-  caller->simplify();
+  caller->sanity_check();
   TRACE(CFG, 3, "final %s\n", SHOW(*caller));
 }
 
@@ -123,45 +140,19 @@ void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
 void CFGInliner::steal_contents(ControlFlowGraph* caller,
                                 Block* callsite,
                                 ControlFlowGraph* callee) {
-  // Make space in the caller's list of blocks because the cfg linearizes in ID
-  // order.
-  //
-  // This isn't required for correctness, but rather I expect this to
-  // perform better. In the future, the CFG will choose a smart order when
-  // linearizing, but right now it is lazy and just uses ID order.
-  // TODO: When ControlFlowGraph::order() is smart, this can be simplified.
-  std::vector<Block*> add_back_to_caller;
-  for (auto it = caller->m_blocks.begin(); it != caller->m_blocks.end();) {
-    Block* b = it->second;
-    if (b->id() > callsite->id()) {
-      b->m_id = b->m_id + callee->num_blocks();
-      add_back_to_caller.push_back(b);
-      it = caller->m_blocks.erase(it);
-    } else {
-      ++it;
-    }
-  }
-
-  // Transfer ownership of the blocks and renumber their IDs.
-  // The id's are chosen to be immediately after the callsite.
-  uint32_t id = callsite->id() + 1;
-  for (Block* b : callee->blocks()) {
+  always_assert(!caller->m_blocks.empty());
+  for (auto& entry : callee->m_blocks) {
+    Block* b = entry.second;
     b->m_parent = caller;
-
+    size_t id = caller->m_blocks.rbegin()->first + 1;
     b->m_id = id;
     caller->m_blocks.emplace(id, b);
-    ++id;
   }
   callee->m_blocks.clear();
 
-  for (Block* b : add_back_to_caller) {
-    caller->m_blocks.emplace(b->id(), b);
-  }
-
   // transfer ownership of the edges
-  for (Edge* e : callee->m_edges) {
-    caller->m_edges.insert(e);
-  }
+  caller->m_edges.reserve(caller->m_edges.size() + callee->m_edges.size());
+  caller->m_edges.insert(callee->m_edges.begin(), callee->m_edges.end());
   callee->m_edges.clear();
 }
 
@@ -189,10 +180,11 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 3, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
+      TRACE(CFG, 4, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
-      if (preds.size() == 1 && cfg->blocks_are_in_same_try(pred, succ)) {
+      if (preds.size() == 1 && succ->preds().size() == 1 &&
+          cfg->blocks_are_in_same_try(pred, succ)) {
         // FIXME: this is annoying because it destroys the succ block
         // (invalidating any iterators into it). Maybe it would be better to do
         // this during cfg.simplify at the very end?
@@ -203,6 +195,7 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   // We must connect the return first because merge_blocks may delete the
   // successor
+  // TODO: tail call optimization (if after_callsite is just a return)
   connect(callee_exits, after_callsite);
   connect({callsite}, callee_entry);
 }
@@ -282,7 +275,7 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
       const auto& mie = *it;
       const auto insn = mie.insn;
       const auto op = insn->opcode();
-      if (can_throw(op) && it.unwrap() != last) {
+      if (opcode::can_throw(op) && it.unwrap() != last) {
         const auto& cfg_it = callee->to_cfg_instruction_iterator(b, it);
         Block* new_block = callee->split_block(cfg_it);
         work_list.push_back(new_block);
@@ -324,14 +317,8 @@ void CFGInliner::add_callee_throws_to_caller(
       };
 
   for (Block* callee_block : callee_blocks) {
-    const auto& existing_throws =
-        cfg->get_succ_edges_of_type(callee_block, EDGE_THROW);
-    if (!existing_throws.empty()) {
-      // Blocks that throw already
-      //   * Instructions that can throw that were already in a try region with
-      //   catch blocks
-      add_throw_edges(callee_block, max_index(existing_throws) + 1);
-    } else {
+    const auto& existing_throws = callee_block->get_outgoing_throws_in_order();
+    if (existing_throws.empty()) {
       // Blocks that end in a throwing instruction but don't have outgoing throw
       // instructions yet.
       //   * Instructions that can throw that were not in a try region before
@@ -341,9 +328,31 @@ void CFGInliner::add_callee_throws_to_caller(
       IRList::iterator last = callee_block->get_last_insn();
       if (last != callee_block->end()) {
         const auto op = last->insn->opcode();
-        if (can_throw(op)) {
+        if (opcode::can_throw(op)) {
           add_throw_edges(callee_block, /* starting_index */ 0);
         }
+      }
+    } else if (existing_throws.back()->m_throw_info->catch_type != nullptr) {
+      // Blocks that throw already
+      //   * Instructions that can throw that were already in a try region with
+      //   catch blocks
+      //   * But don't add to the end of a throw list if there's a catchall
+      //   already
+      add_throw_edges(callee_block,
+                      existing_throws.back()->m_throw_info->index + 1);
+    }
+  }
+}
+
+void CFGInliner::set_dbg_pos_parents(ControlFlowGraph* callee,
+                                     DexPosition* callsite_dbg_pos) {
+  for (auto& entry : callee->m_blocks) {
+    Block* b = entry.second;
+    for (auto& mie : *b) {
+      // Don't overwrite existing parent pointers because those are probably
+      // methods that were inlined into callee before
+      if (mie.type == MFLOW_POSITION && mie.pos->parent == nullptr) {
+        mie.pos->parent = callsite_dbg_pos;
       }
     }
   }
@@ -368,20 +377,48 @@ IROpcode CFGInliner::return_to_move(IROpcode op) {
   }
 }
 
-bool CFGInliner::can_throw(IROpcode op) {
-  return opcode::may_throw(op) || op == OPCODE_THROW;
-};
+DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
+  auto search_block = [](Block* b,
+                         IRList::iterator in_block_it) -> DexPosition* {
+    // Search for an MFLOW_POSITION preceding this instruction within the
+    // same block
+    while (in_block_it->type != MFLOW_POSITION && in_block_it != b->begin()) {
+      --in_block_it;
+    }
+    return in_block_it->type == MFLOW_POSITION ? in_block_it->pos.get()
+                                               : nullptr;
+  };
+  auto result = search_block(callsite.block(), callsite.unwrap());
+  if (result != nullptr) {
+    return result;
+  }
 
-/*
- * Assumption: `throws` is not empty
- */
-uint32_t CFGInliner::max_index(const std::vector<Edge*> throws) {
-  return (*std::max_element(throws.begin(), throws.end(),
-                            [](Edge* e1, Edge* e2) {
-                              return e1->m_throw_info->index <
-                                     e2->m_throw_info->index;
-                            }))
-      ->m_throw_info->index;
+  // TODO: Positions should be connected to instructions rather than preceding
+  // them in the flow of instructions. Having the positions depend on the order
+  // of instructions is a very linear way to encode the information which isn't
+  // very amenable to the editable CFG.
+
+  // while there's a single predecessor, follow that edge
+  const auto& cfg = callsite.cfg();
+  std::function<DexPosition*(Block*)> check_prev_block;
+  check_prev_block = [&check_prev_block, &search_block,
+                      &cfg](Block* b) -> DexPosition* {
+    const auto& reverse_gotos = cfg.get_pred_edges_of_type(b, EDGE_GOTO);
+    if (b->preds().size() == 1 && !reverse_gotos.empty()) {
+      Block* prev_block = reverse_gotos[0]->src();
+      if (!prev_block->empty()) {
+        auto result = search_block(prev_block, std::prev(prev_block->end()));
+        if (result != nullptr) {
+          return result;
+        }
+      }
+      // Didn't find any MFLOW_POSITIONs in `prev_block`, keep going.
+      return check_prev_block(prev_block);
+    }
+    // This block has no solo predecessors anymore. Nowhere left to search.
+    return nullptr;
+  };
+  return check_prev_block(callsite.block());
 }
 
 } // namespace cfg

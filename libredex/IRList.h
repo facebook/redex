@@ -173,20 +173,28 @@ class MethodItemEntryCloner {
   std::unordered_map<const MethodItemEntry*, MethodItemEntry*> m_entry_map;
   // for remapping the parent position pointers
   std::unordered_map<DexPosition*, DexPosition*> m_pos_map;
+  std::vector<DexPosition*> m_positions_to_fix;
 
  public:
   MethodItemEntryCloner();
   MethodItemEntry* clone(const MethodItemEntry* mei);
+
+  /*
+   * This should to be called after the whole method is already cloned so that
+   * m_pos_map has all the positions in the method.
+   *
+   * Don't change any parent pointers that point to `ignore_pos`. This is used
+   * for inlining because the invoke position is the parent but it isn't in the
+   * callee. If you don't have any positions to ignore, nullptr is a safe
+   * default.
+   */
+  void fix_parent_positions(const DexPosition* ignore_pos = nullptr);
 };
 
 using MethodItemMemberListOption =
     boost::intrusive::member_hook<MethodItemEntry,
                                   boost::intrusive::list_member_hook<>,
                                   &MethodItemEntry::list_hook_>;
-
-struct IRListDisposer {
-  void operator()(MethodItemEntry* mie) { delete mie; }
-};
 
 class IRList {
  private:
@@ -196,10 +204,15 @@ class IRList {
   IntrusiveList m_list;
   void remove_branch_targets(IRInstruction* branch_inst);
 
+  static void disposer(MethodItemEntry* mie) {
+    delete mie;
+  }
+
  public:
   using iterator = IntrusiveList::iterator;
   using const_iterator = IntrusiveList::const_iterator;
   using reverse_iterator = IntrusiveList::reverse_iterator;
+  using const_reverse_iterator = IntrusiveList::const_reverse_iterator;
   using difference_type = IntrusiveList::difference_type;
 
   IRList::iterator main_block();
@@ -324,9 +337,9 @@ class IRList {
     m_list.splice(pos, other.m_list, begin, end);
   }
 
-  void remove_and_dispose_if(
-      std::function<bool(const MethodItemEntry&)> predicate) {
-    m_list.remove_and_dispose_if(predicate, IRListDisposer());
+  template<typename Predicate>
+  void remove_and_dispose_if(Predicate predicate) {
+    m_list.remove_and_dispose_if(predicate, disposer);
   }
 
   void sanity_check() const;
@@ -339,6 +352,8 @@ class IRList {
   IRList::const_iterator cend() const { return m_list.cend(); }
   IRList::reverse_iterator rbegin() { return m_list.rbegin(); }
   IRList::reverse_iterator rend() { return m_list.rend(); }
+  IRList::const_reverse_iterator rbegin() const { return m_list.rbegin(); }
+  IRList::const_reverse_iterator rend() const { return m_list.rend(); }
 
   void gather_catch_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;
@@ -348,9 +363,9 @@ class IRList {
 
   IRList::iterator erase(IRList::iterator it) { return m_list.erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {
-    return m_list.erase_and_dispose(it, IRListDisposer());
+    return m_list.erase_and_dispose(it, disposer);
   }
-  void clear_and_dispose() { m_list.clear_and_dispose(IRListDisposer()); }
+  void clear_and_dispose() { m_list.clear_and_dispose(disposer); }
 
   IRList::iterator iterator_to(MethodItemEntry& mie) {
     return m_list.iterator_to(mie);

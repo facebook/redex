@@ -520,7 +520,7 @@ void ElfWriter::write_dynsym(FileHandle& fh) {
 
 // Determine the number of buckets to use for the hash table
 // in 064. num_dynsymbols will always be < 8 in practice, afaict.
-static int num_hash_buckets_064(int num_dynsymbols) {
+static uint32_t num_hash_buckets_064(uint32_t num_dynsymbols) {
   if (num_dynsymbols < 8) {
     return 2;
   } else if (num_dynsymbols < 32) {

@@ -92,6 +92,24 @@ std::unordered_set<DexClass*> get_mixed_mode_classes(
   return mixed_mode_classes;
 }
 
+/**
+ * Generated stores need to be added to the root store.
+ * We achieve this, by adding all the dexes from those stores after the root
+ * store.
+ */
+void treat_generated_stores(DexStoresVector& stores,
+                            interdex::InterDex* interdex) {
+  auto store_it = stores.begin();
+  while (store_it != stores.end()) {
+    if (store_it->is_generated()) {
+      interdex->add_dexes_from_store(*store_it);
+      store_it = stores.erase(store_it);
+    } else {
+      store_it++;
+    }
+  }
+}
+
 } // namespace
 
 namespace interdex {
@@ -106,9 +124,6 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   jw.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   jw.get("can_touch_coldstart_extended_cls", false,
          m_can_touch_coldstart_extended_cls);
-
-  jw.get("emit_scroll_set_marker", false, m_emit_scroll_set_marker);
-
   always_assert_log(
       !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
       "can_touch_coldstart_extended_cls needs to be true, when we can touch "
@@ -126,7 +141,8 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   jw.get("type_refs_limit", 1 << 16, m_type_refs_limit);
 }
 
-void InterDexPass::run_pass(DexClassesVector& dexen,
+void InterDexPass::run_pass(DexStoresVector& stores,
+                            DexClassesVector& dexen,
                             Scope& original_scope,
                             ConfigFiles& cfg,
                             PassManager& mgr) {
@@ -161,13 +177,17 @@ void InterDexPass::run_pass(DexClassesVector& dexen,
     }
   }
 
-  dexen = interdex.run();
+  interdex.run();
+  treat_generated_stores(stores, &interdex);
+  dexen = interdex.take_outdex();
 
   for (const auto& plugin : plugins) {
     plugin->cleanup(original_scope);
   }
-  mgr.incr_metric(METRIC_COLD_START_SET_DEX_COUNT,
-                  interdex.get_num_cold_start_set_dexes());
+  mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
+                 interdex.get_num_cold_start_set_dexes());
+  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT,
+                 interdex.get_num_scroll_dexes());
 
   plugins.clear();
 }
@@ -183,9 +203,10 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
 
   auto original_scope = build_class_scope(stores);
+
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(store.get_dexen(), original_scope, cfg, mgr);
+      run_pass(stores, store.get_dexen(), original_scope, cfg, mgr);
     }
   }
 }

@@ -171,6 +171,9 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
   auto code = m_method->get_code();
   auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQ, {0_v, 1_v}));
   auto target = new BranchTarget(if_mie);
+  code->push_back(dasm(IOPCODE_LOAD_PARAM, {0_v}));
+  code->push_back(dasm(IOPCODE_LOAD_PARAM, {1_v}));
+  code->push_back(dasm(IOPCODE_LOAD_PARAM, {2_v}));
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
   code->push_back(*if_mie);
   code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
@@ -180,7 +183,7 @@ TEST_F(RemoveGotosTest, skipSimpleBranch) {
 
   RemoveGotosPass().run(m_method);
 
-  EXPECT_EQ(5, std::distance(code->begin(), code->end())) << show(code);
+  EXPECT_EQ(8, std::distance(code->begin(), code->end())) << show(code);
 }
 
 // Code:    ABC

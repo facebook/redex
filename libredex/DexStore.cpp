@@ -37,6 +37,18 @@ std::vector<std::string> DexStore::get_dependencies() const {
   return m_metadata.get_dependencies();
 }
 
+void DexStore::remove_classes(const DexClasses& classes) {
+  std::unordered_set<DexClass*> to_remove(classes.begin(), classes.end());
+  for (auto& dex_classes : m_dexen) {
+    dex_classes.erase(std::remove_if(dex_classes.begin(),
+                                     dex_classes.end(),
+                                     [&](DexClass* cls) {
+                                       return to_remove.count(cls) != 0;
+                                     }),
+                      dex_classes.end());
+  }
+}
+
 void DexStore::add_classes(DexClasses classes) {
   m_dexen.push_back(std::move(classes));
 }

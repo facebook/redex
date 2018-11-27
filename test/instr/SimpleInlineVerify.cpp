@@ -38,7 +38,7 @@ TEST_F(PostVerify, InlineInvokeRange) {
   auto m = find_vmethod_named(*cls, "testInvokeRange");
   ASSERT_NE(nullptr, m);
   ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_DIRECT_RANGE,
-        "needsInvokeRange"));
+        "needsInvokeRange")) << show(m->get_dex_code());
 }
 
 /*
@@ -81,7 +81,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeElseThrows) {
   ASSERT_EQ(nullptr, invoke);
 
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 2);
+  ASSERT_LE(code->get_tries().size(), 2) << show(code);
   // verify that we haven't increased the number of catch handlers -- both
   // try blocks should point to the same handler
 }
@@ -132,7 +132,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeIfThrows) {
   ASSERT_EQ(nullptr, invoke);
 
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 2);
+  ASSERT_LE(code->get_tries().size(), 2);
 }
 
 /*
@@ -149,7 +149,7 @@ TEST_F(PreVerify, InlineCallerNestedTry) {
   ASSERT_NE(nullptr, invoke);
 
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 2);
+  ASSERT_LE(code->get_tries().size(), 2);
 }
 
 TEST_F(PostVerify, InlineCallerNestedTry) {
@@ -160,7 +160,7 @@ TEST_F(PostVerify, InlineCallerNestedTry) {
   ASSERT_EQ(nullptr, invoke);
 
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 3);
+  ASSERT_LE(code->get_tries().size(), 3);
 }
 
 /*
@@ -186,7 +186,7 @@ TEST_F(PostVerify, InlineCalleeTryUncaught) {
   auto invoke_throws = find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "wrapsThrow");
   ASSERT_NE(nullptr, invoke_throws);
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 2);
+  ASSERT_LE(code->get_tries().size(), 2);
 }
 
 /*
@@ -213,7 +213,7 @@ TEST_F(PostVerify, InlineCalleeTryCaught) {
       "wrapsArithmeticThrow");
   ASSERT_NE(nullptr, invoke_throws);
   auto code = m->get_dex_code();
-  ASSERT_EQ(code->get_tries().size(), 2);
+  ASSERT_LE(code->get_tries().size(), 2);
 }
 
 /*
@@ -432,4 +432,24 @@ TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
       << "smallMethodThatBecomesBig should not be inlined!";
   EXPECT_EQ(nullptr,
             find_invoke(small, DOPCODE_INVOKE_DIRECT, "bigMethod"));
+}
+
+TEST_F(PreVerify, testFinallyEmpty) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  ASSERT_NE(nullptr, cls);
+  auto m = find_vmethod_named(*cls, "callEmpty");
+  ASSERT_NE(nullptr, m);
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "cleanup")) << SHOW(m->get_dex_code());
+}
+
+TEST_F(PostVerify, testFinallyEmpty) {
+  auto cls = find_class_named(
+    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  ASSERT_NE(nullptr, cls);
+  auto m = find_vmethod_named(*cls, "callEmpty");
+  ASSERT_NE(nullptr, m);
+  EXPECT_EQ(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "cleanup"));
 }

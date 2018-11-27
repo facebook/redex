@@ -32,7 +32,6 @@ std::unordered_set<DexMethod*> InlineInitPass::gather_init_candidates(
       }
     }
   });
-  select_inlinable(scope, deletable_ctors, m_resolved_refs, &candidates);
 
   return candidates;
 }

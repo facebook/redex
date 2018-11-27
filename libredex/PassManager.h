@@ -26,7 +26,7 @@ class PassManager {
               bool is_art_build = false);
 
   PassManager(const std::vector<Pass*>& passes,
-              const redex::ProguardConfiguration& pg_config,
+              std::unique_ptr<redex::ProguardConfiguration> pg_config,
               const Json::Value& config = Json::Value(Json::objectValue),
               bool verify_none_mode = false,
               bool is_art_build = false);
@@ -51,9 +51,9 @@ class PassManager {
   // A temporary hack to return the interdex metrics. Will be removed later.
   const std::unordered_map<std::string, int>& get_interdex_metrics();
 
-  redex::ProguardConfiguration& get_proguard_config() { return m_pg_config; }
+  redex::ProguardConfiguration& get_proguard_config() { return *m_pg_config; }
   bool no_proguard_rules() {
-    return m_pg_config.keep_rules.empty() && !m_testing_mode;
+    return m_pg_config->keep_rules.empty() && !m_testing_mode;
   }
 
   // Call set_testing_mode() in tests that need passes to run which
@@ -91,7 +91,7 @@ class PassManager {
   std::vector<PassManager::PassInfo> m_pass_info;
   PassInfo* m_current_pass_info;
 
-  redex::ProguardConfiguration m_pg_config;
+  std::unique_ptr<redex::ProguardConfiguration> m_pg_config;
   bool m_testing_mode;
   bool m_verify_none_mode;
   bool m_art_build;

@@ -503,13 +503,6 @@ struct Matcher {
     return nullptr;
   }
 
-  DexString* get_simple_name(const DexType* type) {
-    const std::string& full = type->get_name()->str();
-    auto lpos = full.rfind('/');
-    auto simple = full.substr(lpos + 1, full.size() - lpos - 2);
-    return DexString::make_string(simple.c_str());
-  }
-
   // After a successful match, get the replacement instructions. We substitute
   // the placeholders appropriately including special command placeholders.
   std::vector<IRInstruction*> get_replacements() {
@@ -635,8 +628,8 @@ struct Matcher {
         }
         case String::Type_A_get_simple_name: {
           DexType* a = matched_types.at(Type::A);
-          DexString* simple = get_simple_name(a);
-          replace->set_string(simple);
+          std::string simple = get_simple_name(a);
+          replace->set_string(DexString::make_string(simple));
           break;
         }
         default:

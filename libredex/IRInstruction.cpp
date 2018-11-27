@@ -104,8 +104,9 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
     --i;
   }
 
-  const auto& args = m_method->get_proto()->get_args()->get_type_list();
-  return is_wide_type(args.at(i));
+  const std::deque<DexType*>& args =
+      m_method->get_proto()->get_args()->get_type_list();
+  return is_wide_type(args[i]);
 }
 
 bool IRInstruction::src_is_wide(size_t i) const {

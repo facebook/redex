@@ -15,6 +15,7 @@
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
+#include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Resolver.h"
 
@@ -70,6 +71,14 @@ DexType* get_enum_type() {
   return DexType::make_type("Ljava/lang/Enum;");
 }
 
+DexType* get_integer_type() {
+  return DexType::make_type("Ljava/lang/Integer;");
+}
+
+DexType* get_throwable_type() {
+  return DexType::make_type("Ljava/lang/Throwable;");
+}
+
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   always_assert_log(name.find("/") != std::string::npos,
@@ -77,6 +86,16 @@ std::string get_package_name(const DexType* type) {
                     name.c_str());
   unsigned long pos = name.find_last_of("/");
   return name.substr(0, pos);
+}
+
+std::string get_simple_name(const DexType* type) {
+  std::string name = std::string(type->get_name()->c_str());
+  if (name.find("/") == std::string::npos) {
+    return name;
+  }
+  unsigned long pos_begin = name.find_last_of("/");
+  unsigned long pos_end = name.find_last_of(";");
+  return name.substr(pos_begin + 1, pos_end - pos_begin - 1);
 }
 
 bool is_primitive(const DexType* type) {
@@ -186,7 +205,7 @@ bool is_init(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<init>") == 0;
 }
 
-bool is_clinit(const DexMethod* method) {
+bool is_clinit(const DexMethodRef* method) {
   return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
 }
 
@@ -266,10 +285,31 @@ DexType* get_array_type(const DexType* type) {
   return DexType::make_type(name);
 }
 
+DexType* get_array_component_type(const DexType* type) {
+  if (!is_array(type)) return nullptr;
+  auto name = type->get_name()->c_str();
+  name++;
+  return DexType::make_type(name);
+}
+
 DexType* make_array_type(const DexType* type) {
   always_assert(type != nullptr);
   return DexType::make_type(
       DexString::make_string("[" + type->get_name()->str()));
+}
+
+DexType* make_array_type(const DexType* type, uint32_t level) {
+  always_assert(type != nullptr);
+  if (level == 0) {
+    return const_cast<DexType*>(type);
+  }
+  const auto elem_name = type->str();
+  const uint32_t size = elem_name.size() + level;
+  std::string name;
+  name.reserve(size+1);
+  name.append(level, '[');
+  name.append(elem_name.begin(), elem_name.end());
+  return DexType::make_type(name.c_str(), name.size());
 }
 
 void create_runtime_exception_block(
@@ -394,6 +434,21 @@ void load_root_dexen(
   }
 }
 
+void create_store(const std::string& store_name,
+                  DexStoresVector& stores,
+                  DexClasses classes) {
+  // First, remove the classes from other stores.
+  for (auto& store : stores) {
+    store.remove_classes(classes);
+  }
+
+  // Create a new store and add it to the list of stores.
+  DexStore store(store_name);
+  store.set_generated();
+  store.add_classes(std::move(classes));
+  stores.emplace_back(std::move(store));
+}
+
 /*
  * This exists because in the absence of a register allocator, we need each
  * transformation to keep the ins registers at the end of the frame. Once the
@@ -443,8 +498,8 @@ void change_visibility(DexMethod* method) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  for (auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
+  editable_cfg_adapter::iterate(code, [](MethodItemEntry* mie) {
+    auto insn = mie->insn;
 
     if (insn->has_field()) {
       auto cls = type_class(insn->get_field()->get_class());
@@ -480,7 +535,8 @@ void change_visibility(DexMethod* method) {
         set_public(cls);
       }
     }
-  }
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
 
   std::vector<DexType*> types;
   method->get_code()->gather_catch_types(types);

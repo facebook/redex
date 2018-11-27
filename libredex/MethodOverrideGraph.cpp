@@ -7,10 +7,13 @@
 
 #include "MethodOverrideGraph.h"
 
+#include <boost/range/adaptor/map.hpp>
+
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeSet.h"
 #include "Timer.h"
 #include "Walkers.h"
+#include "BinarySerialization.h"
 
 using namespace method_override_graph;
 
@@ -229,7 +232,25 @@ void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
                  });
 }
 
-std::unique_ptr<Graph> build_graph(const Scope& scope) {
+void Graph::dump(std::ostream& os) const {
+  namespace bs = binary_serialization;
+  bs::write_header(os, /* version */ 1);
+  bs::GraphWriter<const DexMethod*> gw(
+      [&](std::ostream& os, const DexMethod* method) {
+        const auto& s = show_deobfuscated(method);
+        bs::write<uint32_t>(os, s.size());
+        os << s;
+      },
+      [&](const DexMethod* method) -> std::vector<const DexMethod*> {
+        const auto& node = get_node(method);
+        std::vector<const DexMethod*> succs(node.children.begin(),
+                                            node.children.end());
+        return succs;
+      });
+  gw.write(os, boost::adaptors::keys(m_nodes));
+}
+
+std::unique_ptr<const Graph> build_graph(const Scope& scope) {
   Timer t("Building method override graph");
   return GraphBuilder(scope).run();
 }

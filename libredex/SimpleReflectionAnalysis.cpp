@@ -218,6 +218,17 @@ class Analyzer final
     }
   }
 
+  DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
+                                      IRInstruction* insn,
+                                      register_t reg) const {
+    auto element_name = current_state->get(insn->src(reg)).get_constant();
+    if (element_name && element_name->kind == STRING) {
+      return element_name->dex_string;
+    } else {
+      return nullptr;
+    }
+  }
+
   void process_virtual_call(IRInstruction* insn,
                             const AbstractObject& receiver,
                             AbstractObjectEnvironment* current_state) const {
@@ -243,21 +254,25 @@ class Analyzer final
     }
     case CLASS: {
       AbstractObjectKind element_kind;
+      DexString* element_name = nullptr;
       if (callee == m_get_method || callee == m_get_declared_method) {
         element_kind = METHOD;
+        element_name = get_dex_string_from_insn(current_state, insn, 1);
+      } else if (m_ctor_lookup_vmethods.count(callee) > 0) {
+        element_kind = METHOD;
+        // Hard code the <init> method name, to continue on treating this as no
+        // different than a method.
+        element_name = DexString::get_string("<init>");
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
-      } else {
+        element_name = get_dex_string_from_insn(current_state, insn, 1);
+      }
+      if (element_name == nullptr) {
         break;
       }
-      auto element_name = current_state->get(insn->src(1)).get_constant();
-      if (!element_name || element_name->kind != STRING) {
-        break;
-      }
-      current_state->set(
-          RESULT_REGISTER,
-          AbstractObjectDomain(AbstractObject(
-              element_kind, callee->get_class(), element_name->dex_string)));
+      current_state->set(RESULT_REGISTER,
+                         AbstractObjectDomain(AbstractObject(
+                             element_kind, callee->get_class(), element_name)));
       return;
     }
     case FIELD:
@@ -308,6 +323,33 @@ class Analyzer final
                              "getDeclaredMethod",
                              {"Ljava/lang/String;", "[Ljava/lang/Class;"},
                              "Ljava/lang/reflect/Method;")};
+  DexMethodRef* m_get_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* m_get_declared_constructor{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructor",
+                             {"[Ljava/lang/Class;"},
+                             "Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* m_get_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  DexMethodRef* m_get_declared_constructors{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredConstructors",
+                             {},
+                             "[Ljava/lang/reflect/Constructor;")};
+  // Set of vmethods on java.lang.Class that can find constructors.
+  std::unordered_set<DexMethodRef*> m_ctor_lookup_vmethods{{
+      m_get_constructor,
+      m_get_declared_constructor,
+      m_get_constructors,
+      m_get_declared_constructors,
+  }};
   DexMethodRef* m_get_field{
       DexMethod::make_method("Ljava/lang/Class;",
                              "getField",

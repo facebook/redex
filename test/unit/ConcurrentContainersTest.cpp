@@ -102,10 +102,15 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
     }
   });
   EXPECT_EQ(m_data_set.size(), set.size());
-  for (uint32_t x : m_data) {
-    EXPECT_EQ(1, set.count(x));
-    EXPECT_NE(set.end(), set.find(x));
-  }
+  auto check_initial_values = [&](const ConcurrentSet<uint32_t>& set) {
+    for (uint32_t x : m_data) {
+      EXPECT_EQ(1, set.count(x));
+      EXPECT_NE(set.end(), set.find(x));
+    }
+  };
+  check_initial_values(set);
+
+  auto copy = set;
 
   run_on_subset_samples([&set](const std::vector<uint32_t>& sample) {
     for (size_t i = 0; i < sample.size(); ++i) {
@@ -128,6 +133,12 @@ TEST_F(ConcurrentContainersTest, concurrentSetTest) {
     EXPECT_EQ(0, set.count(x));
     EXPECT_EQ(set.end(), set.find(x));
   }
+
+  // Check that copy is unchanged.
+  check_initial_values(copy);
+
+  auto moved = std::move(copy);
+  check_initial_values(moved);
 
   set.insert({1, 2, 3});
   EXPECT_EQ(3, set.size());
@@ -171,14 +182,20 @@ TEST_F(ConcurrentContainersTest, concurrentMapTest) {
     }
   });
   EXPECT_EQ(m_data_set.size(), map.size());
-  for (uint32_t x : m_data) {
-    std::string s = std::to_string(x);
-    EXPECT_EQ(1, map.count(s));
-    auto it = map.find(s);
-    EXPECT_NE(map.end(), it);
-    EXPECT_EQ(s, it->first);
-    EXPECT_EQ(x + occurrences[x], it->second);
-  }
+  auto check_initial_values =
+      [&](const ConcurrentMap<std::string, uint32_t>& map) {
+        for (uint32_t x : m_data) {
+          std::string s = std::to_string(x);
+          EXPECT_EQ(1, map.count(s));
+          auto it = map.find(s);
+          EXPECT_NE(map.end(), it);
+          EXPECT_EQ(s, it->first);
+          EXPECT_EQ(x + occurrences[x], it->second);
+        }
+      };
+  check_initial_values(map);
+
+  auto copy = map;
 
   run_on_subset_samples([&map](const std::vector<uint32_t>& sample) {
     for (size_t i = 0; i < sample.size(); ++i) {
@@ -203,6 +220,12 @@ TEST_F(ConcurrentContainersTest, concurrentMapTest) {
     EXPECT_EQ(0, map.count(s));
     EXPECT_EQ(map.end(), map.find(s));
   }
+
+  // Check that copy is unchanged.
+  check_initial_values(copy);
+
+  auto moved = std::move(copy);
+  check_initial_values(moved);
 
   map.insert({{"a", 1}, {"b", 2}, {"c", 3}});
   EXPECT_EQ(3, map.size());

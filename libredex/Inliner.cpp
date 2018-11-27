@@ -6,8 +6,13 @@
  */
 
 #include "Inliner.h"
-#include "IRInstruction.h"
+
+#include "AnnoUtils.h"
+#include "CFGInliner.h"
+#include "ControlFlow.h"
 #include "DexUtil.h"
+#include "EditableCfgAdapter.h"
+#include "IRInstruction.h"
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
@@ -191,22 +196,29 @@ void MultiMethodInliner::inline_methods() {
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
   // hit a leaf and we start inlining from there
+  std::unordered_set<DexMethod*> visited;
   for (auto it : caller_callee) {
     auto caller = it.first;
     TraceContext context(caller->get_deobfuscated_name());
     // if the caller is not a top level keep going, it will be traversed
     // when inlining a top level caller
     if (callee_caller.find(caller) != callee_caller.end()) continue;
-    std::unordered_set<DexMethod*> visited;
-    visited.insert(caller);
-    caller_inline(caller, it.second, visited);
+    sparta::PatriciaTreeSet<DexMethod*> call_stack;
+    caller_inline(caller, it.second, call_stack, &visited);
   }
 }
 
 void MultiMethodInliner::caller_inline(
     DexMethod* caller,
     const std::vector<DexMethod*>& callees,
-    std::unordered_set<DexMethod*>& visited) {
+    sparta::PatriciaTreeSet<DexMethod*> call_stack,
+    std::unordered_set<DexMethod*>* visited) {
+  if (visited->count(caller)) {
+    return;
+  }
+  visited->emplace(caller);
+  call_stack.insert(caller);
+
   std::vector<DexMethod*> nonrecursive_callees;
   nonrecursive_callees.reserve(callees.size());
   // recurse into the callees in case they have something to inline on
@@ -214,17 +226,18 @@ void MultiMethodInliner::caller_inline(
   // completely resolved by the time it is inlined.
   for (auto callee : callees) {
     // if the call chain hits a call loop, ignore and keep going
-    if (visited.count(callee) > 0) {
+    if (call_stack.contains(callee)) {
       info.recursive++;
       continue;
     }
-    nonrecursive_callees.push_back(callee);
 
     auto maybe_caller = caller_callee.find(callee);
     if (maybe_caller != caller_callee.end()) {
-      visited.insert(callee);
-      caller_inline(callee, maybe_caller->second, visited);
-      visited.erase(callee);
+      caller_inline(callee, maybe_caller->second, call_stack, visited);
+    }
+
+    if (should_inline(caller, callee)) {
+      nonrecursive_callees.push_back(callee);
     }
   }
   inline_callees(caller, nonrecursive_callees);
@@ -237,21 +250,28 @@ void MultiMethodInliner::inline_callees(
   // walk the caller opcodes collecting all candidates to inline
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
-  auto ii = InstructionIterable(caller->get_code());
-  auto end = ii.end();
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
-    if (!is_invoke(insn->opcode())) continue;
-    auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-    if (callee == nullptr) continue;
-    if (std::find(callees.begin(), callees.end(), callee) == callees.end()) {
-      continue;
-    }
-    always_assert(callee->is_concrete());
-    found++;
-    inlinables.push_back(std::make_pair(callee, it.unwrap()));
-    if (found == callees.size()) break;
-  }
+  editable_cfg_adapter::iterate_with_iterator(
+      caller->get_code(), [&](IRList::iterator it) {
+        auto insn = it->insn;
+        if (!is_invoke(insn->opcode())) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        if (callee == nullptr) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        if (std::find(callees.begin(), callees.end(), callee) ==
+            callees.end()) {
+          return editable_cfg_adapter::LOOP_CONTINUE;
+        }
+        always_assert(callee->is_concrete());
+        found++;
+        inlinables.emplace_back(callee, it);
+        if (found == callees.size()) {
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
   if (found != callees.size()) {
     always_assert(found <= callees.size());
     info.not_found += callees.size() - found;
@@ -262,21 +282,20 @@ void MultiMethodInliner::inline_callees(
 
 void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
-  auto ii = InstructionIterable(caller->get_code());
-  auto end = ii.end();
-
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
-  for (auto it = ii.begin(); it != end; ++it) {
-    auto insn = it->insn;
-    if (insns.count(insn)) {
-      auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-      if (callee == nullptr) {
-        continue;
-      }
-      always_assert(callee->is_concrete());
-      inlinables.push_back(std::make_pair(callee, it.unwrap()));
-    }
-  }
+  editable_cfg_adapter::iterate_with_iterator(
+      caller->get_code(), [&](IRList::iterator it) {
+        auto insn = it->insn;
+        if (insns.count(insn)) {
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          if (callee == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          always_assert(callee->is_concrete());
+          inlinables.emplace_back(callee, it);
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
 
   inline_inlinables(caller, inlinables);
 }
@@ -288,21 +307,29 @@ void MultiMethodInliner::inline_inlinables(
   size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
     auto callee = inlinable.first;
-    auto insn = inlinable.second;
+    auto callsite = inlinable.second;
 
-    if (!is_inlinable(caller, callee, insn->insn, estimated_insn_size)) {
+    if (!is_inlinable(caller, callee, callsite->insn, estimated_insn_size)) {
       continue;
     }
 
-    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n",
-        SHOW(callee), caller->get_code()->get_registers_size(),
-        SHOW(caller),
-        callee->get_code()->get_registers_size());
-    // Logging before the call to inline_method to get the most relevant line
-    // number near insn before insn gets replaced. Should be ok as inline_method
-    // does not fail to inline.
-    log_opt(INLINED, caller, insn->insn);
-    inliner::inline_method(caller->get_code(), callee->get_code(), insn);
+    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n", SHOW(callee),
+          caller->get_code()->get_registers_size(), SHOW(caller),
+          callee->get_code()->get_registers_size());
+
+    if (m_config.use_cfg_inliner) {
+      bool success = inliner::inline_with_cfg(caller, callee, callsite->insn);
+      if (!success) {
+        continue;
+      }
+    } else {
+      // Logging before the call to inline_method to get the most relevant line
+      // number near callsite before callsite gets replaced. Should be ok as
+      // inline_method does not fail to inline.
+      log_opt(INLINED, caller, callsite->insn);
+
+      inliner::inline_method(caller->get_code(), callee->get_code(), callsite);
+    }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->get_code()->sum_opcode_sizes();
     TRACE(MMINL,
@@ -409,6 +436,73 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
   return false;
 }
 
+bool MultiMethodInliner::should_inline(const DexMethod* caller,
+                                       const DexMethod* callee) const {
+  DexClass* cls = type_class(callee->get_class());
+  if (has_any_annotation(cls, m_config.no_inline) ||
+      has_any_annotation(callee, m_config.no_inline)) {
+    return false;
+  }
+  if (has_any_annotation(callee, m_config.force_inline)) {
+    return true;
+  }
+  if (too_many_callers(callee)) {
+    log_nopt(INL_TOO_MANY_CALLERS, callee);
+    return false;
+  }
+  return true;
+}
+
+/*
+ * Ignore internal opcodes because they do not take up any space in the final
+ * dex file. Ignore move opcodes with the hope that RegAlloc will eliminate
+ * most of them.
+ */
+static size_t count_important_opcodes(const IRCode* code) {
+  size_t count{0};
+  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
+    auto op = mie.insn->opcode();
+    if (!opcode::is_internal(op) && !opcode::is_move(op)) {
+      ++count;
+    }
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
+  return count;
+}
+
+bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
+  auto caller_count = callee_caller.at(callee).size();
+  always_assert(caller_count > 0);
+
+  if (!m_opcode_counts.count(callee)) {
+    m_opcode_counts[callee] = count_important_opcodes(callee->get_code());
+  }
+  auto code_size = m_opcode_counts.at(callee);
+
+  if (!can_delete(callee)) {
+    if (m_config.inline_small_non_deletables) {
+      return code_size > CODE_SIZE_ANY_CALLERS;
+    } else {
+      return true;
+    }
+  }
+
+  if (caller_count == 1) {
+    return false;
+  }
+  if (m_config.multiple_callers) {
+    switch (caller_count) {
+    case 2:
+      return code_size > CODE_SIZE_2_CALLERS;
+    case 3:
+      return code_size > CODE_SIZE_3_CALLERS;
+    default:
+      break;
+    }
+  }
+  return code_size > CODE_SIZE_ANY_CALLERS;
+}
+
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
   auto cls = caller->get_class();
   if (m_config.caller_black_list.count(cls)) {
@@ -441,40 +535,53 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
                                                const DexMethod* callee,
                                                const IRInstruction* invk_insn) {
   int ret_count = 0;
-  for (const auto& mie : InstructionIterable(callee->get_code())) {
-    auto insn = mie.insn;
-    if (create_vmethod(insn)) {
-      log_nopt(INL_CREATE_VMETH, caller, invk_insn);
-      return true;
-    }
-    if (nonrelocatable_invoke_super(insn, callee, caller)) {
-      log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
-      return true;
-    }
-    if (unknown_virtual(insn, callee, caller)) {
-      log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
-      return true;
-    }
-    if (unknown_field(insn, callee, caller)) {
-      log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
-      return true;
-    }
-    if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
-      info.throws++;
-      return true;
-    }
-    if (is_return(insn->opcode())) ret_count++;
-  }
-  // no callees that have more than a return statement (normally one, the
-  // way dx generates code).
-  // That allows us to make a simple inline strategy where we don't have to
-  // worry about creating branches from the multiple returns to the main code
-  if (ret_count > 1) {
+  bool can_inline = true;
+  editable_cfg_adapter::iterate(
+      callee->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (create_vmethod(insn)) {
+          log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (nonrelocatable_invoke_super(insn, callee, caller)) {
+          log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (unknown_virtual(insn, callee, caller)) {
+          log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (unknown_field(insn, callee, caller)) {
+          log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
+          info.throws++;
+          can_inline = false;
+          return editable_cfg_adapter::LOOP_BREAK;
+        }
+        if (is_return(insn->opcode())) {
+          ++ret_count;
+        }
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  // The IRCode inliner can't handle callees with more than one return
+  // statement (normally one, the way dx generates code). That allows us to make
+  // a simple inline strategy where we don't have to worry about creating
+  // branches from the multiple returns to the main code
+  //
+  // d8 however, generates code with multiple return statements in general.
+  // The CFG inliner can handle multiple return callees.
+  if (ret_count > 1 && !m_config.use_cfg_inliner) {
     info.multi_ret++;
     log_nopt(INL_MULTIPLE_RETURNS, callee);
-    return true;
+    can_inline = false;
   }
-  return false;
+  return !can_inline;
 }
 
 /**
@@ -501,7 +608,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       // concrete ctors we can handle because they stay invoke_direct
       return false;
     }
-    if (!is_native(method) && !keep(method)) {
+    if (!is_native(method) && !has_keep(method)) {
       m_make_static.insert(method);
     } else {
       info.need_vmethod++;
@@ -612,42 +719,52 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
 
 bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
   size_t store_idx = xstores.get_store_idx(callee->get_class());
-  for (const auto& mie : InstructionIterable(callee->get_code())) {
-    auto insn = mie.insn;
-    if (insn->has_type()) {
-      if (xstores.illegal_ref(store_idx, insn->get_type())) {
-        info.cross_store++;
-        return true;
-      }
-    } else if (insn->has_method()) {
-      auto meth = insn->get_method();
-      if (xstores.illegal_ref(store_idx, meth->get_class())) {
-        info.cross_store++;
-        return true;
-      }
-      auto proto = meth->get_proto();
-      if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
-        info.cross_store++;
-        return true;
-      }
-      auto args = proto->get_args();
-      if (args == nullptr) continue;
-      for (const auto& arg : args->get_type_list()) {
-        if (xstores.illegal_ref(store_idx, arg)) {
-          info.cross_store++;
-          return true;
+  bool has_cross_store_ref = false;
+  editable_cfg_adapter::iterate(
+      callee->get_code(), [&](const MethodItemEntry& mie) {
+        auto insn = mie.insn;
+        if (insn->has_type()) {
+          if (xstores.illegal_ref(store_idx, insn->get_type())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+        } else if (insn->has_method()) {
+          auto meth = insn->get_method();
+          if (xstores.illegal_ref(store_idx, meth->get_class())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto proto = meth->get_proto();
+          if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          auto args = proto->get_args();
+          if (args == nullptr) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          for (const auto& arg : args->get_type_list()) {
+            if (xstores.illegal_ref(store_idx, arg)) {
+              info.cross_store++;
+              has_cross_store_ref = true;
+              return editable_cfg_adapter::LOOP_BREAK;
+            }
+          }
+        } else if (insn->has_field()) {
+          auto field = insn->get_field();
+          if (xstores.illegal_ref(store_idx, field->get_class()) ||
+              xstores.illegal_ref(store_idx, field->get_type())) {
+            info.cross_store++;
+            has_cross_store_ref = true;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
         }
-      }
-    } else if (insn->has_field()) {
-      auto field = insn->get_field();
-      if (xstores.illegal_ref(store_idx, field->get_class()) ||
-          xstores.illegal_ref(store_idx, field->get_type())) {
-        info.cross_store++;
-        return true;
-      }
-    }
-  }
-  return false;
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
+  return has_cross_store_ref;
 }
 
 void MultiMethodInliner::invoke_direct_to_static() {
@@ -698,87 +815,6 @@ void adjust_opcode_counts(
   for (auto it = range.first; it != range.second; ++it) {
     auto caller = it->second;
     (*adjusted_opcode_count)[caller] += code_size;
-  }
-}
-
-void select_inlinable(
-    const Scope& scope,
-    const std::unordered_set<DexMethod*>& methods,
-    MethodRefCache& resolved_refs,
-    std::unordered_set<DexMethod*>* inlinable,
-    bool multiple_callers) {
-  std::map<DexMethod*, int, dexmethods_comparator> calls;
-  // Keep adjusted tally of opcode size after a method is selected for inlining.
-  // This avoids an edge case where a small method has many callers, but becomes
-  // large due to inlining (need to prevent code duplication in such a case)
-  std::unordered_map<DexMethod*, size_t> adjusted_opcode_count;
-  std::unordered_multimap<DexMethod*, DexMethod*> callee_to_callers;
-  for (const auto& method : methods) {
-    calls[method] = 0;
-    auto code = method->get_code();
-    adjusted_opcode_count[method] = code == nullptr ? 0 : code->count_opcodes();
-  }
-  // count call sites for each method
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto callee = resolve_method(
-              insn->get_method(), opcode_to_search(insn), resolved_refs);
-          if (callee != nullptr && callee->is_concrete()
-              && methods.count(callee) > 0) {
-            calls[callee]++;
-            callee_to_callers.emplace(callee, meth);
-          }
-        }
-      });
-
-  // pick methods with a single call site and add to candidates.
-  // This vector usage is only because of logging we should remove it
-  // once the optimization is "closed"
-  std::vector<std::vector<DexMethod*>> calls_group(MAX_COUNT);
-  for (auto call_it : calls) {
-    if (call_it.second >= MAX_COUNT) {
-      calls_group[MAX_COUNT - 1].push_back(call_it.first);
-      continue;
-    }
-    calls_group[call_it.second].push_back(call_it.first);
-  }
-  assert(method_breakup(calls_group));
-  for (auto callee : calls_group[1]) {
-    adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-    inlinable->insert(callee);
-  }
-  if (multiple_callers) {
-    for (auto callee : calls_group[2]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_2_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_2_CALLERS_TOO_BIG, callee);
-      }
-    }
-    for (auto callee : calls_group[3]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_3_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_3_CALLERS_TOO_BIG, callee);
-      }
-    }
-  }
-
-  for (size_t i = multiple_callers ? 4 : 2; i < MAX_COUNT; ++i) {
-    for (auto callee : calls_group[i]) {
-      auto code_size = adjusted_opcode_count[callee];
-      if (code_size <= CODE_SIZE_ANY_CALLERS) {
-        adjust_opcode_counts(callee_to_callers, callee, &adjusted_opcode_count);
-        inlinable->insert(callee);
-      } else {
-        log_nopt(INL_TOO_MANY_CALLERS, callee);
-      }
-    }
   }
 }
 
@@ -935,12 +971,14 @@ class MethodSplicer {
   }
 
   MethodItemEntry* clone(MethodItemEntry* mie) {
-    return m_mie_cloner.clone(mie);
+    auto result = m_mie_cloner.clone(mie);
+    return result;
   }
 
   void operator()(IRList::iterator insert_pos,
                   IRList::iterator fcallee_start,
                   IRList::iterator fcallee_end) {
+    std::vector<DexPosition*> positions_to_fix;
     for (auto it = fcallee_start; it != fcallee_end; ++it) {
       if (should_skip_debug(&*it)) {
         continue;
@@ -949,37 +987,41 @@ class MethodSplicer {
           opcode::is_load_param(it->insn->opcode())) {
         continue;
       }
-      auto mei = clone(&*it);
-      transform::remap_registers(*mei, m_callee_reg_map);
-      if (mei->type == MFLOW_TRY && m_active_catch != nullptr) {
-        auto tentry = mei->tentry;
+      auto mie = clone(&*it);
+      transform::remap_registers(*mie, m_callee_reg_map);
+      if (mie->type == MFLOW_TRY && m_active_catch != nullptr) {
+        auto tentry = mie->tentry;
         // try ranges cannot be nested, so we flatten them here
         switch (tentry->type) {
           case TRY_START:
             m_mtcaller->insert_before(insert_pos,
                 *(new MethodItemEntry(TRY_END, m_active_catch)));
-            m_mtcaller->insert_before(insert_pos, *mei);
+            m_mtcaller->insert_before(insert_pos, *mie);
             break;
           case TRY_END:
-            m_mtcaller->insert_before(insert_pos, *mei);
+            m_mtcaller->insert_before(insert_pos, *mie);
             m_mtcaller->insert_before(insert_pos,
                 *(new MethodItemEntry(TRY_START, m_active_catch)));
             break;
         }
       } else {
-        if (mei->type == MFLOW_POSITION && mei->pos->parent == nullptr) {
-          mei->pos->parent = m_invoke_position;
+        if (mie->type == MFLOW_POSITION && mie->pos->parent == nullptr) {
+          mie->pos->parent = m_invoke_position;
         }
         // if a handler list does not terminate in a catch-all, have it point to
         // the parent's active catch handler. TODO: Make this more precise by
         // checking if the parent catch type is a subtype of the callee's.
-        if (mei->type == MFLOW_CATCH && mei->centry->next == nullptr &&
-            mei->centry->catch_type != nullptr) {
-          mei->centry->next = m_active_catch;
+        if (mie->type == MFLOW_CATCH && mie->centry->next == nullptr &&
+            mie->centry->catch_type != nullptr) {
+          mie->centry->next = m_active_catch;
         }
-        m_mtcaller->insert_before(insert_pos, *mei);
+        m_mtcaller->insert_before(insert_pos, *mie);
       }
     }
+  }
+
+  void fix_parent_positions() {
+    m_mie_cloner.fix_parent_positions(m_invoke_position);
   }
 
  private:
@@ -1026,6 +1068,17 @@ class MethodSplicer {
 
 namespace inliner {
 
+DexPosition* last_position_before(const IRList::const_iterator& it,
+                                  const IRCode* code) {
+  // we need to decrement the reverse iterator because it gets constructed
+  // as pointing to the element preceding pos
+  auto position_it = std::prev(IRList::const_reverse_iterator(it));
+  const auto& rend = code->rend();
+  while (++position_it != rend && position_it->type != MFLOW_POSITION)
+    ;
+  return position_it == rend ? nullptr : position_it->pos.get();
+}
+
 void inline_method(IRCode* caller_code,
                    IRCode* callee_code,
                    IRList::iterator pos) {
@@ -1043,14 +1096,7 @@ void inline_method(IRCode* caller_code,
   }
 
   // find the last position entry before the invoke.
-  // we need to decrement the reverse iterator because it gets constructed
-  // as pointing to the element preceding pos
-  auto position_it = --IRList::reverse_iterator(pos);
-  while (++position_it != caller_code->rend()
-      && position_it->type != MFLOW_POSITION);
-  std::unique_ptr<DexPosition> pos_nullptr;
-  auto& invoke_position =
-    position_it == caller_code->rend() ? pos_nullptr : position_it->pos;
+  const auto invoke_position = last_position_before(pos, caller_code);
   if (invoke_position) {
     TRACE(INL, 3, "Inlining call at %s:%d\n",
           invoke_position->file->c_str(),
@@ -1060,17 +1106,18 @@ void inline_method(IRCode* caller_code,
   // check if we are in a try block
   auto caller_catch = transform::find_active_catch(caller_code, pos);
 
-  // Copy the callee up to the return. Everything else we push at the end
-  // of the caller
-  auto splice = MethodSplicer(caller_code,
-                              callee_code,
-                              *callee_reg_map,
-                              invoke_position.get(),
-                              caller_catch);
-  auto ret_it = std::find_if(
+  const auto& ret_it = std::find_if(
       callee_code->begin(), callee_code->end(), [](const MethodItemEntry& mei) {
         return mei.type == MFLOW_OPCODE && is_return(mei.insn->opcode());
       });
+
+  auto splice = MethodSplicer(caller_code,
+                              callee_code,
+                              *callee_reg_map,
+                              invoke_position,
+                              caller_catch);
+  // Copy the callee up to the return. Everything else we push at the end
+  // of the caller
   splice(pos, callee_code->begin(), ret_it);
 
   // try items can span across a return opcode
@@ -1113,6 +1160,21 @@ void inline_method(IRCode* caller_code,
     } else if (caller_catch != nullptr) {
       caller_code->push_back(*(new MethodItemEntry(TRY_START, caller_catch)));
     }
+
+    if (std::next(ret_it) != callee_code->end()) {
+      const auto return_position = last_position_before(ret_it, callee_code);
+      if (return_position) {
+        // If there are any opcodes between the callee's return and its next
+        // position, we need to re-mark them with the correct line number,
+        // otherwise they would inherit the line number from the end of the
+        // caller.
+        auto new_pos = std::make_unique<DexPosition>(*return_position);
+        // We want its parent to be the same parent as other inlined code.
+        new_pos->parent = invoke_position;
+        caller_code->push_back(*(new MethodItemEntry(std::move(new_pos))));
+      }
+    }
+
     // Copy the opcodes in the callee after the return and put them at the end
     // of the caller.
     splice(caller_code->end(), std::next(ret_it), callee_code->end());
@@ -1120,6 +1182,7 @@ void inline_method(IRCode* caller_code,
       caller_code->push_back(*(new MethodItemEntry(TRY_END, caller_catch)));
     }
   }
+  splice.fix_parent_positions();
   TRACE(INL, 5, "post-inline caller code:\n%s\n", SHOW(caller_code));
 }
 
@@ -1152,6 +1215,32 @@ void inline_tail_call(DexMethod* caller,
       ++pos;
     }
   }
+}
+
+// return true on successful inlining, false otherwise
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite) {
+  auto& caller_cfg = caller_method->get_code()->cfg();
+  const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
+  if (callsite_it.is_end()) {
+    // The callsite is not in the caller cfg. This is probably because the
+    // callsite pointer is stale. Maybe the callsite's block was deleted since
+    // the time the callsite was found.
+    //
+    // This could have happened if a previous inlining caused a block to be
+    // unreachable, and that block was deleted when the CFG was simplified.
+    return false;
+  }
+
+  // Logging before the call to inline_cfg to get the most relevant line
+  // number near callsite before callsite gets replaced. Should be ok as
+  // inline_cfg does not fail to inline.
+  log_opt(INLINED, caller_method, callsite);
+
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it,
+                              callee_method->get_code()->cfg());
+  return true;
 }
 
 } // namespace inliner

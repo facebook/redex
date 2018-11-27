@@ -14,13 +14,17 @@
 
 namespace constant_propagation {
 
+enum class FieldType { INSTANCE, STATIC };
+
+using EligibleIfields = std::unordered_set<DexField*>;
+
 namespace interprocedural {
 
 class FixpointIterator;
 
 } // namespace interprocedural
 
-using ConstantStaticFieldPartition =
+using ConstantFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, ConstantValue>;
 
 using ConstantMethodPartition =
@@ -45,11 +49,15 @@ class WholeProgramState {
   /*
    * If we only have knowledge of the constant values in a single class --
    * instead of a view of the constants in the whole program -- we can still
-   * determine that the values of static final fields are constant throughout
+   * determine that the values of final fields are constant throughout
    * the entire program. This method records the values of those fields in the
    * WholeProgramState.
    */
-  void collect_static_finals(const DexClass*, StaticFieldEnvironment);
+  void collect_static_finals(const DexClass*, FieldEnvironment);
+
+  void collect_instance_finals(const DexClass*,
+                               const EligibleIfields&,
+                               FieldEnvironment);
 
   void set_to_top() {
     m_field_partition.set_to_top();
@@ -62,10 +70,7 @@ class WholeProgramState {
   }
 
   /*
-   * Returns our best static approximation of the field value.
-   *
-   * This method can be passed both static and non-static fields, but as of now
-   * it will always return Top for non-static fields.
+   * Returns our best approximation of the field value.
    *
    * It will never return Bottom.
    */
@@ -89,7 +94,7 @@ class WholeProgramState {
     return m_method_partition.get(method);
   }
 
-  const ConstantStaticFieldPartition& get_field_partition() const {
+  const ConstantFieldPartition& get_field_partition() const {
     return m_field_partition;
   }
 
@@ -132,7 +137,7 @@ class WholeProgramState {
   // "return" Bottom by throwing or never terminating, in which case we want to
   // bind it to Bottom here, but doing so in an Environment would set the whole
   // Environment to Bottom.
-  ConstantStaticFieldPartition m_field_partition;
+  ConstantFieldPartition m_field_partition;
   ConstantMethodPartition m_method_partition;
 };
 
@@ -146,6 +151,10 @@ class WholeProgramAwareAnalyzer final
                                      const WholeProgramState*> {
  public:
   static bool analyze_sget(const WholeProgramState* whole_program_state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env);
+
+  static bool analyze_iget(const WholeProgramState* whole_program_state,
                            const IRInstruction* insn,
                            ConstantEnvironment* env);
 

@@ -22,8 +22,6 @@ void remap_registers(IRCode*, const RegMap&);
 void remap_registers(IRInstruction* insn, const RegMap& reg_map);
 void remap_registers(MethodItemEntry& mei, const RegMap& reg_map);
 
-void visit(cfg::Block* b, std::unordered_set<cfg::Block*>& visited);
-
 /*
  * Sets all the opcodes in unreachable blocks to MFLOW_FALLTHROUGH, and removes
  * all successor edges connecting them to the graph. Does not actually delete

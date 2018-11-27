@@ -24,6 +24,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
+	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/simpleinline \
 	-I$(top_srcdir)/opt/singleimpl \

@@ -494,6 +494,21 @@ std::string show_opcode(const DexInstruction* insn) {
   case DOPCODE_INVOKE_INTERFACE:
     ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
+  case DOPCODE_INVOKE_VIRTUAL_RANGE:
+    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_SUPER_RANGE:
+    ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_DIRECT_RANGE:
+    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_STATIC_RANGE:
+    ss << "invoke-static/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
+  case DOPCODE_INVOKE_INTERFACE_RANGE:
+    ss << "invoke-interface/range " << show(((DexOpcodeMethod*)insn)->get_method());
+    return ss.str();
   case DOPCODE_CONST_STRING:
     ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
     return ss.str();
@@ -941,6 +956,9 @@ std::ostream& operator<<(std::ostream& o, const DexPosition& pos) {
     o << *pos.file;
   }
   o << ":" << pos.line;
+  if (pos.parent != nullptr) {
+    o << " (parent: " << pos.parent << ")";
+  }
   return o;
 }
 
@@ -1036,7 +1054,11 @@ std::string show(const cfg::ControlFlowGraph& cfg) {
   std::ostringstream ss;
   ss << "CFG:\n";
   for (const auto& b : blocks) {
-    ss << " Block B" << b->id() << ":\n";
+    ss << " Block B" << b->id() << ":";
+    if (b == cfg.entry_block()) {
+      ss << " entry";
+    }
+    ss << "\n";
 
     ss << "   preds:";
     for (const auto& p : b->preds()) {

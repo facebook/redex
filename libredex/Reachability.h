@@ -12,13 +12,14 @@
 
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
+#include "KeepReason.h"
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "WorkQueue.h"
 
 namespace reachability {
 
-enum class ReachableObjectType {
+enum class ReachableObjectType : uint8_t {
   ANNO,
   CLASS,
   FIELD,
@@ -41,6 +42,7 @@ struct ReachableObject {
     const DexClass* cls;
     const DexFieldRef* field;
     const DexMethodRef* method;
+    const keep_reason::Reason* keep_reason;
   };
 
   explicit ReachableObject(const DexAnnotation* anno)
@@ -51,95 +53,21 @@ struct ReachableObject {
       : type{ReachableObjectType::METHOD}, method{method} {}
   explicit ReachableObject(const DexFieldRef* field)
       : type{ReachableObjectType::FIELD}, field{field} {}
+  explicit ReachableObject(const keep_reason::Reason* keep_reason)
+      : type(ReachableObjectType::SEED), keep_reason(keep_reason) {}
   explicit ReachableObject() : type{ReachableObjectType::SEED} {}
 
-  std::string str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return show_deobfuscated(anno);
-    case ReachableObjectType::CLASS:
-      return show_deobfuscated(cls);
-    case ReachableObjectType::FIELD:
-      return show_deobfuscated(field);
-    case ReachableObjectType::METHOD:
-      return show_deobfuscated(method);
-    case ReachableObjectType::SEED:
-      return std::string("<SEED>");
-    }
-  }
-
-  std::string type_str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return "ANNO";
-    case ReachableObjectType::CLASS:
-      return "CLASS";
-    case ReachableObjectType::FIELD:
-      return "FIELD";
-    case ReachableObjectType::METHOD:
-      return "METHOD";
-    case ReachableObjectType::SEED:
-      return "SEED";
-    }
-  }
-
-  std::string state_str() const {
-    switch (type) {
-    case ReachableObjectType::ANNO:
-      return "Annotation";
-    case ReachableObjectType::CLASS:
-      return cls->rstate.str();
-    case ReachableObjectType::FIELD:
-      if (field->is_def()) {
-        return static_cast<const DexField*>(field)->rstate.str();
-      } else {
-        return "DexFieldRef";
-      }
-    case ReachableObjectType::METHOD:
-      if (method->is_def()) {
-        return static_cast<const DexMethod*>(method)->rstate.str();
-      } else {
-        return "DexFieldRef";
-      }
-    case ReachableObjectType::SEED:
-      return "Seed";
-    }
-  }
+  friend std::ostream& operator<<(std::ostream&, const ReachableObject&);
 
   friend bool operator==(const ReachableObject& lhs,
                          const ReachableObject& rhs) {
-    if (lhs.type != rhs.type) {
-      return false;
-    }
-    switch (lhs.type) {
-    case ReachableObjectType::ANNO:
-      return lhs.anno == rhs.anno;
-    case ReachableObjectType::CLASS:
-      return lhs.cls == rhs.cls;
-    case ReachableObjectType::FIELD:
-      return lhs.field == rhs.field;
-    case ReachableObjectType::METHOD:
-      return lhs.method == rhs.method;
-    case ReachableObjectType::SEED:
-      return true;
-    }
+    return lhs.type == rhs.type && lhs.anno == rhs.anno;
   }
 };
 
 struct ReachableObjectHash {
   std::size_t operator()(const ReachableObject& obj) const {
-    switch (obj.type) {
-    case ReachableObjectType::ANNO:
-      return std::hash<const DexAnnotation*>{}(obj.anno);
-    case ReachableObjectType::CLASS:
-      return std::hash<const DexClass*>{}(obj.cls);
-    case ReachableObjectType::FIELD:
-      return std::hash<const DexFieldRef*>{}(obj.field);
-    case ReachableObjectType::METHOD:
-      return std::hash<const DexMethodRef*>{}(obj.method);
-    case ReachableObjectType::SEED:
-      return 0;
-    }
+    return std::hash<uintptr_t>{}(reinterpret_cast<uintptr_t>(obj.anno));
   }
 };
 
@@ -162,9 +90,7 @@ using ReachableObjectGraph =
 
 class ReachableObjects {
  public:
-  const ReachableObjectGraph& retainers_of() const {
-    return m_retainers_of;
-  }
+  const ReachableObjectGraph& retainers_of() const { return m_retainers_of; }
 
   void mark(const DexClass* cls) { m_marked_classes.insert(cls); }
 
@@ -194,17 +120,27 @@ class ReachableObjects {
     return m_marked_fields.count_unsafe(field);
   }
 
+ private:
   template <class Seed>
   void record_is_seed(Seed* seed);
 
   template <class Parent, class Object>
   void record_reachability(Parent*, Object*);
 
- private:
+  template <class Object>
+  void record_reachability(Object* parent, Object* object);
+
+  void record_reachability(const DexFieldRef* member, const DexClass* cls);
+
+  void record_reachability(const DexMethodRef* member, const DexClass* cls);
+
   ConcurrentSet<const DexClass*> m_marked_classes;
   ConcurrentSet<const DexFieldRef*> m_marked_fields;
   ConcurrentSet<const DexMethodRef*> m_marked_methods;
   ReachableObjectGraph m_retainers_of;
+
+  friend class RootSetMarker;
+  friend class TransitiveClosureMarker;
 };
 
 struct ConditionallyMarked {
@@ -377,14 +313,6 @@ struct ObjectCounts {
  */
 ObjectCounts count_objects(const DexStoresVector& stores);
 
-// Dump reachability information to TRACE(REACH_DUMP, 5).
-void dump_info(DexStoresVector& stores,
-               const ReachableObjectGraph& retainers_of,
-               const std::string& dump_tag);
-
-void dump_graph(DexStoresVector& stores,
-                const ReachableObjectGraph& retainers_of,
-                const std::string& dump_tag,
-                std::ostream& os);
+void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of);
 
 } // namespace reachability

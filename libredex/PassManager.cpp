@@ -43,9 +43,8 @@ std::string get_apk_dir(const Json::Value& config) {
 
 } // namespace
 
-redex::ProguardConfiguration empty_pg_config() {
-  redex::ProguardConfiguration pg_config;
-  return pg_config;
+std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
+  return std::make_unique<redex::ProguardConfiguration>();
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
@@ -56,14 +55,14 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
           passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
-                         const redex::ProguardConfiguration& pg_config,
+                         std::unique_ptr<redex::ProguardConfiguration> pg_config,
                          const Json::Value& config,
                          bool verify_none_mode,
                          bool is_art_build)
     : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
-      m_pg_config(pg_config),
+      m_pg_config(std::move(pg_config)),
       m_testing_mode(false),
       m_verify_none_mode(verify_none_mode),
       m_art_build(is_art_build) {
@@ -132,10 +131,9 @@ void PassManager::run_type_checker(const Scope& scope,
     checker.run();
     if (checker.fail()) {
       std::string msg = checker.what();
-      fprintf(stderr, "ABORT! Inconsistency found in Dex code. %s\n",
-              msg.c_str());
-      fprintf(stderr, "Code: %s\n%s\n", SHOW(dex_method),
-              SHOW(dex_method->get_code()));
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
+              SHOW(dex_method), msg.c_str());
+      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
       exit(EXIT_FAILURE);
     }
   });
@@ -157,7 +155,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::ofstream seeds_file(cfg.get_printseeds());
     redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
     std::ofstream config_file(cfg.get_printseeds() + ".pro");
-    redex::show_configuration(config_file, scope, m_pg_config);
+    redex::show_configuration(config_file, scope, *m_pg_config);
     std::ofstream incoming(cfg.get_printseeds() + ".incoming");
     redex::print_classes(incoming, cfg.get_proguard_map(), scope);
     std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");

@@ -65,40 +65,44 @@ class CFGInliner {
   static void move_return_reg(ControlFlowGraph* callee,
                               const boost::optional<uint16_t>& ret_reg);
 
-/*
- * Callees that were not in a try region when their CFGs were created, need to
- * have some blocks split because the callsite is in a try region. We do this
- * because we need to add edges from the throwing opcodes to the catch handler
- * of the caller's try region.
- *
- * Assumption: callsite is in a try region
- */
+  /*
+   * Callees that were not in a try region when their CFGs were created, need to
+   * have some blocks split because the callsite is in a try region. We do this
+   * because we need to add edges from the throwing opcodes to the catch handler
+   * of the caller's try region.
+   *
+   * Assumption: callsite is in a try region
+   */
   static void split_on_callee_throws(ControlFlowGraph* callee);
 
-/*
- * Add a throw edge from each may_throw to each catch that is thrown to from the
- * callsite
- *   * If there are already throw edges in callee, add this edge to the end
- *     of the list
- *
- * Assumption: caller_catches is sorted by catch index
- */
+  /*
+   * Add a throw edge from each may_throw to each catch that is thrown to from
+   * the callsite
+   *   * If there are already throw edges in callee, add this edge to the end
+   *     of the list
+   *
+   * Assumption: caller_catches is sorted by catch index
+   */
   static void add_callee_throws_to_caller(
       ControlFlowGraph* cfg,
       const std::vector<Block*>& callee_blocks,
       const std::vector<Edge*>& caller_catches);
 
   /*
+   * Set the parent pointers of the positions in `callee` to `callsite_dbg_pos`
+   */
+  static void set_dbg_pos_parents(ControlFlowGraph* callee,
+                                  DexPosition* callsite_dbg_pos);
+
+  /*
    * Return the equivalent move opcode for the given return opcode
    */
   static IROpcode return_to_move(IROpcode op);
 
-  static bool can_throw(IROpcode op);
-
   /*
-   * Assumption: `throws` is not empty
+   * Find the first debug position preceding the callsite
    */
-  static uint32_t max_index(const std::vector<Edge*> throws);
+  static DexPosition* get_dbg_pos(const cfg::InstructionIterator& callsite);
 };
 
 } // namespace cfg

@@ -16,14 +16,15 @@ class FinalInlinePassV2 : public Pass {
   struct Config {
     std::unordered_set<const DexType*> black_list_types;
     bool aggressively_delete;
-    Config(): aggressively_delete(true) {}
+    bool inline_instance_field;
+    Config() : aggressively_delete(true), inline_instance_field(false) {}
   };
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
   virtual void configure_pass(const JsonWrapper& jw) override {
     jw.get("aggressively_delete", true, m_config.aggressively_delete);
-
+    jw.get("inline_instance_field", false, m_config.inline_instance_field);
     std::vector<std::string> temp_config_list;
     jw.get("black_list_types", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
@@ -35,7 +36,10 @@ class FinalInlinePassV2 : public Pass {
   }
 
   static size_t run(const Scope&, Config config = Config());
-
+  static size_t run_inline_ifields(
+      const Scope&,
+      const constant_propagation::EligibleIfields& eligible_ifields,
+      Config config = Config());
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

@@ -522,7 +522,7 @@ TEST(ControlFlow, remove_non_branch) {
     (
       (const v0 0)
       (const-wide v2 1)
-      (move v1 v2)
+      (move v1 v0)
       (return-void)
     )
   )");
@@ -546,7 +546,7 @@ TEST(ControlFlow, remove_non_branch) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (move v1 v2)
+      (move v1 v0)
       (return-void)
     )
   )");
@@ -990,6 +990,7 @@ TEST(ControlFlow, empty_first_block) {
 TEST(ControlFlow, exit_blocks) {
   auto code = assembler::ircode_from_string(R"(
     (
+      (const v0 0)
       (if-eqz v0 :thr)
       (return-void)
       (:thr)
@@ -1007,6 +1008,7 @@ TEST(ControlFlow, exit_blocks) {
 TEST(ControlFlow, exit_blocks_change) {
   auto code = assembler::ircode_from_string(R"(
     (
+      (const v0 0)
       (if-eqz v0 :thr)
       (return-void)
       (:thr)
@@ -1037,6 +1039,7 @@ TEST(ControlFlow, exit_blocks_change) {
 TEST(ControlFlow, deep_copy1) {
   auto code = assembler::ircode_from_string(R"(
     (
+      (const v0 0)
       (if-eqz v0 :thr)
       (return-void)
       (:thr)

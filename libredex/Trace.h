@@ -39,6 +39,7 @@
   TM(DELMET)             \
   TM(DRAC)               \
   TM(EMPTY)              \
+  TM(ENUM)               \
   TM(FINALINLINE)        \
   TM(HOTNESS)            \
   TM(ICONSTP)            \
@@ -53,6 +54,7 @@
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
+  TM(METH_DEDUP)         \
   TM(MMINL)              \
   TM(MMODE)              \
   TM(MORTIROLO)          \
@@ -78,6 +80,7 @@
   TM(RMU)                \
   TM(RMUF)               \
   TM(RM_INTF)            \
+  TM(RP)                 \
   TM(SDIS)               \
   TM(SHORTEN)            \
   TM(SINK)               \
@@ -90,6 +93,7 @@
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
+  TM(TYPE)               \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \
@@ -101,7 +105,9 @@
   TM(SW)                 \
   TM(IFCS_ANALYSIS)      \
   TM(UNREF_INTF)         \
-  TM(OPT_STORES)
+  TM(OPT_STORES)         \
+  TM(MEINT)              \
+  TM(OPUT)
 
 enum TraceModule : int {
 #define TM(x) x,

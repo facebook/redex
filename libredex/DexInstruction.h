@@ -308,6 +308,8 @@ inline bool is_move(IROpcode op) {
   return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
 }
 
+inline bool is_return_void(IROpcode op) { return op == OPCODE_RETURN_VOID; }
+
 inline bool is_return(IROpcode op) {
   return op >= OPCODE_RETURN_VOID && op <= OPCODE_RETURN_OBJECT;
 }

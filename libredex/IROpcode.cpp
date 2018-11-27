@@ -1001,6 +1001,9 @@ bool is_load_param(IROpcode op) {
   return op >= IOPCODE_LOAD_PARAM && op <= IOPCODE_LOAD_PARAM_WIDE;
 }
 
+bool is_move(IROpcode op) {
+  return op >= OPCODE_MOVE && op <= OPCODE_MOVE_OBJECT;
+}
 
 bool is_move_result_pseudo(IROpcode op) {
   return op >= IOPCODE_MOVE_RESULT_PSEUDO &&
@@ -1095,7 +1098,7 @@ unsigned dests_size(IROpcode op) {
     return 1;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return dex_opcode::dests_size(dex_op) && !opcode::may_throw(op);
+    return !opcode::may_throw(op) && dex_opcode::dests_size(dex_op);
   }
 }
 

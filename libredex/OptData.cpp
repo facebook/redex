@@ -418,7 +418,8 @@ void OptDataMapper::init_opt_messages() {
       {CALLSITE_ARGS_REMOVED,
        "Updated callsite args for invoking updated method"},
       {METHOD_PARAMS_REMOVED,
-       "Removed unused params and updated method signature"}};
+       "Removed unused params and updated method signature"},
+      {ENUM_OPTIMIZED, "Enum is optimized to Integer objects"}};
   m_opt_msg_map = std::move(opt_msg_map);
 }
 
@@ -445,11 +446,7 @@ void OptDataMapper::init_nopt_messages() {
       {INL_MULTIPLE_RETURNS,
        "Didn''t inline: callee has multiple return points"},
       {INL_TOO_MANY_CALLERS,
-       "Didn''t inline: this method has too many callers"},
-      {INL_2_CALLERS_TOO_BIG,
-       "Didn''t inline: this method has only 2 callers, but it''s too big"},
-      {INL_3_CALLERS_TOO_BIG,
-       "Didn''t inline: this method has only 3 callers, but it''s too big"}};
+       "Didn''t inline: this method has too many callers"}};
   m_nopt_msg_map = std::move(nopt_msg_map);
 }
 

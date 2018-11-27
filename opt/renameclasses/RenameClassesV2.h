@@ -89,6 +89,10 @@ class RenameClassesPassV2 : public Pass {
                       PassManager& mgr);
   void rename_classes_in_layouts(const AliasMap& aliases, PassManager& mgr);
 
+  int m_base_strings_size = 0;
+  int m_ren_strings_size = 0;
+  int m_digits = 0;
+
   // Config and rules
   bool m_rename_annotations;
   std::vector<std::string> m_force_rename_hierarchies;

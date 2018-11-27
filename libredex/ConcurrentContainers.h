@@ -21,7 +21,7 @@
 // Forward declaration.
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots, bool is_const>
+template <typename Container, size_t n_slots>
 class ConcurrentContainerIterator;
 
 } // namespace cc_impl
@@ -51,17 +51,10 @@ class ConcurrentContainer {
  public:
   static_assert(n_slots > 0, "The concurrent container has no slots");
 
-  using iterator =
-      cc_impl::ConcurrentContainerIterator<Container,
-                                           typename Container::iterator,
-                                           n_slots,
-                                           /* is_const */ false>;
+  using iterator = cc_impl::ConcurrentContainerIterator<Container, n_slots>;
 
   using const_iterator =
-      cc_impl::ConcurrentContainerIterator<Container,
-                                           typename Container::const_iterator,
-                                           n_slots,
-                                           /* is_const */ true>;
+      cc_impl::ConcurrentContainerIterator<const Container, n_slots>;
 
   virtual ~ConcurrentContainer() {}
 
@@ -148,9 +141,29 @@ class ConcurrentContainer {
     return m_slots[slot].erase(key);
   }
 
+  /*
+   * This operation is not thread-safe.
+   */
+  size_t bucket_size(size_t i) const {
+    always_assert(i < n_slots);
+    return m_slots[i].size();
+  }
+
  protected:
-  // Only derived classes may be instantiated.
+  // Only derived classes may be instantiated or copied.
   ConcurrentContainer() = default;
+
+  ConcurrentContainer(const ConcurrentContainer& container) {
+    for (size_t i = 0; i < n_slots; ++i) {
+      m_slots[i] = container.m_slots[i];
+    }
+  }
+
+  ConcurrentContainer(ConcurrentContainer&& container) {
+    for (size_t i = 0; i < n_slots; ++i) {
+      m_slots[i] = std::move(container.m_slots[i]);
+    }
+  }
 
   Container& get_container(size_t slot) { return m_slots[slot]; }
 
@@ -163,21 +176,25 @@ class ConcurrentContainer {
   Container m_slots[n_slots];
 };
 
-template <typename Key,
+template <typename MapContainer,
+          typename Key,
           typename Value,
           typename Hash = std::hash<Key>,
-          typename Equal = std::equal_to<Key>,
           size_t n_slots = 31>
-class ConcurrentMap final
-    : public ConcurrentContainer<std::unordered_map<Key, Value, Hash, Equal>,
-                                 Key,
-                                 Hash,
-                                 n_slots> {
+class ConcurrentMapContainer
+    : public ConcurrentContainer<MapContainer, Key, Hash, n_slots> {
  public:
-  ConcurrentMap() = default;
+  ConcurrentMapContainer() = default;
+
+  ConcurrentMapContainer(const ConcurrentMapContainer& container)
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
+
+  ConcurrentMapContainer(ConcurrentMapContainer&& container)
+      : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
+            std::move(container)) {}
 
   template <typename InputIt>
-  ConcurrentMap(InputIt first, InputIt last) {
+  ConcurrentMapContainer(InputIt first, InputIt last) {
     insert(first, last);
   }
 
@@ -199,9 +216,25 @@ class ConcurrentMap final
     return this->get_container(slot).at(key);
   }
 
+  Value get(const Key& key, Value default_value) {
+    size_t slot = Hash()(key) % n_slots;
+    boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
+    const auto& map = this->get_container(slot);
+    const auto& it = map.find(key);
+    if (it == map.end()) {
+      return default_value;
+    }
+    return it->second;
+  }
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
+   *
+   * Note that while the STL containers' insert() methods return both an
+   * iterator and a boolean success value, we only return the boolean value
+   * here as any operations on a returned iterator are not guaranteed to be
+   * thread-safe.
    */
   bool insert(const std::pair<Key, Value>& entry) {
     size_t slot = Hash()(entry.first) % n_slots;
@@ -243,7 +276,7 @@ class ConcurrentMap final
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&& ...args) {
+  bool emplace(Args&&... args) {
     std::pair<Key, Value> entry(std::forward<Args>(args)...);
     size_t slot = Hash()(entry.first) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
@@ -271,6 +304,18 @@ class ConcurrentMap final
 };
 
 template <typename Key,
+          typename Value,
+          typename Hash = std::hash<Key>,
+          typename Equal = std::equal_to<Key>,
+          size_t n_slots = 31>
+using ConcurrentMap =
+    ConcurrentMapContainer<std::unordered_map<Key, Value, Hash, Equal>,
+                           Key,
+                           Value,
+                           Hash,
+                           n_slots>;
+
+template <typename Key,
           typename Hash = std::hash<Key>,
           typename Equal = std::equal_to<Key>,
           size_t n_slots = 31>
@@ -280,6 +325,20 @@ class ConcurrentSet final
                                  Hash,
                                  n_slots> {
  public:
+  ConcurrentSet() = default;
+
+  ConcurrentSet(const ConcurrentSet& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(set) {}
+
+  ConcurrentSet(ConcurrentSet&& set)
+      : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
+                            Key,
+                            Hash,
+                            n_slots>(std::move(set)) {}
+
   /*
    * The Boolean return value denotes whether the insertion took place.
    * This operation is always thread-safe.
@@ -304,7 +363,7 @@ class ConcurrentSet final
    * This operation is always thread-safe.
    */
   template <typename... Args>
-  bool emplace(Args&& ...args) {
+  bool emplace(Args&&... args) {
     Key key(std::forward<Args>(args)...);
     size_t slot = Hash()(key) % n_slots;
     boost::lock_guard<boost::mutex> lock(this->get_lock(slot));
@@ -315,25 +374,28 @@ class ConcurrentSet final
 
 namespace cc_impl {
 
-template <typename Container, typename Iterator, size_t n_slots, bool is_const>
-class ConcurrentContainerIterator final
-    : public std::iterator<std::forward_iterator_tag,
-                           typename Iterator::value_type> {
-
-  using ContainerType =
-      typename std::conditional<is_const, const Container, Container>::type;
-
+template <typename Container, size_t n_slots>
+class ConcurrentContainerIterator final {
  public:
-  explicit ConcurrentContainerIterator(ContainerType* slots)
+  using base_iterator = std::conditional_t<std::is_const<Container>::value,
+                                           typename Container::const_iterator,
+                                           typename Container::iterator>;
+  using difference_type = std::ptrdiff_t;
+  using value_type = typename base_iterator::value_type;
+  using pointer = typename base_iterator::pointer;
+  using reference = typename base_iterator::reference;
+  using iterator_category = std::forward_iterator_tag;
+
+  explicit ConcurrentContainerIterator(Container* slots)
       : m_slots(slots),
         m_slot(n_slots - 1),
         m_position(m_slots[n_slots - 1].end()) {
     skip_empty_slots();
   }
 
-  ConcurrentContainerIterator(ContainerType* slots,
+  ConcurrentContainerIterator(Container* slots,
                               size_t slot,
-                              const Iterator& position)
+                              const base_iterator& position)
       : m_slots(slots), m_slot(slot), m_position(position) {
     skip_empty_slots();
   }
@@ -360,12 +422,22 @@ class ConcurrentContainerIterator final
     return !(*this == other);
   }
 
-  typename Iterator::reference operator*() {
+  reference operator*() {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return *m_position;
   }
 
-  typename Iterator::pointer operator->() {
+  pointer operator->() {
+    always_assert(m_position != m_slots[n_slots - 1].end());
+    return m_position.operator->();
+  }
+
+  const reference operator*() const {
+    always_assert(m_position != m_slots[n_slots - 1].end());
+    return *m_position;
+  }
+
+  const pointer operator->() const {
     always_assert(m_position != m_slots[n_slots - 1].end());
     return m_position.operator->();
   }
@@ -377,9 +449,9 @@ class ConcurrentContainerIterator final
     }
   }
 
-  ContainerType* m_slots;
+  Container* m_slots;
   size_t m_slot;
-  Iterator m_position;
+  base_iterator m_position;
 };
 
 } // namespace cc_impl

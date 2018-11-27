@@ -142,14 +142,6 @@ class AbstractAccessPathDomain final
                ? boost::optional<AccessPath>(get_value()->access_path())
                : boost::none;
   }
-
-  static AbstractAccessPathDomain bottom() {
-    return AbstractAccessPathDomain(AbstractValueKind::Bottom);
-  }
-
-  static AbstractAccessPathDomain top() {
-    return AbstractAccessPathDomain(AbstractValueKind::Top);
-  }
 };
 
 using namespace std::placeholders;

@@ -37,6 +37,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
 	-I$(top_srcdir)/opt/local-dce \
+	-I$(top_srcdir)/opt/layout-reachability \
+	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/obfuscate \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
@@ -46,12 +48,15 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
 	-I$(top_srcdir)/opt/remove-builders \
+	-I$(top_srcdir)/opt/remove-interfaces \
+	-I$(top_srcdir)/opt/remove_redundant_check_casts \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
 	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
+	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/simpleinline \
 	-I$(top_srcdir)/opt/singleimpl \
@@ -63,6 +68,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/synth \
 	-I$(top_srcdir)/opt/test_cfg \
 	-I$(top_srcdir)/opt/track_resources \
+	-I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
@@ -109,6 +115,7 @@ libredex_la_SOURCES = \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
+	libredex/DexStoreUtil.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
@@ -121,6 +128,7 @@ libredex_la_SOURCES = \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
+	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
@@ -132,6 +140,7 @@ libredex_la_SOURCES = \
 	libredex/PointsToSemantics.cpp \
 	libredex/PointsToSemanticsUtils.cpp \
 	libredex/PrintSeeds.cpp \
+	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
@@ -213,7 +222,9 @@ redex_all_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDce.cpp \
+	opt/merge_interface/MergeInterface.cpp \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
@@ -222,7 +233,6 @@ redex_all_SOURCES = \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
-	opt/reachability_graph/ReachabilityGraphPrinter.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
@@ -232,6 +242,9 @@ redex_all_SOURCES = \
 	opt/regalloc/VirtualRegistersFile.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
+	opt/remove-interfaces/RemoveInterfacePass.cpp \
+	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
+	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unread-fields/RemoveUnreadFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
@@ -240,6 +253,7 @@ redex_all_SOURCES = \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/simpleinline/Deleter.cpp \
 	opt/simpleinline/SimpleInline.cpp \
@@ -259,6 +273,15 @@ redex_all_SOURCES = \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
 	opt/track_resources/TrackResources.cpp \
+	opt/type-erasure/ApproximateShapeMerging.cpp \
+	opt/type-erasure/ClassAssemblingUtils.cpp \
+	opt/type-erasure/MergerType.cpp \
+	opt/type-erasure/MethodMerger.cpp \
+	opt/type-erasure/Model.cpp \
+	opt/type-erasure/ModelMerger.cpp \
+	opt/type-erasure/TypeErasureInterDexPlugin.cpp \
+	opt/type-erasure/TypeErasurePass.cpp \
+	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unterface/Unterface.cpp \
 	opt/unterface/UnterfaceOpt.cpp \
@@ -272,7 +295,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
-  service/method-dedup/ConstantLifting.cpp \
+	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \

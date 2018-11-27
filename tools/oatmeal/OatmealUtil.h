@@ -70,6 +70,7 @@ bool is_aligned(uint32_t in) {
 
 template <typename T>
 inline T roundUpToPowerOfTwo(T in) {
+  static_assert(std::is_unsigned<T>::value, "Only support unsigned types.");
   return (sizeof(T) == sizeof(uint32_t)) ?
     (1u << (std::numeric_limits<T>::digits - __builtin_clz (in - 1))) :
     (1Lu << (std::numeric_limits<T>::digits - __builtin_clzll (in - 1)));

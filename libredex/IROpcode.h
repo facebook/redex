@@ -239,6 +239,10 @@ DexOpcode to_dex_opcode(IROpcode);
 
 bool may_throw(IROpcode);
 
+inline bool can_throw(IROpcode op) {
+  return may_throw(op) || op == OPCODE_THROW;
+}
+
 // if an IROpcode can be translated to a DexOpcode of /range format
 bool has_range_form(IROpcode);
 
@@ -252,6 +256,8 @@ bool is_internal(IROpcode);
 bool is_load_param(IROpcode);
 
 bool is_move_result_pseudo(IROpcode);
+
+bool is_move(IROpcode);
 
 IROpcode load_param_to_move(IROpcode);
 

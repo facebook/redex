@@ -62,20 +62,6 @@ struct DedupBlocksTest : testing::Test {
     return method;
   }
 
-  Branch create_branch(IROpcode op) {
-    using namespace dex_asm;
-
-    IRInstruction* insn = nullptr;
-    if (op == OPCODE_GOTO) {
-      insn = dasm(op);
-    } else {
-      insn = dasm(op, {0_v});
-    }
-    auto source = new MethodItemEntry(insn);
-    auto target = new BranchTarget(source);
-    return {source, new MethodItemEntry(target)};
-  }
-
   void run_dedup_blocks() {
     std::vector<Pass*> passes = {
       new DedupBlocksPass()
@@ -102,90 +88,57 @@ TEST_F(DedupBlocksTest, simplestCase) {
   using namespace dex_asm;
   DexMethod* method = get_fresh_method("simplestCase");
 
-  auto A_if_D = create_branch(OPCODE_IF_EQZ);
-  auto B_goto_C = create_branch(OPCODE_GOTO);
-  auto C_goto_E = create_branch(OPCODE_GOTO);
-  auto D_goto_E = create_branch(OPCODE_GOTO);
+  auto str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
 
-  auto code = method->get_code();
-  ASSERT_NE(code, nullptr);
+      ; B
+      (mul-int v0 v0 v0)
+      (goto :C)
 
-  // A
-  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
-  code->push_back(dasm(OPCODE_MUL_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*A_if_D.source);
+      (:E)
+      (return-void)
 
-  // B
-  code->push_back(dasm(OPCODE_MUL_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*B_goto_C.source);
+      (:C)
+      (add-int v0 v0 v0)
+      (goto :E)
 
-  // E
-  code->push_back(*C_goto_E.target);
-  code->push_back(*D_goto_E.target);
-  code->push_back(dasm(OPCODE_RETURN_VOID));
+      (:D)
+      (add-int v0 v0 v0)
+      (goto :E)
+    )
+  )";
 
-  // C
-  code->push_back(*B_goto_C.target);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*C_goto_E.source);
-
-  // D
-  code->push_back(*A_if_D.target);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*D_goto_E.source);
-
-  code->build_cfg(/* editable */ true);
-  EXPECT_EQ(5, code->cfg().blocks().size());
-  printf("Input cfg:\n%s\n", SHOW(code->cfg()));
-  code->clear_cfg();
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
 
   run_dedup_blocks();
 
-  code->build_cfg(/* editable */ true);
-  printf("Result cfg:\n%s\n", SHOW(code->cfg()));
-  EXPECT_EQ(4, code->cfg().blocks().size());
-  code->clear_cfg();
+  auto expected_str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :C)
 
-  auto mie = code->begin();
+      ; B
+      (mul-int v0 v0 v0)
 
-  // A
-  EXPECT_EQ(OPCODE_CONST, mie->insn->opcode());
-  ++mie;
-  EXPECT_EQ(OPCODE_MUL_INT, mie->insn->opcode());
-  ++mie;
-  EXPECT_EQ(OPCODE_IF_EQZ, mie->insn->opcode());
-  auto a_c = mie;
-  ++mie;
+      (:C)
+      (add-int v0 v0 v0)
 
-  // B
-  EXPECT_EQ(OPCODE_MUL_INT, mie->insn->opcode());
-  ++mie;
-  EXPECT_EQ(OPCODE_GOTO, mie->insn->opcode());
-  auto b_c = mie;
-  ++mie;
+      ; E
+      (return-void)
 
-  // E
-  EXPECT_EQ(MFLOW_TARGET, mie->type);
-  auto c_e = mie->target->src;
-  ++mie;
-  EXPECT_EQ(OPCODE_RETURN_VOID, mie->insn->opcode());
-  ++mie;
-
-  // C
-  EXPECT_EQ(MFLOW_TARGET, mie->type);
-  EXPECT_TRUE(mie->target->src == &*a_c || mie->target->src == &*b_c);
-  ++mie;
-  EXPECT_EQ(MFLOW_TARGET, mie->type);
-  EXPECT_TRUE(mie->target->src == &*a_c || mie->target->src == &*b_c);
-  ++mie;
-  EXPECT_EQ(OPCODE_ADD_INT, mie->insn->opcode());
-  ++mie;
-  EXPECT_EQ(OPCODE_GOTO, mie->insn->opcode());
-  EXPECT_EQ(c_e, &*mie);
-  ++mie;
-
-  // no D!
-  EXPECT_EQ(code->end(), mie);
+      ; no D!
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, noDups) {
@@ -209,16 +162,8 @@ TEST_F(DedupBlocksTest, noDups) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(method->get_code()));
-}
-
-std::string cfg_str(IRCode* code) {
-  code->build_cfg(/* editable */ true);
-  const auto& cfg = code->cfg();
-  auto result = show(cfg);
-  code->clear_cfg();
-  return result;
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
@@ -261,11 +206,8 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
@@ -273,27 +215,27 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
     (
       (const v0 0)
       (if-eqz v0 :left)
-      (goto :right)
+
+      ; right
+      ; same code as `:left` block but different successors
+      (const v1 1)
+      (if-eqz v1 :right2)
+
+      (:middle)
+      (return-void)
+
+      (:right2)
+      (const v3 3)
+      (goto :middle)
 
       (:left)
       (const v1 1)
       (if-eqz v1 :left2)
       (goto :middle)
 
-      (:right) ; same code as `:left` block but different successors
-      (const v1 1)
-      (if-eqz v1 :right2)
-      (goto :middle)
-
       (:left2)
       (const v2 2)
       (goto :middle)
-
-      (:right2)
-      (const v3 3)
-
-      (:middle)
-      (return-void)
     )
   )";
 
@@ -306,11 +248,8 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
@@ -318,27 +257,25 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
     (
       (const v0 0)
       (if-eqz v0 :left)
-      (goto :right)
 
-      (:left)
+      ; right
+      ; same code as `:left` block but different successors
       (const v1 1)
       (if-eqz v1 :middle)
-      (goto :left2)
 
-      (:right) ; same code as `:left` block but different successors
-      (const v1 1)
-      (if-eqz v1 :middle)
-      (goto :right2)
-
-      (:left2)
-      (const v2 2)
-      (goto :middle)
-
-      (:right2)
+      ; right2
       (const v3 3)
 
       (:middle)
       (return-void)
+
+      (:left)
+      (const v1 1)
+      (if-eqz v1 :middle)
+
+      ; left2
+      (const v2 2)
+      (goto :middle)
     )
   )";
 
@@ -351,11 +288,8 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diamond) {
@@ -396,11 +330,8 @@ TEST_F(DedupBlocksTest, diamond) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual:\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 // in Code:  A B C (where B == C,
@@ -453,11 +384,8 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expected_code.get()) << SHOW(expected_code) << "actual\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 // in Code: A B C(where B == C,
@@ -492,9 +420,6 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
   auto code = method->get_code();
   run_dedup_blocks();
   auto expect_code = assembler::ircode_from_string(str_code);
-  EXPECT_EQ(assembler::to_s_expr(expect_code.get()),
-            assembler::to_s_expr(code))
-      << "expected:\n"
-      << cfg_str(expect_code.get()) << SHOW(expect_code) << "actual\n"
-      << cfg_str(code) << SHOW(method->get_code());
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
 }

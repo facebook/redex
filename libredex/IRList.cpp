@@ -185,45 +185,58 @@ MethodItemEntryCloner::MethodItemEntryCloner() {
   m_pos_map[nullptr] = nullptr;
 }
 
-MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mei) {
-  MethodItemEntry* cloned_mei;
-  auto entry = m_entry_map.find(mei);
-  if (entry != m_entry_map.end()) {
-    return entry->second;
+MethodItemEntry* MethodItemEntryCloner::clone(const MethodItemEntry* mie) {
+
+  const auto& pair = m_entry_map.emplace(mie, nullptr);
+  auto& it = pair.first;
+  bool was_already_there = !pair.second;
+  if (was_already_there) {
+    return it->second;
   }
-  cloned_mei = new MethodItemEntry(*mei);
-  m_entry_map[mei] = cloned_mei;
-  switch (cloned_mei->type) {
+  auto cloned_mie = new MethodItemEntry(*mie);
+  it->second = cloned_mie;
+
+  switch (cloned_mie->type) {
   case MFLOW_TRY:
-    cloned_mei->tentry = new TryEntry(*cloned_mei->tentry);
-    cloned_mei->tentry->catch_start = clone(cloned_mei->tentry->catch_start);
-    return cloned_mei;
+    cloned_mie->tentry = new TryEntry(*cloned_mie->tentry);
+    cloned_mie->tentry->catch_start = clone(cloned_mie->tentry->catch_start);
+    return cloned_mie;
   case MFLOW_CATCH:
-    cloned_mei->centry = new CatchEntry(*cloned_mei->centry);
-    cloned_mei->centry->next = clone(cloned_mei->centry->next);
-    return cloned_mei;
+    cloned_mie->centry = new CatchEntry(*cloned_mie->centry);
+    cloned_mie->centry->next = clone(cloned_mie->centry->next);
+    return cloned_mie;
   case MFLOW_OPCODE:
-    cloned_mei->insn = new IRInstruction(*cloned_mei->insn);
-    if (cloned_mei->insn->has_data()) {
-      cloned_mei->insn->set_data(cloned_mei->insn->get_data()->clone());
+    cloned_mie->insn = new IRInstruction(*cloned_mie->insn);
+    if (cloned_mie->insn->has_data()) {
+      cloned_mie->insn->set_data(cloned_mie->insn->get_data()->clone());
     }
-    return cloned_mei;
+    return cloned_mie;
   case MFLOW_TARGET:
-    cloned_mei->target = new BranchTarget(*cloned_mei->target);
-    cloned_mei->target->src = clone(cloned_mei->target->src);
-    return cloned_mei;
+    cloned_mie->target = new BranchTarget(*cloned_mie->target);
+    cloned_mie->target->src = clone(cloned_mie->target->src);
+    return cloned_mie;
   case MFLOW_DEBUG:
-    return cloned_mei;
+    return cloned_mie;
   case MFLOW_POSITION:
-    m_pos_map[mei->pos.get()] = cloned_mei->pos.get();
-    cloned_mei->pos->parent = m_pos_map.at(cloned_mei->pos->parent);
-    return cloned_mei;
+    m_pos_map[mie->pos.get()] = cloned_mie->pos.get();
+    m_positions_to_fix.push_back(cloned_mie->pos.get());
+    return cloned_mie;
   case MFLOW_FALLTHROUGH:
-    return cloned_mei;
+    return cloned_mie;
   case MFLOW_DEX_OPCODE:
     always_assert_log(false, "DexInstructions not expected here");
   }
   not_reached();
+}
+
+void MethodItemEntryCloner::fix_parent_positions(
+    const DexPosition* ignore_pos) {
+  // When the DexPosition was copied, the parent pointer was shallowly copied
+  for (DexPosition* pos : m_positions_to_fix) {
+    if (pos->parent != ignore_pos) {
+      pos->parent = m_pos_map.at(pos->parent);
+    }
+  }
 }
 
 void IRList::replace_opcode(IRInstruction* to_delete,

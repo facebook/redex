@@ -92,7 +92,8 @@ void write_intermediate_dex(const ConfigFiles& cfg,
     instruction_lowering::run(stores);
   }
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
-  for (auto& store : stores) {
+  for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
+    auto& store = stores[store_number];
     Timer t("Writing intermediate dexes");
 
     dex_files.append(Json::nullValue);
@@ -124,6 +125,8 @@ void write_intermediate_dex(const ConfigFiles& cfg,
       write_classes_to_dex(ss.str(),
                            &store.get_dexen()[i],
                            nullptr /* locator_index */,
+                           false /* name-based locators */,
+                           store_number,
                            i,
                            cfg,
                            pos_mapper.get(),

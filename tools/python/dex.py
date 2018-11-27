@@ -727,21 +727,35 @@ class debug_info_item(AutoParser):
                     row.epilogue_begin = False
         return self.line_table
 
-    def get_ops(self):
+    def get_ops(self, reset_offset=True):
         if self.ops is None:
             data = self.data
-            data.push_offset_and_seek(self.debug_info_offset)
+            if reset_offset:
+                data.push_offset_and_seek(self.debug_info_offset)
+            else:
+                data.seek(self.debug_info_offset)
             self.ops = list()
             while True:
                 op = debug_info_op(data)
                 self.ops.append(op)
                 if op.op == DBG_END_SEQUENCE:
                     break
-            data.pop_offset_and_seek()
+            if reset_offset:
+                data.pop_offset_and_seek()
         return self.ops
 
-    def dump_debug_info(self, f=sys.stdout, prefix=None):
-        ops = self.get_ops()
+    def dump_debug_info(self, f=sys.stdout, prefix=None, reset_offset=True):
+        ops = self.get_ops(reset_offset=reset_offset)
+        if prefix:
+            f.write(prefix)
+        f.write('    ')
+        f.write('line_start={}({}) param_size={}({}) param_name=[{}]\n'.format(
+            self.line_start,
+            get_uleb128_byte_size(self.line_start),
+            self.parameters_size,
+            get_uleb128_byte_size(self.parameters_size),
+            ", ".join(map(lambda x: str(x), self.parameter_names)),
+        ))
         for op in ops:
             if prefix:
                 f.write(prefix)
@@ -1384,6 +1398,8 @@ class File:
         self.strings = None
         self.call_sites = None
         self.dex_classes = {}
+        self.debug_info_items = None
+        self.debug_info_items_total_size = None
 
     def demangle_class_name(self, cls_mangled):
         '''Given a mangled type name as it would appear in a DEX file like
@@ -1415,6 +1431,21 @@ class File:
             if item.type.get_enum_value() == type_code:
                 return (item.size, item.offset)
         return (0, 0)
+
+    def get_debug_info_items_and_total_size(self):
+        if self.debug_info_items is None:
+            (size, offset) = self.get_map_tuple(TYPE_DEBUG_INFO_ITEM)
+            if size == 0 or offset == 0:
+                return (None, None)
+            self.data.push_offset_and_seek(offset)
+            self.debug_info_items = list()
+            for i in range(size):
+                item = debug_info_item(self.data)
+                _ = item.get_ops(reset_offset=False)
+                self.debug_info_items.append(item)
+            self.debug_info_items_total_size = self.data.tell() - offset
+            self.data.pop_offset_and_seek()
+        return (self.debug_info_items, self.debug_info_items_total_size)
 
     def find_class(self, class_ref):
         class_idx = class_ref
@@ -1803,14 +1834,14 @@ class File:
         classes = self.get_classes()
         if classes:
             for cls in classes:
-                if cls.is_abstract():
+                if options.skip_abstract and cls.is_abstract():
                     continue
                 cls.dump(f=f)
                 methods = cls.get_methods()
                 dc = options.dump_code or options.dump_all
                 ddi = options.debug or options.dump_all
                 for method in methods:
-                    if options.dump_code or options.dump_all:
+                    if dc or ddi:
                         method.dump(f=f, dump_code=dc, dump_debug_info=ddi)
                 f.write('\n')
 
@@ -1821,10 +1852,18 @@ class File:
                 f.write('code_item[%u]:\n' % (i))
                 code_item.dump(f=f)
 
+    def dump_debug_info_items(self, options, f=sys.stdout):
+        (debug_info_items, size) = self.get_debug_info_items_and_total_size()
+        if debug_info_items:
+            for item in debug_info_items:
+                item.dump_debug_info(f=f)
+            f.write("Total TYPE_DEBUG_INFO_ITEM size: {}\n\n".format(size))
+
     def dump(self, options, f=sys.stdout):
         self.dump_header(options, f)
         f.write('\n')
         self.dump_map_list(options, f)
+        self.dump_debug_info_items(options, f)
         self.dump_string_ids(options, f)
         self.dump_type_ids(options, f)
         self.dump_proto_ids(options, f)
@@ -3891,7 +3930,13 @@ def main():
     parser.add_option('--debug',
                       action='store_true',
                       dest='debug',
-                      help='Dump the DEX debug info.',
+                      help='Dump the DEX debug info for each method.',
+                      default=False)
+    parser.add_option('--debug-info-items',
+                      action='store_true',
+                      dest='dump_debug_info_items',
+                      help='Dump the DEX debug info items pointed to in its' + \
+                      ' map_list',
                       default=False)
     parser.add_option('-d', '--disassemble',
                       action='store_true',
@@ -3917,6 +3962,12 @@ def main():
                       dest='proguard',
                       help='Specify a progard file to use for demangling.',
                       default=None)
+    parser.add_option('--skip-abstract',
+                      action='store_true',
+                      dest='skip_abstract',
+                      help='Don\'t print information coming from abstract'
+                      ' classes when passing --code, --debug or --all.',
+                      default=False)
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -3961,6 +4012,8 @@ def main():
             print('')
         if options.dump_map_list or options.dump_all:
             dex.dump_map_list(options)
+        if options.dump_debug_info_items or options.dump_all:
+            dex.dump_debug_info_items(options)
         if options.dump_strings or options.dump_all:
             dex.dump_string_ids(options)
         if options.dump_types or options.dump_all:

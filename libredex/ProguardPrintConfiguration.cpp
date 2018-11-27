@@ -194,7 +194,7 @@ std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
     source << keep_rule.source_filename << ":" << keep_rule.source_line;
     return '\'' + text.str() + "\' from " + source.str();
   }
-  return '\'' + text.str() + '\'';
+  return text.str();
 }
 
 void redex::show_configuration(std::ostream& output,
@@ -206,6 +206,6 @@ void redex::show_configuration(std::ostream& output,
              cls->get_ifields().size() + cls->get_sfields().size();
   }
   for (const auto& keep : config.keep_rules) {
-    output << redex::show_keep(keep) << std::endl;
+    output << redex::show_keep(*keep) << std::endl;
   }
 }

@@ -84,9 +84,25 @@ DexType* get_class_type();
 DexType* get_enum_type();
 
 /**
+ * Return the DexType for an java.lang.Integer type.
+ */
+DexType* get_integer_type();
+
+/**
+ * Return the DexType for an java.lang.Throwable type.
+ */
+DexType* get_throwable_type();
+
+/**
  * Return the package for a valid DexType.
  */
 std::string get_package_name(const DexType* type);
+
+/**
+ * Return the simple name w/o the package name and the ending ';' for a valid
+ * DexType. E.g., 'Lcom/facebook/Simple;' -> 'Simple'.
+ */
+std::string get_simple_name(const DexType* type);
 
 /**
  * Return true if the type is a primitive.
@@ -201,9 +217,23 @@ const DexType* get_array_type_or_self(const DexType*);
 DexType* get_array_type(const DexType*);
 
 /**
+ * According to the description in the Java 7 spec:
+ * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html Given an array
+ * type, it's components are referenced directly via array access expressions
+ * that use integer index values. The component type of an array may itself be
+ * an array type.
+ */
+DexType* get_array_component_type(const DexType*);
+
+/**
  * Return the array type of a given type.
  */
 DexType* make_array_type(const DexType*);
+
+/**
+ * Return the array type of a given type in specified level.
+ */
+DexType* make_array_type(const DexType*, uint32_t level);
 
 /**
  * True if the method is a constructor (matches the "<init>" name)
@@ -213,12 +243,12 @@ bool is_init(const DexMethodRef* method);
 /**
  * True if the method is a static constructor (matches the "<clinit>" name)
  */
-bool is_clinit(const DexMethod* method);
+bool is_clinit(const DexMethodRef* method);
 
 /**
  * Whether the method is a ctor or static ctor.
  */
-inline bool is_any_init(const DexMethod* method) {
+inline bool is_any_init(const DexMethodRef* method) {
   return is_init(method) || is_clinit(method);
 }
 
@@ -330,6 +360,16 @@ void load_root_dexen(
   const std::string& dexen_dir_str,
   bool balloon = false,
   bool verbose = true);
+
+/**
+ * Creates a generated store based on the given classes.
+ *
+ * NOTE: InterDex will take care of adding the classes to the root store.
+ * TODO: Add a way to define a real store.
+ */
+void create_store(const std::string& store_name,
+                  DexStoresVector& stores,
+                  DexClasses classes);
 
 /*
  * This exists because in the absence of a register allocator, we need each

@@ -14,9 +14,14 @@ import org.junit.Test;
 
 public class ConstantPropagationTest {
 
+  // use SimpleInline so redex sees these constants but `javac` and d8 do not
+  long getLong() {
+    return 0x0002000300040005L;
+  }
+
   @Test
   public void if_long() {
-    long x = 0x0002000300040005L;
+    long x = getLong();
     int y;
     if (x > 0x0001000200030004L) {
       y = 32;
@@ -26,9 +31,13 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(32);
   }
 
+  long getNegLong() {
+    return 0x0000000fffffffffL;
+  }
+
   @Test
   public void if_negative_long() {
-    long x = 0x0000000fffffffffL;
+    long x = getNegLong();
     int y;
     if (x == -1L) {
       y = 32;
@@ -38,9 +47,13 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(0);
   }
 
+  float getFloat1() {
+    return 3.0f;
+  }
+
   @Test
   public void if_float1() {
-    float x = 3.0f;
+    float x = getFloat1();
     int y;
     if (x <= 4.5f) {
       y = 32;
@@ -50,9 +63,13 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(32);
   }
 
+  float getFloat2() {
+    return 2.25f;
+  }
+
   @Test
   public void if_float2() {
-    float x = 2.25f;
+    float x = getFloat2();
     int y;
     if (x == 2.25f) {
       y = 32;
@@ -62,9 +79,13 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(32);
   }
 
+  double getDouble1() {
+    return 3.0;
+  }
+
   @Test
   public void if_double1() {
-    double x = 3.0;
+    double x = getDouble1();
     int y;
     if (x <= 4.5) {
       y = 32;
@@ -74,9 +95,13 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(32);
   }
 
+  double getDouble2() {
+    return 2.26;
+  }
+
   @Test
   public void if_double2() {
-    double x = 2.26;
+    double x = getDouble2();
     int y;
     if (x >= 2.27) {
       y = 32;
@@ -86,21 +111,14 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(0);
   }
 
-  // use SimpleInline so that redex sees this constant but `javac` does not
   private int neg1() {
     return -1;
-  }
-
-  // use SimpleInline so that redex sees this constant but `javac` does not
-  private int zero() {
-    return 0;
   }
 
   @Test
   public void if_plus_one() {
     int x = neg1();
     x++;
-    assertThat(x).isEqualTo(0);
     int y;
     if (x == 0) {
       y = 32;
@@ -110,13 +128,21 @@ public class ConstantPropagationTest {
     assertThat(y).isEqualTo(32);
   }
 
+  private int one() {
+    return 1;
+  }
+
+  // This test intentionally does not use the same constant literal more than
+  // once. The reason is that d8 will load that constant and re-use the
+  // register rather than using a add-int/lit instruction. Currently
+  // ConstantPropagationPass only propagates add-int/lit but not add-int.
+  // TODO: propagate more than just add-int/lit
   @Test
-  public void if_plus_one2() {
-    int x = zero();
-    x++;
-    assertThat(x).isEqualTo(1);
+  public void if_plus_two() {
+    int x = one();
+    x += 2;
     int y;
-    if (x == 1) {
+    if (x == 3) {
       y = 32;
     } else {
       y = 0;

@@ -21,6 +21,7 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "JarLoader.h"
+#include "Trace.h"
 #include "Util.h"
 
 /******************
@@ -342,9 +343,35 @@ static DexMethod *make_dexmethod(std::vector<cp_entry> &cpool,
   return method;
 }
 
+// Global whitelist for duplicated classes
+std::vector<std::string> g_dup_class_whitelist;
+
+// Return true if the cls is among one of the known whitelisted duplicated
+// classes.
+static bool is_known_dup(DexClass* cls) {
+  return std::find_if(g_dup_class_whitelist.begin(), g_dup_class_whitelist.end(),
+                      [=](const std::string& name) {
+                        return cls->get_name()->str() == name;
+                      }) != g_dup_class_whitelist.end();
+}
+
+// Read whitelisted duplicate class list from config.
+void read_dup_class_whitelist(const JsonWrapper& json_cfg) {
+  std::vector<std::string> default_whitelist = {
+      "Lcom/facebook/soloader/MergedSoMapping;", "Ljunit/framework/TestSuite;"};
+
+  json_cfg.get("dup_class_whitelist", default_whitelist, g_dup_class_whitelist);
+  TRACE(MAIN, 1, "dup_class_whitelist: { \n");
+  for (auto whitelist_name : g_dup_class_whitelist) {
+    TRACE(MAIN, 1, "  %s\n", whitelist_name.c_str());
+  }
+  TRACE(MAIN, 1, "}\n");
+}
+
 static bool parse_class(uint8_t* buffer,
                         Scope* classes,
-                        attribute_hook_t attr_hook) {
+                        attribute_hook_t attr_hook,
+                        const std::string& jar_location = "") {
   uint32_t magic = read32(buffer);
   uint16_t vminor DEBUG_ONLY = read16(buffer);
   uint16_t vmajor DEBUG_ONLY = read16(buffer);
@@ -370,10 +397,33 @@ static bool parse_class(uint8_t* buffer,
   uint16_t super = read16(buffer);
   uint16_t ifcount = read16(buffer);
   DexType *self = make_dextype_from_cref(cpool, clazz);
-  if (type_class(self)) {
+  DexClass* cls = type_class(self);
+  if (cls) {
+    // We are seeing duplicate classes when parsing jar file
+    if (cls->is_external()) {
+      // Two external classes in .jar file has the same name
+      // Just issue an warning for now
+      TRACE(MAIN, 1,
+            "Warning: Found a duplicate class '%s' in two .jar files:\n "
+            "  Current: '%s'\n"
+            "  Previous: '%s'\n",
+            SHOW(self), jar_location.c_str(), cls->get_location().c_str());
+    } else if (!is_known_dup(cls)) {
+      TRACE(MAIN, 1,
+            "Warning: Found a duplicate class '%s' in .dex and .jar file.\n"
+            "  Current: '%s'\n"
+            "  Previous: '%s'\n",
+            SHOW(self), jar_location.c_str(), cls->get_location().c_str());
+
+      // There are still blocking issues in instrumentation test that are
+      // blocking. We can make this throw again once they are fixed.
+      // throw duplicate_class(SHOW(self), jar_location,
+      //                      cls->get_location());
+    }
     return true;
   }
-  ClassCreator cc(self);
+
+  ClassCreator cc(self, jar_location);
   cc.set_external();
   if (super != 0) {
     DexType *sclazz = make_dextype_from_cref(cpool, super);
@@ -717,7 +767,8 @@ static bool decompress_class(jar_entry &file, const uint8_t *mapping,
 
 static const int kStartBufferSize = 128 * 1024;
 
-static bool process_jar_entries(std::vector<jar_entry>& files,
+static bool process_jar_entries(const char* location,
+                                std::vector<jar_entry>& files,
                                 const uint8_t* mapping,
                                 Scope* classes,
                                 attribute_hook_t attr_hook) {
@@ -751,7 +802,7 @@ static bool process_jar_entries(std::vector<jar_entry>& files,
       return false;
     }
 
-    if (!parse_class(outbuffer, classes, attr_hook)) {
+    if (!parse_class(outbuffer, classes, attr_hook, location)) {
       free(outbuffer);
       return false;
     }
@@ -760,7 +811,8 @@ static bool process_jar_entries(std::vector<jar_entry>& files,
   return true;
 }
 
-static bool process_jar(const uint8_t* mapping,
+static bool process_jar(const char* location,
+                        const uint8_t* mapping,
                         ssize_t size,
                         Scope* classes,
                         attribute_hook_t attr_hook) {
@@ -772,7 +824,7 @@ static bool process_jar(const uint8_t* mapping,
     return false;
   if (!get_jar_entries(mapping, pce, files))
     return false;
-  if (!process_jar_entries(files, mapping, classes, attr_hook)) {
+  if (!process_jar_entries(location, files, mapping, classes, attr_hook)) {
     return false;
   }
   return true;
@@ -789,7 +841,7 @@ bool load_jar_file(const char* location,
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
-  if (!process_jar(mapping, file.size(), classes, attr_hook)) {
+  if (!process_jar(location, mapping, file.size(), classes, attr_hook)) {
     fprintf(stderr, "error: cannot process jar: %s\n", location);
     return false;
   }

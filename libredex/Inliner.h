@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IRCode.h"
+#include "PatriciaTreeSet.h"
 #include "Resolver.h"
 
 namespace inliner {
@@ -46,6 +47,14 @@ void inline_method(IRCode* caller,
                    IRCode* callee,
                    IRList::iterator pos);
 
+/*
+ * Use the editable CFG instead of IRCode to do the inlining. Return true on
+ * success.
+ */
+bool inline_with_cfg(DexMethod* caller_method,
+                     DexMethod* callee_method,
+                     IRInstruction* callsite);
+
 } // namespace inliner
 
 /**
@@ -62,9 +71,14 @@ class MultiMethodInliner {
   struct Config {
     bool throws_inline;
     bool enforce_method_size_limit{true};
+    bool multiple_callers{false};
+    bool inline_small_non_deletables{false};
+    bool use_cfg_inliner{false};
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
     std::unordered_set<DexType*> whitelist_no_method_limit;
+    std::unordered_set<DexType*> no_inline;
+    std::unordered_set<DexType*> force_inline;
   };
 
   MultiMethodInliner(
@@ -109,24 +123,23 @@ class MultiMethodInliner {
    * Recurse in a callee if that has inlinable candidates of its own.
    * Inlining is bottom up.
    */
-  void caller_inline(
+  void caller_inline(DexMethod* caller,
+                     const std::vector<DexMethod*>& callees,
+                     sparta::PatriciaTreeSet<DexMethod*> call_stack,
+                     std::unordered_set<DexMethod*>* visited);
+
+  void inline_inlinables(
       DexMethod* caller,
-      const std::vector<DexMethod*>& callees,
-      std::unordered_set<DexMethod*>& visited);
+      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
 
   /**
    * Return true if the callee is inlinable into the caller.
-   * The predicates below define the constraint for inlining.
+   * The predicates below define the constraints for inlining.
    */
   bool is_inlinable(const DexMethod* caller,
                     const DexMethod* callee,
                     const IRInstruction* insn,
                     size_t estimated_insn_size);
-
-
-  void inline_inlinables(
-      DexMethod* caller,
-      const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -166,13 +179,6 @@ class MultiMethodInliner {
   bool nonrelocatable_invoke_super(IRInstruction* insn,
                                    const DexMethod* callee,
                                    const DexMethod* caller);
-
-  /**
-   * Return true if a callee overrides one of the input registers.
-   * Writing over an input registers may change the type of the registers
-   * in the caller if the method was inlined and break invariants in the caller.
-   */
-  bool writes_ins_reg(IRInstruction* insn, uint16_t temp_regs);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.
@@ -217,6 +223,27 @@ class MultiMethodInliner {
                         const DexMethod* callee);
 
   /**
+   * Return whether the callee should be inlined into the caller. This differs
+   * from is_inlinable in that the former is concerned with whether inlining is
+   * possible to do correctly at all, whereas this is concerned with whether the
+   * inlining is beneficial for size / performance.
+   *
+   * This method does *not* need to return a subset of is_inlinable. We will
+   * only inline callsites that pass both should_inline and is_inlinable.
+   *
+   * Note that this filter  will only be applied  when inlining is initiated via
+   * a call to `inline_methods()`, but not if `inline_callees()` is invoked
+   * directly.
+   */
+  bool should_inline(const DexMethod* caller, const DexMethod* callee) const;
+
+  /**
+   * We want to avoid inlining a large method with many callers as that would
+   * bloat the bytecode.
+   */
+  bool too_many_callers(const DexMethod* callee) const;
+
+  /**
    * Staticize required methods (stored in `m_make_static`) and update
    * opcodes accordingly.
    *
@@ -245,11 +272,15 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<DexMethod*, std::vector<DexMethod*>> callee_caller;
+  std::unordered_map<const DexMethod*, std::vector<DexMethod*>> callee_caller;
   // this map is ordered in order that we inline our methods in a repeatable
   // fashion so as to create reproducible binaries
   std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
       caller_callee;
+
+  // Cache of the opcode counts of each method after all its eligible callsites
+  // have been inlined.
+  mutable std::unordered_map<const DexMethod*, size_t> m_opcode_counts;
 
  private:
   /**
@@ -286,13 +317,3 @@ class MultiMethodInliner {
     return info;
   }
 };
-
-/**
- * Add the single-callsite methods to the inlinable set.
- */
-void select_inlinable(
-    const Scope& scope,
-    const std::unordered_set<DexMethod*>& methods,
-    MethodRefCache& resolved_refs,
-    std::unordered_set<DexMethod*>* inlinable,
-    bool multiple_callee = false);

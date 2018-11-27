@@ -427,22 +427,28 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
   std::unordered_map<DexCatches, uint32_t, boost::hash<DexCatches>> catches_map;
   for (auto it = m_tries.begin(); it != m_tries.end(); ++it, ++tryno) {
     auto& dextry = *it;
+    always_assert(dextry->m_start_addr < code->insns_size);
     dti[tryno].start_addr = dextry->m_start_addr;
+    always_assert(dextry->m_start_addr + dextry->m_insn_count <= code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
       catches_map[dextry->m_catches] = hemit - handler_base;
       size_t catchcount = dextry->m_catches.size();
       bool has_catchall = dextry->m_catches.back().first == nullptr;
       if (has_catchall) {
+        // -1 because the catch-all address is last (without an address)
         catchcount = -(catchcount - 1);
       }
       hemit = write_sleb128(hemit, (int32_t)catchcount);
       for (auto const& cit : dextry->m_catches) {
         auto type = cit.first;
+        auto catch_addr = cit.second;
         if (type != nullptr) {
+          // Assumption: The only catch-all is at the end of the list
           hemit = write_uleb128(hemit, dodx->typeidx(type));
         }
-        hemit = write_uleb128(hemit, cit.second);
+        always_assert(catch_addr < code->insns_size);
+        hemit = write_uleb128(hemit, catch_addr);
       }
     }
     dti[tryno].handler_off = catches_map.at(dextry->m_catches);
@@ -978,7 +984,7 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
 
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
-                   const std::string& dex_location)
+                   const std::string& location)
     : m_access_flags((DexAccessFlags)cdef->access_flags),
       m_super_class(idx->get_typeidx(cdef->super_idx)),
       m_self(idx->get_typeidx(cdef->typeidx)),
@@ -986,7 +992,7 @@ DexClass::DexClass(DexIdx* idx,
       m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
       m_anno(nullptr),
       m_external(false),
-      m_dex_location(dex_location) {
+      m_location(location) {
   load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
       load_static_values(idx, cdef->static_values_off));

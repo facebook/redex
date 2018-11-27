@@ -725,13 +725,9 @@ match_t<T, std::tuple<> > can_rename() {
 }
 
 /** Match which checks keep helper for DexMembers */
-template<typename T>
-match_t<T, std::tuple<> > keep() {
-  return {
-    [](const T* t) {
-      return keep(t);
-    }
-  };
+template <typename T>
+match_t<T, std::tuple<>> has_keep() {
+  return {[](const T* t) { return has_keep(t); }};
 }
 
 } // namespace m

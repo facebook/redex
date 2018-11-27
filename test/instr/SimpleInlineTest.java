@@ -62,6 +62,9 @@ public class SimpleInlineTest {
   private void throwsInElse() throws Exception {
     if (mHello != null) {
       String y = "x";
+      // We need this return here because we're testing what happens to code
+      // after the first return statement
+      return;
     } else {
       wrapsThrow();
     }
@@ -338,4 +341,16 @@ public class SimpleInlineTest {
     Log.e("Hello9", "World9");
     return 100;
   }
+
+  @Test
+  public void callEmpty() {
+    try {
+      tryStuff(0);
+    } finally {
+      cleanup(1);
+    }
+  }
+
+  public void tryStuff(int i) {}
+  public void cleanup(int i) {}
 }

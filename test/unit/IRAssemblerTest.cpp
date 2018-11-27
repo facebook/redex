@@ -293,3 +293,77 @@ TEST_F(IRAssemblerTest, try_catch_with_two_tries) {
   auto s = assembler::to_string(code.get());
   EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
 }
+
+std::vector<DexPosition*> get_positions(const std::unique_ptr<IRCode>& code) {
+  std::vector<DexPosition*> positions;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_POSITION) {
+      positions.push_back(mie.pos.get());
+    }
+  }
+  return positions;
+}
+
+TEST_F(IRAssemblerTest, pos) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos "LFoo;.bar:()V" "Foo.java" "420")
+     (const v0 420)
+    )
+  )");
+
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  EXPECT_EQ(code->count_opcodes(), 1);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 1);
+  auto pos = positions[0];
+  EXPECT_EQ(show(pos->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos->line, 420);
+  EXPECT_EQ(pos->parent, nullptr);
+}
+
+TEST_F(IRAssemblerTest, posWithParent) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
+  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos "LFoo;.baz:()I" "Foo.java" 440 0)
+     (const v0 420)
+     (return v0)
+    )
+  )");
+
+  // Ensure serialize + deserialize works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  // Ensure deserialize actually works
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 2);
+
+  auto pos0 = positions[0];
+  EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos0->line, 420);
+  EXPECT_EQ(pos0->parent, nullptr);
+
+  auto pos1 = positions[1];
+  EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
+  EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos1->line, 440);
+  EXPECT_EQ(*pos1->parent, *pos0);
+}

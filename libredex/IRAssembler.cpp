@@ -116,13 +116,48 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   return s_expr(s_exprs);
 }
 
-s_expr to_s_expr(const DexPosition* pos) {
-  always_assert_log(pos->parent == nullptr, "Not yet implemented");
+namespace {
+
+s_expr _to_s_expr(const DexPosition* pos, uint32_t parent_idx) {
   return s_expr({
-      s_expr(show(pos->method)),
-      s_expr(pos->file->c_str()),
-      s_expr(std::to_string(pos->line)),
+    s_expr(".pos"),
+    s_expr(show(pos->method)),
+    s_expr(pos->file->c_str()),
+    s_expr(std::to_string(pos->line)),
+    s_expr(std::to_string(parent_idx)),
   });
+}
+
+}
+
+std::vector<s_expr> to_s_exprs(
+    const DexPosition* pos,
+    std::vector<const DexPosition*>* positions_emitted) {
+  if (pos->parent) {
+    // Get it? snay is redex's dad
+    auto snay = pos->parent;
+    for (size_t i = 0; i < positions_emitted->size(); i++) {
+      auto pos_emitted = positions_emitted->at(i);
+      if (*pos_emitted == *snay) {
+        // Shane thought he could hide from us... hah! a quick linear search
+        // got him
+        return { _to_s_expr(pos, i) };
+      }
+    }
+    auto result = to_s_exprs(snay, positions_emitted);
+    result.push_back(_to_s_expr(pos, positions_emitted->size() - 1));
+    return result;
+  } else {
+    positions_emitted->push_back(pos);
+    return {
+      s_expr({
+        s_expr(".pos"),
+        s_expr(show(pos->method)),
+        s_expr(pos->file->c_str()),
+        s_expr(std::to_string(pos->line)),
+      })
+    };
+  }
 }
 
 std::unique_ptr<IRInstruction> instruction_from_s_expr(
@@ -227,12 +262,18 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   return insn;
 }
 
-std::unique_ptr<DexPosition> position_from_s_expr(const s_expr& e) {
+std::unique_ptr<DexPosition> position_from_s_expr(
+    const s_expr& e,
+    const std::vector<DexPosition*>& positions) {
   std::string method_str;
   std::string file_str;
   std::string line_str;
-  s_patn({s_patn(&method_str), s_patn(&file_str), s_patn(&line_str)})
-      .must_match(e, "Expected 3 args for position directive");
+  s_expr parent_expr;
+  s_patn({
+      s_patn(&method_str),
+      s_patn(&file_str),
+      s_patn(&line_str),
+  }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
   auto* dex_method =
       static_cast<DexMethod*>(DexMethod::make_method(method_str));
   // We should ideally allow DexPosition to take non-concrete methods too...
@@ -243,6 +284,19 @@ std::unique_ptr<DexPosition> position_from_s_expr(const s_expr& e) {
   in >> line;
   auto pos = std::make_unique<DexPosition>(line);
   pos->bind(dex_method, file);
+  if (!parent_expr.is_nil()) {
+    std::string parent_str;
+    s_patn({
+        s_patn(&parent_str),
+    }).must_match(e, "Expected 4th arg of pos directive to be a string");
+    uint32_t parent_idx = UINT32_MAX;
+    std::istringstream parent_in(parent_str);
+    parent_in >> parent_idx;
+    always_assert(parent_idx < positions.size());
+    pos->parent = positions[parent_idx];
+  } else {
+    pos->parent = nullptr;
+  }
   return pos;
 }
 
@@ -401,6 +455,7 @@ s_expr to_s_expr(const IRCode* code) {
 
   // Now emit the exprs
   std::unordered_map<IRInstruction*, size_t> unused_label_index;
+  std::vector<const DexPosition*> positions_emitted;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
       case MFLOW_OPCODE:
@@ -416,7 +471,9 @@ s_expr to_s_expr(const IRCode* code) {
       case MFLOW_DEBUG:
         always_assert_log(false, "Not yet implemented");
       case MFLOW_POSITION:
-        exprs.emplace_back(::to_s_expr(it->pos.get()));
+        for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
+          exprs.push_back(e);
+        }
         break;
       case MFLOW_TARGET: {
         auto branch_target = it->target;
@@ -487,6 +544,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   LabelDefs label_defs;
   LabelRefs label_refs;
   boost::optional<uint16_t> max_reg;
+  std::vector<DexPosition*> positions;
 
   // map from catch name to catch marker pointer
   const auto& catches = get_catch_name_map(insns_expr);
@@ -496,8 +554,9 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
     s_expr tail;
     if (s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i])) {
       if (keyword == ".pos") {
-        code->push_back(position_from_s_expr(tail));
-
+        auto pos = position_from_s_expr(tail, positions);
+        positions.push_back(pos.get());
+        code->push_back(std::move(pos));
       } else if (keyword.substr(0, 4) == ".try") {
         // Try markers look like this:
         // (.try_start catch_name)

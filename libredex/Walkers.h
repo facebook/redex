@@ -15,6 +15,7 @@
 #include "ControlFlow.h"
 #include "DexAnnotation.h"
 #include "DexClass.h"
+#include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Match.h"
 #include "WorkQueue.h"
@@ -251,9 +252,10 @@ class walk {
                               MethodFilterFn filter,
                               InsnWalkerFn walker) {
     iterate_code(cls, filter, [&walker](DexMethod* m, IRCode& code) {
-      for (const auto& mie : InstructionIterable(code)) {
-        walker(m, mie.insn);
-      }
+      editable_cfg_adapter::iterate(&code, [&walker, &m](MethodItemEntry* mie) {
+        walker(m, mie->insn);
+        return editable_cfg_adapter::LOOP_CONTINUE;
+      });
     });
   }
 

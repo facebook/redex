@@ -411,11 +411,14 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
     return new DexEncodedValue(evt, v);
   }
   case DEVT_FLOAT: {
-    uint64_t v = read_evarg(encdata, evarg, false) << ((3 - evarg) * 8);
+    // We sign extend floats so that they can be treated just like signed ints
+    uint64_t v = read_evarg(encdata, evarg, true /* sign_extend */)
+                 << ((3 - evarg) * 8);
     return new DexEncodedValue(evt, v);
   }
   case DEVT_DOUBLE: {
-    uint64_t v = read_evarg(encdata, evarg, false) << ((7 - evarg) * 8);
+    uint64_t v = read_evarg(encdata, evarg, false /* sign_extend */)
+                 << ((7 - evarg) * 8);
     return new DexEncodedValue(evt, v);
   }
   case DEVT_NULL:

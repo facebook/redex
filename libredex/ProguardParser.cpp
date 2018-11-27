@@ -699,7 +699,7 @@ ClassSpecification parse_class_specification(
 
 bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 token keep_kind,
-                std::vector<KeepSpec>* spec,
+                KeepSpecSet* spec,
                 bool mark_classes,
                 bool mark_conditionally,
                 bool allowshrinking,
@@ -708,18 +708,18 @@ bool parse_keep(std::vector<unique_ptr<Token>>::iterator* it,
                 bool* ok) {
   if ((**it)->type == keep_kind) {
     ++(*it); // Consume the keep token
-    KeepSpec keep;
-    keep.mark_classes = mark_classes;
-    keep.mark_conditionally = mark_conditionally;
-    keep.allowshrinking = allowshrinking;
-    keep.source_filename = filename;
-    keep.source_line = line;
-    if (!parse_modifiers(it, &keep)) {
+    auto keep = std::make_unique<KeepSpec>();
+    keep->mark_classes = mark_classes;
+    keep->mark_conditionally = mark_conditionally;
+    keep->allowshrinking = allowshrinking;
+    keep->source_filename = filename;
+    keep->source_line = line;
+    if (!parse_modifiers(it, &*keep)) {
       skip_to_next_command(it);
       return true;
     }
-    keep.class_spec = parse_class_specification(it, ok);
-    spec->push_back(keep);
+    keep->class_spec = parse_class_specification(it, ok);
+    spec->emplace(std::move(keep));
     return true;
   }
   return false;

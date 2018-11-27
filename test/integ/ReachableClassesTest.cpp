@@ -19,6 +19,11 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 
+// NOTE: This test exercises the "legacy_reflection_reachability" option in
+// ReachableClasses.
+// See the following tests for the modern analysis:
+//  native/redex/test/instr/ReachableClassesTest.java
+//  native/redex/test/instr/ReachableClassesTestVerify.cpp
 TEST(ReachableClasses, ClassForNameStringLiteral) {
   g_redex = new RedexContext();
 

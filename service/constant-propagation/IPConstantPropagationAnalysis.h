@@ -104,4 +104,8 @@ class FixpointIterator
  */
 void set_encoded_values(const DexClass* cls, ConstantEnvironment* env);
 
+void set_ifield_values(const DexClass* cls,
+                       const EligibleIfields& eligible_ifields,
+                       ConstantEnvironment* env);
+
 } // namespace constant_propagation

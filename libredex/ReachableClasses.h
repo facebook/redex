@@ -16,7 +16,12 @@ void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
+
 void recompute_classes_reachable_from_code(const Scope& scope);
+
+void recompute_reachable_from_xml_layouts(
+  const Scope& scope,
+  const std::string& apk_dir);
 
 // Note: The lack of convenience functions for DexType* is intentional. By doing
 // so, it implies you need to nullptr check. Which is evil because it sprinkles
@@ -44,8 +49,8 @@ inline bool can_rename_if_ignoring_blanket_keepnames(DexMember* member) {
 }
 
 template <class DexMember>
-inline bool keep(DexMember* member) {
-  return member->rstate.keep();
+inline bool has_keep(DexMember* member) {
+  return member->rstate.has_keep();
 }
 
 template <class DexMember>
@@ -69,7 +74,7 @@ inline bool assumenosideeffects(DexMember* member) {
 // root is an attempt to identify a root for reachability analysis by using any
 // class or member that has keep set on it but does not have allowshrinking set
 // on it.
-template<class DexMember>
+template <class DexMember>
 inline bool root(DexMember* member) {
-  return keep(member) && !allowshrinking(member);
+  return has_keep(member) && !allowshrinking(member);
 }

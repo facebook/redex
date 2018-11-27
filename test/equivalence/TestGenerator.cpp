@@ -77,6 +77,8 @@ int main(int argc, char* argv[]) {
   write_classes_to_dex(dex,
                        &classes,
                        nullptr /* LocatorIndex* */,
+                       false /* name-based locators */,
+                       0,
                        0,
                        cfg,
                        pos_mapper.get(),

@@ -610,6 +610,10 @@ void IRCode::clear_cfg() {
   }
 }
 
+bool IRCode::editable_cfg_built() const {
+  return m_cfg != nullptr && m_cfg->editable();
+}
+
 namespace {
 
 using RegMap = transform::RegMap;
@@ -980,6 +984,9 @@ bool IRCode::try_sync(DexCode* code) {
     for (auto mei = try_end->tentry->catch_start;
         mei != nullptr;
         mei = mei->centry->next) {
+      if (mei->centry->next != nullptr) {
+        always_assert(mei->centry->catch_type != nullptr);
+      }
       catches.emplace_back(mei->centry->catch_type, entry_to_addr.at(mei));
     }
     split_and_insert_try_regions(start_addr, end_addr, catches, &tries);

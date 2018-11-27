@@ -47,7 +47,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
      )
     )
   )");
-  m1->rstate.set_keep();
+  m1->rstate.set_root();
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -102,7 +102,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
      )
     )
   )");
-  m1->rstate.set_keep();
+  m1->rstate.set_root();
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -115,7 +115,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
      )
     )
   )");
-  m2->rstate.set_keep();
+  m2->rstate.set_root();
   creator.add_method(m2);
 
   auto m3 = assembler::method_from_string(R"(
@@ -160,7 +160,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
      )
     )
   )");
-  m1->rstate.set_keep();
+  m1->rstate.set_root();
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -173,7 +173,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
      )
     )
   )");
-  m2->rstate.set_keep();
+  m2->rstate.set_root();
   creator.add_method(m2);
 
   auto m3 = assembler::method_from_string(R"(
@@ -230,7 +230,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
      )
     )
   )");
-  m1->rstate.set_keep();
+  m1->rstate.set_root();
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -662,7 +662,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
      )
     )
   )");
-  m1->rstate.set_keep(); // Make this an entry point
+  m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -677,7 +677,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
      )
     )
   )");
-  m2->rstate.set_keep(); // Make this an entry point
+  m2->rstate.set_root(); // Make this an entry point
   creator.add_method(m2);
 
   Scope scope{creator.create()};
@@ -720,7 +720,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
      )
     )
   )");
-  m1->rstate.set_keep(); // Make this an entry point
+  m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -735,7 +735,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
      )
     )
   )");
-  m2->rstate.set_keep(); // Make this an entry point
+  m2->rstate.set_root(); // Make this an entry point
   creator.add_method(m2);
 
   Scope scope{creator.create()};
@@ -769,7 +769,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
      )
     )
   )");
-  m1->rstate.set_keep(); // Make this an entry point
+  m1->rstate.set_root(); // Make this an entry point
   creator.add_method(m1);
 
   auto m2 = assembler::method_from_string(R"(
@@ -784,12 +784,12 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
      )
     )
   )");
-  m2->rstate.set_keep(); // Make this an entry point
+  m2->rstate.set_root(); // Make this an entry point
   creator.add_method(m2);
 
   // Mark Foo.qux as a -keep field -- meaning we cannot determine if its value
   // is truly constant just by looking at Dex bytecode
-  static_cast<DexField*>(DexField::get_field("LFoo;.qux:I"))->rstate.set_keep();
+  static_cast<DexField*>(DexField::get_field("LFoo;.qux:I"))->rstate.set_root();
   auto expected = assembler::to_s_expr(m2->get_code());
 
   Scope scope{creator.create()};
@@ -833,7 +833,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
      )
     )
   )");
-  clinit->rstate.set_keep(); // Make this an entry point
+  clinit->rstate.set_root(); // Make this an entry point
   creator.add_method(clinit);
 
   auto m = assembler::method_from_string(R"(
@@ -848,7 +848,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
      )
     )
   )");
-  m->rstate.set_keep(); // Make this an entry point
+  m->rstate.set_root(); // Make this an entry point
   creator.add_method(m);
 
   Scope scope{creator.create()};
@@ -911,7 +911,7 @@ TEST_F(InterproceduralConstantPropagationTest,
      )
     )
   )");
-  clinit->rstate.set_keep(); // Make this an entry point
+  clinit->rstate.set_root(); // Make this an entry point
   creator.add_method(clinit);
 
   auto init_qux = assembler::method_from_string(R"(
@@ -937,7 +937,7 @@ TEST_F(InterproceduralConstantPropagationTest,
      )
     )
   )");
-  m->rstate.set_keep(); // Make this an entry point
+  m->rstate.set_root(); // Make this an entry point
   creator.add_method(m);
 
   // We expect Foo.baz() to be unchanged since Foo.qux is not a constant
@@ -1079,7 +1079,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
     )
   )");
   creator.add_method(method);
-  method->rstate.set_keep(); // Make this an entry point
+  method->rstate.set_root(); // Make this an entry point
 
   auto never_returns = assembler::method_from_string(R"(
     (method (public static) "LFoo;.neverReturns:()V"
