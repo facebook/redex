@@ -694,6 +694,19 @@ void DexOutput::emit_name_based_locators() {
 }
 
 void DexOutput::generate_type_data() {
+  // Check that we don't have more than 2 ^ 15 type refs in one dex.
+  //
+  // NOTE: This is required because of a bug found in Android up to 7.
+  constexpr const size_t kMaxTypeRefs = 1 << 15;
+  always_assert_log(
+      dodx->type_to_idx().size() < kMaxTypeRefs,
+      "Trying to encode too many type refs in dex %lu: %lu (limit: %lu).\n"
+      "NOTE: Please check InterDexPass config flags and set: "
+      "`type_refs_limit: 32768`",
+      m_dex_number,
+      dodx->type_to_idx().size(),
+      kMaxTypeRefs);
+
   dex_type_id* typeids = (dex_type_id*)(m_output + hdr.type_ids_off);
   for (auto& p : dodx->type_to_idx()) {
     auto t = p.first;
