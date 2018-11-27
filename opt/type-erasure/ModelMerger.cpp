@@ -594,6 +594,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     DexStoresVector& stores,
     Model& model,
     boost::optional<size_t> max_num_dispatch_target) {
+  Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
   MergedTypeNames merged_type_names;

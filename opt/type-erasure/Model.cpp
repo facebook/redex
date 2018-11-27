@@ -703,8 +703,7 @@ void Model::shape_merger(const MergerType& merger,
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
       const auto field_type = field->get_type();
-      static const auto string_type = DexType::make_type("Ljava/lang/String;");
-      if (field_type == string_type) {
+      if (field_type == get_string_type()) {
         shape.string_fields++;
         continue;
       }
@@ -1041,7 +1040,6 @@ void Model::map_fields(MergerType& merger, const TypeSet& classes) {
  * belong to the mergeable types.
  */
 void Model::collect_methods() {
-
   // collect all vmethods and dmethods of mergeable types into the merger
   for (auto& merger_it : m_mergers) {
     auto& merger = merger_it.second;
@@ -1439,6 +1437,7 @@ Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
                          ConfigFiles& cfg) {
+  Timer t("build_model");
   TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
@@ -1473,6 +1472,7 @@ void Model::update_redex_stats(PassManager& mgr) const {
 Model Model::build_model(const Scope& scope,
                          const ModelSpec& spec,
                          const TypeSet& types) {
+  Timer t("build_model");
   TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());

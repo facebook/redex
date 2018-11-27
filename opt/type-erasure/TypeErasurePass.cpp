@@ -271,6 +271,7 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
                                   DexStoresVector& stores,
                                   ConfigFiles& cfg) {
   TRACE(TERA, 2, "[TERA] erasing %s model\n", spec.name.c_str());
+  Timer t("erase_model");
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));
   }
