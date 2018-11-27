@@ -213,22 +213,22 @@ std::unordered_set<uint32_t> extract_xml_reference_attributes(
 
 /**
  * Follows the reference links for a resource for all configurations.
- * Returns all the nodes visited, as well as all the string values seen.
+ * Outputs all the nodes visited, as well as all the string values seen.
  */
 void walk_references_for_resource(
+    const android::ResTable& table,
     uint32_t resID,
-    std::unordered_set<uint32_t>& nodes_visited,
-    std::unordered_set<std::string>& leaf_string_values,
-    android::ResTable* table) {
-  if (nodes_visited.find(resID) != nodes_visited.end()) {
+    std::unordered_set<uint32_t>* nodes_visited,
+    std::unordered_set<std::string>* leaf_string_values) {
+  if (nodes_visited->find(resID) != nodes_visited->end()) {
     return;
   }
-  nodes_visited.emplace(resID);
+  nodes_visited->emplace(resID);
 
-  ssize_t pkg_index = table->getResourcePackageIndex(resID);
+  ssize_t pkg_index = table.getResourcePackageIndex(resID);
 
   android::Vector<android::Res_value> initial_values;
-  table->getAllValuesForResource(resID, initial_values);
+  table.getAllValuesForResource(resID, initial_values);
 
   std::stack<android::Res_value> nodes_to_explore;
   for (size_t index = 0; index < initial_values.size(); ++index) {
@@ -240,22 +240,22 @@ void walk_references_for_resource(
     nodes_to_explore.pop();
 
     if (r.dataType == android::Res_value::TYPE_STRING) {
-      android::String8 str = table->getString8FromIndex(pkg_index, r.data);
-      leaf_string_values.insert(std::string(str.string()));
+      android::String8 str = table.getString8FromIndex(pkg_index, r.data);
+      leaf_string_values->insert(std::string(str.string()));
       continue;
     }
 
     // Skip any non-references or already visited nodes
     if ((r.dataType != android::Res_value::TYPE_REFERENCE &&
-          r.dataType != android::Res_value::TYPE_ATTRIBUTE)
-        || r.data <= PACKAGE_RESID_START
-        || nodes_visited.find(r.data) != nodes_visited.end()) {
+         r.dataType != android::Res_value::TYPE_ATTRIBUTE) ||
+        r.data <= PACKAGE_RESID_START ||
+        nodes_visited->find(r.data) != nodes_visited->end()) {
       continue;
     }
 
-    nodes_visited.insert(r.data);
+    nodes_visited->insert(r.data);
     android::Vector<android::Res_value> inner_values;
-    table->getAllValuesForResource(r.data, inner_values);
+    table.getAllValuesForResource(r.data, inner_values);
     for (size_t index = 0; index < inner_values.size(); ++index) {
       nodes_to_explore.push(inner_values[index]);
     }
@@ -631,12 +631,12 @@ std::unordered_set<uint32_t> get_js_resources(
 }
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
-    std::vector<std::string> prefixes,
-    std::map<std::string, std::vector<uint32_t>> name_to_ids) {
+    const std::vector<std::string>& prefixes,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids) {
   std::unordered_set<uint32_t> found_resources;
 
-  for (auto& pair : name_to_ids) {
-    for (auto& prefix : prefixes) {
+  for (const auto& pair : name_to_ids) {
+    for (const auto& prefix : prefixes) {
       if (boost::algorithm::starts_with(pair.first, prefix)) {
         found_resources.insert(pair.second.begin(), pair.second.end());
       }
@@ -921,30 +921,29 @@ std::unordered_set<std::string> get_native_classes(const std::string& apk_direct
   return all_classes;
 }
 
-void* map_file(
-  const char* path,
-  int& file_descriptor,
-  size_t& length,
-  const bool mode_write) {
-  file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
-  if (file_descriptor <= 0) {
+void* map_file(const char* path,
+               int* file_descriptor,
+               size_t* length,
+               const bool mode_write) {
+  *file_descriptor = open(path, mode_write ? O_RDWR : O_RDONLY);
+  if (*file_descriptor <= 0) {
     throw std::runtime_error("Failed to open arsc file");
   }
   struct stat st = {};
-  if (fstat(file_descriptor, &st) == -1) {
-    close(file_descriptor);
+  if (fstat(*file_descriptor, &st) == -1) {
+    close(*file_descriptor);
     throw std::runtime_error("Failed to get file length");
   }
-  length = (size_t)st.st_size;
+  *length = static_cast<size_t>(st.st_size);
   int flags = PROT_READ;
   if (mode_write) {
     flags |= PROT_WRITE;
   }
-  void* fp = mmap(nullptr, length, flags, MAP_SHARED, file_descriptor, 0);
+  void* fp = mmap(nullptr, *length, flags, MAP_SHARED, *file_descriptor, 0);
   if (fp == MAP_FAILED) {
-		close(file_descriptor);
-		throw std::runtime_error("Failed to mmap file");
-	}
+    close(*file_descriptor);
+    throw std::runtime_error("Failed to mmap file");
+  }
   return fp;
 }
 
@@ -953,11 +952,10 @@ void unmap_and_close(int file_descriptor, void* file_pointer, size_t length) {
   close(file_descriptor);
 }
 
-size_t write_serialized_data(
-  const android::Vector<char>& cVec,
-  int file_descriptor,
-  void* file_pointer,
-  const size_t& length) {
+size_t write_serialized_data(const android::Vector<char>& cVec,
+                             int file_descriptor,
+                             void* file_pointer,
+                             size_t length) {
   size_t vec_size = cVec.size();
   if (vec_size > 0) {
     memcpy(file_pointer, &(cVec[0]), vec_size);
@@ -1078,15 +1076,11 @@ int rename_classes_in_layout(
 
   int file_desc;
   size_t len;
-  auto fp = map_file(file_path.c_str(), file_desc, len, true);
+  auto fp = map_file(file_path.c_str(), &file_desc, &len, true);
 
   android::Vector<char> serialized;
-  auto status = replace_in_xml_string_pool(
-    fp,
-    len,
-    shortened_names,
-    &serialized,
-    out_num_renamed);
+  auto status = replace_in_xml_string_pool(fp, len, shortened_names,
+                                           &serialized, out_num_renamed);
 
   if (*out_num_renamed == 0 || status != android::OK) {
     unmap_and_close(file_desc, fp, len);
