@@ -258,7 +258,10 @@ void OptimizationImpl::set_method_defs(DexType* intf,
     // have these zombies lying around.
     new_meth->clear_annotations();
     new_meth->make_non_concrete();
-    new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
+    auto new_deob_name =
+        type_class(meth->get_class())->get_deobfuscated_name() + "." +
+        meth->get_simple_deobfuscated_name() + ":" + show_deobfuscated(proto);
+    new_meth->set_deobfuscated_name(new_deob_name);
     new_meth->rstate = meth->rstate;
     assert(new_meth != meth);
     setup_method(meth, new_meth);
@@ -302,8 +305,14 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     auto created_meth = DexMethod::make_method(
             new_meth->get_class(), new_meth->get_name(), proto);
     if (created_meth->is_def() && method->is_def()) {
-      static_cast<DexMethod*>(created_meth)->set_deobfuscated_name(
-          static_cast<DexMethod*>(method)->get_deobfuscated_name());
+      assert(new_meth->is_def());
+      auto new_deob_name =
+          type_class(new_meth->get_class())->get_deobfuscated_name() + "." +
+          show(static_cast<DexMethod*>(new_meth)
+                   ->get_simple_deobfuscated_name()) +
+          ":" + show_deobfuscated(proto);
+      static_cast<DexMethod*>(created_meth)
+          ->set_deobfuscated_name(new_deob_name);
       static_cast<DexMethod*>(created_meth)->rstate =
           static_cast<DexMethod*>(method)->rstate;
     }
@@ -359,7 +368,10 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       // See related TODO by searching for "this is horrible" in this file.
       new_meth->clear_annotations();
       new_meth->make_non_concrete();
-      new_meth->set_deobfuscated_name(meth->get_deobfuscated_name());
+      auto new_deob_name = impl->get_deobfuscated_name() + "." +
+                           meth->get_simple_deobfuscated_name() + ":" +
+                           show_deobfuscated(meth->get_proto());
+      new_meth->set_deobfuscated_name(new_deob_name);
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
