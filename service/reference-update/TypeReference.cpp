@@ -42,7 +42,7 @@ void fix_colliding_method(
     spec.proto = new_proto;
     meth->change(spec,
                  false /* rename on collision */,
-                 false /* update deobfuscated name */);
+                 true /* update deobfuscated name */);
     num_additional_args[meth] = arg_count;
 
     auto code = meth->get_code();
