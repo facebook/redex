@@ -1133,3 +1133,54 @@ TEST(ControlFlow, deep_copy3) {
   auto copy_iterable = ir_list::InstructionIterable(copy_list);
   EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
 }
+
+TEST(ControlFlow, line_numbers) {
+  g_redex = new RedexContext();
+
+  DexMethod* m = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.m:()V"));
+  m->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+      (goto :exit)
+
+      (:true)
+      (const v2 2)
+
+      (:exit)
+      (.pos "LFoo;.m:()V" "Foo.java" 2)
+      (return-void)
+    )
+  )");
+
+  code->build_cfg(/* editable */ true);
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+
+      (:exit)
+      (.pos "LFoo;.m:()V" "Foo.java" 2)
+      (return-void)
+
+      (:true)
+      (.pos "LFoo;.m:()V" "Foo.java" 1)
+      (const v2 2)
+      (goto :exit)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+
+  delete g_redex;
+}
