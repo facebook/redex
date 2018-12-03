@@ -80,6 +80,18 @@ bool cannot_throw(cfg::Block* b) {
 }
 
 /*
+ * Return true if this is empty or only has positions in it
+ */
+bool is_effectively_empty(cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_POSITION) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/*
  * Return an iterator to the first instruction (except move-result* and goto) if
  * it occurs before the first position. Otherwise return end.
  */
@@ -680,10 +692,17 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       ++it;
     }
   }
+
   if (need_register_size_fix) {
     recompute_registers_size();
   }
+  remove_dangling_parents(deleted_positions);
 
+  return num_insns_removed;
+}
+
+void ControlFlowGraph::remove_dangling_parents(
+    const std::unordered_set<DexPosition*>& deleted_positions) {
   // We don't want to leave any dangling dex parent pointers behind
   if (!deleted_positions.empty()) {
     for (const auto& entry : m_blocks) {
@@ -695,18 +714,18 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       }
     }
   }
-  return num_insns_removed;
 }
-
 void ControlFlowGraph::remove_empty_blocks() {
+  always_assert(editable());
+  std::unordered_set<DexPosition*> deleted_positions;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
-    const auto& succs = b->succs();
-    if (!b->empty() || b == exit_block()) {
+    if (!is_effectively_empty(b) || b == exit_block()) {
       ++it;
       continue;
     }
 
+    const auto& succs = b->succs();
     if (succs.size() > 0) {
       always_assert_log(succs.size() == 1,
         "too many successors for empty block %d:\n%s", it->first, SHOW(*this));
@@ -734,9 +753,16 @@ void ControlFlowGraph::remove_empty_blocks() {
         m_entry_block = succ;
       }
     }
+
+    for (const auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION) {
+        deleted_positions.insert(mie.pos.get());
+      }
+    }
     delete b;
     it = m_blocks.erase(it);
   }
+  remove_dangling_parents(deleted_positions);
 }
 
 void ControlFlowGraph::no_unreferenced_edges() const {

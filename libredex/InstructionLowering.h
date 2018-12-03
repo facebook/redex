@@ -32,9 +32,9 @@ struct Stats {
  *   - Record the number of instructions converted to /2ddr form, also the
  *     number of move instruction inserted because of check-cast.
  */
-Stats lower(DexMethod*);
+Stats lower(DexMethod*, bool lower_with_cfg = false);
 
-Stats run(DexStoresVector&);
+Stats run(DexStoresVector&, bool lower_with_cfg = false);
 
 namespace impl {
 

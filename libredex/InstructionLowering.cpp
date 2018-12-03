@@ -409,10 +409,19 @@ static void lower_simple_instruction(DexMethod*,
   }
 }
 
-Stats lower(DexMethod* method) {
+Stats lower(DexMethod* method, bool lower_with_cfg) {
   Stats stats;
   auto* code = method->get_code();
   always_assert(code != nullptr);
+
+  // There's a bug in dex2oat (version 6.0.0_r1) that generates bogus machine
+  // code when there is an empty block (a block with only a goto in it). To
+  // avoid this bug, we use the CFG to remove empty blocks.
+  if (lower_with_cfg) {
+    code->build_cfg(/* editable */ true);
+    code->clear_cfg();
+  }
+
   // Check the load-param opcodes make sense before removing them
   check_load_params(method);
   for (auto it = code->begin(); it != code->end(); ++it) {
@@ -445,16 +454,16 @@ Stats lower(DexMethod* method) {
   return stats;
 }
 
-Stats run(DexStoresVector& stores) {
+Stats run(DexStoresVector& stores, bool lower_with_cfg) {
   auto scope = build_class_scope(stores);
   return walk::parallel::reduce_methods<Stats>(
       scope,
-      [](DexMethod* m) {
+      [lower_with_cfg](DexMethod* m) {
         Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
         }
-        stats.accumulate(lower(m));
+        stats.accumulate(lower(m, lower_with_cfg));
         return stats;
       },
       [](Stats a, Stats b) {

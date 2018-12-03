@@ -699,8 +699,10 @@ void redex_backend(const PassManager& manager,
   Timer redex_backend_timer("Redex_backend");
   instruction_lowering::Stats instruction_lowering_stats;
   {
+    bool lower_with_cfg = false;
+    cfg.get_json_config().get("lower_with_cfg", false, lower_with_cfg);
     Timer t("Instruction lowering");
-    instruction_lowering_stats = instruction_lowering::run(stores);
+    instruction_lowering_stats = instruction_lowering::run(stores, lower_with_cfg);
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
