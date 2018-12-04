@@ -79,6 +79,64 @@ bool cannot_throw(cfg::Block* b) {
   return true;
 }
 
+/*
+ * Return true if this is empty or only has positions in it
+ */
+bool is_effectively_empty(cfg::Block* b) {
+  for (const auto& mie : *b) {
+    if (mie.type != MFLOW_POSITION) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/*
+ * Return an iterator to the first instruction (except move-result* and goto) if
+ * it occurs before the first position. Otherwise return end.
+ */
+IRList::iterator insn_before_position(cfg::Block* b) {
+  for (auto it = b->begin(); it != b->end(); ++it) {
+    if (it->type == MFLOW_OPCODE) {
+      auto op = it->insn->opcode();
+      if (!is_move_result(op) && !opcode::is_move_result_pseudo(op) &&
+          !is_goto(op)) {
+        return it;
+      }
+    } else if (it->type == MFLOW_POSITION) {
+      return b->end();
+    }
+  }
+  return b->end();
+}
+
+/*
+ * Given an output ordering, Find adjacent positions that are exact duplicates
+ * and delete the extras. Make sure not to delete any positions that are
+ * referenced by a parent pointer.
+ */
+void remove_duplicate_positions(IRList* ir) {
+  std::unordered_set<DexPosition*> keep;
+  for (auto& mie : *ir) {
+    if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+      keep.insert(mie.pos->parent);
+    }
+  }
+  DexPosition* prev = nullptr;
+  for (auto it = ir->begin(); it != ir->end();) {
+    if (it->type == MFLOW_POSITION) {
+      DexPosition* curr = it->pos.get();
+      if (prev != nullptr && *curr == *prev && keep.count(curr) == 0) {
+        it = ir->erase_and_dispose(it);
+        continue;
+      } else {
+        prev = curr;
+      }
+    }
+    ++it;
+  }
+}
+
 } // namespace
 
 namespace cfg {
@@ -371,6 +429,8 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
 
   bool in_try = false;
   IRList::iterator next;
+  DexPosition* current_position = nullptr;
+  DexPosition* last_pos_before_this_block = nullptr;
   for (auto it = ir->begin(); it != ir->end(); it = next) {
     next = std::next(it);
     if (it->type == MFLOW_TRY) {
@@ -387,6 +447,8 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       try_catches[it->centry] = block;
     } else if (it->type == MFLOW_TARGET) {
       branch_to_targets[it->target->src].push_back(block);
+    } else if (it->type == MFLOW_POSITION) {
+      current_position = it->pos.get();
     }
 
     if (!end_of_block(ir, it, in_try)) {
@@ -400,6 +462,22 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       // point to elements of block->m_entries (and we already computed next).
       block->m_entries.splice_selection(block->m_entries.end(), *ir,
                                         block_begin, next);
+      if (last_pos_before_this_block != nullptr) {
+        auto first_insn = insn_before_position(block);
+        if (first_insn != block->end()) {
+          // DexPositions apply to every instruction in the linear stream until
+          // the next DexPosition. Because we're breaking up the linear stream
+          // into many small blocks, we need to make sure that instructions stay
+          // associated with the same DexPosition as they were in the input
+          // IRList.
+          //
+          // This creates duplicate positions, but we will remove any extras at
+          // linearize time.
+          block->m_entries.insert_before(
+              first_insn,
+              std::make_unique<DexPosition>(*last_pos_before_this_block));
+        }
+      }
     } else {
       block->m_end = next;
     }
@@ -411,6 +489,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
     // Start a new block at the next MethodItem.
     block = create_block();
     if (m_editable) {
+      last_pos_before_this_block = current_position;
       block_begin = next;
     } else {
       block->m_begin = next;
@@ -613,10 +692,17 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       ++it;
     }
   }
+
   if (need_register_size_fix) {
     recompute_registers_size();
   }
+  remove_dangling_parents(deleted_positions);
 
+  return num_insns_removed;
+}
+
+void ControlFlowGraph::remove_dangling_parents(
+    const std::unordered_set<DexPosition*>& deleted_positions) {
   // We don't want to leave any dangling dex parent pointers behind
   if (!deleted_positions.empty()) {
     for (const auto& entry : m_blocks) {
@@ -628,18 +714,18 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       }
     }
   }
-  return num_insns_removed;
 }
-
 void ControlFlowGraph::remove_empty_blocks() {
+  always_assert(editable());
+  std::unordered_set<DexPosition*> deleted_positions;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
-    const auto& succs = b->succs();
-    if (!b->empty() || b == exit_block()) {
+    if (!is_effectively_empty(b) || b == exit_block()) {
       ++it;
       continue;
     }
 
+    const auto& succs = b->succs();
     if (succs.size() > 0) {
       always_assert_log(succs.size() == 1,
         "too many successors for empty block %d:\n%s", it->first, SHOW(*this));
@@ -667,9 +753,16 @@ void ControlFlowGraph::remove_empty_blocks() {
         m_entry_block = succ;
       }
     }
+
+    for (const auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION) {
+        deleted_positions.insert(mie.pos.get());
+      }
+    }
     delete b;
     it = m_blocks.erase(it);
   }
+  remove_dangling_parents(deleted_positions);
 }
 
 void ControlFlowGraph::no_unreferenced_edges() const {
@@ -1136,6 +1229,7 @@ IRList* ControlFlowGraph::linearize() {
   for (Block* b : ordering) {
     result->splice(result->end(), b->m_entries);
   }
+  remove_duplicate_positions(result);
 
   return result;
 }

@@ -651,6 +651,10 @@ class ControlFlowGraph {
   // remove blocks with no entries
   void remove_empty_blocks();
 
+  // remove any parent pointer that was passed in as an arg (e.g. for when
+  // you delete the supplied positions)
+  void remove_dangling_parents(const std::unordered_set<DexPosition*>&);
+
   // Assert if there are edges that are never a predecessor or successor of a
   // block
   void no_unreferenced_edges() const;
