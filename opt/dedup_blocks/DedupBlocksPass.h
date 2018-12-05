@@ -23,9 +23,16 @@ class DedupBlocksPass : public Pass {
       if (meth == nullptr || !meth->is_def()) continue;
       m_config.method_black_list.emplace(static_cast<DexMethod*>(meth));
     }
+    jw.get("block_split_min_opcode_count",
+           Config::DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT,
+           m_config.block_split_min_opcode_count);
+    jw.get("split_postfix", true, m_config.split_postfix);
   }
 
   struct Config {
     std::unordered_set<DexMethod*> method_black_list;
+    static const size_t DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 3;
+    size_t block_split_min_opcode_count = DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
+    bool split_postfix = true;
   } m_config;
 };

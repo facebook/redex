@@ -141,6 +141,324 @@ TEST_F(DedupBlocksTest, simplestCase) {
             assembler::to_string(method->get_code()));
 }
 
+// in Code:     A B E C D          (where C and D ends with same instructions)
+// in CFG:      A -> B -> C -> E
+//               \            /
+//                >  --   D  >
+//
+// out Code:    A B E C
+// out CFG:     A -> B -> C' -> F -> E
+//               \             /
+//                > --------- D'
+TEST_F(DedupBlocksTest, simplestPostfixCase) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("simplestPostfixCase");
+
+  auto str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (mul-int v0 v0 v0)
+      (goto :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :E)
+
+      (:D)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (mul-int v0 v0 v0)
+
+      ; C
+      (mul-int v0 v0 v0)
+
+      (:F)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+
+      (:E)
+      (return-void)
+
+      (:D)
+      (const v1 1)
+      (goto :F)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
+
+TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("postfixDiscardingOneCase");
+
+  auto str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (mul-int v0 v0 v0)
+      (goto :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (mul-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :E)
+
+      (:D)
+      (if-eqz v0 :F)
+      (goto :G)
+
+      (:F)
+      (const v2 2)
+      (goto :E)
+
+      (:G)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      ; A
+      (const v0 0)
+      (mul-int v0 v0 v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (mul-int v0 v0 v0)
+
+      (:C)
+      (mul-int v0 v0 v0)
+
+      (:H)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+
+      (:E)
+      (return-void)
+
+      (:D)
+      (if-eqz v0 :F)
+
+      (:G)
+      (const v1 1)
+      (goto :H)
+
+      (:F)
+      (const v2 2)
+      (goto :E)
+
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
+
+TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("deepestIsNotTheBestCase");
+
+  auto str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (packed-switch v0 (:a :b :c :d :e :f))
+      (return v0)
+
+      (:a 0)
+      (return v0)
+
+      (:b 1)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:c 2)
+      (const v1 2)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:d 3)
+      (const v0 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:e 4)
+      (const v0 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:f 5)
+      (const v0 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (packed-switch v0 (:a :b :c :d :e :f))
+
+      (:a 0)
+      (return v0)
+
+      (:f 5)
+      (const v0 0)
+      (goto :g)
+
+      (:e 4)
+      (const v0 0)
+      (goto :g)
+
+      (:d 3)
+      (const v0 0)
+      (goto :g)
+
+      (:c 2)
+      (const v1 2)
+      (goto :g)
+
+      (:b 1)
+      (const v1 1)
+
+      (:g)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+    )
+  )";
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
+
+TEST_F(DedupBlocksTest, postfixSwitchCase) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("postfixSwitchCase");
+
+  auto str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (packed-switch v0 (:a :b :c))
+
+      (:a 0)
+      (return v0)
+
+      (:b 1)
+      (const v1 1)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+
+      (:c 2)
+      (const v0 0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (const v1 1)
+      (packed-switch v0 (:a :b :c))
+
+      (:a 0)
+      (return v0)
+
+      (:c 2)
+      (const v0 0)
+      (goto :d)
+
+      (:b 1)
+      (const v1 1)
+
+      (:d)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (add-int v0 v0 v0)
+      (return v1)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
+
 TEST_F(DedupBlocksTest, noDups) {
   auto str = R"(
     (
