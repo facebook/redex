@@ -329,7 +329,7 @@ TEST_F(IRAssemblerTest, pos) {
   EXPECT_EQ(pos->parent, nullptr);
 }
 
-TEST_F(IRAssemblerTest, posWithParent) {
+TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -339,8 +339,8 @@ TEST_F(IRAssemblerTest, posWithParent) {
 
   auto code = assembler::ircode_from_string(R"(
     (
-     (.pos "LFoo;.bar:()V" "Foo.java" 420)
-     (.pos "LFoo;.baz:()I" "Foo.java" 440 0)
+     (.pos:dbg_0 "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos:dbg_1 "LFoo;.baz:()I" "Foo.java" 440 dbg_0)
      (const v0 420)
      (return v0)
     )
@@ -366,4 +366,169 @@ TEST_F(IRAssemblerTest, posWithParent) {
   EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
   EXPECT_EQ(pos1->line, 440);
   EXPECT_EQ(*pos1->parent, *pos0);
+}
+
+TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
+  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos:DarthVader "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos:LukeSkywalker "LFoo;.baz:()I" "Foo.java" 440 DarthVader)
+     (const v0 420)
+     (return v0)
+    )
+  )");
+
+  // Ensure serialize + deserialize works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  // Ensure deserialize actually works
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 2);
+
+  auto pos0 = positions[0];
+  EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos0->line, 420);
+  EXPECT_EQ(pos0->parent, nullptr);
+
+  auto pos1 = positions[1];
+  EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
+  EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos1->line, 440);
+  EXPECT_EQ(*pos1->parent, *pos0);
+}
+
+TEST_F(IRAssemblerTest, posWithParent_BadParent) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
+  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos:Bob "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos:John "LFoo;.baz:()I" "Foo.java" 440 BadParent)
+     (const v0 420)
+     (return v0)
+    )
+  )");
+
+  // Ensure serialize + deserialize works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  // Ensure deserialize actually works
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 2);
+
+  auto pos0 = positions[0];
+  EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos0->line, 420);
+  EXPECT_EQ(pos0->parent, nullptr);
+
+  auto pos1 = positions[1];
+  EXPECT_EQ(show(pos1->method), std::string("LFoo;.baz:()I"));
+  EXPECT_EQ(pos1->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos1->line, 440);
+  EXPECT_EQ(pos1->parent, nullptr);
+}
+
+TEST_F(IRAssemblerTest, posWithGrandparent) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
+  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method3 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()Z"));
+  method3->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos:dbg_0 "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos:dbg_1 "LFoo;.baz:()I" "Foo.java" 440 dbg_0)
+     (.pos:dbg_2 "LFoo;.baz:()Z" "Foo.java" 441 dbg_1)
+     (const v0 420)
+     (return v0)
+    )
+  )");
+
+  // Ensure serialize + deserialize works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  // Ensure deserialize actually works
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 3);
+
+  auto pos0 = positions[0];
+  EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos0->line, 420);
+  EXPECT_EQ(pos0->parent, nullptr);
+
+  auto pos2 = positions[2];
+  EXPECT_EQ(show(pos2->method), std::string("LFoo;.baz:()Z"));
+  EXPECT_EQ(pos2->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos2->line, 441);
+  EXPECT_EQ(*pos2->parent->parent, *pos0);
+}
+
+TEST_F(IRAssemblerTest, posWithGreatGrandparent) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
+  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method3 =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()Z"));
+  method3->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (.pos:dbg_0 "LFoo;.bar:()V" "Foo.java" 420)
+     (.pos:dbg_1 "LFoo;.baz:()I" "Foo.java" 440 dbg_0)
+     (.pos:dbg_2 "LFoo;.baz:()Z" "Foo.java" 441 dbg_1)
+     (.pos:dbg_3 "LFoo;.baz:()Z" "Foo.java" 442 dbg_2)
+     (const v0 420)
+     (return v0)
+    )
+  )");
+
+  // Ensure serialize + deserialize works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
+  // Ensure deserialize actually works
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto positions = get_positions(code);
+  ASSERT_EQ(positions.size(), 4);
+
+  auto pos0 = positions[0];
+  EXPECT_EQ(show(pos0->method), std::string("LFoo;.bar:()V"));
+  EXPECT_EQ(pos0->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos0->line, 420);
+  EXPECT_EQ(pos0->parent, nullptr);
+
+  auto pos3 = positions[3];
+  EXPECT_EQ(show(pos3->method), std::string("LFoo;.baz:()Z"));
+  EXPECT_EQ(pos3->file->c_str(), std::string("Foo.java"));
+  EXPECT_EQ(pos3->line, 442);
+  EXPECT_EQ(*pos3->parent->parent->parent, *pos0);
 }
