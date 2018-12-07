@@ -319,7 +319,6 @@ class Model {
             const TypeSystem& type_system,
             ConfigFiles* cfg = nullptr);
 
-  void build_hierarchy(const DexType* root);
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
   MergerType* build_mergers(const DexType* root);
