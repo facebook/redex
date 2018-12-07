@@ -75,6 +75,7 @@
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \
+  TM(RGWR)               \
   TM(RME)                \
   TM(RMGOTO)             \
   TM(RMU)                \

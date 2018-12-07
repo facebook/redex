@@ -548,6 +548,9 @@ class ControlFlowGraph {
   // iterator to it, or end, if it isn't in the graph.
   InstructionIterator find_insn(IRInstruction* insn);
 
+  // choose an order of blocks for output
+  std::vector<Block*> order();
+
  private:
   using BranchToTargets =
       std::unordered_map<MethodItemEntry*, std::vector<Block*>>;
@@ -585,8 +588,6 @@ class ControlFlowGraph {
   // Assumes m_editable is true
   void remove_try_catch_markers();
 
-  // choose an order of blocks for output
-  std::vector<Block*> order();
   // helper functions
   using Chain = std::vector<Block*>;
   void build_chains(std::vector<std::unique_ptr<Chain>>* chains,
