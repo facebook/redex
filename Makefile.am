@@ -283,8 +283,6 @@ redex_all_SOURCES = \
 	opt/type-erasure/TypeErasurePass.cpp \
 	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
-	opt/unterface/Unterface.cpp \
-	opt/unterface/UnterfaceOpt.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
