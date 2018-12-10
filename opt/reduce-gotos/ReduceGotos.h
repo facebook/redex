@@ -9,11 +9,16 @@
 
 #include "Pass.h"
 
-class ReplaceGotosWithReturnsPass : public Pass {
+class ReduceGotosPass : public Pass {
  public:
-  ReplaceGotosWithReturnsPass() : Pass("ReplaceGotosWithReturnsPass") {}
+  struct Stats {
+    size_t replaced_gotos_with_returns{0};
+    size_t inverted_conditional_branches{0};
+  };
+
+  ReduceGotosPass() : Pass("ReduceGotosPass") {}
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static size_t process_code(IRCode*);
+  static Stats process_code(IRCode*);
 };

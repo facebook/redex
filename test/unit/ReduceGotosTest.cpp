@@ -11,20 +11,24 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
-#include "ReplaceGotosWithReturns.h"
+#include "ReduceGotos.h"
 
-class ReplaceGotosWithReturnsTest : public RedexTest {};
+class ReduceGotosTest : public RedexTest {};
 
 void test(const std::string& code_str,
           const std::string& expected_str,
-          size_t expected_count) {
+          size_t expected_replaced_gotos_with_returns,
+          size_t expected_inverted_conditional_branches) {
   g_redex = new RedexContext();
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
-  size_t count = ReplaceGotosWithReturnsPass::process_code(code.get());
-  EXPECT_EQ(expected_count, count);
+  ReduceGotosPass::Stats stats = ReduceGotosPass::process_code(code.get());
+  EXPECT_EQ(expected_replaced_gotos_with_returns,
+            stats.replaced_gotos_with_returns);
+  EXPECT_EQ(expected_inverted_conditional_branches,
+            stats.inverted_conditional_branches);
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()));
@@ -32,7 +36,7 @@ void test(const std::string& code_str,
   delete g_redex;
 };
 
-TEST(ReplaceGotosWithReturnsTest, trivial) {
+TEST(ReduceGotosTest, trivial) {
   const auto& code_str = R"(
     (
       (return-void)
@@ -43,10 +47,10 @@ TEST(ReplaceGotosWithReturnsTest, trivial) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0);
+  test(code_str, expected_str, 0, 0);
 }
 
-TEST(ReplaceGotosWithReturnsTest, basic) {
+TEST(ReduceGotosTest, basic) {
   const auto& code_str = R"(
     (
       (if-eqz v0 :true)
@@ -73,10 +77,10 @@ TEST(ReplaceGotosWithReturnsTest, basic) {
       (return v1)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(code_str, expected_str, 1, 0);
 }
 
-TEST(ReplaceGotosWithReturnsTest, involved) {
+TEST(ReduceGotosTest, involved) {
   const auto& code_str = R"(
     (
       (if-eqz v0 :true)
@@ -118,5 +122,35 @@ TEST(ReplaceGotosWithReturnsTest, involved) {
       (return v2)
     )
   )";
-  test(code_str, expected_str, 2);
+  test(code_str, expected_str, 2, 0);
+}
+
+TEST(ReduceGotosTest, invert) {
+  const auto& code_str = R"(
+    (
+      (const v2 0)
+
+      (if-eqz v0 :true)
+      (:back_jump_target)
+
+      (return v2)
+
+      (:true)
+      (const v2 1)
+      (goto :back_jump_target)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v2 0)
+
+      (if-nez v0 :true)
+
+      (const v2 1)
+
+      (:true)
+      (return v2)
+    )
+  )";
+  test(code_str, expected_str, 0, 1);
 }
