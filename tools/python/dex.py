@@ -1472,7 +1472,7 @@ class File:
     def get_string(self, index):
         strings = self.get_strings()
         if index < len(strings):
-            return strings[index].data
+            return file_extract.hex_escape(strings[index].data)
         return None
 
     def get_typename(self, type_id):
