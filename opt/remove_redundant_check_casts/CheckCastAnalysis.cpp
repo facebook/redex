@@ -102,12 +102,12 @@ void CheckCastAnalysis::analyze_instruction(IRInstruction* insn,
   }
 }
 
-std::unordered_map<IRInstruction*, IRInstruction*>
+std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>>
 CheckCastAnalysis::collect_redundant_checks_replacement() {
   auto* code = m_method->get_code();
   auto& cfg = code->cfg();
 
-  std::unordered_map<IRInstruction*, IRInstruction*> insns;
+  std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>> insns;
 
   for (cfg::Block* block : cfg.blocks()) {
     auto env = get_entry_state_at(block);
@@ -121,12 +121,12 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
           auto src = insn->src(0);
           auto dst = ir_list::move_result_pseudo_of(it.unwrap())->dest();
           if (src == dst) {
-            insns[insn] = nullptr;
+            insns[insn] = boost::none;
           } else {
             auto new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
             new_move->set_src(0, src);
             new_move->set_dest(dst);
-            insns[insn] = new_move;
+            insns[insn] = boost::optional<IRInstruction*>(new_move);
           }
         }
       }

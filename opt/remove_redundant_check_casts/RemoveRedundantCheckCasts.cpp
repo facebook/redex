@@ -29,15 +29,14 @@ size_t RemoveRedundantCheckCastsPass::remove_redundant_check_casts(
   impl::CheckCastAnalysis fixpoint(&cfg, method);
   fixpoint.run(impl::Environment());
 
-  std::unordered_map<IRInstruction*, IRInstruction*> redundant_check_casts =
-      fixpoint.collect_redundant_checks_replacement();
+  auto redundant_check_casts = fixpoint.collect_redundant_checks_replacement();
   size_t num_redundant_check_casts = redundant_check_casts.size();
 
   for (const auto& pair : redundant_check_casts) {
     IRInstruction* to_replace = pair.first;
-    IRInstruction* replacement = pair.second;
-    if (replacement) {
-      code->replace_opcode(to_replace, replacement);
+    boost::optional<IRInstruction*> replacement_opt = pair.second;
+    if (replacement_opt) {
+      code->replace_opcode(to_replace, *replacement_opt);
     } else {
       code->remove_opcode(to_replace);
     }

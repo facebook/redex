@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <vector>
 
 #include "ConstantAbstractDomain.h"
@@ -41,8 +42,7 @@ class CheckCastAnalysis final
       cfg::Edge* const& edge,
       const Environment& exit_state_at_source) const override;
 
-  // TODO: use boost::optional
-  std::unordered_map<IRInstruction*, IRInstruction*>
+  std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>>
   collect_redundant_checks_replacement();
 
  private:
