@@ -98,6 +98,7 @@ void fix_colliding_method(
     }
   });
 }
+
 } // namespace
 
 namespace type_reference {
@@ -215,7 +216,10 @@ void update_method_signature_type_references(
     mergeables.insert(pair.first);
   }
 
-  const auto update_sig = [&](DexMethod* meth) {
+  // 1. Updating the signature for non-ctor dmethods. Renaming is sufficient to
+  // address method collision here. At the same time, we collect potentially
+  // colliding methods that are more complicated to handle.
+  const auto update_sig_simple = [&](DexMethod* meth) {
     auto proto = meth->get_proto();
     if (!proto_has_reference_to(proto, mergeables)) {
       return;
@@ -238,10 +242,6 @@ void update_method_signature_type_references(
     auto name = meth->get_name();
     auto existing_meth = DexMethod::get_method(type, name, new_proto);
     if (existing_meth == nullptr) {
-      TRACE(REFU, 9, "sig: updating method %s\n", SHOW(meth));
-      meth->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
       return;
     }
 
@@ -253,17 +253,56 @@ void update_method_signature_type_references(
     colliding_candidates[meth] = new_proto;
   };
 
-  walk::methods(scope, update_sig);
+  walk::methods(scope, update_sig_simple);
+
+  // 2. Updating non-colliding virtuals and ctors.
+  // Updating them do not require handling of virtual scopes.
+  const auto update_sig_non_colliding = [&](DexMethod* meth) {
+    // Skip non-ctor dmethods since they are already updated.
+    if (!is_init(meth) && !meth->is_virtual()) {
+      return;
+    }
+    // Skip colliding candidates. We cannot simply update them. We need to
+    // go through more complicated steps below.
+    if (colliding_candidates.count(meth) > 0) {
+      return;
+    }
+    auto proto = meth->get_proto();
+    if (!proto_has_reference_to(proto, mergeables)) {
+      return;
+    }
+    if (method_debug_map != boost::none) {
+      method_debug_map.get()[meth] = get_method_signature(meth);
+    }
+    auto new_proto = update_proto_reference(proto, old_to_new);
+    DexMethodSpec spec;
+    spec.proto = new_proto;
+
+    auto type = meth->get_class();
+    auto name = meth->get_name();
+    TRACE(REFU, 9, "sig: updating method %s\n", SHOW(meth));
+    meth->change(spec,
+                 true /* rename on collision */,
+                 true /* update deobfuscated name */);
+  };
 
   if (colliding_candidates.empty()) {
+    walk::parallel::methods(scope, update_sig_non_colliding);
     return;
   }
 
-  // Compute virtual scopes and filter out non-virtuals.
-  // Perform simple signature update and renaming for non-virtuals.
+  // If we found colliding candidates, we need to check their true virtualness
+  // by computing virtual scopes of the current type system. We need to do that
+  // before updating any virtual methods. Because updating virtual method will
+  // break the existing virtual scopes.
+  TRACE(REFU, 9, "sig: fixing colliding candidates\n");
   auto non_virtuals = devirtualize(scope);
   std::unordered_set<DexMethod*> non_virt_set(non_virtuals.begin(),
                                               non_virtuals.end());
+
+  // 3. Updating non-ctor dmethods and non-colliding vmethods first.
+  walk::parallel::methods(scope, update_sig_non_colliding);
+
   std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_methods;
   for (const auto& pair : colliding_candidates) {
     auto meth = pair.first;
@@ -277,13 +316,14 @@ void update_method_signature_type_references(
                    true /* update deobfuscated name */);
       continue;
     }
-    // We cannot handle the renaming of true virtuals.
+    // 4. Break the build if we have to handle the renaming of true virtuals.
     always_assert_log(!meth->is_virtual(),
                       "sig: found true virtual colliding method %s\n",
                       SHOW(meth));
     colliding_methods[meth] = new_proto;
   }
-  // Last resort. Fix colliding methods for non-virtuals.
+
+  // 5. Last resort. Fix colliding methods for non-virtuals.
   fix_colliding_method(scope, colliding_methods);
 }
 
