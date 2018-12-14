@@ -173,30 +173,30 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
 
 namespace interdex {
 
-void InterDex::emit_class(const DexInfo& dex_info,
+bool InterDex::emit_class(const DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip) {
   if (is_canary(clazz)) {
     // Nothing to do here.
-    return;
+    return false;
   }
 
   if (m_dexes_structure.has_class(clazz)) {
     TRACE(IDEX, 6, "Trying to re-add class %s!\n", SHOW(clazz));
-    return;
+    return false;
   }
 
   if (check_if_skip) {
     for (const auto& plugin : m_plugins) {
       if (plugin->should_skip_class(clazz)) {
         TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
-        return;
+        return false;
       }
     }
 
     if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
       TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
-      return;
+      return false;
     }
   }
 
@@ -224,6 +224,7 @@ void InterDex::emit_class(const DexInfo& dex_info,
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);
   }
+  return true;
 }
 
 void InterDex::emit_primary_dex(
@@ -575,6 +576,31 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          not_already_included.end());
 }
 
+void InterDex::emit_remaining_classes(const Scope& scope) {
+  if (!m_minimize_cross_dex_refs) {
+    for (DexClass* cls : scope) {
+      emit_class(EMPTY_DEX_INFO, cls, true);
+    }
+    return;
+  }
+
+  // Emit classes using some algorithm to group together classes which
+  // tend to share the same refs.
+  for (DexClass* cls : scope) {
+    m_crossDexRefMinimizer.insert(cls);
+  }
+
+  int dexnum = m_dexes_structure.get_num_dexes();
+  while (!m_crossDexRefMinimizer.empty()) {
+    DexClass* cls = m_crossDexRefMinimizer.front();
+    bool emitted = emit_class(EMPTY_DEX_INFO, cls, true);
+    int new_dexnum = m_dexes_structure.get_num_dexes();
+    bool overflowed = dexnum != new_dexnum;
+    m_crossDexRefMinimizer.erase(cls, emitted, overflowed);
+    dexnum = new_dexnum;
+  }
+}
+
 void InterDex::run() {
   auto scope = build_class_scope(m_dexen);
 
@@ -601,9 +627,7 @@ void InterDex::run() {
   emit_interdex_classes(interdex_types, unreferenced_classes);
 
   // Now emit the classes that weren't specified in the head or primary list.
-  for (DexClass* cls : scope) {
-    emit_class(EMPTY_DEX_INFO, cls, true);
-  }
+  emit_remaining_classes(scope);
 
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {

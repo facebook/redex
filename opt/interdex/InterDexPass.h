@@ -21,6 +21,11 @@ constexpr const char* METRIC_COLD_START_SET_DEX_COUNT =
     "cold_start_set_dex_count";
 constexpr const char* METRIC_SCROLL_SET_DEX_COUNT = "scroll_set_dex_count";
 
+constexpr const char* METRIC_REORDER_CLASSES = "num_reorder_classes";
+constexpr const char* METRIC_REORDER_RESETS = "num_reorder_resets";
+constexpr const char* METRIC_REORDER_REPRIORITIZATIONS =
+    "num_reorder_reprioritization";
+
 class InterDexPass : public Pass {
  public:
   InterDexPass() : Pass(INTERDEX_PASS_NAME) {
@@ -44,6 +49,7 @@ class InterDexPass : public Pass {
   bool m_can_touch_coldstart_extended_cls;
   std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
   bool m_emit_scroll_set_marker;
+  bool m_minimize_cross_dex_refs;
 
   virtual void run_pass(
       DexStoresVector&, DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
