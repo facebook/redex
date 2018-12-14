@@ -211,6 +211,16 @@ void InterDex::emit_class(const DexInfo& dex_info,
       clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
   if (!fits_current_dex) {
     flush_out_dex(dex_info);
+
+    // Plugins may maintain internal state after gathering refs, and then they
+    // tend to forget that state after flushing out (type erasure,
+    // looking at you). So, let's redo gathering of refs here to give
+    // plugins a chance to rebuild their internal state.
+    clazz_mrefs.clear();
+    clazz_frefs.clear();
+    clazz_trefs.clear();
+    gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs);
+
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);
   }
