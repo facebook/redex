@@ -9,10 +9,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from io import BytesIO, StringIO
+
 import binascii
 import re
 import string
-import StringIO
 import struct
 import sys
 
@@ -28,6 +29,12 @@ def dump_memory(base_addr, data, num_per_line, outfile):
     addr = base_addr
     ascii_str = ''
     i = 0
+    concat = None
+    if data_len > 0:
+        if isinstance(hex_string[0], int):
+            concat = lambda a,b: chr(a) + chr(b)
+        else:
+            concat = lambda a,b: a + b
     while i < data_len:
         outfile.write('0x%8.8x: ' % (addr + i))
         bytes_left = data_len - i
@@ -42,13 +49,15 @@ def dump_memory(base_addr, data, num_per_line, outfile):
         # current line with no spaces between bytes
         t = iter(curr_hex_str)
         # Print hex bytes separated by space
-        outfile.write(' '.join(a + b for a, b in zip(t, t)))
+        outfile.write(' '.join(concat(a, b) for a, b in zip(t, t)))
         # Print two spaces
         outfile.write('  ')
         # Calculate ASCII string for bytes into 'ascii_str'
         ascii_str = ''
         for j in range(i, i + curr_data_len):
             ch = data[j]
+            if isinstance(ch, int):
+                ch = chr(ch)
             if ch in string.printable and ch not in string.whitespace:
                 ascii_str += '%c' % (ch)
             else:
@@ -70,6 +79,8 @@ def hex_escape(s):
 
 
 def escape(c):
+    if isinstance(c, int):
+        c = chr(c)
     if c in string.printable:
         if c == '\n':
             return '\\n'
@@ -288,7 +299,7 @@ class FileExtract:
     def read_data(self, byte_size):
         bytes = self.read_size(byte_size)
         if len(bytes) == byte_size:
-            return FileExtract(StringIO.StringIO(bytes),
+            return FileExtract(StringIO(bytes.decode('utf-8')),
                                self.byte_order,
                                self.addr_size)
         return None
@@ -312,74 +323,45 @@ class FileExtract:
     def get_sint8(self, fail_value=0):
         '''Extract a int8_t from the current file position.'''
         s = self.read_size(1)
-        if s:
-            v, = struct.unpack(self.byte_order + 'b', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('b', s) if s else fail_value
 
     def get_uint8(self, fail_value=0):
         '''Extract and return a uint8_t from the current file position.'''
         s = self.read_size(1)
-        if s:
-            v, = struct.unpack(self.byte_order + 'B', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('B', s) if s else fail_value
 
     def get_sint16(self, fail_value=0):
         '''Extract a int16_t from the current file position.'''
         s = self.read_size(2)
-        if s:
-            v, = struct.unpack(self.byte_order + 'h', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('h', s) if s else fail_value
 
     def get_uint16(self, fail_value=0):
         '''Extract a uint16_t from the current file position.'''
         s = self.read_size(2)
-        if s:
-            v, = struct.unpack(self.byte_order + 'H', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('H', s) if s else fail_value
 
     def get_sint32(self, fail_value=0):
         '''Extract a int32_t from the current file position.'''
         s = self.read_size(4)
-        if s:
-            v, = struct.unpack(self.byte_order + 'i', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('i', s) if s else fail_value
 
     def get_uint32(self, fail_value=0):
         '''Extract a uint32_t from the current file position.'''
         s = self.read_size(4)
-        if s:
-            v, = struct.unpack(self.byte_order + 'I', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('I', s) if s else fail_value
 
     def get_sint64(self, fail_value=0):
         '''Extract a int64_t from the current file position.'''
         s = self.read_size(8)
-        if s:
-            v, = struct.unpack(self.byte_order + 'q', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('q', s) if s else fail_value
 
     def get_uint64(self, fail_value=0):
         '''Extract a uint64_t from the current file position.'''
         s = self.read_size(8)
-        if s:
-            v, = struct.unpack(self.byte_order + 'Q', s)
-            return v
-        else:
-            return fail_value
+        return self._unpack('Q', s) if s else fail_value
+
+    def _unpack(self, format_suffix, s):
+        return struct.unpack(self.byte_order + format_suffix, s)[0]
 
     def get_address(self, fail_value=0):
         if self.addr_size == 0:
@@ -423,7 +405,7 @@ class FileExtract:
         if s:
             cstr, = struct.unpack(self.byte_order + ("%i" % n) + 's', s)
             # Strip trialing NULLs
-            cstr = string.strip(cstr, "\0")
+            cstr = cstr.strip(b"\0")
             if isprint_only_with_space_padding:
                 for c in cstr:
                     if c in string.printable or ord(c) == 0:
@@ -572,7 +554,7 @@ def main():
     num_errors = 0
     print('Running unit tests...', end="")
     for (s, check_n) in sleb_tests:
-        e = FileExtract(StringIO.StringIO(s))
+        e = FileExtract(BytesIO(s))
         n = e.get_sleb128()
         if n != check_n:
             num_errors += 1
@@ -580,7 +562,7 @@ def main():
                     check_n, n))
             dump_memory(0, s, 32, sys.stdout)
     for (s, check_n) in uleb_tests:
-        e = FileExtract(StringIO.StringIO(s))
+        e = FileExtract(BytesIO(s))
         n = e.get_uleb128()
         if n != check_n:
             num_errors += 1
@@ -1041,7 +1023,7 @@ class AutoParser:
             else:
                 if 'dump_width' in item:
                     dump_width = item['dump_width']
-                    strm = StringIO.StringIO()
+                    strm = StringIO()
                     self.dump_value(strm, item, value, print_name, parent_path)
                     s = strm.getvalue()
                     f.write(s)

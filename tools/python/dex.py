@@ -10,11 +10,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from file_extract import AutoParser
+from io import BytesIO
+
 import bisect
 import copy
 import dict_utils
 import file_extract
-from file_extract import AutoParser
 import numbers
 import operator
 import optparse
@@ -23,7 +25,10 @@ import re
 import six
 import string
 import sys
-import StringIO
+
+
+def text(s):
+    return unicode(s) if sys.version_info[0] < 3 else str(s)
 
 
 def get_uleb128_byte_size(value):
@@ -41,7 +46,7 @@ def get_uleb128p1_byte_size(value):
 # ----------------------------------------------------------------------
 # Constants
 # ----------------------------------------------------------------------
-MAGIC = "dex\n"
+MAGIC = b"dex\n"
 ENDIAN_CONSTANT = 0x12345678
 REVERSE_ENDIAN_CONSTANT = 0x78563412
 NO_INDEX = 0xffffffff
@@ -186,7 +191,7 @@ class TypeCode(dict_utils.Enum):
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True,
              parent_path=None):
-        f.write(str(self))
+        f.write(text(self))
 
 
 # ----------------------------------------------------------------------
@@ -352,7 +357,7 @@ class class_data_item(AutoParser):
 
     @classmethod
     def create_empty(cls):
-        data = file_extract.FileExtract(StringIO.StringIO('\0\0\0\0'), '=')
+        data = file_extract.FileExtract(BytesIO(b'\0\0\0\0'), '=')
         return class_data_item(data)
 
 # ----------------------------------------------------------------------
@@ -1381,7 +1386,7 @@ class File:
         self.proguard = None
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
-        self.data = file_extract.FileExtract(open(self.path), '=', 4)
+        self.data = file_extract.FileExtract(open(self.path, 'rb'), '=', 4)
         self.header = header_item(self.data)
         self.map_list = None
         self.string_ids = None
@@ -1964,7 +1969,7 @@ class Opcode00(Opcode):
             self.element_width = code_units.get_code_unit()
             self.size = code_units.get_uint()
             num_code_units = int((self.size * self.element_width + 1) / 2)
-            encoder = file_extract.FileEncode(StringIO.StringIO(), 'little', 4)
+            encoder = file_extract.FileEncode(BytesIO(), 'little', 4)
             for i in range(num_code_units):
                 encoder.put_uint16(code_units.get_code_unit())
             encoder.seek(0)
