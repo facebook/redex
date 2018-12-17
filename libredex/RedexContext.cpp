@@ -174,8 +174,7 @@ void RedexContext::mutate_field(DexFieldRef* field,
   if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
     uint32_t i = 0;
     while (true) {
-      r.name = DexString::make_string(
-          ("f$" + std::to_string(i++)).c_str());
+      r.name = DexString::make_string(("f$" + std::to_string(i++)).c_str());
       if (s_field_map.find(r) == s_field_map.end()) {
         break;
       }
@@ -266,12 +265,24 @@ void RedexContext::mutate_method(DexMethodRef* method,
   if (s_method_map.count(r) && rename_on_collision) {
     if (new_spec.cls == nullptr) {
       // Either method prototype or name is going to be changed, and we hit a
-      // collision. Make an unique name: "m$[name]$[0-9]+".
+      // collision. Make an unique name: "name$[0-9]+". But in case of <init>
+      // and <clinit> names, libdex rejects a name like "<init>$1". See:
+      // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#115
+      // Valid characters can be found here: [_a-zA-Z0-9$\-]
+      // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#50
+      // If a method name begins with "<", it must end with ">". We generate a
+      // name like "$init$$42" by replacing <, > with $.
       uint32_t i = 0;
+      std::string prefix;
+      if (r.name->str().front() == '<') {
+        assert(r.name->str().back() == '>');
+        prefix =
+            "$" + r.name->str().substr(1, r.name->str().length() - 2) + "$$";
+      } else {
+        prefix = r.name->str() + "$";
+      }
       do {
-        r.name = DexString::make_string(
-            ("m$" + std::string(r.name->c_str()) + "$" + std::to_string(i++))
-                .c_str());
+        r.name = DexString::make_string((prefix + std::to_string(i++)).c_str());
       } while (s_method_map.count(r));
     } else {
       // We are about to change its class. Use a better name to remeber its
@@ -287,9 +298,16 @@ void RedexContext::mutate_method(DexMethodRef* method,
                 std::sregex_token_iterator(),
                 std::back_inserter(parts));
 
-      // Make a name like "m$[name]$Bar$foo".
+      // Make a name like "name$Bar$foo", or "$init$$Bar$foo" in case of <init>
+      // or <clinit>.
       std::stringstream ss;
-      ss << "m$" << *old_spec.name;
+      if (old_spec.name->str().front() == '<') {
+        ss << "$"
+           << old_spec.name->str().substr(1, old_spec.name->str().length() - 2)
+           << "$";
+      } else {
+        ss << *old_spec.name;
+      }
       for (auto part = parts.rbegin(); part != parts.rend(); ++part) {
         ss << "$" << *part;
         r.name = DexString::make_string(ss.str());
