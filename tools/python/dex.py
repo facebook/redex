@@ -2969,7 +2969,7 @@ class Opcode2B(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
-        self.branch = inst.get_uint32(1)
+        self.branch = inst.get_sint32(1)
 
     def dump(self, f=sys.stdout):
         f.write('%s v%u, %8.8x // +%8.8x' % (self.get_name(), self.reg,
@@ -2988,7 +2988,7 @@ class Opcode2C(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
-        self.branch = inst.get_uint32(1)
+        self.branch = inst.get_sint32(1)
 
     def dump(self, f=sys.stdout):
         f.write('%s v%u, %8.8x // +%8.8x' % (self.get_name(), self.reg,
