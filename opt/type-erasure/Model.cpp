@@ -484,18 +484,20 @@ void Model::create_mergers_helper(
     const boost::optional<size_t>& max_mergeables_count) {
   size_t group_size = group_values.size();
 
-  if (max_mergeables_count != boost::none &&
-      group_size > max_mergeables_count.get()) {
+  if (max_mergeables_count && group_size > *max_mergeables_count) {
     TypeSet curr_group;
     size_t subgroup_cnt = 0;
+    size_t remaining_mergeable_cnt = group_size;
     for (auto it = group_values.begin(); it != group_values.end(); ++it) {
       auto mergeable = *it;
       curr_group.insert(mergeable);
-      if (curr_group.size() == m_spec.max_count.get() ||
+      if ((curr_group.size() == *max_mergeables_count &&
+           remaining_mergeable_cnt - *max_mergeables_count > 1) ||
           std::next(it) == group_values.end()) {
         create_merger_helper(merger_type, shape, group_key, curr_group, dex_num,
                              interdex_subgroup_idx,
                              boost::optional<size_t>(subgroup_cnt++));
+        remaining_mergeable_cnt -= curr_group.size();
         curr_group.clear();
       }
     }
