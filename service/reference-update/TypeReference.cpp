@@ -242,6 +242,15 @@ void update_method_signature_type_references(
     auto name = meth->get_name();
     auto existing_meth = DexMethod::get_method(type, name, new_proto);
     if (existing_meth == nullptr) {
+      // For ctors if no collision is found, we still perform the update.
+      // This is needed to detect a subsequent collision on the updated ctor
+      // proto.
+      if (is_init(meth)) {
+        TRACE(REFU, 9, "sig: updating ctor %s\n", SHOW(meth));
+        meth->change(spec,
+                     false /* rename on collision */,
+                     true /* update deobfuscated name */);
+      }
       return;
     }
 
