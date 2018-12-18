@@ -263,15 +263,19 @@ void RedexContext::mutate_method(DexMethodRef* method,
   r.proto = new_spec.proto != nullptr ? new_spec.proto : method->m_spec.proto;
 
   if (s_method_map.count(r) && rename_on_collision) {
+    // Never rename constructors, which causes runtime verification error:
+    // "Method 42(Foo;.$init$$0) is marked constructor, but doesn't match name"
+    always_assert_log(show(r.name) != "<init>",
+                      "you should not rename constructor on a collision");
     if (new_spec.cls == nullptr) {
       // Either method prototype or name is going to be changed, and we hit a
-      // collision. Make an unique name: "name$[0-9]+". But in case of <init>
-      // and <clinit> names, libdex rejects a name like "<init>$1". See:
+      // collision. Make an unique name: "name$[0-9]+". But in case of <clinit>,
+      // libdex rejects a name like "<clinit>$1". See:
       // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#115
       // Valid characters can be found here: [_a-zA-Z0-9$\-]
       // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#50
       // If a method name begins with "<", it must end with ">". We generate a
-      // name like "$init$$42" by replacing <, > with $.
+      // name like "$clinit$$42" by replacing <, > with $.
       uint32_t i = 0;
       std::string prefix;
       if (r.name->str().front() == '<') {
@@ -298,8 +302,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
                 std::sregex_token_iterator(),
                 std::back_inserter(parts));
 
-      // Make a name like "name$Bar$foo", or "$init$$Bar$foo" in case of <init>
-      // or <clinit>.
+      // Make a name like "name$Bar$foo", or "$clinit$$Bar$foo".
       std::stringstream ss;
       if (old_spec.name->str().front() == '<') {
         ss << "$"
