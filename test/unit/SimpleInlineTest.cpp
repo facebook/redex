@@ -94,7 +94,7 @@ TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
   callee->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   const auto& caller_str = R"(
     (
-      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
       (invoke-static () "LFoo;.bar:()V")
       (return-void)
@@ -102,12 +102,12 @@ TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
   )";
   const auto& callee_str = R"(
     (
-      (.pos "LFoo;.callee:()V" "Foo.java" 123)
+      (.pos:dbg_0 "LFoo;.callee:()V" "Foo.java" 123)
       (const v0 1)
       (if-eqz v0 :after)
 
       (:exit)
-      (.pos "LFoo;.callee:()V" "Foo.java" 124)
+      (.pos:dbg_1 "LFoo;.callee:()V" "Foo.java" 124)
       (const v1 2)
       (return-void)
 
@@ -118,22 +118,22 @@ TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
   )";
   const auto& expected_str = R"(
     (
-      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (.pos:dbg_0 "LFoo;.caller:()V" "Foo.java" 10)
       (const v0 0)
 
-      (.pos "LFoo;.callee:()V" "Foo.java" 123 0)
+      (.pos:dbg_1 "LFoo;.callee:()V" "Foo.java" 123 dbg_0)
       (const v1 1)
       (if-eqz v1 :after)
 
       (:exit)
-      (.pos "LFoo;.callee:()V" "Foo.java" 124 0)
+      (.pos:dbg_2 "LFoo;.callee:()V" "Foo.java" 124 dbg_0)
       (const v2 2)
-      (.pos "LFoo;.caller:()V" "Foo.java" 10)
+      (.pos:dbg_3 "LFoo;.caller:()V" "Foo.java" 10)
       (return-void)
 
       ; Check that this position was correctly added to the code after the
       ; callee's return
-      (.pos "LFoo;.callee:()V" "Foo.java" 124 0)
+      (.pos:dbg_4 "LFoo;.callee:()V" "Foo.java" 124 dbg_0)
       (:after)
       (const v3 3)
       (goto :exit)
