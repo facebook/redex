@@ -49,3 +49,5 @@ DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              DexOpcode opcode,
                              const char* target_mname);
 DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);
+
+void verify_type_erased(const DexClass* cls, size_t num_dmethods = 0);

@@ -101,3 +101,15 @@ DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode) {
       });
   return it == insns.end() ? nullptr : *it;
 }
+
+void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
+  ASSERT_NE(cls, nullptr);
+  auto dmethods = cls->get_dmethods();
+  ASSERT_EQ(dmethods.size(), num_dmethods);
+  for (auto m : dmethods) {
+    ASSERT_FALSE(is_init(m));
+    ASSERT_NE(m->c_str(), "<init>");
+  }
+  auto vmethods = cls->get_vmethods();
+  ASSERT_TRUE(vmethods.empty());
+}
