@@ -72,9 +72,7 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
   for (const auto& cls : stores[0].get_dexen()[0]) {
     m_xstores.back().insert(cls->get_type());
   }
-  m_root_stores = 1;
   if (stores[0].get_dexen().size() > 1) {
-    m_root_stores++;
     m_xstores.push_back(std::unordered_set<const DexType*>());
     m_stores.push_back(&stores[0]);
     for (size_t i = 1; i < stores[0].get_dexen().size(); i++) {

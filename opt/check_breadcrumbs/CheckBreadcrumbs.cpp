@@ -298,14 +298,16 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
 
   size_t caller_store_idx = m_xstores.get_store_idx(caller);
   size_t callee_store_idx = m_xstores.get_store_idx(callee);
-
-  if (m_multiple_root_store_dexes && caller_store_idx == 0 &&
-      callee_store_idx == 1 && !m_reject_illegal_refs_root_store) {
-    return false;
+  if (caller_store_idx < callee_store_idx) {
+    // Accept primary to secondary references.
+    if (m_multiple_root_store_dexes && caller_store_idx == 0 &&
+        callee_store_idx == 1 && !m_reject_illegal_refs_root_store) {
+      return false;
+    }
+    return true;
   }
 
-  return m_xstores.illegal_ref_between_stores(caller_store_idx,
-                                              callee_store_idx);
+  return false;
 }
 
 const DexType* Breadcrumbs::check_type(const DexType* type) {
