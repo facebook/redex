@@ -124,6 +124,11 @@ class XStoreRefs {
    */
   std::vector<const DexStore*> m_stores;
 
+  /**
+   * Number of root stores.
+   */
+  size_t m_root_stores;
+
  public:
   explicit XStoreRefs(const DexStoresVector& stores);
 
@@ -170,7 +175,35 @@ class XStoreRefs {
     for (; type_store_idx < m_xstores.size(); type_store_idx++) {
       if (m_xstores[type_store_idx].count(type) > 0) break;
     }
-    return type_store_idx > store_idx;
+    return illegal_ref_between_stores(store_idx, type_store_idx);
   }
 
+  bool illegal_ref_between_stores(size_t caller_store_idx,
+                                  size_t callee_store_idx) const {
+    if (caller_store_idx == callee_store_idx) {
+      return false;
+    }
+
+    bool callee_in_root_store = callee_store_idx < m_root_stores;
+
+    if (callee_in_root_store) {
+      // Check if primary to secondary reference
+      return callee_store_idx > caller_store_idx;
+    }
+
+    // Check if the caller depends on the callee,
+    // TODO - do it transitively.
+    if (caller_store_idx >= m_root_stores) {
+      const auto& callee_store_name = get_store(callee_store_idx)->get_name();
+      const auto& caller_dependencies =
+          get_store(caller_store_idx)->get_dependencies();
+
+      if (std::find(caller_dependencies.begin(), caller_dependencies.end(),
+                    callee_store_name) != caller_dependencies.end()) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 };
