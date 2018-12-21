@@ -433,6 +433,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_EXTERN_CATCH,
        "Didn''t inline: callee has a non-public external catch type"},
       {INL_TOO_BIG, "Didn''t inline: estimated inlined method size is too big"},
+      {INL_REQUIRES_API,
+       "Didn''t inline: The callee has a higher required api level."},
       {INL_CREATE_VMETH,
        "Didn''t inline: callee contains invokes of methods not visible to the "
        "caller"},

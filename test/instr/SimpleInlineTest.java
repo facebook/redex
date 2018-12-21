@@ -10,6 +10,8 @@ package com.facebook.redexinline;
 import static org.fest.assertions.api.Assertions.*;
 import com.facebook.redexinline.otherpackage.SimpleInlineOtherPackage;
 import android.util.Log;
+import android.os.Build;
+import android.support.annotation.RequiresApi;
 
 import org.junit.Test;
 
@@ -353,4 +355,63 @@ public class SimpleInlineTest {
 
   public void tryStuff(int i) {}
   public void cleanup(int i) {}
+
+  @Test
+  public void callSpecificApi() {
+    // Should not be inlined
+    int i = NeedsAndroidN.useApi();
+    assertThat(i == 1);
+
+    // Should not be inlined
+    i = NeedsAndroidO.shouldNotInlineOutOfClass();
+    assertThat(i == 0);
+
+    // Should not be inlined
+    i = NeedsAndroidO.shouldInlineNintoO();
+    assertThat(i == 1);
+
+    // Should not be inlined
+    i = NeedsAndroidN.shouldNotInlineOintoN();
+    assertThat(i == 1);
+
+    // Should be inlined
+    i = NeedsAndroidN.doesntActuallyNeedN();
+    assertThat(i == 0);
+  }
+
+  private static class NeedsAndroidN {
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    public static int useApi() {
+      return 1;
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.N)
+    public static int shouldNotInlineOintoN() {
+      return NeedsAndroidO.useApiO();
+    }
+
+    public static int doesntActuallyNeedN() {
+      return 0;
+    }
+  }
+
+  @RequiresApi(api = Build.VERSION_CODES.O)
+  private static class NeedsAndroidO {
+    private static int shouldInlineWithinClass() {
+      return 0;
+    }
+
+    public static int shouldNotInlineOutOfClass() {
+      return shouldInlineWithinClass();
+    }
+
+    public static int shouldInlineNintoO() {
+      // Should be inlined because N is a lower requirement than o
+      return NeedsAndroidN.useApi();
+    }
+
+    public static int useApiO() {
+      return 0;
+    }
+  }
 }

@@ -453,3 +453,60 @@ TEST_F(PostVerify, testFinallyEmpty) {
   EXPECT_EQ(nullptr,
             find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "cleanup"));
 }
+
+TEST_F(PostVerify, inlineAcrossCallerNoApi) {
+  // Make sure we're still calling all the api specific methods. Make sure they
+  // haven't been inlined.
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+  ASSERT_NE(nullptr, cls);
+  auto m = find_vmethod_named(*cls, "callSpecificApi");
+  ASSERT_NE(nullptr, m);
+  EXPECT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "useApi"))
+      << SHOW(m->get_dex_code());
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOutOfClass"))
+      << SHOW(m->get_dex_code());
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldInlineNintoO"))
+      << SHOW(m->get_dex_code());
+  EXPECT_NE(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOintoN"))
+      << SHOW(m->get_dex_code());
+  EXPECT_EQ(nullptr,
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "doesntActuallyNeedN"))
+      << SHOW(m->get_dex_code());
+}
+
+TEST_F(PostVerify, inlineAcrossCallerAndroidN) {
+  auto n = find_class_named(
+      classes, "Lcom/facebook/redexinline/SimpleInlineTest$NeedsAndroidN;");
+  ASSERT_NE(nullptr, n);
+
+  auto useApi = find_dmethod_named(*n, "useApi");
+  ASSERT_NE(nullptr, useApi);
+
+  auto shouldNotInlineOintoN = find_dmethod_named(*n, "shouldNotInlineOintoN");
+  ASSERT_NE(nullptr, shouldNotInlineOintoN);
+  EXPECT_NE(nullptr, find_invoke(shouldNotInlineOintoN, DOPCODE_INVOKE_STATIC,
+                                 "useApiO"))
+      << SHOW(shouldNotInlineOintoN->get_dex_code());
+}
+
+TEST_F(PostVerify, inlineAcrossCallerAndroidO) {
+  auto o = find_class_named(
+      classes, "Lcom/facebook/redexinline/SimpleInlineTest$NeedsAndroidO;");
+  ASSERT_NE(nullptr, o);
+
+  auto shouldInlineWithinClass =
+      find_dmethod_named(*o, "shouldInlineWithinClass");
+  // Should be gone.
+  EXPECT_EQ(nullptr, shouldInlineWithinClass);
+
+  auto shouldInlineNintoO = find_dmethod_named(*o, "shouldInlineNintoO");
+  ASSERT_NE(nullptr, shouldInlineNintoO);
+  // Should be inlined. No callsite.
+  EXPECT_EQ(nullptr,
+            find_invoke(shouldInlineNintoO, DOPCODE_INVOKE_STATIC, "useApi"))
+      << SHOW(shouldInlineNintoO->get_dex_code());
+}

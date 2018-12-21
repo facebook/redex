@@ -252,6 +252,14 @@ class MultiMethodInliner {
    */
   void invoke_direct_to_static();
 
+  /**
+   * Get the "most specific" api level of this method. If the method is
+   * annotated with @RequiresApi, return its level, if not, check the containing
+   * class and return its level. If neither are annotated with @RequiresApi,
+   * return 0.
+   */
+  int32_t get_required_api_level(const DexMethod* method);
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -309,6 +317,8 @@ class MultiMethodInliner {
   const std::vector<DexClass*>& m_scope;
 
   const Config& m_config;
+
+  const DexType* m_requires_api;
 
   std::unordered_set<DexMethod*> m_make_static;
 
