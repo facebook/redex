@@ -494,6 +494,17 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   to_cls->add_method(method);
 }
 
+bool is_subclass(const DexType* parent, const DexType* child) {
+  auto super = child;
+  while (super != nullptr) {
+    if (parent == super) return true;
+    const auto cls = type_class(super);
+    if (cls == nullptr) break;
+    super = cls->get_super_class();
+  }
+  return false;
+}
+
 void change_visibility(DexMethod* method) {
   auto code = method->get_code();
   always_assert(code != nullptr);

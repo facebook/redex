@@ -24,6 +24,7 @@
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
+#include "DexTypeDomain.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "IRCode.h"
@@ -139,8 +140,6 @@ constexpr register_t RESULT_REGISTER =
 using BasicTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, TypeDomain>;
 
-using DexTypeDomain = ConstantAbstractDomain<const DexType*>;
-
 using DexTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, DexTypeDomain>;
 
@@ -166,8 +165,8 @@ class TypeEnvironment final
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  boost::optional<const DexType*> get_concrete_type(register_t reg) const {
-    return get<1>().get(reg).get_constant();
+  boost::optional<const DexType*> get_dex_type(register_t reg) const {
+    return get<1>().get(reg).get_dex_type();
   }
 
   void set_concrete_type(register_t reg, const DexTypeDomain& dex_type) {
@@ -308,8 +307,7 @@ class TypeInference final
     case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
       if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
-        const auto& dex_type_opt =
-            current_state->get_concrete_type(insn->src(0));
+        const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
         set_reference(current_state, insn->dest(), dex_type_opt);
       } else {
         set_type(
@@ -338,7 +336,7 @@ class TypeInference final
       assume_reference(current_state, RESULT_REGISTER);
       set_reference(current_state,
                     insn->dest(),
-                    current_state->get_concrete_type(RESULT_REGISTER));
+                    current_state->get_dex_type(RESULT_REGISTER));
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
@@ -519,7 +517,7 @@ class TypeInference final
     case OPCODE_AGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      const auto dex_type_opt = current_state->get_concrete_type(insn->src(0));
+      const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
       if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
         const auto etype = get_array_component_type(*dex_type_opt);
         set_reference(current_state, RESULT_REGISTER, etype);
@@ -1431,6 +1429,19 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
     return BOTTOM;
   }
   return it->second.get_type(reg).element();
+}
+
+const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
+                                           uint16_t reg) const {
+  check_completion();
+  auto& type_envs = m_type_inference->m_type_envs;
+  auto it = type_envs.find(insn);
+  if (it == type_envs.end()) {
+    // The instruction doesn't belong to this method. We treat this as
+    // unreachable code and return BOTTOM.
+    return nullptr;
+  }
+  return *it->second.get_dex_type(reg);
 }
 
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {

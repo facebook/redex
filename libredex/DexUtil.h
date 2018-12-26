@@ -253,6 +253,12 @@ inline bool is_any_init(const DexMethodRef* method) {
 }
 
 /**
+ * Subclass check. Copied from VirtualScope.
+ * We can make this much faster in time.
+ */
+bool is_subclass(const DexType* parent, const DexType* child);
+
+/**
  * Change the visibility of members accessed in a method.
  * We make everything public but we could be more precise and only
  * relax visibility as needed.
