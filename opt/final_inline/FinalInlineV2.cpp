@@ -39,16 +39,6 @@ namespace cp = constant_propagation;
 
 namespace {
 
-class StringAnalyzer
-    : public InstructionAnalyzerBase<StringAnalyzer, ConstantEnvironment> {
- public:
-  static bool analyze_const_string(const IRInstruction* insn,
-                                   ConstantEnvironment* env) {
-    env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
-    return true;
-  }
-};
-
 /*
  * Foo.<clinit> may read some static fields from class Bar, in which case
  * Bar.<clinit> will be executed first by the VM to determine the values of
@@ -145,13 +135,13 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
 using CombinedAnalyzer =
     InstructionAnalyzerCombiner<cp::ClinitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
-                                StringAnalyzer,
+                                cp::StringAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 
 using CombinedInitAnalyzer =
     InstructionAnalyzerCombiner<cp::InitFieldAnalyzer,
                                 cp::WholeProgramAwareAnalyzer,
-                                StringAnalyzer,
+                                cp::StringAnalyzer,
                                 cp::PrimitiveAnalyzer>;
 
 // A trivial clinit should only contain a return-void instruction.

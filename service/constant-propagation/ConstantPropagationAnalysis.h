@@ -209,6 +209,16 @@ class BoxedBooleanAnalyzer final
                              ConstantEnvironment*);
 };
 
+class StringAnalyzer
+    : public InstructionAnalyzerBase<StringAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_const_string(const IRInstruction* insn,
+                                   ConstantEnvironment* env) {
+    env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
+    return true;
+  }
+};
+
 /*
  * Utility methods.
  */
