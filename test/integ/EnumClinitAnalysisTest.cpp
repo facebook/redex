@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "EnumOrdinalAnalysis.h"
+#include "EnumClinitAnalysis.h"
 
 #include <gtest/gtest.h>
 
@@ -19,8 +19,8 @@ constexpr const char* ENUM_A = "Lcom/facebook/redextest/EnumA;";
 constexpr const char* ENUM_B = "Lcom/facebook/redextest/EnumB;";
 
 /*
- * Check that analyze_enum_clinit returns the correct enum field -> ordinal
- * mapping.
+ * Check that analyze_enum_clinit returns the correct enum field -> ordinal and
+ * name mapping.
  */
 TEST_F(RedexTest, OrdinalAnalysis) {
   always_assert(load_class_file(std::getenv("enum_class_file")));
@@ -34,7 +34,7 @@ TEST_F(RedexTest, OrdinalAnalysis) {
   auto scope = build_class_scope(root_store.get_dexen());
 
   auto enumA = type_class(DexType::get_type(ENUM_A));
-  auto enum_field_to_ordinal = optimize_enums::analyze_enum_clinit(enumA);
+  auto enum_field_to_attrs = optimize_enums::analyze_enum_clinit(enumA);
   auto enumA_zero = static_cast<DexField*>(
       DexField::get_field("Lcom/facebook/redextest/EnumA;.TYPE_A_0:Lcom/"
                           "facebook/redextest/EnumA;"));
@@ -44,7 +44,18 @@ TEST_F(RedexTest, OrdinalAnalysis) {
   auto enumA_two = static_cast<DexField*>(
       DexField::get_field("Lcom/facebook/redextest/EnumA;.TYPE_A_2:Lcom/"
                           "facebook/redextest/EnumA;"));
-  EXPECT_EQ(enum_field_to_ordinal.at(enumA_zero), 0);
-  EXPECT_EQ(enum_field_to_ordinal.at(enumA_one), 1);
-  EXPECT_EQ(enum_field_to_ordinal.at(enumA_two), 2);
+  auto& attrs_zero = enum_field_to_attrs.at(enumA_zero);
+  EXPECT_EQ(attrs_zero.ordinal, 0);
+  EXPECT_EQ(attrs_zero.name, DexString::get_string("TYPE_A_0"));
+  EXPECT_EQ(attrs_zero.opt, nullptr);
+
+  auto& attrs_one = enum_field_to_attrs.at(enumA_one);
+  EXPECT_EQ(attrs_one.ordinal, 1);
+  EXPECT_EQ(attrs_one.name, DexString::get_string("TYPE_A_1"));
+  EXPECT_EQ(attrs_one.opt, nullptr);
+
+  auto& attrs_two = enum_field_to_attrs.at(enumA_two);
+  EXPECT_EQ(attrs_two.ordinal, 2);
+  EXPECT_EQ(attrs_two.name, DexString::get_string("TYPE_A_2"));
+  EXPECT_EQ(attrs_two.opt, nullptr);
 }
