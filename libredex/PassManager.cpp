@@ -50,22 +50,30 @@ std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
                          bool verify_none_mode,
-                         bool is_art_build)
-    : PassManager(
-          passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
+                         bool is_art_build,
+                         bool enable_instrument_pass)
+    : PassManager(passes,
+                  empty_pg_config(),
+                  config,
+                  verify_none_mode,
+                  is_art_build,
+                  enable_instrument_pass) {}
 
-PassManager::PassManager(const std::vector<Pass*>& passes,
-                         std::unique_ptr<redex::ProguardConfiguration> pg_config,
-                         const Json::Value& config,
-                         bool verify_none_mode,
-                         bool is_art_build)
+PassManager::PassManager(
+    const std::vector<Pass*>& passes,
+    std::unique_ptr<redex::ProguardConfiguration> pg_config,
+    const Json::Value& config,
+    bool verify_none_mode,
+    bool is_art_build,
+    bool enable_instrument_pass)
     : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
       m_testing_mode(false),
       m_verify_none_mode(verify_none_mode),
-      m_art_build(is_art_build) {
+      m_art_build(is_art_build),
+      m_enable_instrument_pass(enable_instrument_pass) {
   init(config);
   if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
     // Resolve the pass in the constructor so that any typos / references to

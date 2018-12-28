@@ -23,13 +23,15 @@ class PassManager {
   PassManager(const std::vector<Pass*>& passes,
               const Json::Value& config = Json::Value(Json::objectValue),
               bool verify_none_mode = false,
-              bool is_art_build = false);
+              bool is_art_build = false,
+              bool enable_instrument_pass = false);
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<redex::ProguardConfiguration> pg_config,
               const Json::Value& config = Json::Value(Json::objectValue),
               bool verify_none_mode = false,
-              bool is_art_build = false);
+              bool is_art_build = false,
+              bool enable_instrument_pass = false);
 
   struct PassInfo {
     const Pass* pass;
@@ -47,6 +49,7 @@ class PassManager {
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
   bool verify_none_enabled() const { return m_verify_none_mode; }
   bool is_art_build() const { return m_art_build; }
+  bool instrument_pass_enabled() const { return m_enable_instrument_pass; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
   const std::unordered_map<std::string, int>& get_interdex_metrics();
@@ -95,6 +98,7 @@ class PassManager {
   bool m_testing_mode;
   bool m_verify_none_mode;
   bool m_art_build;
+  bool m_enable_instrument_pass;
   bool m_regalloc_has_run = false;
 
   struct ProfilerInfo {

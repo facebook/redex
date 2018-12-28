@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <cstring>
 #include <cinttypes>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -64,6 +64,7 @@ struct Arguments {
   std::vector<std::string> dex_files;
   bool verify_none_mode{false};
   bool art_build{false};
+  bool enable_instrument_pass{false};
   // Entry data contains the list of dex files, config file and original
   // command line arguments. For development usage
   Json::Value entry_data;
@@ -75,6 +76,8 @@ UNUSED void dump_args(const Arguments& args) {
   std::cout << "out_dir: " << args.out_dir << std::endl;
   std::cout << "verify_none_mode: " << args.verify_none_mode << std::endl;
   std::cout << "art_build: " << args.art_build << std::endl;
+  std::cout << "enable_instrument_pass: " << args.enable_instrument_pass
+            << std::endl;
   std::cout << "jar_paths: " << std::endl;
   for (const auto& e : args.jar_paths) {
     std::cout << "  " << e << std::endl;
@@ -176,8 +179,9 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()("printseeds,q",
                    po::value<std::vector<std::string>>(),
                    "file to report seeds computed by redex");
-  od.add_options()("used-js-assets", po::value<std::vector<std::string>>(),
-                   "A JSON file (or files) containing a list of resources used by JS");
+  od.add_options()(
+      "used-js-assets", po::value<std::vector<std::string>>(),
+      "A JSON file (or files) containing a list of resources used by JS");
   od.add_options()("warn,w",
                    po::value<std::vector<int>>(),
                    "warning level:\n"
@@ -192,7 +196,12 @@ Arguments parse_args(int argc, char* argv[]) {
       "wouldn't normally operate with verification enabled.");
   od.add_options()(
       "is-art-build",
+      po::bool_switch(&args.art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
+  od.add_options()(
+      "enable-instrument-pass",
+      po::bool_switch(&args.enable_instrument_pass)->default_value(false),
+      "If specified, enables InstrumentPass if any.\n");
   od.add_options()(",S",
                    po::value<std::vector<std::string>>(), // Accumulation
                    "-Skey=string\n"
@@ -312,7 +321,8 @@ Arguments parse_args(int argc, char* argv[]) {
   // overwrite values read from the config file regardless of the order of
   // arguments.
   if (vm.count("apkdir")) {
-    args.entry_data["apk_dir"] = args.config["apk_dir"] = take_last(vm["apkdir"]);
+    args.entry_data["apk_dir"] = args.config["apk_dir"] =
+        take_last(vm["apkdir"]);
   }
 
   if (vm.count("printseeds")) {
@@ -320,7 +330,8 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   if (vm.count("used-js-assets")) {
-    const auto& js_assets_lists = vm["used-js-assets"].as<std::vector<std::string>>();
+    const auto& js_assets_lists =
+        vm["used-js-assets"].as<std::vector<std::string>>();
     Json::Value array(Json::arrayValue);
     for (const auto& list : js_assets_lists) {
       array.append(list);
@@ -344,11 +355,6 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
-  if (vm.count("is-art-build")) {
-    args.art_build = true;
-  } else {
-    args.art_build = false;
-  }
   // Development usage only
   if (vm.count("stop-pass")) {
     args.stop_pass_idx = vm["stop-pass"].as<int>();
@@ -357,6 +363,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("output-ir")) {
     args.output_ir_dir = vm["output-ir"].as<std::string>();
   }
+
   if (args.stop_pass_idx != boost::none) {
     // Resize the passes list and append an additional RegAllocPass if its final
     // pass is not RegAllocPass.
@@ -381,6 +388,9 @@ Arguments parse_args(int argc, char* argv[]) {
 
   TRACE(MAIN, 2, "Verify-none mode: %s\n",
         args.verify_none_mode ? "Yes" : "No");
+  TRACE(MAIN, 2, "Art build: %s\n", args.art_build ? "Yes" : "No");
+  TRACE(MAIN, 2, "Enable InstrumentPass: %s\n",
+        args.enable_instrument_pass ? "Yes" : "No");
 
   return args;
 }
@@ -702,7 +712,8 @@ void redex_backend(const PassManager& manager,
     bool lower_with_cfg = false;
     cfg.get_json_config().get("lower_with_cfg", false, lower_with_cfg);
     Timer t("Instruction lowering");
-    instruction_lowering_stats = instruction_lowering::run(stores, lower_with_cfg);
+    instruction_lowering_stats =
+        instruction_lowering::run(stores, lower_with_cfg);
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
@@ -879,7 +890,6 @@ int main(int argc, char* argv[]) {
   {
     Timer redex_all_main_timer("redex-all main()");
 
-
     g_redex = new RedexContext();
 
     // Currently there are two sources that specify the library jars:
@@ -905,7 +915,8 @@ int main(int argc, char* argv[]) {
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
-                        args.verify_none_mode, args.art_build);
+                        args.verify_none_mode, args.art_build,
+                        args.enable_instrument_pass);
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, cfg);

@@ -876,6 +876,11 @@ std::unordered_set<std::string> load_blacklist_file(
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
+  if (!pm.instrument_pass_enabled()) {
+    TRACE(INSTRUMENT, 1, "--enable-instrument-pass is not specified.\n");
+    return;
+  }
+
   // Append black listed classes from the file, if exists.
   if (!m_options.blacklist_file_name.empty()) {
     for (const auto& e : load_blacklist_file(m_options.blacklist_file_name)) {
