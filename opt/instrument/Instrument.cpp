@@ -876,7 +876,7 @@ std::unordered_set<std::string> load_blacklist_file(
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
-  if (!pm.instrument_pass_enabled()) {
+  if (!pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1, "--enable-instrument-pass is not specified.\n");
     return;
   }

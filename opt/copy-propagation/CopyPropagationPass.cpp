@@ -460,7 +460,8 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  if (m_config.eliminate_const_literals && !mgr.verify_none_enabled()) {
+  if (m_config.eliminate_const_literals &&
+      !mgr.get_redex_options().verify_none_enabled) {
     // This option is not safe with the verifier
     m_config.eliminate_const_literals = false;
     TRACE(RME,

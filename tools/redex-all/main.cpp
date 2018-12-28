@@ -62,22 +62,21 @@ struct Arguments {
   std::vector<std::string> proguard_config_paths;
   std::string out_dir;
   std::vector<std::string> dex_files;
-  bool verify_none_mode{false};
-  bool art_build{false};
-  bool enable_instrument_pass{false};
   // Entry data contains the list of dex files, config file and original
   // command line arguments. For development usage
   Json::Value entry_data;
   boost::optional<int> stop_pass_idx;
   std::string output_ir_dir;
+  RedexOptions redex_options;
 };
 
 UNUSED void dump_args(const Arguments& args) {
   std::cout << "out_dir: " << args.out_dir << std::endl;
-  std::cout << "verify_none_mode: " << args.verify_none_mode << std::endl;
-  std::cout << "art_build: " << args.art_build << std::endl;
-  std::cout << "enable_instrument_pass: " << args.enable_instrument_pass
+  std::cout << "verify_none_mode: " << args.redex_options.verify_none_enabled
             << std::endl;
+  std::cout << "art_build: " << args.redex_options.is_art_build << std::endl;
+  std::cout << "enable_instrument_pass: "
+            << args.redex_options.instrument_pass_enabled << std::endl;
   std::cout << "jar_paths: " << std::endl;
   for (const auto& e : args.jar_paths) {
     std::cout << "  " << e << std::endl;
@@ -190,18 +189,19 @@ Arguments parse_args(int argc, char* argv[]) {
                    "  2: full text of warnings");
   od.add_options()(
       "verify-none-mode",
-      po::bool_switch(&args.verify_none_mode)->default_value(false),
+      po::bool_switch(&args.redex_options.verify_none_enabled)
+          ->default_value(false),
       "run redex in verify-none mode\n"
       "  \tThis will activate optimization passes or code in some passes that "
       "wouldn't normally operate with verification enabled.");
   od.add_options()(
       "is-art-build",
-      po::bool_switch(&args.art_build)->default_value(false),
+      po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
-  od.add_options()(
-      "enable-instrument-pass",
-      po::bool_switch(&args.enable_instrument_pass)->default_value(false),
-      "If specified, enables InstrumentPass if any.\n");
+  od.add_options()("enable-instrument-pass",
+                   po::bool_switch(&args.redex_options.instrument_pass_enabled)
+                       ->default_value(false),
+                   "If specified, enables InstrumentPass if any.\n");
   od.add_options()(",S",
                    po::value<std::vector<std::string>>(), // Accumulation
                    "-Skey=string\n"
@@ -387,10 +387,11 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   TRACE(MAIN, 2, "Verify-none mode: %s\n",
-        args.verify_none_mode ? "Yes" : "No");
-  TRACE(MAIN, 2, "Art build: %s\n", args.art_build ? "Yes" : "No");
+        args.redex_options.verify_none_enabled ? "Yes" : "No");
+  TRACE(MAIN, 2, "Art build: %s\n",
+        args.redex_options.is_art_build ? "Yes" : "No");
   TRACE(MAIN, 2, "Enable InstrumentPass: %s\n",
-        args.enable_instrument_pass ? "Yes" : "No");
+        args.redex_options.instrument_pass_enabled ? "Yes" : "No");
 
   return args;
 }
@@ -915,8 +916,7 @@ int main(int argc, char* argv[]) {
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
-                        args.verify_none_mode, args.art_build,
-                        args.enable_instrument_pass);
+                        args.redex_options);
     {
       Timer t("Running optimization passes");
       manager.run_passes(stores, cfg);

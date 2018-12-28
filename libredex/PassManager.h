@@ -18,20 +18,22 @@
 #include <utility>
 #include <vector>
 
+struct RedexOptions {
+  bool verify_none_enabled{false};
+  bool is_art_build{false};
+  bool instrument_pass_enabled{false};
+};
+
 class PassManager {
  public:
   PassManager(const std::vector<Pass*>& passes,
               const Json::Value& config = Json::Value(Json::objectValue),
-              bool verify_none_mode = false,
-              bool is_art_build = false,
-              bool enable_instrument_pass = false);
+              const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
               std::unique_ptr<redex::ProguardConfiguration> pg_config,
               const Json::Value& config = Json::Value(Json::objectValue),
-              bool verify_none_mode = false,
-              bool is_art_build = false,
-              bool enable_instrument_pass = false);
+              const RedexOptions& options = RedexOptions{});
 
   struct PassInfo {
     const Pass* pass;
@@ -47,9 +49,7 @@ class PassManager {
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
-  bool verify_none_enabled() const { return m_verify_none_mode; }
-  bool is_art_build() const { return m_art_build; }
-  bool instrument_pass_enabled() const { return m_enable_instrument_pass; }
+  const RedexOptions& get_redex_options() const { return m_redex_options; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
   const std::unordered_map<std::string, int>& get_interdex_metrics();
@@ -67,13 +67,9 @@ class PassManager {
 
   ApkManager& apk_manager() { return m_apk_mgr; }
 
-  void record_running_regalloc() {
-    m_regalloc_has_run = true;
-  }
+  void record_running_regalloc() { m_regalloc_has_run = true; }
 
-  bool regalloc_has_run() {
-    return m_regalloc_has_run;
-  }
+  bool regalloc_has_run() { return m_regalloc_has_run; }
 
  private:
   void activate_pass(const char* name, const Json::Value& cfg);
@@ -95,11 +91,9 @@ class PassManager {
   PassInfo* m_current_pass_info;
 
   std::unique_ptr<redex::ProguardConfiguration> m_pg_config;
-  bool m_testing_mode;
-  bool m_verify_none_mode;
-  bool m_art_build;
-  bool m_enable_instrument_pass;
-  bool m_regalloc_has_run = false;
+  const RedexOptions& m_redex_options;
+  bool m_testing_mode{false};
+  bool m_regalloc_has_run{false};
 
   struct ProfilerInfo {
     std::string command;

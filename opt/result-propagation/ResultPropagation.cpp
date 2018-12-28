@@ -399,7 +399,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       continue;
     }
 
-    if (!mgr.verify_none_enabled()) {
+    if (!mgr.get_redex_options().verify_none_enabled) {
       // Let's check if replacing move-result with a move does not impact
       // verifiability.
       // TODO(configurability): Introduce a flag whether we care about
