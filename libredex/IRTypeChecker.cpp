@@ -28,6 +28,7 @@
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "IRCode.h"
+#include "IRInstructionAnalyzer.h"
 #include "IROpcode.h"
 #include "Match.h"
 #include "MonotonicFixpointIterator.h"
@@ -129,13 +130,8 @@ using TypeDomain = FiniteAbstractDomain<IRType,
                                         TypeLattice::Encoding,
                                         &type_lattice>;
 
-using register_t = uint32_t;
-
-// We use this special register to denote the result of a method invocation or a
-// filled-array creation. If the result is a wide value, RESULT_REGISTER + 1
-// holds the second component of the result.
-constexpr register_t RESULT_REGISTER =
-    std::numeric_limits<register_t>::max() - 1;
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
 using BasicTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, TypeDomain>;
@@ -181,15 +177,14 @@ class TypeCheckingException final : public std::runtime_error {
       : std::runtime_error(what_arg) {}
 };
 
-class TypeInference final
-    : public MonotonicFixpointIterator<cfg::GraphInterface, TypeEnvironment> {
+class TypeInference final : public IRInstructionAnalyzer<TypeEnvironment> {
  public:
   using NodeId = cfg::Block*;
 
   TypeInference(const cfg::ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+      : IRInstructionAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),
@@ -259,19 +254,6 @@ class TypeInference final
     m_inference = false;
   }
 
-  void analyze_node(const NodeId& node,
-                    TypeEnvironment* current_state) const override {
-    for (auto& mie : InstructionIterable(node)) {
-      analyze_instruction(mie.insn, current_state);
-    }
-  }
-
-  TypeEnvironment analyze_edge(
-      const EdgeId&,
-      const TypeEnvironment& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
   // This method is used in two different modes. When m_inference == true, it
   // analyzes an instruction and updates the type environment accordingly. It is
   // used in this mode during the fixpoint iteration. Once a fixpoint has
@@ -286,7 +268,7 @@ class TypeInference final
   // type checking mode, they are used to check that the inferred type of a
   // register matches with its expected type, as derived from the context.
   void analyze_instruction(IRInstruction* insn,
-                           TypeEnvironment* current_state) const {
+                           TypeEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_OBJECT:
