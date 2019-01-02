@@ -38,15 +38,25 @@ class SimpleInlinePass : public Pass {
     std::vector<std::string> no_inline_annos;
     jw.get("no_inline_annos", {}, no_inline_annos);
     for (const auto& type_s : no_inline_annos) {
-      m_inliner_config.no_inline.emplace(
-          DexType::make_type(type_s.c_str()));
+      auto type = DexType::get_type(type_s.c_str());
+      if (type != nullptr) {
+        m_inliner_config.no_inline.emplace(type);
+      } else {
+        fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
+                type_s.c_str());
+      }
     }
 
     std::vector<std::string> force_inline_annos;
     jw.get("force_inline_annos", {}, force_inline_annos);
     for (const auto& type_s : force_inline_annos) {
-      m_inliner_config.force_inline.emplace(
-          DexType::make_type(type_s.c_str()));
+      auto type = DexType::get_type(type_s.c_str());
+      if (type != nullptr) {
+        m_inliner_config.force_inline.emplace(type);
+      } else {
+        fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
+                type_s.c_str());
+      }
     }
   }
 

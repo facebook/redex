@@ -421,6 +421,12 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
     return false;
   }
 
+  DexClass* cls = type_class(callee->get_class());
+  if (has_any_annotation(cls, m_config.no_inline) ||
+      has_any_annotation(callee, m_config.no_inline)) {
+    return false;
+  }
+
   return true;
 }
 
@@ -495,11 +501,6 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 
 bool MultiMethodInliner::should_inline(const DexMethod* caller,
                                        const DexMethod* callee) const {
-  DexClass* cls = type_class(callee->get_class());
-  if (has_any_annotation(cls, m_config.no_inline) ||
-      has_any_annotation(callee, m_config.no_inline)) {
-    return false;
-  }
   if (has_any_annotation(callee, m_config.force_inline)) {
     return true;
   }
