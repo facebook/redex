@@ -19,6 +19,7 @@
 #include "ProguardRegex.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "StringBuilder.h"
 #include "Timer.h"
 #include "WorkQueue.h"
 
@@ -440,7 +441,7 @@ void KeepRuleMatcher::keep_fields(
 }
 
 std::string field_regex(const MemberSpecification& field_spec) {
-  std::ostringstream ss;
+  string_builders::StaticStringBuilder<3> ss;
   ss << proguard_parser::form_member_regex(field_spec.name);
   ss << "\\:";
   ss << proguard_parser::form_type_regex(field_spec.descriptor);

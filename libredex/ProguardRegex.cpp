@@ -17,10 +17,11 @@ namespace proguard_parser {
 // Example: "alpha*beta?gamma" -> "alpha.*beta.gamma"
 std::string form_member_regex(std::string proguard_regex) {
   // An empty string matches against any member name.
-  if (proguard_regex.empty())  {
+  if (proguard_regex.empty()) {
     return ".*";
   }
   std::string r;
+  r.reserve(proguard_regex.size());
   for (const char ch : proguard_regex) {
     // A * matches any part of a field or method name. Convert this
     // into the regex .*
@@ -126,9 +127,10 @@ std::string form_type_regex(std::string proguard_regex) {
 // an internal JVM type descriptor with the wildcards preserved.
 std::string convert_wildcard_type(std::string typ) {
   assert(!typ.empty());
-  std::string desc = convert_type(typ);
+  const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.
   std::string wildcard_descriptor;
+  wildcard_descriptor.reserve(desc.size());
   bool supress_semicolon = false;
   bool keep_dots = false;
   for (unsigned int i = 0; i < desc.size(); i++) {
