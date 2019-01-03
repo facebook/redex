@@ -17,8 +17,8 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "IRInstructionAnalyzer.h"
 #include "IROpcode.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
 
@@ -82,44 +82,25 @@ std::ostream& operator<<(std::ostream& out, const AbstractObject& x) {
 
 namespace impl {
 
-using register_t = uint32_t;
-
-// We use this special register to denote the result of a method invocation or
-// an operation that may throw an exception.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
 using AbstractObjectDomain = ConstantAbstractDomain<AbstractObject>;
 
 using AbstractObjectEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
 
-class Analyzer final
-    : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       AbstractObjectEnvironment> {
+class Analyzer final : public IRInstructionAnalyzer<AbstractObjectEnvironment> {
  public:
   explicit Analyzer(const cfg::ControlFlowGraph& cfg)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {
+      : IRInstructionAnalyzer(cfg) {
     MonotonicFixpointIterator::run(AbstractObjectEnvironment::top());
     populate_environments(cfg);
   }
 
-  void analyze_node(const NodeId& node,
-                    AbstractObjectEnvironment* current_state) const override {
-    for (const MethodItemEntry& mie : *node) {
-      if (mie.type == MFLOW_OPCODE) {
-        analyze_instruction(mie.insn, current_state);
-      }
-    }
-  }
-
-  AbstractObjectEnvironment analyze_edge(
-      const EdgeId&,
-      const AbstractObjectEnvironment& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
-  void analyze_instruction(IRInstruction* insn,
-                           AbstractObjectEnvironment* current_state) const {
+  void analyze_instruction(
+      IRInstruction* insn,
+      AbstractObjectEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));

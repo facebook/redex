@@ -31,7 +31,6 @@
 #include "IRInstructionAnalyzer.h"
 #include "IROpcode.h"
 #include "Match.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Show.h"
