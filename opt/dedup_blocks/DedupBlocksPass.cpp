@@ -366,16 +366,25 @@ class DedupBlocksImpl {
       std::set<cfg::Block*, BlockCompare> blocks;
     };
 
-    // For each ([succs], [blocks]) pair
+    // choose an iteration order based on block ids for determinism
+    std::vector<cfg::Block*> order;
     for (auto& succ_pair : splitGroupMap) {
       auto& succ_blocks = succ_pair.second.postfix_blocks;
       if (succ_blocks.size() <= 1) {
         continue;
       }
+      order.push_back(succ_pair.first);
+    }
+    std::sort(order.begin(), order.end(), BlockCompare());
+
+    // For each ([succs], [blocks]) pair
+    for (cfg::Block* b : order) {
+      auto& split_group = splitGroupMap.at(b);
+      auto& succ_blocks = split_group.postfix_blocks;
 
       TRACE(DEDUP_BLOCKS, 4,
             "split_postfix: current group (succs=%d, blocks=%d)\n",
-            succ_pair.first->succs().size(), succ_blocks.size());
+            b->succs().size(), succ_blocks.size());
 
       // Keep track of best we've seen so far.
       std::set<cfg::Block*, BlockCompare> best_blocks;
@@ -489,9 +498,9 @@ class DedupBlocksImpl {
       TRACE(DEDUP_BLOCKS, 4,
             "split_postfix: best block group.size() = %d, instruction at %d\n",
             best_blocks.size(), best_insn_count);
-      succ_pair.second.postfix_block_its = std::move(best_block_its);
-      succ_pair.second.postfix_blocks = std::move(best_blocks);
-      succ_pair.second.insn_count = best_insn_count;
+      split_group.postfix_block_its = std::move(best_block_its);
+      split_group.postfix_blocks = std::move(best_blocks);
+      split_group.insn_count = best_insn_count;
     }
 
     remove_singletons(splitGroupMap, [](auto it) {
@@ -510,8 +519,16 @@ class DedupBlocksImpl {
     fix_dex_pos_pointers(dups.begin(), dups.end(),
                          [](auto it) { return it->second.postfix_blocks; },
                          cfg);
-    for (const auto& entry : dups) {
-      auto& group = entry.second;
+
+    // iterate deterministically
+    std::vector<cfg::Block*> order;
+    for (auto& succ_pair : dups) {
+      order.push_back(succ_pair.first);
+    }
+    std::sort(order.begin(), order.end(), BlockCompare());
+
+    for (cfg::Block* b : order) {
+      const auto& group = dups.at(b);
       TRACE(DEDUP_BLOCKS, 4,
             "split_postfix: splitting blocks.size() = %d, instruction at %d\n",
             group.postfix_blocks.size(), group.insn_count);
