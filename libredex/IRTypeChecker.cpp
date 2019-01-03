@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -28,7 +29,6 @@
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "IRCode.h"
-#include "IRInstructionAnalyzer.h"
 #include "IROpcode.h"
 #include "Match.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
@@ -176,14 +176,14 @@ class TypeCheckingException final : public std::runtime_error {
       : std::runtime_error(what_arg) {}
 };
 
-class TypeInference final : public IRInstructionAnalyzer<TypeEnvironment> {
+class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
  public:
   using NodeId = cfg::Block*;
 
   TypeInference(const cfg::ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
-      : IRInstructionAnalyzer<TypeEnvironment>(cfg),
+      : BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),

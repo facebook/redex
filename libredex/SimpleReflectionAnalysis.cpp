@@ -12,12 +12,12 @@
 
 #include <boost/optional.hpp>
 
+#include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "IRInstructionAnalyzer.h"
 #include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Show.h"
@@ -90,10 +90,9 @@ using AbstractObjectDomain = ConstantAbstractDomain<AbstractObject>;
 using AbstractObjectEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
 
-class Analyzer final : public IRInstructionAnalyzer<AbstractObjectEnvironment> {
+class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
-  explicit Analyzer(const cfg::ControlFlowGraph& cfg)
-      : IRInstructionAnalyzer(cfg) {
+  explicit Analyzer(const cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
     MonotonicFixpointIterator::run(AbstractObjectEnvironment::top());
     populate_environments(cfg);
   }

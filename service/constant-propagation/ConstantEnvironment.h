@@ -14,7 +14,6 @@
 #include "ControlFlow.h"
 #include "DisjointUnionAbstractDomain.h"
 #include "HashedAbstractPartition.h"
-#include "MonotonicFixpointIterator.h"
 #include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"

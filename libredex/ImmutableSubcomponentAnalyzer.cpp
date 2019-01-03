@@ -15,12 +15,12 @@
 #include <boost/optional.hpp>
 
 #include "AbstractDomain.h"
+#include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
 
@@ -146,54 +146,32 @@ class AbstractAccessPathDomain final
 
 using namespace std::placeholders;
 
-using register_t = uint32_t;
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
-// We use this special register to denote the result of a method invocation.
-// Operations that may throw an exception also store their result in that
-// special register, but they are transparent for this particular analysis.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
 // Used for new-instance handling. Shouldn't collide with anything.
 register_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
 
 using AbstractAccessPathEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractAccessPathDomain>;
 
-class Analyzer final
-    : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       AbstractAccessPathEnvironment> {
+class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
  public:
-  using NodeId = cfg::Block*;
-
   Analyzer(const cfg::ControlFlowGraph& cfg,
            std::function<bool(DexMethodRef*)> is_immutable_getter,
            const std::unordered_set<uint16_t> allowed_locals)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+      : BaseIRAnalyzer<AbstractAccessPathEnvironment>(cfg),
         m_cfg(cfg),
         m_is_immutable_getter(is_immutable_getter),
         m_allowed_locals(allowed_locals) {}
-
-  void analyze_node(
-      const NodeId& node,
-      AbstractAccessPathEnvironment* current_state) const override {
-    for (const MethodItemEntry& mie : *node) {
-      if (mie.type == MFLOW_OPCODE) {
-        analyze_instruction(mie.insn, current_state);
-      }
-    }
-  }
-
-  AbstractAccessPathEnvironment analyze_edge(
-      const EdgeId&, const AbstractAccessPathEnvironment& exit_state_at_source)
-      const override {
-    return exit_state_at_source;
-  }
 
   bool is_local_analyzable(uint16_t reg) const {
     return m_allowed_locals.count(reg) > 0;
   }
 
-  void analyze_instruction(IRInstruction* insn,
-                           AbstractAccessPathEnvironment* current_state) const {
+  void analyze_instruction(
+      IRInstruction* insn,
+      AbstractAccessPathEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT:
     case IOPCODE_LOAD_PARAM:

@@ -10,6 +10,7 @@
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
+#include "MonotonicFixpointIterator.h"
 
 namespace constant_propagation {
 

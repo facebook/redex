@@ -22,22 +22,20 @@ constexpr register_t RESULT_REGISTER =
     std::numeric_limits<register_t>::max() - 1;
 
 template <typename Domain>
-class IRInstructionAnalyzer
+class BaseIRAnalyzer
     : public sparta::MonotonicFixpointIterator<cfg::GraphInterface, Domain> {
  public:
   using NodeId = cfg::Block*;
   using Environment = Domain;
 
-  explicit IRInstructionAnalyzer(const cfg::ControlFlowGraph& cfg)
+  explicit BaseIRAnalyzer(const cfg::ControlFlowGraph& cfg)
       : sparta::MonotonicFixpointIterator<cfg::GraphInterface, Domain>(
             cfg, cfg.blocks().size()) {}
 
   virtual void analyze_node(const NodeId& node,
                             Domain* current_state) const override {
     for (auto& mie : InstructionIterable(node)) {
-      if (mie.type == MFLOW_OPCODE) {
-        analyze_instruction(mie.insn, current_state);
-      }
+      analyze_instruction(mie.insn, current_state);
     }
   }
 
