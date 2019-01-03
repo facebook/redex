@@ -130,7 +130,6 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
 
 
 def run_redex_binary(state):
-
     if state.args.redex_binary is None:
         try:
             state.args.redex_binary = subprocess.check_output(['which', 'redex-all']
@@ -159,6 +158,9 @@ def run_redex_binary(state):
 
     if state.args.is_art_build:
         args += ['--is-art-build']
+
+    if state.args.enable_instrument_pass or state.config_dict.get("enable_instrument_pass"):
+        args += ['--enable-instrument-pass']
 
     if state.args.warn:
         args += ['--warn', state.args.warn]
@@ -526,8 +528,10 @@ Given an APK, produce a better APK!
                         help='Ignore if zipalign is not found')
     parser.add_argument('--verify-none-mode', action='store_true',
                         help='Enable verify-none mode on redex')
+    parser.add_argument('--enable-instrument-pass', action='store_true',
+                        help='Enable InstrumentPass if any')
     parser.add_argument('--is-art-build', action='store_true',
-                        help='States that this is an art only build.')
+                        help='States that this is an art only build')
     parser.add_argument('--page-align-libs', action='store_true',
                         help='Preserve 4k page alignment for uncompressed libs')
 
