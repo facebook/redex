@@ -17,6 +17,8 @@ using namespace local_pointers;
 
 namespace {
 
+using namespace ir_analyzer;
+
 /*
  * Whether the dest of an instruction may be a pointer value. The only time
  * there is an uncertainty as to whether the dest is a pointer or not is when
@@ -294,7 +296,7 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
 
 namespace local_pointers {
 
-void FixpointIterator::analyze_instruction(const IRInstruction* insn,
+void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            Environment* env) const {
   auto op = insn->opcode();
   if (op == IOPCODE_LOAD_PARAM_OBJECT) {

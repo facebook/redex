@@ -178,7 +178,6 @@ class TypeCheckingException final : public std::runtime_error {
 
 class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
  public:
-  using NodeId = cfg::Block*;
 
   TypeInference(const cfg::ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,

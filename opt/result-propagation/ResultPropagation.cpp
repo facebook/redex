@@ -9,11 +9,11 @@
 
 #include <vector>
 
+#include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -62,7 +62,8 @@ const DexType* get_param_type(bool is_static,
   return args[param_index];
 }
 
-using register_t = uint32_t;
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
 using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
 
@@ -72,9 +73,6 @@ using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
  **/
 using ParamDomainEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<register_t, ParamDomain>;
-
-// We use this special register to denote the result of check-cast and invokes.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
 
 // We use this special register to denote the value that is being returned.
 register_t RETURN_VALUE = RESULT_REGISTER - 1;
@@ -90,39 +88,23 @@ ParamDomain makeHigh(ParamDomain domain) {
   return constant ? ParamDomain((*constant) | WIDE_HIGH) : domain;
 }
 
-class Analyzer final
-    : public MonotonicFixpointIterator<cfg::GraphInterface,
-                                       ParamDomainEnvironment> {
+class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
  public:
   Analyzer(cfg::ControlFlowGraph& cfg,
            const ReturnParamResolver& resolver,
            const std::unordered_map<const DexMethod*, ParamIndex>&
                methods_which_return_parameter)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+      : BaseIRAnalyzer(cfg),
         m_resolver(resolver),
         m_methods_which_return_parameter(methods_which_return_parameter),
         m_load_param_map(get_load_param_map(cfg)) {
     MonotonicFixpointIterator::run(ParamDomainEnvironment::top());
   }
 
-  void analyze_node(const NodeId& node,
-                    ParamDomainEnvironment* current_state) const override {
-    for (const MethodItemEntry& mie : *node) {
-      if (mie.type == MFLOW_OPCODE) {
-        analyze_instruction(mie.insn, current_state);
-      }
-    }
-  }
-
-  ParamDomainEnvironment analyze_edge(
-      const EdgeId&,
-      const ParamDomainEnvironment& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
-  void analyze_instruction(IRInstruction* insn,
-                           ParamDomainEnvironment* current_state) const {
+  void analyze_instruction(
+      IRInstruction* insn,
+      ParamDomainEnvironment* current_state) const override {
 
     // While the special registers RESULT_REGISTER and RETURN_VALUE do not
     // participate in possible wide low and high register splitting, all

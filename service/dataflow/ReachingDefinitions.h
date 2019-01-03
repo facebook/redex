@@ -10,15 +10,15 @@
 #pragma once
 
 #include "AbstractDomain.h"
+#include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
 namespace reaching_defs {
 
-using reg_t = uint16_t;
+using reg_t = ir_analyzer::register_t;
 
 class Domain final : public sparta::AbstractDomainReverseAdaptor<
                          sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>,
@@ -54,33 +54,17 @@ class Environment final
   }
 };
 
-class FixpointIterator final
-    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
-                                               Environment> {
+class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  using NodeId = cfg::Block*;
-
   explicit FixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()) {}
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
 
-  void analyze_node(const NodeId& block,
-                    Environment* current_state) const override {
-    for (const auto& mie : InstructionIterable(block)) {
-      analyze_instruction(mie.insn, current_state);
-    }
-  }
-
-  void analyze_instruction(const IRInstruction* insn,
-                           Environment* current_state) const {
+  void analyze_instruction(IRInstruction* insn,
+                           Environment* current_state) const override {
     if (insn->dests_size()) {
       current_state->set(insn->dest(),
                          Domain(const_cast<IRInstruction*>(insn)));
     }
-  }
-
-  Environment analyze_edge(
-      const EdgeId&, const Environment& entry_state_at_source) const override {
-    return entry_state_at_source;
   }
 };
 

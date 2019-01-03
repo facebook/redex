@@ -135,15 +135,17 @@ std::string show_subset(const ptrs::Environment& env,
 
 namespace used_vars {
 
+using namespace ir_analyzer;
+
 FixpointIterator::FixpointIterator(
     const local_pointers::FixpointIterator& pointers_fp_iter,
     side_effects::InvokeToSummaryMap invoke_to_summary_map,
     const cfg::ControlFlowGraph& cfg)
-    : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+    : BaseBackwardsIRAnalyzer<UsedVarsSet>(cfg),
       m_insn_env_map(gen_instruction_environment_map(cfg, pointers_fp_iter)),
       m_invoke_to_summary_map(invoke_to_summary_map) {}
 
-void FixpointIterator::analyze_instruction(const IRInstruction* insn,
+void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            UsedVarsSet* used_vars) const {
   TRACE(DEAD_CODE, 5, "Before %s : %s : %s\n", SHOW(insn), SHOW(*used_vars),
         show_subset(m_insn_env_map.at(insn), insn).c_str());

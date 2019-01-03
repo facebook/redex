@@ -14,21 +14,7 @@ namespace check_casts {
 
 namespace impl {
 
-// We use this special register to denote the result of a method invocation or
-// an operation that may throw an exception.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
-
-void CheckCastAnalysis::analyze_node(const NodeId& node,
-                                     Environment* current_state) const {
-  for (const auto& mie : InstructionIterable(*node)) {
-    analyze_instruction(mie.insn, current_state);
-  }
-}
-
-Environment CheckCastAnalysis::analyze_edge(
-    const EdgeId&, const Environment& exit_state_at_source) const {
-  return exit_state_at_source;
-}
+using namespace ir_analyzer;
 
 void CheckCastAnalysis::analyze_instruction(IRInstruction* insn,
                                             Environment* current_state) const {

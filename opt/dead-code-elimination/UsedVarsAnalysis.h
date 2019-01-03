@@ -14,9 +14,7 @@
 #include "Resolver.h"
 #include "SideEffectSummary.h"
 
-using reg_t = uint32_t;
-
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
+using reg_t = ir_analyzer::register_t;
 
 namespace used_vars {
 
@@ -67,33 +65,14 @@ class UsedVarsSet final
  * instructions which it can determine to have no observable side-effects.
  */
 class FixpointIterator final
-    : public sparta::MonotonicFixpointIterator<
-          sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
-          UsedVarsSet> {
+    : public ir_analyzer::BaseBackwardsIRAnalyzer<UsedVarsSet> {
  public:
-  using NodeId = cfg::Block*;
-
   FixpointIterator(const local_pointers::FixpointIterator& pointers_fp_iter,
                    side_effects::InvokeToSummaryMap invoke_to_summary_map,
                    const cfg::ControlFlowGraph& cfg);
 
-  void analyze_node(const NodeId& block,
-                    UsedVarsSet* used_vars) const override {
-    TRACE(DEAD_CODE, 5, "Block B%u\n", block->id());
-    for (auto it = block->rbegin(); it != block->rend(); ++it) {
-      if (it->type == MFLOW_OPCODE) {
-        analyze_instruction(it->insn, used_vars);
-      }
-    }
-  }
-
-  UsedVarsSet analyze_edge(
-      const EdgeId&, const UsedVarsSet& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
-  void analyze_instruction(const IRInstruction* insn,
-                           UsedVarsSet* used_vars) const;
+  void analyze_instruction(IRInstruction* insn,
+                           UsedVarsSet* used_vars) const override;
 
   // Returns true if a write to the object in obj_reg cannot be proven to be
   // unused.

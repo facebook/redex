@@ -9,11 +9,11 @@
 
 #include <ostream>
 
+#include "BaseIRAnalyzer.h"
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "MonotonicFixpointIterator.h"
 #include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "PatriciaTreeSetAbstractDomain.h"
@@ -33,9 +33,7 @@
 
 namespace local_pointers {
 
-using reg_t = uint32_t;
-
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
+using reg_t = ir_analyzer::register_t;
 
 using PointerSet = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
@@ -145,28 +143,16 @@ sparta::s_expr to_s_expr(const EscapeSummary&);
 using InvokeToSummaryMap =
     std::unordered_map<const IRInstruction*, EscapeSummary>;
 
-class FixpointIterator final
-    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
-                                               Environment> {
+class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap())
-      : MonotonicFixpointIterator(cfg),
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
         m_invoke_to_summary_map(invoke_to_summary_map) {}
 
-  void analyze_node(const NodeId& block, Environment* env) const override {
-    for (auto& mie : InstructionIterable(block)) {
-      analyze_instruction(mie.insn, env);
-    }
-  }
-
-  void analyze_instruction(const IRInstruction* insn, Environment* env) const;
-
-  Environment analyze_edge(const EdgeId&,
-                           const Environment& entry_env) const override {
-    return entry_env;
-  }
+  void analyze_instruction(IRInstruction* insn,
+                           Environment* env) const override;
 
  private:
   // A map of the invoke instructions in the analyzed method to their respective

@@ -26,6 +26,7 @@
 #include <boost/functional/hash_fwd.hpp>
 #include <boost/optional.hpp>
 
+#include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexAccess.h"
@@ -34,7 +35,6 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 #include "PointsToSemanticsUtils.h"
@@ -723,11 +723,8 @@ namespace pts_impl {
 
 using namespace std::placeholders;
 
-using register_t = uint32_t;
-
-// We use this special register to denote the result of a method invocation or a
-// filled-array creation.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
 // We represent an anchor by a pointer to the corresponding instruction. An
 // empty anchor set is semantically equivalent to the `null` reference.
@@ -736,36 +733,18 @@ using AnchorDomain = PatriciaTreeSetAbstractDomain<IRInstruction*>;
 using AnchorEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
 
-class AnchorPropagation final
-    : public MonotonicFixpointIterator<cfg::GraphInterface, AnchorEnvironment> {
+class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
  public:
-  using NodeId = cfg::Block*;
-
   AnchorPropagation(const cfg::ControlFlowGraph& cfg,
                     bool is_static_method,
                     IRCode* code)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+      : BaseIRAnalyzer(cfg),
         m_is_static_method(is_static_method),
         m_code(code),
         m_this_anchor(nullptr) {}
 
-  void analyze_node(const NodeId& node,
-                    AnchorEnvironment* current_state) const override {
-    for (const MethodItemEntry& mie : *node) {
-      if (mie.type == MFLOW_OPCODE) {
-        analyze_instruction(mie.insn, current_state);
-      }
-    }
-  }
-
-  AnchorEnvironment analyze_edge(
-      const EdgeId&,
-      const AnchorEnvironment& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
   void analyze_instruction(IRInstruction* insn,
-                           AnchorEnvironment* current_state) const {
+                           AnchorEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       // There's nothing to do, since this instruction has been taken care of
