@@ -322,8 +322,13 @@ void RedexContext::mutate_method(DexMethodRef* method,
     }
   }
 
-  always_assert_log(!s_method_map.count(r),
-                    "Another method of the same signature already exists");
+  if (s_method_map.count(r)) {
+    auto& m = *s_method_map.find(r)->second;
+    always_assert_log(!s_method_map.count(r),
+                      "Another method of the same signature already exists %s"
+                      " %s %s",
+                      SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
+  }
   s_method_map.emplace(r, method);
 
   // We just updated DexMethodSpec, which will update this method's name.
