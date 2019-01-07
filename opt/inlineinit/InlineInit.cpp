@@ -46,7 +46,7 @@ void InlineInitPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& mgr) {
 
-  if (!mgr.verify_none_enabled()) {
+  if (!mgr.get_redex_options().verify_none_enabled) {
     TRACE(INLINIT, 1, "Verify-none mode is disabled, skipping Inline Init...\n");
     return;
   }

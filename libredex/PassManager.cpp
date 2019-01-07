@@ -49,23 +49,20 @@ std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
                          const Json::Value& config,
-                         bool verify_none_mode,
-                         bool is_art_build)
-    : PassManager(
-          passes, empty_pg_config(), config, verify_none_mode, is_art_build) {}
+                         const RedexOptions& options)
+    : PassManager(passes, empty_pg_config(), config, options) {}
 
-PassManager::PassManager(const std::vector<Pass*>& passes,
-                         std::unique_ptr<redex::ProguardConfiguration> pg_config,
-                         const Json::Value& config,
-                         bool verify_none_mode,
-                         bool is_art_build)
+PassManager::PassManager(
+    const std::vector<Pass*>& passes,
+    std::unique_ptr<redex::ProguardConfiguration> pg_config,
+    const Json::Value& config,
+    const RedexOptions& options)
     : m_apk_mgr(get_apk_dir(config)),
       m_registered_passes(passes),
       m_current_pass_info(nullptr),
       m_pg_config(std::move(pg_config)),
-      m_testing_mode(false),
-      m_verify_none_mode(verify_none_mode),
-      m_art_build(is_art_build) {
+      m_redex_options(options),
+      m_testing_mode(false) {
   init(config);
   if (getenv("PROFILE_COMMAND") && getenv("PROFILE_PASS")) {
     // Resolve the pass in the constructor so that any typos / references to
@@ -191,7 +188,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   // When verify_none is enabled, it's OK to have polymorphic constants.
   bool polymorphic_constants =
       type_checker_args.get("polymorphic_constants", false).asBool() ||
-      verify_none_enabled();
+      get_redex_options().verify_none_enabled;
   bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
   std::unordered_set<std::string> trigger_passes;
 
