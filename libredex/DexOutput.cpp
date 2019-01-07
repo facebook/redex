@@ -1159,11 +1159,10 @@ void DexOutput::generate_debug_items() {
     // No align requirement for debug items.
     std::vector<DebugLineItem> debug_line_info;
     uint32_t line_start{0};
-    auto dbgops = generate_debug_instructions(dbg, dodx, m_pos_mapper,
-                                              &line_start, &debug_line_info);
+    auto dbgops = generate_debug_instructions(dbg, m_pos_mapper, &line_start,
+                                              &debug_line_info);
     if (m_emit_debug_line_info) {
-      int size = dbg->encode(dodx, m_pos_mapper, m_output + m_offset,
-                             line_start, dbgops);
+      int size = dbg->encode(dodx, m_output + m_offset, line_start, dbgops);
       dci->debug_info_off = m_offset;
       m_offset += size;
     }
