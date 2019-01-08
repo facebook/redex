@@ -67,7 +67,13 @@ TEST(SimpleReflectionAnalysisTest, nominalCases) {
   root_store.add_classes(load_classes_from_dex(dexfile));
   stores.emplace_back(std::move(root_store));
 
-  const char* android_sdk = std::getenv("ANDROID_SDK");
+  const char* android_env_sdk = std::getenv("ANDROID_SDK");
+  const char* android_config_sdk = std::getenv("sdk_path");
+
+  const char* android_sdk = (strncmp(android_config_sdk,"None", 4) != 0) ?
+    android_config_sdk :
+    android_env_sdk;
+
   ASSERT_NE(nullptr, android_sdk);
   const char* android_target = std::getenv("android_target");
   ASSERT_NE(nullptr, android_target);
