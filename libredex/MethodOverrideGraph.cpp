@@ -9,39 +9,27 @@
 
 #include <boost/range/adaptor/map.hpp>
 
+#include "BinarySerialization.h"
 #include "PatriciaTreeMap.h"
 #include "PatriciaTreeSet.h"
 #include "Timer.h"
 #include "Walkers.h"
-#include "BinarySerialization.h"
 
 using namespace method_override_graph;
 
 namespace {
 
-template <typename T>
-struct PatriciaTreeMapValue {
-  using type = T;
-
-  static T default_value() { return T(); }
-
-  static bool is_default_value(const T& t) { return t.equals(T()); }
-
-  static bool equals(const T& a, const T& b) { return a.equals(b); }
-};
-
 using MethodSet = sparta::PatriciaTreeSet<const DexMethod*>;
 
-using ProtoMap =
-    sparta::PatriciaTreeMap<const DexProto*, PatriciaTreeMapValue<MethodSet>>;
+using ProtoMap = sparta::PatriciaTreeMap<const DexProto*, MethodSet>;
 
 // The set of methods in scope at a particular class. We use PatriciaTreeMaps
 // for this because there is a lot shared structure: the maps of subclasses /
 // subinterfaces contain many elements from their parent classes / interfaces.
 // We also do a lot of unioning operations when analyzing interfaces, and
 // PatriciaTreeMaps are well-optimized for that.
-using SignatureMap = sparta::PatriciaTreeMap<const DexString* /* name */,
-                                             PatriciaTreeMapValue<ProtoMap>>;
+using SignatureMap =
+    sparta::PatriciaTreeMap<const DexString* /* name */, ProtoMap>;
 
 struct ClassSignatureMap {
   // The methods implemented by the current class or one of its superclasses.
