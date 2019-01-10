@@ -734,7 +734,7 @@ void RenameClassesPassV2::rename_classes(
 
     auto dstring = DexString::make_string(descriptor);
     aliases.add_class_alias(clazz, dstring);
-    dtype->assign_name_alias(dstring);
+    dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
     //    proguard_map.update_class_mapping(old_str, new_str);
@@ -757,7 +757,7 @@ void RenameClassesPassV2::rename_classes(
       dstring = DexString::make_string(newarraytype);
 
       aliases.add_alias(oldname, dstring);
-      arraytype->assign_name_alias(dstring);
+      arraytype->set_name(dstring);
     }
   }
 

@@ -172,7 +172,7 @@ void rename_classes(
     sprintf(descriptor, "LX%s%s;", inner ? "$" : "", clzname);
     auto dstring = DexString::make_string(descriptor);
     aliases[oldname] = dstring;
-    dtype->assign_name_alias(dstring);
+    dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
     base_strings_size += strlen(oldname->c_str());
@@ -193,7 +193,7 @@ void rename_classes(
       newarraytype += dstring->c_str();
       dstring = DexString::make_string(newarraytype.c_str());
       aliases[oldname] = dstring;
-      arraytype->assign_name_alias(dstring);
+      arraytype->set_name(dstring);
     }
   }
   mgr.incr_metric(METRIC_RENAMED_CLASSES, match_short + match_long + match_inner);

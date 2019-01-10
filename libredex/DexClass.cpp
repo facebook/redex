@@ -599,6 +599,17 @@ DexMethodRef* DexMethod::make_method(
                            DexTypeList::make_type_list(std::move(dex_types))));
 }
 
+void DexClass::set_deobfuscated_name(const std::string& name) {
+  if (!m_deobfuscated_name.empty()) {
+    g_redex->remove_type_name(DexString::make_string(m_deobfuscated_name));
+  }
+  m_deobfuscated_name = name;
+  auto dex_string = DexString::make_string(m_deobfuscated_name);
+  if (dex_string != m_self->get_name()) {
+    g_redex->alias_type_name(m_self, dex_string);
+  }
+}
+
 void DexClass::remove_method(const DexMethod* m) {
   auto& meths = m->is_virtual() ? m_vmethods : m_dmethods;
   auto it = std::find(meths.begin(), meths.end(), m);

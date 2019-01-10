@@ -214,9 +214,7 @@ class DexType {
   }
 
  public:
-  void assign_name_alias(DexString* new_name) {
-    g_redex->alias_type_name(this, new_name);
-  }
+  void set_name(DexString* new_name) { g_redex->set_type_name(this, new_name); }
 
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
@@ -1118,7 +1116,13 @@ class DexClass {
   DexAnnotationSet* get_anno_set() { return m_anno; }
   void attach_annotation_set(DexAnnotationSet* anno) { m_anno = anno; }
   void set_source_file(DexString* source_file) { m_source_file = source_file; }
-  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+
+  /**
+   * This also adds `name` as an alias for this DexType in the g_redex global
+   * type map.
+   */
+  void set_deobfuscated_name(const std::string& name);
+
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }

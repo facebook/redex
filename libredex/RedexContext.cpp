@@ -117,14 +117,20 @@ DexType* RedexContext::get_type(DexString* dstring) {
   return s_type_map.get(dstring, nullptr);
 }
 
+void RedexContext::set_type_name(DexType* type, DexString* new_name) {
+  alias_type_name(type, new_name);
+  type->m_name = new_name;
+}
+
 void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
   always_assert_log(
       !s_type_map.count(new_name),
       "Bailing, attempting to alias a symbol that already exists! '%s'\n",
       new_name->c_str());
-  type->m_name = new_name;
   s_type_map.emplace(new_name, type);
 }
+
+void RedexContext::remove_type_name(DexString* name) { s_type_map.erase(name); }
 
 DexFieldRef* RedexContext::make_field(const DexType* container,
                                       const DexString* name,

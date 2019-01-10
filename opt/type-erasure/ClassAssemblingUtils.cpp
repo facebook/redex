@@ -149,7 +149,7 @@ DexClass* create_class(const DexType* type,
   always_assert(!pkg_name.empty());
   auto name = std::string(type->get_name()->c_str());
   name = pkg_name + "/" + name.substr(1);
-  t->assign_name_alias(DexString::make_string(name));
+  t->set_name(DexString::make_string(name));
   // Create class.
   ClassCreator creator(t);
   creator.set_access(access);
