@@ -85,7 +85,7 @@ TEST_F(PatriciaTreeSetAbstractDomainTest, latticeOperations) {
   EXPECT_TRUE(e2.meet(Domain::bottom()).is_bottom());
   EXPECT_TRUE(e2.meet(Domain::top()).equals(e2));
   EXPECT_FALSE(e1.meet(e3).is_bottom());
-  EXPECT_TRUE(e1.meet(e3).elements().is_empty());
+  EXPECT_TRUE(e1.meet(e3).elements().empty());
   EXPECT_TRUE(e1.narrowing(e2).equals(e1));
 
   EXPECT_TRUE(e2.contains(this->a()));
@@ -125,7 +125,7 @@ TEST_F(PatriciaTreeSetAbstractDomainTest, destructiveOperations) {
   EXPECT_THAT(this->to_string(e1.elements()),
               ::testing::UnorderedElementsAre("c"));
   e1.remove({this->a(), this->c()});
-  EXPECT_TRUE(e1.elements().is_empty());
+  EXPECT_TRUE(e1.elements().empty());
 
   e1.join_with(e2);
   EXPECT_THAT(this->to_string(e1.elements()),
@@ -144,7 +144,7 @@ TEST_F(PatriciaTreeSetAbstractDomainTest, destructiveOperations) {
   EXPECT_THAT(this->to_string(e2.elements()),
               ::testing::UnorderedElementsAre("b", "c"));
   e1.meet_with(e2);
-  EXPECT_TRUE(e1.elements().is_empty());
+  EXPECT_TRUE(e1.elements().empty());
   e1.meet_with(Domain::top());
   EXPECT_THAT(this->to_string(e2.elements()),
               ::testing::UnorderedElementsAre("b", "c"));

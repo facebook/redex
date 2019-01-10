@@ -8,8 +8,6 @@
 #include "PatriciaTreeSet.h"
 
 #include <cstdint>
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <limits>
 #include <random>
 #include <set>
@@ -17,9 +15,16 @@
 #include <unordered_set>
 #include <vector>
 
+#include <boost/concept/assert.hpp>
+#include <boost/concept_check.hpp>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+
 using namespace sparta;
 
 using pt_set = PatriciaTreeSet<uint32_t>;
+
+BOOST_CONCEPT_ASSERT((boost::ForwardContainer<pt_set>));
 
 class PatriciaTreeSetTest : public ::testing::Test {
  protected:
@@ -84,10 +89,7 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
     s1.insert(x);
   }
   EXPECT_EQ(7, s1.size());
-  {
-    std::vector<uint32_t> v(s1.begin(), s1.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAreArray(elements1));
-  }
+  EXPECT_THAT(s1, ::testing::UnorderedElementsAreArray(elements1));
 
   for (uint32_t x : elements1) {
     EXPECT_TRUE(s1.contains(x));
@@ -99,16 +101,14 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   pt_set s2 = s1;
   std::vector<uint32_t> elements2 = {0, 2, 3, 1023};
   s2.remove(1).remove(4).remove(bigint);
+
+  // We copy s1 into s2 and then we remove some elements from s2. Since the
+  // underlying Patricia trees are shared after the copy, we want to make sure
+  // that s1 hasn't been modified.
+  EXPECT_THAT(s1, ::testing::UnorderedElementsAreArray(elements1));
+
   {
-    // We copy s1 into s2 and then we remove some elements from s2. Since the
-    // underlying Patricia trees are shared after the copy, we want to make sure
-    // that s1 hasn't been modified.
-    std::vector<uint32_t> v(s1.begin(), s1.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAreArray(elements1));
-  }
-  {
-    std::vector<uint32_t> v(s2.begin(), s2.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAreArray(elements2));
+    EXPECT_THAT(s2, ::testing::UnorderedElementsAreArray(elements2));
     std::ostringstream out;
     out << s2;
     EXPECT_EQ("{0, 2, 3, 1023}", out.str());
@@ -134,8 +134,7 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   EXPECT_FALSE(u13.is_subset_of(s3));
   {
     std::vector<uint32_t> union13 = get_union(elements1, elements3);
-    std::vector<uint32_t> v(u13.begin(), u13.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAreArray(union13));
+    EXPECT_THAT(u13, ::testing::UnorderedElementsAreArray(union13));
   }
   EXPECT_TRUE(s1.get_union_with(empty_set).equals(s1));
   EXPECT_TRUE(s1.get_union_with(s1).equals(s1));
@@ -149,11 +148,10 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   {
     std::vector<uint32_t> intersection13 =
         get_intersection(elements1, elements3);
-    std::vector<uint32_t> v(i13.begin(), i13.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAreArray(intersection13));
+    EXPECT_THAT(i13, ::testing::UnorderedElementsAreArray(intersection13));
   }
-  EXPECT_TRUE(s1.get_intersection_with(empty_set).is_empty());
-  EXPECT_TRUE(empty_set.get_intersection_with(s1).is_empty());
+  EXPECT_TRUE(s1.get_intersection_with(empty_set).empty());
+  EXPECT_TRUE(empty_set.get_intersection_with(s1).empty());
   EXPECT_TRUE(s1.get_intersection_with(s1).equals(s1));
 
   EXPECT_EQ(elements3.size(), s3.size());
@@ -166,16 +164,11 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   pt_set t4(elements4.begin(), elements4.end());
   pt_set d34 = t3;
   d34.difference_with(t4);
-  {
-    std::vector<uint32_t> v(d34.begin(), d34.end());
-    EXPECT_THAT(v, ::testing::UnorderedElementsAre(1023, 13001));
-  }
+  EXPECT_THAT(d34, ::testing::UnorderedElementsAre(1023, 13001));
+
   pt_set d43 = t4.get_difference_with(t3);
-  {
-    std::vector<uint32_t> v(d43.begin(), d43.end());
-    EXPECT_THAT(v,
-                ::testing::UnorderedElementsAre(0, 1, 5, 101, 8137, 1234567));
-  }
+  EXPECT_THAT(d43,
+              ::testing::UnorderedElementsAre(0, 1, 5, 101, 8137, 1234567));
 
   struct Hash {
     size_t operator()(const pt_set& s) const { return s.hash(); }
@@ -208,11 +201,9 @@ TEST_F(PatriciaTreeSetTest, robustness) {
     std::vector<uint32_t> ref_i12 = get_intersection(elems1, elems2);
     pt_set u12 = s1.get_union_with(s2);
     pt_set i12 = s1.get_intersection_with(s2);
-    std::vector<uint32_t> v_u12(u12.begin(), u12.end());
-    std::vector<uint32_t> v_i12(i12.begin(), i12.end());
-    EXPECT_THAT(v_u12, ::testing::UnorderedElementsAreArray(ref_u12))
+    EXPECT_THAT(u12, ::testing::UnorderedElementsAreArray(ref_u12))
         << "s1 = " << s1 << ", s2 = " << s2;
-    EXPECT_THAT(v_i12, ::testing::UnorderedElementsAreArray(ref_i12))
+    EXPECT_THAT(i12, ::testing::UnorderedElementsAreArray(ref_i12))
         << "s1 = " << s1 << ", s2 = " << s2;
     EXPECT_TRUE(s1.is_subset_of(u12));
     EXPECT_TRUE(s2.is_subset_of(u12));
@@ -264,6 +255,8 @@ TEST_F(PatriciaTreeSetTest, whiteBox) {
 
 using string_set = PatriciaTreeSet<std::string*>;
 
+BOOST_CONCEPT_ASSERT((boost::ForwardContainer<string_set>));
+
 std::vector<std::string> string_set_to_vector(const string_set& s) {
   std::vector<std::string> v;
   for (std::string* p : s) {
@@ -296,7 +289,7 @@ TEST_F(PatriciaTreeSetTest, setsOfPointers) {
   s.filter([](std::string* x) { return *x >= "a"; });
   EXPECT_TRUE(s.equals(s_ab));
   s.filter([](std::string* x) { return *x > "g"; });
-  EXPECT_TRUE(s.is_empty());
+  EXPECT_TRUE(s.empty());
 
   string_set t({&a});
   std::ostringstream out;

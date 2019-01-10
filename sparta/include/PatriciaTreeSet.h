@@ -12,6 +12,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <stack>
@@ -109,10 +110,17 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> diff(
 template <typename Element>
 class PatriciaTreeSet final {
  public:
+  // C++ container concept member types
+  using iterator = pt_impl::PatriciaTreeIterator<Element>;
+  using const_iterator = iterator;
+  using value_type = Element;
+  using difference_type = std::ptrdiff_t;
+  using size_type = size_t;
+  using const_reference = const Element&;
+  using const_pointer = const Element*;
+
   using IntegerType = typename std::
       conditional_t<std::is_pointer<Element>::value, uintptr_t, Element>;
-
-  using iterator = pt_impl::PatriciaTreeIterator<Element>;
 
   PatriciaTreeSet() = default;
 
@@ -129,13 +137,15 @@ class PatriciaTreeSet final {
     }
   }
 
-  bool is_empty() const { return m_tree == nullptr; }
+  bool empty() const { return m_tree == nullptr; }
 
   size_t size() const {
     size_t s = 0;
     std::for_each(begin(), end(), [&s](const auto&) { ++s; });
     return s;
   }
+
+  size_t max_size() const { return std::numeric_limits<IntegerType>::max(); }
 
   iterator begin() const { return iterator(m_tree); }
 
@@ -862,9 +872,15 @@ inline std::shared_ptr<PatriciaTree<IntegerType>> diff(
 // The iterator basically performs a post-order traversal of the tree, pausing
 // at each leaf.
 template <typename Element>
-class PatriciaTreeIterator final
-    : public std::iterator<std::forward_iterator_tag, Element> {
+class PatriciaTreeIterator final {
  public:
+  // C++ iterator concept member types
+  using iterator_category = std::forward_iterator_tag;
+  using value_type = Element;
+  using difference_type = std::ptrdiff_t;
+  using pointer = Element*;
+  using reference = const Element&;
+
   using IntegerType = typename PatriciaTreeSet<Element>::IntegerType;
 
   PatriciaTreeIterator() {}
