@@ -8,12 +8,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/optional.hpp>
+#include <boost/regex.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <fcntl.h>
 #include <fstream>
 #include <map>
-#include <boost/regex.hpp>
 #include <sstream>
 #include <string>
 
@@ -485,6 +486,47 @@ void write_entire_file(
     const std::string& contents) {
   std::ofstream out(filename, std::ofstream::binary);
   out << contents;
+}
+
+boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
+  const std::string& manifest = read_entire_file(manifest_filename);
+
+  if (manifest.size() == 0) {
+    fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
+            manifest_filename.c_str());
+    return boost::none;
+  }
+
+  android::ResXMLTree parser;
+  parser.setTo(manifest.data(), manifest.size());
+
+  if (parser.getError() != android::NO_ERROR) {
+    fprintf(stderr, "WARNING: Failed to parse the manifest file %s\n",
+            manifest_filename.c_str());
+    return boost::none;
+  }
+
+  const android::String16 uses_sdk("uses-sdk");
+  const android::String16 min_sdk("minSdkVersion");
+  android::ResXMLParser::event_code_t event_code;
+  do {
+    event_code = parser.next();
+    if (event_code == android::ResXMLParser::START_TAG) {
+      size_t outLen;
+      auto el_name = android::String16(parser.getElementName(&outLen));
+      if (el_name == uses_sdk) {
+        android::Res_value raw_value;
+        if (has_raw_attribute_value(parser, min_sdk, raw_value) &&
+            (raw_value.dataType & android::Res_value::TYPE_INT_DEC)) {
+          return boost::optional<int32_t>(static_cast<int32_t>(raw_value.data));
+        } else {
+          return boost::none;
+        }
+      }
+    }
+  } while ((event_code != android::ResXMLParser::END_DOCUMENT) &&
+           (event_code != android::ResXMLParser::BAD_DOCUMENT));
+  return boost::none;
 }
 
 std::unordered_set<std::string> get_manifest_classes(const std::string& filename) {

@@ -12,6 +12,7 @@ import com.facebook.redexinline.otherpackage.SimpleInlineOtherPackage;
 import android.util.Log;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
+import android.annotation.TargetApi;
 
 import org.junit.Test;
 
@@ -385,7 +386,7 @@ public class SimpleInlineTest {
       return 1;
     }
 
-    @RequiresApi(api = Build.VERSION_CODES.N)
+    @RequiresApi(Build.VERSION_CODES.N)
     public static int shouldNotInlineOintoN() {
       return NeedsAndroidO.useApiO();
     }
@@ -395,7 +396,7 @@ public class SimpleInlineTest {
     }
   }
 
-  @RequiresApi(api = Build.VERSION_CODES.O)
+  @TargetApi(Build.VERSION_CODES.O)
   private static class NeedsAndroidO {
     private static int shouldInlineWithinClass() {
       return 0;

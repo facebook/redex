@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -36,6 +37,7 @@ bool has_raw_attribute_value(
     const android::ResXMLTree& parser,
     const android::String16& attribute_name,
     android::Res_value& out_value);
+boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename);
 std::unordered_set<std::string> get_manifest_classes(
     const std::string& filename);
 std::unordered_set<std::string> get_native_classes(

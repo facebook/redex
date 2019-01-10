@@ -28,6 +28,7 @@
 #include <boost/program_options.hpp>
 #include <json/json.h>
 
+#include "ApiLevelChecker.h"
 #include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -43,6 +44,7 @@
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexResources.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -877,6 +879,7 @@ void dump_class_method_info_map(const std::string file_path,
     }
   });
 }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -912,7 +915,17 @@ int main(int argc, char* argv[]) {
     DexStoresVector stores;
     ConfigFiles cfg(args.config, args.out_dir);
 
+    std::string apk_dir;
+    cfg.get_json_config().get("apk_dir", "", apk_dir);
+    const std::string& manifest_filename = apk_dir + "/AndroidManifest.xml";
+    boost::optional<int32_t> maybe_sdk = get_min_sdk(manifest_filename);
+    if (maybe_sdk != boost::none) {
+      args.redex_options.min_sdk = *maybe_sdk;
+    }
+
     redex_frontend(cfg, args, *pg_config, stores, stats);
+
+    api::LevelChecker::init(args.redex_options.min_sdk);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,

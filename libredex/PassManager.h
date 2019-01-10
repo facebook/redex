@@ -22,6 +22,7 @@ struct RedexOptions {
   bool verify_none_enabled{false};
   bool is_art_build{false};
   bool instrument_pass_enabled{false};
+  int32_t min_sdk{0};
 };
 
 class PassManager {

@@ -8,6 +8,7 @@
 #include "Inliner.h"
 
 #include "AnnoUtils.h"
+#include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -165,33 +166,6 @@ bool method_ok(DexType* type, DexMethodRef* meth) {
   return false;
 }
 
-// If the DexMember has a RequiresApi annotation, return its value. Otherwise,
-// return 0. 0 means "no required api".
-//
-// This method only checks the given member, not any parent or sibling
-// members.
-template <typename DexMember>
-int32_t get_required_api_level(const DexMember* member,
-                               const DexType* requires_api) {
-  if (requires_api == nullptr || member->get_anno_set() == nullptr) {
-    return 0;
-  }
-  for (const auto& anno : member->get_anno_set()->get_annotations()) {
-    if (anno->type() == requires_api) {
-      const auto& elems = anno->anno_elems();
-      always_assert(elems.size() == 1);
-      const DexAnnotationElement& api_elem = elems[0];
-      always_assert(api_elem.string == DexString::get_string("api") ||
-                    api_elem.string == DexString::get_string("value"));
-      const DexEncodedValue* value = api_elem.encoded_value;
-      always_assert(value->evtype() == DEVT_INT);
-      int32_t result = static_cast<int32_t>(value->value());
-      return result;
-    }
-  }
-  return 0;
-}
-
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -200,12 +174,7 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const Config& config)
-    : resolver(resolve_fn),
-      xstores(stores),
-      m_scope(scope),
-      m_config(config),
-      m_requires_api(
-          DexType::get_type("Landroid/support/annotation/RequiresApi;")) {
+    : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
@@ -220,12 +189,6 @@ MultiMethodInliner::MultiMethodInliner(
                     }
                   }
                 });
-
-  if (m_requires_api == nullptr) {
-    fprintf(stderr,
-            "WARNING: Unable to find RequiresApi annotation. It's either "
-            "unused (okay) or been deleted (not okay)\n");
-  }
 }
 
 void MultiMethodInliner::inline_methods() {
@@ -413,11 +376,16 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
   // Don't inline code into a method that doesn't have the same (or higher)
   // required API. We don't want to bring API specific code into a class where
   // it's not supported.
-  int32_t callee_api = get_required_api_level(callee);
-  if (callee_api != 0 && callee_api > get_required_api_level(caller)) {
-    // check callee_api against zero and short-circuit because most methods
-    // don't have a required api and we want that to be fast.
+  int32_t callee_api = api::LevelChecker::get_method_level(callee);
+  if (callee_api != api::LevelChecker::get_min_level() &&
+      callee_api > api::LevelChecker::get_method_level(caller)) {
+    // check callee_api against the minimum and short-circuit because most
+    // methods don't have a required api and we want that to be fast.
     log_nopt(INL_REQUIRES_API, caller, insn);
+    TRACE(MMINL, 4,
+          "Refusing to inline %s\n"
+          "              into %s\n because of API boundaries.",
+          show_deobfuscated(callee).c_str(), show_deobfuscated(caller).c_str());
     return false;
   }
 
@@ -428,16 +396,6 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
   }
 
   return true;
-}
-
-int32_t MultiMethodInliner::get_required_api_level(const DexMethod* method) {
-  int32_t method_level = ::get_required_api_level(method, m_requires_api);
-  if (method_level == 0) {
-    int32_t class_level = ::get_required_api_level(
-        type_class(method->get_class()), m_requires_api);
-    return class_level;
-  }
-  return method_level;
 }
 
 /**
