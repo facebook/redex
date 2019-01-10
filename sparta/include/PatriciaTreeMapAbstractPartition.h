@@ -53,7 +53,7 @@ class PatriciaTreeMapAbstractPartition final
     static bool leq(const type& x, const type& y) { return x.leq(y); }
   };
 
-  using MapType = PatriciaTreeMap<Label, ValueInterface>;
+  using MapType = PatriciaTreeMap<Label, Domain, ValueInterface>;
 
   /*
    * The default constructor produces the Bottom value.
@@ -118,7 +118,7 @@ class PatriciaTreeMapAbstractPartition final
 
   bool is_top() const override { return m_is_top; }
 
-  bool is_bottom() const override { return !m_is_top && m_map.is_empty(); }
+  bool is_bottom() const override { return !m_is_top && m_map.empty(); }
 
   void set_to_bottom() override {
     m_map.clear();

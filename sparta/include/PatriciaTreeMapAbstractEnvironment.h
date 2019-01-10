@@ -46,7 +46,8 @@ class PatriciaTreeMapAbstractEnvironment final
  public:
   using Value = ptmae_impl::MapValue<Variable, Domain>;
 
-  using MapType = PatriciaTreeMap<Variable, typename Value::ValueInterface>;
+  using MapType =
+      PatriciaTreeMap<Variable, Domain, typename Value::ValueInterface>;
 
   /*
    * The default constructor produces the Top value.
@@ -206,7 +207,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
   AbstractValueKind kind() const override {
     // If the map is empty, then all variables are implicitly bound to Top,
     // i.e., the abstract environment itself is Top.
-    return m_map.is_empty() ? AbstractValueKind::Top : AbstractValueKind::Value;
+    return m_map.empty() ? AbstractValueKind::Top : AbstractValueKind::Value;
   }
 
   bool leq(const MapValue& other) const override {
@@ -271,7 +272,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     }
   }
 
-  PatriciaTreeMap<Variable, ValueInterface> m_map;
+  PatriciaTreeMap<Variable, Domain, ValueInterface> m_map;
 
   template <typename T1, typename T2>
   friend class sparta::PatriciaTreeMapAbstractEnvironment;

@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <stack>
@@ -23,14 +24,15 @@
 // Forward declarations
 namespace sparta {
 
-template <typename Key, typename Value>
+template <typename Key, typename ValueType, typename Value>
 class PatriciaTreeMap;
 
 } // namespace sparta
 
-template <typename Key, typename Value>
-std::ostream& operator<<(std::ostream&,
-                         const typename sparta::PatriciaTreeMap<Key, Value>&);
+template <typename Key, typename ValueType, typename Value>
+std::ostream& operator<<(
+    std::ostream&,
+    const typename sparta::PatriciaTreeMap<Key, ValueType, Value>&);
 
 namespace sparta {
 
@@ -93,6 +95,21 @@ T snd(const T&, const T& second) {
   return second;
 }
 
+/*
+ * Convenience interface that makes it easy to define maps for value types that
+ * are default-constructible and equality-comparable.
+ */
+template <typename T>
+struct SimpleValue {
+  using type = T;
+
+  static T default_value() { return T(); }
+
+  static bool is_default_value(const T& t) { return t == T(); }
+
+  static bool equals(const T& a, const T& b) { return a == b; }
+};
+
 } // namespace ptmap_impl
 
 /*
@@ -136,22 +153,32 @@ T snd(const T&, const T& second) {
  * of Patricia-tree maps can transparently operate on keys that are either
  * unsigned integers or pointers to objects.
  */
-template <typename Key, typename Value>
+template <typename Key,
+          typename ValueType,
+          typename Value = ptmap_impl::SimpleValue<ValueType>>
 class PatriciaTreeMap final {
  public:
-  using IntegerType =
-      typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
-
+  // C++ container concept member types
   using key_type = Key;
   using mapped_type = typename Value::type;
   using value_type = std::pair<const Key, mapped_type>;
   using iterator = ptmap_impl::PatriciaTreeIterator<Key, Value>;
+  using const_iterator = iterator;
+  using difference_type = std::ptrdiff_t;
+  using size_type = size_t;
+  using const_reference = const mapped_type&;
+  using const_pointer = const mapped_type*;
+
+  using IntegerType =
+      typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
 
   ~PatriciaTreeMap() {
     // The destructor is the only method that is guaranteed to be created when a
     // class template is instantiated. This is a good place to perform all the
     // sanity checks on the template parameters.
+    static_assert(std::is_same<ValueType, typename Value::type>::value,
+                  "ValueType must be equal to Value::type");
     static_assert(
         std::is_same<decltype(Value::default_value()), mapped_type>::value,
         "Value::default_value() does not exist");
@@ -166,13 +193,15 @@ class PatriciaTreeMap final {
         "Value::equals() does not exist");
   }
 
-  bool is_empty() const { return m_tree == nullptr; }
+  bool empty() const { return m_tree == nullptr; }
 
   size_t size() const {
     size_t s = 0;
     std::for_each(begin(), end(), [&s](const auto&) { ++s; });
     return s;
   }
+
+  size_t max_size() const { return std::numeric_limits<IntegerType>::max(); }
 
   iterator begin() const { return iterator(m_tree); }
 
@@ -200,6 +229,14 @@ class PatriciaTreeMap final {
 
   bool equals(const PatriciaTreeMap& other) const {
     return ptmap_impl::equals<IntegerType>(m_tree, other.m_tree);
+  }
+
+  friend bool operator==(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
+    return m1.equals(m2);
+  }
+
+  friend bool operator!=(const PatriciaTreeMap& m1, const PatriciaTreeMap& m2) {
+    return !m1.equals(m2);
   }
 
   /*
@@ -315,9 +352,9 @@ class PatriciaTreeMap final {
 
   std::shared_ptr<ptmap_impl::PatriciaTree<IntegerType, Value>> m_tree;
 
-  template <typename T, typename V>
+  template <typename T, typename VT, typename V>
   friend std::ostream& ::operator<<(std::ostream&,
-                                    const PatriciaTreeMap<T, V>&);
+                                    const PatriciaTreeMap<T, VT, V>&);
 
   template <typename T, typename V>
   friend class ptmap_impl::PatriciaTreeIterator;
@@ -325,13 +362,15 @@ class PatriciaTreeMap final {
 
 } // namespace sparta
 
-template <typename Key, typename Value>
+template <typename Key, typename ValueType, typename Value>
 inline std::ostream& operator<<(
-    std::ostream& o, const typename sparta::PatriciaTreeMap<Key, Value>& s) {
+    std::ostream& o,
+    const typename sparta::PatriciaTreeMap<Key, ValueType, Value>& s) {
   using namespace sparta;
   o << "{";
   for (auto it = s.begin(); it != s.end(); ++it) {
-    o << PatriciaTreeMap<Key, Value>::deref(it->first) << " -> " << it->second;
+    o << PatriciaTreeMap<Key, ValueType, Value>::deref(it->first) << " -> "
+      << it->second;
     if (std::next(it) != s.end()) {
       o << ", ";
     }
@@ -735,7 +774,7 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> combine_leaf(
   if (Value::is_default_value(combined_value)) {
     return nullptr;
   }
-  if (!combined_value.equals(leaf->value())) {
+  if (!Value::equals(combined_value, leaf->value())) {
     return std::make_shared<PatriciaTreeLeaf<IntegerType, Value>>(
         leaf->key(), combined_value);
   }
@@ -833,11 +872,18 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> intersect(
 // The iterator basically performs a post-order traversal of the tree, pausing
 // at each leaf.
 template <typename Key, typename Value>
-class PatriciaTreeIterator final
-    : public std::iterator<std::forward_iterator_tag, Key> {
+class PatriciaTreeIterator final {
  public:
-  using IntegerType = typename PatriciaTreeMap<Key, Value>::IntegerType;
+  // C++ iterator concept member types
+  using iterator_category = std::forward_iterator_tag;
   using mapped_type = typename Value::type;
+  using value_type = std::pair<Key, mapped_type>;
+  using difference_type = std::ptrdiff_t;
+  using pointer = value_type*;
+  using reference = const value_type&;
+
+  using IntegerType =
+      typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
 
   PatriciaTreeIterator() {}
 

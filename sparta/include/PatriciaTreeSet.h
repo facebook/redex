@@ -166,6 +166,14 @@ class PatriciaTreeSet final {
     return pt_impl::equals<IntegerType>(m_tree, other.m_tree);
   }
 
+  friend bool operator==(const PatriciaTreeSet& s1, const PatriciaTreeSet& s2) {
+    return s1.equals(s2);
+  }
+
+  friend bool operator!=(const PatriciaTreeSet& s1, const PatriciaTreeSet& s2) {
+    return !s1.equals(s2);
+  }
+
   /*
    * This faster equality predicate can be used to check whether a sequence of
    * in-place modifications leaves a Patricia-tree set unchanged. For comparing
