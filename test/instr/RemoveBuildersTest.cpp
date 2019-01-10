@@ -136,14 +136,19 @@ TEST_F(PostVerify, RemoveBarBuilder) {
       find_vmethod_named(*using_no_escape_builders, "initializeBar");
   auto initialize_bar_different_regs = find_vmethod_named(
       *using_no_escape_builders, "initializeBarDifferentRegs");
+  auto initialize_bar_same_value_different_branches = find_vmethod_named(
+      *using_no_escape_builders, "initializeBarDifferentBranchesSameValues");
 
   EXPECT_NE(nullptr, initialize_bar_different_regs);
   EXPECT_NE(nullptr, initialize_bar);
+  EXPECT_NE(nullptr, initialize_bar_same_value_different_branches);
 
   // No build call.
   EXPECT_EQ(nullptr,
             find_invoke(
                 initialize_bar_different_regs, DOPCODE_INVOKE_VIRTUAL, "build"));
+  EXPECT_EQ(nullptr,
+            find_invoke(initialize_bar, DOPCODE_INVOKE_VIRTUAL, "build"));
   EXPECT_EQ(nullptr,
             find_invoke(initialize_bar, DOPCODE_INVOKE_VIRTUAL, "build"));
 }
