@@ -1050,7 +1050,7 @@ bool tainted_reg_escapes(
         TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
         return true;
       }
-    } else if (is_conditional_branch(op)) {
+    } else if (is_conditional_branch(op) || is_monitor(op)) {
       if (tainted[insn->src(0)]) {
         // TODO(emmasevastian): Treat this case separate.
         return true;
