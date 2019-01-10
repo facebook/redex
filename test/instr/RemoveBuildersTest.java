@@ -168,6 +168,23 @@ class UsingNoEscapeBuilder {
     return new Bar(value);
   }
 
+  public Bar initializeBarDifferentBranchesSameValues() {
+    Random randomGen = new Random();
+    int value = randomGen.nextInt(10);
+    Bar.Builder builder = new Bar.Builder();
+
+    int x = 7;
+    if (value < 6) {
+      builder.x = x;
+    } else if (value > 9) {
+      builder.x = x;
+    } else {
+      builder.x = 91;
+    }
+
+    return builder.build();
+  }
+
   public Car initializeNullCarModel(int version) {
     Car.Builder builder = new Car.Builder();
     builder.setVersion(version);

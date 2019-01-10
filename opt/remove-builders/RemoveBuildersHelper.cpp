@@ -932,7 +932,7 @@ void FieldsRegs::meet(const FieldsRegs& that) {
       field_to_iput_insns[pair.first] = that.field_to_iput_insns.at(pair.first);
     } else if (that.field_to_reg.at(pair.first) == FieldOrRegStatus::DEFAULT) {
       continue;
-    } else if (pair.second != that.field_to_reg.at(pair.first)) {
+    } else {
       if (pair.second == FieldOrRegStatus::UNDEFINED ||
           that.field_to_reg.at(pair.first) == FieldOrRegStatus::UNDEFINED) {
         field_to_iput_insns[pair.first].insert(NULL_INSN);
