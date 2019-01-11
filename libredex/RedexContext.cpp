@@ -271,8 +271,10 @@ void RedexContext::mutate_method(DexMethodRef* method,
   if (s_method_map.count(r) && rename_on_collision) {
     // Never rename constructors, which causes runtime verification error:
     // "Method 42(Foo;.$init$$0) is marked constructor, but doesn't match name"
-    always_assert_log(show(r.name) != "<init>" && show(r.name) != "<clinit>",
-                      "you should not rename constructor on a collision");
+    always_assert_log(
+        show(r.name) != "<init>" && show(r.name) != "<clinit>",
+        "you should not rename constructor on a collision, %s.%s:%s exists",
+        SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
     if (new_spec.cls == nullptr) {
       // Either method prototype or name is going to be changed, and we hit a
       // collision. Make an unique name: "name$[0-9]+". But in case of <clinit>,
