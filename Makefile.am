@@ -153,6 +153,7 @@ libredex_la_SOURCES = \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
+	libredex/RedexResources.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
 	libredex/SimpleReflectionAnalysis.cpp \
@@ -165,7 +166,6 @@ libredex_la_SOURCES = \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
 	libresource/FileMap.cpp \
-	libresource/RedexResources.cpp \
 	libresource/ResourceTypes.cpp \
 	libresource/Serialize.cpp \
 	libresource/SharedBuffer.cpp \

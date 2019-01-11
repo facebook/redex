@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 #include <map>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -33,19 +34,54 @@ void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
 
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
                                        const android::String16& attribute_name);
-bool has_raw_attribute_value(
-    const android::ResXMLTree& parser,
-    const android::String16& attribute_name,
-    android::Res_value& out_value);
+bool has_raw_attribute_value(const android::ResXMLTree& parser,
+                             const android::String16& attribute_name,
+                             android::Res_value& out_value);
+
 boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename);
-std::unordered_set<std::string> get_manifest_classes(
-    const std::string& filename);
+
+/*
+ * These are all the components which may contain references to Java classes in
+ * their attributes.
+ */
+enum class ComponentTag {
+  Activity,
+  ActivityAlias,
+  Provider,
+  Receiver,
+  Service,
+};
+
+struct ComponentTagInfo {
+  ComponentTag tag;
+  std::string classname;
+  bool is_exported;
+  // Not defined on <provider>
+  bool has_intent_filters{false};
+  // Only defined on <provider>
+  std::unordered_set<std::string> authority_classes;
+
+  ComponentTagInfo(ComponentTag tag,
+                   const std::string& classname,
+                   bool is_exported)
+      : tag(tag), classname(classname), is_exported(is_exported) {}
+};
+
+struct ManifestClassInfo {
+  std::unordered_set<std::string> application_classes;
+  std::unordered_set<std::string> instrumentation_classes;
+  std::vector<ComponentTagInfo> component_tags;
+};
+
+ManifestClassInfo get_manifest_class_info(const std::string& filename);
+
 std::unordered_set<std::string> get_native_classes(
     const std::string& apk_directory);
+
 std::unordered_set<std::string> get_layout_classes(
     const std::string& apk_directory);
-std::unordered_set<std::string> get_xml_files(
-    const std::string& directory);
+
+std::unordered_set<std::string> get_xml_files(const std::string& directory);
 std::unordered_set<uint32_t> get_xml_reference_attributes(
     const std::string& filename);
 // Checks if the file is in a res/raw folder. Such a file won't be considered

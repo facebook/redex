@@ -271,36 +271,6 @@ void mark_reachable_by_classname(std::string& classname) {
   mark_reachable_by_classname(dclass);
 }
 
-void mark_reachable_by_xml(const std::string& classname, bool is_manifest) {
-  auto dtype = DexType::get_type(classname.c_str());
-  if (dtype == nullptr) {
-    return;
-  }
-  auto dclass = type_class(dtype);
-  if (dclass == nullptr) {
-    return;
-  }
-  if (is_manifest) {
-    // Mark these as permanantly reachable. We don't ever try to prune classes
-    // from the manifest.
-    dclass->rstate.set_root(keep_reason::MANIFEST);
-    // Prevent renaming.
-    dclass->rstate.increment_keep_count();
-    for (DexMethod* dmethod : dclass->get_ctors()) {
-      dmethod->rstate.set_root(keep_reason::MANIFEST);
-    }
-  } else {
-    // Setting "referenced_by_resource_xml" essentially behaves like keep,
-    // though breaking it out to its own flag will let us clear/recompute this.
-    dclass->rstate.set_referenced_by_resource_xml();
-    // Mark the constructors as used, which should be the expected use case from
-    // layout inflation.
-    for (DexMethod* dmethod : dclass->get_ctors()) {
-      dmethod->rstate.set_referenced_by_resource_xml();
-    }
-  }
-}
-
 // Possible methods for an android:onClick accept 1 argument that is a View.
 // Source:
 // https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r15/core/java/android/view/View.java#5331
@@ -361,6 +331,129 @@ void mark_onclick_attributes_reachable(
   }
 }
 
+DexClass* maybe_class_from_string(const std::string& classname) {
+  auto dtype = DexType::get_type(classname.c_str());
+  if (dtype == nullptr) {
+    return nullptr;
+  }
+  auto dclass = type_class(dtype);
+  if (dclass == nullptr) {
+    return nullptr;
+  }
+  return dclass;
+}
+
+void mark_manifest_root(const std::string& classname) {
+  auto dclass = maybe_class_from_string(classname);
+  if (dclass == nullptr) {
+    TRACE(PGR, 3, "Dangling reference from manifest: %s\n", classname.c_str());
+    return;
+  }
+  TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
+  dclass->rstate.set_root(keep_reason::MANIFEST);
+  // Prevent renaming.
+  dclass->rstate.increment_keep_count();
+  for (DexMethod* dmethod : dclass->get_ctors()) {
+    dmethod->rstate.set_root(keep_reason::MANIFEST);
+  }
+}
+
+/*
+ * We mark an <activity>'s referenced class as reachable only if it is exported
+ * or has intent filters. Exported Activities may be called from other apps, so
+ * we must treat them as entry points. Activities with intent filters can be
+ * called via implicit intents, and it is difficult to statically determine
+ * which Activity an implicit intent will resolve to, so we treat all potential
+ * recipient Activities as always reachable. For more details, see:
+ *
+ *   https://developer.android.com/guide/topics/manifest/activity-element
+ *   https://developer.android.com/guide/components/intents-filters
+ *
+ * Note 1: Every Activity must be registered in the manifest before it can be
+ * invoked by an intent (both explicit and implicit ones). Since our class
+ * renamer isn't currently able to rewrite class names in the manifest, we mark
+ * all Activities as non-obfuscatable.
+ *
+ * Note 2: RMU may delete some of the Activities that we haven't marked as entry
+ * points. However, it currently doesn't know how to rewrite the manifest to
+ * remove the corresponding <activity> tags. This seems benign: the Android
+ * runtime appears to be OK with these dangling references.
+ *
+ * Addendum: The other component tags are also governed by the exported
+ * attribute as well as by intent filters, but I (jezng) am not sure if those
+ * are sufficient to statically determine their reachability, so I am taking the
+ * conservative approach. This may be worth revisiting.
+ */
+void analyze_reachable_from_manifest(
+    const std::string& apk_dir,
+    const std::unordered_set<std::string>& prune_unexported_components_str) {
+  std::unordered_map<std::string, ComponentTag> string_to_tag{
+      {"activity", ComponentTag::Activity},
+      {"activity-alias", ComponentTag::ActivityAlias}};
+  std::unordered_set<ComponentTag, EnumClassHash> prune_unexported_components;
+  for (const auto& s : prune_unexported_components_str) {
+    prune_unexported_components.emplace(string_to_tag.at(s));
+  }
+
+  std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
+  const auto& manifest_class_info = get_manifest_class_info(manifest);
+
+  for (const auto& classname : manifest_class_info.application_classes) {
+    mark_manifest_root(classname);
+  }
+
+  for (const auto& classname : manifest_class_info.instrumentation_classes) {
+    mark_manifest_root(classname);
+  }
+
+  for (const auto& tag_info : manifest_class_info.component_tags) {
+    switch (tag_info.tag) {
+    case ComponentTag::Activity:
+    case ComponentTag::ActivityAlias: {
+      if (tag_info.is_exported || tag_info.has_intent_filters ||
+          !prune_unexported_components.count(tag_info.tag)) {
+        mark_manifest_root(tag_info.classname);
+      } else {
+        TRACE(PGR, 3, "%s not exported\n", tag_info.classname.c_str());
+        auto dclass = maybe_class_from_string(tag_info.classname);
+        if (dclass) {
+          dclass->rstate.increment_keep_count();
+          dclass->rstate.unset_allowobfuscation();
+        }
+      }
+      break;
+    }
+    case ComponentTag::Receiver:
+    case ComponentTag::Service: {
+      mark_manifest_root(tag_info.classname);
+      break;
+    }
+    case ComponentTag::Provider: {
+      mark_manifest_root(tag_info.classname);
+      for (const auto& classname : tag_info.authority_classes) {
+        mark_manifest_root(classname);
+      }
+      break;
+    }
+    }
+  }
+}
+
+void mark_reachable_by_xml(const std::string& classname) {
+  auto dclass = maybe_class_from_string(classname);
+  if (dclass == nullptr) {
+    return;
+  }
+  // Setting "referenced_by_resource_xml" essentially behaves like keep,
+  // though breaking it out to its own flag will let us clear/recompute this.
+  dclass->rstate.set_referenced_by_resource_xml();
+  // Mark the constructors as used, which should be the expected use case from
+  // layout inflation.
+  for (DexMethod* dmethod : dclass->get_ctors()) {
+    dmethod->rstate.set_referenced_by_resource_xml();
+  }
+}
+
 // 1) Marks classes (Fragments, Views) found in XML layouts as reachable along
 // with their constructors.
 // 2) Marks candidate methods that could be called via android:onClick
@@ -373,18 +466,14 @@ void analyze_reachable_from_xml_layouts(
   // Method names used by reflection
   attrs_to_read.emplace(ONCLICK_ATTRIBUTE);
   std::unordered_multimap<std::string, std::string> attribute_values;
-  collect_layout_classes_and_attributes(
-    apk_dir,
-    attrs_to_read,
-    layout_classes,
-    attribute_values);
+  collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
+                                        attribute_values);
   for (std::string classname : layout_classes) {
     TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
-    mark_reachable_by_xml(classname, false);
+    mark_reachable_by_xml(classname);
   }
-  auto attr_values = multimap_values_to_set(
-    attribute_values,
-    ONCLICK_ATTRIBUTE);
+  auto attr_values =
+      multimap_values_to_set(attribute_values, ONCLICK_ATTRIBUTE);
   mark_onclick_attributes_reachable(scope, attr_values);
 }
 
@@ -516,6 +605,7 @@ void init_permanently_reachable_classes(
   std::vector<std::string> annotations;
   std::vector<std::string> class_members;
   std::vector<std::string> methods;
+  std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
   bool legacy_reflection_reachability;
 
@@ -527,6 +617,7 @@ void init_permanently_reachable_classes(
   config.get("compute_xml_reachability", true, compute_xml_reachability);
   config.get("legacy_reflection_reachability", true,
              legacy_reflection_reachability);
+  config.get("prune_unexported_components", {}, prune_unexported_components);
 
   if (legacy_reflection_reachability) {
     auto match = std::make_tuple(
@@ -579,12 +670,7 @@ void init_permanently_reachable_classes(
   if (apk_dir.size()) {
     if (compute_xml_reachability) {
       // Classes present in manifest
-      std::string manifest = apk_dir + std::string("/AndroidManifest.xml");
-      for (std::string classname : get_manifest_classes(manifest)) {
-        TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
-        mark_reachable_by_xml(classname, true);
-      }
-
+      analyze_reachable_from_manifest(apk_dir, prune_unexported_components);
       // Classes present in XML layouts
       analyze_reachable_from_xml_layouts(scope, apk_dir);
     }

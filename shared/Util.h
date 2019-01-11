@@ -118,3 +118,10 @@ using ssize_t = SSIZE_T;
 #else
 # define NO_SANITIZE_ADDRESS
 #endif
+
+struct EnumClassHash {
+  template <typename T>
+  size_t operator()(T t) const {
+    return static_cast<size_t>(t);
+  }
+};
