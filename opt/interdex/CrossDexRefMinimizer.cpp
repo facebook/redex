@@ -27,7 +27,8 @@ std::string format_infrequent_refs_array(const std::array<Value, N>& array) {
   return ss.str();
 }
 
-uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
+uint64_t CrossDexRefMinimizer::ClassInfo::get_primary_priority_denominator()
+    const {
   always_assert(refs_weight >= applied_refs_weight);
   always_assert(refs_weight >=
                 std::accumulate(infrequent_refs_weight.begin(),
@@ -37,7 +38,6 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
                                          static_cast<uint64_t>(y);
                                 }));
   uint64_t unapplied_refs_weight = refs_weight - applied_refs_weight;
-  uint64_t nominator = applied_refs_weight;
   int64_t denominator = static_cast<int64_t>(
       std::min(unapplied_refs_weight,
                static_cast<uint64_t>(std::numeric_limits<int64_t>::max())));
@@ -47,9 +47,13 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
   for (size_t i = 0; i < infrequent_refs_weight.size(); ++i) {
     denominator -= infrequent_refs_weight[i] / (i + 1);
   }
-  denominator = std::max(denominator, 1L);
-  uint64_t primary_priority =
-      (nominator << 20) / static_cast<uint64_t>(denominator);
+  return static_cast<uint64_t>(std::max(denominator, 1L));
+}
+
+uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
+  uint64_t nominator = applied_refs_weight;
+  uint64_t denominator = get_primary_priority_denominator();
+  uint64_t primary_priority = (nominator << 20) / denominator;
   primary_priority = std::min(primary_priority, (1UL << 40) - 1);
 
   // Note that locator.h imposes a limit of (1<<6)-1 dexes, which in fact
@@ -205,6 +209,29 @@ bool CrossDexRefMinimizer::empty() const {
 
 DexClass* CrossDexRefMinimizer::front() const {
   return m_prioritized_classes.front();
+}
+
+DexClass* CrossDexRefMinimizer::worst() const {
+  auto max_it = m_class_infos.begin();
+  for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
+    const CrossDexRefMinimizer::ClassInfo& max_class_info = max_it->second;
+    const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
+    if (class_info.get_primary_priority_denominator() >
+        max_class_info.get_primary_priority_denominator()) {
+      max_it = it;
+    }
+  }
+
+  TRACE(IDEX, 3,
+        "[dex ordering] Picked worst class {%s} with priority %016lx; "
+        "index %u; %u applied refs weight, %s infrequent refs weights, %u "
+        "total refs\n",
+        SHOW(max_it->first), max_it->second.get_priority(),
+        max_it->second.index, max_it->second.applied_refs_weight,
+        format_infrequent_refs_array(max_it->second.infrequent_refs_weight)
+            .c_str(),
+        max_it->second.refs.size());
+  return max_it->first;
 }
 
 void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {

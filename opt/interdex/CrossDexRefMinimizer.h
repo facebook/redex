@@ -79,6 +79,7 @@ class CrossDexRefMinimizer {
           infrequent_refs_weight(),
           refs_weight(0),
           applied_refs_weight(0) {}
+    uint64_t get_primary_priority_denominator() const;
     uint64_t get_priority() const;
   };
   std::unordered_map<DexClass*, ClassInfo> m_class_infos;
@@ -97,6 +98,9 @@ class CrossDexRefMinimizer {
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;
+  // "Worst" in the sense of having the biggest (adjusted) unapplied refs
+  // weight.
+  DexClass* worst() const;
   // "Erasing" a class applies its refs, updating
   // the priorities of all remaining classes.
   // "Resetting" must happen when the previous dex was flushed and the given

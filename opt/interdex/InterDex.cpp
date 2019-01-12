@@ -608,8 +608,16 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   }
 
   int dexnum = m_dexes_structure.get_num_dexes();
+  // Strategy for picking the next class to emit:
+  // - at the beginning of a new dex, pick the "worst" class, i.e. the class
+  //   with the most (adjusted) unapplied refs
+  // - otherwise, pick the "best" class according to the priority scheme that
+  //   prefers classes that share many applied refs and bring in few unapplied
+  //   refs
+  bool pick_worst = true;
   while (!m_crossDexRefMinimizer.empty()) {
-    DexClass* cls = m_crossDexRefMinimizer.front();
+    DexClass* cls = pick_worst ? m_crossDexRefMinimizer.worst()
+                               : m_crossDexRefMinimizer.front();
     std::vector<DexClass*> erased_classes;
     bool emitted = emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
                               &erased_classes);
@@ -626,6 +634,8 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
       m_crossDexRefMinimizer.erase(erased_cls, /* emitted */ true,
                                    /* overflowed */ false);
     }
+
+    pick_worst = (pick_worst && !emitted) || overflowed;
     dexnum = new_dexnum;
   }
 }
