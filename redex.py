@@ -838,6 +838,8 @@ def finalize_redex(state):
                          'method override graph', 'redex-method-override-graph')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
+                                     'iodi metadata', 'iodi-metadata')
 
     if state.config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all
