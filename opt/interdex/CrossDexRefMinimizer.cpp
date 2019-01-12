@@ -101,7 +101,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   ++m_stats.classes;
   CrossDexRefMinimizer::ClassInfo& class_info =
       m_class_infos
-          .insert({cls, CrossDexRefMinimizer::ClassInfo(m_class_infos.size())})
+          .insert({cls, CrossDexRefMinimizer::ClassInfo(m_next_index++)})
           .first->second;
 
   // Collect all relevant references that contribute to cross-dex metadata

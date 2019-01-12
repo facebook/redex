@@ -82,6 +82,7 @@ class CrossDexRefMinimizer {
     uint64_t get_priority() const;
   };
   std::unordered_map<DexClass*, ClassInfo> m_class_infos;
+  uint32_t m_next_index{0};
   std::unordered_map<void*, std::unordered_set<DexClass*>> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
 

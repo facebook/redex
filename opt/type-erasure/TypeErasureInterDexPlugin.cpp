@@ -83,10 +83,12 @@ bool TypeErasureInterDexPlugin::should_skip_class(const DexClass* clazz) {
  * the method / field refs. The later logic in additional_classes
  * will make sure that those classes actually get added.
  */
-void TypeErasureInterDexPlugin::gather_mrefs(const DexClass* cls,
-                                             std::vector<DexMethodRef*>& mrefs,
-                                             std::vector<DexFieldRef*>& frefs,
-                                             std::vector<DexType*>& trefs) {
+void TypeErasureInterDexPlugin::gather_refs(
+    const DexClass* cls,
+    std::vector<DexMethodRef*>& mrefs,
+    std::vector<DexFieldRef*>& frefs,
+    std::vector<DexType*>& trefs,
+    std::vector<DexClass*>* erased_classes) {
 
   std::vector<DexMethod*> methods = cls->get_dmethods();
   const std::vector<DexMethod*>& vmethods = cls->get_vmethods();
@@ -130,6 +132,7 @@ void TypeErasureInterDexPlugin::gather_mrefs(const DexClass* cls,
       m_cls_to_mergeables[cls->get_type()].emplace(type);
 
       DexClass* current_cls = type_class(type);
+      if (erased_classes) erased_classes->push_back(current_cls);
       current_cls->gather_methods(mrefs);
       current_cls->gather_fields(frefs);
       current_cls->gather_types(trefs);

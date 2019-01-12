@@ -80,7 +80,11 @@ class InterDex {
   void add_dexes_from_store(const DexStore& store);
 
  private:
-  bool emit_class(const DexInfo& dex_info, DexClass* clazz, bool check_if_skip);
+  bool should_skip_class(const DexInfo& dex_info, DexClass* clazz);
+  bool emit_class(const DexInfo& dex_info,
+                  DexClass* clazz,
+                  bool check_if_skip,
+                  std::vector<DexClass*>* erased_classes = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,
