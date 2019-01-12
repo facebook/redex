@@ -24,7 +24,7 @@ namespace interdex {
 // other classes left that also have those *refs.
 // Generally, a higher count increases the effectiveness of cross-dex-reference
 // minimization, but also causes it to use more memory and run slower.
-constexpr size_t INFREQUENT_REFS_COUNT = 5;
+constexpr size_t INFREQUENT_REFS_COUNT = 6;
 
 using PrioritizedDexClasses = MutablePriorityQueue<DexClass*, uint64_t>;
 struct CrossDexRefMinimizerStats {

@@ -131,7 +131,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // TODO: Try some other variations.
   // TODO: Make all constants into config flags.
   for (auto mref : method_refs) {
-    uint32_t weight = 110;
+    uint32_t weight = 100;
     refs.emplace_back(mref, weight);
     refs_weight += weight;
   }
@@ -141,12 +141,12 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     refs_weight += weight;
   }
   for (auto string : strings) {
-    uint32_t weight = 100;
+    uint32_t weight = 90;
     refs.emplace_back(string, weight);
     refs_weight += weight;
   }
   for (auto fref : field_refs) {
-    uint32_t weight = 100;
+    uint32_t weight = 90;
     refs.emplace_back(fref, weight);
     refs_weight += weight;
   }
