@@ -50,6 +50,7 @@ class InterDexPass : public Pass {
   std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
   bool m_emit_scroll_set_marker;
   bool m_minimize_cross_dex_refs;
+  CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
 
   virtual void run_pass(
       DexStoresVector&, DexClassesVector&, Scope&, ConfigFiles&, PassManager&);

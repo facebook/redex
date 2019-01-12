@@ -33,6 +33,13 @@ struct CrossDexRefMinimizerStats {
   size_t reprioritizations{0};
 };
 
+struct CrossDexRefMinimizerConfig {
+  size_t method_ref_weight;
+  size_t field_ref_weight;
+  size_t type_ref_weight;
+  size_t string_ref_weight;
+};
+
 // Helper class that maintains a set of dex classes with associated priorities
 // based on the *ref needs of the class and the *refs already added
 // to the current dex.
@@ -86,6 +93,7 @@ class CrossDexRefMinimizer {
   uint32_t m_next_index{0};
   std::unordered_map<void*, std::unordered_set<DexClass*>> m_ref_classes;
   CrossDexRefMinimizerStats m_stats;
+  const CrossDexRefMinimizerConfig m_config;
 
   struct ClassInfoDelta {
     std::array<int32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight{};
@@ -95,6 +103,8 @@ class CrossDexRefMinimizer {
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
 
  public:
+  CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
+      : m_config(config) {}
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;
@@ -107,6 +117,7 @@ class CrossDexRefMinimizer {
   // class is in fact applied to a new dex.
   // This function returns the number of applied refs.
   void erase(DexClass* cls, bool emitted, bool reset);
+  const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
   const CrossDexRefMinimizerStats stats() const { return m_stats; }
 };
 

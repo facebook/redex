@@ -30,7 +30,8 @@ class InterDex {
            bool normal_primary_dex,
            bool emit_scroll_set_marker,
            bool emit_canaries,
-           bool minimize_cross_dex_refs)
+           bool minimize_cross_dex_refs,
+           const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_cfg(cfg),
@@ -38,7 +39,8 @@ class InterDex {
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
         m_emit_canaries(emit_canaries),
-        m_minimize_cross_dex_refs(minimize_cross_dex_refs) {
+        m_minimize_cross_dex_refs(minimize_cross_dex_refs),
+        m_cross_dex_ref_minimizer(minimize_cross_dex_refs_config) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
   }
@@ -67,7 +69,7 @@ class InterDex {
   }
 
   CrossDexRefMinimizerStats get_cross_dex_ref_minimizer_stats() const {
-    return m_crossDexRefMinimizer.stats();
+    return m_cross_dex_ref_minimizer.stats();
   }
 
   /**
@@ -129,7 +131,7 @@ class InterDex {
   std::vector<DexType*> m_end_markers;
   std::vector<DexType*> m_scroll_markers;
 
-  CrossDexRefMinimizer m_crossDexRefMinimizer;
+  CrossDexRefMinimizer m_cross_dex_ref_minimizer;
 };
 
 } // namespace interdex

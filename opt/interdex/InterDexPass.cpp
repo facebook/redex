@@ -141,6 +141,14 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   jw.get("type_refs_limit", 1 << 16, m_type_refs_limit);
 
   jw.get("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
+  jw.get("minimize_cross_dex_refs_method_ref_weight", 100,
+         m_minimize_cross_dex_refs_config.method_ref_weight);
+  jw.get("minimize_cross_dex_refs_field_ref_weight", 90,
+         m_minimize_cross_dex_refs_config.field_ref_weight);
+  jw.get("minimize_cross_dex_refs_type_ref_weight", 100,
+         m_minimize_cross_dex_refs_config.type_ref_weight);
+  jw.get("minimize_cross_dex_refs_string_ref_weight", 90,
+         m_minimize_cross_dex_refs_config.string_ref_weight);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -160,7 +168,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, m_emit_scroll_set_marker,
-                    m_emit_canaries, m_minimize_cross_dex_refs);
+                    m_emit_canaries, m_minimize_cross_dex_refs,
+                    m_minimize_cross_dex_refs_config);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.

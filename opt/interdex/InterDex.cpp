@@ -596,6 +596,14 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     return;
   }
 
+  TRACE(IDEX, 2,
+        "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
+        "%d, field ref weight %d, type ref weight %d, string ref weight %d.\n",
+        m_cross_dex_ref_minimizer.get_config().method_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().field_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().type_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().string_ref_weight);
+
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
   for (DexClass* cls : scope) {
@@ -604,7 +612,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
         should_skip_class(EMPTY_DEX_INFO, cls)) {
       continue;
     }
-    m_crossDexRefMinimizer.insert(cls);
+    m_cross_dex_ref_minimizer.insert(cls);
   }
 
   int dexnum = m_dexes_structure.get_num_dexes();
@@ -615,24 +623,24 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   //   prefers classes that share many applied refs and bring in few unapplied
   //   refs
   bool pick_worst = true;
-  while (!m_crossDexRefMinimizer.empty()) {
-    DexClass* cls = pick_worst ? m_crossDexRefMinimizer.worst()
-                               : m_crossDexRefMinimizer.front();
+  while (!m_cross_dex_ref_minimizer.empty()) {
+    DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
+                               : m_cross_dex_ref_minimizer.front();
     std::vector<DexClass*> erased_classes;
     bool emitted = emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
                               &erased_classes);
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
-    m_crossDexRefMinimizer.erase(cls, emitted, overflowed);
+    m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
 
     // We can treat *refs owned by "erased classes" as effectively being emitted
     for (DexClass* erased_cls : erased_classes) {
       TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}\n",
             SHOW(erased_cls));
       always_assert(should_skip_class(EMPTY_DEX_INFO, erased_cls));
-      m_crossDexRefMinimizer.insert(erased_cls);
-      m_crossDexRefMinimizer.erase(erased_cls, /* emitted */ true,
-                                   /* overflowed */ false);
+      m_cross_dex_ref_minimizer.insert(erased_cls);
+      m_cross_dex_ref_minimizer.erase(erased_cls, /* emitted */ true,
+                                      /* overflowed */ false);
     }
 
     pick_worst = (pick_worst && !emitted) || overflowed;

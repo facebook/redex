@@ -133,24 +133,23 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // The weights are somewhat arbitrary, but they were chosen after trying many
   // different values and observing the effect on APK size.
   // TODO: Try some other variations.
-  // TODO: Make all constants into config flags.
   for (auto mref : method_refs) {
-    uint32_t weight = 100;
+    uint32_t weight = m_config.method_ref_weight;
     refs.emplace_back(mref, weight);
     refs_weight += weight;
   }
   for (auto type : types) {
-    uint32_t weight = 100;
+    uint32_t weight = m_config.type_ref_weight;
     refs.emplace_back(type, weight);
     refs_weight += weight;
   }
   for (auto string : strings) {
-    uint32_t weight = 90;
+    uint32_t weight = m_config.string_ref_weight;
     refs.emplace_back(string, weight);
     refs_weight += weight;
   }
   for (auto fref : field_refs) {
-    uint32_t weight = 90;
+    uint32_t weight = m_config.field_ref_weight;
     refs.emplace_back(fref, weight);
     refs_weight += weight;
   }
