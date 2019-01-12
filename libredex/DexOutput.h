@@ -91,6 +91,8 @@ class DexOutputIdx {
   uint32_t get_offset(uint32_t* ptr) { return get_offset((uint8_t*)ptr); }
 };
 
+class IODIMetadata;
+
 dex_stats_t write_classes_to_dex(
     std::string filename,
     DexClasses* classes,
@@ -101,7 +103,8 @@ dex_stats_t write_classes_to_dex(
     const ConfigFiles& cfg,
     PositionMapper* line_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines);
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    IODIMetadata* iodi_metadata);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);

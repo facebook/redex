@@ -108,7 +108,8 @@
   TM(UNREF_INTF)         \
   TM(OPT_STORES)         \
   TM(MEINT)              \
-  TM(OPUT)
+  TM(OPUT)               \
+  TM(IODI)
 
 enum TraceModule : int {
 #define TM(x) x,

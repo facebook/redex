@@ -836,6 +836,8 @@ def finalize_redex(state):
                          'reachability graph', 'redex-reachability-graph')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'method-override-graph',
                          'method override graph', 'redex-method-override-graph')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
+                         'iodi metadata', 'iodi-metadata')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
