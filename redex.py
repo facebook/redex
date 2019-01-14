@@ -820,6 +820,8 @@ def finalize_redex(state):
                          'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
                          'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
+                         'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map.txt',

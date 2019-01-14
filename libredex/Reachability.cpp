@@ -26,6 +26,13 @@ namespace mog = method_override_graph;
 
 namespace {
 
+template <typename T>
+struct SafeVector {
+  std::mutex mutex;
+  std::vector<T>* vector;
+  SafeVector(std::vector<T>* v) : vector(v) {}
+};
+
 static ReachableObject SEED_SINGLETON{};
 
 bool is_canary(const DexClass* cls) {
@@ -568,8 +575,10 @@ void ReachableObjects::record_is_seed(Seed* seed) {
  * Remove unmarked fields from :fields and erase their definitions from
  * g_redex.
  */
-static void sweep_fields_if_unmarked(std::vector<DexField*>& fields,
-                                     const ReachableObjects& reachables) {
+static void sweep_fields_if_unmarked(
+    std::vector<DexField*>& fields,
+    const ReachableObjects& reachables,
+    ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](DexField* f) {
     if (reachables.marked_unsafe(f) == 0) {
       TRACE(RMU, 2, "Removing %s\n", SHOW(f));
@@ -578,30 +587,46 @@ static void sweep_fields_if_unmarked(std::vector<DexField*>& fields,
     }
     return false;
   };
-  fields.erase(std::remove_if(fields.begin(), fields.end(), p), fields.end());
+  const auto it = std::remove_if(fields.begin(), fields.end(), p);
+  if (removed_symbols) {
+    for (auto i = it; i != fields.end(); i++) {
+      removed_symbols->insert(show_deobfuscated(*i));
+    }
+  }
+  fields.erase(it, fields.end());
 }
 
 /*
  * Remove unmarked classes and methods. This should really erase the classes /
  * methods from g_redex as well, but that will probably result in dangling
  * pointers (at least for DexMethods). We should fix that at some point...
+ * Adds all swept objects to the given vector.
  */
 template <class Container>
 static void sweep_if_unmarked(Container& c,
-                              const ReachableObjects& reachables) {
+                              const ReachableObjects& reachables,
+                              ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](const auto& m) { return !reachables.marked_unsafe(m); };
-  c.erase(std::remove_if(c.begin(), c.end(), p), c.end());
+  const auto it = std::remove_if(c.begin(), c.end(), p);
+  if (removed_symbols) {
+    for (auto i = it; i != c.end(); i++) {
+      removed_symbols->insert(show_deobfuscated(*i));
+    }
+  }
+  c.erase(it, c.end());
 }
 
-void sweep(DexStoresVector& stores, const ReachableObjects& reachables) {
+void sweep(DexStoresVector& stores,
+           const ReachableObjects& reachables,
+           ConcurrentSet<std::string>* removed_symbols) {
   Timer t("Sweep");
   for (auto& dex : DexStoreClassesIterator(stores)) {
-    sweep_if_unmarked(dex, reachables);
+    sweep_if_unmarked(dex, reachables, removed_symbols);
     walk::parallel::classes(dex, [&](DexClass* cls) {
-      sweep_fields_if_unmarked(cls->get_ifields(), reachables);
-      sweep_fields_if_unmarked(cls->get_sfields(), reachables);
-      sweep_if_unmarked(cls->get_dmethods(), reachables);
-      sweep_if_unmarked(cls->get_vmethods(), reachables);
+      sweep_fields_if_unmarked(cls->get_ifields(), reachables, removed_symbols);
+      sweep_fields_if_unmarked(cls->get_sfields(), reachables, removed_symbols);
+      sweep_if_unmarked(cls->get_dmethods(), reachables, removed_symbols);
+      sweep_if_unmarked(cls->get_vmethods(), reachables, removed_symbols);
     });
   }
 }
