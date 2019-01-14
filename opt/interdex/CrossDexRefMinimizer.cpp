@@ -47,14 +47,15 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_primary_priority_denominator()
   for (size_t i = 0; i < infrequent_refs_weight.size(); ++i) {
     denominator -= infrequent_refs_weight[i] / (i + 1);
   }
-  return static_cast<uint64_t>(std::max(denominator, 1L));
+  return static_cast<uint64_t>(std::max(denominator, static_cast<int64_t>(1L)));
 }
 
 uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
   uint64_t nominator = applied_refs_weight;
   uint64_t denominator = get_primary_priority_denominator();
   uint64_t primary_priority = (nominator << 20) / denominator;
-  primary_priority = std::min(primary_priority, (1UL << 40) - 1);
+  primary_priority = std::min(primary_priority,
+                              (static_cast<uint64_t>(1UL) << 40) - 1);
 
   // Note that locator.h imposes a limit of (1<<6)-1 dexes, which in fact
   // implies a much lower limit of around 1<<22 classes.
