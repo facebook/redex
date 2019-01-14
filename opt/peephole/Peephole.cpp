@@ -260,14 +260,6 @@ struct Matcher {
   size_t match_index;
   std::vector<IRInstruction*> matched_instructions;
 
-  // Another reason why we need C++14...
-  struct EnumClassHash {
-    template <typename T>
-    size_t operator()(T t) const {
-      return static_cast<size_t>(t);
-    }
-  };
-
   std::unordered_map<Register, uint16_t, EnumClassHash> matched_regs;
   std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;

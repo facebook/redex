@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "RedexResources.h"
+
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
@@ -36,12 +38,13 @@
 #include "utils/ByteOrder.h"
 #include "utils/Errors.h"
 #include "utils/Log.h"
+#include "utils/Serialize.h"
 #include "utils/String16.h"
 #include "utils/String8.h"
-#include "utils/Serialize.h"
 #include "utils/TypeHelpers.h"
 #include <json/json.h>
 
+#include "Debug.h"
 #include "StringUtil.h"
 
 constexpr size_t MIN_CLASSNAME_LENGTH = 10;
@@ -98,6 +101,17 @@ bool has_raw_attribute_value(
   }
 
   return false;
+}
+
+bool get_bool_attribute_value(const android::ResXMLTree& parser,
+                              const android::String16& attribute_name,
+                              bool default_value) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    always_assert(raw_value.dataType & android::Res_value::TYPE_INT_BOOLEAN);
+    return static_cast<bool>(raw_value.data);
+  }
+  return default_value;
 }
 
 std::string dotname_to_dexname(const std::string& classname) {
@@ -263,11 +277,46 @@ void walk_references_for_resource(
 }
 
 /*
+ * Look for <search_tag> within the descendants of the current node in the XML
+ * tree.
+ */
+bool find_nested_tag(const android::String16& search_tag,
+                     android::ResXMLTree* parser) {
+  size_t depth{1};
+  while (depth) {
+    auto type = parser->next();
+    switch (type) {
+    case android::ResXMLParser::START_TAG: {
+      ++depth;
+      size_t len;
+      android::String16 tag(parser->getElementName(&len));
+      if (tag == search_tag) {
+        return true;
+      }
+      break;
+    }
+    case android::ResXMLParser::END_TAG: {
+      --depth;
+      break;
+    }
+    case android::ResXMLParser::BAD_DOCUMENT: {
+      always_assert(false);
+      break;
+    }
+    default: {
+      break;
+    }
+    }
+  }
+  return false;
+}
+
+/*
  * Parse AndroidManifest from buffer, return a list of class names that are
  * referenced
  */
-std::unordered_set<std::string> extract_classes_from_manifest(const std::string& manifest_contents) {
-
+ManifestClassInfo extract_classes_from_manifest(
+    const std::string& manifest_contents) {
   // Tags
   android::String16 activity("activity");
   android::String16 activity_alias("activity-alias");
@@ -276,19 +325,30 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
   android::String16 receiver("receiver");
   android::String16 service("service");
   android::String16 instrumentation("instrumentation");
+  android::String16 intent_filter("intent-filter");
+
+  // This is not an unordered_map because String16 doesn't define a hash
+  std::map<android::String16, ComponentTag> string_to_tag{
+      {activity, ComponentTag::Activity},
+      {activity_alias, ComponentTag::ActivityAlias},
+      {provider, ComponentTag::Provider},
+      {receiver, ComponentTag::Receiver},
+      {service, ComponentTag::Service},
+  };
 
   // Attributes
   android::String16 authorities("authorities");
+  android::String16 exported("exported");
   android::String16 name("name");
   android::String16 target_activity("targetActivity");
 
   android::ResXMLTree parser;
   parser.setTo(manifest_contents.data(), manifest_contents.size());
 
-  std::unordered_set<std::string> result;
+  ManifestClassInfo manifest_classes;
 
   if (parser.getError() != android::NO_ERROR) {
-    return result;
+    return manifest_classes;
   }
 
   android::ResXMLParser::event_code_t type;
@@ -297,47 +357,53 @@ std::unordered_set<std::string> extract_classes_from_manifest(const std::string&
     if (type == android::ResXMLParser::START_TAG) {
       size_t len;
       android::String16 tag(parser.getElementName(&len));
-      if (tag == activity ||
-          tag == application ||
-          tag == provider ||
-          tag == receiver ||
-          tag == service ||
-          tag == instrumentation) {
-
+      if (tag == application) {
         std::string classname = get_string_attribute_value(parser, name);
+        // android:name is an optional attribute for <application>
         if (classname.size()) {
-          result.insert(dotname_to_dexname(classname));
+          manifest_classes.application_classes.emplace(
+              dotname_to_dexname(classname));
         }
+      } else if (tag == instrumentation) {
+        std::string classname = get_string_attribute_value(parser, name);
+        always_assert(classname.size());
+        manifest_classes.instrumentation_classes.emplace(
+            dotname_to_dexname(classname));
+      } else if (string_to_tag.count(tag)) {
+        std::string classname = get_string_attribute_value(
+            parser, tag != activity_alias ? name : target_activity);
+        always_assert(classname.size());
 
+        bool is_exported = get_bool_attribute_value(parser, exported,
+                                                    /* default_value */ false);
+        ComponentTagInfo tag_info(string_to_tag.at(tag),
+                                  dotname_to_dexname(classname), is_exported);
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
           size_t start = 0;
           size_t end = 0;
           while ((end = text.find(';', start)) != std::string::npos) {
-            result.insert(dotname_to_dexname(text.substr(start, end - start)));
+            tag_info.authority_classes.insert(
+                dotname_to_dexname(text.substr(start, end - start)));
             start = end + 1;
           }
-          result.insert(dotname_to_dexname(text.substr(start)));
+          tag_info.authority_classes.insert(
+              dotname_to_dexname(text.substr(start)));
+        } else {
+          tag_info.has_intent_filters = find_nested_tag(intent_filter, &parser);
         }
-      } else if (tag == activity_alias) {
-        std::string classname = get_string_attribute_value(parser, target_activity);
-        if (classname.size()) {
-          result.insert(dotname_to_dexname(classname));
-        }
-        classname = get_string_attribute_value(parser, name);
-        if (classname.size()) {
-          result.insert(dotname_to_dexname(classname));
-        }
+
+        manifest_classes.component_tags.emplace_back(tag_info);
       }
     }
   } while (type != android::ResXMLParser::BAD_DOCUMENT &&
            type != android::ResXMLParser::END_DOCUMENT);
-  return result;
+
+  return manifest_classes;
 }
 
-std::string read_attribute_name_at_idx(
-    const android::ResXMLTree& parser,
-    size_t idx) {
+std::string read_attribute_name_at_idx(const android::ResXMLTree& parser,
+                                       size_t idx) {
   size_t len;
   auto name_chars = parser.getAttributeName8(idx, &len);
   if (name_chars != nullptr) {
@@ -390,12 +456,12 @@ void extract_classes_from_layout(
       if (!attributes_to_read.empty()) {
         for (size_t i = 0; i < parser.getAttributeCount(); i++) {
           auto ns_id = parser.getAttributeNamespaceID(i);
-          std::string name = read_attribute_name_at_idx(parser, i);
+          std::string attr_name = read_attribute_name_at_idx(parser, i);
           std::string fully_qualified;
           if (ns_id >= 0) {
-            fully_qualified = namespace_prefix_map[ns_id] + ":" + name;
+            fully_qualified = namespace_prefix_map[ns_id] + ":" + attr_name;
           } else {
-            fully_qualified = name;
+            fully_qualified = attr_name;
           }
           if (attributes_to_read.count(fully_qualified) != 0) {
             auto val = parser.getAttributeStringValue(i, &len);
@@ -487,9 +553,9 @@ void write_entire_file(
   out << contents;
 }
 
-std::unordered_set<std::string> get_manifest_classes(const std::string& filename) {
+ManifestClassInfo get_manifest_class_info(const std::string& filename) {
   std::string manifest = read_entire_file(filename);
-  std::unordered_set<std::string> classes;
+  ManifestClassInfo classes;
   if (manifest.size()) {
     classes = extract_classes_from_manifest(manifest);
   } else {
