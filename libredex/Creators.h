@@ -379,6 +379,10 @@ struct MethodBlock {
 struct MethodCreator {
  public:
   MethodCreator(DexMethod* meth);
+  MethodCreator(DexMethodRef* ref,
+                DexAccessFlags access,
+                DexAnnotationSet* anno = nullptr,
+                bool with_debug_item = false);
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,

@@ -611,6 +611,17 @@ MethodCreator::MethodCreator(DexMethod* meth)
   main_block = new MethodBlock(meth_code->main_block(), this);
 }
 
+MethodCreator::MethodCreator(DexMethodRef* ref,
+                             DexAccessFlags access,
+                             DexAnnotationSet* anno,
+                             bool with_debug_item)
+    : MethodCreator(ref->get_class(),
+                    ref->get_name(),
+                    ref->get_proto(),
+                    access,
+                    anno,
+                    with_debug_item){};
+
 MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
                              DexProto* proto,

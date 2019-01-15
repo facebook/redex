@@ -256,6 +256,15 @@ class Block final {
   boost::optional<Edge::CaseKey> remove_first_matching_target(
       MethodItemEntry* branch);
 
+  /**
+   * TODO(fengliu): Will make cfg support IRCode construction in a better way,
+   * this method will be deprecated soon.
+   */
+  template <class... Args>
+  void push_back(Args&&... args) {
+    m_entries.push_back(*(new MethodItemEntry(std::forward<Args>(args)...)));
+  }
+
  private:
   friend class ControlFlowGraph;
   friend class CFGInliner;
