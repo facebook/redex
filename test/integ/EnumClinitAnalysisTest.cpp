@@ -47,15 +47,12 @@ TEST_F(RedexTest, OrdinalAnalysis) {
   auto& attrs_zero = enum_field_to_attrs.at(enumA_zero);
   EXPECT_EQ(attrs_zero.ordinal, 0);
   EXPECT_EQ(attrs_zero.name, DexString::get_string("TYPE_A_0"));
-  EXPECT_EQ(attrs_zero.opt, nullptr);
 
   auto& attrs_one = enum_field_to_attrs.at(enumA_one);
   EXPECT_EQ(attrs_one.ordinal, 1);
   EXPECT_EQ(attrs_one.name, DexString::get_string("TYPE_A_1"));
-  EXPECT_EQ(attrs_one.opt, nullptr);
 
   auto& attrs_two = enum_field_to_attrs.at(enumA_two);
   EXPECT_EQ(attrs_two.ordinal, 2);
   EXPECT_EQ(attrs_two.name, DexString::get_string("TYPE_A_2"));
-  EXPECT_EQ(attrs_two.opt, nullptr);
 }
