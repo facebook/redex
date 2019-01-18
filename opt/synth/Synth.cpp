@@ -295,7 +295,8 @@ WrapperMethods analyze(const ClassHierarchy& ch,
   for (auto cls : classes) {
     for (auto dmethod : cls->get_dmethods()) {
       // constructors are special and all we can remove are synthetic ones
-      if (is_synthetic(dmethod) && is_constructor(dmethod)) {
+      if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
+          is_constructor(dmethod)) {
         auto ctor = trivial_ctor_wrapper(dmethod);
         if (ctor) {
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s\n", SHOW(dmethod));

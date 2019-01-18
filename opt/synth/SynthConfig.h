@@ -13,6 +13,7 @@
  *   "max_passes" : <int>
  *   "synth_only" : <int>
  *   "remove_pub" : <int>
+ *   "remove_constructors" : <int>
  * }
  * for the bool flags the value of the int is as expected (0 or non 0).
  * Meaning and default values for the flags:
@@ -23,6 +24,8 @@
  * synth_only = 0 (false)
  * - allow removal of public methods
  * remove_pub = 1 (true)
+ * - allow removal of synthetic constructors
+ * remove_constructors = 1 (true)
  * those are the most "permissive" flags that optimize the highest number
  * of cases. No config definition is required if those are the flags used.
  */
@@ -30,4 +33,13 @@ struct SynthConfig {
   int64_t max_passes;
   bool synth_only;
   bool remove_pub;
+  bool remove_constructors;
+
+  SynthConfig() {
+    // defaults
+    max_passes = 5;
+    synth_only = false;
+    remove_pub = true;
+    remove_constructors = true;
+  }
 };
