@@ -218,6 +218,15 @@ class ReferencedState {
   void set_allowshrinking() { m_set_allowshrinking = true; }
   void unset_allowshrinking() { m_unset_allowshrinking = true; }
 
+  // This one should only be used by UnmarkProguardKeepPass to unmark proguard
+  // keep rule after proguard file processing is finished. Because
+  // ProguardMatcher uses parallel processing, using this will result in race
+  // condition.
+  void force_unset_allowshrinking() {
+    m_set_allowshrinking = true;
+    m_unset_allowshrinking = false;
+  }
+
   void set_allowobfuscation() { m_set_allowobfuscation = true; }
   void unset_allowobfuscation() { m_unset_allowobfuscation = true; }
 

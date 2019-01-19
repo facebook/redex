@@ -71,6 +71,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/track_resources \
 	-I$(top_srcdir)/opt/type-erasure \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
+	-I$(top_srcdir)/opt/unmark_proguard_keep \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/verifier \
 	-I$(top_srcdir)/opt/virtual_scope \
@@ -288,6 +289,7 @@ redex_all_SOURCES = \
 	opt/type-erasure/TypeErasurePass.cpp \
 	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
+	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/verifier/Verifier.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
