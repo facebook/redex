@@ -1094,17 +1094,25 @@ get_tainted_regs(uint16_t regs_size,
 
 //////////////////////////////////////////////
 
-bool has_builder_name(DexType* cls) {
-  always_assert(cls != nullptr);
+bool has_builder_name(DexType* type) {
+  always_assert(type != nullptr);
 
   static boost::regex re{"\\$Builder;$"};
-  return boost::regex_search(cls->c_str(), re);
+
+  const auto& deobfuscated_name = type_class(type)->get_deobfuscated_name();
+  if (!deobfuscated_name.empty()) {
+    return boost::regex_search(deobfuscated_name.c_str(), re);
+  }
+  return boost::regex_search(type->c_str(), re);
 }
 
 DexType* get_buildee(DexType* builder) {
   always_assert(builder != nullptr);
 
-  auto builder_name = std::string(builder->c_str());
+  const auto& deobfuscated_name = type_class(builder)->get_deobfuscated_name();
+  const auto& builder_name =
+      !deobfuscated_name.empty() ? deobfuscated_name : builder->str();
+
   auto buildee_name = builder_name.substr(0, builder_name.size() - 9) + ";";
   return DexType::get_type(buildee_name.c_str());
 }
