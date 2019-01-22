@@ -600,13 +600,19 @@ DexMethodRef* DexMethod::make_method(
 }
 
 void DexClass::set_deobfuscated_name(const std::string& name) {
+  // If the class has an old deobfuscated_name which is not equal to
+  // `show(self)`, erase the name mapping from the global type map.
+  // if (!m_deobfuscated_name.empty() && m_deobfuscated_name != m_self->str()) {
   if (!m_deobfuscated_name.empty()) {
-    g_redex->remove_type_name(DexString::make_string(m_deobfuscated_name));
+    auto old_name = DexString::make_string(m_deobfuscated_name);
+    if (old_name != m_self->get_name()) {
+      g_redex->remove_type_name(old_name);
+    }
   }
   m_deobfuscated_name = name;
-  auto dex_string = DexString::make_string(m_deobfuscated_name);
-  if (dex_string != m_self->get_name()) {
-    g_redex->alias_type_name(m_self, dex_string);
+  auto new_name = DexString::make_string(m_deobfuscated_name);
+  if (new_name != m_self->get_name()) {
+    g_redex->alias_type_name(m_self, new_name);
   }
 }
 
