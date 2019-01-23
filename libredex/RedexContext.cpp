@@ -50,6 +50,10 @@ RedexContext::~RedexContext() {
   for (auto const& it : s_method_map) {
     delete it.second;
   }
+  // Delete DexClasses.
+  for (auto const& it : m_type_to_class) {
+    delete it.second;
+  }
 
   for (const auto& p : s_keep_reasons) {
     delete p.second;

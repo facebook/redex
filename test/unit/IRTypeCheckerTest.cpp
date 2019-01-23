@@ -645,7 +645,7 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
       static_cast<DexMethod*>(DexMethod::make_method("LBase;.foo:()I"));
   base_foo->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
-  const DexClass* base_cls = cls_base_creator.create();
+  cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
@@ -728,6 +728,4 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   EXPECT_EQ(type_b, checker.get_dex_type(insns[7], 0));
   EXPECT_EQ(type_base, checker.get_dex_type(insns[8], 0));
   EXPECT_EQ(type_base, checker.get_dex_type(insns[9], 0));
-
-  delete base_cls;
 }
