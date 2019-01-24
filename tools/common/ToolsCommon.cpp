@@ -120,8 +120,6 @@ void write_intermediate_dex(const ConfigFiles& cfg,
       }
       ss << ".dex";
 
-      store_files["list"].append(ss.str());
-
       write_classes_to_dex(ss.str(),
                            &store.get_dexen()[i],
                            nullptr /* locator_index */,
@@ -133,6 +131,8 @@ void write_intermediate_dex(const ConfigFiles& cfg,
                            nullptr,
                            nullptr,
                            nullptr /* IODIMetadata* */);
+      auto basename = boost::filesystem::path(ss.str()).filename().string();
+      store_files["list"].append(basename);
     }
   }
 }
@@ -149,8 +149,9 @@ void load_intermediate_dex(const std::string& input_ir_dir,
     DexStore store(store_files["name"].asString());
     stores.emplace_back(std::move(store));
     for (const Json::Value& file_name : store_files["list"]) {
-      DexClasses classes =
-          load_classes_from_dex(file_name.asString().c_str(), &dex_stats);
+      auto location = boost::filesystem::path(input_ir_dir);
+      location /= file_name.asString();
+      DexClasses classes = load_classes_from_dex(location.c_str(), &dex_stats);
       stores.back().add_classes(std::move(classes));
     }
   }
@@ -198,9 +199,11 @@ Json::Value parse_config(const std::string& config_file) {
  */
 void write_all_intermediate(const ConfigFiles& cfg,
                             const std::string& output_ir_dir,
+                            const RedexOptions& redex_options,
                             DexStoresVector& stores,
                             Json::Value& entry_data) {
   Timer t("Dumping all");
+  redex_options.serialize(entry_data);
   entry_data["dex_list"] = Json::arrayValue;
   write_ir_meta(output_ir_dir, stores);
   write_intermediate_dex(ConfigFiles(Json::nullValue), output_ir_dir, stores,

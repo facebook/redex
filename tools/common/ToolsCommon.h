@@ -7,6 +7,7 @@
 
 #include "ConfigFiles.h"
 #include "DexStore.h"
+#include "PassManager.h"
 
 namespace redex {
 
@@ -16,6 +17,7 @@ Json::Value parse_config(const std::string& config_file);
 
 void write_all_intermediate(const ConfigFiles& cfg,
                             const std::string& output_ir_dir,
+                            const RedexOptions& redex_options,
                             DexStoresVector& stores,
                             Json::Value& entry_data);
 

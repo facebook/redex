@@ -25,10 +25,10 @@
 #include <unistd.h>
 #endif
 
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <json/json.h>
 
-#include "ApiLevelChecker.h"
 #include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -38,7 +38,6 @@
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "OptData.h"
-#include "PassManager.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
@@ -294,7 +293,8 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("config")) {
     const std::string& config_file = take_last(vm["config"]);
-    args.entry_data["config"] = config_file;
+    args.entry_data["config"] =
+        boost::filesystem::absolute(config_file).string();
     args.config = redex::parse_config(config_file);
   }
 
@@ -611,7 +611,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
 
-  args.entry_data["jars"] = Json::arrayValue;
+  std::set<std::string> library_jars;
   for (const auto& jar_path : args.jar_paths) {
     std::istringstream jar_stream(jar_path);
     std::string dependent_jar_path;
@@ -620,7 +620,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
             2,
             "Dependent JAR specified on command-line: %s\n",
             dependent_jar_path.c_str());
-      args.entry_data["jars"].append(dependent_jar_path);
+      library_jars.emplace(dependent_jar_path);
     }
   }
 
@@ -660,13 +660,13 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   }
 
   Scope external_classes;
-  if (!args.entry_data["jars"].empty()) {
+  args.entry_data["jars"] = Json::arrayValue;
+  if (!library_jars.empty()) {
     Timer t("Load library jars");
     const JsonWrapper& json_cfg = cfg.get_json_config();
     read_dup_class_whitelist(json_cfg);
 
-    for (const auto& _library_jar : args.entry_data["jars"]) {
-      const std::string library_jar = _library_jar.asString();
+    for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
@@ -677,6 +677,10 @@ void redex_frontend(ConfigFiles& cfg, /* input */
                     << std::endl;
           exit(EXIT_FAILURE);
         }
+        args.entry_data["jars"].append(basedir_path);
+      } else {
+        auto abs_path = boost::filesystem::absolute(library_jar);
+        args.entry_data["jars"].append(abs_path.string());
       }
     }
   }
@@ -942,8 +946,6 @@ int main(int argc, char* argv[]) {
 
     redex_frontend(cfg, args, *pg_config, stores, stats);
 
-    api::LevelChecker::init(args.redex_options.min_sdk);
-
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
@@ -962,8 +964,8 @@ int main(int argc, char* argv[]) {
             stores);
       }
     } else {
-      redex::write_all_intermediate(cfg, args.output_ir_dir, stores,
-                                    args.entry_data);
+      redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
+                                    stores, args.entry_data);
     }
 
     stats_output_path =
