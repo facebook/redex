@@ -50,7 +50,7 @@
   TM(INLRES)             \
   TM(INSTRUMENT)         \
   TM(INTF)               \
-  TM(LITHO_BLD)          \
+  TM(BLD_PATTERN)        \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
