@@ -129,7 +129,8 @@ void gather_refs(
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
-    interdex::TypeRefs* trefs) {
+    interdex::TypeRefs* trefs,
+    std::vector<DexClass*>* erased_classes) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
@@ -138,7 +139,8 @@ void gather_refs(
   cls->gather_types(type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_mrefs(cls, method_refs, field_refs, type_refs);
+    plugin->gather_refs(cls, method_refs, field_refs, type_refs,
+                        erased_classes);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
@@ -173,31 +175,38 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
 
 namespace interdex {
 
-void InterDex::emit_class(const DexInfo& dex_info,
+bool InterDex::should_skip_class(const DexInfo& dex_info, DexClass* clazz) {
+  for (const auto& plugin : m_plugins) {
+    if (plugin->should_skip_class(clazz)) {
+      TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
+      return true;
+    }
+  }
+
+  if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
+    TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
+    return true;
+  }
+
+  return false;
+}
+
+bool InterDex::emit_class(const DexInfo& dex_info,
                           DexClass* clazz,
-                          bool check_if_skip) {
+                          bool check_if_skip,
+                          std::vector<DexClass*>* erased_classes) {
   if (is_canary(clazz)) {
     // Nothing to do here.
-    return;
+    return false;
   }
 
   if (m_dexes_structure.has_class(clazz)) {
     TRACE(IDEX, 6, "Trying to re-add class %s!\n", SHOW(clazz));
-    return;
+    return false;
   }
 
-  if (check_if_skip) {
-    for (const auto& plugin : m_plugins) {
-      if (plugin->should_skip_class(clazz)) {
-        TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
-        return;
-      }
-    }
-
-    if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
-      return;
-    }
+  if (check_if_skip && should_skip_class(dex_info, clazz)) {
+    return false;
   }
 
   // Calculate the extra method and field refs that we would need to add to
@@ -205,15 +214,29 @@ void InterDex::emit_class(const DexInfo& dex_info,
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
-  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs);
+  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
+              erased_classes);
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
       clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
   if (!fits_current_dex) {
     flush_out_dex(dex_info);
+
+    // Plugins may maintain internal state after gathering refs, and then they
+    // tend to forget that state after flushing out (type erasure,
+    // looking at you). So, let's redo gathering of refs here to give
+    // plugins a chance to rebuild their internal state.
+    clazz_mrefs.clear();
+    clazz_frefs.clear();
+    clazz_trefs.clear();
+    if (erased_classes) erased_classes->clear();
+    gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
+                erased_classes);
+
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);
   }
+  return true;
 }
 
 void InterDex::emit_primary_dex(
@@ -565,6 +588,66 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          not_already_included.end());
 }
 
+void InterDex::emit_remaining_classes(const Scope& scope) {
+  if (!m_minimize_cross_dex_refs) {
+    for (DexClass* cls : scope) {
+      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true);
+    }
+    return;
+  }
+
+  TRACE(IDEX, 2,
+        "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
+        "%d, field ref weight %d, type ref weight %d, string ref weight %d.\n",
+        m_cross_dex_ref_minimizer.get_config().method_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().field_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().type_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().string_ref_weight);
+
+  // Emit classes using some algorithm to group together classes which
+  // tend to share the same refs.
+  for (DexClass* cls : scope) {
+    // Don't bother with classes that emit_class will skip anyway
+    if (is_canary(cls) || m_dexes_structure.has_class(cls) ||
+        should_skip_class(EMPTY_DEX_INFO, cls)) {
+      continue;
+    }
+    m_cross_dex_ref_minimizer.insert(cls);
+  }
+
+  int dexnum = m_dexes_structure.get_num_dexes();
+  // Strategy for picking the next class to emit:
+  // - at the beginning of a new dex, pick the "worst" class, i.e. the class
+  //   with the most (adjusted) unapplied refs
+  // - otherwise, pick the "best" class according to the priority scheme that
+  //   prefers classes that share many applied refs and bring in few unapplied
+  //   refs
+  bool pick_worst = true;
+  while (!m_cross_dex_ref_minimizer.empty()) {
+    DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
+                               : m_cross_dex_ref_minimizer.front();
+    std::vector<DexClass*> erased_classes;
+    bool emitted = emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+                              &erased_classes);
+    int new_dexnum = m_dexes_structure.get_num_dexes();
+    bool overflowed = dexnum != new_dexnum;
+    m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
+
+    // We can treat *refs owned by "erased classes" as effectively being emitted
+    for (DexClass* erased_cls : erased_classes) {
+      TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}\n",
+            SHOW(erased_cls));
+      always_assert(should_skip_class(EMPTY_DEX_INFO, erased_cls));
+      m_cross_dex_ref_minimizer.insert(erased_cls);
+      m_cross_dex_ref_minimizer.erase(erased_cls, /* emitted */ true,
+                                      /* overflowed */ false);
+    }
+
+    pick_worst = (pick_worst && !emitted) || overflowed;
+    dexnum = new_dexnum;
+  }
+}
+
 void InterDex::run() {
   auto scope = build_class_scope(m_dexen);
 
@@ -591,9 +674,7 @@ void InterDex::run() {
   emit_interdex_classes(interdex_types, unreferenced_classes);
 
   // Now emit the classes that weren't specified in the head or primary list.
-  for (DexClass* cls : scope) {
-    emit_class(EMPTY_DEX_INFO, cls, true);
-  }
+  emit_remaining_classes(scope);
 
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {

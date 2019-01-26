@@ -139,6 +139,16 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
   //        https://phabricator.internmc.facebook.com/P60294798 and for this
   //        it should be set to 1 << 15.
   jw.get("type_refs_limit", 1 << 16, m_type_refs_limit);
+
+  jw.get("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
+  jw.get("minimize_cross_dex_refs_method_ref_weight", 100,
+         m_minimize_cross_dex_refs_config.method_ref_weight);
+  jw.get("minimize_cross_dex_refs_field_ref_weight", 90,
+         m_minimize_cross_dex_refs_config.field_ref_weight);
+  jw.get("minimize_cross_dex_refs_type_ref_weight", 100,
+         m_minimize_cross_dex_refs_config.type_ref_weight);
+  jw.get("minimize_cross_dex_refs_string_ref_weight", 90,
+         m_minimize_cross_dex_refs_config.string_ref_weight);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -158,7 +168,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, m_emit_scroll_set_marker,
-                    m_emit_canaries);
+                    m_emit_canaries, m_minimize_cross_dex_refs,
+                    m_minimize_cross_dex_refs_config);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
@@ -186,10 +197,16 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   }
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());
-  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT,
-                 interdex.get_num_scroll_dexes());
+  mgr.set_metric(METRIC_SCROLL_SET_DEX_COUNT, interdex.get_num_scroll_dexes());
 
   plugins.clear();
+
+  auto cross_dex_ref_minimizer_stats =
+      interdex.get_cross_dex_ref_minimizer_stats();
+  mgr.set_metric(METRIC_REORDER_CLASSES, cross_dex_ref_minimizer_stats.classes);
+  mgr.set_metric(METRIC_REORDER_RESETS, cross_dex_ref_minimizer_stats.resets);
+  mgr.set_metric(METRIC_REORDER_REPRIORITIZATIONS,
+                 cross_dex_ref_minimizer_stats.reprioritizations);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,

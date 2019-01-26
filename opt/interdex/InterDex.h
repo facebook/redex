@@ -10,6 +10,7 @@
 #include <unordered_set>
 
 #include "ApkManager.h"
+#include "CrossDexRefMinimizer.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "InterDexPassPlugin.h"
@@ -28,14 +29,18 @@ class InterDex {
            bool static_prune_classes,
            bool normal_primary_dex,
            bool emit_scroll_set_marker,
-           bool emit_canaries)
+           bool emit_canaries,
+           bool minimize_cross_dex_refs,
+           const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_cfg(cfg),
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
-        m_emit_canaries(emit_canaries) {
+        m_emit_canaries(emit_canaries),
+        m_minimize_cross_dex_refs(minimize_cross_dex_refs),
+        m_cross_dex_ref_minimizer(minimize_cross_dex_refs_config) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
   }
@@ -63,6 +68,10 @@ class InterDex {
     return m_dexes_structure.get_num_scroll_dexes();
   }
 
+  CrossDexRefMinimizerStats get_cross_dex_ref_minimizer_stats() const {
+    return m_cross_dex_ref_minimizer.stats();
+  }
+
   /**
    * Only call this if you know what you are doing.
    * This will leave the current instance is in an unusable state.
@@ -73,7 +82,11 @@ class InterDex {
   void add_dexes_from_store(const DexStore& store);
 
  private:
-  void emit_class(const DexInfo& dex_info, DexClass* clazz, bool check_if_skip);
+  bool should_skip_class(const DexInfo& dex_info, DexClass* clazz);
+  bool emit_class(const DexInfo& dex_info,
+                  DexClass* clazz,
+                  bool check_if_skip,
+                  std::vector<DexClass*>* erased_classes = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
       const std::vector<DexType*>& interdex_order,
@@ -81,6 +94,7 @@ class InterDex {
   void emit_interdex_classes(
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes);
+  void emit_remaining_classes(const Scope& scope);
   void emit_mixed_mode_classes(const std::vector<DexType*>& interdexorder,
                                bool can_touch_interdex_order);
   void flush_out_dex(DexInfo dex_info);
@@ -109,12 +123,15 @@ class InterDex {
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
   bool m_emit_canaries;
+  bool m_minimize_cross_dex_refs;
 
   MixedModeInfo m_mixed_mode_info;
   DexesStructure m_dexes_structure;
 
   std::vector<DexType*> m_end_markers;
   std::vector<DexType*> m_scroll_markers;
+
+  CrossDexRefMinimizer m_cross_dex_ref_minimizer;
 };
 
 } // namespace interdex

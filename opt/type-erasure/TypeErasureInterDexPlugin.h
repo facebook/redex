@@ -38,10 +38,11 @@ class TypeErasureInterDexPlugin : public interdex::InterDexPassPlugin {
 
   bool should_skip_class(const DexClass* clazz) override;
 
-  void gather_mrefs(const DexClass* cls,
-                    std::vector<DexMethodRef*>& mrefs,
-                    std::vector<DexFieldRef*>& frefs,
-                    std::vector<DexType*>& trefs) override;
+  void gather_refs(const DexClass* cls,
+                   std::vector<DexMethodRef*>& mrefs,
+                   std::vector<DexFieldRef*>& frefs,
+                   std::vector<DexType*>& trefs,
+                   std::vector<DexClass*>* erased_classes) override;
 
   DexClasses additional_classes(const DexClassesVector& outdex,
                                 const DexClasses& classes) override;
