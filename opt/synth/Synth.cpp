@@ -360,7 +360,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
   return ssms;
 }
 
-IRInstruction* make_iget(DexField* field, uint8_t src) {
+IRInstruction* make_iget(DexField* field, uint16_t src) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:
