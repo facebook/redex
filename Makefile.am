@@ -40,6 +40,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/obfuscate \
+	-I$(top_srcdir)/opt/optimize_enums \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/peephole \
@@ -233,6 +234,12 @@ redex_all_SOURCES = \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/optimize_enums/EnumClinitAnalysis.cpp \
+	opt/optimize_enums/EnumTransformer.cpp \
+	opt/optimize_enums/EnumUpcastAnalysis.cpp \
+	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
+	opt/optimize_enums/OptimizeEnums.cpp \
+	opt/optimize_enums/OptimizeEnumsGeneratedAnalysis.cpp \
 	opt/original_name/OriginalNamePass.cpp \
 	opt/outliner/Outliner.cpp \
 	opt/peephole/Peephole.cpp \
