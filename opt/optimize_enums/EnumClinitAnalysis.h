@@ -13,7 +13,7 @@ namespace optimize_enums {
 
 struct EnumAttr {
   const uint32_t ordinal;
-  const DexString* name{nullptr}; // Builtin name for enums.
+  const DexString* name; // Builtin name for enums.
 };
 
 /*
