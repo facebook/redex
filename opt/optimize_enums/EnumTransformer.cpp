@@ -765,7 +765,7 @@ class EnumTransformer final {
       prev_block->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
 
       prev_block->push_back(dasm(OPCODE_INVOKE_VIRTUAL,
-                                 m_enum_util->STRING_EQ_METHOD, {0_v, {1_v}}));
+                                 m_enum_util->STRING_EQ_METHOD, {0_v, 1_v}));
       prev_block->push_back(dasm(OPCODE_MOVE_RESULT, {3_v}));
       prev_block->push_back(dasm(OPCODE_IF_EQZ, {3_v}));
 
