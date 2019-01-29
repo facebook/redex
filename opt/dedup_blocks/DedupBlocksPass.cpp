@@ -97,7 +97,8 @@ static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
 
 struct BlockEquals {
   bool operator()(cfg::Block* b1, cfg::Block* b2) const {
-    return same_successors(b1, b2) && b1->same_try(b2) && same_code(b1, b2);
+    return same_successors(b1, b2) && b1->same_try(b2) && same_code(b1, b2) &&
+           b1->is_catch() == b2->is_catch();
   }
 };
 
@@ -658,11 +659,6 @@ class DedupBlocksImpl {
 
   static bool is_eligible(cfg::Block* block) {
     if (!has_opcodes(block)) {
-      return false;
-    }
-
-    if (block->is_catch()) {
-      // TODO. Should be possible. Skip now for simplicity
       return false;
     }
 

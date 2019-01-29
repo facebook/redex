@@ -741,3 +741,119 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
   EXPECT_EQ(assembler::to_string(expect_code.get()),
             assembler::to_string(code));
 }
+
+TEST_F(DedupBlocksTest, dedupCatchBlocks) {
+  std::string str_code = R"(
+    (
+      (.try_start t_0)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "testClass.<init>:()V")
+      (.try_end t_0)
+
+      (.try_start t_2)
+      (iget v0 "testClass;.a:I")
+      (move-result-pseudo v2)
+      (.try_end t_2)
+
+      (.try_start t_1)
+      (iget v0 "testClass;.b:I")
+      (move-result-pseudo v3)
+      (.try_end t_1)
+
+      (return-void)
+
+      (:block_catch_t_0)
+      (.catch (t_0))
+      (move-exception v2)
+      (throw v2)
+
+      (:block_catch_t_1)
+      (.catch (t_1))
+      (move-exception v2)
+      (throw v2)
+
+      (:block_catch_t_2)
+      (.catch (t_2))
+      (throw v0)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str_code);
+  auto method = get_fresh_method("dedupCatchBlocks");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+  run_dedup_blocks();
+
+  std::string expect_str = R"(
+    (
+      (.try_start t_0)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "testClass.<init>:()V")
+      (.try_end t_0)
+
+      (.try_start t_2)
+      (iget v0 "testClass;.a:I")
+      (move-result-pseudo v2)
+      (.try_end t_2)
+
+      (.try_start t_0)
+      (iget v0 "testClass;.b:I")
+      (move-result-pseudo v3)
+      (.try_end t_0)
+
+      (return-void)
+
+      (:block_catch_t_0)
+      (.catch (t_0))
+      (move-exception v2)
+      (throw v2)
+
+      (:block_catch_t_2)
+      (.catch (t_2))
+      (throw v0)
+    )
+  )";
+  auto expect_code = assembler::ircode_from_string(expect_str);
+  expect_code->build_cfg(true);
+  expect_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
+}
+
+TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
+  std::string str_code = R"(
+    (
+      (.try_start t_0)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "testClass.<init>:()V")
+      (.try_end t_0)
+
+      (if-eqz v0 :block_no_catch)
+      (return-void)
+
+      (:block_catch_t_0)
+      (.catch (t_0))
+      (move-exception v2)
+      (throw v2)
+
+      (:block_no_catch)
+      (move-exception v2)
+      (throw v2)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str_code);
+  auto method = get_fresh_method("dontDedupCatchBlockAndNonCatchBlock");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+  run_dedup_blocks();
+
+  auto expect_code = assembler::ircode_from_string(str_code);
+  expect_code->build_cfg(true);
+  expect_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
+}
