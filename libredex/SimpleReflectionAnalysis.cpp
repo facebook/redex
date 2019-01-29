@@ -92,15 +92,74 @@ using AbstractObjectEnvironment =
 
 class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
-  explicit Analyzer(const cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
-    MonotonicFixpointIterator::run(AbstractObjectEnvironment::top());
-    populate_environments(cfg);
+  explicit Analyzer(const cfg::ControlFlowGraph& cfg)
+      : BaseIRAnalyzer(cfg), m_cfg(cfg) {}
+
+  void run(DexMethod* dex_method) {
+    // We need to compute the initial environment by assigning the parameter
+    // registers their correct abstract object derived from the method's
+    // signature. The IOPCODE_LOAD_PARAM_* instructions are pseudo-operations
+    // that are used to specify the formal parameters of the method. They must
+    // be interpreted separately.
+    //
+    // Note that we do not try to infer them as STRINGs.
+    // Since we don't have the the actual value of the string other than their
+    // type being String. Also for CLASSes, the exact Java type they refer to is
+    // not available here.
+    auto init_state = AbstractObjectEnvironment::top();
+    const auto& signature =
+        dex_method->get_proto()->get_args()->get_type_list();
+    auto sig_it = signature.begin();
+    bool first_param = true;
+    // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
+    // beginning of the entry block of the CFG.
+    for (const auto& mie : InstructionIterable(m_cfg.entry_block())) {
+      IRInstruction* insn = mie.insn;
+      switch (insn->opcode()) {
+      case IOPCODE_LOAD_PARAM_OBJECT: {
+        if (first_param && !is_static(dex_method)) {
+          // If the method is not static, the first parameter corresponds to
+          // `this`.
+          first_param = false;
+          update_non_string_abstract_object(
+              &init_state, insn, dex_method->get_class());
+        } else {
+          // This is a regular parameter of the method.
+          DexType* type = *sig_it;
+          always_assert(sig_it++ != signature.end());
+          update_non_string_abstract_object(&init_state, insn, type);
+        }
+        break;
+      }
+      case IOPCODE_LOAD_PARAM:
+      case IOPCODE_LOAD_PARAM_WIDE: {
+        default_semantics(insn, &init_state);
+        break;
+      }
+      default: {
+        // We've reached the end of the LOAD_PARAM_* instruction block and we
+        // simply exit the loop. Note that premature loop exit is probably the
+        // only legitimate use of goto in C++ code.
+        goto done;
+      }
+      }
+    }
+  done:
+    MonotonicFixpointIterator::run(init_state);
+    populate_environments(m_cfg);
   }
 
   void analyze_instruction(
       IRInstruction* insn,
       AbstractObjectEnvironment* current_state) const override {
     switch (insn->opcode()) {
+    case IOPCODE_LOAD_PARAM:
+    case IOPCODE_LOAD_PARAM_OBJECT:
+    case IOPCODE_LOAD_PARAM_WIDE: {
+      // IOPCODE_LOAD_PARAM_* instructions have been processed before the
+      // analysis.
+      break;
+    }
     case OPCODE_MOVE_OBJECT: {
       current_state->set(insn->dest(), current_state->get(insn->src(0)));
       break;
@@ -125,9 +184,30 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_CHECK_CAST: {
       current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
       // Note that this is sound. In a concrete execution, if the check-cast
-      // operation fails, an exception is thrown and the control point following
-      // the check-cast becomes unreachable, which corresponds to _|_ in the
-      // abstract domain. Any abstract state is a sound approximation of _|_.
+      // operation fails, an exception is thrown and the control point
+      // following the check-cast becomes unreachable, which corresponds to
+      // _|_ in the abstract domain. Any abstract state is a sound
+      // approximation of _|_.
+      break;
+    }
+    case OPCODE_AGET_OBJECT: {
+      const auto array_object = current_state->get(insn->src(0)).get_constant();
+      if (array_object) {
+        auto type = array_object->dex_type;
+        if (type && is_array(type)) {
+          const auto etype = get_array_component_type(type);
+          update_non_string_abstract_object(current_state, insn, etype);
+          break;
+        }
+      }
+      default_semantics(insn, current_state);
+      break;
+    }
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_SGET_OBJECT: {
+      always_assert(insn->has_field());
+      const auto field = insn->get_field();
+      update_non_string_abstract_object(current_state, insn, field->get_type());
       break;
     }
     case OPCODE_NEW_INSTANCE:
@@ -141,7 +221,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_INVOKE_VIRTUAL: {
       auto receiver = current_state->get(insn->src(0)).get_constant();
       if (!receiver) {
-        default_semantics(insn, current_state);
+        update_return_object(current_state, insn);
         break;
       }
       process_virtual_call(insn, *receiver, current_state);
@@ -151,19 +231,27 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (insn->get_method() == m_for_name) {
         auto class_name = current_state->get(insn->src(0)).get_constant();
         if (class_name && class_name->kind == STRING) {
-          auto internal_name = DexString::make_string(
-            JavaNameUtil::external_to_internal(class_name->dex_string->str()));
-          current_state->set(
-              RESULT_REGISTER,
-              AbstractObjectDomain(AbstractObject(
-                  CLASS, DexType::make_type(internal_name))));
+          auto internal_name =
+              DexString::make_string(JavaNameUtil::external_to_internal(
+                  class_name->dex_string->str()));
+          current_state->set(RESULT_REGISTER,
+                             AbstractObjectDomain(AbstractObject(
+                                 CLASS, DexType::make_type(internal_name))));
           break;
         }
       }
-      default_semantics(insn, current_state);
+      update_return_object(current_state, insn);
       break;
     }
-    default: { default_semantics(insn, current_state); }
+    case OPCODE_INVOKE_INTERFACE:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT: {
+      update_return_object(current_state, insn);
+      break;
+    }
+    default: {
+      default_semantics(insn, current_state);
+    }
     }
   }
 
@@ -177,6 +265,34 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
  private:
+  const cfg::ControlFlowGraph& m_cfg;
+
+  void update_non_string_abstract_object(
+      AbstractObjectEnvironment* current_state,
+      IRInstruction* insn,
+      DexType* type) const {
+    auto dest_reg = insn->has_move_result() ? RESULT_REGISTER : insn->dest();
+    if (type == get_class_type()) {
+      // We don't have precise type information to which the Class obj refers
+      // to.
+      current_state->set(dest_reg,
+                         AbstractObjectDomain(AbstractObject(CLASS, nullptr)));
+    } else {
+      current_state->set(dest_reg,
+                         AbstractObjectDomain(AbstractObject(OBJECT, type)));
+    }
+  }
+
+  void update_return_object(AbstractObjectEnvironment* current_state,
+                            IRInstruction* insn) const {
+    DexMethodRef* callee = insn->get_method();
+    DexType* return_type = callee->get_proto()->get_rtype();
+    if (is_void(return_type) || !is_object(return_type)) {
+      return;
+    }
+    update_non_string_abstract_object(current_state, insn, return_type);
+  }
+
   void default_semantics(IRInstruction* insn,
                          AbstractObjectEnvironment* current_state) const {
     // For instructions that are transparent for this analysis, we just need
@@ -240,8 +356,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         element_name = get_dex_string_from_insn(current_state, insn, 1);
       } else if (m_ctor_lookup_vmethods.count(callee) > 0) {
         element_kind = METHOD;
-        // Hard code the <init> method name, to continue on treating this as no
-        // different than a method.
+        // Hard code the <init> method name, to continue on treating this as
+        // no different than a method.
         element_name = DexString::get_string("<init>");
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
@@ -267,7 +383,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     }
-    default_semantics(insn, current_state);
+    update_return_object(current_state, insn);
   }
 
   // After the fixpoint iteration completes, we replay the analysis on all
@@ -277,8 +393,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   // memory footprint of storing the abstract state at each program point is
   // small.
   void populate_environments(const cfg::ControlFlowGraph& cfg) {
-    // We reserve enough space for the map in order to avoid repeated rehashing
-    // during the computation.
+    // We reserve enough space for the map in order to avoid repeated
+    // rehashing during the computation.
     m_environments.reserve(cfg.blocks().size() * 16);
     for (cfg::Block* block : cfg.blocks()) {
       AbstractObjectEnvironment current_state = get_entry_state_at(block);
@@ -363,6 +479,7 @@ SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method) {
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(cfg);
+  m_analyzer->run(dex_method);
 }
 
 boost::optional<AbstractObject> SimpleReflectionAnalysis::get_abstract_object(

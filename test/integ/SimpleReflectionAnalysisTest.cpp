@@ -24,17 +24,18 @@
 
 using namespace sra;
 
-std::unordered_map<std::string, std::string> expected = {{"f1", "\"foo1\""},
-                                                         {"f2", "\"foo2\""},
-                                                         {"m1", "\"moo1\""},
-                                                         {"m2", "\"moo2\""},
-                                                         {"f3", "?"},
-                                                         {"f4", "\"foo2\""},
-                                                         {"f5", "\"foo2\""},
-                                                         {"f6", "?"},
-                                                         {"m7", "?"},
-                                                         {"f8", "?"},
-                                                         {"f9", "\"foo1\""}};
+std::unordered_map<std::string, std::string> expected = {
+    {"f1", "\"foo1\""},
+    {"f2", "\"foo2\""},
+    {"m1", "\"moo1\""},
+    {"m2", "\"moo2\""},
+    {"f3", "OBJECT{Ljava/lang/String;}"},
+    {"f4", "\"foo2\""},
+    {"f5", "\"foo2\""},
+    {"f6", "OBJECT{Ljava/lang/String;}"},
+    {"m7", "OBJECT{Ljava/lang/String;}"},
+    {"f8", "OBJECT{Ljava/lang/String;}"},
+    {"f9", "\"foo1\""}};
 
 void validate_arguments(IRInstruction* insn,
                         const SimpleReflectionAnalysis& analysis) {
