@@ -53,10 +53,6 @@ macro(add_dependent_packages_for_redex)
 
     message("-- REDEX_JSONCPP_LIBRARY: ${REDEX_JSONCPP_LIBRARY}")
 
-    if (NOT MSVC)
-        set(JSONCPP_INCLUDE_DIRS "${JSONCPP_INCLUDE_DIRS}/jsoncpp")
-    endif ()
-
     if (APPLE)
         #Static library is not installed on default path in MacOS because it conflicts with Xcode Version
         set(ZLIB_HOME "/usr/local/opt/zlib/")
@@ -66,7 +62,7 @@ macro(add_dependent_packages_for_redex)
 
     print_dirs(${ZLIB_STATIC_LIB} "ZLIB_STATIC_LIB")
     print_dirs(${ZLIB_SHARED_LIB} "ZLIB_SHARED_LIB")
-    
+
     if (ENABLE_STATIC)
         set(REDEX_ZLIB_LIBRARY ${ZLIB_STATIC_LIB})
     else ()

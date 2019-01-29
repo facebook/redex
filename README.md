@@ -23,7 +23,7 @@ xcode-select --install
 Install dependencies using homebrew:
 ```
 brew install autoconf automake libtool python3
-brew install boost jsoncpp
+brew install boost jsoncpp zlib
 ```
 
 ### Ubuntu (64-bit)
