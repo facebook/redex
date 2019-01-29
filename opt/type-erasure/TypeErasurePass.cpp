@@ -110,7 +110,7 @@ InterDexGroupingType get_merge_per_interdex_type(
 
   always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
                     "InterDex Grouping Type %s not found. Please check the list"
-                    " of accepted values.");
+                    " of accepted values.", merge_per_interdex_set.c_str());
   return string_to_grouping.at(merge_per_interdex_set);
 }
 

@@ -300,24 +300,43 @@ void MultiMethodInliner::inline_callees(
 }
 
 void MultiMethodInliner::inline_inlinables(
-    DexMethod* caller,
+    DexMethod* caller_method,
     const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables) {
+
+  auto caller = caller_method->get_code();
+  std::unordered_set<IRCode*> need_deconstruct;
+  if (m_config.use_cfg_inliner && !caller->editable_cfg_built()) {
+    need_deconstruct.reserve(1 + inlinables.size());
+    need_deconstruct.insert(caller);
+    for (const auto& inlinable : inlinables) {
+      need_deconstruct.insert(inlinable.first->get_code());
+    }
+    for (auto code : need_deconstruct) {
+      always_assert(!code->editable_cfg_built());
+      code->build_cfg(/* editable */ true);
+    }
+  }
+
   // attempt to inline all inlinable candidates
-  size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
+  // FIXME: this returns 0 for the CFG case
+  size_t estimated_insn_size = caller->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
-    auto callee = inlinable.first;
+    auto callee_method = inlinable.first;
+    auto callee = callee_method->get_code();
     auto callsite = inlinable.second;
 
-    if (!is_inlinable(caller, callee, callsite->insn, estimated_insn_size)) {
+    if (!is_inlinable(caller_method, callee_method, callsite->insn,
+                      estimated_insn_size)) {
       continue;
     }
 
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n", SHOW(callee),
-          caller->get_code()->get_registers_size(), SHOW(caller),
-          callee->get_code()->get_registers_size());
+          caller->get_registers_size(), SHOW(caller),
+          callee->get_registers_size());
 
     if (m_config.use_cfg_inliner) {
-      bool success = inliner::inline_with_cfg(caller, callee, callsite->insn);
+      bool success = inliner::inline_with_cfg(caller_method, callee_method,
+                                              callsite->insn);
       if (!success) {
         continue;
       }
@@ -325,19 +344,23 @@ void MultiMethodInliner::inline_inlinables(
       // Logging before the call to inline_method to get the most relevant line
       // number near callsite before callsite gets replaced. Should be ok as
       // inline_method does not fail to inline.
-      log_opt(INLINED, caller, callsite->insn);
+      log_opt(INLINED, caller_method, callsite->insn);
 
-      inliner::inline_method(caller->get_code(), callee->get_code(), callsite);
+      inliner::inline_method(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
-    estimated_insn_size += callee->get_code()->sum_opcode_sizes();
+    estimated_insn_size += callee->sum_opcode_sizes();
     TRACE(MMINL,
           6,
           "checking visibility usage of members in %s\n",
           SHOW(callee));
-    change_visibility(callee);
+    change_visibility(callee_method);
     info.calls_inlined++;
-    inlined.insert(callee);
+    inlined.insert(callee_method);
+  }
+
+  for (IRCode* code : need_deconstruct) {
+    code->clear_cfg();
   }
 }
 
@@ -1237,7 +1260,10 @@ void inline_tail_call(DexMethod* caller,
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite) {
-  auto& caller_cfg = caller_method->get_code()->cfg();
+
+  auto caller_code = caller_method->get_code();
+  always_assert(caller_code->editable_cfg_built());
+  auto& caller_cfg = caller_code->cfg();
   const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
   if (callsite_it.is_end()) {
     // The callsite is not in the caller cfg. This is probably because the
@@ -1254,8 +1280,10 @@ bool inline_with_cfg(DexMethod* caller_method,
   // inline_cfg does not fail to inline.
   log_opt(INLINED, caller_method, callsite);
 
-  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it,
-                              callee_method->get_code()->cfg());
+  auto callee_code = callee_method->get_code();
+  always_assert(callee_code->editable_cfg_built());
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg());
+
   return true;
 }
 
