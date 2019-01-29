@@ -1828,7 +1828,9 @@ void ControlFlowGraph::remove_block(Block* block) {
   }
   delete_pred_edges(block);
   delete_succ_edges(block);
-  m_blocks.erase(block->id());
+  auto num_removed = m_blocks.erase(block->id());
+  always_assert_log(num_removed == 1,
+                    "Block wasn't in CFG. Attempted double delete?");
   block->m_entries.clear_and_dispose();
   delete block;
 }
