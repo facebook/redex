@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#if __ANDROID__
 #include <museum/5.0.0/bionic/libc/sys/cdefs.h>
 #include <museum/5.0.0/bionic/libc/sys/types.h>
 #include <museum/5.0.0/bionic/libc/time.h>
@@ -28,6 +29,7 @@
 #include <museum/5.0.0/bionic/libc/stdlib.h>
 #include <museum/5.0.0/bionic/libc/memory.h>
 #include <museum/5.0.0/bionic/libc/math.h>
+#endif
 
 #include "elf-writer.h"
 #include "OatmealUtil.h"

@@ -8,6 +8,7 @@
 // Code for parsing and building OAT files for multiple android versions. See
 // OatFile::build and OatFile::parse, below.
 
+#if __ANDROID__
 #include <museum/5.0.0/bionic/libc/sys/cdefs.h>
 #include <museum/5.0.0/bionic/libc/sys/types.h>
 #include <museum/5.0.0/bionic/libc/time.h>
@@ -31,6 +32,7 @@
 #include <museum/5.0.0/bionic/libc/stdlib.h>
 #include <museum/5.0.0/bionic/libc/memory.h>
 #include <museum/5.0.0/bionic/libc/math.h>
+#endif
 
 #include "dump-oat.h"
 #include "OatmealUtil.h"
