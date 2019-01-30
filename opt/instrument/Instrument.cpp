@@ -617,6 +617,9 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   const auto& file_name = cfg.metafile(options.metadata_file_name);
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
 
+  // Write meta info of the meta file: the type of the meta file and version.
+  ofs << "#,simple-method-tracing,1.0" << std::endl;
+
   int method_id = 0;
   int excluded = 0;
   std::unordered_set<std::string> method_names;
