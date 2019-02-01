@@ -41,7 +41,7 @@ class Analyzer;
  *   java.lang.Class baz_class = Class.forName("Baz"); --> CLASS(Baz)
  *
  * Note that the signature of a method is not tracked by the analysis. In the
- * example above, f may refer to any method named "foo" in the class Foo.
+ * example above, f may refer to any field named "foo" in the class `Foo`.
  */
 
 /*
