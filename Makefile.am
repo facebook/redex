@@ -159,7 +159,7 @@ libredex_la_SOURCES = \
 	libredex/RedexResources.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
-	libredex/SimpleReflectionAnalysis.cpp \
+	libredex/ReflectionAnalysis.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \

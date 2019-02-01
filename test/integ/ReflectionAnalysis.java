@@ -9,7 +9,7 @@
 
  import java.lang.reflect.*;
 
- class SimpleReflectionAnalysis {
+ class ReflectionAnalysis {
    static class Isolate {
      public int foo1;
      public double foo2;
@@ -61,7 +61,8 @@
          }
          check("f8", f8.getName());
 
-         java.lang.Class isolate_class3 = java.lang.Class.forName("com.facebook.redextest.SimpleReflectionAnalysis.Isolate");
+         java.lang.Class isolate_class3 = java.lang.Class.forName(
+             "com.facebook.redextest.ReflectionAnalysis.Isolate");
          Field f9 = isolate_class3.getField("foo1");
          check("f9", f9.getName());
        } catch (Exception e) {

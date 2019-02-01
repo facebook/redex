@@ -21,16 +21,16 @@
 #include "IROpcode.h"
 #include "LocalDce.h"
 #include "RedexContext.h"
-#include "SimpleReflectionAnalysis.h"
+#include "ReflectionAnalysis.h"
 
 using namespace testing;
-using namespace sra;
+using namespace reflection;
 
-class SimpleReflectionAnalysisTest : public ::testing::Test {
+class ReflectionAnalysisTest : public ::testing::Test {
  public:
-  ~SimpleReflectionAnalysisTest() { delete g_redex; }
+  ~ReflectionAnalysisTest() { delete g_redex; }
 
-  SimpleReflectionAnalysisTest() {
+  ReflectionAnalysisTest() {
     g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({
         get_object_type() // v5
@@ -56,7 +56,7 @@ class SimpleReflectionAnalysisTest : public ::testing::Test {
   DexMethod* m_method;
 };
 
-TEST_F(SimpleReflectionAnalysisTest, noReflection) {
+TEST_F(ReflectionAnalysisTest, noReflection) {
   auto insns = assembler::ircode_from_string(R"(
     (
       (const-string "S1")
@@ -67,11 +67,11 @@ TEST_F(SimpleReflectionAnalysisTest, noReflection) {
     )
   )");
   add_code(insns);
-  SimpleReflectionAnalysis analysis(m_method);
+  ReflectionAnalysis analysis(m_method);
   EXPECT_FALSE(analysis.has_found_reflection());
 }
 
-TEST_F(SimpleReflectionAnalysisTest, constClass) {
+TEST_F(ReflectionAnalysisTest, constClass) {
   auto insns = assembler::ircode_from_string(R"(
     (
       (new-instance "LFoo;")
@@ -82,6 +82,6 @@ TEST_F(SimpleReflectionAnalysisTest, constClass) {
     )
   )");
   add_code(insns);
-  SimpleReflectionAnalysis analysis(m_method);
+  ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
 }

@@ -15,17 +15,16 @@
 #include <unordered_set>
 
 #include "ClassHierarchy.h"
-#include "Walkers.h"
 #include "DexClass.h"
 #include "Match.h"
 #include "RedexResources.h"
-#include "SimpleReflectionAnalysis.h"
+#include "ReflectionAnalysis.h"
 #include "StringUtil.h"
 #include "Walkers.h"
 
 namespace {
 
-using namespace sra;
+using namespace reflection;
 
 template<typename T, typename F>
 struct DexItemIter {
@@ -135,7 +134,7 @@ void analyze_reflection(const Scope& scope) {
            }},
       };
 
-  auto dex_string_lookup = [](const SimpleReflectionAnalysis& analysis,
+  auto dex_string_lookup = [](const ReflectionAnalysis& analysis,
                               ReflectionType refl_type,
                               IRInstruction* insn) {
     if (refl_type == GET_CONSTRUCTOR || refl_type == GET_DECLARED_CONSTRUCTOR) {
@@ -151,7 +150,7 @@ void analyze_reflection(const Scope& scope) {
   };
 
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    std::unique_ptr<SimpleReflectionAnalysis> analysis = nullptr;
+    std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
       if (!is_invoke(insn->opcode())) {
@@ -177,7 +176,7 @@ void analyze_reflection(const Scope& scope) {
       // on the method. So, we wait until we're sure we need it.
       // We use a unique_ptr so that we'll still only have one per method.
       if (!analysis) {
-        analysis = std::make_unique<SimpleReflectionAnalysis>(method);
+        analysis = std::make_unique<ReflectionAnalysis>(method);
       }
 
       auto arg_cls = analysis->get_abstract_object(insn->src(0), insn);

@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SimpleReflectionAnalysis.h"
+#include "ReflectionAnalysis.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -22,7 +22,7 @@
 #include "JarLoader.h"
 #include "RedexContext.h"
 
-using namespace sra;
+using namespace reflection;
 
 std::unordered_map<std::string, std::string> expected = {
     {"f1", "\"foo1\""},
@@ -38,7 +38,7 @@ std::unordered_map<std::string, std::string> expected = {
     {"f9", "\"foo1\""}};
 
 void validate_arguments(IRInstruction* insn,
-                        const SimpleReflectionAnalysis& analysis) {
+                        const ReflectionAnalysis& analysis) {
   auto label = analysis.get_abstract_object(insn->src(0), insn);
   auto actual = analysis.get_abstract_object(insn->src(1), insn);
   EXPECT_TRUE(label);
@@ -88,10 +88,10 @@ TEST(SimpleReflectionAnalysisTest, nominalCases) {
   Scope scope = build_class_scope(it);
   for (const auto& cls : scope) {
     if (cls->get_name()->str() ==
-        "Lcom/facebook/redextest/SimpleReflectionAnalysis$Isolate;") {
+        "Lcom/facebook/redextest/ReflectionAnalysis$Isolate;") {
       for (const auto& method : cls->get_dmethods()) {
         if (method->get_name()->str() == "main") {
-          SimpleReflectionAnalysis analysis(method);
+          ReflectionAnalysis analysis(method);
           for (auto& mie : InstructionIterable(method->get_code())) {
             IRInstruction* insn = mie.insn;
             if (insn->opcode() == OPCODE_INVOKE_STATIC &&

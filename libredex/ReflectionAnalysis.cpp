@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SimpleReflectionAnalysis.h"
+#include "ReflectionAnalysis.h"
 
 #include <iomanip>
 #include <unordered_map>
@@ -24,13 +24,14 @@
 
 using namespace sparta;
 
-std::ostream& operator<<(std::ostream& out, const sra::AbstractObject& x) {
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::AbstractObject& x) {
   switch (x.kind) {
-  case sra::OBJECT: {
+  case reflection::OBJECT: {
     out << "OBJECT{" << SHOW(x.dex_type) << "}";
     break;
   }
-  case sra::STRING: {
+  case reflection::STRING: {
     const std::string& str = x.dex_string->str();
     if (str.empty()) {
       out << "\"\"";
@@ -39,19 +40,21 @@ std::ostream& operator<<(std::ostream& out, const sra::AbstractObject& x) {
     }
     break;
   }
-  case sra::CLASS: {
-    always_assert(x.cls_source != sra::ClassObjectSource::NOT_APPLICABLE);
-    std::string cls_tag = x.cls_source == sra::ClassObjectSource::REFLECTION
-                              ? "CLASS_REFLECT"
-                              : "CLASS";
+  case reflection::CLASS: {
+    always_assert(x.cls_source !=
+                  reflection::ClassObjectSource::NOT_APPLICABLE);
+    std::string cls_tag =
+        x.cls_source == reflection::ClassObjectSource::REFLECTION
+            ? "CLASS_REFLECT"
+            : "CLASS";
     out << cls_tag << "{" << SHOW(x.dex_type) << "}";
     break;
   }
-  case sra::FIELD: {
+  case reflection::FIELD: {
     out << "FIELD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
     break;
   }
-  case sra::METHOD: {
+  case reflection::METHOD: {
     out << "METHOD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
     break;
   }
@@ -59,7 +62,7 @@ std::ostream& operator<<(std::ostream& out, const sra::AbstractObject& x) {
   return out;
 }
 
-namespace sra {
+namespace reflection {
 
 bool is_reflection_output(const AbstractObject& obj) {
   if (obj.kind == FIELD || obj.kind == METHOD) {
@@ -500,9 +503,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
 } // namespace impl
 
-SimpleReflectionAnalysis::~SimpleReflectionAnalysis() {}
+ReflectionAnalysis::~ReflectionAnalysis() {}
 
-SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method)
+ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
     : m_dex_method(dex_method) {
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
@@ -515,7 +518,7 @@ SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method)
   m_analyzer->run(dex_method);
 }
 
-bool SimpleReflectionAnalysis::has_found_reflection() {
+bool ReflectionAnalysis::has_found_reflection() {
   std::map<IRInstruction*, std::map<register_t, AbstractObject>>
       reflection_sites;
   auto code = m_dex_method->get_code();
@@ -540,7 +543,7 @@ bool SimpleReflectionAnalysis::has_found_reflection() {
   return !reflection_sites.empty();
 }
 
-boost::optional<AbstractObject> SimpleReflectionAnalysis::get_abstract_object(
+boost::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
     size_t reg, IRInstruction* insn) const {
   if (m_analyzer == nullptr) {
     return boost::none;
@@ -548,4 +551,4 @@ boost::optional<AbstractObject> SimpleReflectionAnalysis::get_abstract_object(
   return m_analyzer->get_abstract_object(reg, insn);
 }
 
-} // namespace sra
+} // namespace reflection
