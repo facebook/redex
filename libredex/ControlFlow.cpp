@@ -320,6 +320,17 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
+Block* Block::follow_goto() const {
+  const auto& s = succs();
+  if (s.size() == 1) {
+    const auto& e = s[0];
+    if (e->type() == EDGE_GOTO) {
+      return e->target();
+    }
+  }
+  return nullptr;
+}
+
 std::vector<Edge*> Block::get_outgoing_throws_in_order() const {
   std::vector<Edge*> result =
       m_parent->get_succ_edges_of_type(this, EDGE_THROW);

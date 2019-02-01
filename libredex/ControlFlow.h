@@ -248,6 +248,10 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  // If this block has a single outgoing goto edge, return the target.
+  // Otherwise, return nullptr
+  Block* follow_goto() const;
+
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 
