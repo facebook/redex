@@ -14,7 +14,7 @@ public class StringConcatenatorTest {
   public static final String prefix = "pre";
   public static final String concatenated = fake_clinit();
 
-  // run simpleinline first to make this the real <clinit>
+  // run methodinline first to make this the real <clinit>
   private static String fake_clinit() {
     StringBuilder b = new StringBuilder();
     b.append(prefix);

@@ -21,7 +21,7 @@
 
 TEST_F(PreVerify, InlineInvokeRange) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
 
   auto m = find_vmethod_named(*cls, "testInvokeRange");
@@ -32,7 +32,7 @@ TEST_F(PreVerify, InlineInvokeRange) {
 
 TEST_F(PostVerify, InlineInvokeRange) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
 
   auto m = find_vmethod_named(*cls, "testInvokeRange");
@@ -47,7 +47,7 @@ TEST_F(PostVerify, InlineInvokeRange) {
 
 TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerTryCalleeElseThrows");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInElse");
   ASSERT_NE(nullptr, invoke);
@@ -74,7 +74,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
 
 TEST_F(PostVerify, InlineCallerTryCalleeElseThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerTryCalleeElseThrows");
   // verify that we've removed the throwsInElse() call
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInElse");
@@ -95,7 +95,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeElseThrows) {
 
 TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerTryCalleeIfThrows");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInIf");
   ASSERT_NE(nullptr, invoke);
@@ -125,7 +125,7 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
 
 TEST_F(PostVerify, InlineCallerTryCalleeIfThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerTryCalleeElseThrows");
   // verify that we've removed the throwsInIf() call
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInIf");
@@ -143,7 +143,7 @@ TEST_F(PostVerify, InlineCallerTryCalleeIfThrows) {
 
 TEST_F(PreVerify, InlineCallerNestedTry) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerNestedTry");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_NE(nullptr, invoke);
@@ -154,7 +154,7 @@ TEST_F(PreVerify, InlineCallerNestedTry) {
 
 TEST_F(PostVerify, InlineCallerNestedTry) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCallerNestedTry");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsInElse2");
   ASSERT_EQ(nullptr, invoke);
@@ -169,7 +169,7 @@ TEST_F(PostVerify, InlineCallerNestedTry) {
 
 TEST_F(PreVerify, InlineCalleeTryUncaught) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsUncaught");
   ASSERT_NE(nullptr, invoke);
@@ -179,7 +179,7 @@ TEST_F(PreVerify, InlineCalleeTryUncaught) {
 
 TEST_F(PostVerify, InlineCalleeTryUncaught) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryUncaught");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsUncaught");
   ASSERT_EQ(nullptr, invoke);
@@ -195,7 +195,7 @@ TEST_F(PostVerify, InlineCalleeTryUncaught) {
 
 TEST_F(PreVerify, InlineCalleeTryCaught) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsCaught");
   ASSERT_NE(nullptr, invoke);
@@ -205,7 +205,7 @@ TEST_F(PreVerify, InlineCalleeTryCaught) {
 
 TEST_F(PostVerify, InlineCalleeTryCaught) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryCaught");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "throwsCaught");
   ASSERT_EQ(nullptr, invoke);
@@ -222,7 +222,7 @@ TEST_F(PostVerify, InlineCalleeTryCaught) {
 
 TEST_F(PreVerify, InlineTryHandlerThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "handlerThrows");
   ASSERT_NE(nullptr, invoke);
@@ -232,7 +232,7 @@ TEST_F(PreVerify, InlineTryHandlerThrows) {
 
 TEST_F(PostVerify, InlineTryHandlerThrows) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeTryHandlerThrows");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "handlerThrows");
   ASSERT_EQ(nullptr, invoke);
@@ -252,7 +252,7 @@ TEST_F(PostVerify, InlineTryHandlerThrows) {
 
 TEST_F(PreVerify, InlineCalleeTryTwice) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
   ASSERT_NE(nullptr, invoke);
@@ -262,7 +262,7 @@ TEST_F(PreVerify, InlineCalleeTryTwice) {
 
 TEST_F(PostVerify, InlineCalleeTryTwice) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineCalleeTryTwice");
   auto invoke = find_invoke(m, DOPCODE_INVOKE_DIRECT, "inlineCalleeTryTwice");
   ASSERT_EQ(nullptr, invoke);
@@ -278,7 +278,7 @@ TEST_F(PostVerify, InlineCalleeTryTwice) {
 
 TEST_F(PreVerify, InlineInvokeDirect) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto invoke =
       find_invoke(m, DOPCODE_INVOKE_DIRECT, "hasNoninlinableInvokeDirect");
@@ -303,7 +303,7 @@ TEST_F(PreVerify, InlineInvokeDirect) {
 
 TEST_F(PostVerify, InlineInvokeDirect) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto noninlinable_invoke_direct =
       find_invoke(m, DOPCODE_INVOKE_STATIC, "noninlinable$0");
@@ -312,7 +312,7 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   auto noninlinable = static_cast<DexMethod*>(
       noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()),
-            "(Lcom/facebook/redexinline/SimpleInlineTest;)V");
+            "(Lcom/facebook/redexinline/MethodInlineTest;)V");
   EXPECT_EQ(
       noninlinable->get_proto()->get_args()->get_type_list().size(),
       noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
@@ -340,7 +340,7 @@ TEST_F(PostVerify, InlineInvokeDirect) {
 
 TEST_F(PreVerify, testArrayDataInCaller) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testArrayDataInCaller");
 
   // check that the callee indeed has a non-terminal if, which will exercise
@@ -361,7 +361,7 @@ TEST_F(PreVerify, testArrayDataInCaller) {
 
 TEST_F(PostVerify, testArrayDataInCaller) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testArrayDataInCaller");
   ASSERT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_DIRECT, "callerWithIf"));
   auto last_insn = m->get_dex_code()->get_instructions().back();
@@ -370,7 +370,7 @@ TEST_F(PostVerify, testArrayDataInCaller) {
 
 TEST_F(PostVerify, testForceInline) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testForceInlineOne");
   EXPECT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_DIRECT, "multipleCallers"));
   m = find_vmethod_named(*cls, "testForceInlineTwo");
@@ -379,30 +379,30 @@ TEST_F(PostVerify, testForceInline) {
 
 TEST_F(PreVerify, testCalleeRefsPrivateClass) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeRefsPrivateClass");
   EXPECT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "inlineMe"));
 
   auto other_pkg_cls = find_class_named(
       classes,
-      "Lcom/facebook/redexinline/otherpackage/SimpleInlineOtherPackage$Bar;");
+      "Lcom/facebook/redexinline/otherpackage/MethodInlineOtherPackage$Bar;");
   EXPECT_FALSE(is_public(other_pkg_cls));
 }
 
 TEST_F(PostVerify, testCalleeRefsPrivateClass) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testCalleeRefsPrivateClass");
   EXPECT_EQ(nullptr, find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "inlineMe"));
   auto other_pkg_cls = find_class_named(
       classes,
-      "Lcom/facebook/redexinline/otherpackage/SimpleInlineOtherPackage$Bar;");
+      "Lcom/facebook/redexinline/otherpackage/MethodInlineOtherPackage$Bar;");
   EXPECT_TRUE(is_public(other_pkg_cls));
 }
 
 TEST_F(PreVerify, testFillArrayOpcode) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testFillArrayOpcode");
   EXPECT_NE(nullptr,
             find_invoke(m, DOPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
@@ -410,7 +410,7 @@ TEST_F(PreVerify, testFillArrayOpcode) {
 
 TEST_F(PostVerify, testFillArrayOpcode) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testFillArrayOpcode");
   EXPECT_EQ(nullptr,
             find_invoke(m, DOPCODE_INVOKE_DIRECT, "calleeWithFillArray"));
@@ -418,7 +418,7 @@ TEST_F(PostVerify, testFillArrayOpcode) {
 
 TEST_F(PreVerify, testUpdateCodeSizeWhenInlining) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
   EXPECT_NE(nullptr,
             find_invoke(m, DOPCODE_INVOKE_DIRECT, "bigMethod"));
@@ -426,7 +426,7 @@ TEST_F(PreVerify, testUpdateCodeSizeWhenInlining) {
 
 TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto small = find_dmethod_named(*cls, "smallMethodThatBecomesBig");
   EXPECT_NE(small, nullptr)
       << "smallMethodThatBecomesBig should not be inlined!";
@@ -436,7 +436,7 @@ TEST_F(PostVerify, testUpdateCodeSizeWhenInlining) {
 
 TEST_F(PreVerify, testFinallyEmpty) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "callEmpty");
   ASSERT_NE(nullptr, m);
@@ -446,7 +446,7 @@ TEST_F(PreVerify, testFinallyEmpty) {
 
 TEST_F(PostVerify, testFinallyEmpty) {
   auto cls = find_class_named(
-    classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+    classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "callEmpty");
   ASSERT_NE(nullptr, m);
@@ -458,7 +458,7 @@ TEST_F(PostVerify, inlineAcrossCallerNoApi) {
   // Make sure we're still calling all the api specific methods. Make sure they
   // haven't been inlined.
   auto cls =
-      find_class_named(classes, "Lcom/facebook/redexinline/SimpleInlineTest;");
+      find_class_named(classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "callSpecificApi");
   ASSERT_NE(nullptr, m);
@@ -480,7 +480,7 @@ TEST_F(PostVerify, inlineAcrossCallerNoApi) {
 
 TEST_F(PostVerify, inlineAcrossCallerAndroidN) {
   auto n = find_class_named(
-      classes, "Lcom/facebook/redexinline/SimpleInlineTest$NeedsAndroidN;");
+      classes, "Lcom/facebook/redexinline/MethodInlineTest$NeedsAndroidN;");
   ASSERT_NE(nullptr, n);
 
   auto useApi = find_dmethod_named(*n, "useApi");
@@ -495,7 +495,7 @@ TEST_F(PostVerify, inlineAcrossCallerAndroidN) {
 
 TEST_F(PostVerify, inlineAcrossCallerAndroidO) {
   auto o = find_class_named(
-      classes, "Lcom/facebook/redexinline/SimpleInlineTest$NeedsAndroidO;");
+      classes, "Lcom/facebook/redexinline/MethodInlineTest$NeedsAndroidO;");
   ASSERT_NE(nullptr, o);
 
   auto shouldInlineWithinClass =

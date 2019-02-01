@@ -138,7 +138,7 @@ Json::Value default_config() {
   const auto passes = {
       "ReBindRefsPass",        "BridgePass",     "SynthPass",
       "FinalInlinePass",       "DelSuperPass",   "SingleImplPass",
-      "SimpleInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
+      "MethodInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass", "RegAllocPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");

@@ -14,7 +14,7 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
-struct SimpleInlineTest : public RedexTest {};
+struct MethodInlineTest : public RedexTest {};
 
 void test_inliner(const std::string& caller_str,
                   const std::string& callee_str,
@@ -38,7 +38,7 @@ void test_inliner(const std::string& caller_str,
  * Test that we correctly insert move instructions that map caller args to
  * callee params.
  */
-TEST_F(SimpleInlineTest, insertMoves) {
+TEST_F(MethodInlineTest, insertMoves) {
   using namespace dex_asm;
   auto callee = static_cast<DexMethod*>(DexMethod::make_method(
       "Lfoo;", "testCallee", "V", {"I", "Ljava/lang/Object;"}));
@@ -85,7 +85,7 @@ TEST_F(SimpleInlineTest, insertMoves) {
   EXPECT_EQ(caller_code->get_registers_size(), 5);
 }
 
-TEST_F(SimpleInlineTest, debugPositionsAfterReturn) {
+TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
   DexMethod* caller =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.caller:()V"));
   caller->make_concrete(ACC_PUBLIC, /* is_virtual */ false);

@@ -14,7 +14,7 @@ import org.junit.Test;
 
 public class ConstantPropagationTest {
 
-  // use SimpleInline so redex sees these constants but `javac` and d8 do not
+  // use MethodInline so redex sees these constants but `javac` and d8 do not
   long getLong() {
     return 0x0002000300040005L;
   }

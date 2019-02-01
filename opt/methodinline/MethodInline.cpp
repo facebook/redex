@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "SimpleInline.h"
+#include "MethodInline.h"
 
 #include <algorithm>
 #include <boost/algorithm/string/predicate.hpp>
@@ -26,9 +26,9 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void MethodInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(SINL, 1, "SimpleInlinePass not run because no ProGuard configuration was provided.");
+    TRACE(SINL, 1, "MethodInlinePass not run because no ProGuard configuration was provided.");
     return;
   }
   auto scope = build_class_scope(stores);
@@ -92,7 +92,7 @@ void SimpleInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
  */
-std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
+std::unordered_set<DexMethod*> MethodInlinePass::gather_non_virtual_methods(
     Scope& scope) {
   // trace counter
   size_t all_methods = 0;
@@ -161,7 +161,7 @@ std::unordered_set<DexMethod*> SimpleInlinePass::gather_non_virtual_methods(
   return methods;
 }
 
-void SimpleInlinePass::populate_blacklist(const Scope& scope) {
+void MethodInlinePass::populate_blacklist(const Scope& scope) {
   walk::classes(scope, [this](const DexClass* cls) {
     for (const auto& type_s : m_black_list) {
       if (boost::starts_with(cls->get_name()->c_str(), type_s)) {
@@ -178,4 +178,4 @@ void SimpleInlinePass::populate_blacklist(const Scope& scope) {
   });
 }
 
-static SimpleInlinePass s_pass;
+static MethodInlinePass s_pass;

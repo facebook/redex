@@ -27,7 +27,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/replace-results-with-returns \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
-	-I$(top_srcdir)/opt/simpleinline \
+	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \

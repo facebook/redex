@@ -9,7 +9,7 @@ package com.facebook.redexinline.otherpackage;
 
 import static org.fest.assertions.api.Assertions.*;
 
-public class SimpleInlineOtherPackage {
+public class MethodInlineOtherPackage {
   private class Foo {
     String mStr;
 

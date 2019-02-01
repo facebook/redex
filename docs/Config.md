@@ -21,7 +21,7 @@ in `config/default.config`.  This is what it looks like:
     "FinalInlinePass",
     "DelSuperPass",
     "SingleImplPass",
-    "SimpleInlinePass",
+    "MethodInlinePass",
     "StaticReloPass",
     "RemoveEmptyClassesPass",
     "ShortenSrcStringsPass"
@@ -56,7 +56,7 @@ this config:
     "FinalInlinePass",
     "DelSuperPass",
     "SingleImplPass",
-    "SimpleInlinePass",
+    "MethodInlinePass",
     "RemoveEmptyClassesPass"
   ]
 }

@@ -16,9 +16,9 @@
 #include "Pass.h"
 #include "Resolver.h"
 
-class SimpleInlinePass : public Pass {
+class MethodInlinePass : public Pass {
  public:
-  SimpleInlinePass() : Pass("SimpleInlinePass") {}
+  MethodInlinePass() : Pass("MethodInlinePass") {}
 
   virtual void configure_pass(const JsonWrapper& jw) override {
     jw.get("virtual", true, m_virtual_inline);

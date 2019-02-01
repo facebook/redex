@@ -8,7 +8,7 @@
 package com.facebook.redexinline;
 
 import static org.fest.assertions.api.Assertions.*;
-import com.facebook.redexinline.otherpackage.SimpleInlineOtherPackage;
+import com.facebook.redexinline.otherpackage.MethodInlineOtherPackage;
 import android.util.Log;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
@@ -16,7 +16,7 @@ import android.annotation.TargetApi;
 
 import org.junit.Test;
 
-public class SimpleInlineTest {
+public class MethodInlineTest {
   String mHello = null;
 
   /**
@@ -223,7 +223,7 @@ public class SimpleInlineTest {
    * noninlinable() above when we change it to a static method. (Otherwise
    * we would have a clash in method signatures.)
    */
-  public static void noninlinable(SimpleInlineTest foo) {
+  public static void noninlinable(MethodInlineTest foo) {
     if (foo != null && foo.getHello() != null) {
       noninlinable(foo);
     }
@@ -301,7 +301,7 @@ public class SimpleInlineTest {
 
   @Test
   public void testCalleeRefsPrivateClass() {
-    (new SimpleInlineOtherPackage()).inlineMe();
+    (new MethodInlineOtherPackage()).inlineMe();
   }
 
   private int[] calleeWithFillArray() {

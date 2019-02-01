@@ -60,7 +60,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
-	-I$(top_srcdir)/opt/simpleinline \
+	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
 	-I$(top_srcdir)/opt/staticrelo \
@@ -268,8 +268,8 @@ redex_all_SOURCES = \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
-	opt/simpleinline/Deleter.cpp \
-	opt/simpleinline/SimpleInline.cpp \
+	opt/methodinline/Deleter.cpp \
+	opt/methodinline/MethodInline.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
