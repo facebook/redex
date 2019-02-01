@@ -44,42 +44,68 @@ class Analyzer;
  * example above, f may refer to any method named "foo" in the class Foo.
  */
 
+/*
+ * The first three are inputs of an reflecting operation.
+ * The last three are output of an reflecting operation.
+ */
+/* clang-format off */
 enum AbstractObjectKind {
-  OBJECT, // An object created with `new`
+  OBJECT, // An object instantiated locally, passed in as a param or read from
+          // heap
   STRING, // A string literal
   CLASS,  // A java.lang.Class object
   FIELD,  // A java.lang.reflect.Field object
   METHOD, // A java.lang.reflect.Method object
 };
 
+/*
+ * This only applies to AbstractObjectKind.CLASS.
+ * By what kind of operation the class object is produced.
+ */
+enum ClassObjectSource {
+  NON_REFLECTION, // Non-reflecting operations like param loading and get field.
+  REFLECTION,     // Reflection operations like const-class or Class.forName().
+  UNKNOWN,        // A joined value of a reflecting and non-reflectiong source.
+  NOT_APPLICABLE, // AbstractObjectKind is not CLASS.
+};
+
+/* clang-format on */
 struct AbstractObject {
   AbstractObjectKind kind;
   DexType* dex_type;
   DexString* dex_string;
+  ClassObjectSource cls_source;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : kind(STRING), dex_type(nullptr), dex_string(s) {}
+      : kind(STRING),
+        dex_type(nullptr),
+        dex_string(s),
+        cls_source(NOT_APPLICABLE) {}
 
-  AbstractObject(AbstractObjectKind k, DexType* t)
-      : kind(k), dex_type(t), dex_string(nullptr) {
-    always_assert(k == OBJECT || k == CLASS);
-  }
+  explicit AbstractObject(DexType* t)
+      : kind(OBJECT),
+        dex_type(t),
+        dex_string(nullptr),
+        cls_source(NOT_APPLICABLE) {}
+
+  AbstractObject(DexType* t, ClassObjectSource cls_source)
+      : kind(CLASS), dex_type(t), dex_string(nullptr), cls_source(cls_source) {}
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : kind(k), dex_type(t), dex_string(s) {
+      : kind(k), dex_type(t), dex_string(s), cls_source(NOT_APPLICABLE) {
     always_assert(k == FIELD || k == METHOD);
   }
 };
 
+bool is_reflection_output(const AbstractObject& obj);
+
 bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
-
-std::ostream& operator<<(std::ostream& out, const AbstractObject& x);
 
 class SimpleReflectionAnalysis final {
  public:
@@ -92,6 +118,8 @@ class SimpleReflectionAnalysis final {
 
   explicit SimpleReflectionAnalysis(DexMethod* dex_method);
 
+  bool has_found_reflection();
+
   /*
    * Returns the abstract object (if any) referenced by the register at the
    * given instruction. Note that if the instruction overwrites the register,
@@ -102,7 +130,10 @@ class SimpleReflectionAnalysis final {
       size_t reg, IRInstruction* insn) const;
 
  private:
+  const DexMethod* m_dex_method;
   std::unique_ptr<impl::Analyzer> m_analyzer;
 };
 
 } // namespace sra
+
+std::ostream& operator<<(std::ostream& out, const sra::AbstractObject& x);

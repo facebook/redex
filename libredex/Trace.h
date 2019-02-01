@@ -72,6 +72,7 @@
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REFU)               \
+  TM(REFL)               \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \

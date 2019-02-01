@@ -24,7 +24,49 @@
 
 using namespace sparta;
 
+std::ostream& operator<<(std::ostream& out, const sra::AbstractObject& x) {
+  switch (x.kind) {
+  case sra::OBJECT: {
+    out << "OBJECT{" << SHOW(x.dex_type) << "}";
+    break;
+  }
+  case sra::STRING: {
+    const std::string& str = x.dex_string->str();
+    if (str.empty()) {
+      out << "\"\"";
+    } else {
+      out << std::quoted(str);
+    }
+    break;
+  }
+  case sra::CLASS: {
+    always_assert(x.cls_source != sra::ClassObjectSource::NOT_APPLICABLE);
+    std::string cls_tag = x.cls_source == sra::ClassObjectSource::REFLECTION
+                              ? "CLASS_REFLECT"
+                              : "CLASS";
+    out << cls_tag << "{" << SHOW(x.dex_type) << "}";
+    break;
+  }
+  case sra::FIELD: {
+    out << "FIELD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
+    break;
+  }
+  case sra::METHOD: {
+    out << "METHOD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
+    break;
+  }
+  }
+  return out;
+}
+
 namespace sra {
+
+bool is_reflection_output(const AbstractObject& obj) {
+  if (obj.kind == FIELD || obj.kind == METHOD) {
+    return true;
+  }
+  return obj.kind == CLASS && obj.cls_source == REFLECTION;
+}
 
 bool operator==(const AbstractObject& x, const AbstractObject& y) {
   if (x.kind != y.kind) {
@@ -33,7 +75,7 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
   switch (x.kind) {
   case OBJECT:
   case CLASS: {
-    return x.dex_type == y.dex_type;
+    return x.dex_type == y.dex_type && x.cls_source == y.cls_source;
   }
   case STRING: {
     return x.dex_string == y.dex_string;
@@ -47,37 +89,6 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y) {
   return !(x == y);
-}
-
-std::ostream& operator<<(std::ostream& out, const AbstractObject& x) {
-  switch (x.kind) {
-  case OBJECT: {
-    out << "OBJECT{" << SHOW(x.dex_type) << "}";
-    break;
-  }
-  case STRING: {
-    const std::string& str = x.dex_string->str();
-    if (str.empty()) {
-      out << "\"\"";
-    } else {
-      out << std::quoted(str);
-    }
-    break;
-  }
-  case CLASS: {
-    out << "CLASS{" << SHOW(x.dex_type) << "}";
-    break;
-  }
-  case FIELD: {
-    out << "FIELD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
-    break;
-  }
-  case METHOD: {
-    out << "METHOD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
-    break;
-  }
-  }
-  return out;
 }
 
 namespace impl {
@@ -121,13 +132,12 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           // If the method is not static, the first parameter corresponds to
           // `this`.
           first_param = false;
-          update_non_string_abstract_object(
-              &init_state, insn, dex_method->get_class());
+          update_non_string_input(&init_state, insn, dex_method->get_class());
         } else {
           // This is a regular parameter of the method.
           DexType* type = *sig_it;
           always_assert(sig_it++ != signature.end());
-          update_non_string_abstract_object(&init_state, insn, type);
+          update_non_string_input(&init_state, insn, type);
         }
         break;
       }
@@ -176,9 +186,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_CONST_CLASS: {
-      current_state->set(
-          RESULT_REGISTER,
-          AbstractObjectDomain(AbstractObject(CLASS, insn->get_type())));
+      auto aobj =
+          AbstractObject(insn->get_type(), ClassObjectSource::REFLECTION);
+      current_state->set(RESULT_REGISTER, AbstractObjectDomain(aobj));
       break;
     }
     case OPCODE_CHECK_CAST: {
@@ -196,7 +206,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         auto type = array_object->dex_type;
         if (type && is_array(type)) {
           const auto etype = get_array_component_type(type);
-          update_non_string_abstract_object(current_state, insn, etype);
+          update_non_string_input(current_state, insn, etype);
           break;
         }
       }
@@ -207,7 +217,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_SGET_OBJECT: {
       always_assert(insn->has_field());
       const auto field = insn->get_field();
-      update_non_string_abstract_object(current_state, insn, field->get_type());
+      update_non_string_input(current_state, insn, field->get_type());
       break;
     }
     case OPCODE_NEW_INSTANCE:
@@ -215,7 +225,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_FILLED_NEW_ARRAY: {
       current_state->set(
           RESULT_REGISTER,
-          AbstractObjectDomain(AbstractObject(OBJECT, insn->get_type())));
+          AbstractObjectDomain(AbstractObject(insn->get_type())));
       break;
     }
     case OPCODE_INVOKE_VIRTUAL: {
@@ -236,7 +246,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                   class_name->dex_string->str()));
           current_state->set(RESULT_REGISTER,
                              AbstractObjectDomain(AbstractObject(
-                                 CLASS, DexType::make_type(internal_name))));
+                                 DexType::make_type(internal_name),
+                                 ClassObjectSource::REFLECTION)));
           break;
         }
       }
@@ -264,22 +275,31 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get(reg).get_constant();
   }
 
+  const AbstractObjectEnvironment* get_abstract_object_env(
+      IRInstruction* insn) {
+    auto it = m_environments.find(insn);
+    if (it == m_environments.end()) {
+      return nullptr;
+    }
+    return &it->second;
+  }
+
  private:
   const cfg::ControlFlowGraph& m_cfg;
+  std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
 
-  void update_non_string_abstract_object(
-      AbstractObjectEnvironment* current_state,
-      IRInstruction* insn,
-      DexType* type) const {
+  void update_non_string_input(AbstractObjectEnvironment* current_state,
+                               IRInstruction* insn,
+                               DexType* type) const {
     auto dest_reg = insn->has_move_result() ? RESULT_REGISTER : insn->dest();
     if (type == get_class_type()) {
       // We don't have precise type information to which the Class obj refers
       // to.
       current_state->set(dest_reg,
-                         AbstractObjectDomain(AbstractObject(CLASS, nullptr)));
+                         AbstractObjectDomain(AbstractObject(
+                             nullptr, ClassObjectSource::NON_REFLECTION)));
     } else {
-      current_state->set(dest_reg,
-                         AbstractObjectDomain(AbstractObject(OBJECT, type)));
+      current_state->set(dest_reg, AbstractObjectDomain(AbstractObject(type)));
     }
   }
 
@@ -290,7 +310,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     if (is_void(return_type) || !is_object(return_type)) {
       return;
     }
-    update_non_string_abstract_object(current_state, insn, return_type);
+    update_non_string_input(current_state, insn, return_type);
   }
 
   void default_semantics(IRInstruction* insn,
@@ -334,7 +354,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set(
             RESULT_REGISTER,
-            AbstractObjectDomain(AbstractObject(CLASS, receiver.dex_type)));
+            AbstractObjectDomain(AbstractObject(
+                receiver.dex_type, ClassObjectSource::REFLECTION)));
         return;
       }
       break;
@@ -343,7 +364,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set(
             RESULT_REGISTER,
-            AbstractObjectDomain(AbstractObject(CLASS, get_string_type())));
+            AbstractObjectDomain(AbstractObject(
+                get_string_type(), ClassObjectSource::REFLECTION)));
         return;
       }
       break;
@@ -401,12 +423,22 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         m_environments.emplace(insn, current_state);
+        traceState(insn, current_state);
         analyze_instruction(insn, &current_state);
       }
     }
   }
 
-  std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
+  void traceState(const IRInstruction* insn,
+                  const AbstractObjectEnvironment& current_state) {
+    if (!traceEnabled(REFL, 5)) {
+      return;
+    }
+    std::ostringstream out;
+    out << current_state << std::endl;
+    TRACE(REFL, 5, " %s %s\n", SHOW(insn), out.str().c_str());
+  }
+
   DexMethodRef* m_get_class{DexMethod::make_method(
       "Ljava/lang/Object;", "getClass", {}, "Ljava/lang/Class;")};
   DexMethodRef* m_get_method{
@@ -470,7 +502,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
 SimpleReflectionAnalysis::~SimpleReflectionAnalysis() {}
 
-SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method) {
+SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method)
+    : m_dex_method(dex_method) {
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
     return;
@@ -480,6 +513,31 @@ SimpleReflectionAnalysis::SimpleReflectionAnalysis(DexMethod* dex_method) {
   cfg.calculate_exit_block();
   m_analyzer = std::make_unique<impl::Analyzer>(cfg);
   m_analyzer->run(dex_method);
+}
+
+bool SimpleReflectionAnalysis::has_found_reflection() {
+  std::map<IRInstruction*, std::map<register_t, AbstractObject>>
+      reflection_sites;
+  auto code = m_dex_method->get_code();
+  auto reg_size = code->get_registers_size();
+  for (auto& mie : InstructionIterable(code)) {
+    IRInstruction* insn = mie.insn;
+    for (size_t i = 0; i < reg_size; i++) {
+      auto aobj = m_analyzer->get_abstract_object(i, insn);
+      if (!aobj) {
+        continue;
+      }
+      if (is_reflection_output(*aobj)) {
+        if (traceEnabled(REFL, 5)) {
+          std::ostringstream out;
+          out << "reg " << i << " " << *aobj << std::endl;
+          TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
+        }
+        reflection_sites[insn][i] = *aobj;
+      }
+    }
+  }
+  return !reflection_sites.empty();
 }
 
 boost::optional<AbstractObject> SimpleReflectionAnalysis::get_abstract_object(
