@@ -8,6 +8,7 @@
 #include <unordered_set>
 
 #include "DexInstruction.h"
+#include "SwitchMap.h"
 #include "verify/VerifyUtil.h"
 
 namespace {
@@ -23,31 +24,11 @@ std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
 
   auto code = method->get_code();
   std::unordered_set<size_t> switch_cases;
-  IRInstruction* packed_switch_insn = nullptr;
 
-  for (auto it = code->begin(); it != code->end(); ++it) {
-    if (it->type == MFLOW_OPCODE) {
-      auto insn = it->insn;
-      if (insn->opcode() == OPCODE_PACKED_SWITCH ||
-          insn->opcode() == OPCODE_SPARSE_SWITCH) {
-        // We assume there is only 1 switch statement.
-        EXPECT_EQ(nullptr, packed_switch_insn);
-        packed_switch_insn = it->insn;
-      }
-    }
-
-    if (it->type == MFLOW_TARGET) {
-      auto branch_target = static_cast<BranchTarget*>(it->target);
-
-      if (branch_target->type == BRANCH_MULTI &&
-          branch_target->src != nullptr &&
-          branch_target->src->type == MFLOW_OPCODE &&
-          branch_target->src->insn == packed_switch_insn) {
-        switch_cases.emplace(branch_target->case_key);
-      }
-    }
+  SwitchMethodPartitioning smp(code, /* verify_default_case */ false);
+  for (const auto& entry : smp.get_key_to_block()) {
+    switch_cases.insert(entry.first);
   }
-
   return switch_cases;
 }
 
@@ -83,8 +64,11 @@ TEST_F(PreVerify, GeneratedClass) {
       "Lcom/facebook/redextest/Foo;.useEnumA_again:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A_again = collect_switch_cases(method_use_enumA_again);
-  std::unordered_set<size_t> expected_switch_cases_A_again = {2, 1, 3};
-  EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
+  std::unordered_set<size_t> expected_switch_cases_A_again = {1, 3};
+  auto code = static_cast<DexMethod*>(method_use_enumA_again)->get_code();
+  code->build_cfg();
+  EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again)
+      << show(code->cfg());
 }
 
 TEST_F(PostVerify, GeneratedClass) {
@@ -118,6 +102,6 @@ TEST_F(PostVerify, GeneratedClass) {
       "Lcom/facebook/redextest/Foo;.useEnumA_again:(Lcom/facebook/redextest/"
       "EnumA;)I");
   auto switch_cases_A_again = collect_switch_cases(method_use_enumA_again);
-  std::unordered_set<size_t> expected_switch_cases_A_again = {2, 0, 1};
+  std::unordered_set<size_t> expected_switch_cases_A_again = {0, 1};
   EXPECT_EQ(expected_switch_cases_A_again, switch_cases_A_again);
 }
