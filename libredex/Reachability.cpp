@@ -583,11 +583,11 @@ static void sweep_fields_if_unmarked(
     if (reachables.marked_unsafe(f) == 0) {
       TRACE(RMU, 2, "Removing %s\n", SHOW(f));
       DexField::erase_field(f);
-      return true;
+      return false;
     }
-    return false;
+    return true;
   };
-  const auto it = std::remove_if(fields.begin(), fields.end(), p);
+  const auto it = std::partition(fields.begin(), fields.end(), p);
   if (removed_symbols) {
     for (auto i = it; i != fields.end(); i++) {
       removed_symbols->insert(show_deobfuscated(*i));
@@ -606,8 +606,14 @@ template <class Container>
 static void sweep_if_unmarked(Container& c,
                               const ReachableObjects& reachables,
                               ConcurrentSet<std::string>* removed_symbols) {
-  auto p = [&](const auto& m) { return !reachables.marked_unsafe(m); };
-  const auto it = std::remove_if(c.begin(), c.end(), p);
+  auto p = [&](const auto& m) {
+    if (reachables.marked_unsafe(m) == 0) {
+      TRACE(RMU, 2, "Removing %s\n", SHOW(m));
+      return false;
+    }
+    return true;
+  };
+  const auto it = std::partition(c.begin(), c.end(), p);
   if (removed_symbols) {
     for (auto i = it; i != c.end(); i++) {
       removed_symbols->insert(show_deobfuscated(*i));
