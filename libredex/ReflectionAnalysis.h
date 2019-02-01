@@ -107,6 +107,9 @@ bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
 
+using ReflectionSites = std::vector<
+    std::pair<IRInstruction*, std::map<register_t, AbstractObject>>>;
+
 class ReflectionAnalysis final {
  public:
   // If we don't declare a destructor for this class, a default destructor will
@@ -118,7 +121,9 @@ class ReflectionAnalysis final {
 
   explicit ReflectionAnalysis(DexMethod* dex_method);
 
-  bool has_found_reflection();
+  const ReflectionSites get_reflection_sites() const;
+
+  bool has_found_reflection() const;
 
   /*
    * Returns the abstract object (if any) referenced by the register at the
@@ -132,6 +137,11 @@ class ReflectionAnalysis final {
  private:
   const DexMethod* m_dex_method;
   std::unique_ptr<impl::Analyzer> m_analyzer;
+
+  void get_reflection_site(
+      const register_t reg,
+      IRInstruction* insn,
+      std::map<register_t, AbstractObject>* abstract_objects) const;
 };
 
 } // namespace reflection

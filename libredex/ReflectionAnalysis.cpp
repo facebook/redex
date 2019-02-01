@@ -518,29 +518,45 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
   m_analyzer->run(dex_method);
 }
 
-bool ReflectionAnalysis::has_found_reflection() {
-  std::map<IRInstruction*, std::map<register_t, AbstractObject>>
-      reflection_sites;
+void ReflectionAnalysis::get_reflection_site(
+    const register_t reg,
+    IRInstruction* insn,
+    std::map<register_t, AbstractObject>* abstract_objects) const {
+  auto aobj = m_analyzer->get_abstract_object(reg, insn);
+  if (!aobj) {
+    return;
+  }
+  if (is_reflection_output(*aobj)) {
+    if (traceEnabled(REFL, 5)) {
+      std::ostringstream out;
+      out << "reg " << reg << " " << *aobj << std::endl;
+      TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
+    }
+    (*abstract_objects)[reg] = *aobj;
+  }
+}
+
+const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
+  ReflectionSites reflection_sites;
   auto code = m_dex_method->get_code();
   auto reg_size = code->get_registers_size();
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
+    std::map<register_t, AbstractObject> abstract_objects;
     for (size_t i = 0; i < reg_size; i++) {
-      auto aobj = m_analyzer->get_abstract_object(i, insn);
-      if (!aobj) {
-        continue;
-      }
-      if (is_reflection_output(*aobj)) {
-        if (traceEnabled(REFL, 5)) {
-          std::ostringstream out;
-          out << "reg " << i << " " << *aobj << std::endl;
-          TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
-        }
-        reflection_sites[insn][i] = *aobj;
-      }
+      get_reflection_site(i, insn, &abstract_objects);
+    }
+    get_reflection_site(impl::RESULT_REGISTER, insn, &abstract_objects);
+
+    if (!abstract_objects.empty()) {
+      reflection_sites.push_back(std::make_pair(insn, abstract_objects));
     }
   }
-  return !reflection_sites.empty();
+  return reflection_sites;
+}
+
+bool ReflectionAnalysis::has_found_reflection() const {
+  return !get_reflection_sites().empty();
 }
 
 boost::optional<AbstractObject> ReflectionAnalysis::get_abstract_object(
