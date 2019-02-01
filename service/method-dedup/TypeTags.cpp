@@ -8,8 +8,8 @@
 #include "TypeTags.h"
 
 void TypeTags::set_type_tag(const DexType* type, uint32_t type_tag) {
-  m_type_to_tag.emplace(type, type_tag);
-  m_tag_to_type.emplace(type_tag, type);
+  m_type_to_tag[type] = type_tag;
+  m_tag_to_type[type_tag] = type;
 }
 
 uint32_t TypeTags::get_type_tag(const DexType* type) const {
