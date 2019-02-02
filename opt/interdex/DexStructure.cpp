@@ -102,9 +102,9 @@ bool DexesStructure::add_class_to_current_dex(const MethodRefs& clazz_mrefs,
   always_assert_log(m_classes.count(clazz) == 0,
                     "Can't emit the same class twice!\n", SHOW(clazz));
 
-  if (m_current_dex.add_class_if_fits(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                      m_linear_alloc_limit, m_type_refs_limit,
-                                      clazz)) {
+  if (m_current_dex.add_class_if_fits(
+          clazz_mrefs, clazz_frefs, clazz_trefs, m_linear_alloc_limit,
+          MAX_METHOD_REFS - m_reserve_mrefs, m_type_refs_limit, clazz)) {
     update_stats(clazz_mrefs, clazz_frefs, clazz);
     m_classes.emplace(clazz);
     return true;
@@ -176,6 +176,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
                                      const FieldRefs& clazz_frefs,
                                      const TypeRefs& clazz_trefs,
                                      size_t linear_alloc_limit,
+                                     size_t method_refs_limit,
                                      size_t type_refs_limit,
                                      DexClass* clazz) {
 
@@ -192,21 +193,27 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   auto extra_frefs = set_difference(clazz_frefs, m_frefs);
   auto extra_trefs = set_difference(clazz_trefs, m_trefs);
 
-  if (m_mrefs.size() + extra_mrefs.size() >= MAX_METHOD_REFS ||
-      m_frefs.size() + extra_frefs.size() >= MAX_FIELD_REFS) {
+  if (m_mrefs.size() + extra_mrefs.size() >= method_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the method or field refs limit: %d / %d : %s\n",
-          m_mrefs.size() + extra_mrefs.size(),
-          m_frefs.size() + extra_frefs.size(), SHOW(clazz));
+          "over the method refs limit: %d >= %d: %s\n",
+          m_mrefs.size() + extra_mrefs.size(), method_refs_limit, SHOW(clazz));
+    return false;
+  }
+
+  if (m_frefs.size() + extra_frefs.size() >= MAX_FIELD_REFS) {
+    TRACE(IDEX, 6,
+          "[warning]: Class won't fit current dex since it will go "
+          "over the field refs limit: %d >= %d: %s\n",
+          m_frefs.size() + extra_frefs.size(), MAX_FIELD_REFS, SHOW(clazz));
     return false;
   }
 
   if (m_trefs.size() + extra_trefs.size() >= type_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the type refs limit: %d : %s\n",
-          m_trefs.size() + extra_trefs.size(), SHOW(clazz));
+          "over the type refs limit: %d >= %d: %s\n",
+          m_trefs.size() + extra_trefs.size(), type_refs_limit, SHOW(clazz));
     return false;
   }
 

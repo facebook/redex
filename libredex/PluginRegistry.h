@@ -19,6 +19,7 @@ class PluginEntry : public Plugin {
  public:
   typedef std::function<T*()> Creator;
   void register_plugin(const std::string& plugin_name, Creator&& creator) {
+    always_assert(!m_creators.count(plugin_name));
     m_creators[plugin_name] = std::move(creator);
   }
   std::unique_ptr<T> create(const std::string& plugin_name) {

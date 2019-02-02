@@ -161,15 +161,17 @@ void InterDexPass::run_pass(DexStoresVector& stores,
       PluginRegistry::get().pass_registry(INTERDEX_PASS_NAME));
 
   auto plugins = registry->create_plugins();
+  size_t reserve_mrefs = 0;
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, cfg);
+    reserve_mrefs += plugin->reserve_mrefs();
   }
 
   InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, m_emit_scroll_set_marker,
                     m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_minimize_cross_dex_refs_config);
+                    m_minimize_cross_dex_refs_config, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
