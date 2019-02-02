@@ -1004,8 +1004,7 @@ class DexMethod : public DexMethodRef {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
-  void gather_strings(std::vector<DexString*>& lstring,
-                      bool exclude_loads = false) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1031,7 +1030,6 @@ class DexClass {
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
   bool m_external;
-  bool m_perf_sensitive;
   std::string m_deobfuscated_name;
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
@@ -1159,15 +1157,9 @@ class DexClass {
   int encode(DexOutputIdx* dodx, dexcode_to_offset& dco, uint8_t* output);
 
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring,
-                      bool exclude_loads = false) const;
+  void gather_strings(std::vector<DexString*>& lstring) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
-
-  // Whether to optimize for perf, instead of space.
-  // This bit is only set by the InterDex pass and not available earlier.
-  bool is_perf_sensitive() const { return m_perf_sensitive; }
-  void set_perf_sensitive(bool value) { m_perf_sensitive = value; }
 
  private:
   void sort_methods();
@@ -1259,7 +1251,9 @@ struct dexmethods_profiled_comparator {
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
  */
-inline DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
+inline DexClass* type_class(const DexType* t) {
+  return g_redex->type_class(t);
+}
 
 /**
  * Return the DexClass that represents an internal DexType or nullptr if
@@ -1267,20 +1261,10 @@ inline DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
  */
 inline DexClass* type_class_internal(const DexType* t) {
   auto dc = type_class(t);
-  if (dc == nullptr || dc->is_external()) return nullptr;
+  if (dc == nullptr || dc->is_external())
+    return nullptr;
   return dc;
 }
-
-/**
- * For a set of classes, compute all referenced strings, types, fields and
- * methods, such that components are sorted and unique.
- */
-void gather_components(std::vector<DexString*>& lstring,
-                       std::vector<DexType*>& ltype,
-                       std::vector<DexFieldRef*>& lfield,
-                       std::vector<DexMethodRef*>& lmethod,
-                       const DexClasses& classes,
-                       bool exclude_loads = false);
 
 DISALLOW_DEFAULT_COMPARATOR(DexClass)
 DISALLOW_DEFAULT_COMPARATOR(DexCode)

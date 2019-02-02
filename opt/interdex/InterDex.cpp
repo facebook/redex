@@ -194,7 +194,6 @@ bool InterDex::should_skip_class(const DexInfo& dex_info, DexClass* clazz) {
 bool InterDex::emit_class(const DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
-                          bool perf_sensitive,
                           std::vector<DexClass*>* erased_classes) {
   if (is_canary(clazz)) {
     // Nothing to do here.
@@ -208,10 +207,6 @@ bool InterDex::emit_class(const DexInfo& dex_info,
 
   if (check_if_skip && should_skip_class(dex_info, clazz)) {
     return false;
-  }
-
-  if (perf_sensitive) {
-    clazz->set_perf_sensitive(true);
   }
 
   // Calculate the extra method and field refs that we would need to add to
@@ -275,16 +270,14 @@ void InterDex::emit_primary_dex(
         continue;
       }
 
-      emit_class(primary_dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ true);
+      emit_class(primary_dex_info, cls, true);
       coldstart_classes_in_primary++;
     }
   }
 
   // Now add the rest.
   for (DexClass* cls : primary_dex) {
-    emit_class(primary_dex_info, cls, /* check_if_skip */ true,
-               /* perf_sensitive */ true);
+    emit_class(primary_dex_info, cls, true);
   }
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex "
@@ -402,8 +395,7 @@ void InterDex::emit_interdex_classes(
       continue;
     }
 
-    emit_class(dex_info, cls, /* check_if_skip */ true,
-               /* perf_sensitive */ true);
+    emit_class(dex_info, cls, true);
   }
 
   // Now emit the classes we omitted from the original coldstart set.
@@ -411,8 +403,7 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
 
     if (cls && unreferenced_classes.count(cls)) {
-      emit_class(dex_info, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false);
+      emit_class(dex_info, cls, true);
     }
   }
 
@@ -451,8 +442,7 @@ void InterDex::emit_mixed_mode_classes(
               " Emitting mixed mode class, that is also in the "
               "interdex list: %s \n",
               SHOW(clazz));
-        emit_class(mixedmode_info, clazz, /* check_if_skip */ false,
-                   /* perf_sensitive */ true);
+        emit_class(mixedmode_info, clazz, false);
       }
       m_mixed_mode_info.remove_mixed_mode_class(clazz);
     }
@@ -460,8 +450,7 @@ void InterDex::emit_mixed_mode_classes(
 
   for (const auto& clazz : m_mixed_mode_info.get_mixed_mode_classes()) {
     TRACE(IDEX, 2, " Emitting mixed mode class: %s \n", SHOW(clazz));
-    emit_class(mixedmode_info, clazz, /* check_if_skip */ false,
-               /* perf_sensitive */ true);
+    emit_class(mixedmode_info, clazz, false);
   }
 
   flush_out_dex(mixedmode_info);
@@ -602,8 +591,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
 void InterDex::emit_remaining_classes(const Scope& scope) {
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : scope) {
-      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false);
+      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true);
     }
     return;
   }
@@ -640,7 +628,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
                                : m_cross_dex_ref_minimizer.front();
     std::vector<DexClass*> erased_classes;
     bool emitted = emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
-                              /* perf_sensitive */ false, &erased_classes);
+                              &erased_classes);
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
@@ -694,8 +682,7 @@ void InterDex::run() {
     for (DexClass* add_class : add_classes) {
       TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s\n",
             SHOW(add_class));
-      emit_class(EMPTY_DEX_INFO, add_class, /* check_if_skip */ false,
-                 /* perf_sensitive */ false);
+      emit_class(EMPTY_DEX_INFO, add_class, false);
     }
   }
 
@@ -716,8 +703,7 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
   const auto& dexes = store.get_dexen();
   for (const DexClasses& classes : dexes) {
     for (DexClass* cls : classes) {
-      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
-                 /* perf_sensitive */ false);
+      emit_class(EMPTY_DEX_INFO, cls, false);
     }
   }
   flush_out_dex(EMPTY_DEX_INFO);

@@ -49,7 +49,6 @@ class DexStructure {
                          const FieldRefs& clazz_frefs,
                          const TypeRefs& clazz_trefs,
                          size_t linear_alloc_limit,
-                         size_t method_refs_limit,
                          size_t type_refs_limit,
                          DexClass* clazz);
 
@@ -107,10 +106,6 @@ class DexesStructure {
     m_type_refs_limit = type_refs_limit;
   }
 
-  void set_reserve_mrefs(size_t reserve_mrefs) {
-    m_reserve_mrefs = reserve_mrefs;
-  }
-
   /**
    * Tries to add the class to the current dex. If it can't, it returns false.
    * Throws if the class already exists in the dexes.
@@ -152,7 +147,6 @@ class DexesStructure {
 
   int64_t m_linear_alloc_limit;
   int64_t m_type_refs_limit;
-  size_t m_reserve_mrefs;
 
   struct DexesInfo {
     size_t num_dexes{0};

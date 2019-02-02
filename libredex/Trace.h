@@ -38,7 +38,6 @@
   TM(DELINIT)            \
   TM(DELMET)             \
   TM(DRAC)               \
-  TM(DS)                 \
   TM(EMPTY)              \
   TM(ENUM)               \
   TM(FINALINLINE)        \
