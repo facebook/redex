@@ -41,6 +41,11 @@ inline bool can_rename(DexMember* member) {
   return member->rstate.can_rename();
 }
 
+template <class DexMember>
+inline bool is_serde(DexMember* member) {
+  return member->rstate.is_serde();
+}
+
 // A temporary measure to allow the RenamerV2 pass to rename classes that would
 // other not be renamable due to any top level blanket keep rules.
 template <class DexMember>

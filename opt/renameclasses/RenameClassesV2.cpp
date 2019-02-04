@@ -317,17 +317,14 @@ std::unordered_set<const DexType*>
 RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
   std::unordered_set<const DexType*> dont_rename_serde_relationships;
   for (const auto& cls : scope) {
+    ClassSerdes cls_serdes = get_class_serdes(cls);
     const char* rawname = cls->get_name()->c_str();
     std::string name = std::string(rawname);
     name.pop_back();
 
     // Look for a class that matches one of the two deserializer patterns
-    std::string desername = name + "$Deserializer;";
-    std::replace(name.begin(), name.end(), '$', '_');
-    std::string flatbuf_desername = name + "Deserializer;";
-
-    DexType* deser = DexType::get_type(desername.c_str());
-    DexType* flatbuf_deser = DexType::get_type(flatbuf_desername.c_str());
+    DexType* deser = cls_serdes.get_deser();
+    DexType* flatbuf_deser = cls_serdes.get_flatbuf_deser();
     bool has_deser_finder = false;
 
     if (deser || flatbuf_deser) {
@@ -340,12 +337,8 @@ RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
     }
 
     // Look for a class that matches one of the two serializer patterns
-    std::string sername = name + "$Serializer;";
-    std::replace(name.begin(), name.end(), '$', '_');
-    std::string flatbuf_sername = name + "Serializer;";
-
-    DexType* ser = DexType::get_type(sername);
-    DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
+    DexType* ser = cls_serdes.get_ser();
+    DexType* flatbuf_ser = cls_serdes.get_flatbuf_ser();
     bool has_ser_finder = false;
 
     if (ser || flatbuf_ser) {

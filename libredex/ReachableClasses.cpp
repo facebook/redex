@@ -11,7 +11,6 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include <string>
 #include <unordered_set>
 
 #include "ClassHierarchy.h"
@@ -20,6 +19,7 @@
 #include "RedexResources.h"
 #include "ReflectionAnalysis.h"
 #include "StringUtil.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -476,6 +476,41 @@ void analyze_reachable_from_xml_layouts(
   mark_onclick_attributes_reachable(scope, attr_values);
 }
 
+// Set is_serde to be true for all JSON serializer and deserializer classes
+// that extend any one of supercls_names.
+void initialize_reachable_for_json_serde(
+    const Scope& scope, const std::vector<std::string>& supercls_names) {
+  std::unordered_set<const DexType*> serde_superclses;
+  for (auto& cls_name : supercls_names) {
+    const DexType* supercls = DexType::get_type(cls_name);
+    if (supercls) {
+      serde_superclses.emplace(supercls);
+    }
+  }
+  if (serde_superclses.size() == 0) {
+    return;
+  }
+  TypeSystem ts(scope);
+  walk::parallel::classes(scope, [&ts, &serde_superclses](DexClass* cls) {
+    if (is_interface(cls)) {
+      return;
+    }
+    const auto& parents_chain = ts.parent_chain(cls->get_type());
+    if (parents_chain.size() <= 2) {
+      // The class's direct super class is java.lang.Object, no need
+      // to proceed.
+      return;
+    }
+    for (uint32_t index = 1; index < parents_chain.size() - 1; ++index) {
+      if (serde_superclses.find(parents_chain[index]) !=
+          serde_superclses.end()) {
+        cls->rstate.set_is_serde();
+        break;
+      }
+    }
+  });
+}
+
 template <typename DexMember>
 bool anno_set_contains(
   DexMember m,
@@ -756,6 +791,7 @@ void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
+
   // Find classes that are reachable in such a way that none of the redex
   // passes will cause them to be no longer reachable.  For example, if a
   // class is referenced from the manifest.
@@ -765,6 +801,10 @@ void init_reachable_classes(
   // example, a class might be instantiated from a method, but if that method
   // is later deleted then it might no longer be reachable.
   recompute_classes_reachable_from_code(scope);
+
+  std::vector<std::string> json_serde_supercls;
+  config.get("json_serde_supercls", {}, json_serde_supercls);
+  initialize_reachable_for_json_serde(scope, json_serde_supercls);
 }
 
 std::string ReferencedState::str() const {
@@ -772,6 +812,7 @@ std::string ReferencedState::str() const {
   s << m_bytype;
   s << m_bystring;
   s << m_byresources;
+  s << m_is_serde;
   s << m_keep;
   s << allowshrinking();
   s << allowobfuscation();

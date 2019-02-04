@@ -79,6 +79,27 @@ DexType* get_throwable_type() {
   return DexType::make_type("Ljava/lang/Throwable;");
 }
 
+ClassSerdes get_class_serdes(const DexClass* cls) {
+  std::string name = cls->get_name()->str();
+  name.pop_back();
+  std::string flatbuf_name = name;
+  std::replace(flatbuf_name.begin(), flatbuf_name.end(), '$', '_');
+
+  std::string desername = name + "$Deserializer;";
+  DexType* deser = DexType::get_type(desername.c_str());
+
+  std::string flatbuf_desername = flatbuf_name + "Deserializer;";
+  DexType* flatbuf_deser = DexType::get_type(flatbuf_desername.c_str());
+
+  std::string sername = name + "$Serializer;";
+  DexType* ser = DexType::get_type(sername);
+
+  std::string flatbuf_sername = flatbuf_name + "Serializer;";
+  DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
+
+  return ClassSerdes(deser, flatbuf_deser, ser, flatbuf_ser);
+}
+
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   always_assert_log(name.find("/") != std::string::npos,

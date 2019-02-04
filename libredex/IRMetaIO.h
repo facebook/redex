@@ -27,8 +27,8 @@ class IRMetaIO {
   static bool is_default_meta(const T* obj) {
     return obj->get_deobfuscated_name() == show(obj) && !obj->rstate.m_bytype &&
            !obj->rstate.m_bystring && !obj->rstate.m_byresources &&
-           !obj->rstate.m_mix_mode && !obj->rstate.m_keep &&
-           !obj->rstate.m_assumenosideeffects &&
+           !obj->rstate.m_is_serde && !obj->rstate.m_mix_mode &&
+           !obj->rstate.m_keep && !obj->rstate.m_assumenosideeffects &&
            !obj->rstate.m_blanket_keepnames &&
            !obj->rstate.m_whyareyoukeeping &&
            !obj->rstate.m_set_allowshrinking &&

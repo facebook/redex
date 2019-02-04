@@ -88,6 +88,30 @@ DexType* get_enum_type();
  */
 DexType* get_integer_type();
 
+struct ClassSerdes {
+  std::vector<DexType*> serdes;
+
+  ClassSerdes(DexType* deser,
+              DexType* flatbuf_deser,
+              DexType* ser,
+              DexType* flatbuf_ser)
+      : serdes{deser, flatbuf_deser, ser, flatbuf_ser} {}
+
+  std::vector<DexType*> get_all_serdes() { return serdes; }
+
+  DexType* get_deser() { return serdes[0]; }
+  DexType* get_flatbuf_deser() { return serdes[1]; }
+  DexType* get_ser() { return serdes[2]; }
+  DexType* get_flatbuf_ser() { return serdes[3]; }
+};
+
+/**
+ * Return possible deserializer and serializer classes of the given class
+ * 'class$Deserializer;', 'class_Deserializer;', 'class$Serializer;',
+ * 'class_Serializer;'
+ */
+ClassSerdes get_class_serdes(const DexClass* cls);
+
 /**
  * Return the DexType for an java.lang.Throwable type.
  */

@@ -31,6 +31,8 @@ class ReferencedState {
   bool m_bytype{false};
   // Whether it is referenced from an XML layout.
   bool m_byresources{false};
+  // Whether it is a json serializer/deserializer class for a reachable class.
+  bool m_is_serde{false};
 
   // Flag that specifies if this member is used for mix-mode compilation.
   bool m_mix_mode{false};
@@ -83,6 +85,7 @@ class ReferencedState {
       this->m_bytype = other.m_bytype;
       this->m_bystring = other.m_bystring;
       this->m_byresources = other.m_byresources;
+      this->m_is_serde = other.m_is_serde;
       this->m_mix_mode = other.m_mix_mode;
 
       this->m_keep = other.m_keep;
@@ -167,6 +170,10 @@ class ReferencedState {
   }
 
   bool is_referenced_by_resource_xml() const { return m_byresources; }
+
+  void set_is_serde() { m_is_serde = true; }
+
+  bool is_serde() const { return m_is_serde; }
 
   // A direct reference from code (not reflection)
   void ref_by_type() { m_bytype = true; }
