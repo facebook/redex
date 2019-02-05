@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 #define CHECK(cond, ...)                                                     \
@@ -42,6 +43,20 @@ template <class Container, class T, class Compare>
 void insert_sorted(Container& c, const T& e, Compare comp) {
   c.insert(std::lower_bound(c.begin(), c.end(), e, comp), e);
 }
+
+/**
+ * Copy the const-ness of `In` onto `Out`.
+ * For example:
+ *   mimic_const_t<const Foo, Bar> == const Bar
+ *   mimic_const_t<Foo, Bar>       == Bar
+ */
+template <typename In, typename Out>
+struct mimic_const {
+  using type =
+      typename std::conditional_t<std::is_const<In>::value, const Out, Out>;
+};
+template <typename In, typename Out>
+using mimic_const_t = typename mimic_const<In, Out>::type;
 
 template <typename T>
 struct fake_dependency : public std::false_type {};

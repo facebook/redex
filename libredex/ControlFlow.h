@@ -224,7 +224,7 @@ class Block final {
 
   bool is_catch() const;
 
-  bool same_try(Block* other) const;
+  bool same_try(const Block* other) const;
 
   void remove_opcode(const ir_list::InstructionIterator&);
   void remove_opcode(const IRList::iterator& it);

@@ -22,6 +22,7 @@
 #include "IRList.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "Util.h"
 #include "Walkers.h"
 
 /*
@@ -82,10 +83,10 @@ static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
     return false;
   }
   for (const cfg::Edge* b1_succ : b1_succs) {
-    const auto& in_b2 =
-        std::find_if(b2_succs.begin(), b2_succs.end(), [&](const cfg::Edge* e) {
-          return e->equals_ignore_source(*b1_succ);
-        });
+    const auto& in_b2 = std::find_if(b2_succs.begin(), b2_succs.end(),
+                                     [&b1_succ](const cfg::Edge* e) {
+                                       return e->equals_ignore_source(*b1_succ);
+                                     });
     if (in_b2 == b2_succs.end()) {
       // b1 has a succ that b2 doesn't. Note that both the succ blocks and
       // the edge types have to match
@@ -95,10 +96,16 @@ static bool same_successors(const cfg::Block* b1, const cfg::Block* b2) {
   return true;
 }
 
-struct BlockEquals {
-  bool operator()(cfg::Block* b1, cfg::Block* b2) const {
-    return same_successors(b1, b2) && b1->same_try(b2) && same_code(b1, b2) &&
-           b1->is_catch() == b2->is_catch();
+struct SuccBlocksInSameGroup {
+  bool operator()(const cfg::Block* a, const cfg::Block* b) const {
+    return same_successors(a, b) && a->same_try(b) &&
+           a->is_catch() == b->is_catch();
+  }
+};
+
+struct BlocksInSameGroup {
+  bool operator()(cfg::Block* a, cfg::Block* b) const {
+    return SuccBlocksInSameGroup{}(a, b) && same_code(a, b);
   }
 };
 
@@ -114,6 +121,7 @@ struct BlockHasher {
 
 struct BlockCompare {
   bool operator()(const cfg::Block* a, const cfg::Block* b) const {
+    // This assumes that cfg::Block::operator<() is based on block ids
     return *a < *b;
   }
 };
@@ -128,12 +136,6 @@ struct BlockSuccHasher {
   }
 };
 
-struct BlockSuccCompare {
-  bool operator()(const cfg::Block* a, const cfg::Block* b) const {
-    return same_successors(a, b);
-  }
-};
-
 struct InstructionHasher {
   hash_t operator()(IRInstruction* insn) const { return insn->hash(); }
 };
@@ -141,6 +143,26 @@ struct InstructionHasher {
 struct InstructionEquals {
   bool operator()(IRInstruction* a, IRInstruction* b) const { return *a == *b; }
 };
+
+// Choose an iteration order based on block ids for determinism. This returns a
+// vector of pointers to the entries of the Map.
+//
+// * If the map is const, the vector has const pointers to the entries.
+// * If the map is not const, the vector has non-const pointers to the entries.
+//   * If you edit them, do so with extreme care. Changing the keys or the
+//     results of the key hash/equality functions could be disastrous.
+template <class UnorderedMap,
+          class Entry =
+              mimic_const_t<UnorderedMap, typename UnorderedMap::value_type>>
+std::vector<Entry*> get_id_order(UnorderedMap& umap) {
+  std::vector<Entry*> order;
+  for (Entry& entry : umap) {
+    order.push_back(&entry);
+  }
+  std::sort(order.begin(), order.end(),
+            [](Entry* e1, Entry* e2) { return *(e1->first) < *(e2->first); });
+  return order;
+}
 
 class DedupBlocksImpl {
  public:
@@ -156,14 +178,6 @@ class DedupBlocksImpl {
       record_stats(dups);
       deduplicate(dups, cfg);
     }
-  }
-
-  /*
-   * Split blocks that share prefix of instructions (that begin with the same
-   * set of instructions).
-   */
-  void split_prefix(cfg::ControlFlowGraph& cfg) {
-    // @TODO - not yet implemented.
   }
 
   /*
@@ -186,12 +200,12 @@ class DedupBlocksImpl {
       code.build_cfg(/* editable */ true);
       auto& cfg = code.cfg();
 
-      // @TODO - Might want to do this repeatedly until no more work can be
-      // performed, horribly inefficient though. We might want to do a proper
-      // graph traversal in (forward/reverse) topological order.
-      split_prefix(cfg);
-
       if (m_config.split_postfix) {
+        // TODO: Might want to do this repeatedly until no more work can be
+        // performed, horribly inefficient though. We might want to do a proper
+        // graph traversal in (forward/reverse) topological order.
+        //
+        // We could also split based on a shared prefix of instructions
         split_postfix(cfg);
       }
 
@@ -203,19 +217,27 @@ class DedupBlocksImpl {
   }
 
  private:
-  using Duplicates = std::unordered_map<cfg::Block*,
-                                        std::set<cfg::Block*, BlockCompare>,
-                                        BlockHasher,
-                                        BlockEquals>;
+  // Be careful using `.at()` (or similar) on this map. We use a very broad
+  // equality function that can lead to unexpected results. The key equality
+  // function of this map is actually a check that they are duplicates, not that
+  // they're the same block.
+  //
+  // Because `BlocksInSameGroup` depends on the CFG, modifications to the CFG
+  // invalidate this map.
+  using BlockSet = std::set<cfg::Block*, BlockCompare>;
+  using Duplicates =
+      std::unordered_map<cfg::Block*, BlockSet, BlockHasher, BlocksInSameGroup>;
   struct PostfixSplitGroup {
-    std::set<cfg::Block*, BlockCompare> postfix_blocks;
+    BlockSet postfix_blocks;
     std::map<cfg::Block*, IRList::reverse_iterator> postfix_block_its;
     size_t insn_count;
   };
+
+  // Be careful using `.at()` on this map for the same reason as on `Duplicates`
   using PostfixSplitGroupMap = std::unordered_map<cfg::Block*,
                                                   PostfixSplitGroup,
                                                   BlockSuccHasher,
-                                                  BlockSuccCompare>;
+                                                  SuccBlocksInSameGroup>;
   const char* METRIC_BLOCKS_REMOVED = "blocks_removed";
   const char* METRIC_BLOCKS_SPLIT = "blocks_split";
   const char* METRIC_ELIGIBLE_BLOCKS = "eligible_blocks";
@@ -238,6 +260,16 @@ class DedupBlocksImpl {
 
     for (cfg::Block* block : blocks) {
       if (is_eligible(block)) {
+        // Find a group that matches this one. The key equality function of this
+        // map is actually a check that they are duplicates, not that they're
+        // the same block.
+        //
+        // For example, if Block A and Block A' are duplicates, we will
+        // populate this map as such:
+        //   * after the first iteration (inserted A)
+        //       A -> [A]
+        //   * after the second iteration (inserted A')
+        //       A -> [A, A']
         duplicates[block].insert(block);
         ++m_num_eligible_blocks;
       }
@@ -249,8 +281,7 @@ class DedupBlocksImpl {
   }
 
   // Replace duplicated blocks with the "canon" (block with lowest ID).
-  void dedup_blocks(cfg::ControlFlowGraph& cfg,
-                    const std::set<cfg::Block*, BlockCompare>& blocks) {
+  void dedup_blocks(cfg::ControlFlowGraph& cfg, const BlockSet& blocks) {
     // canon is block with lowest id.
     cfg::Block* canon = *blocks.begin();
 
@@ -270,9 +301,15 @@ class DedupBlocksImpl {
     fix_dex_pos_pointers(dups.begin(), dups.end(),
                          [](auto it) { return it->second; }, cfg);
 
-    for (const auto& entry : dups) {
-      const auto& blocks = entry.second;
-      dedup_blocks(cfg, blocks);
+    // Copy the BlockSets into a vector so that we're not reading the map while
+    // editing the CFG.
+    std::vector<BlockSet> order;
+    for (const Duplicates::value_type* entry : get_id_order(dups)) {
+      order.push_back(entry->second);
+    }
+
+    for (const BlockSet& group : order) {
+      dedup_blocks(cfg, group);
     }
   }
 
@@ -364,31 +401,25 @@ class DedupBlocksImpl {
 
     struct CountGroup {
       size_t count = 0;
-      std::set<cfg::Block*, BlockCompare> blocks;
+      BlockSet blocks;
     };
 
-    // choose an iteration order based on block ids for determinism
-    std::vector<cfg::Block*> order;
-    for (auto& succ_pair : splitGroupMap) {
-      auto& succ_blocks = succ_pair.second.postfix_blocks;
+    // For each ([succs], [blocks]) pair
+    for (PostfixSplitGroupMap::value_type* entry :
+         get_id_order(splitGroupMap)) {
+      const cfg::Block* b = entry->first;
+      auto& split_group = entry->second;
+      auto& succ_blocks = split_group.postfix_blocks;
       if (succ_blocks.size() <= 1) {
         continue;
       }
-      order.push_back(succ_pair.first);
-    }
-    std::sort(order.begin(), order.end(), BlockCompare());
-
-    // For each ([succs], [blocks]) pair
-    for (cfg::Block* b : order) {
-      auto& split_group = splitGroupMap.at(b);
-      auto& succ_blocks = split_group.postfix_blocks;
 
       TRACE(DEDUP_BLOCKS, 4,
             "split_postfix: current group (succs=%d, blocks=%d)\n",
             b->succs().size(), succ_blocks.size());
 
       // Keep track of best we've seen so far.
-      std::set<cfg::Block*, BlockCompare> best_blocks;
+      BlockSet best_blocks;
       std::map<cfg::Block*, IRList::reverse_iterator> best_block_its;
       size_t best_insn_count = 0;
       size_t best_saved_insn = 0;
@@ -521,20 +552,13 @@ class DedupBlocksImpl {
                          [](auto it) { return it->second.postfix_blocks; },
                          cfg);
 
-    // iterate deterministically
-    std::vector<cfg::Block*> order;
-    for (auto& succ_pair : dups) {
-      order.push_back(succ_pair.first);
-    }
-    std::sort(order.begin(), order.end(), BlockCompare());
-
-    for (cfg::Block* b : order) {
-      const auto& group = dups.at(b);
+    for (const PostfixSplitGroupMap::value_type* entry : get_id_order(dups)) {
+      const auto& group = entry->second;
       TRACE(DEDUP_BLOCKS, 4,
             "split_postfix: splitting blocks.size() = %d, instruction at %d\n",
             group.postfix_blocks.size(), group.insn_count);
 
-      std::set<cfg::Block*, BlockCompare> split_blocks;
+      BlockSet split_blocks;
 
       // Split the blocks at the reverse iterator where we determine to be
       // the best location.
@@ -836,7 +860,8 @@ class DedupBlocksImpl {
     TRACE(DEDUP_BLOCKS, 4, "} end duplicate blocks set\n");
   }
 };
-}
+
+} // namespace
 
 void DedupBlocksPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* unused */,

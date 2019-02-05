@@ -177,7 +177,7 @@ bool Block::is_catch() const {
   return m_parent->get_pred_edge_of_type(this, EDGE_THROW) != nullptr;
 }
 
-bool Block::same_try(Block* other) const {
+bool Block::same_try(const Block* other) const {
   always_assert(other->m_parent == this->m_parent);
   return m_parent->blocks_are_in_same_try(this, other);
 }
@@ -1839,9 +1839,10 @@ void ControlFlowGraph::remove_block(Block* block) {
   }
   delete_pred_edges(block);
   delete_succ_edges(block);
-  auto num_removed = m_blocks.erase(block->id());
+  auto id = block->id();
+  auto num_removed = m_blocks.erase(id);
   always_assert_log(num_removed == 1,
-                    "Block wasn't in CFG. Attempted double delete?");
+                    "Block %d wasn't in CFG. Attempted double delete?", id);
   block->m_entries.clear_and_dispose();
   delete block;
 }
