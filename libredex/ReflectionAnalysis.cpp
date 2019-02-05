@@ -16,10 +16,12 @@
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
+#include "FiniteAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "ReducedProductAbstractDomain.h"
 #include "Show.h"
 
 using namespace sparta;
@@ -41,13 +43,7 @@ std::ostream& operator<<(std::ostream& out,
     break;
   }
   case reflection::CLASS: {
-    always_assert(x.cls_source !=
-                  reflection::ClassObjectSource::NOT_APPLICABLE);
-    std::string cls_tag =
-        x.cls_source == reflection::ClassObjectSource::REFLECTION
-            ? "CLASS_REFLECT"
-            : "CLASS";
-    out << cls_tag << "{" << SHOW(x.dex_type) << "}";
+    out << "CLASS{" << SHOW(x.dex_type) << "}";
     break;
   }
   case reflection::FIELD: {
@@ -62,13 +58,43 @@ std::ostream& operator<<(std::ostream& out,
   return out;
 }
 
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ClassObjectSource& cls_src) {
+  switch (cls_src) {
+  case reflection::UNKNOWN: {
+    out << "UNKNOWN";
+    break;
+  }
+  case reflection::NON_REFLECTION: {
+    out << "NON_REFLECTION";
+    break;
+  }
+  case reflection::REFLECTION: {
+    out << "REFLECTION";
+    break;
+  }
+  case reflection::BOTTOM: {
+    out << "_|_";
+    break;
+  }
+  }
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ReflectionAbstractObject& aobj) {
+  if (aobj.first.kind == reflection::CLASS) {
+    out << aobj.first << "(" << aobj.second << ")";
+  } else {
+    out << aobj.first;
+  }
+  return out;
+}
+
 namespace reflection {
 
-bool is_reflection_output(const AbstractObject& obj) {
-  if (obj.kind == FIELD || obj.kind == METHOD) {
-    return true;
-  }
-  return obj.kind == CLASS && obj.cls_source == REFLECTION;
+bool is_not_reflection_output(const AbstractObject& obj) {
+  return obj.kind == OBJECT || obj.kind == STRING;
 }
 
 bool operator==(const AbstractObject& x, const AbstractObject& y) {
@@ -78,7 +104,7 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
   switch (x.kind) {
   case OBJECT:
   case CLASS: {
-    return x.dex_type == y.dex_type && x.cls_source == y.cls_source;
+    return x.dex_type == y.dex_type;
   }
   case STRING: {
     return x.dex_string == y.dex_string;
@@ -99,10 +125,65 @@ namespace impl {
 using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
+using ClassObjectSourceLattice =
+    sparta::BitVectorLattice<ClassObjectSource,
+                             /* cardinality */ 4,
+                             boost::hash<ClassObjectSource>>;
+
+ClassObjectSourceLattice lattice({BOTTOM, NON_REFLECTION, REFLECTION, UNKNOWN},
+                                 {{BOTTOM, NON_REFLECTION},
+                                  {BOTTOM, REFLECTION},
+                                  {NON_REFLECTION, UNKNOWN},
+                                  {REFLECTION, UNKNOWN}});
+
+using ClassObjectSourceDomain =
+    FiniteAbstractDomain<ClassObjectSource,
+                         ClassObjectSourceLattice,
+                         ClassObjectSourceLattice::Encoding,
+                         &lattice>;
+
 using AbstractObjectDomain = ConstantAbstractDomain<AbstractObject>;
 
-using AbstractObjectEnvironment =
+using BasicAbstractObjectEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
+
+using ClassObjectSourceEnvironment =
+    PatriciaTreeMapAbstractEnvironment<register_t, ClassObjectSourceDomain>;
+
+class AbstractObjectEnvironment final
+    : public ReducedProductAbstractDomain<AbstractObjectEnvironment,
+                                          BasicAbstractObjectEnvironment,
+                                          ClassObjectSourceEnvironment> {
+ public:
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  static void reduce_product(
+      std::tuple<BasicAbstractObjectEnvironment,
+                 ClassObjectSourceEnvironment>& /* product */) {}
+
+  const AbstractObjectDomain get_abstract_obj(register_t reg) const {
+    return get<0>().get(reg);
+  }
+
+  void set_abstract_obj(register_t reg, const AbstractObjectDomain aobj) {
+    apply<0>([=](auto env) { env->set(reg, aobj); }, true);
+  }
+
+  void update_abstract_obj(
+      register_t reg,
+      const std::function<AbstractObjectDomain(const AbstractObjectDomain&)>&
+          operation) {
+    apply<0>([=](auto env) { env->update(reg, operation); }, true);
+  }
+
+  const ClassObjectSourceDomain get_class_source(register_t reg) const {
+    return get<1>().get(reg);
+  }
+
+  void set_class_source(register_t reg, const ClassObjectSourceDomain cls_src) {
+    apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
+  }
+};
 
 class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
  public:
@@ -174,28 +255,49 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_MOVE_OBJECT: {
-      current_state->set(insn->dest(), current_state->get(insn->src(0)));
+      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      current_state->set_abstract_obj(insn->dest(), aobj);
+      if (aobj.get_constant() &&
+          aobj.get_constant()->kind == AbstractObjectKind::CLASS) {
+        current_state->set_class_source(
+            insn->dest(), current_state->get_class_source(insn->src(0)));
+      }
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
-      current_state->set(insn->dest(), current_state->get(RESULT_REGISTER));
+      const auto aobj = current_state->get_abstract_obj(RESULT_REGISTER);
+      current_state->set_abstract_obj(insn->dest(), aobj);
+      if (aobj.get_constant() &&
+          aobj.get_constant()->kind == AbstractObjectKind::CLASS) {
+        current_state->set_class_source(
+            insn->dest(), current_state->get_class_source(RESULT_REGISTER));
+      }
       break;
     }
     case OPCODE_CONST_STRING: {
-      current_state->set(
+      current_state->set_abstract_obj(
           RESULT_REGISTER,
           AbstractObjectDomain(AbstractObject(insn->get_string())));
       break;
     }
     case OPCODE_CONST_CLASS: {
-      auto aobj =
-          AbstractObject(insn->get_type(), ClassObjectSource::REFLECTION);
-      current_state->set(RESULT_REGISTER, AbstractObjectDomain(aobj));
+      auto aobj = AbstractObject(AbstractObjectKind::CLASS, insn->get_type());
+      current_state->set_abstract_obj(RESULT_REGISTER,
+                                      AbstractObjectDomain(aobj));
+      current_state->set_class_source(
+          RESULT_REGISTER,
+          ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
       break;
     }
     case OPCODE_CHECK_CAST: {
-      current_state->set(RESULT_REGISTER, current_state->get(insn->src(0)));
+      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      current_state->set_abstract_obj(RESULT_REGISTER, aobj);
+      if (aobj.get_constant() &&
+          aobj.get_constant()->kind == AbstractObjectKind::CLASS) {
+        current_state->set_class_source(
+            RESULT_REGISTER, current_state->get_class_source(insn->src(0)));
+      }
       // Note that this is sound. In a concrete execution, if the check-cast
       // operation fails, an exception is thrown and the control point
       // following the check-cast becomes unreachable, which corresponds to
@@ -204,7 +306,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     case OPCODE_AGET_OBJECT: {
-      const auto array_object = current_state->get(insn->src(0)).get_constant();
+      const auto array_object =
+          current_state->get_abstract_obj(insn->src(0)).get_constant();
       if (array_object) {
         auto type = array_object->dex_type;
         if (type && is_array(type)) {
@@ -226,13 +329,15 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case OPCODE_NEW_INSTANCE:
     case OPCODE_NEW_ARRAY:
     case OPCODE_FILLED_NEW_ARRAY: {
-      current_state->set(
+      current_state->set_abstract_obj(
           RESULT_REGISTER,
-          AbstractObjectDomain(AbstractObject(insn->get_type())));
+          AbstractObjectDomain(
+              AbstractObject(AbstractObjectKind::OBJECT, insn->get_type())));
       break;
     }
     case OPCODE_INVOKE_VIRTUAL: {
-      auto receiver = current_state->get(insn->src(0)).get_constant();
+      auto receiver =
+          current_state->get_abstract_obj(insn->src(0)).get_constant();
       if (!receiver) {
         update_return_object(current_state, insn);
         break;
@@ -242,15 +347,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_INVOKE_STATIC: {
       if (insn->get_method() == m_for_name) {
-        auto class_name = current_state->get(insn->src(0)).get_constant();
+        auto class_name =
+            current_state->get_abstract_obj(insn->src(0)).get_constant();
         if (class_name && class_name->kind == STRING) {
           auto internal_name =
               DexString::make_string(JavaNameUtil::external_to_internal(
                   class_name->dex_string->str()));
-          current_state->set(RESULT_REGISTER,
-                             AbstractObjectDomain(AbstractObject(
-                                 DexType::make_type(internal_name),
-                                 ClassObjectSource::REFLECTION)));
+          current_state->set_abstract_obj(
+              RESULT_REGISTER,
+              AbstractObjectDomain(
+                  AbstractObject(AbstractObjectKind::CLASS,
+                                 DexType::make_type(internal_name))));
+          current_state->set_class_source(
+              RESULT_REGISTER,
+              ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
           break;
         }
       }
@@ -275,16 +385,15 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     if (it == m_environments.end()) {
       return boost::none;
     }
-    return it->second.get(reg).get_constant();
+    return it->second.get_abstract_obj(reg).get_constant();
   }
 
-  const AbstractObjectEnvironment* get_abstract_object_env(
-      IRInstruction* insn) {
+  ClassObjectSource get_class_source(size_t reg, IRInstruction* insn) const {
     auto it = m_environments.find(insn);
     if (it == m_environments.end()) {
-      return nullptr;
+      return ClassObjectSource::UNKNOWN;
     }
-    return &it->second;
+    return it->second.get_class_source(reg).element();
   }
 
  private:
@@ -298,11 +407,15 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     if (type == get_class_type()) {
       // We don't have precise type information to which the Class obj refers
       // to.
-      current_state->set(dest_reg,
-                         AbstractObjectDomain(AbstractObject(
-                             nullptr, ClassObjectSource::NON_REFLECTION)));
+      current_state->set_abstract_obj(dest_reg,
+                                      AbstractObjectDomain(AbstractObject(
+                                          AbstractObjectKind::CLASS, nullptr)));
+      current_state->set_class_source(
+          dest_reg, ClassObjectSourceDomain(ClassObjectSource::NON_REFLECTION));
     } else {
-      current_state->set(dest_reg, AbstractObjectDomain(AbstractObject(type)));
+      current_state->set_abstract_obj(dest_reg,
+                                      AbstractObjectDomain(AbstractObject(
+                                          AbstractObjectKind::OBJECT, type)));
     }
   }
 
@@ -325,22 +438,26 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // analysis. Hence, the effect of those operations is correctly abstracted
     // away regardless of the size of the destination register.
     if (insn->dests_size() > 0) {
-      current_state->set(insn->dest(), AbstractObjectDomain::top());
+      current_state->set_abstract_obj(insn->dest(),
+                                      AbstractObjectDomain::top());
       if (insn->dest_is_wide()) {
-        current_state->set(insn->dest() + 1, AbstractObjectDomain::top());
+        current_state->set_abstract_obj(insn->dest() + 1,
+                                        AbstractObjectDomain::top());
       }
     }
     // We need to invalidate RESULT_REGISTER if the instruction writes into
     // this register.
     if (insn->has_move_result()) {
-      current_state->set(RESULT_REGISTER, AbstractObjectDomain::top());
+      current_state->set_abstract_obj(RESULT_REGISTER,
+                                      AbstractObjectDomain::top());
     }
   }
 
   DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
                                       IRInstruction* insn,
                                       register_t reg) const {
-    auto element_name = current_state->get(insn->src(reg)).get_constant();
+    auto element_name =
+        current_state->get_abstract_obj(insn->src(reg)).get_constant();
     if (element_name && element_name->kind == STRING) {
       return element_name->dex_string;
     } else {
@@ -355,20 +472,26 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     switch (receiver.kind) {
     case OBJECT: {
       if (callee == m_get_class) {
-        current_state->set(
+        current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(AbstractObject(
-                receiver.dex_type, ClassObjectSource::REFLECTION)));
+            AbstractObjectDomain(
+                AbstractObject(AbstractObjectKind::CLASS, receiver.dex_type)));
+        current_state->set_class_source(
+            RESULT_REGISTER,
+            ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
         return;
       }
       break;
     }
     case STRING: {
       if (callee == m_get_class) {
-        current_state->set(
+        current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(AbstractObject(
-                get_string_type(), ClassObjectSource::REFLECTION)));
+            AbstractObjectDomain(
+                AbstractObject(AbstractObjectKind::CLASS, get_string_type())));
+        current_state->set_class_source(
+            RESULT_REGISTER,
+            ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
         return;
       }
       break;
@@ -391,16 +514,17 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (element_name == nullptr) {
         break;
       }
-      current_state->set(RESULT_REGISTER,
-                         AbstractObjectDomain(AbstractObject(
-                             element_kind, callee->get_class(), element_name)));
+      current_state->set_abstract_obj(
+          RESULT_REGISTER,
+          AbstractObjectDomain(
+              AbstractObject(element_kind, callee->get_class(), element_name)));
       return;
     }
     case FIELD:
     case METHOD: {
       if ((receiver.kind == FIELD && callee == m_get_field_name) ||
           (receiver.kind == METHOD && callee == m_get_method_name)) {
-        current_state->set(
+        current_state->set_abstract_obj(
             RESULT_REGISTER,
             AbstractObjectDomain(AbstractObject(receiver.dex_string)));
         return;
@@ -521,19 +645,27 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
 void ReflectionAnalysis::get_reflection_site(
     const register_t reg,
     IRInstruction* insn,
-    std::map<register_t, AbstractObject>* abstract_objects) const {
+    std::map<register_t, ReflectionAbstractObject>* abstract_objects) const {
   auto aobj = m_analyzer->get_abstract_object(reg, insn);
   if (!aobj) {
     return;
   }
-  if (is_reflection_output(*aobj)) {
-    if (traceEnabled(REFL, 5)) {
-      std::ostringstream out;
-      out << "reg " << reg << " " << *aobj << std::endl;
-      TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
-    }
-    (*abstract_objects)[reg] = *aobj;
+  if (is_not_reflection_output(*aobj)) {
+    return;
   }
+  ClassObjectSource cls_src = aobj->kind == AbstractObjectKind::CLASS
+                                  ? m_analyzer->get_class_source(reg, insn)
+                                  : ClassObjectSource::UNKNOWN;
+  if (aobj->kind == AbstractObjectKind::CLASS &&
+      cls_src != ClassObjectSource::REFLECTION) {
+    return;
+  }
+  if (traceEnabled(REFL, 5)) {
+    std::ostringstream out;
+    out << "reg " << reg << " " << *aobj << " " << cls_src << std::endl;
+    TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
+  }
+  (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }
 
 const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
@@ -542,7 +674,7 @@ const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   auto reg_size = code->get_registers_size();
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
-    std::map<register_t, AbstractObject> abstract_objects;
+    std::map<register_t, ReflectionAbstractObject> abstract_objects;
     for (size_t i = 0; i < reg_size; i++) {
       get_reflection_site(i, insn, &abstract_objects);
     }

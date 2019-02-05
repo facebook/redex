@@ -100,7 +100,7 @@ TEST_F(ReflectionAnalysisTest, constClass) {
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
             "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, "
-            "CLASS_REFLECT{LFoo;}}\n");
+            "CLASS{LFoo;}(REFLECTION)}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getClassOnParam) {
@@ -115,7 +115,7 @@ TEST_F(ReflectionAnalysisTest, getClassOnParam) {
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
             "MOVE_RESULT_OBJECT v1 {4294967294, "
-            "CLASS_REFLECT{Ljava/lang/Object;}}\n");
+            "CLASS{Ljava/lang/Object;}(REFLECTION)}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, classForName) {
@@ -131,7 +131,7 @@ TEST_F(ReflectionAnalysisTest, classForName) {
   ReflectionAnalysis analysis(m_method);
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
-            "MOVE_RESULT_OBJECT v0 {4294967294, CLASS_REFLECT{LLFoo;;}}\n");
+            "MOVE_RESULT_OBJECT v0 {4294967294, CLASS{LLFoo;;}(REFLECTION)}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getClassOnField) {
@@ -148,7 +148,7 @@ TEST_F(ReflectionAnalysisTest, getClassOnField) {
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(to_string(analysis.get_reflection_sites()),
             "MOVE_RESULT_OBJECT v1 {4294967294, "
-            "CLASS_REFLECT{Ljava/lang/String;}}\n");
+            "CLASS{Ljava/lang/String;}(REFLECTION)}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getMethod) {
@@ -169,13 +169,13 @@ TEST_F(ReflectionAnalysisTest, getMethod) {
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(
       to_string(analysis.get_reflection_sites()),
-      "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, CLASS_REFLECT{LFoo;}}\n\
-CONST_STRING \"bar\" {1, CLASS_REFLECT{LFoo;};4294967294, CLASS_REFLECT{LFoo;}}\n\
-IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS_REFLECT{LFoo;}}\n\
-NEW_ARRAY v3, [Ljava/lang/Class; {1, CLASS_REFLECT{LFoo;}}\n\
-IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v3 {1, CLASS_REFLECT{LFoo;}}\n\
-INVOKE_VIRTUAL v1, v2, v3, Ljava/lang/Class;.getMethod:(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method; {1, CLASS_REFLECT{LFoo;}}\n\
-MOVE_RESULT_OBJECT v4 {1, CLASS_REFLECT{LFoo;};4294967294, METHOD{Ljava/lang/Class;:bar}}\n");
+      "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, CLASS{LFoo;}(REFLECTION)}\n\
+CONST_STRING \"bar\" {1, CLASS{LFoo;}(REFLECTION);4294967294, CLASS{LFoo;}(REFLECTION)}\n\
+IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS{LFoo;}(REFLECTION)}\n\
+NEW_ARRAY v3, [Ljava/lang/Class; {1, CLASS{LFoo;}(REFLECTION)}\n\
+IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v3 {1, CLASS{LFoo;}(REFLECTION)}\n\
+INVOKE_VIRTUAL v1, v2, v3, Ljava/lang/Class;.getMethod:(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method; {1, CLASS{LFoo;}(REFLECTION)}\n\
+MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, METHOD{Ljava/lang/Class;:bar}}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getField) {
@@ -194,9 +194,9 @@ TEST_F(ReflectionAnalysisTest, getField) {
   EXPECT_TRUE(analysis.has_found_reflection());
   EXPECT_EQ(
       to_string(analysis.get_reflection_sites()),
-      "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, CLASS_REFLECT{LFoo;}}\n\
-CONST_STRING \"bar\" {1, CLASS_REFLECT{LFoo;};4294967294, CLASS_REFLECT{LFoo;}}\n\
-IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS_REFLECT{LFoo;}}\n\
-INVOKE_VIRTUAL v1, v2, Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field; {1, CLASS_REFLECT{LFoo;}}\n\
-MOVE_RESULT_OBJECT v4 {1, CLASS_REFLECT{LFoo;};4294967294, FIELD{Ljava/lang/Class;:bar}}\n");
+      "IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1 {4294967294, CLASS{LFoo;}(REFLECTION)}\n\
+CONST_STRING \"bar\" {1, CLASS{LFoo;}(REFLECTION);4294967294, CLASS{LFoo;}(REFLECTION)}\n\
+IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS{LFoo;}(REFLECTION)}\n\
+INVOKE_VIRTUAL v1, v2, Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field; {1, CLASS{LFoo;}(REFLECTION)}\n\
+MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, FIELD{Ljava/lang/Class;:bar}}\n");
 }

@@ -59,14 +59,14 @@ enum AbstractObjectKind {
 };
 
 /*
- * This only applies to AbstractObjectKind.CLASS.
+ * Only applies to AbstractObjectKind.CLASS.
  * By what kind of operation the class object is produced.
  */
 enum ClassObjectSource {
+  UNKNOWN,        // A joined value of a reflecting and non-reflectiong source.
   NON_REFLECTION, // Non-reflecting operations like param loading and get field.
   REFLECTION,     // Reflection operations like const-class or Class.forName().
-  UNKNOWN,        // A joined value of a reflecting and non-reflectiong source.
-  NOT_APPLICABLE, // AbstractObjectKind is not CLASS.
+  BOTTOM,         // AbstractObjectKind is not CLASS.
 };
 
 /* clang-format on */
@@ -74,41 +74,35 @@ struct AbstractObject {
   AbstractObjectKind kind;
   DexType* dex_type;
   DexString* dex_string;
-  ClassObjectSource cls_source;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : kind(STRING),
-        dex_type(nullptr),
-        dex_string(s),
-        cls_source(NOT_APPLICABLE) {}
+      : kind(STRING), dex_type(nullptr), dex_string(s) {}
 
-  explicit AbstractObject(DexType* t)
-      : kind(OBJECT),
-        dex_type(t),
-        dex_string(nullptr),
-        cls_source(NOT_APPLICABLE) {}
-
-  AbstractObject(DexType* t, ClassObjectSource cls_source)
-      : kind(CLASS), dex_type(t), dex_string(nullptr), cls_source(cls_source) {}
+  AbstractObject(AbstractObjectKind k, DexType* t)
+      : kind(k), dex_type(t), dex_string(nullptr) {
+    always_assert(k == OBJECT || k == CLASS);
+  }
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : kind(k), dex_type(t), dex_string(s), cls_source(NOT_APPLICABLE) {
+      : kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
 };
 
-bool is_reflection_output(const AbstractObject& obj);
+bool is_not_reflection_output(const AbstractObject& obj);
 
 bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
 
+using ReflectionAbstractObject = std::pair<AbstractObject, ClassObjectSource>;
+
 using ReflectionSites = std::vector<
-    std::pair<IRInstruction*, std::map<register_t, AbstractObject>>>;
+    std::pair<IRInstruction*, std::map<register_t, ReflectionAbstractObject>>>;
 
 class ReflectionAnalysis final {
  public:
@@ -134,6 +128,8 @@ class ReflectionAnalysis final {
   boost::optional<AbstractObject> get_abstract_object(
       size_t reg, IRInstruction* insn) const;
 
+  ClassObjectSource get_class_source(size_t reg, IRInstruction* insn) const;
+
  private:
   const DexMethod* m_dex_method;
   std::unique_ptr<impl::Analyzer> m_analyzer;
@@ -141,10 +137,16 @@ class ReflectionAnalysis final {
   void get_reflection_site(
       const register_t reg,
       IRInstruction* insn,
-      std::map<register_t, AbstractObject>* abstract_objects) const;
+      std::map<register_t, ReflectionAbstractObject>* abstract_objects) const;
 };
 
 } // namespace reflection
 
 std::ostream& operator<<(std::ostream& out,
                          const reflection::AbstractObject& x);
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ClassObjectSource& cls_src);
+
+std::ostream& operator<<(std::ostream& out,
+                         const reflection::ReflectionAbstractObject& aobj);
