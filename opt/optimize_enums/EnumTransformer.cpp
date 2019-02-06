@@ -628,11 +628,21 @@ class EnumTransformer final {
     for (auto it = candidate_enums.begin(); it != candidate_enums.end(); ++it) {
       auto enum_cls = type_class(*it);
       auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
-      if (enum_attrs.empty()) {
-        // TODO: Some could not get enum_attrs.
-        TRACE(ENUM, 8, "ord %zu %s\n", enum_attrs.size(), SHOW(enum_cls));
+      if (enum_attrs.empty() ||
+          enum_cls->get_sfields().size() - 1 != enum_attrs.size()) {
+        // TODO: Will investigate why optimize_enums::analyze_enum_clinit may
+        // return empty for some enum <clinit> with less redundant
+        // `sget-object` instructions. And simply ignore enum classes that may
+        // contain multiple static fields that refer to the same enum object,
+        // for instance:
+        // enum CandidateEnum {
+        //   ONE, TWO;
+        //   static final CandidateEnum THREE = ONE;
+        // }
+        TRACE(ENUM, 1, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
+              SHOW(enum_cls), enum_attrs.size(),
+              enum_cls->get_sfields().size());
       } else {
-        always_assert(enum_cls->get_sfields().size() - 1 == enum_attrs.size());
         m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
         m_enum_objs += enum_attrs.size();
         m_enum_attrs.emplace(*it, enum_attrs);
