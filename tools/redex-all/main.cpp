@@ -759,6 +759,14 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
   auto iodi_metadata_filename =
       cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
+  if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
+      !iodi_metadata_filename.empty()) {
+    fprintf(stderr,
+            "[WARNING] IODI will not be used because it requires"
+            " debug_line_method_map_v2 and line_number_map_v2 to be set"
+            " (these artifacts are required for leaveraging iodi_metadata)!\n");
+    iodi_metadata_filename = "";
+  }
 
   std::unique_ptr<PositionMapper> pos_mapper(
       PositionMapper::make(pos_output, pos_output_v2));
