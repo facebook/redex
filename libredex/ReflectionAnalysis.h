@@ -63,10 +63,8 @@ enum AbstractObjectKind {
  * By what kind of operation the class object is produced.
  */
 enum ClassObjectSource {
-  UNKNOWN,        // A joined value of a reflecting and non-reflectiong source.
   NON_REFLECTION, // Non-reflecting operations like param loading and get field.
   REFLECTION,     // Reflection operations like const-class or Class.forName().
-  BOTTOM,         // AbstractObjectKind is not CLASS.
 };
 
 /* clang-format on */
@@ -99,7 +97,8 @@ bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
 
-using ReflectionAbstractObject = std::pair<AbstractObject, ClassObjectSource>;
+using ReflectionAbstractObject =
+    std::pair<AbstractObject, boost::optional<ClassObjectSource>>;
 
 using ReflectionSites = std::vector<
     std::pair<IRInstruction*, std::map<register_t, ReflectionAbstractObject>>>;
@@ -128,7 +127,8 @@ class ReflectionAnalysis final {
   boost::optional<AbstractObject> get_abstract_object(
       size_t reg, IRInstruction* insn) const;
 
-  ClassObjectSource get_class_source(size_t reg, IRInstruction* insn) const;
+  boost::optional<ClassObjectSource> get_class_source(
+      size_t reg, IRInstruction* insn) const;
 
  private:
   const DexMethod* m_dex_method;

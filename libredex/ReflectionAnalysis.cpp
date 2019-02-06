@@ -61,10 +61,6 @@ std::ostream& operator<<(std::ostream& out,
 std::ostream& operator<<(std::ostream& out,
                          const reflection::ClassObjectSource& cls_src) {
   switch (cls_src) {
-  case reflection::UNKNOWN: {
-    out << "UNKNOWN";
-    break;
-  }
   case reflection::NON_REFLECTION: {
     out << "NON_REFLECTION";
     break;
@@ -73,20 +69,15 @@ std::ostream& operator<<(std::ostream& out,
     out << "REFLECTION";
     break;
   }
-  case reflection::BOTTOM: {
-    out << "_|_";
-    break;
-  }
   }
   return out;
 }
 
 std::ostream& operator<<(std::ostream& out,
                          const reflection::ReflectionAbstractObject& aobj) {
-  if (aobj.first.kind == reflection::CLASS) {
-    out << aobj.first << "(" << aobj.second << ")";
-  } else {
-    out << aobj.first;
+  out << aobj.first;
+  if (aobj.first.kind == reflection::CLASS && aobj.second) {
+    out << "(" << *aobj.second << ")";
   }
   return out;
 }
@@ -125,24 +116,9 @@ namespace impl {
 using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
-using ClassObjectSourceLattice =
-    sparta::BitVectorLattice<ClassObjectSource,
-                             /* cardinality */ 4,
-                             boost::hash<ClassObjectSource>>;
-
-ClassObjectSourceLattice lattice({BOTTOM, NON_REFLECTION, REFLECTION, UNKNOWN},
-                                 {{BOTTOM, NON_REFLECTION},
-                                  {BOTTOM, REFLECTION},
-                                  {NON_REFLECTION, UNKNOWN},
-                                  {REFLECTION, UNKNOWN}});
-
-using ClassObjectSourceDomain =
-    FiniteAbstractDomain<ClassObjectSource,
-                         ClassObjectSourceLattice,
-                         ClassObjectSourceLattice::Encoding,
-                         &lattice>;
-
 using AbstractObjectDomain = ConstantAbstractDomain<AbstractObject>;
+
+using ClassObjectSourceDomain = ConstantAbstractDomain<ClassObjectSource>;
 
 using BasicAbstractObjectEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
@@ -388,12 +364,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     return it->second.get_abstract_obj(reg).get_constant();
   }
 
-  ClassObjectSource get_class_source(size_t reg, IRInstruction* insn) const {
+  boost::optional<ClassObjectSource> get_class_source(
+      size_t reg, IRInstruction* insn) const {
     auto it = m_environments.find(insn);
     if (it == m_environments.end()) {
-      return ClassObjectSource::UNKNOWN;
+      return boost::none;
     }
-    return it->second.get_class_source(reg).element();
+    return it->second.get_class_source(reg).get_constant();
   }
 
  private:
@@ -642,16 +619,21 @@ void ReflectionAnalysis::get_reflection_site(
   if (is_not_reflection_output(*aobj)) {
     return;
   }
-  ClassObjectSource cls_src = aobj->kind == AbstractObjectKind::CLASS
-                                  ? m_analyzer->get_class_source(reg, insn)
-                                  : ClassObjectSource::UNKNOWN;
+  boost::optional<ClassObjectSource> cls_src =
+      aobj->kind == AbstractObjectKind::CLASS
+          ? m_analyzer->get_class_source(reg, insn)
+          : boost::none;
   if (aobj->kind == AbstractObjectKind::CLASS &&
       cls_src != ClassObjectSource::REFLECTION) {
     return;
   }
   if (traceEnabled(REFL, 5)) {
     std::ostringstream out;
-    out << "reg " << reg << " " << *aobj << " " << cls_src << std::endl;
+    out << "reg " << reg << " " << *aobj << " ";
+    if (cls_src) {
+      out << *cls_src;
+    }
+    out << std::endl;
     TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
   }
   (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
