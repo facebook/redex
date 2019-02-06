@@ -63,6 +63,8 @@ class ReferencedState {
 
   bool m_keep_name{false};
 
+  int32_t m_api_level{-1};
+
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
   boost::optional<size_t> m_interdex_subgroup{boost::none};
@@ -255,6 +257,10 @@ class ReferencedState {
   bool has_interdex_subgroup() const {
     return m_interdex_subgroup != boost::none;
   }
+
+  // -1 means unknown, e.g. for a method created by Redex
+  int32_t get_api_level() const { return m_api_level; }
+  void set_api_level(int api_level) { m_api_level = api_level; }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

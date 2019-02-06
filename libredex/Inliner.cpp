@@ -367,8 +367,8 @@ void MultiMethodInliner::inline_inlinables(
 /**
  * Defines the set of rules that determine whether a function is inlinable.
  */
-bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
-                                      const DexMethod* callee,
+bool MultiMethodInliner::is_inlinable(DexMethod* caller,
+                                      DexMethod* callee,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size) {
   // don't inline cross store references

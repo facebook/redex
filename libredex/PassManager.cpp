@@ -154,10 +154,13 @@ void PassManager::run_type_checker(const Scope& scope,
 }
 
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
-  api::LevelChecker::init(m_redex_options.min_sdk);
-
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
+
+  {
+    Timer t("API Level Checker");
+    api::LevelChecker::init(m_redex_options.min_sdk, scope);
+  }
 
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {

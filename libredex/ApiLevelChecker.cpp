@@ -6,6 +6,7 @@
  */
 
 #include "ApiLevelChecker.h"
+#include "Walkers.h"
 
 namespace api {
 
@@ -17,7 +18,9 @@ DexType* LevelChecker::s_requires_api = nullptr;
 DexType* LevelChecker::s_target_api = nullptr;
 bool LevelChecker::s_has_been_init = false;
 
-void LevelChecker::init(int32_t min_level) {
+void LevelChecker::init(int32_t min_level, const Scope& scope) {
+  always_assert(min_level >= 0);
+
   s_has_been_init = true;
   s_min_level = min_level;
   s_requires_api =
@@ -33,24 +36,55 @@ void LevelChecker::init(int32_t min_level) {
             "WARNING: Unable to find TargetApi annotation. It's either "
             "unused (okay) or been deleted (not okay)\n");
   }
+
+  walk::parallel::classes(scope, init_class);
+  walk::parallel::methods(scope, init_method);
 }
 
-// If the DexMethod (or its containing classes) has a Target/RequiresApi
-// annotation, return its value. Otherwise, return the min_sdk
-int32_t LevelChecker::get_method_level(const DexMethod* method) {
+int32_t LevelChecker::get_method_level(DexMethod* method) {
   always_assert_log(s_has_been_init, "must call init first");
-  int32_t method_level = get_level(method);
-  if (method_level != s_min_level) {
-    return method_level;
+  int32_t method_level = method->rstate.get_api_level();
+  if (method_level == -1) {
+    // must have been created later on by Redex
+    DexClass* cls = type_class(method->get_class());
+    int32_t class_level = cls->rstate.get_api_level();
+    if (class_level == -1) {
+      // must have been created later on by Redex
+      init_class(cls);
+    }
+
+    init_method(method);
+    method_level = method->rstate.get_api_level();
   }
-  for (DexClass* cls = type_class(method->get_class()); cls != nullptr;
-       cls = get_outer_class(cls)) {
-    int32_t level = get_level(cls);
-    if (level != s_min_level) {
-      return level;
+
+  return method_level;
+}
+
+void LevelChecker::init_class(DexClass* clazz) {
+  for (DexClass* cls = clazz; cls != nullptr; cls = get_outer_class(cls)) {
+    int32_t class_level = get_level(cls);
+    if (class_level != -1) {
+      clazz->rstate.set_api_level(class_level);
+      return;
     }
   }
-  return s_min_level;
+
+  clazz->rstate.set_api_level(s_min_level);
+}
+
+void LevelChecker::init_method(DexMethod* method) {
+  int32_t method_level = get_level(method);
+  if (method_level == -1) {
+    DexClass* cls = type_class(method->get_class());
+    if (cls == nullptr) {
+      method_level = s_min_level;
+    } else {
+      method_level = cls->rstate.get_api_level();
+      always_assert(method_level != -1);
+    }
+  }
+
+  method->rstate.set_api_level(method_level);
 }
 
 DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
