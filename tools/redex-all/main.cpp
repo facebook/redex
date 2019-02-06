@@ -37,6 +37,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
@@ -697,6 +698,12 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
                            pg_config);
+  }
+  {
+    Timer t("No Optimizations Rules");
+    // this will change rstate of methods
+    redex::process_no_optimizations_rules(cfg.get_no_optimizations_annos(),
+                                          scope);
   }
   {
     Timer t("Initializing reachable classes");

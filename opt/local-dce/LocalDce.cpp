@@ -264,22 +264,6 @@ void LocalDcePass::run(IRCode* code) {
   LocalDce(find_pure_methods()).dce(code);
 }
 
-void LocalDcePass::eval_pass(DexStoresVector& stores,
-                             ConfigFiles& cfg,
-                             PassManager& mgr) {
-
-  auto no_optimization_annos = cfg.get_no_optimizations_annos();
-  auto scope = build_class_scope(stores);
-  auto match = m::any_annos<DexMethod>(
-      m::as_type<DexAnnotation>(m::in<DexType>(no_optimization_annos)));
-
-  walk::methods(scope, [&](DexMethod* method) {
-    if (match.matches(method)) {
-      m_do_not_optimize_methods.insert(method);
-    }
-  });
-}
-
 void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& cfg,
                             PassManager& mgr) {
@@ -295,8 +279,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* m) {
         auto* code = m->get_code();
-        if (code == nullptr || m_do_not_optimize_methods.find(m) !=
-                                   m_do_not_optimize_methods.end()) {
+        if (code == nullptr || m->rstate.no_optimizations()) {
           return LocalDce::Stats();
         }
 

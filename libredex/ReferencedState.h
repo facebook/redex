@@ -63,6 +63,8 @@ class ReferencedState {
 
   bool m_keep_name{false};
 
+  bool m_no_optimizations{false};
+
   int32_t m_api_level{-1};
 
   // InterDex subgroup, if any.
@@ -261,6 +263,9 @@ class ReferencedState {
   // -1 means unknown, e.g. for a method created by Redex
   int32_t get_api_level() const { return m_api_level; }
   void set_api_level(int api_level) { m_api_level = api_level; }
+
+  bool no_optimizations() const { return m_no_optimizations; }
+  void set_no_optimizations() { m_no_optimizations = true; }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

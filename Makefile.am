@@ -138,6 +138,7 @@ libredex_la_SOURCES = \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
 	libredex/Mutators.cpp \
+	libredex/NoOptimizationsMatcher.cpp \
 	libredex/OptData.cpp \
 	libredex/PassManager.cpp \
 	libredex/PassRegistry.cpp \
