@@ -550,20 +550,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
         m_environments.emplace(insn, current_state);
-        traceState(insn, current_state);
         analyze_instruction(insn, &current_state);
       }
     }
-  }
-
-  void traceState(const IRInstruction* insn,
-                  const AbstractObjectEnvironment& current_state) {
-    if (!traceEnabled(REFL, 5)) {
-      return;
-    }
-    std::ostringstream out;
-    out << current_state << std::endl;
-    TRACE(REFL, 5, " %s %s\n", SHOW(insn), out.str().c_str());
   }
 
   DexMethodRef* m_get_class{DexMethod::make_method(
