@@ -809,9 +809,9 @@ void init_reachable_classes(
 
 std::string ReferencedState::str() const {
   std::ostringstream s;
-  s << m_bytype;
-  s << m_bystring;
-  s << m_byresources;
+  s << m_by_type;
+  s << m_by_string;
+  s << m_by_resources;
   s << m_is_serde;
   s << m_keep;
   s << allowshrinking();

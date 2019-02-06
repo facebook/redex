@@ -24,13 +24,13 @@ class ReferencedState {
   // Whether this DexMember is referenced by one of the strings in the native
   // libraries. Note that this doesn't allow us to distinguish
   // native -> Java references from Java -> native refs.
-  bool m_bystring{false};
-  // This is a superset of m_bystring -- i.e. it's true if m_bystring is true.
+  bool m_by_string{false};
+  // This is a superset of m_by_string -- i.e. it's true if m_by_string is true.
   // It also gets set ot true if this DexMember is referenced by one of the
   // "keep_" settings in the Redex config.
-  bool m_bytype{false};
+  bool m_by_type{false};
   // Whether it is referenced from an XML layout.
-  bool m_byresources{false};
+  bool m_by_resources{false};
   // Whether it is a json serializer/deserializer class for a reachable class.
   bool m_is_serde{false};
 
@@ -82,9 +82,9 @@ class ReferencedState {
   // std::atomic requires an explicitly user-defined assignment operator.
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
-      this->m_bytype = other.m_bytype;
-      this->m_bystring = other.m_bystring;
-      this->m_byresources = other.m_byresources;
+      this->m_by_type = other.m_by_type;
+      this->m_by_string = other.m_by_string;
+      this->m_by_resources = other.m_by_resources;
       this->m_is_serde = other.m_is_serde;
       this->m_mix_mode = other.m_mix_mode;
 
@@ -114,28 +114,28 @@ class ReferencedState {
   // probably don't want to use this method unless root() turns out to be
   // somehow insufficient.
   bool can_delete() const {
-    return !m_bytype && !m_byresources && (!m_keep || allowshrinking());
+    return !m_by_type && !m_by_resources && (!m_keep || allowshrinking());
   }
 
   // Like can_delete(), this is also over-conservative. We don't yet have a
   // better alternative, but we should create one.
   bool can_rename() const {
-    return !m_keep_name && !m_bystring && (!m_keep || allowobfuscation()) &&
+    return !m_keep_name && !m_by_string && (!m_keep || allowobfuscation()) &&
            !allowshrinking();
   }
 
   // ProGuard keep options
 
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
-  bool has_keep() const { return m_keep || m_byresources; }
+  bool has_keep() const { return m_keep || m_by_resources; }
 
   // ProGuard keep option modifiers
   bool allowshrinking() const {
-    return !m_unset_allowshrinking && m_set_allowshrinking && !m_byresources;
+    return !m_unset_allowshrinking && m_set_allowshrinking && !m_by_resources;
   }
   bool allowobfuscation() const {
     return !m_unset_allowobfuscation && m_set_allowobfuscation &&
-           !m_byresources;
+           !m_by_resources;
   }
   bool assumenosideeffects() const { return m_assumenosideeffects; }
 
@@ -147,8 +147,8 @@ class ReferencedState {
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() { m_bytype = m_bystring = true; }
-  bool is_referenced_by_string() const { return m_bystring; }
+  void ref_by_string() { m_by_type = m_by_string = true; }
+  bool is_referenced_by_string() const { return m_by_string; }
 
   // A class referenced by resource XML can take the following forms in .xml
   // files under the res/ directory:
@@ -158,25 +158,25 @@ class ReferencedState {
   // This differs from "by_string" reference since it is possible to rename
   // these string references, and potentially eliminate dead resource .xml files
   void set_referenced_by_resource_xml() {
-    m_byresources = true;
+    m_by_resources = true;
     if (RedexContext::record_keep_reasons()) {
       add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
     }
   }
 
   void unset_referenced_by_resource_xml() {
-    m_byresources = false;
+    m_by_resources = false;
     // TODO: Remove the XML-related keep reasons
   }
 
-  bool is_referenced_by_resource_xml() const { return m_byresources; }
+  bool is_referenced_by_resource_xml() const { return m_by_resources; }
 
   void set_is_serde() { m_is_serde = true; }
 
   bool is_serde() const { return m_is_serde; }
 
   // A direct reference from code (not reflection)
-  void ref_by_type() { m_bytype = true; }
+  void ref_by_type() { m_by_type = true; }
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 
