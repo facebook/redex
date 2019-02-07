@@ -47,7 +47,22 @@ void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
   }
 }
 
+// We need to construct the classes in our tests because the used vars analysis
+// will call resolve_method() during its analysis. resolve_method() needs the
+// method to reside in a class hierarchy in order to work correctly.
+DexClass* create_simple_class(const std::string& name) {
+  ClassCreator cc(DexType::make_type(name.c_str()));
+  cc.set_super(get_object_type());
+  auto* ctor =
+      static_cast<DexMethod*>(DexMethod::make_method(name + ".<init>:()V"));
+  ctor->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  cc.add_method(ctor);
+  return cc.create();
+}
+
 TEST_F(UsedVarsTest, simple) {
+  create_simple_class("LFoo;");
+
   auto code = assembler::ircode_from_string(R"(
     (
       (new-instance "LFoo;")
@@ -83,6 +98,9 @@ TEST_F(UsedVarsTest, simple) {
 }
 
 TEST_F(UsedVarsTest, join) {
+  create_simple_class("LFoo;");
+  create_simple_class("LBar;");
+
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -168,6 +186,87 @@ TEST_F(UsedVarsTest, noDeleteInit) {
     if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
+    }
+  }
+  auto fp_iter =
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+}
+
+TEST_F(UsedVarsTest, noDeleteAliasedInit) {
+  create_simple_class("LFoo;");
+
+  // The used register differs from the initialized register, but they both
+  // point to the same object.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (move-object v1 v0)
+      (invoke-direct (v1) "LFoo;.<init>:()V")
+      (sput-object v0 "LBar;.foo:LFoo;")
+      (return-void)
+    )
+  )");
+  auto expected = assembler::to_s_expr(code.get());
+
+  side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
+  ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
+  for (auto& mie : InstructionIterable(*code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+      invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
+      invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
+    }
+  }
+  auto fp_iter =
+      analyze(*code, invoke_to_esc_summary_map, invoke_to_eff_summary_map);
+  optimize(*fp_iter, code.get());
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+}
+
+TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
+  auto foo_cls = create_simple_class("LFoo;");
+  // This method will only modify the `this` argument.
+  auto no_side_effects_method = static_cast<DexMethod*>(
+      DexMethod::make_method("LFoo;.nosideeffects:()V"));
+  no_side_effects_method->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  foo_cls->get_dmethods().push_back(no_side_effects_method);
+
+  // The object is never read or allowed to escape, but there's a non-removable
+  // if-* opcode that branches on it. Check that we keep its initializer.
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "LFoo;.<init>:()V")
+      ; Unfortunately, with our current implementation, we aren't able to remove
+      ; this no-op call even though it would be safe to do so.
+      (invoke-direct (v0) "LFoo;.nosideeffects:()V")
+      (if-eqz v0 :exit)
+      (invoke-static () "LBar;.something:()V")
+      (:exit)
+      (return-void)
+    )
+  )");
+  auto expected = assembler::to_s_expr(code.get());
+
+  side_effects::InvokeToSummaryMap invoke_to_eff_summary_map;
+  ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
+  for (auto& mie : InstructionIterable(*code)) {
+    auto insn = mie.insn;
+    if (is_invoke(insn->opcode())) {
+      auto method = insn->get_method();
+      if (is_init(method)) {
+        invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
+        invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
+      } else if (method->get_name()->str() == "nosideeffects") {
+        invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
+        invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
+      }
     }
   }
   auto fp_iter =

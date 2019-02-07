@@ -14,83 +14,6 @@ namespace ptrs = local_pointers;
 namespace {
 
 /*
- * This returns all the pointer-bearing registers whose pointees :insn will
- * access (whether to read from or to write to them).
- */
-std::vector<uint16_t> pointer_registers(const IRInstruction* insn) {
-  switch (insn->opcode()) {
-  case OPCODE_AGET:
-  case OPCODE_AGET_WIDE:
-  case OPCODE_AGET_BOOLEAN:
-  case OPCODE_AGET_BYTE:
-  case OPCODE_AGET_CHAR:
-  case OPCODE_AGET_SHORT:
-  case OPCODE_AGET_OBJECT:
-  case OPCODE_IGET:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_BOOLEAN:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_OBJECT:
-    return {insn->src(0)};
-
-  case OPCODE_APUT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-    // src(0) is the value that is being written, src(1) is the object whose
-    // field is being written to.
-    return {insn->src(1)};
-
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_IPUT_OBJECT:
-    return {insn->src(0), insn->src(1)};
-  case OPCODE_SPUT_OBJECT:
-    return {insn->src(0)};
-
-  case OPCODE_THROW:
-  case OPCODE_RETURN_OBJECT:
-    return {insn->src(0)};
-
-  case OPCODE_FILL_ARRAY_DATA:
-    return {insn->src(0)};
-
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_INTERFACE: {
-    std::vector<uint16_t> regs;
-    size_t idx{0};
-    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-      // The `this` parameter
-      regs.emplace_back(insn->src(idx++));
-    }
-    auto callee = insn->get_method();
-    auto arg_types = callee->get_proto()->get_args()->get_type_list();
-    for (DexType* arg_type : arg_types) {
-      if (!is_primitive(arg_type)) {
-        regs.emplace_back(insn->src(idx));
-      }
-      ++idx;
-    }
-    return regs;
-  }
-  default:
-    return {};
-  }
-}
-
-/*
  * Record the environment before the execution of every instruction. We need
  * this data during the backwards used vars analysis.
  */
@@ -141,30 +64,25 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
     if (env.is_bottom()) {
       return;
     }
-    // We mark all pointer-bearing registers as used, even if we only write to
-    // them. This is done in order to correctly handle the verifier's
-    // requirement that all objects are initialized before being used (even if
-    // only to make unused writes to them.) Marking modified objects as used
-    // ensures that we don't delete the <init>() calls on them. See the
+    // We mark all src registers -- and any pointers they contain -- as used,
+    // even if we don't read from the pointee objects. This is done in order to
+    // correctly handle the verifier's requirement that all objects are
+    // initialized before being used (even if only to make unused writes to them
+    // or to check whether the pointer is non-null.) Marking modified objects as
+    // used ensures that we don't delete the <init>() calls on them. See the
     // UsedVarsTest_noDeleteInit unit test for a concrete example.
-    for (auto reg : pointer_registers(insn)) {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      auto reg = insn->src(i);
+      used_vars->add(reg);
       auto pointers = env.get_pointers(reg);
-      // XXX: We should never encounter this case since we explicitly bind all
-      // potential pointer-containing registers to non-Top values in our
-      // environment. If we did encounter Top here, however, we should treat
-      // all local allocations as potentially used -- a read from
-      // PointerSet::top() must be treated like a read from every possible
-      // heap location.
-      always_assert_log(!pointers.is_top(), "%u is top for %s", reg,
-                        SHOW(insn));
+      if (!pointers.is_value()) {
+        continue;
+      }
       for (auto pointer : pointers.elements()) {
         if (ptrs::may_alloc(pointer->opcode())) {
           used_vars->add(pointer);
         }
       }
-    }
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
-      used_vars->add(insn->src(i));
     }
     if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
       used_vars->add(RESULT_REGISTER);
@@ -256,8 +174,17 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_VIRTUAL: {
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (method != nullptr && assumenosideeffects(method)) {
+    if (method == nullptr) {
+      return true;
+    }
+    if (assumenosideeffects(method)) {
       return used_vars.contains(RESULT_REGISTER);
+    }
+    const auto& env = m_insn_env_map.at(insn);
+    if (is_init(method) &&
+        (used_vars.contains(insn->src(0)) ||
+         is_used_or_escaping_write(env, used_vars, insn->src(0)))) {
+      return true;
     }
     if (!m_invoke_to_summary_map.count(insn)) {
       return true;
@@ -270,7 +197,6 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
         used_vars.contains(RESULT_REGISTER)) {
       return true;
     }
-    const auto& env = m_insn_env_map.at(insn);
     const auto& mod_params = summary.modified_params;
     return std::any_of(
         mod_params.begin(), mod_params.end(), [&](param_idx_t idx) {
