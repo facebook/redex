@@ -20,15 +20,6 @@ using namespace testing;
 
 class LocalPointersTest : public RedexTest {};
 
-std::unordered_set<const IRInstruction*> to_set(const ptrs::PointerSet& pset) {
-  if (!pset.is_value()) {
-    return std::unordered_set<const IRInstruction*>{};
-  }
-  const auto& elems = pset.elements();
-  std::unordered_set<const IRInstruction*> result(elems.begin(), elems.end());
-  return result;
-}
-
 TEST_F(LocalPointersTest, domainOperations) {
   ptrs::Environment env1;
   ptrs::Environment env2;
@@ -39,24 +30,23 @@ TEST_F(LocalPointersTest, domainOperations) {
   auto insn3 = (new IRInstruction(OPCODE_NEW_INSTANCE))
                    ->set_type(DexType::make_type("LBaz;"));
 
-  env1.set_pointer_at(0, insn1, EscapeState::NOT_ESCAPED);
-  env2.set_pointer_at(0, insn1, EscapeState::MAY_ESCAPE);
+  env1.set_fresh_pointer(0, insn1);
+  env2.set_fresh_pointer(0, insn1);
+  env2.set_may_escape(0);
 
-  env1.set_pointer_at(1, insn1, EscapeState::NOT_ESCAPED);
-  env2.set_pointer_at(1, insn2, EscapeState::NOT_ESCAPED);
+  env1.set_fresh_pointer(1, insn1);
+  env2.set_fresh_pointer(1, insn2);
 
   auto joined_env = env1.join(env2);
 
   EXPECT_EQ(joined_env.get_pointers(0).size(), 1);
   EXPECT_EQ(*joined_env.get_pointers(0).elements().begin(), insn1);
   EXPECT_EQ(joined_env.get_pointers(1).size(), 2);
-  EXPECT_THAT(to_set(joined_env.get_pointers(1)),
+  EXPECT_THAT(joined_env.get_pointers(1).elements(),
               UnorderedElementsAre(insn1, insn2));
-  EXPECT_EQ(joined_env.get_pointee(insn1),
-            EscapeDomain(EscapeState::MAY_ESCAPE));
-  EXPECT_EQ(joined_env.get_pointee(insn2),
-            EscapeDomain(EscapeState::NOT_ESCAPED));
-  EXPECT_EQ(joined_env.get_pointee(insn3), EscapeDomain(EscapeState::BOTTOM));
+  EXPECT_TRUE(joined_env.may_have_escaped(insn1));
+  EXPECT_FALSE(joined_env.may_have_escaped(insn2));
+  EXPECT_FALSE(joined_env.may_have_escaped(insn3));
 }
 
 TEST_F(LocalPointersTest, simple) {
@@ -87,19 +77,16 @@ TEST_F(LocalPointersTest, simple) {
 
   auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
   EXPECT_EQ(exit_env.get_pointers(0).size(), 2);
-  EXPECT_THAT(to_set(exit_env.get_pointers(0)),
+  EXPECT_THAT(exit_env.get_pointers(0).elements(),
               UnorderedElementsAre(
                   Pointee(Eq(*(IRInstruction(OPCODE_NEW_INSTANCE)
                                    .set_type(DexType::get_type("LFoo;"))))),
                   Pointee(Eq(*(
                       IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0))))));
   for (auto insn : exit_env.get_pointers(0).elements()) {
-    if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
-      EXPECT_EQ(exit_env.get_pointee(insn),
-                EscapeDomain(EscapeState::ONLY_PARAMETER_DEPENDENT));
-    } else if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-      EXPECT_EQ(exit_env.get_pointee(insn),
-                EscapeDomain(EscapeState::NOT_ESCAPED));
+    if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
+        insn->opcode() == OPCODE_NEW_INSTANCE) {
+      EXPECT_FALSE(exit_env.may_have_escaped(insn));
     }
   }
 }
@@ -137,14 +124,13 @@ TEST_F(LocalPointersTest, aliasEscape) {
   auto returned_ptrs = exit_env.get_pointers(0);
   EXPECT_EQ(returned_ptrs.size(), 2);
   EXPECT_THAT(
-      to_set(returned_ptrs),
+      returned_ptrs.elements(),
       UnorderedElementsAre(
           Pointee(*(IRInstruction(OPCODE_NEW_INSTANCE)
                         .set_type(DexType::get_type("LFoo;")))),
           Pointee(*(IRInstruction(IOPCODE_LOAD_PARAM_OBJECT).set_dest(0)))));
   for (auto insn : returned_ptrs.elements()) {
-    EXPECT_EQ(exit_env.get_pointee(insn),
-              EscapeDomain(EscapeState::MAY_ESCAPE));
+    EXPECT_TRUE(exit_env.may_have_escaped(insn));
   }
 }
 

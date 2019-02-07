@@ -133,7 +133,9 @@ class SummaryBuilder final {
       }
       break;
     }
-    default: { break; }
+    default: {
+      break;
+    }
     }
   }
 
@@ -152,20 +154,14 @@ class SummaryBuilder final {
       return;
     }
     for (auto insn : pointers.elements()) {
-      switch (env.get_pointee(insn).element()) {
-      case EscapeState::MAY_ESCAPE: {
+      if (!env.may_have_escaped(insn)) {
+        if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
+          summary->modified_params.emplace(m_param_insn_map.at(insn));
+        }
+      } else {
         TRACE(DEAD_CODE, 3, "Escaping write to value allocated by %s\n",
               SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
-        break;
-      }
-      case EscapeState::ONLY_PARAMETER_DEPENDENT: {
-        summary->modified_params.emplace(m_param_insn_map.at(insn));
-        break;
-      }
-      case EscapeState::NOT_ESCAPED:
-      case EscapeState::BOTTOM:
-        break;
       }
     }
   }
@@ -211,6 +207,19 @@ void analyze_method_recursive(const DexMethod* method,
       SummaryBuilder(invoke_to_summary_cmap, *ptrs_fp_iter, method->get_code())
           .build();
   summary_cmap->emplace(method, summary);
+
+  if (traceEnabled(DEAD_CODE, 3)) {
+    TRACE(DEAD_CODE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
+          summary.effects != EFF_NONE ? "has" : "does not have",
+          summary.effects);
+    if (summary.modified_params.size() != 0) {
+      TRACE(DEAD_CODE, 3, "Modified params: ");
+      for (auto idx : summary.modified_params) {
+        TRACE(DEAD_CODE, 3, "%u ", idx);
+      }
+      TRACE(DEAD_CODE, 3, "\n");
+    }
+  }
 }
 
 } // namespace
@@ -245,20 +254,6 @@ void analyze_scope(
     PatriciaTreeSet<const DexMethodRef*> visiting;
     analyze_method_recursive(method, call_graph, ptrs_fp_iter_map, visiting,
                              &summary_cmap);
-
-    if (traceEnabled(DEAD_CODE, 3)) {
-      const auto& summary = summary_cmap.at(method);
-      TRACE(DEAD_CODE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
-            summary.effects != EFF_NONE ? "has" : "does not have",
-            summary.effects);
-      if (summary.modified_params.size() != 0) {
-        TRACE(DEAD_CODE, 3, "Modified params: ");
-        for (auto idx : summary.modified_params) {
-          TRACE(DEAD_CODE, 3, "%u ", idx);
-        }
-        TRACE(DEAD_CODE, 3, "\n");
-      }
-    }
   });
 
   for (auto& pair : summary_cmap) {

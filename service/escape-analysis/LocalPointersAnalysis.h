@@ -22,9 +22,10 @@
 
 /*
  * This analysis identifies heap values that are allocated within a given
- * method and never escape it. Specifically, it determines all the pointers
+ * method and have not escaped it. Specifically, it determines all the pointers
  * that a given register may contain, and figures out which of these pointers
- * must not escape.
+ * must not have escaped on any path from the method entry to the current
+ * program point.
  *
  * Note that we do not model instance fields or array elements, so any values
  * written to them will be treated as escaping, even if the containing object
@@ -40,38 +41,50 @@ using PointerSet = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 using PointerEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, PointerSet>;
 
-using HeapDomain =
-    sparta::PatriciaTreeMapAbstractPartition<const IRInstruction*,
-                                             EscapeDomain>;
+inline bool may_alloc(IROpcode op) {
+  return op == OPCODE_NEW_INSTANCE || op == OPCODE_NEW_ARRAY ||
+         op == OPCODE_FILLED_NEW_ARRAY;
+}
 
-class Environment final
-    : public sparta::ReducedProductAbstractDomain<Environment,
-                                                  PointerEnvironment,
-                                                  HeapDomain> {
+class Environment final : public sparta::ReducedProductAbstractDomain<
+                              Environment,
+                              PointerEnvironment,
+                              PointerSet /* may-escape pointers */> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
-      const std::tuple<PointerEnvironment, HeapDomain>&) {}
+      const std::tuple<PointerEnvironment, PointerSet>&) {}
 
   const PointerEnvironment& get_pointer_environment() const {
     return ReducedProductAbstractDomain::get<0>();
   }
 
-  const HeapDomain& get_heap() const {
-    return ReducedProductAbstractDomain::get<1>();
+  bool may_have_escaped(const IRInstruction* ptr) const {
+    if (is_always_escaping(ptr)) {
+      return true;
+    }
+    return ReducedProductAbstractDomain::get<1>().contains(ptr);
   }
 
   PointerSet get_pointers(reg_t reg) const {
     return get_pointer_environment().get(reg);
   }
 
-  EscapeDomain get_pointee(const IRInstruction* insn) const {
-    return get_heap().get(insn);
-  }
-
   void set_pointers(reg_t reg, PointerSet pset) {
     apply<0>([&](PointerEnvironment* penv) { penv->set(reg, pset); });
+  }
+
+  void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) {
+    set_pointers(reg, PointerSet(pointer));
+    apply<1>([&](PointerSet* may_escape) { may_escape->remove(pointer); });
+  }
+
+  void set_may_escape_pointer(reg_t reg, const IRInstruction* pointer) {
+    set_pointers(reg, PointerSet(pointer));
+    if (!is_always_escaping(pointer)) {
+      apply<1>([&](PointerSet* may_escape) { may_escape->add(pointer); });
+    }
   }
 
   /*
@@ -83,31 +96,30 @@ class Environment final
     if (!pointers.is_value()) {
       return;
     }
-    apply<1>([&](HeapDomain* heap) {
+    apply<1>([&](PointerSet* may_escape) {
       for (const auto* pointer : pointers.elements()) {
-        heap->set(pointer, EscapeDomain(EscapeState::MAY_ESCAPE));
+        if (!is_always_escaping(pointer)) {
+          may_escape->add(pointer);
+        }
       }
     });
   }
 
+ private:
   /*
-   * Set :reg to contain the single abstract pointer :insn, which points to a
-   * value with :escape_state.
+   * This method tells us whether we should always treat as may-escapes all the
+   * non-null pointers written by the given instruction to its dest register.
+   * This is a small performance optimization -- it means we don't have to
+   * populate our may_escape set with as many pointers.
+   *
+   * For instructions that don't write any non-null pointer values to their
+   * dests, this method will be vacuously true.
    */
-  void set_pointer_at(reg_t reg,
-                      const IRInstruction* insn,
-                      EscapeState escape_state) {
-    apply<0>(
-        [&](PointerEnvironment* penv) { penv->set(reg, PointerSet(insn)); });
-    apply<1>(
-        [&](HeapDomain* heap) { heap->set(insn, EscapeDomain(escape_state)); });
+  static bool is_always_escaping(const IRInstruction* ptr) {
+    auto op = ptr->opcode();
+    return !may_alloc(op) && op != IOPCODE_LOAD_PARAM_OBJECT;
   }
 };
-
-inline bool is_alloc_opcode(IROpcode op) {
-  return op == OPCODE_NEW_INSTANCE || op == OPCODE_NEW_ARRAY ||
-         op == OPCODE_FILLED_NEW_ARRAY;
-}
 
 using ParamSet = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
 

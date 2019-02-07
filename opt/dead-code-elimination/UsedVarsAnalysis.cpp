@@ -11,6 +11,8 @@
 
 namespace ptrs = local_pointers;
 
+namespace {
+
 /*
  * This returns all the pointer-bearing registers whose pointees :insn will
  * access (whether to read from or to write to them).
@@ -92,7 +94,7 @@ std::vector<uint16_t> pointer_registers(const IRInstruction* insn) {
  * Record the environment before the execution of every instruction. We need
  * this data during the backwards used vars analysis.
  */
-static std::unordered_map<const IRInstruction*, ptrs::Environment>
+std::unordered_map<const IRInstruction*, ptrs::Environment>
 gen_instruction_environment_map(const cfg::ControlFlowGraph& cfg,
                                 const ptrs::FixpointIterator& fp_iter) {
   std::unordered_map<const IRInstruction*, ptrs::Environment> result;
@@ -107,31 +109,7 @@ gen_instruction_environment_map(const cfg::ControlFlowGraph& cfg,
   return result;
 }
 
-// Print the subset of env that insn references. (Printing out the entire env
-// at every instruction makes logging too costly.)
-std::string show_subset(const ptrs::Environment& env,
-                        const IRInstruction* insn) {
-  std::ostringstream o;
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    auto src = insn->src(i);
-    const auto& pointers = env.get_pointers(src);
-    o << pointers;
-    if (!pointers.is_value()) {
-      continue;
-    }
-    o << "(";
-    bool first = true;
-    for (auto* pointer : pointers.elements()) {
-      if (!first) {
-        o << ", ";
-      }
-      o << env.get_pointee(pointer);
-      first = false;
-    }
-    o << ")";
-  }
-  return o.str();
-}
+} // namespace
 
 namespace used_vars {
 
@@ -147,11 +125,10 @@ FixpointIterator::FixpointIterator(
 
 void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            UsedVarsSet* used_vars) const {
-  TRACE(DEAD_CODE, 5, "Before %s : %s : %s\n", SHOW(insn), SHOW(*used_vars),
-        show_subset(m_insn_env_map.at(insn), insn).c_str());
+  TRACE(DEAD_CODE, 5, "Before %s : %s : %s\n", SHOW(insn), SHOW(*used_vars));
   bool required = is_required(insn, *used_vars);
   auto op = insn->opcode();
-  if (ptrs::is_alloc_opcode(op)) {
+  if (ptrs::may_alloc(op)) {
     used_vars->remove(insn);
   }
   if (insn->dests_size()) {
@@ -181,7 +158,9 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
       always_assert_log(!pointers.is_top(), "%u is top for %s", reg,
                         SHOW(insn));
       for (auto pointer : pointers.elements()) {
-        used_vars->add(pointer);
+        if (ptrs::may_alloc(pointer->opcode())) {
+          used_vars->add(pointer);
+        }
       }
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
@@ -201,14 +180,9 @@ bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
   if (!pointers.is_value()) {
     return true;
   }
-  const auto& heap = env.get_heap();
   for (auto pointer : pointers.elements()) {
-    if (used_vars.contains(pointer)) {
-      return true;
-    }
-    // Writes to MAY_ESCAPE or ONLY_PARAMETER_DEPENDENT objects must be treated
-    // as potentially used.
-    if (!heap.get(pointer).equals(EscapeDomain(EscapeState::NOT_ESCAPED))) {
+    if (pointer->opcode() == IOPCODE_LOAD_PARAM_OBJECT ||
+        used_vars.contains(pointer) || env.may_have_escaped(pointer)) {
       return true;
     }
   }

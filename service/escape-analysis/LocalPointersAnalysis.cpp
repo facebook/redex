@@ -253,15 +253,9 @@ static void analyze_dest(const IRInstruction* insn,
   // as escaping pointers, it would bloat the size of our abstract domain and
   // incur a runtime performance tax.
   if (dest_may_be_pointer(insn)) {
-    env->set_pointer_at(dest, insn, EscapeState::MAY_ESCAPE);
+    env->set_may_escape_pointer(dest, insn);
   } else {
     env->set_pointers(dest, PointerSet::top());
-  }
-}
-
-void escape_all_srcs(const IRInstruction* insn, Environment* env) {
-  for (size_t i = 0; i < insn->srcs_size(); ++i) {
-    env->set_may_escape(insn->src(i));
   }
 }
 
@@ -299,11 +293,16 @@ namespace local_pointers {
 void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            Environment* env) const {
   auto op = insn->opcode();
-  if (op == IOPCODE_LOAD_PARAM_OBJECT) {
-    env->set_pointer_at(
-        insn->dest(), insn, EscapeState::ONLY_PARAMETER_DEPENDENT);
-  } else if (is_alloc_opcode(op)) {
-    env->set_pointer_at(RESULT_REGISTER, insn, EscapeState::NOT_ESCAPED);
+  if (may_alloc(op)) {
+    if (op == OPCODE_FILLED_NEW_ARRAY &&
+        is_array(get_array_component_type(insn->get_type()))) {
+      for (size_t i = 0; i < insn->srcs_size(); ++i) {
+        env->set_may_escape(insn->src(i));
+      }
+    }
+    env->set_fresh_pointer(RESULT_REGISTER, insn);
+  } else if (op == IOPCODE_LOAD_PARAM_OBJECT) {
+    env->set_fresh_pointer(insn->dest(), insn);
   } else if (is_move(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
   } else if (op == OPCODE_CHECK_CAST) {
@@ -313,15 +312,24 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
   } else if (insn->dests_size()) {
     analyze_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result()) {
-    if (is_filled_new_array(op)) {
-      escape_all_srcs(insn, env);
-      analyze_dest(insn, RESULT_REGISTER, env);
-    } else if (is_invoke(op)) {
+    if (is_invoke(op)) {
       if (m_invoke_to_summary_map.count(insn)) {
         const auto& summary = m_invoke_to_summary_map.at(insn);
         analyze_invoke_with_summary(summary, insn, env);
       } else {
-        escape_all_srcs(insn, env);
+        size_t idx{0};
+        if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+          env->set_may_escape(insn->src(0));
+          ++idx;
+        }
+        const auto& arg_types =
+            insn->get_method()->get_proto()->get_args()->get_type_list();
+        for (const auto* arg : arg_types) {
+          if (!is_primitive(arg)) {
+            env->set_may_escape(insn->src(idx));
+          }
+          ++idx;
+        }
         analyze_dest(insn, RESULT_REGISTER, env);
       }
     } else {
@@ -436,8 +444,7 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
       param_indexes.emplace(insn, idx);
 
-      if (exit_state.get_pointee(insn).equals(
-              EscapeDomain(EscapeState::MAY_ESCAPE))) {
+      if (exit_state.may_have_escaped(insn)) {
         summary.escaping_parameters.emplace(idx);
       }
     }
