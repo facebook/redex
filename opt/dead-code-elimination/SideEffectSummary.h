@@ -45,6 +45,8 @@ enum Effects : size_t {
   EFF_LOCKS = 1 << 1,
   EFF_WRITE_MAY_ESCAPE = 1 << 2,
   EFF_UNKNOWN_INVOKE = 1 << 3,
+  // Marked by @DoNotOptimize
+  EFF_NO_OPTIMIZE = 1 << 4,
 };
 
 struct Summary {

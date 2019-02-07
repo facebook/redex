@@ -206,6 +206,9 @@ void analyze_method_recursive(const DexMethod* method,
   auto summary =
       SummaryBuilder(invoke_to_summary_cmap, *ptrs_fp_iter, method->get_code())
           .build();
+  if (method->rstate.no_optimizations()) {
+    summary.effects |= EFF_NO_OPTIMIZE;
+  }
   summary_cmap->emplace(method, summary);
 
   if (traceEnabled(DEAD_CODE, 3)) {
