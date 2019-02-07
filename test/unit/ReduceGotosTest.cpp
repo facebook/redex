@@ -18,6 +18,7 @@ class ReduceGotosTest : public RedexTest {};
 void test(const std::string& code_str,
           const std::string& expected_str,
           size_t expected_replaced_gotos_with_returns,
+          size_t expected_removed_trailing_moves,
           size_t expected_inverted_conditional_branches) {
   g_redex = new RedexContext();
 
@@ -27,6 +28,7 @@ void test(const std::string& code_str,
   ReduceGotosPass::Stats stats = ReduceGotosPass::process_code(code.get());
   EXPECT_EQ(expected_replaced_gotos_with_returns,
             stats.replaced_gotos_with_returns);
+  EXPECT_EQ(expected_removed_trailing_moves, stats.removed_trailing_moves);
   EXPECT_EQ(expected_inverted_conditional_branches,
             stats.inverted_conditional_branches);
 
@@ -47,7 +49,7 @@ TEST(ReduceGotosTest, trivial) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0);
+  test(code_str, expected_str, 0, 0, 0);
 }
 
 TEST(ReduceGotosTest, basic) {
@@ -77,7 +79,38 @@ TEST(ReduceGotosTest, basic) {
       (return v1)
     )
   )";
-  test(code_str, expected_str, 1, 0);
+  test(code_str, expected_str, 1, 0, 0);
+}
+
+TEST(ReduceGotosTest, move) {
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v2 0)
+      (move v1 v2)
+      (goto :end)
+
+      (:true)
+      (const v1 1)
+
+      (:end)
+      (return v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v2 0)
+      (return v2)
+
+      (:true)
+      (const v1 1)
+      (return v1)
+    )
+  )";
+  test(code_str, expected_str, 2, 1, 0);
 }
 
 TEST(ReduceGotosTest, involved) {
@@ -122,7 +155,7 @@ TEST(ReduceGotosTest, involved) {
       (return v2)
     )
   )";
-  test(code_str, expected_str, 2, 0);
+  test(code_str, expected_str, 2, 0, 0);
 }
 
 TEST(ReduceGotosTest, invert) {
@@ -152,5 +185,5 @@ TEST(ReduceGotosTest, invert) {
       (return v2)
     )
   )";
-  test(code_str, expected_str, 0, 1);
+  test(code_str, expected_str, 0, 0, 1);
 }

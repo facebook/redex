@@ -13,6 +13,7 @@ class ReduceGotosPass : public Pass {
  public:
   struct Stats {
     size_t replaced_gotos_with_returns{0};
+    size_t removed_trailing_moves{0};
     size_t inverted_conditional_branches{0};
   };
 
