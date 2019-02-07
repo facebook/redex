@@ -270,7 +270,11 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
   case sparta::AbstractValueKind::Value: {
     PointerSet returned_ptrs;
     for (auto src_idx : summary.returned_parameters.elements()) {
-      returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+      if (src_idx == FRESH_RETURN) {
+        returned_ptrs.add(insn);
+      } else {
+        returned_ptrs.join_with(env->get_pointers(insn->src(src_idx)));
+      }
     }
     env->set_pointers(RESULT_REGISTER, returned_ptrs);
     break;
@@ -286,6 +290,26 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
   }
 }
 
+/*
+ * Analyze an invoke instruction in the absence of an available summary.
+ */
+void analyze_generic_invoke(const IRInstruction* insn, Environment* env) {
+  size_t idx{0};
+  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+    env->set_may_escape(insn->src(0));
+    ++idx;
+  }
+  const auto& arg_types =
+      insn->get_method()->get_proto()->get_args()->get_type_list();
+  for (const auto* arg : arg_types) {
+    if (!is_primitive(arg)) {
+      env->set_may_escape(insn->src(idx));
+    }
+    ++idx;
+  }
+  analyze_dest(insn, RESULT_REGISTER, env);
+}
+
 } // namespace
 
 namespace local_pointers {
@@ -294,13 +318,22 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            Environment* env) const {
   auto op = insn->opcode();
   if (may_alloc(op)) {
-    if (op == OPCODE_FILLED_NEW_ARRAY &&
-        is_array(get_array_component_type(insn->get_type()))) {
-      for (size_t i = 0; i < insn->srcs_size(); ++i) {
-        env->set_may_escape(insn->src(i));
+    if (is_invoke(op)) {
+      if (m_invoke_to_summary_map.count(insn)) {
+        const auto& summary = m_invoke_to_summary_map.at(insn);
+        analyze_invoke_with_summary(summary, insn, env);
+      } else {
+        analyze_generic_invoke(insn, env);
       }
+    } else {
+      if (op == OPCODE_FILLED_NEW_ARRAY &&
+          is_array(get_array_component_type(insn->get_type()))) {
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          env->set_may_escape(insn->src(i));
+        }
+      }
+      env->set_fresh_pointer(RESULT_REGISTER, insn);
     }
-    env->set_fresh_pointer(RESULT_REGISTER, insn);
   } else if (op == IOPCODE_LOAD_PARAM_OBJECT) {
     env->set_fresh_pointer(insn->dest(), insn);
   } else if (is_move(op)) {
@@ -312,29 +345,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
   } else if (insn->dests_size()) {
     analyze_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result()) {
-    if (is_invoke(op)) {
-      if (m_invoke_to_summary_map.count(insn)) {
-        const auto& summary = m_invoke_to_summary_map.at(insn);
-        analyze_invoke_with_summary(summary, insn, env);
-      } else {
-        size_t idx{0};
-        if (insn->opcode() != OPCODE_INVOKE_STATIC) {
-          env->set_may_escape(insn->src(0));
-          ++idx;
-        }
-        const auto& arg_types =
-            insn->get_method()->get_proto()->get_args()->get_type_list();
-        for (const auto* arg : arg_types) {
-          if (!is_primitive(arg)) {
-            env->set_may_escape(insn->src(idx));
-          }
-          ++idx;
-        }
-        analyze_dest(insn, RESULT_REGISTER, env);
-      }
-    } else {
-      analyze_dest(insn, RESULT_REGISTER, env);
-    }
+    analyze_dest(insn, RESULT_REGISTER, env);
   } else if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
              op == OPCODE_IPUT_OBJECT) {
     // Since we don't model instance fields / array elements, any pointers
@@ -457,6 +468,8 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
     for (auto insn : returned_ptrs.elements()) {
       if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
         summary.returned_parameters.add(param_indexes.at(insn));
+      } else if (!exit_state.may_have_escaped(insn)) {
+        summary.returned_parameters.add(FRESH_RETURN);
       } else {
         // We are returning a pointer that did not originate from an input
         // parameter. We have no way of representing these values in our

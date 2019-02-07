@@ -43,7 +43,7 @@ using PointerEnvironment =
 
 inline bool may_alloc(IROpcode op) {
   return op == OPCODE_NEW_INSTANCE || op == OPCODE_NEW_ARRAY ||
-         op == OPCODE_FILLED_NEW_ARRAY;
+         op == OPCODE_FILLED_NEW_ARRAY || is_invoke(op);
 }
 
 class Environment final : public sparta::ReducedProductAbstractDomain<
@@ -122,6 +122,10 @@ class Environment final : public sparta::ReducedProductAbstractDomain<
 };
 
 using ParamSet = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
+
+// For denoting that a returned value is freshly allocated in the summarized
+// method and only escaped at the return opcode(s).
+constexpr uint16_t FRESH_RETURN = std::numeric_limits<uint16_t>::max();
 
 struct EscapeSummary {
   // The elements of this set represent the indexes of the src registers that

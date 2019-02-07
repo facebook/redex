@@ -198,3 +198,157 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   EXPECT_EQ(summary_copy.returned_parameters, ptrs::ParamSet::top());
   EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre());
 }
+
+/*
+ * Given the following code snippet:
+ *
+ *   class Foo {
+ *      public static Foo newInstance() {
+ *        Foo instance = new Foo();
+ *        instance.setValue(123);
+ *        return instance;
+ *      }
+ *   }
+ *
+ * We wish the callers of newInstance() to be able to treat its return value as
+ * non-escaping.
+ */
+TEST_F(LocalPointersTest, returnFreshValue) {
+  ptrs::EscapeSummary fresh_return_summary;
+  // First, check that we generate the right summary from the callee.
+  {
+    auto code = assembler::ircode_from_string(R"(
+      (
+       (new-instance "LFoo;")
+       (move-result-pseudo-object v0)
+       (invoke-direct (v0) "LFoo;.<init>:()V")
+       (return v0)
+      )
+    )");
+
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+
+    ptrs::InvokeToSummaryMap invoke_to_summary_map;
+    for (const auto& mie : InstructionIterable(code.get())) {
+      if (is_invoke(mie.insn->opcode())) {
+        invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+      }
+    }
+
+    ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
+    fp_iter.run(ptrs::Environment());
+
+    fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
+    EXPECT_EQ(fresh_return_summary.returned_parameters,
+              ptrs::ParamSet(ptrs::FRESH_RETURN));
+    EXPECT_THAT(fresh_return_summary.escaping_parameters,
+                UnorderedElementsAre());
+  }
+
+  // Now check that the caller handles the summary correctly.
+  {
+    auto code = assembler::ircode_from_string(R"(
+      (
+       (invoke-static () "LFoo;.newInstance:()LFoo;")
+       (move-result-object v0)
+       (return v0)
+      )
+    )");
+
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+
+    ptrs::InvokeToSummaryMap invoke_to_summary_map;
+    const IRInstruction* invoke_insn{nullptr};
+    for (const auto& mie : InstructionIterable(code.get())) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        invoke_insn = insn;
+        invoke_to_summary_map.emplace(insn, fresh_return_summary);
+      }
+    }
+
+    ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
+    fp_iter.run(ptrs::Environment());
+
+    auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+    EXPECT_THAT(exit_env.get_pointers(0).elements(),
+                UnorderedElementsAre(Pointee(Eq(*invoke_insn))));
+    EXPECT_FALSE(exit_env.may_have_escaped(invoke_insn));
+  }
+}
+
+/*
+ * Check that we correctly analyze the cases where we return a newly-allocated
+ * value that has escaped.
+ */
+TEST_F(LocalPointersTest, returnEscapedValue) {
+  ptrs::EscapeSummary fresh_return_summary;
+  // First, check that we generate the right summary from the callee.
+  {
+    auto code = assembler::ircode_from_string(R"(
+      (
+       (new-instance "LFoo;")
+       (move-result-pseudo-object v0)
+       (invoke-direct (v0) "LFoo;.<init>:()V")
+       (sput-object v0 "LFoo;.a:LFoo;") ; v0 escapes here
+       (return v0)
+      )
+    )");
+
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+
+    ptrs::InvokeToSummaryMap invoke_to_summary_map;
+    for (const auto& mie : InstructionIterable(code.get())) {
+      if (is_invoke(mie.insn->opcode())) {
+        invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+      }
+    }
+
+    ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
+    fp_iter.run(ptrs::Environment());
+
+    fresh_return_summary = ptrs::get_escape_summary(fp_iter, *code);
+    EXPECT_EQ(fresh_return_summary.returned_parameters, ptrs::ParamSet::top());
+    EXPECT_THAT(fresh_return_summary.escaping_parameters,
+                UnorderedElementsAre());
+  }
+
+  // Now check that the caller handles the summary correctly.
+  {
+    auto code = assembler::ircode_from_string(R"(
+      (
+       (invoke-static () "LFoo;.newEscapedInstance:()LFoo;")
+       (move-result-object v0)
+       (return v0)
+      )
+    )");
+
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+
+    ptrs::InvokeToSummaryMap invoke_to_summary_map;
+    const IRInstruction* invoke_insn{nullptr};
+    for (const auto& mie : InstructionIterable(code.get())) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        invoke_insn = insn;
+        invoke_to_summary_map.emplace(insn, fresh_return_summary);
+      }
+    }
+
+    ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
+    fp_iter.run(ptrs::Environment());
+
+    auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+    EXPECT_THAT(exit_env.get_pointers(0).elements(),
+                UnorderedElementsAre(Pointee(Eq(*invoke_insn))));
+    EXPECT_TRUE(exit_env.may_have_escaped(invoke_insn));
+  }
+}
