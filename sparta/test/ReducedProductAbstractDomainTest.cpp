@@ -13,6 +13,7 @@
 
 #include "AbstractDomainPropertyTest.h"
 #include "FiniteAbstractDomain.h"
+#include "HashedAbstractPartition.h"
 
 using namespace sparta;
 
@@ -75,18 +76,6 @@ class D0xD1xD2 final
       std::get<1>(product) = D1::bottom();
     }
   }
-
-  static D0xD1xD2 bottom() {
-    D0xD1xD2 p;
-    p.set_to_bottom();
-    return p;
-  }
-
-  static D0xD1xD2 top() {
-    D0xD1xD2 p;
-    p.set_to_top();
-    return p;
-  }
 };
 
 INSTANTIATE_TYPED_TEST_CASE_P(ReducedProductAbstractDomain,
@@ -147,6 +136,25 @@ TEST(ReducedProductAbstractDomainTest, latticeOperations) {
 
   D0xD1xD2 tac_reduced(make_tuple(D0(BOT0), D1(A), D2(C)));
   EXPECT_TRUE(tac_reduced.is_bottom());
+}
+
+class D0xPartition final
+    : public ReducedProductAbstractDomain<D0xPartition,
+                                          D0,
+                                          HashedAbstractPartition<int, D1>> {
+ public:
+  // Inherit constructors from ReducedProductAbstractDomain.
+  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+
+  static void reduce_product(
+      std::tuple<D0, HashedAbstractPartition<int, D1>>& product) {}
+};
+
+TEST(ReducedProductAbstractDomainTest, normalizedConstruction) {
+  D0xPartition product;
+  // Since a partition's default constructor creates a Bottom instance, the
+  // product must be set to Bottom as well.
+  EXPECT_TRUE(product.is_bottom());
 }
 
 TEST(ReducedProductAbstractDomainTest, destructiveOperations) {

@@ -103,8 +103,6 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
                   "Derived::reduce_product() does not exist");
   }
 
-  ReducedProductAbstractDomain() = default;
-
   /*
    * Defining a public variadic constructor will invariably lead to instances of
    * the "Most Vexing Parse". Passing a tuple of elements as a single argument
@@ -126,6 +124,14 @@ class ReducedProductAbstractDomain : public AbstractDomain<Derived> {
     // by the reduce() method.
     reduce();
   }
+
+  /*
+   * We need to define the default constructor in terms of the tuple-taking
+   * constructor because the normalized product of the default-constructed
+   * component Domains may be _|_.
+   */
+  ReducedProductAbstractDomain()
+      : ReducedProductAbstractDomain(std::tuple<Domains...>{}) {}
 
   // This method allows the user to explicitly call the reduction operation at
   // any time during the analysis. The `reduce_product()` method implements the
