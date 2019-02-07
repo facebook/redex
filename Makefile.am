@@ -27,7 +27,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/constant-propagation \
-	-I$(top_srcdir)/opt/dead-code-elimination \
 	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
@@ -40,6 +39,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/merge_interface \
 	-I$(top_srcdir)/opt/obfuscate \
+	-I$(top_srcdir)/opt/object-sensitive-dce \
 	-I$(top_srcdir)/opt/optimize_enums \
 	-I$(top_srcdir)/opt/original_name \
 	-I$(top_srcdir)/opt/outliner \
@@ -214,9 +214,6 @@ redex_all_SOURCES = \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
-	opt/dead-code-elimination/DeadCodeEliminationPass.cpp \
-	opt/dead-code-elimination/SideEffectSummary.cpp \
-	opt/dead-code-elimination/UsedVarsAnalysis.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
@@ -235,6 +232,9 @@ redex_all_SOURCES = \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
 	opt/obfuscate/VirtualRenamer.cpp \
+	opt/object-sensitive-dce/ObjectSensitiveDcePass.cpp \
+	opt/object-sensitive-dce/SideEffectSummary.cpp \
+	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \

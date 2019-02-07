@@ -15,9 +15,9 @@
 #include "SideEffectSummary.h"
 #include "UsedVarsAnalysis.h"
 
-class DeadCodeEliminationPass final : public Pass {
+class ObjectSensitiveDcePass final : public Pass {
  public:
-  DeadCodeEliminationPass() : Pass("DeadCodeEliminationPass") {}
+  ObjectSensitiveDcePass() : Pass("ObjectSensitiveDcePass") {}
 
   virtual void configure_pass(const JsonWrapper& jw) override {
     std::string s;

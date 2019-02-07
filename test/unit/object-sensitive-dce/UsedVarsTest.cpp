@@ -11,8 +11,8 @@
 #include <gtest/gtest.h>
 
 #include "Creators.h"
-#include "DeadCodeEliminationPass.h"
 #include "IRAssembler.h"
+#include "ObjectSensitiveDcePass.h"
 #include "RedexTest.h"
 
 namespace ptrs = local_pointers;

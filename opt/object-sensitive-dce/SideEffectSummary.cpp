@@ -114,7 +114,7 @@ class SummaryBuilder final {
 
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_INTERFACE: {
-      TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
+      TRACE(OSDCE, 3, "Unknown invoke: %s\n", SHOW(insn));
       summary->effects |= EFF_UNKNOWN_INVOKE;
       break;
     }
@@ -128,7 +128,7 @@ class SummaryBuilder final {
           classify_heap_write(env, insn->src(idx), summary);
         }
       } else {
-        TRACE(DEAD_CODE, 3, "Unknown invoke: %s\n", SHOW(insn));
+        TRACE(OSDCE, 3, "Unknown invoke: %s\n", SHOW(insn));
         summary->effects |= EFF_UNKNOWN_INVOKE;
       }
       break;
@@ -159,7 +159,7 @@ class SummaryBuilder final {
           summary->modified_params.emplace(m_param_insn_map.at(insn));
         }
       } else {
-        TRACE(DEAD_CODE, 3, "Escaping write to value allocated by %s\n",
+        TRACE(OSDCE, 3, "Escaping write to value allocated by %s\n",
               SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
       }
@@ -211,16 +211,16 @@ void analyze_method_recursive(const DexMethod* method,
   }
   summary_cmap->emplace(method, summary);
 
-  if (traceEnabled(DEAD_CODE, 3)) {
-    TRACE(DEAD_CODE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
+  if (traceEnabled(OSDCE, 3)) {
+    TRACE(OSDCE, 3, "%s %s unknown side effects (%u)\n", SHOW(method),
           summary.effects != EFF_NONE ? "has" : "does not have",
           summary.effects);
     if (summary.modified_params.size() != 0) {
-      TRACE(DEAD_CODE, 3, "Modified params: ");
+      TRACE(OSDCE, 3, "Modified params: ");
       for (auto idx : summary.modified_params) {
-        TRACE(DEAD_CODE, 3, "%u ", idx);
+        TRACE(OSDCE, 3, "%u ", idx);
       }
-      TRACE(DEAD_CODE, 3, "\n");
+      TRACE(OSDCE, 3, "\n");
     }
   }
 }

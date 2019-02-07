@@ -32,7 +32,6 @@
   TM(DBGSTRIP)           \
   TM(DC)                 \
   TM(DCE)                \
-  TM(DEAD_CODE)          \
   TM(DEDUP_BLOCKS)       \
   TM(DEDUP_RES)          \
   TM(DELINIT)            \
@@ -62,6 +61,7 @@
   TM(OBFUSCATE)          \
   TM(OPTRES)             \
   TM(ORIGINALNAME)       \
+  TM(OSDCE)              \
   TM(OUTLINE)            \
   TM(PEEPHOLE)           \
   TM(PGR)                \

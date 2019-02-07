@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DeadCodeEliminationPass.h"
+#include "ObjectSensitiveDcePass.h"
 
 #include <functional>
 
@@ -109,9 +109,9 @@ static side_effects::InvokeToSummaryMap build_summary_map(
   return invoke_to_summary_map;
 }
 
-void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
-                                       ConfigFiles&,
-                                       PassManager& mgr) {
+void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
+                                      ConfigFiles&,
+                                      PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
   walk::parallel::code(scope, [&](const DexMethod* method, IRCode& code) {
@@ -157,23 +157,23 @@ void DeadCodeEliminationPass::run_pass(DexStoresVector& stores,
             code->cfg());
         used_vars_fp_iter.run(uv::UsedVarsSet());
 
-        TRACE(DEAD_CODE, 5, "Transforming %s\n", SHOW(method));
-        TRACE(DEAD_CODE, 5, "Before:\n%s\n", SHOW(code->cfg()));
+        TRACE(OSDCE, 5, "Transforming %s\n", SHOW(method));
+        TRACE(OSDCE, 5, "Before:\n%s\n", SHOW(code->cfg()));
         auto dead_instructions =
             used_vars::get_dead_instructions(*code, used_vars_fp_iter);
         for (auto dead : dead_instructions) {
           // This logging is useful for quantifying what gets removed. E.g. to
           // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log | grep
           // " L.*$" -Po | sort | uniq -c
-          TRACE(DEAD_CODE, 3, "DEAD: %s\n", SHOW(dead->insn));
+          TRACE(OSDCE, 3, "DEAD: %s\n", SHOW(dead->insn));
           code->remove_opcode(dead);
         }
         transform::remove_unreachable_blocks(code);
-        TRACE(DEAD_CODE, 5, "After:\n%s\n", SHOW(&code));
+        TRACE(OSDCE, 5, "After:\n%s\n", SHOW(&code));
         return dead_instructions.size();
       },
       std::plus<size_t>());
   mgr.set_metric("removed_instructions", removed);
 }
 
-static DeadCodeEliminationPass s_pass;
+static ObjectSensitiveDcePass s_pass;
