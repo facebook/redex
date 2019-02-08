@@ -597,6 +597,7 @@ ReflectionAnalysis::~ReflectionAnalysis() {}
 
 ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
     : m_dex_method(dex_method) {
+  always_assert(dex_method != nullptr);
   IRCode* code = dex_method->get_code();
   if (code == nullptr) {
     return;
@@ -624,7 +625,7 @@ void ReflectionAnalysis::get_reflection_site(
           ? m_analyzer->get_class_source(reg, insn)
           : boost::none;
   if (aobj->kind == AbstractObjectKind::CLASS &&
-      cls_src != ClassObjectSource::REFLECTION) {
+      cls_src == ClassObjectSource::NON_REFLECTION) {
     return;
   }
   if (traceEnabled(REFL, 5)) {
@@ -642,6 +643,9 @@ void ReflectionAnalysis::get_reflection_site(
 const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   ReflectionSites reflection_sites;
   auto code = m_dex_method->get_code();
+  if (code == nullptr) {
+    return reflection_sites;
+  }
   auto reg_size = code->get_registers_size();
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
