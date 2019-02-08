@@ -26,13 +26,6 @@ namespace mog = method_override_graph;
 
 namespace {
 
-template <typename T>
-struct SafeVector {
-  std::mutex mutex;
-  std::vector<T>* vector;
-  SafeVector(std::vector<T>* v) : vector(v) {}
-};
-
 static ReachableObject SEED_SINGLETON{};
 
 DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
