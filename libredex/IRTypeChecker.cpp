@@ -1275,7 +1275,10 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 /*
  * Do a linear pass to sanity-check the structure of the bytecode.
  */
-Result check_structure(const IRCode* code) {
+Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
+  check_no_overwrite_this &= !is_static(method);
+  auto* code = method->get_code();
+  IRInstruction* this_insn = nullptr;
   bool has_seen_non_load_param_opcode{false};
   for (auto it = code->begin(); it != code->end(); ++it) {
     // XXX we are using IRList::iterator instead of InstructionIterator here
@@ -1291,6 +1294,15 @@ Result check_structure(const IRCode* code) {
                                 " not at the start of the method");
     }
     has_seen_non_load_param_opcode = !opcode::is_load_param(op);
+
+    if (check_no_overwrite_this) {
+      if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
+        this_insn = insn;
+      } else if (insn->dests_size() && insn->dest() == this_insn->dest()) {
+        return Result::make_error(
+            "Encountered overwrite of `this` register by " + show(insn));
+      }
+    }
 
     // The instruction immediately before a move-result instruction must be
     // either an invoke-* or a filled-new-array instruction.
@@ -1338,6 +1350,7 @@ IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
       m_complete(false),
       m_enable_polymorphic_constants(false),
       m_verify_moves(false),
+      m_check_no_overwrite_this(false),
       m_good(true),
       m_what("OK") {}
 
@@ -1355,7 +1368,7 @@ void IRTypeChecker::run() {
     return;
   }
 
-  auto result = check_structure(code);
+  auto result = check_structure(m_dex_method, m_check_no_overwrite_this);
   if (result != Result::Ok()) {
     m_complete = true;
     m_good = false;

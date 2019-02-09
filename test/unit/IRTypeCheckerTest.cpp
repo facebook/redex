@@ -729,3 +729,63 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   EXPECT_EQ(type_base, checker.get_dex_type(insns[8], 0));
   EXPECT_EQ(type_base, checker.get_dex_type(insns[9], 0));
 }
+
+TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
+  // Good
+  {
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (const v1 0)
+        (return-object v0)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.good()) << checker.what();
+  }
+  // Bad: virtual method
+  {
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (const v0 0) ; overwrites `this` register
+        (return-object v0)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.check_no_overwrite_this();
+    checker.run();
+    EXPECT_FALSE(checker.good());
+    EXPECT_EQ(checker.what(),
+              "Encountered overwrite of `this` register by CONST v0, 0");
+  }
+  // Bad: non-static (private) direct method
+  {
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (const v0 0) ; overwrites `this` register
+        (return-object v0)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.check_no_overwrite_this();
+    checker.run();
+    EXPECT_FALSE(checker.good());
+    EXPECT_EQ(checker.what(),
+              "Encountered overwrite of `this` register by CONST v0, 0");
+  }
+}

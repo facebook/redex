@@ -193,6 +193,19 @@ class IRTypeChecker final {
     }
   }
 
+  /*
+   * ART has various issues that get triggered by code overwriting the `this`
+   * register, even if the `this` pointer isn't live-out. See
+   * `canHaveThisTypeVerifierBug` and `canHaveThisJitCodeDebuggingBug` in r8's
+   * InternalOptions.java for details.
+   */
+  void check_no_overwrite_this() {
+    if (!m_complete) {
+      // We can only set this parameter before running the type checker.
+      m_check_no_overwrite_this = true;
+    }
+  }
+
   void run();
 
   bool good() const {
@@ -239,6 +252,7 @@ class IRTypeChecker final {
   bool m_complete;
   bool m_enable_polymorphic_constants;
   bool m_verify_moves;
+  bool m_check_no_overwrite_this;
   bool m_good;
   std::string m_what;
   std::unique_ptr<irtc_impl::TypeInference> m_type_inference;

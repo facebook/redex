@@ -131,7 +131,8 @@ void PassManager::init(const Json::Value& config) {
 
 void PassManager::run_type_checker(const Scope& scope,
                                    bool polymorphic_constants,
-                                   bool verify_moves) {
+                                   bool verify_moves,
+                                   bool check_no_overwrite_this) {
   TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
@@ -141,6 +142,9 @@ void PassManager::run_type_checker(const Scope& scope,
     }
     if (verify_moves) {
       checker.verify_moves();
+    }
+    if (check_no_overwrite_this) {
+      checker.check_no_overwrite_this();
     }
     checker.run();
     if (checker.fail()) {
@@ -212,6 +216,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
       type_checker_args.get("polymorphic_constants", false).asBool() ||
       get_redex_options().verify_none_enabled;
   bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
+  bool check_no_overwrite_this =
+      type_checker_args.get("check_no_overwrite_this", false).asBool();
   std::unordered_set<std::string> trigger_passes;
 
   for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
@@ -235,14 +241,18 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
 
     if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
       scope = build_class_scope(it);
-      run_type_checker(scope, polymorphic_constants, verify_moves);
+      // It's OK to overwrite the `this` register if we are not yet at the
+      // output phase -- the register allocator can fix it up later.
+      run_type_checker(scope, polymorphic_constants, verify_moves,
+                       /* check_no_overwrite_this */ false);
     }
     m_current_pass_info = nullptr;
   }
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, polymorphic_constants, verify_moves);
+  run_type_checker(scope, polymorphic_constants, verify_moves,
+                   check_no_overwrite_this);
 
   if (!cfg.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
