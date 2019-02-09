@@ -9,8 +9,8 @@
 
 #include <stack>
 
-#include "Interference.h"
 #include "IRCode.h"
+#include "Interference.h"
 #include "Liveness.h"
 #include "Split.h"
 #include "Transform.h"
@@ -81,6 +81,7 @@ class Allocator {
 
  public:
   struct Config {
+    bool no_overwrite_this{false};
     bool use_splitting{false};
     bool use_spill_costs{false};
   };
@@ -103,7 +104,7 @@ class Allocator {
 
   Allocator() = default; // use default config
 
-  Allocator(const Config& config): m_config(config) {}
+  Allocator(const Config& config) : m_config(config) {}
 
   bool coalesce(interference::Graph*, IRCode*);
 
@@ -128,7 +129,7 @@ class Allocator {
                      RegisterTransform*,
                      SpillPlan*);
 
-  void select_params(const IRCode*,
+  void select_params(const DexMethod*,
                      const interference::Graph&,
                      RegisterTransform*,
                      SpillPlan*);
@@ -151,7 +152,7 @@ class Allocator {
              const RangeSet&,
              IRCode*);
 
-  void allocate(IRCode*);
+  void allocate(DexMethod*);
 
   const Stats& get_stats() const { return m_stats; }
 
