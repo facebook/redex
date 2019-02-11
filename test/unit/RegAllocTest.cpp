@@ -961,3 +961,47 @@ TEST_F(RegAllocTest, ParamFirstUse) {
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
 }
+
+TEST_F(RegAllocTest, NoOverwriteThis) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(I)LFoo;"));
+  method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (load-param v1)
+     (if-eqz v1 :true-label)
+     (sget-object "LFoo;.foo:LFoo;")
+     (move-result-object v0)
+     (:true-label)
+     (return-object v0)
+    )
+)"));
+  auto code = method->get_code();
+  code->set_registers_size(2);
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  graph_coloring::Allocator::Config config;
+  config.no_overwrite_this = true;
+  graph_coloring::Allocator allocator(config);
+  allocator.allocate(method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v1)
+     (load-param v2)
+     (move-object v0 v1)
+     (if-eqz v2 :true-label)
+     (sget-object "LFoo;.foo:LFoo;")
+     (move-result-object v0)
+     (:true-label)
+     (return-object v0)
+    )
+)");
+  EXPECT_EQ(assembler::to_s_expr(code),
+            assembler::to_s_expr(expected_code.get()))
+      << show(code);
+}

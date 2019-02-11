@@ -225,7 +225,6 @@ class Graph {
    */
   std::ostream& write_dot_format(std::ostream&) const;
 
- private:
   uint32_t edge_weight(const Node&, const Node&) const;
 
   using ContainmentEdge = std::pair<reg_t, reg_t>;
@@ -239,9 +238,7 @@ class Graph {
     m_containment_graph.emplace(ContainmentEdge(u, v));
   }
 
-  // Boolean of whether we should separate symregs requiring less than 16 bits
-  // from those without this constraint,
-  bool m_separate_node{false};
+ private:
   std::unordered_map<reg_t, Node> m_nodes;
   using Edge = impl::OrderedPair<reg_t>;
   std::unordered_map<Edge, bool /* not_coalesceable */, boost::hash<Edge>>

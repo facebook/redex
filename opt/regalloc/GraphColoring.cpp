@@ -24,8 +24,7 @@ namespace regalloc {
 /*
  * Find the first instruction in a block (if any) that uses a given register.
  */
-static IRList::iterator find_first_use_in_block(reg_t use,
-                                                cfg::Block* block) {
+static IRList::iterator find_first_use_in_block(reg_t use, cfg::Block* block) {
   auto ii = InstructionIterable(block);
   auto it = ii.begin();
   for (; it != ii.end(); ++it) {
@@ -394,8 +393,8 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       }
       // Merge the child's node into the parent's
       ig->combine(parent, child);
-      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n",
-            parent, child, SHOW(insn));
+      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n", parent, child,
+            SHOW(insn));
       if (is_move(op)) {
         ++m_stats.moves_coalesced;
         code->remove_opcode(it.unwrap());
@@ -646,8 +645,8 @@ void Allocator::select_ranges(const IRCode* code,
                                            reg_transform->size,
                                            vreg_files,
                                            reg_transform->map);
-    fit_range_instruction(
-        ig, insn, range_base, vreg_files, reg_transform, spill_plan);
+    fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
+                          spill_plan);
   }
 }
 
@@ -655,12 +654,13 @@ void Allocator::select_ranges(const IRCode* code,
  * Assign virtual registers to our symbolic param-related registers, spilling
  * where necessary.
  */
-void Allocator::select_params(const IRCode* code,
+void Allocator::select_params(const DexMethod* method,
                               const interference::Graph& ig,
                               RegisterTransform* reg_transform,
                               SpillPlan* spill_plan) {
   std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
   std::vector<reg_t> param_regs;
+  const IRCode* code = method->get_code();
   auto param_insns = code->get_param_instructions();
   size_t params_size{0};
   for (auto& mie : InstructionIterable(param_insns)) {
@@ -681,8 +681,8 @@ void Allocator::select_params(const IRCode* code,
                                          reg_transform->size,
                                          vreg_files,
                                          reg_transform->map);
-  fit_params(
-      ig, param_insns, params_base, vreg_files, reg_transform, spill_plan);
+  fit_params(ig, param_insns, params_base, vreg_files, reg_transform,
+             spill_plan);
 }
 
 // Find out if there exist a
@@ -900,10 +900,9 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
  * If there are other instructions that define that range, the analysis is a
  * bit more complicated, so we just insert a load at the start of the method.
  */
-void Allocator::split_params(
-    const interference::Graph& ig,
-    const std::unordered_set<reg_t>& param_spills,
-    IRCode* code) {
+void Allocator::split_params(const interference::Graph& ig,
+                             const std::unordered_set<reg_t>& param_spills,
+                             IRCode* code) {
   auto load_locations = find_param_splits(param_spills, code);
   if (load_locations.size() == 0) {
     return;
@@ -1011,6 +1010,54 @@ void Allocator::spill(const interference::Graph& ig,
 }
 
 /*
+ * Ensure that we have a symreg dedicated to holding the `this` pointer
+ * throughout the entire method. If there is another instruction that writes to
+ * the same live range, we split the `this` parameter into a separate one by
+ * inserting a move instruction at the start of the method. For example, this
+ * code:
+ *
+ *   load-param-object v0
+ *   if-eqz ... :true-label
+ *   sget-object v0 LFoo;
+ *   :true-label
+ *   return-object v0
+ *
+ * Becomes this:
+ *
+ *   load-param-object v1
+ *   move-object v0 v1
+ *   if-eqz ... :true-label
+ *   sget-object v0 LFoo;
+ *   :true-label
+ *   return-object v0
+ */
+static void dedicate_this_register(DexMethod* method) {
+  always_assert(!is_static(method));
+  IRCode* code = method->get_code();
+  auto param_insns = code->get_param_instructions();
+  auto this_insn = param_insns.begin()->insn;
+
+  bool this_needs_split{false};
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->dests_size() && insn->dest() == this_insn->dest() &&
+        insn != this_insn) {
+      this_needs_split = true;
+      break;
+    }
+  }
+
+  if (this_needs_split) {
+    auto old_reg = this_insn->dest();
+    this_insn->set_dest(code->allocate_temp());
+    auto insert_it = param_insns.end();
+    code->insert_before(insert_it, (new IRInstruction(OPCODE_MOVE_OBJECT))
+                                       ->set_dest(old_reg)
+                                       ->set_src(0, this_insn->dest()));
+  }
+}
+
+/*
  * Main differences from the standard Chaitin-Briggs
  * build-coalesce-simplify-spill loop:
  *
@@ -1025,7 +1072,8 @@ void Allocator::spill(const interference::Graph& ig,
  *     account for. These are handled in select_ranges and select_params
  *     respectively.
  */
-void Allocator::allocate(IRCode* code) {
+void Allocator::allocate(DexMethod* method) {
+  IRCode* code = method->get_code();
 
   // Any temp larger than this is the result of the spilling process
   auto initial_regs = code->get_registers_size();
@@ -1035,6 +1083,10 @@ void Allocator::allocate(IRCode* code) {
   // in the allocation loop below.
   auto range_set = init_range_set(code);
 
+  bool no_overwrite_this = m_config.no_overwrite_this && !is_static(method);
+  if (no_overwrite_this) {
+    dedicate_this_register(method);
+  }
   bool first{true};
   while (true) {
     SplitCosts split_costs;
@@ -1050,6 +1102,17 @@ void Allocator::allocate(IRCode* code) {
     TRACE(REG, 5, "Allocating:\n%s\n", ::SHOW(code->cfg()));
     auto ig =
         interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
+
+    // Make the `this` symreg conflict with every other one so that it never
+    // gets overwritten in the method. See check_no_overwrite_this in
+    // IRTypeChecker.h for the rationale.
+    if (no_overwrite_this) {
+      auto this_insn = code->get_param_instructions().begin()->insn;
+      for (const auto& pair : ig.nodes()) {
+        ig.add_edge(this_insn->dest(), pair.first);
+      }
+    }
+
     TRACE(REG, 7, "IG:\n%s", SHOW(ig));
     if (first) {
       coalesce(&ig, code);
@@ -1084,7 +1147,7 @@ void Allocator::allocate(IRCode* code) {
     // constrained category of registers, so it makes sense to allocate them
     // last.
     select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
-    select_params(code, ig, &reg_transform, &spill_plan);
+    select_params(method, ig, &reg_transform, &spill_plan);
     TRACE(REG, 5, "Transform after range alloc:\n%s\n", SHOW(reg_transform));
 
     if (!spill_plan.empty()) {

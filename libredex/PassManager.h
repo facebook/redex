@@ -80,7 +80,8 @@ class PassManager {
 
   static void run_type_checker(const Scope& scope,
                                bool polymorphic_constants,
-                               bool verify_moves);
+                               bool verify_moves,
+                               bool check_no_overwrite_this);
 
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;

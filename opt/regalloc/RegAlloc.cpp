@@ -52,7 +52,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           transform::remove_unreachable_blocks(&code);
           live_range::renumber_registers(&code, /* width_aware */ false);
           graph_coloring::Allocator allocator(m_allocator_config);
-          allocator.allocate(&code);
+          allocator.allocate(m);
           stats.accumulate(allocator.get_stats());
 
           TRACE(REG,
