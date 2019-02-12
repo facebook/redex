@@ -477,6 +477,64 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   }
 }
 
+/* In Signature annotations, parameterized types of the form Foo<Bar> get
+ * represented as the strings
+ *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
+ *   or
+ *   "Lcom/baz/Foo<" "Lcom/baz/Bar;" ">"
+ *
+ * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
+ * Signature annotations suck.
+ *
+ * This method transforms the input to the form expected by the alias map:
+ *   "Lcom/baz/Foo;"
+ * looks that up in the map, then transforms back to the form of the input.
+ */
+DexString* lookup_signature_annotation(const AliasMap& aliases,
+                                       DexString* anno) {
+  bool has_bracket = false;
+  bool added_semicolon = false;
+  std::string anno_str = anno->str();
+  // anno_str looks like one of these
+  // Lcom/baz/Foo<
+  // Lcom/baz/Foo;
+  // Lcom/baz/Foo
+  if (anno_str.back() == '<') {
+    anno_str.pop_back();
+    has_bracket = true;
+  }
+  // anno_str looks like one of these
+  // Lcom/baz/Foo;
+  // Lcom/baz/Foo
+  if (anno_str.back() != ';') {
+    anno_str.push_back(';');
+    added_semicolon = true;
+  }
+  // anno_str looks like this
+  // Lcom/baz/Foo;
+
+  // Use get_string because if it's in the map, then it must also already exist
+  DexString* transformed_anno = DexString::get_string(anno_str);
+  if (transformed_anno != nullptr && aliases.has(transformed_anno)) {
+    DexString* obfu = aliases.at(transformed_anno);
+    if (!added_semicolon && !has_bracket) {
+      return obfu;
+    }
+    std::string obfu_str = obfu->str();
+    // We need to transform back to the original format of the input
+    if (added_semicolon) {
+      always_assert(obfu_str.back() == ';');
+      obfu_str.pop_back();
+    }
+    if (has_bracket) {
+      always_assert(obfu_str.back() != '<');
+      obfu_str.push_back('<');
+    }
+    return DexString::make_string(obfu_str);
+  }
+  return nullptr;
+}
+
 void RenameClassesPassV2::eval_classes(
     Scope& scope,
     const ClassHierarchy& class_hierarchy,
@@ -800,29 +858,6 @@ void RenameClassesPassV2::rename_classes(
    * Strings rather than Type's, so they have to be explicitly
    * handled.
    */
-
-  /* In Signature annotations, parameterized types of the form Foo<Bar> get
-   * represented as the strings
-   *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
-   *
-   * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
-   * So, we have to alias those strings if they exist. Signature annotations
-   * suck.
-   */
-  for (const auto& apair : aliases.get_class_map()) {
-    char buf[MAX_DESCRIPTOR_LENGTH];
-    const char *sourcestr = apair.first->c_str();
-    size_t sourcelen = strlen(sourcestr);
-    if (sourcestr[sourcelen - 1] != ';') continue;
-    strcpy(buf, sourcestr);
-    buf[sourcelen - 1] = '\0';
-    auto dstring = DexString::get_string(buf);
-    if (dstring == nullptr) continue;
-    strcpy(buf, apair.second->c_str());
-    buf[strlen(apair.second->c_str()) - 1] = '\0';
-    auto target = DexString::make_string(buf);
-    aliases.add_alias(dstring, target);
-  }
   static DexType *dalviksig =
     DexType::get_type("Ldalvik/annotation/Signature;");
   walk::annotations(scope, [&](DexAnnotation* anno) {
@@ -836,11 +871,12 @@ void RenameClassesPassV2::rename_classes(
       for (auto strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
         auto stringev = static_cast<DexEncodedValueString*>(strev);
-        if (aliases.has(stringev->string())) {
+        DexString* old_str = stringev->string();
+        DexString* new_str = lookup_signature_annotation(aliases, old_str);
+        if (new_str != nullptr) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
-              stringev->string()->c_str(),
-              aliases.at(stringev->string())->c_str());
-          stringev->string(aliases.at(stringev->string()));
+                old_str->c_str(), new_str->c_str());
+          stringev->string(new_str);
         }
       }
     }
