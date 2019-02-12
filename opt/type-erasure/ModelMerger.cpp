@@ -415,60 +415,6 @@ std::string merger_info(const MergerType& merger) {
   return ss.str();
 }
 
-std::map<DexMethod*, DexType*, dexmethods_comparator>
-collect_static_relocation_candidates(
-    const Scope& scope, const std::unordered_set<DexMethod*>& methods) {
-
-  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> method_to_types;
-  const auto collect_static_relocation_candidates = [&](DexMethod* method,
-                                                        IRInstruction* insn) {
-    if (!insn->has_method()) {
-      return;
-    }
-
-    DexMethod* current_meth =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (!current_meth || methods.count(current_meth) == 0) {
-      return;
-    }
-
-    method_to_types[current_meth].emplace(method->get_class());
-  };
-  walk::opcodes(scope,
-                [&](DexMethod*) { return true; },
-                collect_static_relocation_candidates);
-
-  std::map<DexMethod*, DexType*, dexmethods_comparator> methods_to_relocate;
-  for (const auto& pair : method_to_types) {
-    DexMethod* method = pair.first;
-    auto& types = pair.second;
-
-    if (types.size() == 1) {
-      DexType* type = *types.begin();
-      if (type != method->get_class()) {
-        methods_to_relocate[method] = type;
-      }
-    }
-  }
-  return methods_to_relocate;
-}
-
-uint32_t relocate_methods(
-    const std::map<DexMethod*, DexType*, dexmethods_comparator>&
-        methods_to_relocate) {
-  uint32_t num_relocated = 0;
-  for (auto& pair : methods_to_relocate) {
-    DexMethod* method = pair.first;
-    DexType* to_type = pair.second;
-    if (relocate_method_if_no_changes(method, to_type)) {
-      num_relocated++;
-    }
-  }
-
-  TRACE(TERA, 4, "Relocated %d static methods\n", num_relocated);
-  return num_relocated;
-}
-
 void set_interfaces(DexClass* cls, const TypeSet& intfs) {
   if (!intfs.empty()) {
     auto intf_list = std::deque<DexType*>();
@@ -563,14 +509,6 @@ void ModelMerger::update_merger_fields(const MergerType& merger) {
           ? create_merger_fields(merger.type, merger.field_map.begin()->second)
           : empty_fields;
   m_merger_fields[merger.type] = merger_fields;
-}
-
-void ModelMerger::relocate_static_methods(Scope& scope) {
-
-  // Find candidates
-  std::map<DexMethod*, DexType*, dexmethods_comparator> methods_to_relocate =
-      collect_static_relocation_candidates(scope, m_static_methods);
-  m_num_relocated_methods = relocate_methods(methods_to_relocate);
 }
 
 void ModelMerger::update_stats(const std::string model_name,
@@ -694,13 +632,6 @@ std::vector<DexClass*> ModelMerger::merge_model(
   update_stats(model.get_name(), to_materialize, mm);
   update_const_string_type_refs(scope, merged_type_names);
 
-  // Relocate static methods only if merging "globally",
-  // If dex sharding is enabled, changes will happen at InterDex level,
-  // when we shouldn't simply move methods around.
-  if (!model.is_dex_sharding_enabled()) {
-    relocate_static_methods(scope);
-  }
-
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
   write_out_type_mapping(mergeable_to_merger, method_dedup_map, s_mapping_file);
@@ -721,8 +652,6 @@ void ModelMerger::update_redex_stats(const std::string& prefix,
                   m_num_static_non_virt_dedupped);
   mgr.incr_metric((prefix + "_vmethods_dedupped").c_str(),
                   m_num_vmethods_dedupped);
-  mgr.set_metric((prefix + "_relocated_methods").c_str(),
-                 m_num_relocated_methods);
   mgr.set_metric((prefix + "_const_lifted_methods").c_str(),
                  m_num_const_lifted_methods);
 }
