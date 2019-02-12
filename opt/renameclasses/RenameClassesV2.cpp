@@ -8,11 +8,13 @@
 #include "RenameClassesV2.h"
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/regex.hpp>
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -166,25 +168,30 @@ RenameClassesPassV2::build_dont_rename_resources(
 
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
-  std::unordered_set<std::string> dont_rename_class_name_literals;
-
-  // Gather strings from const-string opcodes
-  auto match = std::make_tuple(
-    m::const_string(/* const-string {vX}, <any string> */)
-  );
-  walk::matching_opcodes(scope, match,
-      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
-        IRInstruction* const_string = insns[0];
-        auto classname = JavaNameUtil::external_to_internal(
-          const_string->get_string()->c_str());
-        if (DexType::get_type(classname)) {
-          TRACE(RENAME, 4,
-                "Found const-string of: %s, marking %s unrenameable\n",
-                const_string->get_string()->c_str(), classname.c_str());
-          dont_rename_class_name_literals.insert(classname);
-        }
-      });
-  return dont_rename_class_name_literals;
+  using namespace boost::algorithm;
+  std::vector<DexString*> all_strings;
+  for (auto clazz : scope) {
+    clazz->gather_strings(all_strings);
+  }
+  sort_unique(all_strings);
+  std::unordered_set<std::string> result;
+  boost::regex external_name_regex{
+      "((org)|(com)|(android(x|\\.support)))\\."
+      "([a-zA-Z][a-zA-Z\\d_$]*\\.)*"
+      "[a-zA-Z][a-zA-Z\\d_$]*"};
+  for (auto dex_str : all_strings) {
+    const std::string& s = dex_str->str();
+    if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
+      const std::string& internal_name = JavaNameUtil::external_to_internal(s);
+      auto cls = type_class(DexType::get_type(internal_name));
+      if (cls != nullptr && !cls->is_external()) {
+        result.insert(internal_name);
+        TRACE(RENAME, 4, "Found %s in string pool before renaming\n",
+              s.c_str());
+      }
+    }
+  }
+  return result;
 }
 
 std::unordered_set<std::string>
@@ -464,7 +471,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   sort_unique(all_strings);
   int sketchy_strings = 0;
   for (auto s : all_strings) {
-    if (external_names.find(s->c_str()) != external_names.end() ||
+    if (external_names.find(s->str()) != external_names.end() ||
         aliases.has(s)) {
       TRACE(RENAME, 2, "Found %s in string pool after renaming\n", s->c_str());
       sketchy_strings++;
@@ -746,7 +753,7 @@ void RenameClassesPassV2::rename_classes(
       mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'\n", oldname->c_str());
     } else if (m_dont_rename_reasons.find(clazz) !=
-          m_dont_rename_reasons.end()) {
+               m_dont_rename_reasons.end()) {
       auto reason = m_dont_rename_reasons[clazz];
       std::string metric = dont_rename_reason_to_metric(reason.code);
       mgr.incr_metric(metric, 1);
@@ -907,7 +914,7 @@ void RenameClassesPassV2::rename_classes_in_layouts(
     }
     size_t num_renamed = 0;
     ssize_t out_delta = 0;
-    TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());
+    TRACE(RENAME, 6, "Begin rename Views in layout %s\n", path.c_str());
     rename_classes_in_layout(path, aliases_for_layouts, &num_renamed, &out_delta);
     TRACE(
       RENAME,
