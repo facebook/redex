@@ -516,14 +516,12 @@ void output_moved_methods_map(const char* path, const ConfigFiles& cfg) {
 }
 
 void write_debug_line_mapping(
-    const std::string& debug_line_mapping_filename,
     const std::string& debug_line_mapping_filename_v2,
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
     const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
         code_debug_lines,
     DexStoresVector& stores) {
-  if (debug_line_mapping_filename.empty() ||
-      debug_line_mapping_filename_v2.empty()) {
+  if (debug_line_mapping_filename_v2.empty()) {
     return;
   }
   /*
@@ -555,9 +553,7 @@ void write_debug_line_mapping(
   uint32_t version = 1;
   ofs.write((const char*)&version, bit_32_size);
   ofs.write((const char*)&num_method, bit_32_size);
-  FILE* fd = fopen(debug_line_mapping_filename.c_str(), "a");
   std::ostringstream line_out;
-  std::stringstream readable_line_out;
 
   auto scope = build_class_scope(stores);
   walk::methods(scope, [&](DexMethod* method) {
@@ -568,9 +564,6 @@ void write_debug_line_mapping(
     }
 
     uint64_t method_id = method_to_id.at(method);
-    // write human readable file
-    fprintf(fd, "0x%016" PRIx64 " %u\n", method_id, offset);
-    readable_line_out << method->get_deobfuscated_name() << "\n";
     // write method id => offset info for binary file
     ofs.write((const char*)&method_id, bit_64_size);
     ofs.write((const char*)&binary_offset, bit_32_size);
@@ -587,12 +580,9 @@ void write_debug_line_mapping(
     for (auto it = debug_lines.begin(); it != debug_lines.end(); ++it) {
       line_out.write((const char*)&it->offset, bit_32_size);
       line_out.write((const char*)&it->line, bit_32_size);
-      readable_line_out << it->offset << " " << it->line << "\n";
     }
   });
   ofs << line_out.str();
-  fprintf(fd, "\n%s", readable_line_out.str().c_str());
-  fclose(fd);
 }
 
 /**
@@ -753,8 +743,6 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("line_number_map", std::string()));
   auto pos_output_v2 =
       cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
-  auto debug_line_mapping_filename =
-      cfg.metafile(json_cfg.get("debug_line_method_map", std::string()));
   auto debug_line_mapping_filename_v2 =
       cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
   auto iodi_metadata_filename =
@@ -840,8 +828,7 @@ void redex_backend(const PassManager& manager,
     Timer t("Writing stats");
     auto method_move_map =
         cfg.metafile(json_cfg.get("method_move_map", std::string()));
-    write_debug_line_mapping(debug_line_mapping_filename,
-                             debug_line_mapping_filename_v2, method_to_id,
+    write_debug_line_mapping(debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
     iodi_metadata.write(iodi_metadata_filename, method_to_id);
     pos_mapper->write_map();

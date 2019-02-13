@@ -826,8 +826,6 @@ def finalize_redex(state):
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map.txt',
-                         'debug line map', 'redex-debug-line-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2',
                          'debug method id map', 'redex-debug-line-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
