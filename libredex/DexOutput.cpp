@@ -550,6 +550,16 @@ DexOutput::locator_for_descriptor(
   const std::unordered_set<DexString*>& type_names,
   DexString* descriptor)
 {
+  if (m_emit_name_based_locators) {
+    const char* s = descriptor->c_str();
+    uint32_t global_clsnr = Locator::decodeGlobalClassIndex(s);
+    if (global_clsnr != Locator::invalid_global_class_index) {
+      // We don't need locators for renamed classes since
+      // name-based-locators are enabled.
+      return nullptr;
+    }
+  }
+
   LocatorIndex* locator_index = m_locator_index;
   if (locator_index != nullptr) {
     auto locator_it = locator_index->find(descriptor);
