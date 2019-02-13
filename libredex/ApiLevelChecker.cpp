@@ -25,6 +25,9 @@ void LevelChecker::init(int32_t min_level, const Scope& scope) {
   s_min_level = min_level;
   s_requires_api =
       DexType::get_type("Landroid/support/annotation/RequiresApi;");
+  if (s_requires_api == nullptr) {
+    s_requires_api = DexType::get_type("Landroidx/annotation/RequiresApi;");
+  }
   s_target_api = DexType::get_type("Landroid/annotation/TargetApi;");
   if (s_requires_api == nullptr) {
     fprintf(stderr,
