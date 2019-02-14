@@ -99,9 +99,6 @@ class MethodMerger {
                              DexMethod* callee,
                              uint32_t type_tag,
                              bool with_type_tag = false);
-  std::unordered_set<DexMethod*>& get_static_methods() {
-    return m_static_methods;
-  }
 
   TypeToMethodMap get_method_dedup_map() { return m_method_dedup_map; }
 
@@ -136,7 +133,6 @@ class MethodMerger {
   uint32_t m_num_static_non_virt_dedupped = 0;
   uint32_t m_num_vmethods_dedupped = 0;
   uint32_t m_num_const_lifted_methods = 0;
-  std::unordered_set<DexMethod*> m_static_methods;
 
   void merge_ctors();
   void merge_non_ctor_non_virt_methods();

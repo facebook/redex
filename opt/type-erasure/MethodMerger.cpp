@@ -640,10 +640,6 @@ void MethodMerger::merge_non_ctor_non_virt_methods() {
 
       TRACE(TERA, 8, "dedup: moving static|non_virt method %s\n", SHOW(m));
       relocate_method(m, merger_type);
-
-      if (is_static(m)) {
-        m_static_methods.emplace(m);
-      }
     }
     update_to_static(to_relocate);
 
@@ -733,7 +729,6 @@ void MethodMerger::update_to_static(
     if (!is_static(method)) {
       mutators::make_static(method, mutators::KeepThis::Yes);
       staticized.emplace(method);
-      m_static_methods.emplace(method);
     }
   }
 

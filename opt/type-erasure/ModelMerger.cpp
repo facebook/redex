@@ -450,7 +450,7 @@ void fix_existing_merger_cls(const Model& model,
 }
 
 // Trim the debug map to only contain mergeable methods.
-void trim_method_dedup_map(
+void trim_method_debug_map(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
   TRACE(TERA, 5, "Method debug map un-trimmed %d\n", method_debug_map.size());
@@ -523,8 +523,6 @@ void ModelMerger::update_stats(const std::string model_name,
   m_num_static_non_virt_dedupped += mm.get_num_static_non_virt_dedupped();
   m_num_vmethods_dedupped += mm.get_num_vmethods_dedupped();
   m_num_const_lifted_methods += mm.get_num_const_lifted_methods();
-  // Keep track of all static methods.
-  add_static_methods(mm.get_static_methods());
 }
 
 std::vector<DexClass*> ModelMerger::merge_model(
@@ -612,7 +610,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                                  type_tag_fields,
                                  method_debug_map,
                                  generate_type_tags);
-  trim_method_dedup_map(mergeable_to_merger, method_debug_map);
+  trim_method_debug_map(mergeable_to_merger, method_debug_map);
   update_refs_to_mergeable_fields(
       scope, to_materialize, mergeable_to_merger, m_merger_fields);
 
