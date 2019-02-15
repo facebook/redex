@@ -3973,6 +3973,11 @@ def main():
                       help='Don\'t print information coming from abstract'
                       ' classes when passing --code, --debug or --all.',
                       default=False)
+    parser.add_option('--counts',
+                      action='store_true',
+                      dest='dump_counts',
+                      help='Dump the DEX opcode counts',
+                      default=False)
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -3981,6 +3986,7 @@ def main():
     total_opcode_byte_size = 0
     total_file_size = 0
     op_name_to_size = {}
+    op_name_to_count = {}
     string_counts = {}
     i = 0
 
@@ -4040,7 +4046,8 @@ def main():
         if options.dump_code_items:
             dex.dump_code_items(options)
         if (options.dump_disassembly or options.dump_stats or
-                options.check_encoding or options.new_encoding):
+                options.check_encoding or options.new_encoding
+                or options.dump_counts):
             if options.dump_stats:
                 for string_item in dex.get_strings():
                     if string_item.data not in string_counts:
@@ -4063,7 +4070,7 @@ def main():
                     file_opcodes_byte_size += opcodes_bytes_size
                     total_opcode_byte_size += opcodes_bytes_size
                     if (options.dump_stats or options.check_encoding or
-                            options.new_encoding):
+                            options.new_encoding or options.dump_counts):
                         for dex_inst in method.get_instructions():
                             if options.dump_stats:
                                 op_name = dex_inst.get_name()
@@ -4071,6 +4078,11 @@ def main():
                                 if op_name not in op_name_to_size:
                                     op_name_to_size[op_name] = 0
                                 op_name_to_size[op_name] += size
+                            if options.dump_counts:
+                                op_name = dex_inst.get_name()
+                                if op_name not in op_name_to_count:
+                                    op_name_to_count[op_name] = 0
+                                op_name_to_count[op_name] += 1
                             if options.check_encoding:
                                 code_bytes_inefficiently_encoded += (
                                     dex_inst.check_encoding())
@@ -4143,6 +4155,12 @@ def main():
             print('%-8u %5.2f %s' % (byte_size, percentage, op_name))
         print('-------- ----- ---------------------------------')
         print('%-8u 100.0' % (total_opcode_byte_size))
+
+    if options.dump_counts:
+        print('COUNT    OPCODE')
+        print('======== =================================')
+        for op_name, count in op_name_to_count.items():
+            print('%-8u %s' % (count, op_name))
 
     if i > 0:
         if options.check_encoding:
