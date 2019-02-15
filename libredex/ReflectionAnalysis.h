@@ -12,6 +12,8 @@
 
 #include <boost/optional.hpp>
 
+#include "AbstractDomain.h"
+#include "ConstantAbstractDomain.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
 
@@ -49,27 +51,27 @@ class Analyzer;
  * The last three are output of an reflecting operation.
  */
 /* clang-format off */
-enum AbstractObjectKind {
-  OBJECT, // An object instantiated locally, passed in as a param or read from
-          // heap
-  STRING, // A string literal
-  CLASS,  // A java.lang.Class object
-  FIELD,  // A java.lang.reflect.Field object
-  METHOD, // A java.lang.reflect.Method object
-};
+ enum AbstractObjectKind {
+   OBJECT, // An object instantiated locally, passed in as a param or read from
+           // heap
+   STRING, // A string literal
+   CLASS,  // A java.lang.Class object
+   FIELD,  // A java.lang.reflect.Field object
+   METHOD, // A java.lang.reflect.Method object
+ };
 
-/*
- * Only applies to AbstractObjectKind.CLASS.
- * By what kind of operation the class object is produced.
- */
-enum ClassObjectSource {
-  NON_REFLECTION, // Non-reflecting operations like param loading and get field.
-  REFLECTION,     // Reflection operations like const-class or Class.forName().
-};
+ /*
+  * Only applies to AbstractObjectKind.CLASS.
+  * By what kind of operation the class object is produced.
+  */
+ enum ClassObjectSource {
+   NON_REFLECTION, // Non-reflecting operations like param loading and get field.
+   REFLECTION,     // Reflection operations like const-class or Class.forName().
+ };
 
 /* clang-format on */
-struct AbstractObject {
-  AbstractObjectKind kind;
+struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
+  AbstractObjectKind obj_kind;
   DexType* dex_type;
   DexString* dex_string;
 
@@ -78,24 +80,46 @@ struct AbstractObject {
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : kind(STRING), dex_type(nullptr), dex_string(s) {}
+      : obj_kind(STRING), dex_type(nullptr), dex_string(s) {}
 
   AbstractObject(AbstractObjectKind k, DexType* t)
-      : kind(k), dex_type(t), dex_string(nullptr) {
+      : obj_kind(k), dex_type(t), dex_string(nullptr) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : kind(k), dex_type(t), dex_string(s) {
+      : obj_kind(k), dex_type(t), dex_string(s) {
     always_assert(k == FIELD || k == METHOD);
   }
-};
 
-bool is_not_reflection_output(const AbstractObject& obj);
+  void clear() override {}
+
+  sparta::AbstractValueKind kind() const override {
+    return sparta::AbstractValueKind::Value;
+  }
+
+  bool leq(const AbstractObject& other) const override;
+
+  bool equals(const AbstractObject& other) const override;
+
+  sparta::AbstractValueKind join_with(const AbstractObject& other) override;
+
+  sparta::AbstractValueKind widen_with(const AbstractObject& other) override {
+    return join_with(other);
+  }
+
+  sparta::AbstractValueKind meet_with(const AbstractObject& other) override;
+
+  sparta::AbstractValueKind narrow_with(const AbstractObject& other) override {
+    return meet_with(other);
+  }
+};
 
 bool operator==(const AbstractObject& x, const AbstractObject& y);
 
 bool operator!=(const AbstractObject& x, const AbstractObject& y);
+
+bool is_not_reflection_output(const AbstractObject& obj);
 
 using ReflectionAbstractObject =
     std::pair<AbstractObject, boost::optional<ClassObjectSource>>;

@@ -34,7 +34,7 @@ std::unordered_map<std::string, std::string> expected = {
     {"f5", "\"foo2\""},
     {"f6", "OBJECT{Ljava/lang/String;}"},
     {"m7", "OBJECT{Ljava/lang/String;}"},
-    {"f8", "OBJECT{Ljava/lang/String;}"},
+    {"f8", ""}, // f8 is a generic string (name of field join("foo1", "foo2"))
     {"f9", "\"foo1\""}};
 
 void validate_arguments(IRInstruction* insn,
@@ -42,7 +42,7 @@ void validate_arguments(IRInstruction* insn,
   auto label = analysis.get_abstract_object(insn->src(0), insn);
   auto actual = analysis.get_abstract_object(insn->src(1), insn);
   EXPECT_TRUE(label);
-  EXPECT_EQ(STRING, label->kind);
+  EXPECT_EQ(STRING, label->obj_kind);
   std::string label_str = label->dex_string->str();
   std::string actual_str = "?";
   if (actual) {

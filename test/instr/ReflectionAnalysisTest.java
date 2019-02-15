@@ -19,13 +19,39 @@ import static org.fest.assertions.api.Assertions.assertThat;
 public class ReflectionAnalysisTest {
 
   class Foo {}
+  class Bar {}
 
   class Reflector {
-    Class<? extends Foo> mClazz;
-    String getClass(boolean flag) throws ClassNotFoundException {
+    Class<? extends Foo> mFooClazz;
+
+    String getClassJoinSame(boolean flag) throws ClassNotFoundException {
       Class cls = null;
       if (flag) {
-        cls = mClazz;
+        cls =
+            Class.forName("com.facebook.redextest.ReflectionAnalysisTest$Foo");
+      } else {
+        cls =
+            Foo.class;
+      }
+      return cls.getName();
+    }
+
+    String getClassJoinDifferent(boolean flag) throws ClassNotFoundException {
+      Class cls = null;
+      if (flag) {
+        cls =
+            Class.forName("com.facebook.redextest.ReflectionAnalysisTest$Foo");
+      } else {
+        cls =
+            Class.forName("com.facebook.redextest.ReflectionAnalysisTest$Bar");
+      }
+      return cls.getName();
+    }
+
+    String getClassJoinEmpty(boolean flag) throws ClassNotFoundException {
+      Class cls = null;
+      if (flag) {
+        cls = mFooClazz;
       } else {
         cls =
             Class.forName("com.facebook.redextest.ReflectionAnalysisTest$Foo");
@@ -33,13 +59,48 @@ public class ReflectionAnalysisTest {
       }
       return cls.getName();
     }
+
+    Class getStringJoinSame(boolean flag) throws ClassNotFoundException {
+      String str = null;
+      if (flag) {
+        str = "com.facebook.redextest.ReflectionAnalysisTest$Foo";
+      } else {
+        str = "com.facebook.redextest.ReflectionAnalysisTest$Foo";
+      }
+      return Class.forName(str);
+    }
+
+    Class getStringJoinDifferent(boolean flag) throws ClassNotFoundException {
+      String str = null;
+      if (flag) {
+        str = "com.facebook.redextest.ReflectionAnalysisTest$Foo";
+      } else {
+        str = "com.facebook.redextest.ReflectionAnalysisTest$Bar";
+      }
+      return Class.forName(str);
+    }
+
+    Class getStringJoinEmpty(boolean flag) throws ClassNotFoundException {
+      String str = null;
+      if (flag) {
+        str = "com.facebook.redextest.ReflectionAnalysisTest$Foo";
+      } else {
+        str = "";
+      }
+      return Class.forName(str);
+    }
   }
 
   @Test
   public void testGetClass() {
     Reflector r = new Reflector();
     try {
-      assertThat(r.getClass(false)).isNotNull();
+      assertThat(r.getClassJoinEmpty(false)).isNotNull();
+      assertThat(r.getClassJoinSame(false)).isNotNull();
+      assertThat(r.getClassJoinDifferent(false)).isNotNull();
+      assertThat(r.getStringJoinEmpty(false)).isNotNull();
+      assertThat(r.getStringJoinSame(false)).isNotNull();
+      assertThat(r.getStringJoinDifferent(false)).isNotNull();
     } catch (ClassNotFoundException ex) {
       // nothing
     }

@@ -142,7 +142,7 @@ void analyze_reflection(const Scope& scope) {
     }
     int arg_str_idx = refl_type == ReflectionType::REF_UPDATER ? 2 : 1;
     auto arg_str = analysis.get_abstract_object(insn->src(arg_str_idx), insn);
-    if (arg_str && arg_str->kind == AbstractObjectKind::STRING) {
+    if (arg_str && arg_str->obj_kind == AbstractObjectKind::STRING) {
       return arg_str->dex_string;
     } else {
       return (DexString*)nullptr;
@@ -180,7 +180,7 @@ void analyze_reflection(const Scope& scope) {
       }
 
       auto arg_cls = analysis->get_abstract_object(insn->src(0), insn);
-      if (!arg_cls || arg_cls->kind != AbstractObjectKind::CLASS) {
+      if (!arg_cls || arg_cls->obj_kind != AbstractObjectKind::CLASS) {
         continue;
       }
 
@@ -192,7 +192,7 @@ void analyze_reflection(const Scope& scope) {
 
       TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s\n",
             insn->get_method()->get_name()->str().c_str(), refl_type,
-            method_class_name.c_str(), method_name.c_str(), arg_cls->kind,
+            method_class_name.c_str(), method_name.c_str(), arg_cls->obj_kind,
             SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
             SHOW(arg_str_value));
 
