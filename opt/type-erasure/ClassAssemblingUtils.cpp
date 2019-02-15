@@ -306,7 +306,7 @@ void patch_iget(DexMethod* meth,
   switch (op) {
   case OPCODE_IGET_OBJECT: {
     auto dest = std::next(it)->insn->dest();
-    auto cast = MethodMerger::make_check_cast(original_field_type, dest);
+    auto cast = ModelMethodMerger::make_check_cast(original_field_type, dest);
     meth->get_code()->insert_after(insn, cast);
     break;
   }

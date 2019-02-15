@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "MethodMerger.h"
+#include "ModelMethodMerger.h"
 
 #include "AnnoUtils.h"
 #include "ConstantLifting.h"
@@ -150,7 +150,7 @@ void MethodStats::print(const std::string model_name, uint32_t num_mergeables) {
   }
 }
 
-MethodMerger::MethodMerger(
+ModelMethodMerger::ModelMethodMerger(
     const Scope& scope,
     const std::vector<const MergerType*>& mergers,
     const MergerToField& type_tag_fields,
@@ -197,7 +197,7 @@ MethodMerger::MethodMerger(
   m_method_stats = {{}};
 }
 
-void MethodMerger::fix_visibility() {
+void ModelMethodMerger::fix_visibility() {
   MethodOrderedSet vmethods_created;
   for (const auto& pair : m_merger_ctors) {
     const std::vector<DexMethod*>& ctors = pair.second;
@@ -253,8 +253,8 @@ void MethodMerger::fix_visibility() {
   }
 }
 
-std::vector<IRInstruction*> MethodMerger::make_string_const(uint16_t dest,
-                                                            std::string val) {
+std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
+    uint16_t dest, std::string val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -266,8 +266,8 @@ std::vector<IRInstruction*> MethodMerger::make_string_const(uint16_t dest,
   return res;
 }
 
-std::vector<IRInstruction*> MethodMerger::make_check_cast(DexType* type,
-                                                          uint16_t src_dest) {
+std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(
+    DexType* type, uint16_t src_dest) {
   auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   check_cast->set_type(type)->set_src(0, src_dest);
   auto move_result_pseudo =
@@ -276,7 +276,7 @@ std::vector<IRInstruction*> MethodMerger::make_check_cast(DexType* type,
   return {check_cast, move_result_pseudo};
 }
 
-dispatch::DispatchMethod MethodMerger::create_dispatch_method(
+dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
     const dispatch::Spec spec, const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   TRACE(TERA,
@@ -294,7 +294,7 @@ dispatch::DispatchMethod MethodMerger::create_dispatch_method(
   return create_virtual_dispatch(spec, indices_to_callee);
 }
 
-std::map<SwitchIndices, DexMethod*> MethodMerger::get_dedupped_indices_map(
+std::map<SwitchIndices, DexMethod*> ModelMethodMerger::get_dedupped_indices_map(
     const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   std::map<SwitchIndices, DexMethod*> indices_to_callee;
@@ -319,16 +319,16 @@ std::map<SwitchIndices, DexMethod*> MethodMerger::get_dedupped_indices_map(
   return indices_to_callee;
 }
 
-DexType* MethodMerger::get_merger_type(DexType* mergeable) {
+DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
   auto merger_ctor = m_mergeable_to_merger_ctor.at(mergeable);
   return merger_ctor->get_class();
 }
 
-bool MethodMerger::no_type_tags() {
+bool ModelMethodMerger::no_type_tags() {
   return !m_use_external_type_tags && !m_generate_type_tags;
 }
 
-DexMethod* MethodMerger::create_instantiation_factory(
+DexMethod* ModelMethodMerger::create_instantiation_factory(
     DexType* owner_type,
     std::string name,
     DexProto* proto,
@@ -351,7 +351,7 @@ DexMethod* MethodMerger::create_instantiation_factory(
  * to do so. It is only needed when we want to make sure the entries in the
  * dispatch are indeed inlined in the final output.
  */
-void MethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
+void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
   auto dispatch_code = dispatch->get_code();
   std::vector<std::pair<IRCode*, IRList::iterator>> callsites;
   auto insns = InstructionIterable(dispatch_code);
@@ -378,7 +378,7 @@ void MethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
         SHOW(dispatch->get_code()));
 }
 
-std::string MethodMerger::get_method_signature_string(DexMethod* meth) {
+std::string ModelMethodMerger::get_method_signature_string(DexMethod* meth) {
   if (m_method_debug_map.count(meth) > 0) {
     auto orig_signature = m_method_debug_map.at(meth);
     TRACE(TERA, 9, "Method debug map look up %s\n", orig_signature.c_str());
@@ -388,7 +388,7 @@ std::string MethodMerger::get_method_signature_string(DexMethod* meth) {
   return type_reference::get_method_signature(meth);
 }
 
-void MethodMerger::merge_virtual_methods(
+void ModelMethodMerger::merge_virtual_methods(
     const Scope& scope,
     DexType* super_type,
     DexType* target_type,
@@ -454,7 +454,7 @@ void MethodMerger::merge_virtual_methods(
   }
 }
 
-void MethodMerger::merge_ctors() {
+void ModelMethodMerger::merge_ctors() {
   //////////////////////////////////////////
   // Collect type tags and call sites.
   //////////////////////////////////////////
@@ -584,14 +584,14 @@ void MethodMerger::merge_ctors() {
       call_sites, type_tags, old_to_new_callee, m_generate_type_tags);
 }
 
-void MethodMerger::merge_non_ctor_non_virt_methods() {
+void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
   for (auto merger : m_mergers) {
     auto merger_type = const_cast<DexType*>(merger->type);
     std::vector<DexMethod*> to_dedup;
     // Add non_ctors and non_vmethods
-    auto non_ctors = m_merger_non_ctors.at(merger);
+    auto& non_ctors = m_merger_non_ctors.at(merger);
     to_dedup.insert(to_dedup.end(), non_ctors.begin(), non_ctors.end());
-    auto non_vmethods = m_merger_non_vmethods.at(merger);
+    auto& non_vmethods = m_merger_non_vmethods.at(merger);
     to_dedup.insert(to_dedup.end(), non_vmethods.begin(), non_vmethods.end());
 
     // Lift constants
@@ -608,11 +608,17 @@ void MethodMerger::merge_non_ctor_non_virt_methods() {
           m_scope, m_type_tags, annotated, CONST_LIFT_STUB_THRESHOLD);
       to_dedup.insert(to_dedup.end(), stub_methods.begin(), stub_methods.end());
       m_num_const_lifted_methods += const_lift.get_num_const_lifted_methods();
+      for (auto stub : stub_methods) {
+        if (stub->is_virtual()) {
+          non_vmethods.push_back(stub);
+        } else {
+          non_ctors.push_back(stub);
+        }
+      }
     }
 
     // Dedup non_ctors & non_vmethods
     std::vector<DexMethod*> replacements;
-    auto to_cleanup = to_dedup;
     std::unordered_map<DexMethod*, MethodOrderedSet> new_to_old;
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
@@ -663,23 +669,34 @@ void MethodMerger::merge_non_ctor_non_virt_methods() {
       }
     }
 
-    // Clean up remainders
+    // Clean up remainders, update the non_ctors and non_vmethods.
+    auto should_erase = [&merger_type, this](DexMethod* m) {
+      auto owner = m->get_class();
+      if (owner == merger_type) {
+        return false;
+      }
+      TRACE(TERA, 9, "dedup: removing %s\n", SHOW(m));
+      always_assert(m_mergeable_to_merger_ctor.count(owner));
+      auto cls = type_class(owner);
+      cls->remove_method(m);
+      DexMethod::erase_method(m);
+      return true;
+    };
+    int before = non_ctors.size() + non_vmethods.size();
+    non_ctors.erase(
+        std::remove_if(non_ctors.begin(), non_ctors.end(), should_erase),
+        non_ctors.end());
+    non_vmethods.erase(
+        std::remove_if(non_vmethods.begin(), non_vmethods.end(), should_erase),
+        non_vmethods.end());
     TRACE(TERA,
           8,
           "dedup: clean up static|non_virt remainders %d\n",
-          to_cleanup.size());
-    for (auto m : to_cleanup) {
-      auto owner = m->get_class();
-      if (m_mergeable_to_merger_ctor.count(owner) > 0) {
-        auto cls = type_class(owner);
-        TRACE(TERA, 9, "dedup: removing %s\n", SHOW(m));
-        cls->remove_method(m);
-      }
-    }
+          before - non_ctors.size() - non_vmethods.size());
   }
 }
 
-void MethodMerger::merge_virt_itf_methods() {
+void ModelMethodMerger::merge_virt_itf_methods() {
   std::vector<std::pair<DexClass*, DexMethod*>> dispatch_methods;
   std::unordered_map<DexMethod*, DexMethod*> old_to_new_callee;
 
@@ -717,7 +734,7 @@ void MethodMerger::merge_virt_itf_methods() {
   }
 }
 
-void MethodMerger::update_to_static(
+void ModelMethodMerger::update_to_static(
     const std::set<DexMethod*, dexmethods_comparator>& methods) {
 
   if (!m_devirtualize_enabled) {

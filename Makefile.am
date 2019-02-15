@@ -290,7 +290,7 @@ redex_all_SOURCES = \
 	opt/type-erasure/ApproximateShapeMerging.cpp \
 	opt/type-erasure/ClassAssemblingUtils.cpp \
 	opt/type-erasure/MergerType.cpp \
-	opt/type-erasure/MethodMerger.cpp \
+	opt/type-erasure/ModelMethodMerger.cpp \
 	opt/type-erasure/Model.cpp \
 	opt/type-erasure/ModelMerger.cpp \
 	opt/type-erasure/TypeErasureInterDexPlugin.cpp \

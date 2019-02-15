@@ -513,7 +513,7 @@ void ModelMerger::update_merger_fields(const MergerType& merger) {
 
 void ModelMerger::update_stats(const std::string model_name,
                                const std::vector<const MergerType*>& mergers,
-                               MethodMerger& mm) {
+                               ModelMethodMerger& mm) {
   for (auto merger : mergers) {
     m_num_classes_merged += merger->mergeables.size();
   }
@@ -615,17 +615,17 @@ std::vector<DexClass*> ModelMerger::merge_model(
       scope, to_materialize, mergeable_to_merger, m_merger_fields);
 
   // Merge methods
-  MethodMerger mm(scope,
-                  to_materialize,
-                  type_tag_fields,
-                  &type_tags,
-                  method_debug_map,
-                  has_type_tag,
-                  generate_type_tags,
-                  model.devirtualize_non_virtuals(),
-                  model.process_method_meta(),
-                  max_num_dispatch_target,
-                  model.keep_debug_info());
+  ModelMethodMerger mm(scope,
+                       to_materialize,
+                       type_tag_fields,
+                       &type_tags,
+                       method_debug_map,
+                       has_type_tag,
+                       generate_type_tags,
+                       model.devirtualize_non_virtuals(),
+                       model.process_method_meta(),
+                       max_num_dispatch_target,
+                       model.keep_debug_info());
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
   update_const_string_type_refs(scope, merged_type_names);

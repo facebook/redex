@@ -44,9 +44,9 @@ struct MethodStats {
   void print(const std::string model_name, uint32_t num_mergeables);
 };
 
-class MethodMerger {
+class ModelMethodMerger {
  public:
-  MethodMerger(
+  ModelMethodMerger(
       const Scope& scope,
       const std::vector<const MergerType*>& mergers,
       const MergerToField& type_tag_fields,

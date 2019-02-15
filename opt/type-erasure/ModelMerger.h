@@ -15,7 +15,7 @@
 
 class Model;
 struct MergerType;
-class MethodMerger;
+class ModelMethodMerger;
 class DexStore;
 class TypeTags;
 using DexStoresVector = std::vector<DexStore>;
@@ -68,5 +68,5 @@ class ModelMerger {
   void update_merger_fields(const MergerType& merger);
   void update_stats(const std::string name,
                     const std::vector<const MergerType*>& mergers,
-                    MethodMerger& mm);
+                    ModelMethodMerger& mm);
 };
