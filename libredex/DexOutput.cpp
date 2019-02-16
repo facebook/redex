@@ -150,9 +150,11 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
-  std::stable_sort(lmeth.begin(),
-                   lmeth.end(),
-                   dexmethods_profiled_comparator(&m_method_to_weight));
+  std::stable_sort(
+      lmeth.begin(),
+      lmeth.end(),
+      dexmethods_profiled_comparator(&m_method_to_weight,
+                                     &m_method_sorting_whitelisted_substrings));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
@@ -413,6 +415,7 @@ public:
   LocatorIndex* m_locator_index;
   bool m_emit_name_based_locators;
   const ConfigFiles& m_config_files;
+  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
   void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data(SortMode mode = SortMode::DEFAULT);
@@ -451,6 +454,8 @@ public:
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
   void emit_name_based_locators();
+  const std::unordered_set<std::string>& get_method_whitelisted_substrings(
+      const ConfigFiles& cfg);
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
 
@@ -1775,9 +1780,31 @@ void DexOutput::write_symbol_files() {
                                 m_method_bytecode_offsets);
 }
 
+void GatheredTypes::set_method_sorting_whitelisted_substrings(
+    const std::unordered_set<std::string>& whitelisted_substrings) {
+  m_method_sorting_whitelisted_substrings = whitelisted_substrings;
+}
+
 void GatheredTypes::set_method_to_weight(
     const std::unordered_map<std::string, unsigned int>& method_to_weight) {
   m_method_to_weight = method_to_weight;
+}
+
+const std::unordered_set<std::string>&
+DexOutput::get_method_whitelisted_substrings(const ConfigFiles& cfg) {
+  if (m_method_sorting_whitelisted_substrings.empty()) {
+    const auto json_cfg = cfg.get_json_config();
+    Json::Value json_result;
+    json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
+                 json_result);
+    if (json_result != Json::nullValue) {
+      for (auto const& json_element : json_result) {
+        m_method_sorting_whitelisted_substrings.insert(json_element.asString());
+      }
+    }
+  }
+
+  return m_method_sorting_whitelisted_substrings;
 }
 
 void DexOutput::prepare(SortMode string_mode,
@@ -1787,6 +1814,8 @@ void DexOutput::prepare(SortMode string_mode,
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
     m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
+    m_gtypes->set_method_sorting_whitelisted_substrings(
+        get_method_whitelisted_substrings(cfg));
   }
 
   fix_jumbos(m_classes, dodx);
