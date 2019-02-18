@@ -379,7 +379,7 @@ void* VectorImpl::_grow(size_t where, size_t amount)
 
     const size_t new_size = mCount + amount;
     if (capacity() < new_size) {
-        const size_t new_capacity = max(kMinVectorCapacity, ((new_size*3)+1)/2);
+        const size_t new_capacity = max(kMinVectorCapacity, (new_size + (new_size/2)+1));
 //        ALOGV("grow vector %p, new_capacity=%d", this, (int)new_capacity);
         if ((mStorage) &&
             (mCount==where) &&
