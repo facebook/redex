@@ -620,12 +620,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        type_tag_fields,
                        &type_tags,
                        method_debug_map,
-                       has_type_tag,
-                       generate_type_tags,
-                       model.devirtualize_non_virtuals(),
-                       model.process_method_meta(),
-                       max_num_dispatch_target,
-                       model.keep_debug_info());
+                       model.get_model_spec(),
+                       max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
   update_const_string_type_refs(scope, merged_type_names);

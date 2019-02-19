@@ -156,27 +156,19 @@ ModelMethodMerger::ModelMethodMerger(
     const MergerToField& type_tag_fields,
     const TypeTags* type_tags,
     const std::unordered_map<DexMethod*, std::string>& method_debug_map,
-    bool use_external_type_tags,
-    bool generate_type_tags,
-    bool devirtualize_enabled,
-    bool process_method_meta,
-    boost::optional<size_t> max_num_dispatch_target,
-    bool keep_debug_info)
+    const ModelSpec& model_spec,
+    boost::optional<size_t> max_num_dispatch_target)
     : m_scope(scope),
       m_mergers(mergers),
       m_type_tag_fields(type_tag_fields),
       m_type_tags(type_tags),
       m_method_debug_map(method_debug_map),
-      m_use_external_type_tags(use_external_type_tags),
-      m_generate_type_tags(generate_type_tags),
-      m_devirtualize_enabled(devirtualize_enabled),
-      m_process_method_meta(process_method_meta),
-      m_max_num_dispatch_target(max_num_dispatch_target),
-      m_keep_debug_info(keep_debug_info) {
+      m_model_spec(model_spec),
+      m_max_num_dispatch_target(max_num_dispatch_target) {
   for (const auto& mtf : type_tag_fields) {
     auto type_tag_field = mtf.second;
     assert((type_tag_field && type_tag_field->is_concrete()) ||
-           !generate_type_tags);
+           !model_spec.needs_type_tag);
   }
   // Collect ctors, non_ctors.
   for (const MergerType* merger : mergers) {
@@ -325,7 +317,7 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
 }
 
 bool ModelMethodMerger::no_type_tags() {
-  return !m_use_external_type_tags && !m_generate_type_tags;
+  return !m_model_spec.has_type_tag && !m_model_spec.needs_type_tag;
 }
 
 DexMethod* ModelMethodMerger::create_instantiation_factory(
@@ -427,7 +419,7 @@ void ModelMethodMerger::merge_virtual_methods(
                         type_tag_field,
                         overridden_meth,
                         m_max_num_dispatch_target,
-                        m_keep_debug_info};
+                        m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
     for (const auto sub_dispatch : dispatch.sub_dispatches) {
@@ -507,11 +499,11 @@ void ModelMethodMerger::merge_ctors() {
 
       // Create dispatch.
       bool pass_type_tag_param =
-          !m_use_external_type_tags && m_generate_type_tags;
+          !m_model_spec.has_type_tag && m_model_spec.needs_type_tag;
       auto dispatch_arg_list = type_reference::append_and_make(
           ctor_proto->get_args(), get_int_type());
       auto dispatch_proto =
-          m_generate_type_tags
+          m_model_spec.needs_type_tag
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
       dispatch::Spec spec{target_type,
@@ -523,7 +515,7 @@ void ModelMethodMerger::merge_ctors() {
                           ACC_PUBLIC | ACC_CONSTRUCTOR,
                           type_tag_field,
                           nullptr, // overridden_meth
-                          m_keep_debug_info};
+                          m_model_spec.keep_debug_info};
       auto indices_to_callee = get_dedupped_indices_map(ctors);
       if (indices_to_callee.size() > 1) {
         always_assert_log(
@@ -567,7 +559,7 @@ void ModelMethodMerger::merge_ctors() {
       dispatches.emplace(dispatch);
     }
     // Update mergeable ctor map
-    if (m_use_external_type_tags) {
+    if (m_model_spec.has_type_tag) {
       always_assert(dispatches.size() == 1);
     }
     for (auto type : pair.first->mergeables) {
@@ -581,7 +573,7 @@ void ModelMethodMerger::merge_ctors() {
   //////////////////////////////////////////
   auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
   update_call_refs(
-      call_sites, type_tags, old_to_new_callee, m_generate_type_tags);
+      call_sites, type_tags, old_to_new_callee, m_model_spec.needs_type_tag);
 }
 
 void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
@@ -595,7 +587,7 @@ void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
     to_dedup.insert(to_dedup.end(), non_vmethods.begin(), non_vmethods.end());
 
     // Lift constants
-    if (m_process_method_meta) {
+    if (m_model_spec.process_method_meta) {
       ConstantLifting const_lift;
       std::vector<DexMethod*> annotated;
       for (const auto m : to_dedup) {
@@ -737,7 +729,7 @@ void ModelMethodMerger::merge_virt_itf_methods() {
 void ModelMethodMerger::update_to_static(
     const std::set<DexMethod*, dexmethods_comparator>& methods) {
 
-  if (!m_devirtualize_enabled) {
+  if (!m_model_spec.devirtualize_non_virtuals) {
     return;
   }
 

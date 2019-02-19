@@ -11,6 +11,7 @@
 
 #include "DexClass.h"
 #include "MergerType.h"
+#include "Model.h"
 #include "TypeTags.h"
 
 struct InterfaceMethod;
@@ -52,12 +53,8 @@ class ModelMethodMerger {
       const MergerToField& type_tag_fields,
       const TypeTags* type_tags,
       const std::unordered_map<DexMethod*, std::string>& method_debug_map,
-      bool use_external_type_tags,
-      bool generate_type_tags,
-      bool devirtualize_enabled,
-      bool process_method_meta,
-      boost::optional<size_t> max_num_dispatch_target,
-      bool keep_debug_info);
+      const ModelSpec& model_spec,
+      boost::optional<size_t> max_num_dispatch_target);
 
   TypeToMethod& merge_methods() {
     merge_ctors();
@@ -108,14 +105,10 @@ class ModelMethodMerger {
   const MergerToField m_type_tag_fields;
   const TypeTags* m_type_tags;
   const std::unordered_map<DexMethod*, std::string>& m_method_debug_map;
-  bool m_use_external_type_tags;
-  bool m_generate_type_tags;
-  bool m_devirtualize_enabled;
-  bool m_process_method_meta;
+  const ModelSpec m_model_spec;
   // This member is only used for testing purpose. If its value is greator than
   // zero, the splitting decision will bypass the instruction count limit.
   boost::optional<size_t> m_max_num_dispatch_target;
-  bool m_keep_debug_info;
 
   // dmethods
   MergerToMethods m_merger_ctors;

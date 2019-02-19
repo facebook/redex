@@ -103,6 +103,12 @@ struct ModelSpec {
   bool include_primary_dex{false};
   // Devirtualize/staticize non-virtual methods
   bool devirtualize_non_virtuals{false};
+  // Merge static methods within shape.
+  bool merge_static_methods_within_shape{false};
+  // Merge direct methods within shape.
+  bool merge_direct_methods_within_shape{false};
+  // Merge nonvirt methods within shape.
+  bool merge_nonvirt_methods_within_shape{false};
   // Process @MethodMeta annotations
   bool process_method_meta{false};
   // Max mergeable count per merger type
@@ -198,6 +204,8 @@ class Model {
   bool is_merge_per_interdex_set_enabled() const {
     return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
   }
+
+  const ModelSpec get_model_spec() const { return m_spec; }
 
   bool needs_type_tag() const { return m_spec.needs_type_tag; }
   bool has_type_tag() const { return m_spec.has_type_tag; }

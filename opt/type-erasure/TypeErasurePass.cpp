@@ -128,6 +128,15 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     m_max_num_dispatch_target =
         boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
   }
+  bool merge_static_methods_within_shape;
+  jw.get("merge_static_methods_within_shape", false,
+         merge_static_methods_within_shape);
+  bool merge_direct_methods_within_shape;
+  jw.get("merge_direct_methods_within_shape", false,
+         merge_direct_methods_within_shape);
+  bool merge_nonvirt_methods_within_shape;
+  jw.get("merge_nonvirt_methods_within_shape", false,
+         merge_nonvirt_methods_within_shape);
 
   // load model specifications
   Json::Value models;
@@ -207,6 +216,10 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     }
     model.devirtualize_non_virtuals = devirtualize_non_virtuals;
     model.process_method_meta = process_method_meta;
+    model.merge_static_methods_within_shape = merge_static_methods_within_shape;
+    model.merge_direct_methods_within_shape = merge_direct_methods_within_shape;
+    model.merge_nonvirt_methods_within_shape =
+        merge_nonvirt_methods_within_shape;
     if (!verify_model_spec(model)) {
       continue;
     }
