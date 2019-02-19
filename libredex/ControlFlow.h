@@ -170,6 +170,7 @@ class Edge final {
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
+  ThrowInfo* throw_info() const { return m_throw_info.get(); }
   boost::optional<CaseKey> case_key() const { return m_case_key; }
 };
 
@@ -546,6 +547,12 @@ class ControlFlowGraph {
 
   // by default, start at the entry block
   boost::sub_range<IRList> get_param_instructions();
+
+  void gather_catch_types(std::vector<DexType*>& types) const;
+  void gather_strings(std::vector<DexString*>& strings) const;
+  void gather_types(std::vector<DexType*>& types) const;
+  void gather_fields(std::vector<DexFieldRef*>& fields) const;
+  void gather_methods(std::vector<DexMethodRef*>& methods) const;
 
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 

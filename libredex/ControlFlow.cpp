@@ -958,6 +958,57 @@ boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() {
   return block->m_entries.get_param_instructions();
 }
 
+void ControlFlowGraph::gather_catch_types(std::vector<DexType*>& types) const {
+  always_assert(editable());
+  std::unordered_set<DexType*> seen;
+  // get the catch types of all the incoming edges to all the catch blocks
+  for (const auto& entry : m_blocks) {
+    const Block* b = entry.second;
+    if (b->is_catch()) {
+      for (const cfg::Edge* e : b->preds()) {
+        if (e->type() == cfg::EDGE_THROW) {
+          DexType* t = e->throw_info()->catch_type;
+          const auto pair = seen.insert(t);
+          bool insertion_occured = pair.second;
+          if (insertion_occured) {
+            types.push_back(t);
+          }
+        }
+      }
+    }
+  }
+}
+
+void ControlFlowGraph::gather_strings(std::vector<DexString*>& strings) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_strings(strings);
+  }
+}
+
+void ControlFlowGraph::gather_types(std::vector<DexType*>& types) const {
+  always_assert(editable());
+  gather_catch_types(types);
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_types(types);
+  }
+}
+
+void ControlFlowGraph::gather_fields(std::vector<DexFieldRef*>& fields) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_fields(fields);
+  }
+}
+
+void ControlFlowGraph::gather_methods(
+    std::vector<DexMethodRef*>& methods) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_methods(methods);
+  }
+}
+
 cfg::InstructionIterator ControlFlowGraph::move_result_of(
     const cfg::InstructionIterator& it) {
   auto next_insn = std::next(it);
