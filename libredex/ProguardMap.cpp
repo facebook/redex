@@ -72,10 +72,11 @@ void whitespace(const char*& p) {
   }
 }
 
-void digits(const char*& p) {
-  while (isdigit(*p)) {
-    ++p;
-  }
+uint32_t line_number(const char*& p) {
+  char* e;
+  uint32_t line = std::strtol(p, &e, 10);
+  p = e;
+  return line;
 }
 
 bool isseparator(uint32_t cp) {
@@ -176,6 +177,11 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
   return find_or_same(method, m_obfMethodMap);
 }
 
+ProguardLineRangeSet& ProguardMap::method_lines(
+    const std::string& obfuscated_method) {
+  return m_obfMethodLinesMap.at(obfuscated_method);
+}
+
 void ProguardMap::parse_proguard_map(std::istream& fp) {
   std::string line;
   while (std::getline(fp, line)) {
@@ -253,12 +259,12 @@ bool ProguardMap::parse_method(const std::string& line) {
   std::string old_args;
   std::string new_args;
   std::string newname;
-
+  auto lines = std::make_unique<ProguardLineRange>();
   auto p = line.c_str();
   whitespace(p);
-  digits(p);
+  lines->start = line_number(p);
   literal(p, ':');
-  digits(p);
+  lines->end = line_number(p);
   literal(p, ':');
 
   if (!id(p, type)) return false;
@@ -279,9 +285,9 @@ bool ProguardMap::parse_method(const std::string& line) {
   }
 
   literal(p, ':');
-  digits(p);
+  lines->original_start = line_number(p);
   literal(p, ':');
-  digits(p);
+  lines->original_end = line_number(p);
   literal(p, " -> ");
 
   if (!id(p, newname)) return false;
@@ -292,6 +298,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
+  m_obfMethodLinesMap[pgnew].insert(std::move(lines));
   return true;
 }
 

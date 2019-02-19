@@ -148,6 +148,7 @@ libredex_la_SOURCES = \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
+	libredex/ProguardLineRange.cpp \
 	libredex/ProguardMap.cpp \
 	libredex/ProguardMatcher.cpp \
 	libredex/ProguardParser.cpp \

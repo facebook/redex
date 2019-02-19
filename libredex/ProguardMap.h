@@ -14,6 +14,7 @@
 #include <string>
 
 #include "DexClass.h"
+#include "ProguardLineRange.h"
 
 /**
  * ProguardMap parses ProGuard's mapping.txt file that maps de-obfuscated class
@@ -80,6 +81,11 @@ struct ProguardMap {
    */
   std::string deobfuscate_method(const std::string& method) const;
 
+  /**
+   * Obtain line range set for a given obfuscated method name.
+   */
+  ProguardLineRangeSet& method_lines(const std::string& obfuscated_method);
+
   bool empty() const { return m_classMap.empty() && m_fieldMap.empty() &&
                               m_methodMap.empty() ; }
 
@@ -105,6 +111,7 @@ struct ProguardMap {
   std::unordered_map<std::string, std::string> m_obfClassMap;
   std::unordered_map<std::string, std::string> m_obfFieldMap;
   std::unordered_map<std::string, std::string> m_obfMethodMap;
+  std::unordered_map<std::string, ProguardLineRangeSet> m_obfMethodLinesMap;
 
   // Interfaces that are (most likely) coalesced by Proguard.
   std::unordered_set<std::string> m_pg_coalesced_interfaces;
