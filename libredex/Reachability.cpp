@@ -28,10 +28,6 @@ namespace {
 
 static ReachableObject SEED_SINGLETON{};
 
-bool is_canary(const DexClass* cls) {
-  return strstr(cls->get_name()->c_str(), "Canary");
-}
-
 DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
@@ -83,13 +79,21 @@ std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
   }
 }
 
+bool RootSetMarker::is_canary(const DexClass* cls) {
+  return strstr(cls->get_name()->c_str(), "Canary");
+}
+
+bool RootSetMarker::should_mark_cls(const DexClass* cls) {
+  return root(cls) || is_canary(cls);
+}
+
 /*
  * Initializes the root set by marking and pushing nodes onto the work queue.
  * Also conditionally marks class member seeds.
  */
 void RootSetMarker::mark(const Scope& scope) {
   walk::parallel::classes(scope, [&](const DexClass* cls) {
-    if (root(cls) || is_canary(cls)) {
+    if (should_mark_cls(cls)) {
       TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
       push_seed(cls);
     }
@@ -179,7 +183,7 @@ void RootSetMarker::mark_external_method_overriders() {
 void TransitiveClosureMarker::visit(const ReachableObject& obj) {
   switch (obj.type) {
   case ReachableObjectType::CLASS:
-    visit(obj.cls);
+    visit_cls(obj.cls);
     break;
   case ReachableObjectType::FIELD:
     visit(obj.field);
@@ -339,7 +343,7 @@ void TransitiveClosureMarker::push_typelike_strings(
   }
 }
 
-void TransitiveClosureMarker::visit(const DexClass* cls) {
+void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s\n", SHOW(cls));
   for (auto& m : cls->get_dmethods()) {
     if (is_clinit(m)) {
@@ -649,4 +653,6 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
   gw.write(os, boost::adaptors::keys(retainers_of));
 }
 
+template void TransitiveClosureMarker::push<DexClass>(const DexClass* parent,
+                                                      const DexType* type);
 } // namespace reachability

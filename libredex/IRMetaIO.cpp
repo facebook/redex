@@ -23,9 +23,10 @@ PACKED(struct ir_meta_header_t {
 });
 
 #define BIT_FIELDS                \
-  FIELD(m_bytype)                 \
-  FIELD(m_bystring)               \
-  FIELD(m_byresources)            \
+  FIELD(m_by_type)                \
+  FIELD(m_by_string)              \
+  FIELD(m_by_resources)           \
+  FIELD(m_is_serde)               \
   FIELD(m_mix_mode)               \
   FIELD(m_keep)                   \
   FIELD(m_assumenosideeffects)    \

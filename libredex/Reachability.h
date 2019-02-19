@@ -191,11 +191,16 @@ class RootSetMarker {
         m_reachable_objects(reachable_objects),
         m_root_set(root_set) {}
 
+  virtual ~RootSetMarker() = default;
   /*
    * Initializes the root set by marking and pushing nodes onto the work queue.
    * Also conditionally marks class member seeds.
    */
   void mark(const Scope& scope);
+
+  bool is_canary(const DexClass* cls);
+
+  virtual bool should_mark_cls(const DexClass* cls);
 
  private:
   void push_seed(const DexClass* cls);
@@ -241,7 +246,9 @@ class TransitiveClosureMarker {
    * Marks :obj and pushes its immediately reachable neighbors onto the local
    * task queue of the current worker.
    */
-  void visit(const ReachableObject& obj);
+  virtual void visit(const ReachableObject& obj);
+
+  virtual void visit_cls(const DexClass* cls);
 
   virtual References gather(const DexAnnotation* anno) const;
 
@@ -249,12 +256,12 @@ class TransitiveClosureMarker {
 
   virtual References gather(const DexField* field) const;
 
+  template <class Parent>
+  void push(const Parent* parent, const DexType* type);
+
  private:
   template <class Parent, class InputIt>
   void push(const Parent* parent, InputIt begin, InputIt end);
-
-  template <class Parent>
-  void push(const Parent* parent, const DexType* type);
 
   template <class Parent>
   void push(const Parent* parent, const DexClass* cls);
@@ -275,8 +282,6 @@ class TransitiveClosureMarker {
   template <class Parent>
   void push_typelike_strings(const Parent* parent,
                              const std::vector<DexString*>& strings);
-
-  void visit(const DexClass* cls);
 
   void visit(const DexFieldRef* field);
 

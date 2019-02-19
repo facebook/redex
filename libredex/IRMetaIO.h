@@ -25,8 +25,9 @@ class IRMetaIO {
    */
   template <typename T>
   static bool is_default_meta(const T* obj) {
-    return obj->get_deobfuscated_name() == show(obj) && !obj->rstate.m_bytype &&
-           !obj->rstate.m_bystring && !obj->rstate.m_byresources &&
+    return obj->get_deobfuscated_name() == show(obj) &&
+           !obj->rstate.m_by_type && !obj->rstate.m_by_string &&
+           !obj->rstate.m_by_resources && !obj->rstate.m_is_serde &&
            !obj->rstate.m_mix_mode && !obj->rstate.m_keep &&
            !obj->rstate.m_assumenosideeffects &&
            !obj->rstate.m_blanket_keepnames &&
