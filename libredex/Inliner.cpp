@@ -318,8 +318,9 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   // attempt to inline all inlinable candidates
-  // FIXME: this returns 0 for the CFG case
-  size_t estimated_insn_size = caller->sum_opcode_sizes();
+  size_t estimated_insn_size = caller->editable_cfg_built()
+                                   ? caller->cfg().sum_opcode_sizes()
+                                   : caller->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
@@ -349,10 +350,11 @@ void MultiMethodInliner::inline_inlinables(
       inliner::inline_method(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
-    estimated_insn_size += callee->sum_opcode_sizes();
-    TRACE(MMINL,
-          6,
-          "checking visibility usage of members in %s\n",
+    estimated_insn_size += callee->editable_cfg_built()
+                               ? callee->cfg().sum_opcode_sizes()
+                               : callee->sum_opcode_sizes();
+
+    TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
           SHOW(callee));
     change_visibility(callee_method);
     info.calls_inlined++;
@@ -448,7 +450,9 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  auto callee_size = callee->get_code()->sum_opcode_sizes();
+  const IRCode* code = callee->get_code();
+  auto callee_size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
+                                                : code->sum_opcode_sizes();
   if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
     return true;
@@ -556,8 +560,13 @@ bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
  * in which case we cannot inline.
  */
 bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
+  const IRCode* code = callee->get_code();
   std::vector<DexType*> types;
-  callee->get_code()->gather_catch_types(types);
+  if (code->editable_cfg_built()) {
+    code->cfg().gather_catch_types(types);
+  } else {
+    code->gather_catch_types(types);
+  }
   for (auto type : types) {
     auto cls = type_class(type);
     if (cls != nullptr && cls->is_external() && !is_public(cls)) {

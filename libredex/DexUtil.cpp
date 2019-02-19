@@ -571,7 +571,11 @@ void change_visibility(DexMethod* method) {
   });
 
   std::vector<DexType*> types;
-  method->get_code()->gather_catch_types(types);
+  if (code->editable_cfg_built()) {
+    code->cfg().gather_catch_types(types);
+  } else {
+    code->gather_catch_types(types);
+  }
   for (auto type : types) {
     auto cls = type_class(type);
     if (cls != nullptr && !cls->is_external()) {

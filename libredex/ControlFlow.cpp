@@ -228,18 +228,13 @@ opcode::Branchingness Block::branchingness() {
 }
 
 uint32_t Block::num_opcodes() const {
-  if (m_parent->editable()) {
-    return m_entries.count_opcodes();
-  } else {
-    uint32_t result = 0;
-    for (auto it = m_begin; it != m_end; ++it) {
-      if (it->type == MFLOW_OPCODE &&
-          !opcode::is_internal(it->insn->opcode())) {
-        ++result;
-      }
-    }
-    return result;
-  }
+  always_assert(m_parent->editable());
+  return m_entries.count_opcodes();
+}
+
+uint32_t Block::sum_opcode_sizes() const {
+  always_assert(m_parent->editable());
+  return m_entries.sum_opcode_sizes();
 }
 
 // shallowly copy pointers (edges and parent cfg)
@@ -941,6 +936,14 @@ uint32_t ControlFlowGraph::num_opcodes() const {
   uint32_t result = 0;
   for (const auto& entry : m_blocks) {
     result += entry.second->num_opcodes();
+  }
+  return result;
+}
+
+uint32_t ControlFlowGraph::sum_opcode_sizes() const {
+  uint32_t result = 0;
+  for (const auto& entry : m_blocks) {
+    result += entry.second->sum_opcode_sizes();
   }
   return result;
 }

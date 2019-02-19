@@ -241,6 +241,8 @@ class Block final {
 
   uint32_t num_opcodes() const;
 
+  uint32_t sum_opcode_sizes() const;
+
   // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
   // return an iterator to the first MFLOW_OPCODE, or end() if there are none
@@ -525,6 +527,8 @@ class ControlFlowGraph {
   void no_dangling_dex_positions() const;
 
   uint32_t num_opcodes() const;
+
+  uint32_t sum_opcode_sizes() const;
 
   uint16_t allocate_temp() { return m_registers_size++; }
 
