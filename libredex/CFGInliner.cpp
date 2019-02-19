@@ -276,7 +276,7 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
       const auto insn = mie.insn;
       const auto op = insn->opcode();
       if (opcode::can_throw(op) && it.unwrap() != last) {
-        const auto& cfg_it = callee->to_cfg_instruction_iterator(b, it);
+        const auto& cfg_it = b->to_cfg_instruction_iterator(it);
         Block* new_block = callee->split_block(cfg_it);
         work_list.push_back(new_block);
       }

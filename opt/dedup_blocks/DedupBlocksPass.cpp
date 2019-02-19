@@ -602,7 +602,7 @@ class DedupBlocksImpl {
 
         // Split the block
         auto split_block =
-            cfg.split_block(cfg.to_cfg_instruction_iterator(block, fwd_it));
+            cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
         split_blocks.insert(split_block);
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %d, new = %d\n", block->id(),

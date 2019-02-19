@@ -363,6 +363,34 @@ boost::optional<Edge::CaseKey> Block::remove_first_matching_target(
   not_reached();
 }
 
+// These assume that the iterator is inside this block
+cfg::InstructionIterator Block::to_cfg_instruction_iterator(
+    const ir_list::InstructionIterator& list_it) {
+  if (ControlFlowGraph::DEBUG) {
+    bool inside = false;
+    auto needle = list_it.unwrap();
+    for (auto it = begin(); it != end(); ++it) {
+      if (it == needle) {
+        inside = true;
+      }
+    }
+    always_assert(inside);
+  }
+  return cfg::InstructionIterator(*m_parent, this, list_it);
+}
+
+cfg::InstructionIterator Block::to_cfg_instruction_iterator(
+    const IRList::iterator& list_it) {
+  return to_cfg_instruction_iterator(
+      ir_list::InstructionIterator(list_it, this->end()));
+}
+
+cfg::InstructionIterator Block::to_cfg_instruction_iterator(
+    MethodItemEntry& mie) {
+  always_assert(m_parent->editable());
+  return to_cfg_instruction_iterator(m_entries.iterator_to(mie));
+}
+
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
   switch (e.type()) {
   case EDGE_GOTO: {
@@ -1061,6 +1089,7 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
     const Block* block = entry.second;
     // this shallowly copies edge pointers inside, then we patch them later
     Block* new_block = new Block(*block, &cloner);
+    new_block->m_parent = new_cfg;
     new_cfg->m_blocks.emplace(new_block->id(), new_block);
   }
   // We need a second pass because parent position pointers may refer to
@@ -1089,11 +1118,6 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   if (this->m_exit_block != nullptr) {
     new_cfg->m_exit_block = new_cfg->m_blocks.at(this->m_exit_block->id());
   }
-}
-
-cfg::InstructionIterator ControlFlowGraph::to_cfg_instruction_iterator(
-    Block* b, const ir_list::InstructionIterator& list_it) {
-  return cfg::InstructionIterator(*this, b, list_it);
 }
 
 InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle) {

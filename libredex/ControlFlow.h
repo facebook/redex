@@ -263,6 +263,13 @@ class Block final {
   boost::optional<Edge::CaseKey> remove_first_matching_target(
       MethodItemEntry* branch);
 
+  // These assume that the iterator is inside this block
+  InstructionIterator to_cfg_instruction_iterator(
+      const ir_list::InstructionIterator& list_it);
+  InstructionIterator to_cfg_instruction_iterator(
+      const IRList::iterator& list_it);
+  InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
+
   /**
    * TODO(fengliu): Will make cfg support IRCode construction in a better way,
    * this method will be deprecated soon.
@@ -309,6 +316,8 @@ struct DominatorInfo {
 class ControlFlowGraph {
 
  public:
+  static constexpr bool DEBUG{false};
+
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
 
@@ -316,7 +325,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = false);
+  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = true);
   ~ControlFlowGraph();
 
   /*
@@ -564,9 +573,6 @@ class ControlFlowGraph {
    * fill `new_cfg` with a copy of `this`
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
-
-  cfg::InstructionIterator to_cfg_instruction_iterator(
-      Block* b, const ir_list::InstructionIterator& list_it);
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
@@ -818,7 +824,6 @@ class ControlFlowGraph {
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
-  static constexpr bool DEBUG{false};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
