@@ -530,8 +530,8 @@ void change_visibility(DexMethod* method) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  editable_cfg_adapter::iterate(code, [](MethodItemEntry* mie) {
-    auto insn = mie->insn;
+  editable_cfg_adapter::iterate(code, [](MethodItemEntry& mie) {
+    auto insn = mie.insn;
 
     if (insn->has_field()) {
       auto cls = type_class(insn->get_field()->get_class());

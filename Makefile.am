@@ -120,6 +120,7 @@ libredex_la_SOURCES = \
 	libredex/DexStore.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
+	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
