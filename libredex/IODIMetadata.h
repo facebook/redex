@@ -106,38 +106,28 @@ class IODIMetadata {
   MethodToPrettyMap m_pretty_map;
   Scope m_scope;
 
-  // Internal helpers:
+  // Internal helper:
   // This will properly push_back a duplicate if method is a duplicate and
   // allow_collision is true. If allow collision is false and there is a
   // collision then will assert.
   void emplace_entry(const std::string& key,
                      const DexMethod* method,
                      bool allow_collision = true);
-  // This tries to rename all of the duplicates in old_entry, fills new_entries
-  // with any newly created entries and flattens old_entry once its done. If
-  // any of the methods cannot be renamed then they are skipped. The prefix
-  // is the external name of old_entry's methods' class with a period appended
-  // to it.
-  void try_rename(Entry& old_entry,
-                  const std::string& prefix,
-                  EntryMap* new_entries);
 
  public:
   // We can initialize this guy for free. If this feature is enabled then
   // invoke the methods below.
   IODIMetadata() {}
 
-  // This fills the internal map of stack trace name -> method
-  // and renames any methods if it finds a collision (and a rename has already
-  // occurred). This must be called after the last pass and before the anything
-  // starts to get lowered.
-  void mark_and_rename_methods(DexStoresVector& scope);
+  // This fills the internal map of stack trace name -> method. This must be
+  // called after the last pass and before anything starts to get lowered.
+  void mark_methods(DexStoresVector& scope);
 
   // Returns whether we can symbolicate using IODI for the given method.
   bool can_safely_use_iodi(const DexMethod* method) const;
 
   // This must be called after all Scopes have been marked above with
-  // mark_and_rename_methods.
+  // mark_methods.
   void mark_callers();
 
   // Write to disk, pretty usual. Does nothing if filename len is 0.

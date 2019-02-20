@@ -764,8 +764,8 @@ void redex_backend(const PassManager& manager,
   bool needs_method_to_id = !iodi_metadata_filename.empty() ||
                             !debug_line_mapping_filename_v2.empty();
   if (!iodi_metadata_filename.empty()) {
-    Timer t("Rename and find duplicates for IODI");
-    iodi_metadata.mark_and_rename_methods(stores);
+    Timer t("Compute initial IODI metadata");
+    iodi_metadata.mark_methods(stores);
   }
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
@@ -803,7 +803,7 @@ void redex_backend(const PassManager& manager,
   }
 
   if (!iodi_metadata_filename.empty()) {
-    Timer t("Compute IODI metadata");
+    Timer t("Compute IODI caller metadata");
     iodi_metadata.mark_callers();
   }
 

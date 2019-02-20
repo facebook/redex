@@ -40,51 +40,6 @@ void IODIMetadata::Entry::push_back(const DexMethod* meth) {
 }
 
 namespace {
-void iter_rename(std::string& suffix) {
-  // Algo is to iterate through A-Za-z, appending a new character once we
-  // reach the end.
-  size_t len = suffix.size();
-  always_assert(len != 0);
-  char& last = suffix[len - 1];
-  if (last == 'z') {
-    suffix += "0"; // Our state machine below starts with 0.
-  } else {
-    char next;
-    // Our rename iterator is as follows:
-    // 0-8: n => n+1
-    // 9      => A
-    // $      => A
-    // _      => A
-    // A-Y: n => n+1
-    // Z      => a
-    // a-y: n => n+1
-    //
-    // We have an additional assert if our letter falls outside these ranges
-    // as otherwise its not a valid identifier in java.
-    //
-    // We don't map to _/$ ever because other passes don't and we don't want
-    // to introduce new strings when possible.
-    switch (last) {
-    case '9':
-    case '$':
-    case '_':
-      next = 'A';
-      break;
-    case 'Z':
-      next = 'a';
-      break;
-    default:
-      always_assert_log((last >= '0' && last < '9') ||
-                            (last >= 'A' && last < 'Z') ||
-                            (last >= 'a' && last < 'z'),
-                        "Valid identifier when renaming");
-      next = last + 1;
-      break;
-    }
-    last = next;
-  }
-}
-
 template <typename T>
 void emplace_warning_existence(T& map,
                                const DexMethod* m,
@@ -112,71 +67,6 @@ void IODIMetadata::emplace_entry(const std::string& key,
   }
 }
 
-void IODIMetadata::try_rename(Entry& old_entry,
-                              const std::string& prefix,
-                              EntryMap* new_entries) {
-  auto& caller_map = old_entry.get_caller_map();
-  // We want to stop just before the end.
-  for (auto it = caller_map.begin(); std::next(it) != caller_map.end();) {
-    DexMethod* method = const_cast<DexMethod*>(it->first);
-    // It's ok to have duplicate direct meths since our apk is the only one to
-    // call it.
-    if (method->is_virtual()) {
-      if (method->rstate.can_rename()) {
-        auto cls = method->get_class();
-        auto proto = method->get_proto();
-        // Copy the string so we can mutate it with iter_rename below.
-        std::string new_name = method->str();
-        std::string new_key;
-        DexString* new_dex_name;
-        do {
-          iter_rename(new_name);
-          new_key = prefix + new_name;
-          new_dex_name = DexString::make_string(new_name);
-          // We want to make sure there is no class/method_name collision,
-          // hence the latter two checks. The first check is necessary
-          // because sometimes the internal DexMethodSpec -> DexMethod
-          // map in RedexContext contains seemingly bogus entries and
-          // an assert fires due to a collision occurring. Task open to
-          // track this: T39021199
-        } while (DexMethod::get_method(cls, new_dex_name, proto) != nullptr ||
-                 m_entries.count(new_key) > 0 ||
-                 new_entries->count(new_key) > 0);
-        // Rename with new non-colliding name
-        DexMethodSpec spec(cls, new_dex_name, proto);
-        // We can't reuse the rename on collision below because it checks for
-        // collisions of proto/class/method_name tuples but we need to check
-        // for collisions of class/method_name pairs.
-        method->change(spec,
-                       false /* rename on collision */,
-                       false /* update deobfuscated name */);
-
-        // Finally remove the old entry, add to new_entries
-        it = caller_map.erase(it);
-        auto pretty_iter = m_pretty_map.find(method);
-        always_assert(pretty_iter != m_pretty_map.end());
-        // Note: pretty_map maps from method -> external name, i.e. the entry
-        // map key.
-        auto old_key = std::move(pretty_iter->second);
-        m_pretty_map.erase(pretty_iter);
-
-        // We don't add to pretty map because thats done when new_entries
-        // are merged into m_entries later.
-        always_assert(new_name == method->str());
-        bool inserted = new_entries->emplace(new_key, method).second;
-        always_assert_log(inserted, "Failed to insert with new_key: %s -> %s\n",
-                          old_key.c_str(), new_key.c_str());
-        TRACE(IODI, 4, "[IODI] Renamed %s -> %s\n", old_key.c_str(),
-              new_key.c_str());
-        continue;
-      }
-    }
-    // If we hit here then we didn't rename, so just increment to iterator
-    it++;
-  }
-  old_entry.flatten();
-}
-
 namespace {
 // Returns com.foo.Bar. for the DexClass Lcom/foo/Bar;. Note the trailing
 // '.'.
@@ -188,7 +78,7 @@ std::string pretty_prefix_for_cls(const DexClass* cls) {
 }
 } // namespace
 
-void IODIMetadata::mark_and_rename_methods(DexStoresVector& scope) {
+void IODIMetadata::mark_methods(DexStoresVector& scope) {
   // Calculates the duplicates that will appear in stack traces when using iodi.
   // For example, if a method is overloaded or templating is being used the line
   // emitted in the stack trace may be ambiguous (all that's emitted is the
@@ -219,30 +109,6 @@ void IODIMetadata::mark_and_rename_methods(DexStoresVector& scope) {
         }
       }
     }
-  }
-  // Then we can try to rename everything. Secondary dictionary so we don't
-  // mutate m_entries while iterating over it.
-  EntryMap new_entries;
-  size_t n_dup = 0;
-  for (auto& it : m_entries) {
-    if (!it.second.is_duplicate()) {
-      continue;
-    }
-    auto cls =
-        type_class(it.second.get_caller_map().begin()->first->get_class());
-    always_assert(cls);
-    std::string pretty_prefix = pretty_prefix_for_cls(cls);
-    try_rename(it.second, pretty_prefix, &new_entries);
-    // If after trying to rename its still a duplicate entry then add it to the
-    // counter to print out
-    if (it.second.is_duplicate()) {
-      n_dup += it.second.get_caller_map().size();
-    }
-  }
-  TRACE(IODI, 2, "[IODI] Found %u dups, renamed %u methods\n", n_dup,
-        new_entries.size());
-  for (auto& it : new_entries) {
-    emplace_entry(it.first, it.second.get_method(), false);
   }
 }
 
