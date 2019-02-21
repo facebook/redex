@@ -94,4 +94,11 @@ DexMethod* create_ctor_or_static_dispatch(
     const Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee);
 
+/**
+ * Generate a new dispatch method name.
+ */
+DexString* gen_dispatch_name(DexType* owner,
+                             DexProto* proto,
+                             std::string orig_name);
+
 } // namespace dispatch

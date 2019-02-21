@@ -11,6 +11,7 @@
 #include "DexStoreUtil.h"
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "SwitchDispatch.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -47,26 +48,6 @@ DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {
   return dispatch;
 }
 
-DexString* get_dispatch_name(DexType* owner,
-                             DexProto* proto,
-                             std::string orig_name) {
-  auto simple_name = DexString::make_string("$dispatch$" + orig_name);
-  if (DexMethod::get_method(owner, simple_name, proto) == nullptr) {
-    return simple_name;
-  }
-
-  size_t count = 0;
-  while (true) {
-    auto suffix = "$" + std::to_string(count);
-    auto dispatch_name = DexString::make_string(simple_name->c_str() + suffix);
-    auto existing_meth = DexMethod::get_method(owner, dispatch_name, proto);
-    if (existing_meth == nullptr) {
-      return dispatch_name;
-    }
-    ++count;
-  }
-}
-
 /**
  * Generate an interface call dispatch.
  * Here is an example with two targets:
@@ -100,7 +81,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
                                        const_cast<DexType*>(base_type));
   auto rtype = front_meth->get_proto()->get_rtype();
   auto new_proto = DexProto::make_proto(rtype, new_arg_list);
-  auto dispatch_name = get_dispatch_name(dispatch_owner, new_proto, orig_name);
+  auto dispatch_name =
+      dispatch::gen_dispatch_name(dispatch_owner, new_proto, orig_name);
 
   TRACE(RM_INTF, 9, "generating dispatch %s.%s for targets of size %d\n",
         SHOW(dispatch_owner), dispatch_name->c_str(), targets.size());

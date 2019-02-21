@@ -476,4 +476,23 @@ DexMethod* create_ctor_or_static_dispatch(
   return materialize_dispatch(orig_method, mc);
 }
 
+DexString* gen_dispatch_name(DexType* owner,
+                             DexProto* proto,
+                             std::string orig_name) {
+  auto simple_name = DexString::make_string("$dispatch$" + orig_name);
+  if (DexMethod::get_method(owner, simple_name, proto) == nullptr) {
+    return simple_name;
+  }
+
+  size_t count = 0;
+  while (true) {
+    auto suffix = "$" + std::to_string(count);
+    auto dispatch_name = DexString::make_string(simple_name->str() + suffix);
+    auto existing_meth = DexMethod::get_method(owner, dispatch_name, proto);
+    if (existing_meth == nullptr) {
+      return dispatch_name;
+    }
+    ++count;
+  }
+}
 } // namespace dispatch
