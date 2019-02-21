@@ -1,5 +1,7 @@
-Using ReDex with BUCK
----------------------
+---
+id: buck
+title: Using ReDex with Buck
+---
 
 ReDex already has a deep integration with BUCK. 
 Steps:

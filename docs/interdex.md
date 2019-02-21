@@ -1,4 +1,8 @@
-# Background
+---
+id: interdex
+title: Interdex
+---
+
 The Interdex Pass addresses the problem that the ordering of classes inside dexes
 and their distribution between dexes (if the application has multiple dexes) does
 not correspond to the order that they are accessed with during runtime if we use

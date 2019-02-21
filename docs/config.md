@@ -1,5 +1,7 @@
-Configuring ReDex
------------------
+---
+id: configuring
+title: Configuring ReDex
+---
 
 ReDex can be configured to run different optimizations or to alter the behavior
 of existing optimizations.  While this isn't always necessary, it's helpful to
