@@ -34,7 +34,9 @@ DexProto* make_static_sig(DexMethod* meth) {
 } // namespace
 
 MethodBlock::MethodBlock(IRList::iterator iterator, MethodCreator* creator)
-    : mc(creator), curr(iterator) {}
+    : mc(creator), curr(iterator) {
+  mc->blocks.push_back(this);
+}
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());

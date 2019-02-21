@@ -48,7 +48,7 @@ RedexContext::~RedexContext() {
   }
   // Delete DexMethods.
   for (auto const& it : s_method_map) {
-    delete it.second;
+    delete static_cast<DexMethod*>(it.second);
   }
   // Delete DexClasses.
   for (auto const& it : m_type_to_class) {

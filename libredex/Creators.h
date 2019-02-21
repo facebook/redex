@@ -479,6 +479,7 @@ struct MethodCreator {
   DexMethod* method;
   IRCode* meth_code;
   std::vector<Location> locals;
+  std::vector<MethodBlock*> blocks;
   MethodBlock* main_block;
 
   friend std::string show(const MethodCreator*);
