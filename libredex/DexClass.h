@@ -1189,7 +1189,7 @@ struct dexmethods_comparator {
   }
 };
 
-inline int get_method_weight_if_available(
+inline unsigned int get_method_weight_if_available(
     DexMethodRef* mref,
     std::unordered_map<std::string, unsigned int>* method_to_weight) {
 
@@ -1206,32 +1206,61 @@ inline int get_method_weight_if_available(
   return 0;
 }
 
+inline unsigned int get_method_weight_override(
+    DexMethodRef* m, std::unordered_set<std::string>* whitelisted_substrings) {
+  DexMethod* method = static_cast<DexMethod*>(m);
+  const std::string& deobfname = method->get_deobfuscated_name();
+  for (const std::string& substr : *whitelisted_substrings) {
+
+    if (deobfname.find(substr) != std::string::npos) {
+      return 100;
+    }
+  }
+
+  return 0;
+}
+
 /* Order based on method profile data */
 inline bool compare_dexmethods_profiled(
     DexMethodRef* a,
     DexMethodRef* b,
-    std::unordered_map<std::string, unsigned int>* method_to_weight) {
+    std::unordered_map<std::string, unsigned int>* method_to_weight,
+    std::unordered_set<std::string>* whitelisted_substrings) {
   if (a == nullptr) {
     return b != nullptr;
   } else if (b == nullptr) {
     return false;
   }
 
-  int weight_a = get_method_weight_if_available(a, method_to_weight);
-  int weight_b = get_method_weight_if_available(b, method_to_weight);
+  unsigned int weight_a = get_method_weight_if_available(a, method_to_weight);
+  unsigned int weight_b = get_method_weight_if_available(b, method_to_weight);
+
+  // For methods not included in the profiled methods file, move them to the top
+  // section anyway if they match one of the whitelisted substrings.
+  if (weight_a == 0) {
+    weight_a = get_method_weight_override(a, whitelisted_substrings);
+  }
+
+  if (weight_b == 0) {
+    weight_b = get_method_weight_override(b, whitelisted_substrings);
+  }
 
   return weight_a > weight_b;
 }
 
 struct dexmethods_profiled_comparator {
   std::unordered_map<std::string, unsigned int>* method_to_weight;
+  std::unordered_set<std::string>* whitelisted_substrings;
 
   dexmethods_profiled_comparator(
-      std::unordered_map<std::string, unsigned int>* method_to_weight_val)
-      : method_to_weight(method_to_weight_val) {}
+      std::unordered_map<std::string, unsigned int>* method_to_weight_val,
+      std::unordered_set<std::string>* whitelisted_substrings_val)
+      : method_to_weight(method_to_weight_val),
+        whitelisted_substrings(whitelisted_substrings_val) {}
 
   bool operator()(DexMethodRef* a, DexMethodRef* b) const {
-    return compare_dexmethods_profiled(a, b, method_to_weight);
+    return compare_dexmethods_profiled(a, b, method_to_weight,
+                                       whitelisted_substrings);
   }
 };
 
