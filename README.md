@@ -6,4 +6,4 @@ files, and a set of optimization passes that use this framework to improve the
 bytecode.  An APK optimized by ReDex should be smaller and faster than its
 source.
 
-Go to http://fbredex.com for full documentation.
+Go to https://fbredex.com for full documentation.
