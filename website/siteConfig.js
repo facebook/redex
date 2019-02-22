@@ -13,6 +13,7 @@ const siteConfig = {
   tagline: 'An Android Bytecode Optimizer',
   url: 'https://fbredex.com',
   baseUrl: '/',
+  cname: 'fbrdex.com',
 
   // Used for publishing and more
   organizationName: 'facebook',
