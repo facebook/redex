@@ -1,4 +1,9 @@
-# Using ProGuard Rules with Redex
+---
+id: proguard
+title: Using ProGuard Rules with Redex
+---
+
+> The code and artifacts for this example are on [GitHub](https://github.com/facebook/redex/tree/master/examples/ProguardExample).
 
 Currently there is limited support for specifying ProGuard rules which
 Redex will try to honor when it considers deleting (shrinking) classes,
@@ -75,7 +80,7 @@ did not notice that `Greek` is used as part of an `instanceof` check (or there c
 use of reflection that mentioned the Greek class). Running the app gives the following output
 on the display of the device:
 
-![Missing Greek interface](missing-greek.png)
+![Missing Greek interface](/img/missing-greek.png)
 
 You can instruct Redex to prevent a class or interface from begin deleted by providing
 a [ProGuard](http://proguard.sourceforge.net/manual/usage.html#keepoptions) rule. In this
@@ -94,7 +99,7 @@ $ redex -o myfasterapp.apk myapp.apk -P proguard-rules.pro --sign -s ~/.android/
 
 Now when you run the post-Redex APK you will notice that the `Greek` class has not been stripped away:
 
-![With Greek interface](with-greek.png)
+![With Greek interface](/img/with-greek.png)
 
 ## Limitations
 Right now we support only simple keep annotations for classes and interfaces. Shortly we will provide
