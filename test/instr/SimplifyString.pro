@@ -12,6 +12,7 @@
 -keep class sun.misc.** { *; }
 -keep class android.test.** { *; }
 -keep class android.support.test.** { *; }
+-keep class androidx.test.** { *; }
 
 # Unit test will have -dontoptimize from somewhere, so this is technically
 # has no effect.
@@ -23,6 +24,7 @@
 -dontwarn sun.misc.**
 -dontwarn android.test.**
 -dontwarn android.support.test.**
+-dontwarn androidx.test.**
 
 -keepattributes SourceFile,LineNumberTable,Signature
 
