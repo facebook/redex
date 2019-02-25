@@ -398,6 +398,8 @@ struct MethodCreator {
     return locals.at(i);
   }
 
+  std::vector<Location> get_reg_args();
+
   /**
    * Make a new local of the given type.
    */

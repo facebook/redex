@@ -21,6 +21,8 @@ enum Type {
   CTOR,
   STATIC,
   VIRTUAL,
+  DIRECT,
+  OTHER_TYPE
 };
 
 struct Spec {
@@ -93,6 +95,16 @@ dispatch::DispatchMethod create_virtual_dispatch(
 DexMethod* create_ctor_or_static_dispatch(
     const Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee);
+
+/**
+ * Create a simple dispatch for the methods who should have the same proto and
+ * same `this` type if the methods are virtual or direct. Methods should all
+ * be direct, static or virtual, do not support constructors or mix.
+ */
+DexMethod* create_simple_dispatch(
+    const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
+    DexAnnotationSet* anno = nullptr,
+    bool with_debug_item = false);
 
 /**
  * Generate a new dispatch method name.
