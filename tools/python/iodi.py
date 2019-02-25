@@ -40,6 +40,29 @@ class IODIMetadata(object):
                     dup_meta[method_id] = mid_cs
                 self.collisions[key] = dup_meta
 
+    def _write(self, form, *vals):
+        self._f.write(struct.pack(form, *vals))
+
+    def write(self, path):
+        with open(path, "wb") as f:
+            self._f = f
+            self._write(
+                "<LLLL", 0xFACEB001, 1, len(self.collision_free), len(self.collisions)
+            )
+            for key, mid in self.collision_free.items():
+                self._write("<HQ", len(key), mid)
+                self._write("<" + str(len(key)) + "s", key.encode("ascii"))
+            for key, entries in self.collisions.items():
+                self._write("<HL", len(key), len(entries))
+                self._write("<" + str(len(key)) + "s", key.encode("ascii"))
+                for mid, mid_cs in entries.items():
+                    cs_count = sum(len(v) for _, v in mid_cs.items())
+                    self._write("<QL", mid, cs_count)
+                    for caller_mid, pcs in mid_cs.items():
+                        for pc in pcs:
+                            self._write("<QH", caller_mid, pc)
+            self._f = None
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
