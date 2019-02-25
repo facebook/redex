@@ -41,9 +41,9 @@ std::string form_member_regex(std::string proguard_regex) {
 
 // Convert a ProGuard type regex to a boost::regex
 // Example: "%" -> "(?:B|S|I|J|Z|F|D|C|V)"
-// Example: "Lalpha?beta;" -> "Lalpha.beta;"
-// Example: "Lalpha/*/beta;" -> "Lalpha\\/([^\\/]+)\\/beta;"
-// Example: "Lalpha/**/beta;" ->  "Lalpha\\/([^\\/]+(?:\\/[^\\/]+)*)\\/beta;"
+// Example: "Lalpha?beta;" -> "Lalpha[^\\/\\[]beta;"
+// Example: "Lalpha/*/beta;" -> "Lalpha\\/(?:[^\\/^\\[]*)\\/beta;"
+// Example: "Lalpha/**/beta;" ->  "Lalpha\\/(?:[^\\[]*)\\/beta;"
 std::string form_type_regex(std::string proguard_regex) {
   if (proguard_regex.empty()) {
     return ".*";
@@ -80,14 +80,14 @@ std::string form_type_regex(std::string proguard_regex) {
       r += "\\)";
       continue;
     }
-    // Escape an array [ to it is not part of the regex syntax.
+    // Escape an array [ so it is not part of the regex syntax.
     if (ch == '[') {
       r += "\\[";
       continue;
     }
-    // ? should match any character except the class seperator.
+    // ?: match any character except the class seperator or array prefix
     if (ch == '?') {
-      r += "[^\\/]";
+      r += "[^\\/\\[]";
       continue;
     }
     if (ch == '*') {
@@ -99,19 +99,22 @@ std::string form_type_regex(std::string proguard_regex) {
           i = i + 2;
           continue;
         }
-        // **: Match class type containing any number of seperators
-        r += "(?:[^\\/]+(?:\\/[^\\/]+)*)";
+        // **: Match any part of a class name including any number of seperators
+        // Note that this does not match an array type
+        r += "(?:[^\\[]*)";
         i++;
         continue;
       }
-      r += "(?:[^\\/]*)";
+      // *: Match any part of a class name not containing the package separator
+      // Note that this does not match an array type
+      r += "(?:[^\\/\\[]*)";
       continue;
     }
     if (ch == '.') {
       if ((i != proguard_regex.size() - 1) && (proguard_regex[i + 1] == '.')) {
         if ((i != proguard_regex.size() - 2) &&
             (proguard_regex[i + 2] == '.')) {
-          // Match any sequence of types.
+          // ...: Match any sequence of types.
           r += "(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*";
           i = i + 2;
           continue;
