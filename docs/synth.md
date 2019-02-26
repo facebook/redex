@@ -3,7 +3,7 @@ id: synth
 title: Redex Synth Pass Example
 ---
 
-> > The code and artifacts for this example are on [GitHub](https://github.com/facebook/redex/tree/master/examples/Synth).
+> The code and artifacts for this example are on [GitHub](https://github.com/facebook/redex/tree/master/examples/Synth).
 
 The synth optimizations attempt to remove synthetic methods and wrappers. This
 improves performance by making access to field values faster and it also

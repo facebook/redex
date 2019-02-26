@@ -1,16 +1,85 @@
 /* your custom css */
 
-@media only screen and (min-device-width: 360px) and (max-device-width: 736px) {
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Italic.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Italic.woff') format('woff');
+  font-weight: normal;
+  font-style: italic;
 }
 
-@media only screen and (min-width: 1024px) {
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Black.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Black.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
 }
 
-@media only screen and (max-width: 1023px) {
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-BlackItalic.woff2') format('woff2'),
+    url('/fonts/LatoLatin-BlackItalic.woff') format('woff');
+  font-weight: 900;
+  font-style: italic;
 }
 
-@media only screen and (min-width: 1400px) {
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Light.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
 }
 
-@media only screen and (min-width: 1500px) {
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Regular.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+.homeContainer {
+  background: $primaryColor;
+}
+
+.navPusher {
+  background: $secondaryColor;
+}
+
+.projectTitle {
+  color: #fff;
+}
+
+.homeContainer .homeWrapper {
+  padding: 6em 10px;
+}
+
+.button {
+  border: 1px solid #fff;
+  color: #fff;
+}
+
+.button:hover {
+  background: #fff;
+  color: $primaryColor;
+}
+
+body {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.navigationSlider .slidingNav ul {
+  color: $primaryColor;
+}
+
+.navigationSlider .slidingNav ul li:hover {
+  color: #fff;
+}
+
+.navigationSlider .slidingNav ul li a {
+  font-size: 1em;
+  font-weight: bold;
+  padding: 15px;
 }

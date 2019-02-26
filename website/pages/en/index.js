@@ -106,11 +106,11 @@ class Index extends React.Component {
       <div>
         <HomeSplash language={language} />
         <div className="mainContainer">
-          <Container padding={['bottom', 'top']} background="light">
+          <Container padding={['bottom', 'top']}>
             <GridBlock align="center" layout="fourColumn" contents={[
                 {
                   title: 'Optimizing',
-                  content: 'Redex provides a framework for reading, writing, and analyzing .dex files, and a set of optimization passes that use this framework to improve the bytecode. An APK optimized by ReDex should be smaller and faster than its source.',
+                  content: 'Redex provides a framework for reading, writing, and analyzing .dex files, and a set of optimization passes that use this framework to improve the bytecode. An APK optimized by Redex should be smaller and faster.',
                 },
                 {
                   title: 'Fast',
