@@ -40,9 +40,13 @@ std::string form_member_regex(std::string proguard_regex) {
 }
 
 // Convert a ProGuard type regex to a boost::regex
+//
+// See this link for more details
+// www.guardsquare.com/en/products/proguard/manual/usage#classspecification
+//
 // Example: "%" -> "(?:B|S|I|J|Z|F|D|C|V)"
 // Example: "Lalpha?beta;" -> "Lalpha[^\\/\\[]beta;"
-// Example: "Lalpha/*/beta;" -> "Lalpha\\/(?:[^\\/^\\[]*)\\/beta;"
+// Example: "Lalpha/*/beta;" -> "Lalpha\\/(?:[^\\/\\[]*)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/(?:[^\\[]*)\\/beta;"
 std::string form_type_regex(std::string proguard_regex) {
   if (proguard_regex.empty()) {
