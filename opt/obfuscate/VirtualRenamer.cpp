@@ -428,7 +428,7 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
   // recurse into children
   for (const auto& child :
       get_children(class_scopes.get_class_hierarchy(), type)) {
-    int base_seed = stack_trace_elements ? 0 : seed;
+    int base_seed = seed;
     renamed += rename_virtual_scopes(child, base_seed);
     max_seed = std::max(max_seed, base_seed);
   }
