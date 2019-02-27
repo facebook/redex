@@ -58,17 +58,13 @@ class ModelMethodMerger {
 
   TypeToMethod& merge_methods() {
     merge_ctors();
-    merge_non_ctor_non_virt_methods();
+    dedup_non_ctor_non_virt_methods();
     merge_virt_itf_methods();
+    merge_methods_within_shape();
     return get_mergeable_ctor_map();
   }
 
-  uint32_t get_num_ctor_dedupped() { return m_num_ctor_dedupped; }
-  uint32_t get_num_static_non_virt_dedupped() {
-    return m_num_static_non_virt_dedupped;
-  }
-  uint32_t get_num_vmethods_dedupped() { return m_num_vmethods_dedupped; }
-  uint32_t get_num_const_lifted_methods() { return m_num_const_lifted_methods; }
+  const ModelStats& get_stats() const { return m_stats; }
   TypeToMethod& get_mergeable_ctor_map() { return m_mergeable_to_merger_ctor; }
   void print_method_stats(const std::string model_name,
                           uint32_t num_mergeables) {
@@ -122,14 +118,12 @@ class ModelMethodMerger {
   // Method dedup map
   TypeToMethodMap m_method_dedup_map;
 
-  uint32_t m_num_ctor_dedupped = 0;
-  uint32_t m_num_static_non_virt_dedupped = 0;
-  uint32_t m_num_vmethods_dedupped = 0;
-  uint32_t m_num_const_lifted_methods = 0;
+  ModelStats m_stats;
 
   void merge_ctors();
-  void merge_non_ctor_non_virt_methods();
+  void dedup_non_ctor_non_virt_methods();
   void merge_virt_itf_methods();
+  void merge_methods_within_shape();
   void fix_visibility();
 
   void merge_virtual_methods(

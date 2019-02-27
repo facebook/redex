@@ -11,9 +11,9 @@
 #include <unordered_set>
 
 #include "DexClass.h"
+#include "Model.h"
 #include "PassManager.h"
 
-class Model;
 struct MergerType;
 class ModelMethodMerger;
 class DexStore;
@@ -32,16 +32,6 @@ class ModelMerger {
       Model& model,
       boost::optional<size_t> max_num_dispatch_target = boost::none);
 
-  uint32_t get_num_classes_merged() const { return m_num_classes_merged; }
-  uint32_t get_num_ctor_dedupped() const { return m_num_ctor_dedupped; }
-  uint32_t get_num_static_non_virt_dedupped() const {
-    return m_num_static_non_virt_dedupped;
-  }
-  uint32_t get_num_vmethods_dedupped() const { return m_num_vmethods_dedupped; }
-  uint32_t get_num_const_lifted_methods() const {
-    return m_num_const_lifted_methods;
-  }
-
   void update_redex_stats(const std::string& prefix, PassManager& mgr) const;
 
   static std::string s_mapping_file;
@@ -56,12 +46,7 @@ class ModelMerger {
   }
 
  private:
-  uint32_t m_num_classes_merged = 0;
-  uint32_t m_num_ctor_dedupped = 0;
-  uint32_t m_num_static_non_virt_dedupped = 0;
-  uint32_t m_num_vmethods_dedupped = 0;
-  uint32_t m_num_const_lifted_methods = 0;
-  uint32_t m_num_generated_classes = 0;
+  ModelStats m_stats;
   static const std::vector<DexField*> empty_fields;
   MergerFields m_merger_fields;
 

@@ -422,3 +422,19 @@ class Model {
     }
   }
 };
+
+struct ModelStats {
+  uint32_t m_num_classes_merged = 0;
+  uint32_t m_num_generated_classes = 0;
+  uint32_t m_num_ctor_dedupped = 0;
+  uint32_t m_num_static_non_virt_dedupped = 0;
+  uint32_t m_num_vmethods_dedupped = 0;
+  uint32_t m_num_const_lifted_methods = 0;
+  // Stats of methods merging within each class. They are number of merged
+  // methods minus number of dispatch methods.
+  uint32_t m_num_merged_static_methods = 0;
+  uint32_t m_num_merged_direct_methods = 0;
+  uint32_t m_num_merged_nonvirt_methods = 0;
+
+  ModelStats& operator+=(const ModelStats& stats);
+};

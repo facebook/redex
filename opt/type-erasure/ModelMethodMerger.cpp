@@ -15,6 +15,7 @@
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "MethodDedup.h"
+#include "MethodMerger.h"
 #include "MethodReference.h"
 #include "Mutators.h"
 #include "Resolver.h"
@@ -282,7 +283,7 @@ dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
   // The MethodBlocks are to be initialized by switch_op() based on their
   // corresponding keys in the map.
   auto indices_to_callee = get_dedupped_indices_map(targets);
-  m_num_vmethods_dedupped += targets.size() - indices_to_callee.size();
+  m_stats.m_num_vmethods_dedupped += targets.size() - indices_to_callee.size();
   return create_virtual_dispatch(spec, indices_to_callee);
 }
 
@@ -522,7 +523,7 @@ void ModelMethodMerger::merge_ctors() {
             !no_type_tags(),
             "No type tag config cannot handle multiple dispatch targets!");
       }
-      m_num_ctor_dedupped += ctors.size() - indices_to_callee.size();
+      m_stats.m_num_ctor_dedupped += ctors.size() - indices_to_callee.size();
       auto dispatch =
           dispatch::create_ctor_or_static_dispatch(spec, indices_to_callee);
       for (const auto& m : ctors) {
@@ -576,7 +577,7 @@ void ModelMethodMerger::merge_ctors() {
       call_sites, type_tags, old_to_new_callee, m_model_spec.needs_type_tag);
 }
 
-void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
+void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
   for (auto merger : m_mergers) {
     auto merger_type = const_cast<DexType*>(merger->type);
     std::vector<DexMethod*> to_dedup;
@@ -599,7 +600,8 @@ void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
       auto stub_methods = const_lift.lift_constants_from(
           m_scope, m_type_tags, annotated, CONST_LIFT_STUB_THRESHOLD);
       to_dedup.insert(to_dedup.end(), stub_methods.begin(), stub_methods.end());
-      m_num_const_lifted_methods += const_lift.get_num_const_lifted_methods();
+      m_stats.m_num_const_lifted_methods +=
+          const_lift.get_num_const_lifted_methods();
       for (auto stub : stub_methods) {
         if (stub->is_virtual()) {
           non_vmethods.push_back(stub);
@@ -615,7 +617,7 @@ void ModelMethodMerger::merge_non_ctor_non_virt_methods() {
     auto new_to_old_optional =
         boost::optional<std::unordered_map<DexMethod*, MethodOrderedSet>>(
             new_to_old);
-    m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
+    m_stats.m_num_static_non_virt_dedupped += method_dedup::dedup_methods(
         m_scope, to_dedup, replacements, new_to_old_optional);
 
     // Relocate the remainders.
@@ -724,6 +726,68 @@ void ModelMethodMerger::merge_virt_itf_methods() {
     auto dispatch = pair.second;
     merger_cls->add_method(dispatch);
   }
+}
+
+/**
+ * Merge static/direct/non-virtual methods within each shape based on proto
+ * grouping.
+ */
+void ModelMethodMerger::merge_methods_within_shape() {
+  if (!m_model_spec.merge_direct_methods_within_shape &&
+      !m_model_spec.merge_static_methods_within_shape &&
+      !m_model_spec.merge_nonvirt_methods_within_shape) {
+    return;
+  }
+  using MethodGroups = std::vector<std::vector<DexMethod*>>;
+  using ProcessFunc =
+      std::function<void(std::vector<DexMethod*>&, MethodGroups&)>;
+  ProcessFunc do_nothing = [](std::vector<DexMethod*>&, MethodGroups&) {};
+  ProcessFunc add_methods = [](std::vector<DexMethod*>& methods,
+                               MethodGroups& groups) {
+    if (methods.size() < 3) {
+      return;
+    }
+    groups.push_back(methods);
+  };
+  ProcessFunc process_non_vmethods = do_nothing;
+  if (m_model_spec.merge_nonvirt_methods_within_shape) {
+    process_non_vmethods = add_methods;
+  }
+  ProcessFunc process_non_ctors = do_nothing;
+  if (m_model_spec.merge_direct_methods_within_shape ||
+      m_model_spec.merge_static_methods_within_shape) {
+    ProcessFunc process_direct = do_nothing;
+    ProcessFunc process_static = do_nothing;
+    if (m_model_spec.merge_direct_methods_within_shape) {
+      process_direct = add_methods;
+    }
+    if (m_model_spec.merge_static_methods_within_shape) {
+      process_static = add_methods;
+    }
+    process_non_ctors = [process_direct,
+                         process_static](std::vector<DexMethod*>& methods,
+                                         MethodGroups& groups) {
+      auto it = std::partition(methods.begin(),
+                               methods.end(),
+                               [](DexMethod* meth) { return is_static(meth); });
+      std::vector<DexMethod*> statics(methods.begin(), it);
+      std::vector<DexMethod*> directs(it, methods.end());
+      process_static(statics, groups);
+      process_direct(directs, groups);
+    };
+  }
+
+  std::vector<std::vector<DexMethod*>> method_groups;
+  for (auto merger : m_mergers) {
+    auto& non_ctors = m_merger_non_ctors.at(merger);
+    auto& non_vmethods = m_merger_non_vmethods.at(merger);
+    process_non_ctors(non_ctors, method_groups);
+    process_non_vmethods(non_vmethods, method_groups);
+  }
+  auto stats = method_merger::merge_methods(method_groups, m_scope);
+  m_stats.m_num_merged_nonvirt_methods += stats.num_merged_nonvirt_methods;
+  m_stats.m_num_merged_static_methods += stats.num_merged_static_methods;
+  m_stats.m_num_merged_direct_methods += stats.num_merged_direct_methods;
 }
 
 void ModelMethodMerger::update_to_static(
