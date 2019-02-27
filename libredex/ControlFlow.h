@@ -858,7 +858,8 @@ class InstructionIteratorImpl {
   using Iterator = typename std::
       conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
 
-  Cfg& m_cfg;
+  // Use a pointer so that we can be copy constructible
+  Cfg* m_cfg;
   ControlFlowGraph::Blocks::const_iterator m_block;
 
   // Depends on C++14 Null Forward Iterators
@@ -870,10 +871,10 @@ class InstructionIteratorImpl {
 
   // go to beginning of next block, skipping empty blocks
   void to_next_block() {
-    while (m_block != m_cfg.m_blocks.end() &&
+    while (m_block != m_cfg->m_blocks.end() &&
            m_it.unwrap() == m_block->second->m_entries.end()) {
       ++m_block;
-      if (m_block != m_cfg.m_blocks.end()) {
+      if (m_block != m_cfg->m_blocks.end()) {
         Block* b = m_block->second;
         m_it = ir_list::InstructionIteratorImpl<is_const>(b->m_entries.begin(),
                                                           b->m_entries.end());
@@ -888,7 +889,7 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl(Cfg& cfg,
                           Block* b,
                           const ir_list::InstructionIterator& it)
-      : m_cfg(cfg), m_block(m_cfg.m_blocks.find(b->id())), m_it(it) {}
+      : m_cfg(&cfg), m_block(m_cfg->m_blocks.find(b->id())), m_it(it) {}
 
  public:
   using reference = Mie&;
@@ -899,11 +900,11 @@ class InstructionIteratorImpl {
 
   InstructionIteratorImpl() = delete;
 
-  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(cfg) {
-    always_assert(m_cfg.editable());
+  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(&cfg) {
+    always_assert(m_cfg->editable());
     if (is_begin) {
-      m_block = m_cfg.m_blocks.begin();
-      if (m_block != m_cfg.m_blocks.end()) {
+      m_block = m_cfg->m_blocks.begin();
+      if (m_block != m_cfg->m_blocks.end()) {
         auto iterable =
             ir_list::InstructionIterableImpl<is_const>(m_block->second);
         m_it = iterable.begin();
@@ -912,7 +913,7 @@ class InstructionIteratorImpl {
         }
       }
     } else {
-      m_block = m_cfg.m_blocks.end();
+      m_block = m_cfg->m_blocks.end();
     }
   }
 
@@ -948,13 +949,13 @@ class InstructionIteratorImpl {
     if (!ControlFlowGraph::DEBUG) {
       return;
     }
-    always_assert_log(m_block != m_cfg.m_blocks.end(), "%s", SHOW(m_cfg));
+    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s", SHOW(*m_cfg));
     always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(),
-                      "%s", SHOW(m_cfg));
+                      "%s", SHOW(*m_cfg));
   }
 
   bool is_end() const {
-    return m_block == m_cfg.m_blocks.end() &&
+    return m_block == m_cfg->m_blocks.end() &&
            m_it == ir_list::InstructionIteratorImpl<is_const>();
   }
 
@@ -965,7 +966,7 @@ class InstructionIteratorImpl {
     return m_block->second;
   }
 
-  const ControlFlowGraph& cfg() const { return m_cfg; }
+  Cfg& cfg() const { return *m_cfg; }
 };
 
 // Iterate through all IRInstructions in the CFG.

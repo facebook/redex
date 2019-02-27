@@ -391,6 +391,21 @@ TEST(ControlFlow, nullForwardIterators) {
   }
 }
 
+TEST(ControlFlow, copyConstructibleIterator) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  ControlFlowGraph& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  boost::optional<cfg::InstructionIterator> opt;
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    opt = it;
+  }
+}
+
 TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
   auto str = R"(
     (
