@@ -15,13 +15,39 @@ using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 
 namespace method_reference {
 
-// Caller to invoke instruction
-using CallSites = std::vector<std::pair<DexMethod*, IRInstruction*>>;
+// A callsite instruction in caller. mie should always contain an IRInstruction.
+struct CallSite {
+  DexMethod* caller;
+  MethodItemEntry* mie;
+  DexMethod* callee;
+  CallSite(DexMethod* caller, MethodItemEntry* mie, DexMethod* callee)
+      : caller(caller), mie(mie), callee(callee) {}
+};
 
+using CallSites = std::vector<CallSite>;
+
+// TODO(fengliu) : Deprecate this since the complexity of looking up the
+// call_insn in caller's code is linear time. Will use CallSite and NewCallee
+// instead. instead.
 struct CallSiteSpec {
   DexMethod* caller;
   IRInstruction* call_insn;
   DexMethod* new_callee;
+};
+
+// A new callee and additional args.
+struct NewCallee {
+  DexMethod* method;
+  boost::optional<std::vector<uint32_t>> additional_args = boost::none;
+  NewCallee(DexMethod* method) : method(method) {}
+  NewCallee(DexMethod* method, uint32_t arg) : method(method) {
+    std::vector<uint32_t> args;
+    args.push_back(arg);
+    additional_args = boost::optional<std::vector<uint32_t>>(args);
+  }
+  NewCallee(DexMethod* method, std::vector<uint32_t>& args) : method(method) {
+    additional_args = boost::optional<std::vector<uint32_t>>(args);
+  }
 };
 
 IRInstruction* make_load_const(uint16_t dest, size_t val);
@@ -46,6 +72,11 @@ void patch_callsite_var_additional_args(
 void patch_callsite(
     const CallSiteSpec& spec,
     const boost::optional<uint32_t>& additional_arg = boost::none);
+
+/**
+ * Update the callsite with the new_callee.
+ */
+void patch_callsite(const CallSite& callsite, const NewCallee& new_callee);
 
 void update_call_refs_simple(
     const Scope& scope,

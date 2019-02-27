@@ -49,9 +49,9 @@ void update_call_refs(
     const MethodTypeTags& type_tags,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee,
     bool with_type_tag = false) {
-  for (const auto& pair : call_sites) {
-    auto meth = pair.first;
-    auto insn = pair.second;
+  for (const auto& callsite : call_sites) {
+    auto meth = callsite.caller;
+    auto insn = callsite.mie->insn;
     const auto callee =
         resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
@@ -238,8 +238,8 @@ void ModelMethodMerger::fix_visibility() {
   // Fix call sites of vmethods_created.
   auto call_sites =
       method_reference::collect_call_refs(m_scope, vmethods_created);
-  for (const auto& pair : call_sites) {
-    auto insn = pair.second;
+  for (const auto& callsite : call_sites) {
+    auto insn = callsite.mie->insn;
     always_assert(is_invoke_direct(insn->opcode()));
     insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
   }

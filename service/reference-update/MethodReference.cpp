@@ -74,6 +74,10 @@ void patch_callsite_var_additional_args(
       new_call_insns.push_back(load_additional_arg);
     }
   new_call_insns.push_back(invoke);
+  // TODO(fengliu): The function traverses all the instructions to find the
+  // call_insn. We can make the CallSiteSpec store the MethodItemEntry instead
+  // of IRInstruction and then use code.iterator_to to get the iterator in
+  // constant time.
   code->insert_after(call_insn, new_call_insns);
 
   // remove original call.
@@ -129,44 +133,53 @@ void patch_callsite(
   }
 }
 
+void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
+  // TODO(fengliu) : Update the implementation.
+  CallSiteSpec old_spec;
+  old_spec.caller = callsite.caller;
+  old_spec.call_insn = callsite.mie->insn;
+  old_spec.new_callee = new_callee.method;
+  patch_callsite_var_additional_args(old_spec, new_callee.additional_args);
+}
+
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees) {
-  auto patcher = [&](DexMethod* meth) {
+  if (callees.empty()) {
+    CallSites empty;
+    return empty;
+  }
+  auto patcher = [&](DexMethod* caller) {
     CallSites call_sites;
-    auto code = meth->get_code();
+    auto code = caller->get_code();
     if (!code) {
       return call_sites;
     }
 
-    for (auto& mie : InstructionIterable(meth->get_code())) {
+    for (auto& mie : InstructionIterable(caller->get_code())) {
       auto insn = mie.insn;
       if (!insn->has_method()) {
         continue;
       }
 
-      const auto method =
+      const auto callee =
           resolve_method(insn->get_method(),
                          opcode_to_search(const_cast<IRInstruction*>(insn)));
-      if (method == nullptr || callees.count(method) == 0) {
+      if (callee == nullptr || callees.count(callee) == 0) {
         continue;
       }
 
-      call_sites.emplace_back(meth, insn);
-      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(meth));
+      call_sites.emplace_back(caller, &mie, callee);
+      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(caller));
     }
 
     return call_sites;
   };
 
-  CallSites call_sites =
-      walk::parallel::reduce_methods<CallSites>(
-          scope,
-          patcher,
-          [](CallSites left, CallSites right) {
-            left.insert(left.end(), right.begin(), right.end());
-            return left;
-          });
+  CallSites call_sites = walk::parallel::reduce_methods<CallSites>(
+      scope, patcher, [](CallSites left, CallSites right) {
+        left.insert(left.end(), right.begin(), right.end());
+        return left;
+      });
   return call_sites;
 }
-
 } // namespace method_reference

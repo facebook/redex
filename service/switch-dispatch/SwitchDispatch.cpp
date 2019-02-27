@@ -495,6 +495,8 @@ DexAccessFlags get_dispatch_access(DexMethod* origin_method) {
 
 namespace dispatch {
 
+constexpr const char* DISPATCH_PREFIX = "$dispatch$";
+
 DispatchMethod create_virtual_dispatch(
     const Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
@@ -616,7 +618,7 @@ DexMethod* create_simple_dispatch(
 DexString* gen_dispatch_name(DexType* owner,
                              DexProto* proto,
                              std::string orig_name) {
-  auto simple_name = DexString::make_string("$dispatch$" + orig_name);
+  auto simple_name = DexString::make_string(DISPATCH_PREFIX + orig_name);
   if (DexMethod::get_method(owner, simple_name, proto) == nullptr) {
     return simple_name;
   }
@@ -631,5 +633,25 @@ DexString* gen_dispatch_name(DexType* owner,
     }
     ++count;
   }
+}
+
+bool may_be_dispatch(const DexMethod* method) {
+  const auto& name = method->str();
+  if (name.find(DISPATCH_PREFIX) != 0) {
+    return false;
+  }
+  auto code = method->get_code();
+  uint32_t branches = 0;
+  for (auto& mie : InstructionIterable(code)) {
+    auto op = mie.insn->opcode();
+    if (is_switch(op)) {
+      return true;
+    }
+    branches += is_conditional_branch(op);
+    if (branches > 1) {
+      return true;
+    }
+  }
+  return false;
 }
 } // namespace dispatch

@@ -54,6 +54,7 @@
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(METH_DEDUP)         \
+  TM(METH_MERGER)        \
   TM(MMINL)              \
   TM(MMODE)              \
   TM(MORTIROLO)          \
