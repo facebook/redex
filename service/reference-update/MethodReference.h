@@ -26,23 +26,19 @@ struct CallSite {
 
 using CallSites = std::vector<CallSite>;
 
-// TODO(fengliu) : Deprecate this since the complexity of looking up the
-// call_insn in caller's code is linear time. Will use CallSite and NewCallee
-// instead. instead.
-struct CallSiteSpec {
-  DexMethod* caller;
-  IRInstruction* call_insn;
-  DexMethod* new_callee;
-};
-
-// A new callee and additional args.
+// A new callee method and optional additional args.
+// One example would be passing the type tag in type erased code.
 struct NewCallee {
   DexMethod* method;
   boost::optional<std::vector<uint32_t>> additional_args = boost::none;
+
   NewCallee(DexMethod* method) : method(method) {}
-  NewCallee(DexMethod* method, uint32_t arg) : method(method) {
+  NewCallee(DexMethod* method, boost::optional<uint32_t> arg) : method(method) {
+    if (arg == boost::none) {
+      return;
+    }
     std::vector<uint32_t> args;
-    args.push_back(arg);
+    args.push_back(arg.get());
     additional_args = boost::optional<std::vector<uint32_t>>(args);
   }
   NewCallee(DexMethod* method, std::vector<uint32_t>& args) : method(method) {
@@ -57,23 +53,8 @@ IRInstruction* make_invoke(DexMethod* callee,
                            std::vector<uint16_t> args);
 
 /**
- * An optional list of additional arguments that we can pass to the patched call
- * site.
- */
-void patch_callsite_var_additional_args(
-    const CallSiteSpec& spec,
-    const boost::optional<std::vector<uint32_t>>& additional_args =
-        boost::none);
-
-/**
- * An optional additional argument that we want to pass to the patched call
- * site. One example would be passing the type tag in type erased code.
- */
-void patch_callsite(
-    const CallSiteSpec& spec,
-    const boost::optional<uint32_t>& additional_arg = boost::none);
-
-/**
+ * A callsite consists of a caller, a callee and the instruction.
+ * A new_callee consists of a new callee method and additional args.
  * Update the callsite with the new_callee.
  */
 void patch_callsite(const CallSite& callsite, const NewCallee& new_callee);
@@ -84,4 +65,4 @@ void update_call_refs_simple(
 
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees);
-}
+} // namespace method_reference

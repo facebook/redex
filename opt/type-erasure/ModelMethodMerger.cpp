@@ -51,17 +51,14 @@ void update_call_refs(
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee,
     bool with_type_tag = false) {
   for (const auto& callsite : call_sites) {
-    auto meth = callsite.caller;
-    auto insn = callsite.mie->insn;
-    const auto callee =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
+    auto callee = callsite.callee;
     always_assert(callee != nullptr && type_tags.count(callee) > 0);
-    auto new_callee = old_to_new_callee.at(callee);
-    method_reference::CallSiteSpec spec{meth, insn, new_callee};
+    auto new_callee_method = old_to_new_callee.at(callee);
     auto type_tag_arg = with_type_tag
                             ? boost::optional<uint32_t>(type_tags.at(callee))
                             : boost::none;
-    patch_callsite(spec, type_tag_arg);
+    method_reference::NewCallee new_callee(new_callee_method, type_tag_arg);
+    patch_callsite(callsite, new_callee);
   }
 }
 

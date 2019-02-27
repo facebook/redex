@@ -12,8 +12,6 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-using CallSites = std::vector<std::pair<DexMethod*, IRInstruction*>>;
-
 namespace {
 
 void fix_colliding_method(
@@ -61,7 +59,7 @@ void fix_colliding_method(
   }
 
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    CallSites callsites;
+    method_reference::CallSites callsites;
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (!insn->has_method()) {
@@ -74,12 +72,11 @@ void fix_colliding_method(
           colliding_methods.find(callee) == colliding_methods.end()) {
         continue;
       }
-      callsites.emplace_back(callee, insn);
+      callsites.emplace_back(meth, &mie, callee);
     }
 
-    for (const auto& pair : callsites) {
-      auto callee = pair.first;
-      auto insn = pair.second;
+    for (const auto& callsite : callsites) {
+      auto callee = callsite.callee;
       always_assert(callee != nullptr);
       TRACE(REFU,
             9,
@@ -92,9 +89,8 @@ void fix_colliding_method(
       for (size_t i = 0; i < num_additional_args.at(callee); ++i) {
         additional_args.push_back(42);
       }
-      method_reference::CallSiteSpec spec{meth, insn, callee};
-      method_reference::patch_callsite_var_additional_args(
-          spec, boost::optional<std::vector<uint32_t>>(additional_args));
+      method_reference::NewCallee new_callee(callee, additional_args);
+      method_reference::patch_callsite(callsite, new_callee);
     }
   });
 }

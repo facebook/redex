@@ -82,16 +82,10 @@ class ModelMethodMerger {
                                                  DexMethod* ctor);
   static void inline_dispatch_entries(DexMethod* dispatch);
 
-  static IRInstruction* make_load_const(uint16_t dest, size_t val);
   static std::vector<IRInstruction*> make_string_const(uint16_t dest,
                                                        std::string val);
   static std::vector<IRInstruction*> make_check_cast(DexType* type,
                                                      uint16_t src_dest);
-  static void patch_callsite(DexMethod* caller,
-                             IRInstruction* call_insn,
-                             DexMethod* callee,
-                             uint32_t type_tag,
-                             bool with_type_tag = false);
 
   TypeToMethodMap get_method_dedup_map() { return m_method_dedup_map; }
 
