@@ -102,9 +102,9 @@ ClassSerdes get_class_serdes(const DexClass* cls) {
 
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
-  always_assert_log(name.find("/") != std::string::npos,
-                    "Type name is not valid: %s\n",
-                    name.c_str());
+  if (name.find("/") == std::string::npos) {
+    return "";
+  }
   unsigned long pos = name.find_last_of("/");
   return name.substr(0, pos);
 }
