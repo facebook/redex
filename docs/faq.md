@@ -20,7 +20,7 @@ Additionally, it's possible zipalign itself failed. In this case the stderr will
 
 ## My app fails to install with `Failure [INSTALL_PARSE_FAILED_NO_CERTIFICATES]`
 
-After you run redex, you'll need to re-sign your app.  You can re-sign manually
+After you run redex, you will need to re-sign your app.  You can re-sign manually
 using these instructions:
 https://developer.android.com/tools/publishing/app-signing.html#signing-manually.
 
