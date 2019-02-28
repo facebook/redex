@@ -6,14 +6,17 @@
  */
 #include "ProguardLineRange.h"
 
-ProguardLineRange::ProguardLineRange(uint32_t s,
-                                     uint32_t e,
-                                     uint32_t os,
-                                     uint32_t oe)
-    : start(s), end(e), original_start(os), original_end(oe) {}
+ProguardLineRange::ProguardLineRange(
+    uint32_t s, uint32_t e, uint32_t os, uint32_t oe, std::string ogn)
+    : start(s),
+      end(e),
+      original_start(os),
+      original_end(oe),
+      original_name(ogn) {}
 
 bool ProguardLineRange::operator==(const ProguardLineRange& other) const {
   return this->start == other.start && this->end == other.end &&
          this->original_start == other.original_start &&
-         this->original_end == other.original_end;
+         this->original_end == other.original_end &&
+         this->original_name == other.original_name;
 }

@@ -10,7 +10,7 @@
 #include <memory>
 #include <set>
 #include <stdint.h>
-
+#include <string>
 /**
  * ProguardLineRange stores line number values parsed from a proguard mapping.
  */
@@ -20,9 +20,11 @@ struct ProguardLineRange final {
   uint32_t end{0};
   uint32_t original_start{0};
   uint32_t original_end{0};
+  std::string original_name;
 
   ProguardLineRange() = default;
-  ProguardLineRange(uint32_t s, uint32_t e, uint32_t os, uint32_t oe);
+  ProguardLineRange(
+      uint32_t s, uint32_t e, uint32_t os, uint32_t oe, std::string ogn);
   virtual ~ProguardLineRange() = default;
 
   bool operator==(const ProguardLineRange& other) const;
@@ -32,7 +34,8 @@ struct proguardlineranges_comparator {
   bool operator()(std::unique_ptr<ProguardLineRange> const& a,
                   std::unique_ptr<ProguardLineRange> const& b) const {
     return a->start < b->start || a->original_start < b->original_start ||
-           a->end < b->end || a->original_end < b->original_end;
+           a->end < b->end || a->original_end < b->original_end ||
+           a->original_name.compare(b->original_name);
   }
 };
 

@@ -308,6 +308,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
+  lines->original_name = pgold;
   m_obfMethodLinesMap[pgnew].insert(std::move(lines));
   return true;
 }

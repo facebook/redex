@@ -89,6 +89,9 @@ TEST(ProguardMapTest, LineNumbers) {
       "    7:7:void onRun():382:382 -> o\n"
       "    8:8:void onRun():385:385 -> o\n"
       "    9:9:void onRun():387:387 -> o\n"
+      "com.foo.Inline -> B:\n"
+      "    1000:1001:void bar():1 -> a\n"
+      "    1000:1001:void baz():1 -> a\n"
       "android.support.v4.app.Fragment -> android.support.v4.app.Fragment:\n"
       "    android.support.v4.util.SimpleArrayMap sClassMap -> sClassMap\n"
       "    1:10:com.foo.bar stuff(com.foo.bar,com.foo.bar) -> o\n"
@@ -119,44 +122,72 @@ TEST(ProguardMapTest, LineNumbers) {
             pm.translate_method("Landroid/support/v4/app/Fragment;.stuff:(Lcom/"
                                 "foo/bar;Lcom/foo/bar;)Lcom/foo/bar;"));
 
-  EXPECT_THAT(
-      pm.method_lines("LA;.<init>:()V"),
-      AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(3, 3, 0, 0)))));
-  EXPECT_THAT(
-      pm.method_lines("LA;.a:()Ljava/io/File;"),
-      AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(0, 0, 0, 0)))));
-  EXPECT_THAT(
-      pm.method_lines("LA;.b:()V"),
-      AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(3, 0, 0, 0)))));
+  EXPECT_THAT(pm.method_lines("LA;.<init>:()V"),
+              AllOf(SizeIs(1),
+                    UnorderedElementsAre(Pointee(ProguardLineRange(
+                        3, 3, 0, 0, "Lcom/foo/bar;.<init>:()V")))));
+  EXPECT_THAT(pm.method_lines("LA;.a:()Ljava/io/File;"),
+              AllOf(SizeIs(1),
+                    UnorderedElementsAre(Pointee(ProguardLineRange(
+                        0, 0, 0, 0,
+                        "Lcom/foo/bar;.createTempFile:()Ljava/io/File;")))));
+  EXPECT_THAT(pm.method_lines("LA;.b:()V"),
+              AllOf(SizeIs(1),
+                    UnorderedElementsAre(Pointee(ProguardLineRange(
+                        3, 0, 0, 0, "Lcom/foo/bar;.stuff:()V")))));
   EXPECT_THAT(
       pm.method_lines("LA;.k:()Z"),
       AllOf(SizeIs(7),
-            UnorderedElementsAre(Pointee(ProguardLineRange(1, 1, 490, 490)),
-                                 Pointee(ProguardLineRange(1, 1, 275, 0)),
-                                 Pointee(ProguardLineRange(2, 2, 490, 0)),
-                                 Pointee(ProguardLineRange(2, 2, 275, 0)),
-                                 Pointee(ProguardLineRange(3, 3, 491, 491)),
-                                 Pointee(ProguardLineRange(3, 3, 275, 0)),
-                                 Pointee(ProguardLineRange(4, 4, 275, 275)))));
+            UnorderedElementsAre(
+                Pointee(ProguardLineRange(1, 1, 490, 490,
+                                          "Lcom/foo/bar;.isExpired:()Z")),
+                Pointee(ProguardLineRange(
+                    1, 1, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
+                Pointee(ProguardLineRange(2, 2, 490, 0,
+                                          "Lcom/foo/bar;.isExpired:()Z")),
+                Pointee(ProguardLineRange(
+                    2, 2, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
+                Pointee(ProguardLineRange(3, 3, 491, 491,
+                                          "Lcom/foo/bar;.isExpired:()Z")),
+                Pointee(ProguardLineRange(
+                    3, 3, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
+                Pointee(ProguardLineRange(
+                    4, 4, 275, 275, "Lcom/foo/bar;.isRequirementsMet:()Z")))));
   EXPECT_THAT(
       pm.method_lines("LA;.k:()J"),
       AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(2, 2, 66, 66)))));
-  EXPECT_THAT(
-      pm.method_lines("LA;.o:()V"),
-      AllOf(SizeIs(7),
-            UnorderedElementsAre(Pointee(ProguardLineRange(1, 2, 282, 283)),
-                                 Pointee(ProguardLineRange(3, 3, 385, 385)),
-                                 Pointee(ProguardLineRange(4, 5, 286, 287)),
-                                 Pointee(ProguardLineRange(6, 6, 289, 289)),
-                                 Pointee(ProguardLineRange(7, 7, 382, 382)),
-                                 Pointee(ProguardLineRange(8, 8, 385, 385)),
-                                 Pointee(ProguardLineRange(9, 9, 387, 387)))));
+            UnorderedElementsAre(Pointee(ProguardLineRange(
+                2, 2, 66, 66,
+                "Lcom/whatsapp/core/Time;.currentServerTimeMillis:()J")))));
+  EXPECT_THAT(pm.method_lines("LA;.o:()V"),
+              AllOf(SizeIs(7),
+                    UnorderedElementsAre(
+                        Pointee(ProguardLineRange(1, 2, 282, 283,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(3, 3, 385, 385,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(4, 5, 286, 287,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(6, 6, 289, 289,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(7, 7, 382, 382,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(8, 8, 385, 385,
+                                                  "Lcom/foo/bar;.onRun:()V")),
+                        Pointee(ProguardLineRange(
+                            9, 9, 387, 387, "Lcom/foo/bar;.onRun:()V")))));
+  EXPECT_THAT(pm.method_lines("LB;.a:()V"),
+              AllOf(SizeIs(2),
+                    UnorderedElementsAre(
+                        Pointee(ProguardLineRange(1000, 1001, 1, 0,
+                                                  "Lcom/foo/Inline;.bar:()V")),
+                        Pointee(ProguardLineRange(
+                            1000, 1001, 1, 0, "Lcom/foo/Inline;.baz:()V")))));
   EXPECT_THAT(
       pm.method_lines("Landroid/support/v4/app/Fragment;.o:(LA;LA;)LA;"),
       AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(1, 10, 0, 0)))));
+            UnorderedElementsAre(Pointee(ProguardLineRange(
+                1, 10, 0, 0,
+                "Landroid/support/v4/app/Fragment;.stuff:(Lcom/"
+                "foo/bar;Lcom/foo/bar;)Lcom/foo/bar;")))));
 }
