@@ -123,9 +123,12 @@ TEST(ProguardMapTest, LineNumbers) {
                                 "foo/bar;Lcom/foo/bar;)Lcom/foo/bar;"));
 
   EXPECT_THAT(pm.method_lines("LA;.<init>:()V"),
-              AllOf(SizeIs(1),
-                    UnorderedElementsAre(Pointee(ProguardLineRange(
-                        3, 3, 0, 0, "Lcom/foo/bar;.<init>:()V")))));
+              AllOf(SizeIs(2),
+                    UnorderedElementsAre(
+                        Pointee(ProguardLineRange(3, 3, 0, 0,
+                                                  "Lcom/foo/bar;.<init>:()V")),
+                        Pointee(ProguardLineRange(
+                            3, 3, 0, 0, "Lcom/foo/bar;.<init>:()V")))));
   EXPECT_THAT(pm.method_lines("LA;.a:()Ljava/io/File;"),
               AllOf(SizeIs(1),
                     UnorderedElementsAre(Pointee(ProguardLineRange(

@@ -185,7 +185,7 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
   return find_or_same(method, m_obfMethodMap);
 }
 
-ProguardLineRangeSet& ProguardMap::method_lines(
+ProguardLineRangeVector& ProguardMap::method_lines(
     const std::string& obfuscated_method) {
   return m_obfMethodLinesMap.at(obfuscated_method);
 }
@@ -309,7 +309,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
   lines->original_name = pgold;
-  m_obfMethodLinesMap[pgnew].insert(std::move(lines));
+  m_obfMethodLinesMap[pgnew].push_back(std::move(lines));
   return true;
 }
 
