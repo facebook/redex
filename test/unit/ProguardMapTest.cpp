@@ -40,6 +40,10 @@ TEST(ProguardMapTest, empty) {
   EXPECT_EQ("LA;.a:I", pm.translate_field("Lcom/foo/bar;.do1:I"));
   EXPECT_EQ("LA;.<init>:()V", pm.translate_method("Lcom/foo/bar;.<init>:()V"));
   EXPECT_EQ("LA;.a:()Ljava/util/ArrayList;", pm.translate_method("Lcom/foo/bar;.getCopy:()Ljava/util/ArrayList;"));
+  EXPECT_EQ("LA;.addSubMenu:()Landroid/content/Context;",
+            pm.translate_method(
+                "Landroid/support/v7/view/menu/"
+                "MenuBuilder;.getContext:()Landroid/content/Context;"));
   EXPECT_EQ("Lcom/not/Found;", pm.translate_class("Lcom/not/Found;"));
   EXPECT_EQ("Landroid/support/v4/b/b;", pm.translate_class("Landroid/support/v4/util/SimpleArrayMap;"));
   EXPECT_EQ("Landroid/support/v4/app/Fragment;.sClassMap:Landroid/support/v4/b/b;", pm.translate_field("Landroid/support/v4/app/Fragment;.sClassMap:Landroid/support/v4/util/SimpleArrayMap;"));
@@ -100,10 +104,10 @@ TEST(ProguardMapTest, LineNumbers) {
   EXPECT_EQ("LA;.k:()Z", pm.translate_method("Lcom/foo/bar;.isExpired:()Z"));
   EXPECT_EQ("LA;.k:()Z",
             pm.translate_method("Lcom/foo/bar;.isRequirementsMet:()Z"));
-  EXPECT_EQ(
-      "LA;.k:()J",
-      pm.translate_method(
-          "Lcom/foo/bar;.com.whatsapp.core.Time.currentServerTimeMillis:()J"));
+
+  EXPECT_EQ("LA;.k:()J",
+            pm.translate_method(
+                "Lcom/whatsapp/core/Time;.currentServerTimeMillis:()J"));
   EXPECT_EQ("LA;.o:()V", pm.translate_method("Lcom/foo/bar;.onRun:()V"));
   EXPECT_EQ("Landroid/support/v4/b/b;",
             pm.translate_class("Landroid/support/v4/util/SimpleArrayMap;"));

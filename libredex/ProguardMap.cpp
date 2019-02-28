@@ -125,6 +125,14 @@ bool comment(const std::string& line) {
   return literal(p, '#');
 }
 
+void inlined_method(std::string& classname, std::string& methodname) {
+  std::size_t found = methodname.find_last_of('.');
+  if (found != std::string::npos) {
+    classname = convert_scalar_type(methodname.substr(0, found));
+    methodname = methodname.substr(found + 1);
+  }
+}
+
 /**
  * Proguard would generate some special sequences when a coalesced interface is used.
  * https://sourceforge.net/p/proguard/code/ci/default/tree/core/src/proguard/classfile/editor/ClassReferenceFixer.java#l554
@@ -256,6 +264,7 @@ bool ProguardMap::parse_field(const std::string& line) {
 bool ProguardMap::parse_method(const std::string& line) {
   std::string type;
   std::string methodname;
+  std::string classname = m_currClass;
   std::string old_args;
   std::string new_args;
   std::string newname;
@@ -271,6 +280,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   whitespace(p);
 
   if (!id(p, methodname)) return false;
+  inlined_method(classname, methodname);
 
   if (!literal(p, '(')) return false;
   while (true) {
@@ -294,7 +304,7 @@ bool ProguardMap::parse_method(const std::string& line) {
 
   auto old_rtype = convert_type(type);
   auto new_rtype = translate_type(old_rtype, *this);
-  auto pgold = convert_method(m_currClass, old_rtype, methodname, old_args);
+  auto pgold = convert_method(classname, old_rtype, methodname, old_args);
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
