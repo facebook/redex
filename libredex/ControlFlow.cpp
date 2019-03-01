@@ -434,7 +434,7 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
   }
   case EDGE_BRANCH: {
     os << "branch";
-    auto key = e.case_key();
+    const auto& key = e.case_key();
     if (key) {
       os << " " << *key;
     }

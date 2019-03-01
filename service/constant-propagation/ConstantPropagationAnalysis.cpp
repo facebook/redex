@@ -637,7 +637,7 @@ ConstantEnvironment FixpointIterator::analyze_edge(
   if (is_conditional_branch(op)) {
     analyze_if(insn, &env, edge->type() == cfg::EDGE_BRANCH);
   } else if (is_switch(op)) {
-    auto case_key = edge->case_key();
+    const auto& case_key = edge->case_key();
     if (case_key) {
       env.set(insn->src(0),
               env.get(insn->src(0)).meet(SignedConstantDomain(*case_key)));

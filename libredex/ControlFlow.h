@@ -171,7 +171,8 @@ class Edge final {
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
   ThrowInfo* throw_info() const { return m_throw_info.get(); }
-  boost::optional<CaseKey> case_key() const { return m_case_key; }
+  const boost::optional<CaseKey>& case_key() const { return m_case_key; }
+  void set_case_key(boost::optional<CaseKey> k) { m_case_key = k; }
 };
 
 std::ostream& operator<<(std::ostream& os, const Edge& e);
