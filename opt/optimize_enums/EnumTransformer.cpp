@@ -329,6 +329,14 @@ struct EnumUtil {
   }
 };
 
+struct StringBuilderInfo {
+  DexType* candidate_type;
+  IRInstruction* insn;
+
+  StringBuilderInfo(DexType* t, IRInstruction* i)
+      : candidate_type(t), insn(i) {}
+};
+
 /**
  * Code transformation for a method.
  */
@@ -348,23 +356,41 @@ class CodeTransformer final {
     optimize_enums::EnumFixpointIterator engine(cfg);
     engine.run(start_env);
 
+    std::vector<StringBuilderInfo> string_builder_infos;
     for (auto& block : cfg.blocks()) {
       optimize_enums::EnumTypeEnvironment env =
           engine.get_entry_state_at(block);
       for (auto it = block->begin(); it != block->end(); ++it) {
         if (it->type == MFLOW_OPCODE) {
           engine.analyze_instruction(it->insn, &env);
-          update_instructions(env, block, it);
+          update_instructions(env, block, it, &string_builder_infos);
         }
       }
+    }
+
+    // We defer editing of the stringbuilder append calls because they require
+    // splitting of blocks, which invalidates CFG iterators and cannot be done
+    // while iterating through the blocks.
+    for (const auto& info : string_builder_infos) {
+      // We must use `find_insn` (even though it's linear) because all iterators
+      // are invalidated when `update_invoke_stringbuilder_append` makes edits
+      // to the CFG.
+      // TODO: We could probably be faster than `find_insn` on average if we
+      // start by looking where the instruction was before and following gotos.
+      const cfg::InstructionIterator& insn_it = cfg.find_insn(info.insn);
+      always_assert_log(!insn_it.is_end(),
+                        "Can't find stringbuilder append in %s", SHOW(cfg));
+      update_invoke_stringbuilder_append(info.candidate_type, insn_it);
     }
     code->clear_cfg();
   }
 
  private:
-  void update_instructions(const optimize_enums::EnumTypeEnvironment& env,
-                           cfg::Block* block,
-                           IRList::iterator& it) {
+  void update_instructions(
+      const optimize_enums::EnumTypeEnvironment& env,
+      cfg::Block* block,
+      IRList::iterator& it,
+      std::vector<StringBuilderInfo>* string_builder_infos) {
     auto insn = it->insn;
     switch (insn->opcode()) {
     case OPCODE_SGET_OBJECT:
@@ -383,7 +409,12 @@ class CodeTransformer final {
         update_invoke_tostring(env, insn);
       } else if (signatures_match(
                      method, m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD)) {
-        update_invoke_stringbuilder_append(env, block, it);
+        // Defer editing of stringbuilder. Save the information for later.
+        DexType* candidate_type =
+            extract_candidate_enum_type(env.get(insn->src(1)));
+        if (candidate_type != nullptr) {
+          string_builder_infos->emplace_back(candidate_type, insn);
+        }
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
@@ -507,21 +538,18 @@ class CodeTransformer final {
    *   move-result-object vn
    *   invoke-virtual v0 vn LStringBuilder;.append:(String)LStringBuilder;
    */
-  void update_invoke_stringbuilder_append(
-      const optimize_enums::EnumTypeEnvironment& env,
-      cfg::Block* block,
-      IRList::iterator& it) {
+  void update_invoke_stringbuilder_append(DexType* candidate_type,
+                                          const cfg::InstructionIterator& it) {
     auto reg = it->insn->src(1);
-    DexType* candidate_type = extract_candidate_enum_type(env.get(reg));
-    if (!candidate_type) {
-      return;
-    }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
-    const auto& insn_it = block->to_cfg_instruction_iterator(it);
     auto str_reg = allocate_temp();
-    block->insert_before(
-        insn_it,
+    // If we're inside a try region, inserting this invoke-static will split the
+    // block and insert the move-result in the new goto successor block, thus
+    // invalidating iterators into the CFG. See the comment on the insertion
+    // methods in ControlFlow.h for more details.
+    it.cfg().insert_before(
+        it,
         {dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg}}),
          dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, str_reg}})});
     it->insn->set_method(m_enum_util->STRINGBUILDER_APPEND_STR_METHOD);

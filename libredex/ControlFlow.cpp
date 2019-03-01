@@ -393,32 +393,38 @@ cfg::InstructionIterator Block::to_cfg_instruction_iterator(
 }
 
 // Forward the insertion methods to the parent CFG.
-void Block::insert_before(const InstructionIterator& position,
+bool Block::insert_before(const InstructionIterator& position,
                           const std::vector<IRInstruction*>& insns) {
-  m_parent->insert_before(position, insns);
+  always_assert(position.block() == this);
+  return m_parent->insert_before(position, insns);
 }
-void Block::insert_before(const InstructionIterator& position,
+bool Block::insert_before(const InstructionIterator& position,
                           IRInstruction* insn) {
-  m_parent->insert_before(position, insn);
+  always_assert(position.block() == this);
+  return m_parent->insert_before(position, insn);
 }
-void Block::insert_after(const InstructionIterator& position,
+bool Block::insert_after(const InstructionIterator& position,
                          const std::vector<IRInstruction*>& insns) {
-  m_parent->insert_after(position, insns);
+  always_assert(position.block() == this);
+  return m_parent->insert_after(position, insns);
 }
-void Block::insert_after(const InstructionIterator& position,
+bool Block::insert_after(const InstructionIterator& position,
                          IRInstruction* insn) {
-  m_parent->insert_after(position, insn);
+  always_assert(position.block() == this);
+  return m_parent->insert_after(position, insn);
 }
-void Block::push_front(const std::vector<IRInstruction*>& insns) {
-  m_parent->push_front(this, insns);
+bool Block::push_front(const std::vector<IRInstruction*>& insns) {
+  return m_parent->push_front(this, insns);
 }
-void Block::push_front(IRInstruction* insn) {
-  m_parent->push_front(this, insn);
+bool Block::push_front(IRInstruction* insn) {
+  return m_parent->push_front(this, insn);
 }
-void Block::push_back(const std::vector<IRInstruction*>& insns) {
-  m_parent->push_back(this, insns);
+bool Block::push_back(const std::vector<IRInstruction*>& insns) {
+  return m_parent->push_back(this, insns);
 }
-void Block::push_back(IRInstruction* insn) { m_parent->push_back(this, insn); }
+bool Block::push_back(IRInstruction* insn) {
+  return m_parent->push_back(this, insn);
+}
 
 std::ostream& operator<<(std::ostream& os, const Edge& e) {
   switch (e.type()) {
@@ -2012,7 +2018,7 @@ void ControlFlowGraph::create_branch(
   }
 }
 
-void ControlFlowGraph::insert(const InstructionIterator& position,
+bool ControlFlowGraph::insert(const InstructionIterator& position,
                               const std::vector<IRInstruction*>& insns,
                               bool before) {
   // Convert to the before case by moving the position forward one.
@@ -2023,6 +2029,7 @@ void ControlFlowGraph::insert(const InstructionIterator& position,
   IRList::iterator pos =
       before ? position.unwrap() : std::next(position.unwrap());
 
+  bool invalidated_its = false;
   for (auto insn : insns) {
     const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
 
@@ -2055,6 +2062,7 @@ void ControlFlowGraph::insert(const InstructionIterator& position,
       always_assert(insn == insns.back());
       for (auto it = pos; it != b->m_entries.end();) {
         it = b->m_entries.erase_and_dispose(it);
+        invalidated_its = true;
       }
       if (is_return(op)) {
         // This block now ends in a return, it must have no successors.
@@ -2069,6 +2077,7 @@ void ControlFlowGraph::insert(const InstructionIterator& position,
       // If this created unreachable blocks, they will be removed by simplify.
     } else if (opcode::may_throw(op)) {
       if (!throws.empty()) {
+        invalidated_its = true;
         // FIXME: Copying the outgoing throw edges isn't enough.
         // When the editable CFG is constructed, we transform the try regions
         // into throw edges. We only add these edges to blocks that may throw,
@@ -2100,46 +2109,48 @@ void ControlFlowGraph::insert(const InstructionIterator& position,
       }
     }
   }
+  return invalidated_its;
 }
 
-void ControlFlowGraph::insert_before(const InstructionIterator& position,
+bool ControlFlowGraph::insert_before(const InstructionIterator& position,
                                      const std::vector<IRInstruction*>& insns) {
-  insert(position, insns, /* before */ true);
+  return insert(position, insns, /* before */ true);
 }
 
-void ControlFlowGraph::insert_after(const InstructionIterator& position,
+bool ControlFlowGraph::insert_after(const InstructionIterator& position,
                                     const std::vector<IRInstruction*>& insns) {
-  insert(position, insns, /* before */ false);
+  return insert(position, insns, /* before */ false);
 }
 
-void ControlFlowGraph::push_front(Block* b,
+bool ControlFlowGraph::push_front(Block* b,
                                   const std::vector<IRInstruction*>& insns) {
   const auto& begin = ir_list::InstructionIterable(b).begin();
-  insert(b->to_cfg_instruction_iterator(begin), insns, /* before */ true);
+  return insert(b->to_cfg_instruction_iterator(begin), insns,
+                /* before */ true);
 }
 
-void ControlFlowGraph::push_back(Block* b,
+bool ControlFlowGraph::push_back(Block* b,
                                  const std::vector<IRInstruction*>& insns) {
   const auto& end = ir_list::InstructionIterable(b).end();
-  insert(b->to_cfg_instruction_iterator(end), insns, /* before */ true);
+  return insert(b->to_cfg_instruction_iterator(end), insns, /* before */ true);
 }
 
-void ControlFlowGraph::insert_before(const InstructionIterator& position,
+bool ControlFlowGraph::insert_before(const InstructionIterator& position,
                                      IRInstruction* insn) {
-  insert_before(position, std::vector<IRInstruction*>{insn});
+  return insert_before(position, std::vector<IRInstruction*>{insn});
 }
 
-void ControlFlowGraph::insert_after(const InstructionIterator& position,
+bool ControlFlowGraph::insert_after(const InstructionIterator& position,
                                     IRInstruction* insn) {
-  insert_after(position, std::vector<IRInstruction*>{insn});
+  return insert_after(position, std::vector<IRInstruction*>{insn});
 }
 
-void ControlFlowGraph::push_front(Block* b, IRInstruction* insn) {
-  push_front(b, std::vector<IRInstruction*>{insn});
+bool ControlFlowGraph::push_front(Block* b, IRInstruction* insn) {
+  return push_front(b, std::vector<IRInstruction*>{insn});
 }
 
-void ControlFlowGraph::push_back(Block* b, IRInstruction* insn) {
-  push_back(b, std::vector<IRInstruction*>{insn});
+bool ControlFlowGraph::push_back(Block* b, IRInstruction* insn) {
+  return push_back(b, std::vector<IRInstruction*>{insn});
 }
 
 void ControlFlowGraph::remove_block(Block* block) {

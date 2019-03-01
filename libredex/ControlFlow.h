@@ -267,16 +267,16 @@ class Block final {
   InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
 
   // These forward to implementations in ControlFlowGraph, See comment there
-  void insert_before(const InstructionIterator& position,
+  bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
-  void insert_before(const InstructionIterator& position, IRInstruction* insn);
-  void insert_after(const InstructionIterator& position,
+  bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+  bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
-  void insert_after(const InstructionIterator& position, IRInstruction* insn);
-  void push_front(const std::vector<IRInstruction*>& insns);
-  void push_front(IRInstruction* insn);
-  void push_back(const std::vector<IRInstruction*>& insns);
-  void push_back(IRInstruction* insn);
+  bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+  bool push_front(const std::vector<IRInstruction*>& insns);
+  bool push_front(IRInstruction* insn);
+  bool push_back(const std::vector<IRInstruction*>& insns);
+  bool push_back(IRInstruction* insn);
 
  private:
   friend class ControlFlowGraph;
@@ -332,6 +332,15 @@ class ControlFlowGraph {
    */
   IRList* linearize();
 
+  // TODO: this copies blocks, but it should probably offer a read-only view
+  // into the blocks map instead.
+  //
+  // If a block is created or destroyed while we're iterating on a copy, the
+  // copy is now stale. That stale copy may have a pointer to a deleted block or
+  // it may be incomplete (not iterating over the newly creating block).
+  //
+  // A read-only view would be better because block creation and destruction
+  // operations don't invalidate std::map iterators.
   std::vector<Block*> blocks() const;
 
   Block* create_block();
@@ -500,29 +509,32 @@ class ControlFlowGraph {
   //  * If the inserted instruction requires a block boundary after it, the
   //    block will be split, instructions will be moved to the next
   //    (non-exceptional) block and the next insertion from `insns` will also
-  //    occur in the next block. This invalidates InstructionIterators.
+  //    occur in the next block. This invalidates iterators into the CFG.
   //  * If the inserted instruction could end the method (return-* or throw),
   //    then instructions after the insertion point will be removed and
   //    successor edges will be removed from the block. When inserting a return
   //    or throw, it must be the last in `insns`. This invalidates
-  //    InstructionIterators.
+  //    iterators into the CFG.
   //
   // insert insns before position
-  void insert_before(const InstructionIterator& position,
+  // return a boolean:
+  //   true means that iterators into the CFG are now invalid
+  //   false means that iterators are still valid
+  bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
   // insert insns after position
-  void insert_after(const InstructionIterator& position,
+  bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
   // insert insns at the beginning of block b
-  void push_front(Block* b, const std::vector<IRInstruction*>& insns);
+  bool push_front(Block* b, const std::vector<IRInstruction*>& insns);
   // insert insns at the end of block b
-  void push_back(Block* b, const std::vector<IRInstruction*>& insns);
+  bool push_back(Block* b, const std::vector<IRInstruction*>& insns);
 
   // Convenience functions that add just one instruction.
-  void insert_before(const InstructionIterator& position, IRInstruction* insn);
-  void insert_after(const InstructionIterator& position, IRInstruction* insn);
-  void push_front(Block* b, IRInstruction* insn);
-  void push_back(Block* b, IRInstruction* insn);
+  bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+  bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+  bool push_front(Block* b, IRInstruction* insn);
+  bool push_back(Block* b, IRInstruction* insn);
 
   // Create a conditional branch, which consists of:
   // * inserting an `if` instruction at the end of b
@@ -729,7 +741,7 @@ class ControlFlowGraph {
   // block
   void no_unreferenced_edges() const;
 
-  void insert(const InstructionIterator& position,
+  bool insert(const InstructionIterator& position,
               const std::vector<IRInstruction*>& insns,
               bool before);
 
@@ -956,6 +968,16 @@ class InstructionIteratorImpl {
   using value_type = Mie&;
   using pointer = Mie*;
   using iterator_category = std::forward_iterator_tag;
+
+  // TODO: Is it possible to recover a valid state of iterators into the CFG
+  // after an insertion operation?
+  //
+  // The goal is to maintain a valid state within the CFG at all times. If the
+  // user wants to insert an instruction that ends the block (return, can_throw,
+  // if, switch, etc.), the block needs to split. When you split a block into
+  // two parts, you're moving code from one block to another. When code is moved
+  // `InstructionIterator`s may be left in an invalid state because their `m_it`
+  // is pointing into a different block than `m_block`.
 
   InstructionIteratorImpl() = delete;
 
