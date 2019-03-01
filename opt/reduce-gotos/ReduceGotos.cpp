@@ -89,11 +89,10 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
   // Small bonus optimization: Also eliminate move instructions that only exist
   // to faciliate shared return instructions.
 
-  auto order = cfg.order();
   bool rerun;
   do {
+    auto order = cfg.order();
     rerun = false;
-    std::vector<cfg::Edge*> edges_to_delete;
     for (auto block_it = order.begin(); block_it != order.end(); ++block_it) {
       cfg::Block* b = *block_it;
       auto last_mie_it = b->get_last_insn();
@@ -109,19 +108,14 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
         continue;
       }
 
-      const auto& preds = b->preds();
-      for (cfg::Edge* e : preds) {
-        if (e->type() != cfg::EDGE_GOTO) {
-          continue;
-        }
-
+      std::vector<std::pair<cfg::Block*, IRInstruction*>> returns_to_add;
+      for (cfg::Edge* e : cfg.get_pred_edges_of_type(b, cfg::EDGE_GOTO)) {
         cfg::Block* src = e->src();
 
-        MethodItemEntryCloner cloner;
-        MethodItemEntry* cloned_mie = cloner.clone(mie);
+        IRInstruction* cloned_return = new IRInstruction(*mie->insn);
 
         bool removed_trailing_move = false;
-        if (cloned_mie->insn->srcs_size()) {
+        if (cloned_return->srcs_size()) {
           // eliminate trailing move instruction by specializing return
           // instruction
           auto src_last_mie_it = src->get_last_insn();
@@ -132,15 +126,14 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
             //   return $dest
             // instruction we found earlier.
             IRInstruction* src_last_insn = src_last_mie_it->insn;
-            IRInstruction* cloned_insn = cloned_mie->insn;
             if (is_move(src_last_insn->opcode()) &&
-                src_last_insn->dest() == cloned_insn->src(0) &&
-                src_last_insn->is_wide() == cloned_insn->is_wide()) {
+                src_last_insn->dest() == cloned_return->src(0) &&
+                src_last_insn->is_wide() == cloned_return->is_wide()) {
               // Found a matching move! We'll rewrite the (cloned) return
               // instruction to
               //   return $source
               removed_trailing_move = true;
-              cloned_insn->set_src(0, src_last_insn->src(0));
+              cloned_return->set_src(0, src_last_insn->src(0));
               src->remove_opcode(src_last_mie_it);
               stats.removed_trailing_moves++;
             }
@@ -158,18 +151,52 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
           continue;
         }
 
-        src->push_back(*cloned_mie);
-        edges_to_delete.push_back(e);
+        const auto& non_gotos =
+            cfg.get_succ_edges_if(src, [](const cfg::Edge* e) {
+              return e->type() == cfg::EDGE_BRANCH ||
+                     e->type() == cfg::EDGE_THROW;
+            });
+        if (!non_gotos.empty()) {
+          // It's not safe to add a return because `src` has outgoing edges of
+          // another type.
+          //
+          // Create a new return block that only `src` is the predecessor of.
+          // This way, when the CFG chooses an order, it may choose this block
+          // as the fallthrough predecessor, which means we don't need a goto.
+          //
+          // Effectively, we are duplicating this return block for each of its
+          // goto predecessors. Notice that this optimization is the opposite of
+          // DedupBlocksPass. This optimization should always occur after
+          // DedupBlocks because DedupBlocks doesn't check if deduplicating the
+          // blocks is worth the extra goto.
+          auto new_return_block = cfg.create_block();
+          new_return_block->push_back(cloned_return);
+          cfg.set_edge_target(e, new_return_block);
+        } else {
+          // `src` has no other outgoing edges, we will add a return to this
+          // block directly. However, we can't do it yet because we're iterating
+          // through a copy of the predecessor edges of `b` and adding a return
+          // deletes the outgoing edges of `src`. If we deleted this edge now we
+          // might reach a stale Edge pointer that has been deleted.
+          returns_to_add.emplace_back(src, cloned_return);
+        }
+
+        stats.replaced_gotos_with_returns++;
+      }
+
+      for (const auto& pair : returns_to_add) {
+        // `src` has no other outgoing edges, we can just stick the return
+        // instruction on the end
+        cfg::Block* src = pair.first;
+        IRInstruction* cloned_return = pair.second;
+        src->push_back(cloned_return);
       }
     }
 
-    for (cfg::Edge* e : edges_to_delete) {
-      cfg.delete_edge(e);
-      stats.replaced_gotos_with_returns++;
-    }
   } while (rerun);
 
   code->clear_cfg();
+
   return stats;
 }
 

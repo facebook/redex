@@ -695,6 +695,9 @@ class DedupBlocksImpl {
       return false;
     }
 
+    // TODO: It's not worth the goto to merge return-only blocks. What size is
+    // the minimum?
+
     return true;
   }
 

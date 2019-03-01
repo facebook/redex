@@ -230,10 +230,6 @@ class Block final {
   void remove_opcode(const ir_list::InstructionIterator&);
   void remove_opcode(const IRList::iterator& it);
 
-  // use this to make edits to the "straight-line" code in this block. Do not
-  // attempt to insert any control flow instructions
-  IRList& get_entries() { return m_entries; }
-
   opcode::Branchingness branchingness();
 
   // returns true if there are no MethodItemEntries (not IRInstructions)
@@ -270,14 +266,17 @@ class Block final {
       const IRList::iterator& list_it);
   InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
 
-  /**
-   * TODO(fengliu): Will make cfg support IRCode construction in a better way,
-   * this method will be deprecated soon.
-   */
-  template <class... Args>
-  void push_back(Args&&... args) {
-    m_entries.push_back(*(new MethodItemEntry(std::forward<Args>(args)...)));
-  }
+  // These forward to implementations in ControlFlowGraph, See comment there
+  void insert_before(const InstructionIterator& position,
+                     const std::vector<IRInstruction*>& insns);
+  void insert_before(const InstructionIterator& position, IRInstruction* insn);
+  void insert_after(const InstructionIterator& position,
+                    const std::vector<IRInstruction*>& insns);
+  void insert_after(const InstructionIterator& position, IRInstruction* insn);
+  void push_front(const std::vector<IRInstruction*>& insns);
+  void push_front(IRInstruction* insn);
+  void push_back(const std::vector<IRInstruction*>& insns);
+  void push_back(IRInstruction* insn);
 
  private:
   friend class ControlFlowGraph;
@@ -368,10 +367,13 @@ class ControlFlowGraph {
   // args are arguments to an Edge constructor
   template <class... Args>
   void add_edge(Args&&... args) {
-    Edge* edge = new Edge(std::forward<Args>(args)...);
-    m_edges.insert(edge);
-    edge->src()->m_succs.emplace_back(edge);
-    edge->target()->m_preds.emplace_back(edge);
+    add_edge(new Edge(std::forward<Args>(args)...));
+  }
+
+  void add_edge(Edge* e) {
+    m_edges.insert(e);
+    e->src()->m_succs.emplace_back(e);
+    e->target()->m_preds.emplace_back(e);
   }
 
   using EdgeSet = std::unordered_set<Edge*>;
@@ -472,6 +474,9 @@ class ControlFlowGraph {
   /*
    * Split this block into two blocks. After this call, `it` will be the last
    * instruction in the predecessor block.
+   *
+   * The existing block will become the predecessor. All code after `it` will be
+   * moved into the new block (the successor). Return the (new) successor.
    */
   Block* split_block(const cfg::InstructionIterator& it);
 
@@ -487,6 +492,56 @@ class ControlFlowGraph {
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
   void remove_opcode(const InstructionIterator& it);
+
+  // Insertion Methods (insert_before/after and push_front/back):
+  //  * These methods add instructions to the CFG
+  //  * They do not add branch (if-*, switch-*) instructions to the cfg (use
+  //    create_branch for that)
+  //  * If the inserted instruction requires a block boundary after it, the
+  //    block will be split, instructions will be moved to the next
+  //    (non-exceptional) block and the next insertion from `insns` will also
+  //    occur in the next block. This invalidates InstructionIterators.
+  //  * If the inserted instruction could end the method (return-* or throw),
+  //    then instructions after the insertion point will be removed and
+  //    successor edges will be removed from the block. When inserting a return
+  //    or throw, it must be the last in `insns`. This invalidates
+  //    InstructionIterators.
+  //
+  // insert insns before position
+  void insert_before(const InstructionIterator& position,
+                     const std::vector<IRInstruction*>& insns);
+  // insert insns after position
+  void insert_after(const InstructionIterator& position,
+                    const std::vector<IRInstruction*>& insns);
+  // insert insns at the beginning of block b
+  void push_front(Block* b, const std::vector<IRInstruction*>& insns);
+  // insert insns at the end of block b
+  void push_back(Block* b, const std::vector<IRInstruction*>& insns);
+
+  // Convenience functions that add just one instruction.
+  void insert_before(const InstructionIterator& position, IRInstruction* insn);
+  void insert_after(const InstructionIterator& position, IRInstruction* insn);
+  void push_front(Block* b, IRInstruction* insn);
+  void push_back(Block* b, IRInstruction* insn);
+
+  // Create a conditional branch, which consists of:
+  // * inserting an `if` instruction at the end of b
+  // * Possibly add an EDGE_GOTO to the false block (`fls` may be null if b
+  //   already has a goto leaving it)
+  // * add an EDGE_BRANCH to the true block
+  void create_branch(Block* b, IRInstruction* insn, Block* fls, Block* tru);
+
+  // Create an `if` or `switch`, which consists of:
+  // * insert an `if` or `switch` instruction at the end of b
+  // * Possibly add an EDGE_GOTO to the default block (`goto_block` may be null
+  //   if b already has a goto leaving it)
+  // * add EDGE_BRANCHes to the other blocks based on the `case_to_block`
+  //   vector.
+  void create_branch(
+      Block* b,
+      IRInstruction* insn,
+      Block* goto_block,
+      const std::vector<std::pair<int32_t, Block*>>& case_to_block);
 
   // delete old_block and reroute its predecessors to new_block
   void replace_block(Block* old_block, Block* new_block);
@@ -673,6 +728,10 @@ class ControlFlowGraph {
   // Assert if there are edges that are never a predecessor or successor of a
   // block
   void no_unreferenced_edges() const;
+
+  void insert(const InstructionIterator& position,
+              const std::vector<IRInstruction*>& insns,
+              bool before);
 
   // remove_..._edge:
   //   * These functions remove edges from the graph.

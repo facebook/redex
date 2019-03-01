@@ -447,8 +447,9 @@ class CodeTransformer final {
       auto cls = type_class(container);
       uint64_t enum_size = cls->get_sfields().size() - 1;
       always_assert(enum_size);
-      block->get_entries().insert_before(
-          it, dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL, enum_size}}));
+      block->insert_before(
+          block->to_cfg_instruction_iterator(it),
+          dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL, enum_size}}));
       insn->set_opcode(OPCODE_INVOKE_STATIC);
       insn->set_method(m_enum_util->m_values_method_ref);
       insn->set_arg_word_count(1);
@@ -517,11 +518,12 @@ class CodeTransformer final {
     }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
-    block->get_entries().insert_before(
-        it, dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg}}));
+    const auto& insn_it = block->to_cfg_instruction_iterator(it);
     auto str_reg = allocate_temp();
-    block->get_entries().insert_before(
-        it, dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, str_reg}}));
+    block->insert_before(
+        insn_it,
+        {dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg}}),
+         dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, str_reg}})});
     it->insn->set_method(m_enum_util->STRINGBUILDER_APPEND_STR_METHOD);
     it->insn->set_src(1, str_reg);
   }
@@ -718,26 +720,22 @@ class EnumTransformer final {
     code->build_cfg();
     auto& cfg = code->cfg();
     auto entry = cfg.entry_block();
-    entry->push_back(dasm(OPCODE_IF_EQZ, {0_v}));
     auto return_null_block = cfg.create_block();
-    {
-      return_null_block->push_back(
-          dasm(OPCODE_CONST_STRING, DexString::make_string("null")));
-      return_null_block->push_back(
-          dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-      return_null_block->push_back(dasm(OPCODE_RETURN_OBJECT, {1_v}));
-    }
+    return_null_block->push_back(
+        {dasm(OPCODE_CONST_STRING, DexString::make_string("null")),
+         dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+         dasm(OPCODE_RETURN_OBJECT, {1_v})});
     auto obj_tostring_block = cfg.create_block();
     {
       auto tostring_meth =
           m_enum_util->get_substitute_of_tostring(ref->get_class());
       obj_tostring_block->push_back(
-          dasm(OPCODE_INVOKE_STATIC, tostring_meth, {0_v}));
-      obj_tostring_block->push_back(dasm(OPCODE_MOVE_RESULT_OBJECT, {1_v}));
-      obj_tostring_block->push_back(dasm(OPCODE_RETURN_OBJECT, {1_v}));
+          {dasm(OPCODE_INVOKE_STATIC, tostring_meth, {0_v}),
+           dasm(OPCODE_MOVE_RESULT_OBJECT, {1_v}),
+           dasm(OPCODE_RETURN_OBJECT, {1_v})});
     }
-    cfg.add_edge(entry, return_null_block, cfg::EDGE_BRANCH);
-    cfg.add_edge(entry, obj_tostring_block, cfg::EDGE_GOTO);
+    cfg.create_branch(entry, dasm(OPCODE_IF_EQZ, {0_v}), obj_tostring_block,
+                      return_null_block);
     cfg.recompute_registers_size();
     code->clear_cfg();
   }
@@ -771,33 +769,31 @@ class EnumTransformer final {
     auto sorted_values = sort_enum_values(enum_attrs);
     for (auto& value : sorted_values) {
       prev_block->push_back(
-          dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)));
-      prev_block->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-
-      prev_block->push_back(dasm(OPCODE_INVOKE_VIRTUAL,
-                                 m_enum_util->STRING_EQ_METHOD, {0_v, 1_v}));
-      prev_block->push_back(dasm(OPCODE_MOVE_RESULT, {3_v}));
-      prev_block->push_back(dasm(OPCODE_IF_EQZ, {3_v}));
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
+           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+           dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_EQ_METHOD,
+                {0_v, 1_v}),
+           dasm(OPCODE_MOVE_RESULT, {3_v})});
 
       auto equal_block = cfg.create_block();
       {
         auto obj_field = m_enum_util->m_fields[value.ordinal];
-        equal_block->push_back(dasm(OPCODE_SGET_OBJECT, obj_field));
-        equal_block->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
-        equal_block->push_back(dasm(OPCODE_RETURN_OBJECT, {2_v}));
+        equal_block->push_back({dasm(OPCODE_SGET_OBJECT, obj_field),
+                                dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
+                                dasm(OPCODE_RETURN_OBJECT, {2_v})});
       }
       auto ne_block = cfg.create_block();
-      cfg.add_edge(prev_block, ne_block, cfg::EDGE_BRANCH);
-      cfg.add_edge(prev_block, equal_block, cfg::EDGE_GOTO);
+      cfg.create_branch(prev_block, dasm(OPCODE_IF_EQZ, {3_v}), equal_block,
+                        ne_block);
       prev_block = ne_block;
     }
     prev_block->push_back(
-        dasm(OPCODE_NEW_INSTANCE, m_enum_util->ILLEGAL_ARG_EXCP_TYPE, {}));
-    prev_block->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-    prev_block->push_back(dasm(OPCODE_INVOKE_DIRECT,
-                               m_enum_util->ILLEGAL_ARG_CONSTRUCT_METHOD,
-                               {1_v, 0_v}));
-    prev_block->push_back(dasm(OPCODE_THROW, {1_v}));
+        {dasm(OPCODE_NEW_INSTANCE, m_enum_util->ILLEGAL_ARG_EXCP_TYPE, {}),
+         dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+         dasm(OPCODE_INVOKE_DIRECT,
+              m_enum_util->ILLEGAL_ARG_CONSTRUCT_METHOD,
+              {1_v, 0_v}),
+         dasm(OPCODE_THROW, {1_v})});
     cfg.recompute_registers_size();
     code->clear_cfg();
   }
@@ -822,22 +818,29 @@ class EnumTransformer final {
     code->build_cfg();
     auto& cfg = code->cfg();
     auto entry = cfg.entry_block();
-    {
-      entry->push_back(dasm(OPCODE_INVOKE_VIRTUAL,
-                            m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}));
-      entry->push_back(dasm(OPCODE_MOVE_RESULT, {0_v}));
-      entry->push_back(dasm(OPCODE_PACKED_SWITCH, {0_v}));
-    }
+    entry->push_back({dasm(OPCODE_INVOKE_VIRTUAL,
+                           m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
+                      dasm(OPCODE_MOVE_RESULT, {0_v})});
+
     auto& enum_attrs = m_enum_attrs.at(ref->get_class());
     auto sorted_values = sort_enum_values(enum_attrs);
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
     for (auto& value : sorted_values) {
       auto block = cfg.create_block();
-      cfg.add_edge(entry, block, value.ordinal);
+      cases.emplace_back(value.ordinal, block);
       block->push_back(
-          dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)));
-      block->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}));
-      block->push_back(dasm(OPCODE_RETURN_OBJECT, {1_v}));
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
+           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+           dasm(OPCODE_RETURN_OBJECT, {1_v})});
     }
+    // This goto edge should never be taken, but we need a goto edge because the
+    // switch is not a valid way to end a method. A switch cannot end a block
+    // because the on-device dex verifier is unable to prove if the switch is
+    // exhaustive.
+    //
+    // Arbitrarily choose the first case block.
+    cfg.create_branch(entry, dasm(OPCODE_PACKED_SWITCH, {0_v}),
+                      cases.front().second, cases);
     cfg.recompute_registers_size();
     code->clear_cfg();
   }
