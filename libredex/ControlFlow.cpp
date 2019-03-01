@@ -855,15 +855,17 @@ void ControlFlowGraph::sanity_check() const {
   if (m_editable) {
     for (const auto& entry : m_blocks) {
       Block* b = entry.second;
-      // No targets or gotos
-      for (const auto& mie : *b) {
-        always_assert_log(mie.type != MFLOW_TARGET,
-                          "failed to remove all targets. block %d in\n%s",
-                          b->id(), SHOW(*this));
-        if (mie.type == MFLOW_OPCODE) {
-          always_assert_log(!is_goto(mie.insn->opcode()),
-                            "failed to remove all gotos. block %d in\n%s",
+      if (DEBUG) {
+        // No targets or gotos
+        for (const auto& mie : *b) {
+          always_assert_log(mie.type != MFLOW_TARGET,
+                            "failed to remove all targets. block %d in\n%s",
                             b->id(), SHOW(*this));
+          if (mie.type == MFLOW_OPCODE) {
+            always_assert_log(!is_goto(mie.insn->opcode()),
+                              "failed to remove all gotos. block %d in\n%s",
+                              b->id(), SHOW(*this));
+          }
         }
       }
 
@@ -965,7 +967,9 @@ void ControlFlowGraph::sanity_check() const {
                       m_registers_size, SHOW(*this));
   }
   no_dangling_dex_positions();
-  no_unreferenced_edges();
+  if (DEBUG) {
+    no_unreferenced_edges();
+  }
 }
 
 uint16_t ControlFlowGraph::compute_registers_size() const {
@@ -990,12 +994,12 @@ void ControlFlowGraph::recompute_registers_size() {
 }
 
 void ControlFlowGraph::no_dangling_dex_positions() const {
-  std::unordered_set<DexPosition*> positions;
+  std::unordered_map<DexPosition*, bool> parents;
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
     for (const auto& mie : *b) {
-      if (mie.type == MFLOW_POSITION) {
-        positions.insert(mie.pos.get());
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+        parents.emplace(mie.pos->parent, false);
       }
     }
   }
@@ -1003,11 +1007,18 @@ void ControlFlowGraph::no_dangling_dex_positions() const {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
     for (const auto& mie : *b) {
-      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
-        always_assert_log(positions.count(mie.pos->parent) > 0, "%s in %s",
-                          SHOW(mie), SHOW(*this));
+      if (mie.type == MFLOW_POSITION) {
+        auto search = parents.find(mie.pos.get());
+        if (search != parents.end()) {
+          search->second = true;
+        }
       }
     }
+  }
+
+  for (const auto& entry : parents) {
+    always_assert_log(entry.second, "%lu is a dangling parent pointer in %s",
+                      entry.first, SHOW(*this));
   }
 }
 

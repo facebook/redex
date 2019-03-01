@@ -92,7 +92,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // remove the outgoing throw if we remove the callsite
   caller->remove_opcode(callsite);
 
-  caller->sanity_check();
+  if (ControlFlowGraph::DEBUG) {
+    caller->sanity_check();
+  }
   TRACE(CFG, 3, "final %s\n", SHOW(*caller));
 }
 
