@@ -131,7 +131,8 @@ void write_intermediate_dex(const ConfigFiles& cfg,
                            cfg,
                            pos_mapper.get(),
                            nullptr,
-                           nullptr);
+                           nullptr,
+                           nullptr /* IODIMetadata* */);
     }
   }
 }

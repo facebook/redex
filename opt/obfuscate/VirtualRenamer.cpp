@@ -108,75 +108,17 @@ using RefsMap =
     std::unordered_map<DexMethod*,
                        std::set<DexMethodRef*, dexmethods_comparator>>;
 
-/**
- * Rename a given method with the given name.
- */
-void rename(DexMethodRef* meth, DexString* name) {
-  //assert(meth->is_concrete() && !meth->is_external());
-  DexMethodSpec spec;
-  spec.cls = meth->get_class();
-  spec.name = name;
-  spec.proto = meth->get_proto();
-  if (meth->is_concrete()) {
-    auto def = static_cast<DexMethod*>(meth);
-    if (def->get_deobfuscated_name().empty()) {
-      def->set_deobfuscated_name(meth->get_name()->c_str());
-    }
-  }
-  // We should not update deobfuscated name here!
-  meth->change(spec,
-               false /* rename on collision */,
-               false /* update deobfuscated name */);
-}
-
-/**
- * Rename all refs to the given method.
- */
-int rename_scope_ref(
-    DexMethod* meth,
-    const RefsMap& def_refs,
-    DexString* name) {
-  int renamed = 0;
-  const auto& refs = def_refs.find(meth);
-  if (refs == def_refs.end()) return renamed;
-  for (auto& ref : refs->second) {
-    rename(ref, name);
-    renamed++;
-  }
-  return renamed;
-}
-
-/**
- * Rename an entire virtual scope.
- */
-int rename_scope(
-    const VirtualScope* scope,
-    const RefsMap& def_refs,
-    DexString* name) {
-  int renamed = 0;
-  for (auto& vmeth : scope->methods) {
-    rename(vmeth.first, name);
-    if (vmeth.first->is_concrete()) renamed++;
-    else {
-      TRACE(OBFUSCATE, 2, "not concrete %s\n", SHOW(vmeth.first));
-    }
-  }
-  assert(scope->methods.size() > 0);
-  rename_scope_ref(scope->methods[0].first, def_refs, name);
-  return renamed;
-}
-
 // Uncomment and use this as a prefix for virtual method
 // names for debugging
-//const std::string prefix = __Redex__";
+// const std::string prefix = __Redex__";
 const std::string prefix = "";
 
 DexString* get_name(int seed) {
   std::string name = prefix;
 
   const auto append = [&](int value) {
-    always_assert_log(value >= 0 && value < 52,
-        "value = %d, seed = %d", value, seed);
+    always_assert_log(value >= 0 && value < 52, "value = %d, seed = %d", value,
+                      seed);
     if (value < 26) {
       name += ('A' + value);
     } else {
@@ -193,29 +135,124 @@ DexString* get_name(int seed) {
 }
 
 struct VirtualRenamer {
-  VirtualRenamer(const ClassScopes& class_scopes, const RefsMap& def_refs) :
-      class_scopes(class_scopes),
-      def_refs(def_refs) {}
+  VirtualRenamer(const ClassScopes& class_scopes,
+                 const RefsMap& def_refs,
+                 std::unordered_map<std::string, uint32_t>* elms,
+                 std::unordered_map<const DexType*, std::string>* cache)
+      : class_scopes(class_scopes),
+        def_refs(def_refs),
+        stack_trace_elements(elms),
+        external_name_cache(cache) {}
 
-  int rename_virtual_scopes(const DexType* type, int& seed) const;
-  int rename_interface_scopes(int& seed) const;
+  int rename_virtual_scopes(const DexType* type, int& seed);
+  int rename_interface_scopes(int& seed);
 
-private:
+ private:
   const ClassScopes& class_scopes;
   const RefsMap& def_refs;
+  // When avoid_stack_trace_collision is true this is used to keep a ref count
+  // of a given fully qualified method name (sans parameters); i.e. the line
+  // that will be printed when the method appears in a stack trace (internally
+  // in ART this is called a stack trace element). As methods are renamed
+  // their ref counts get updated, and if the ref count drops to 0 then its
+  // entry is erased. When avoid_stack_trace_collision is false then this is
+  // null and collision avoidance is disabled.
+  std::unordered_map<std::string, uint32_t>* stack_trace_elements;
+  // Note these entries contain trailing periods
+  std::unordered_map<const DexType*, std::string>* external_name_cache;
 
-private:
-  DexString* get_unescaped_name(
-      std::vector<const VirtualScope*> scopes,
-      int& seed) const;
-  DexString* get_unescaped_name(
-      const VirtualScope* scope,
-      int& seed) const;
-  bool usable_name(
-      DexString* name,
-      const VirtualScope* scope) const;
+ private:
+  const std::string& get_prefix(const DexType* type) const {
+    always_assert(external_name_cache != nullptr);
+    auto iter = external_name_cache->find(type);
+    always_assert(iter != external_name_cache->end());
+    return iter->second;
+  }
+
+  void rename(DexMethodRef* meth, DexString* name);
+  int rename_scope_ref(DexMethod* meth, DexString* name);
+  int rename_scope(const VirtualScope* scope, DexString* name);
+
+  DexString* get_unescaped_name(std::vector<const VirtualScope*> scopes,
+                                int& seed) const;
+  DexString* get_unescaped_name(const VirtualScope* scope, int& seed) const;
+  bool usable_name(DexString* name, const VirtualScope* scope) const;
 };
 
+/**
+ * Rename a given method with the given name.
+ */
+void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
+  //assert(meth->is_concrete() && !meth->is_external());
+  DexMethodSpec spec;
+  spec.cls = meth->get_class();
+  spec.name = name;
+  spec.proto = meth->get_proto();
+  if (meth->is_concrete()) {
+    auto def = static_cast<DexMethod*>(meth);
+    if (def->get_deobfuscated_name().empty()) {
+      def->set_deobfuscated_name(meth->get_name()->c_str());
+    }
+  }
+  if (stack_trace_elements) {
+    std::string ste = get_prefix(meth->get_class()) + meth->str();
+    auto iter = stack_trace_elements->find(ste);
+    // We don't find this ste if it's a miranda method
+    if (iter != stack_trace_elements->end()) {
+      // We've found this ste, so let's decrement its ref count, and if it
+      // reaches 0 then remove it so we don't have any empty entries
+      iter->second -= 1;
+      if (iter->second == 0) {
+        stack_trace_elements->erase(iter);
+      }
+    }
+  }
+  // We should not update deobfuscated name here!
+  meth->change(spec,
+               false /* rename on collision */,
+               false /* update deobfuscated name */);
+
+  if (stack_trace_elements) {
+    std::string ste = get_prefix(meth->get_class()) + name->str();
+    auto res = stack_trace_elements->emplace(std::move(ste), 1);
+    // Ideally we've picked a new name that doesn't collide with any other
+    // method, so this assert should never fire. We leave this here in case
+    // my human brain foobarred the logic (or in a refactor some other
+    // assumption e.g. thread safety are changed)
+    always_assert(res.second);
+  }
+}
+
+/**
+ * Rename all refs to the given method.
+ */
+int VirtualRenamer::rename_scope_ref(DexMethod* meth, DexString* name) {
+  int renamed = 0;
+  const auto& refs = def_refs.find(meth);
+  if (refs == def_refs.end()) return renamed;
+  for (auto& ref : refs->second) {
+    rename(ref, name);
+    renamed++;
+  }
+  return renamed;
+}
+
+/**
+ * Rename an entire virtual scope.
+ */
+int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
+  int renamed = 0;
+  for (auto& vmeth : scope->methods) {
+    rename(vmeth.first, name);
+    if (vmeth.first->is_concrete()) renamed++;
+    else {
+      TRACE(OBFUSCATE, 2, "not concrete %s\n", SHOW(vmeth.first));
+    }
+  }
+  assert(scope->methods.size() > 0);
+  rename_scope_ref(scope->methods[0].first, name);
+  return renamed;
+}
 
 /**
  * A name is usable if it does not collide with an existing
@@ -229,10 +266,17 @@ bool VirtualRenamer::usable_name(
   TypeSet hier;
   hier.insert(root);
   get_all_children(class_scopes.get_class_hierarchy(), root, hier);
+  bool has_ste = stack_trace_elements != nullptr;
   for (const auto& type : hier) {
     if (DexMethod::get_method(const_cast<DexType*>(type), name, proto)
         != nullptr) {
       return false;
+    }
+    if (has_ste) {
+      auto ste = get_prefix(type) + name->str();
+      if (stack_trace_elements->find(ste) != stack_trace_elements->end()) {
+        return false;
+      }
     }
   }
   return true;
@@ -271,7 +315,7 @@ DexString* VirtualRenamer::get_unescaped_name(
   }
 }
 
-int VirtualRenamer::rename_interface_scopes(int& seed) const {
+int VirtualRenamer::rename_interface_scopes(int& seed) {
   int renamed = 0;
   class_scopes.walk_all_intf_scopes(
       [&](const DexString* name,
@@ -322,7 +366,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
         TRACE(OBFUSCATE, 5, "New name %s for %s%s\n",
             SHOW(new_name), SHOW(name), SHOW(proto));
         for (const auto& scope : scopes) {
-          renamed += rename_scope(scope, def_refs, new_name);
+          renamed += rename_scope(scope, new_name);
         }
         // rename interface method only
         for (const auto& intf : intfs) {
@@ -336,7 +380,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
           TRACE(OBFUSCATE, 5, "New name %s for %s\n",
               SHOW(new_name), SHOW(intf_meth));
           rename(intf_meth, new_name);
-          rename_scope_ref(intf_meth, def_refs, new_name);
+          rename_scope_ref(intf_meth, new_name);
           renamed++;
         }
       });
@@ -346,8 +390,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) const {
 /**
  * Rename only scopes that are not interface and can_rename.
  */
-int VirtualRenamer::rename_virtual_scopes(
-    const DexType* type, int& seed) const {
+int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
   int renamed = 0;
   const auto cls = type_class(type);
   TRACE(OBFUSCATE, 5, "Attempting to rename %s\n", SHOW(type));
@@ -372,7 +415,7 @@ int VirtualRenamer::rename_virtual_scopes(
       auto name =  get_unescaped_name(scope, seed);
       TRACE(OBFUSCATE, 5, "New name %s for %s\n",
           SHOW(name), SHOW(scope->methods[0].first));
-      renamed += rename_scope(scope, def_refs, name);
+      renamed += rename_scope(scope, name);
     }
   }
 
@@ -432,13 +475,37 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
 /**
  * Rename virtual methods.
  */
-size_t rename_virtuals(Scope& classes) {
+size_t rename_virtuals(Scope& classes, bool avoid_stack_trace_collision) {
   // build a ClassScope a RefsMap and a VirtualRenamer
   ClassScopes class_scopes(classes);
   scope_info(class_scopes);
   RefsMap def_refs;
   collect_refs(classes, def_refs);
-  VirtualRenamer vr(class_scopes, def_refs);
+  std::unordered_map<std::string, uint32_t> stack_trace_elements;
+  std::unordered_map<const DexType*, std::string> external_cache;
+  if (avoid_stack_trace_collision) {
+    for (const auto& cls : classes) {
+      std::string pref = JavaNameUtil::internal_to_external(cls->str()) + ".";
+      auto emp_res = external_cache.emplace(cls->get_type(), pref);
+      always_assert(emp_res.second);
+      auto meths_visitor = [&](const std::vector<DexMethod*>& methods) {
+        for (const DexMethod* method : methods) {
+          std::string ste = pref + method->str();
+          // We're 100% ok with the default construction of an entry here, since
+          // after this line that would give said entry the correct ref count
+          // of 1.
+          stack_trace_elements[ste] += 1;
+        }
+      };
+      meths_visitor(cls->get_dmethods());
+      meths_visitor(cls->get_vmethods());
+    }
+  }
+  VirtualRenamer vr(class_scopes,
+                    def_refs,
+                    avoid_stack_trace_collision ? &stack_trace_elements
+                                                : nullptr,
+                    avoid_stack_trace_collision ? &external_cache : nullptr);
 
   // rename virtual only first
   const auto obj_t = get_object_type();

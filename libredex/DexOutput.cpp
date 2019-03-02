@@ -34,6 +34,7 @@
 #include "DexClass.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IODIMetadata.h"
 #include "IRCode.h"
 #include "Pass.h"
 #include "Resolver.h"
@@ -366,6 +367,23 @@ typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
 typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
 typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
 
+enum class DebugInfoKind {
+  Normal = 0,
+  NoPositions = 1,
+  InstructionOffsets = 2,
+  InstructionOffsetsPerArity = 3,
+  Max = 4,
+};
+
+struct CodeItemEmit {
+  DexMethod* method;
+  DexCode* code;
+  dex_code_item* code_item;
+
+  CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
+      : method(meth), code(c), code_item(ci) {}
+};
+
 class DexOutput {
 public:
   dex_stats_t m_stats;
@@ -378,14 +396,15 @@ public:
   const char* m_filename;
   size_t m_store_number;
   size_t m_dex_number;
-  bool m_emit_debug_line_info;
+  DebugInfoKind m_debug_info_kind;
+  IODIMetadata* m_iodi_metadata;
   PositionMapper* m_pos_mapper;
   std::string m_method_mapping_filename;
   std::string m_class_mapping_filename;
   std::string m_pg_mapping_filename;
   std::string m_bytecode_offset_filename;
   std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
-  std::vector<std::pair<DexCode*, dex_code_item*>> m_code_item_emits;
+  std::vector<CodeItemEmit> m_code_item_emits;
   std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
@@ -447,7 +466,8 @@ public:
             bool emit_name_based_locators,
             size_t store_number,
             size_t dex_number,
-            bool emit_debug_line_info,
+            DebugInfoKind debug_info_kind,
+            IODIMetadata* iodi_metadata,
             const ConfigFiles& config_files,
             PositionMapper* pos_mapper,
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
@@ -471,7 +491,8 @@ DexOutput::DexOutput(
     bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
-    bool emit_debug_line_info,
+    DebugInfoKind debug_info_kind,
+    IODIMetadata* iodi_metadata,
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
@@ -482,6 +503,7 @@ DexOutput::DexOutput(
     const std::string& bytecode_offset_filename)
     : m_config_files(config_files) {
   m_classes = classes;
+  m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
@@ -499,7 +521,7 @@ DexOutput::DexOutput(
   m_dex_number = dex_number;
   m_locator_index = locator_index;
   m_emit_name_based_locators = emit_name_based_locators;
-  m_emit_debug_line_info = emit_debug_line_info;
+  m_debug_info_kind = debug_info_kind;
 }
 
 DexOutput::~DexOutput() {
@@ -851,8 +873,8 @@ void DexOutput::generate_class_data_items() {
   dexcode_to_offset dco;
   uint32_t cdi_start = m_offset;
   for (auto& it : m_code_item_emits) {
-    uint32_t offset = (uint32_t) (((uint8_t*)it.second) - m_output);
-    dco[it.first] = offset;
+    uint32_t offset = (uint32_t)(((uint8_t*)it.code_item) - m_output);
+    dco[it.code] = offset;
   }
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
@@ -936,7 +958,8 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
-    m_code_item_emits.emplace_back(code, (dex_code_item*)(m_output + m_offset));
+    m_code_item_emits.emplace_back(meth, code,
+                                   (dex_code_item*)(m_output + m_offset));
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
   }
@@ -1152,31 +1175,189 @@ void DexOutput::generate_annotations() {
   }
 }
 
+namespace {
+int emit_debug_info(
+    DexOutputIdx* dodx,
+    bool emit_positions,
+    DexDebugItem* dbg,
+    DexCode* dc,
+    dex_code_item* dci,
+    PositionMapper* pos_mapper,
+    uint8_t* output,
+    uint32_t offset,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
+  // No align requirement for debug items.
+  std::vector<DebugLineItem> debug_line_info;
+  uint32_t line_start{0};
+  auto dbgops = generate_debug_instructions(dbg, pos_mapper, &line_start,
+                                            &debug_line_info);
+  int size = 0;
+  if (emit_positions) {
+    size = dbg->encode(dodx, output + offset, line_start, dbgops);
+    dci->debug_info_off = offset;
+  }
+  if (dbg_lines != nullptr) {
+    (*dbg_lines)[dc] = debug_line_info;
+  }
+  return size;
+}
+
+// Returns a DexDebugInstruction corresponding to emitting a line entry
+// with the given address offset and line offset. Asserts if invalid arguments.
+inline std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
+                                                              uint8_t addr) {
+  // These are limits imposed by
+  // https://source.android.com/devices/tech/dalvik/dex-format#opcodes
+  always_assert(line >= -4 && line <= 10);
+  always_assert(addr <= 17);
+  // Below is correct because adjusted_opcode = (addr * 15) + (line + 4), so
+  // line_offset = -4 + (adjusted_opcode % 15) = -4 + line + 4 = line
+  // addr_offset = adjusted_opcode / 15 = addr * 15 / 15 = addr since line + 4
+  // is bounded by 0 and 14 we know (line + 4) / 15 = 0
+  uint8_t opcode = 0xa + (addr * 15) + (line + 4);
+  return std::make_unique<DexDebugInstruction>(
+      static_cast<DexDebugItemOpcode>(opcode));
+}
+
+uint32_t emit_instruction_offset_debug_info(
+    DexOutputIdx* dodx,
+    bool per_arity,
+    PositionMapper* pos_mapper,
+    std::vector<CodeItemEmit>& code_items,
+    const IODIMetadata& iodi_metadata,
+    uint8_t* output,
+    uint32_t offset,
+    int* dbgcount,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
+  // Algo is as follows:
+  // 1) Calculate max method size for each method of N params
+  // 2) Emit one debug program that will emit a position for each pc up to
+  //    size calculated in (1) for each method of N params
+  // 3) Tie all code items back to debug program emitted in (2)
+  //
+  // If per_arity is false then all the "of N params" are replaced with a
+  // calculated max param size.
+  std::unordered_map<uint32_t, uint32_t> param_to_size;
+  // (1)
+  uint32_t max_param = 0;
+  for (auto& it : code_items) {
+    DexCode* dc = it.code;
+    const auto dbg_item = dc->get_debug_item();
+    if (!dbg_item) {
+      continue;
+    }
+    if (!iodi_metadata.can_safely_use_iodi(it.method)) {
+      continue;
+    }
+    uint32_t real_param_size = dbg_item->get_param_names().size();
+    uint32_t param_size = per_arity ? real_param_size : 0;
+    auto& max_size = param_to_size[param_size];
+    auto size = dc->size();
+    if (size > max_size) {
+      max_size = size;
+    }
+    if (real_param_size > max_param) {
+      max_param = real_param_size;
+    }
+  }
+  // (2)
+  std::unordered_map<uint32_t, uint32_t> param_to_offset;
+  uint32_t initial_offset = offset;
+  for (auto& pts : param_to_size) {
+    auto param_size = per_arity ? pts.first : max_param;
+    auto insns_size = pts.second;
+    TRACE(OPUT, 2,
+          "[emit_instruction_offset_debug_info][param_to_size] %u : %u\n",
+          param_size, insns_size);
+    param_to_offset[param_size] = offset;
+    TRACE(OPUT, 2,
+          "[emit_instruction_offset_debug_info][param_to_offset] %u : %u\n",
+          param_size, offset);
+    std::vector<DexString*> params;
+    for (size_t i = 0; i < param_size; i++) {
+      params.push_back(nullptr);
+    }
+    std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+    if (insns_size > 0) {
+      // First emit an entry for pc = 0 -> line = 0
+      dbgops.push_back(create_line_entry(0, 0));
+      // Now emit an entry for each pc thereafter
+      // (0x1e increments addr+line by 1)
+      for (size_t i = 1; i < insns_size; i++) {
+        dbgops.push_back(create_line_entry(1, 1));
+      }
+    }
+    offset += DexDebugItem::encode(nullptr, output + offset, 0, params, dbgops);
+    *dbgcount += 1;
+  }
+  // (3)
+  auto offset_end = param_to_offset.end();
+  for (auto& it : code_items) {
+    DexCode* dc = it.code;
+    const auto dbg = dc->get_debug_item();
+    if (!dbg) {
+      continue;
+    }
+    dex_code_item* dci = it.code_item;
+    bool use_iodi = iodi_metadata.can_safely_use_iodi(it.method);
+    // We still want to fill in pos_mapper and code_debug_map, so run the
+    // usual code to emit debug info, additionally we actual emit the usual
+    // debug info if we can't safely use iodi.
+    offset += emit_debug_info(dodx, !use_iodi, dbg, dc, dci, pos_mapper, output,
+                              offset, code_debug_map);
+    if (use_iodi) {
+      uint32_t param_size =
+          per_arity ? dbg->get_param_names().size() : max_param;
+      auto offset_it = param_to_offset.find(param_size);
+      always_assert_log(offset_it != offset_end,
+                        "Expected to find param to offset");
+      dci->debug_info_off = offset_it->second;
+    } else {
+      *dbgcount += 1;
+    }
+  }
+  // Return how much data we've encoded
+  return offset - initial_offset;
+}
+
+} // namespace
+
 void DexOutput::generate_debug_items() {
   uint32_t dbg_start = m_offset;
   int dbgcount = 0;
-  for (auto& it : m_code_item_emits) {
-    DexCode* dc = it.first;
-    dex_code_item* dci = it.second;
-    auto dbg = dc->get_debug_item();
-    if (dbg == nullptr) continue;
-    dbgcount++;
-    // No align requirement for debug items.
-    std::vector<DebugLineItem> debug_line_info;
-    uint32_t line_start{0};
-    auto dbgops = generate_debug_instructions(dbg, dodx, m_pos_mapper,
-                                              &line_start, &debug_line_info);
-    if (m_emit_debug_line_info) {
-      int size = dbg->encode(dodx, m_pos_mapper, m_output + m_offset,
-                             line_start, dbgops);
-      dci->debug_info_off = m_offset;
-      m_offset += size;
+  bool per_arity =
+      m_debug_info_kind == DebugInfoKind::InstructionOffsetsPerArity;
+  bool emit_positions = m_debug_info_kind != DebugInfoKind::NoPositions;
+  bool use_iodi =
+      m_debug_info_kind == DebugInfoKind::InstructionOffsets || per_arity;
+  if (use_iodi && m_iodi_metadata) {
+    m_offset += emit_instruction_offset_debug_info(dodx,
+                                                   per_arity,
+                                                   m_pos_mapper,
+                                                   m_code_item_emits,
+                                                   *m_iodi_metadata,
+                                                   m_output,
+                                                   m_offset,
+                                                   &dbgcount,
+                                                   m_code_debug_lines);
+  } else {
+    if (use_iodi) {
+      fprintf(stderr,
+              "[IODI] WARNING: Not using IODI because no iodi metadata file was"
+              " specified.\n");
     }
-    if (m_code_debug_lines != nullptr) {
-      (*m_code_debug_lines)[dc] = debug_line_info;
+    for (auto& it : m_code_item_emits) {
+      DexCode* dc = it.code;
+      dex_code_item* dci = it.code_item;
+      auto dbg = dc->get_debug_item();
+      if (dbg == nullptr) continue;
+      dbgcount++;
+      m_offset +=
+          emit_debug_info(dodx, emit_positions, dbg, dc, dci, m_pos_mapper,
+                          m_output, m_offset, m_code_debug_lines);
     }
   }
-  if (m_emit_debug_line_info) {
+  if (emit_positions) {
     insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
   }
 }
@@ -1696,6 +1877,21 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   }
 }
 
+static DebugInfoKind deserialize_debug_info_kind(std::string raw_kind) {
+  if (raw_kind == "no_positions") {
+    return DebugInfoKind::NoPositions;
+  } else if (raw_kind == "iodi") {
+    return DebugInfoKind::InstructionOffsets;
+  } else if (raw_kind == "iodi_per_arity") {
+    return DebugInfoKind::InstructionOffsetsPerArity;
+  } else {
+    always_assert_log(raw_kind == "normal" || raw_kind == "",
+                      "Unknown debug info kind. Supported kinds are \"normal\","
+                      " \"no_positions\", \"iodi\", \"iodi_per_arity\".");
+    return DebugInfoKind::Normal;
+  }
+}
+
 dex_stats_t write_classes_to_dex(
     std::string filename,
     DexClasses* classes,
@@ -1706,8 +1902,8 @@ dex_stats_t write_classes_to_dex(
     const ConfigFiles& cfg,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-        code_debug_lines) {
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    IODIMetadata* iodi_metadata) {
   const JsonWrapper& json_cfg = cfg.get_json_config();
   auto method_mapping_filename =
       cfg.metafile(json_cfg.get("method_mapping", std::string()));
@@ -1718,7 +1914,8 @@ dex_stats_t write_classes_to_dex(
   auto bytecode_offset_filename =
       cfg.metafile(json_cfg.get("bytecode_offset_map", std::string()));
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
-  auto emit_debug_line_info = json_cfg.get("emit_debug_line_info", true);
+  DebugInfoKind debug_info_kind = deserialize_debug_info_kind(
+      json_cfg.get("debug_info_kind", std::string()));
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
     string_sort_mode = SortMode::CLASS_STRINGS;
@@ -1740,7 +1937,7 @@ dex_stats_t write_classes_to_dex(
     code_sort_mode.push_back(SortMode::DEFAULT);
   }
 
-  TRACE(OPUT, 3, "[write_classes_to_dex][filename] %s\n", filename.c_str());
+  TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s\n", filename.c_str());
 
   DexOutput dout = DexOutput(filename.c_str(),
                              classes,
@@ -1748,7 +1945,8 @@ dex_stats_t write_classes_to_dex(
                              emit_name_based_locators,
                              store_number,
                              dex_number,
-                             emit_debug_line_info,
+                             debug_info_kind,
+                             iodi_metadata,
                              cfg,
                              pos_mapper,
                              method_to_id,

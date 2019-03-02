@@ -83,7 +83,8 @@ int main(int argc, char* argv[]) {
                        cfg,
                        pos_mapper.get(),
                        nullptr,
-                       nullptr);
+                       nullptr,
+                       nullptr /* IODIMetadata* */);
 
   delete g_redex;
   return 0;

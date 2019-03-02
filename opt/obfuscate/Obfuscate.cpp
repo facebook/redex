@@ -136,7 +136,9 @@ void get_totals(Scope& scope, RenameStats& stats) {
 
 } // end namespace
 
-void obfuscate(Scope& scope, RenameStats& stats) {
+void obfuscate(Scope& scope,
+               RenameStats& stats,
+               const ObfuscatePass::Config& config) {
   get_totals(scope, stats);
   ClassHierarchy ch = build_type_hierarchy(scope);
 
@@ -254,7 +256,8 @@ void obfuscate(Scope& scope, RenameStats& stats) {
   stats.fields_renamed = field_name_manager.commit_renamings_to_dex();
   stats.dmethods_renamed = method_name_manager.commit_renamings_to_dex();
 
-  stats.vmethods_renamed = rename_virtuals(scope);
+  stats.vmethods_renamed =
+      rename_virtuals(scope, config.avoid_colliding_debug_name);
 
   debug_logging(scope);
 
@@ -279,7 +282,7 @@ void ObfuscatePass::run_pass(DexStoresVector& stores,
   }
   auto scope = build_class_scope(stores);
   RenameStats stats;
-  obfuscate(scope, stats);
+  obfuscate(scope, stats, m_config);
   mgr.incr_metric(
       METRIC_FIELD_TOTAL, static_cast<int>(stats.fields_total));
   mgr.incr_metric(

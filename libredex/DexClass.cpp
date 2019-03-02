@@ -195,7 +195,6 @@ std::unique_ptr<DexDebugItem> DexDebugItem::get_dex_debug(DexIdx* idx,
  */
 std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
     DexDebugItem* debugitem,
-    DexOutputIdx* dodx,
     PositionMapper* pos_mapper,
     uint32_t* line_start,
     std::vector<DebugLineItem>* line_info) {
@@ -273,14 +272,14 @@ std::vector<std::unique_ptr<DexDebugInstruction>> generate_debug_instructions(
 
 int DexDebugItem::encode(
     DexOutputIdx* dodx,
-    PositionMapper* pos_mapper,
     uint8_t* output,
     uint32_t line_start,
+    const std::vector<DexString*>& parameters,
     const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, line_start);
-  encdata = write_uleb128(encdata, (uint32_t)m_param_names.size());
-  for (auto s : m_param_names) {
+  encdata = write_uleb128(encdata, (uint32_t)parameters.size());
+  for (auto s : parameters) {
     if (s == nullptr) {
       encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
       continue;

@@ -33,6 +33,7 @@
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
 #include "OptData.h"
@@ -731,11 +732,28 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
   auto debug_line_mapping_filename_v2 =
       cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
+  auto iodi_metadata_filename =
+      cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
+  if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
+      !iodi_metadata_filename.empty()) {
+    fprintf(stderr,
+            "[WARNING] IODI will not be used because it requires"
+            " debug_line_method_map_v2 and line_number_map_v2 to be set"
+            " (these artifacts are required for leaveraging iodi_metadata)!\n");
+    iodi_metadata_filename = "";
+  }
 
   std::unique_ptr<PositionMapper> pos_mapper(
       PositionMapper::make(pos_output, pos_output_v2));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+  IODIMetadata iodi_metadata;
+  bool needs_method_to_id = !iodi_metadata_filename.empty() ||
+                            !debug_line_mapping_filename_v2.empty();
+  if (!iodi_metadata_filename.empty()) {
+    Timer t("Compute initial IODI metadata");
+    iodi_metadata.mark_methods(stores);
+  }
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
@@ -763,11 +781,17 @@ void redex_backend(const PassManager& manager,
           i,
           cfg,
           pos_mapper.get(),
-          debug_line_mapping_filename_v2.empty() ? nullptr : &method_to_id,
-          debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines);
+          needs_method_to_id ? &method_to_id : nullptr,
+          debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines,
+          iodi_metadata_filename.empty() ? nullptr : &iodi_metadata);
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
+  }
+
+  if (!iodi_metadata_filename.empty()) {
+    Timer t("Compute IODI caller metadata");
+    iodi_metadata.mark_callers();
   }
 
   {
@@ -793,6 +817,7 @@ void redex_backend(const PassManager& manager,
         cfg.metafile(json_cfg.get("method_move_map", std::string()));
     write_debug_line_mapping(debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
+    iodi_metadata.write(iodi_metadata_filename, method_to_id);
     pos_mapper->write_map();
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
