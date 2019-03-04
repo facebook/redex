@@ -189,14 +189,8 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
 std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
     DexString* method_name, uint32_t line) const {
   std::vector<Frame> frames;
-  // FIXME: We are looking up the set of lines using the fully-qualified
-  // obfuscated method name, which includes method proto and return type. I'm
-  // skeptical that this is the right thing to do: This would mean that our
-  // obfuscated and deobfuscated methods must share the same signatures, which
-  // isn't true in general. I suspect we should just do the lookups by method
-  // name + line number, and trust that PG / R8 names things such that there are
-  // no collisions?
-  auto ranges_it = m_obfMethodLinesMap.find(method_name->str());
+  auto ranges_it =
+      m_obfMethodLinesMap.find(pg_impl::lines_key(method_name->str()));
   if (ranges_it != m_obfMethodLinesMap.end()) {
     for (const auto& range : ranges_it->second) {
       if (!range->matches(line)) {
@@ -221,7 +215,7 @@ std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
 
 ProguardLineRangeVector& ProguardMap::method_lines(
     const std::string& obfuscated_method) {
-  return m_obfMethodLinesMap.at(obfuscated_method);
+  return m_obfMethodLinesMap.at(pg_impl::lines_key(obfuscated_method));
 }
 
 void ProguardMap::parse_proguard_map(std::istream& fp) {
@@ -343,7 +337,7 @@ bool ProguardMap::parse_method(const std::string& line) {
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
   lines->original_name = pgold;
-  m_obfMethodLinesMap[pgnew].push_back(std::move(lines));
+  m_obfMethodLinesMap[pg_impl::lines_key(pgnew)].push_back(std::move(lines));
   return true;
 }
 
@@ -404,6 +398,15 @@ void apply_deobfuscated_positions(IRCode* code, const ProguardMap& pm) {
       insert_it = code->insert_before(insert_it, std::move(next_pos));
     }
   }
+}
+
+/**
+ * method_name should be a method as returned from convert_method
+ */
+std::string lines_key(const std::string& method_name) {
+  std::size_t end = method_name.rfind(':');
+  always_assert(end != std::string::npos);
+  return method_name.substr(0, end);
 }
 
 } // namespace pg_impl

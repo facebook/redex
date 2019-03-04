@@ -148,6 +148,8 @@ DexString* file_name_from_method_string(const DexString* method);
 
 void apply_deobfuscated_positions(IRCode*, const ProguardMap&);
 
+std::string lines_key(const std::string& method_name);
+
 } // namespace pg_impl
 
 /**

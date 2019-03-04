@@ -139,30 +139,30 @@ TEST(ProguardMapTest, LineNumbers) {
               AllOf(SizeIs(1),
                     UnorderedElementsAre(Pointee(ProguardLineRange(
                         3, 0, 0, 0, "Lcom/foo/bar;.stuff:()V")))));
-  EXPECT_THAT(
-      pm.method_lines("LA;.k:()Z"),
-      AllOf(SizeIs(7),
-            UnorderedElementsAre(
-                Pointee(ProguardLineRange(1, 1, 490, 490,
-                                          "Lcom/foo/bar;.isExpired:()Z")),
-                Pointee(ProguardLineRange(
-                    1, 1, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
-                Pointee(ProguardLineRange(2, 2, 490, 0,
-                                          "Lcom/foo/bar;.isExpired:()Z")),
-                Pointee(ProguardLineRange(
-                    2, 2, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
-                Pointee(ProguardLineRange(3, 3, 491, 491,
-                                          "Lcom/foo/bar;.isExpired:()Z")),
-                Pointee(ProguardLineRange(
-                    3, 3, 275, 0, "Lcom/foo/bar;.isRequirementsMet:()Z")),
-                Pointee(ProguardLineRange(
-                    4, 4, 275, 275, "Lcom/foo/bar;.isRequirementsMet:()Z")))));
-  EXPECT_THAT(
-      pm.method_lines("LA;.k:()J"),
-      AllOf(SizeIs(1),
-            UnorderedElementsAre(Pointee(ProguardLineRange(
-                2, 2, 66, 66,
-                "Lcom/whatsapp/core/Time;.currentServerTimeMillis:()J")))));
+  auto expected = AllOf(
+      SizeIs(8),
+      UnorderedElementsAre(
+          Pointee(
+              ProguardLineRange(1, 1, 490, 490, "Lcom/foo/bar;.isExpired:()Z")),
+          Pointee(ProguardLineRange(1, 1, 275, 0,
+                                    "Lcom/foo/bar;.isRequirementsMet:()Z")),
+          Pointee(
+              ProguardLineRange(2, 2, 490, 0, "Lcom/foo/bar;.isExpired:()Z")),
+          Pointee(ProguardLineRange(2, 2, 275, 0,
+                                    "Lcom/foo/bar;.isRequirementsMet:()Z")),
+          Pointee(
+              ProguardLineRange(3, 3, 491, 491, "Lcom/foo/bar;.isExpired:()Z")),
+          Pointee(ProguardLineRange(3, 3, 275, 0,
+                                    "Lcom/foo/bar;.isRequirementsMet:()Z")),
+          Pointee(ProguardLineRange(4, 4, 275, 275,
+                                    "Lcom/foo/bar;.isRequirementsMet:()Z")),
+          Pointee(ProguardLineRange(
+              2, 2, 66, 66,
+              "Lcom/whatsapp/core/Time;.currentServerTimeMillis:()J"))));
+
+  EXPECT_THAT(pm.method_lines("LA;.k:()Z"), expected);
+  EXPECT_THAT(pm.method_lines("LA;.k:()J"), expected);
+
   EXPECT_THAT(pm.method_lines("LA;.o:()V"),
               AllOf(SizeIs(7),
                     UnorderedElementsAre(
@@ -194,6 +194,13 @@ TEST(ProguardMapTest, LineNumbers) {
                 1, 10, 0, 0,
                 "Landroid/support/v4/app/Fragment;.stuff:(Lcom/"
                 "foo/bar;Lcom/foo/bar;)Lcom/foo/bar;")))));
+}
+
+TEST(ProguardMapTest, LinesKey) {
+  EXPECT_EQ("LA;.o", pg_impl::lines_key("LA;.o:()V"));
+  EXPECT_EQ(
+      "Landroid/support/v4/app/Fragment;.o",
+      pg_impl::lines_key("Landroid/support/v4/app/Fragment;.o:(LA;LA;)LA;"));
 }
 
 TEST(ProguardMapTest, FileNameFromMethodString) {
