@@ -81,6 +81,18 @@ struct ProguardMap {
    */
   std::string deobfuscate_method(const std::string& method) const;
 
+  struct Frame {
+    DexString* method;
+    uint32_t line;
+    Frame(DexString* s, uint32_t line) : method(s), line(line) {}
+  };
+
+  /**
+   * Translate obfuscated stack frame to un-obfuscated series of frames. The
+   * frames should be ordered with callees preceding their callers.
+   */
+  std::vector<Frame> deobfuscate_frame(DexString*, uint32_t line) const;
+
   /**
    * Obtain line range vector for a given obfuscated method name.
    */
@@ -128,6 +140,15 @@ struct ProguardMap {
 void apply_deobfuscated_names(
   const std::vector<DexClasses>&,
   const ProguardMap&);
+
+// Exposed for testing purposes.
+namespace pg_impl {
+
+DexString* file_name_from_method_string(const DexString* method);
+
+void apply_deobfuscated_positions(IRCode*, const ProguardMap&);
+
+} // namespace pg_impl
 
 /**
  * Convert a dot-style name to a dexdump-style name, e.g.:

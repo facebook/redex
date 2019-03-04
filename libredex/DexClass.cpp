@@ -295,10 +295,11 @@ int DexDebugItem::encode(
 }
 
 void DexDebugItem::bind_positions(DexMethod* method, DexString* file) {
+  auto* method_str = DexString::make_string(show(method));
   for (auto& entry : m_dbg_entries) {
     switch (entry.type) {
     case DexDebugEntryType::Position:
-      entry.pos->bind(method, file);
+      entry.pos->bind(method_str, file);
       break;
     case DexDebugEntryType::Instruction:
       break;

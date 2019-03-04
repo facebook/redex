@@ -18,15 +18,16 @@ class DexString;
 class DexDebugItem;
 
 struct DexPosition final {
-  DexMethod* method{nullptr};
+  DexString* method{nullptr};
   DexString* file{nullptr};
   uint32_t line;
   // when a function gets inlined for the first time, all its DexPositions will
   // have the DexPosition of the callsite as their parent.
-  DexPosition* parent;
+  DexPosition* parent{nullptr};
   DexPosition(uint32_t line);
+  DexPosition(DexString* method, DexString* file, uint32_t line);
 
-  void bind(DexMethod* method_, DexString* file_);
+  void bind(DexString* method_, DexString* file_);
   bool operator==(const DexPosition&) const;
 };
 

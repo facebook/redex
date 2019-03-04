@@ -8,6 +8,7 @@
 #include "ProguardMap.h"
 
 #include "DexUtil.h"
+#include "IRCode.h"
 #include "Timer.h"
 #include "WorkQueue.h"
 
@@ -185,6 +186,39 @@ std::string ProguardMap::deobfuscate_method(const std::string& method) const {
   return find_or_same(method, m_obfMethodMap);
 }
 
+std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
+    DexString* method_name, uint32_t line) const {
+  std::vector<Frame> frames;
+  // FIXME: We are looking up the set of lines using the fully-qualified
+  // obfuscated method name, which includes method proto and return type. I'm
+  // skeptical that this is the right thing to do: This would mean that our
+  // obfuscated and deobfuscated methods must share the same signatures, which
+  // isn't true in general. I suspect we should just do the lookups by method
+  // name + line number, and trust that PG / R8 names things such that there are
+  // no collisions?
+  auto ranges_it = m_obfMethodLinesMap.find(method_name->str());
+  if (ranges_it != m_obfMethodLinesMap.end()) {
+    for (const auto& range : ranges_it->second) {
+      if (!range->matches(line)) {
+        continue;
+      }
+      auto new_line = line;
+      if (range->remaps_to_single_line()) {
+        new_line = range->original_start;
+      } else if (range->remaps_to_range()) {
+        new_line = range->original_start + line - range->start;
+      }
+      frames.emplace_back(DexString::make_string(range->original_name),
+                          new_line);
+    }
+  }
+
+  if (frames.empty()) {
+    return {Frame(method_name, line)};
+  }
+  return frames;
+}
+
 ProguardLineRangeVector& ProguardMap::method_lines(
     const std::string& obfuscated_method) {
   return m_obfMethodLinesMap.at(obfuscated_method);
@@ -313,6 +347,67 @@ bool ProguardMap::parse_method(const std::string& line) {
   return true;
 }
 
+namespace pg_impl {
+
+/*
+ * Given a string "Lcom/foo/Bar;.a:()I", return "Bar.java". If we have a method
+ * called on an inner class like "Baz$Inner", use just the outer class for the
+ * source file name -- in this case we would return "Baz.java".
+ */
+DexString* file_name_from_method_string(const DexString* method) {
+  const auto& s = method->str();
+  auto end = s.rfind(";.");
+  auto innercls_pos = s.rfind("$", end);
+  if (innercls_pos != std::string::npos) {
+    end = innercls_pos;
+  }
+  auto start = s.rfind("/", end);
+  always_assert(start != std::string::npos && end != std::string::npos);
+  ++start; // Skip over the "/"
+  return DexString::make_string(s.substr(start, end - start) + ".java");
+}
+
+static void apply_deobfuscated_positions(DexMethod* method,
+                                         const ProguardMap& pm) {
+  auto* code = method->get_code();
+  if (code == nullptr) {
+    return;
+  }
+  apply_deobfuscated_positions(code, pm);
+}
+
+void apply_deobfuscated_positions(IRCode* code, const ProguardMap& pm) {
+  for (auto& mie : *code) {
+    if (mie.type != MFLOW_POSITION) {
+      continue;
+    }
+    auto* pos = mie.pos.get();
+    const auto& remapped_frames = pm.deobfuscate_frame(pos->method, pos->line);
+    auto it = remapped_frames.begin();
+    // Make sure we don't update pos->file if the method and line numbers are
+    // unchanged. file_name_from_method_string() is only a best guess at the
+    // real file name.
+    if (pos->method != it->method || pos->line != it->line) {
+      pos->method = it->method;
+      pos->file = file_name_from_method_string(it->method);
+      pos->line = it->line;
+    }
+    // There may be multiple remapped frames if the given instruction was
+    // inlined. Create a linked list of DexPositions corresponding to the call
+    // chain.
+    auto insert_it = code->iterator_to(mie);
+    for (auto prev = it++; it != remapped_frames.end(); prev = it++) {
+      auto next_pos = std::make_unique<DexPosition>(
+          it->method, file_name_from_method_string(it->method), it->line);
+      pos->parent = next_pos.get();
+      pos = next_pos.get();
+      insert_it = code->insert_before(insert_it, std::move(next_pos));
+    }
+  }
+}
+
+} // namespace pg_impl
+
 void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
                               const ProguardMap& pm) {
   std::function<void(DexClass*)> worker_empty_pg_map = [&](DexClass* cls) {
@@ -339,11 +434,13 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
       TRACE(PGR, 4, "deob dmeth %s %s\n", SHOW(m),
             pm.deobfuscate_method(show(m)).c_str());
       m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
+      pg_impl::apply_deobfuscated_positions(m, pm);
     }
     for (const auto& m : cls->get_vmethods()) {
       TRACE(PM, 4, "deob vmeth %s %s\n", SHOW(m),
             pm.deobfuscate_method(show(m)).c_str());
       m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
+      pg_impl::apply_deobfuscated_positions(m, pm);
     }
     for (const auto& f : cls->get_ifields()) {
       TRACE(PM, 4, "deob ifield %s %s\n", SHOW(f),

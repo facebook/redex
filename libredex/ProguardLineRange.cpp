@@ -20,3 +20,15 @@ bool ProguardLineRange::operator==(const ProguardLineRange& other) const {
          this->original_end == other.original_end &&
          this->original_name == other.original_name;
 }
+
+bool ProguardLineRange::remaps_to_range() const {
+  return original_start != 0 && original_end != 0;
+}
+
+bool ProguardLineRange::remaps_to_single_line() const {
+  return original_start != 0 && original_end == 0;
+}
+
+bool ProguardLineRange::matches(uint32_t line) const {
+  return (start == 0 && end == 0) || (start <= line && end >= line);
+}

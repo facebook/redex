@@ -28,6 +28,14 @@ struct ProguardLineRange final {
   virtual ~ProguardLineRange() = default;
 
   bool operator==(const ProguardLineRange& other) const;
+
+  // This is an entry of the form "123:321 void foo():523:821 -> a"
+  bool remaps_to_range() const;
+
+  // This is an entry of the form "123:321 void foo():5 -> a"
+  bool remaps_to_single_line() const;
+
+  bool matches(uint32_t line) const;
 };
 
 using ProguardLineRangeVector = std::vector<std::unique_ptr<ProguardLineRange>>;

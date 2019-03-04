@@ -279,16 +279,12 @@ std::unique_ptr<DexPosition> position_from_s_expr(
       s_patn(&file_str),
       s_patn(&line_str),
   }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
-  auto* dex_method =
-      static_cast<DexMethod*>(DexMethod::make_method(method_str));
-  // We should ideally allow DexPosition to take non-concrete methods too...
-  always_assert(dex_method->is_concrete());
   auto* file = DexString::make_string(file_str);
   uint32_t line;
   std::istringstream in(line_str);
   in >> line;
   auto pos = std::make_unique<DexPosition>(line);
-  pos->bind(dex_method, file);
+  pos->bind(DexString::make_string(method_str), file);
   if (!parent_expr.is_nil()) {
     std::string parent_str;
     s_patn({
