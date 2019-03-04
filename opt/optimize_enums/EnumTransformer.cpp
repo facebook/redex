@@ -47,6 +47,15 @@ using namespace dex_asm;
 using EnumAttrMap =
     std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
 
+/**
+ * We create a helper class `EnumUtils` in primary dex with all the boxed
+ * integer fields for representing enum values. The maximum number of the fields
+ * is equal to largest number of values of candidate enum classes. To limit the
+ * size of the class, exclude the enum classes that contain more than
+ * MAXIMUM_ENUM_SIZE values before the transformation.
+ */
+constexpr uint32_t MAXIMUM_ENUM_SIZE = 100;
+
 std::vector<EnumAttr> sort_enum_values(
     const std::unordered_map<const DexField*, EnumAttr>& enum_values) {
   std::map<uint32_t, const EnumAttr&> enums;
@@ -672,6 +681,9 @@ class EnumTransformer final {
         TRACE(ENUM, 1, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
               SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
+      } else if (enum_attrs.size() > MAXIMUM_ENUM_SIZE) {
+        TRACE(ENUM, 2, "\tSkip %s %lu values\n", SHOW(enum_cls),
+              enum_attrs.size());
       } else {
         m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
         m_enum_objs += enum_attrs.size();
@@ -680,8 +692,6 @@ class EnumTransformer final {
         opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       }
     }
-    // TODO: Limit the count of singleton fields, for enums with large amount of
-    // objects, boxed Integer in-place.
     m_enum_util->create_util_class(stores, m_int_objs);
   }
 
