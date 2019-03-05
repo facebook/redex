@@ -373,7 +373,9 @@ namespace copy_propagation_impl {
 
 Stats Stats::operator+(const Stats& other) {
   return Stats{moves_eliminated + other.moves_eliminated,
-               replaced_sources + other.replaced_sources};
+               replaced_sources + other.replaced_sources,
+               skipped_due_to_too_many_registers +
+                   other.skipped_due_to_too_many_registers};
 }
 
 Stats CopyPropagation::run(Scope scope) {
@@ -388,7 +390,7 @@ Stats CopyPropagation::run(Scope scope) {
 
         const std::string& before_code =
             m_config.debug ? show(m->get_code()) : "";
-        const auto& result = run(code);
+        const auto& result = run(code, m);
 
         if (m_config.debug) {
           // Run the IR type checker
@@ -406,6 +408,7 @@ Stats CopyPropagation::run(Scope scope) {
             always_assert(false);
           }
         }
+
         return result;
       },
       [](Output a, Output b) { return a + b; },
@@ -413,12 +416,13 @@ Stats CopyPropagation::run(Scope scope) {
       m_config.debug ? 1 : walk::parallel::default_num_threads());
 }
 
-Stats CopyPropagation::run(IRCode* code) {
+Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   // XXX HACK! Since this pass runs after RegAlloc, we need to avoid remapping
   // registers that belong to /range instructions. The easiest way to find out
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
+  uint16_t max_dest = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (opcode::has_range_form(insn->opcode())) {
@@ -428,11 +432,26 @@ Stats CopyPropagation::run(IRCode* code) {
       }
       insn->normalize_registers();
     }
+    if (insn->dests_size() && insn->dest() > max_dest) {
+      max_dest = insn->dest();
+    }
+  }
+
+  Stats stats;
+  // We compute an approximation of the number of needed registers above.
+  // We do that instead of using code->get_registers_size() below because
+  // that information may be stale and incorrect.
+  if (max_dest > m_config.max_estimated_registers) {
+    TRACE(RME,
+          2,
+          "[RME] Skipping {%s} - too many registers: %u.\n",
+          SHOW(method),
+          (unsigned)max_dest);
+    ++stats.skipped_due_to_too_many_registers;
+    return stats;
   }
 
   std::unordered_set<IRInstruction*> deletes;
-  Stats stats;
-
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
@@ -476,6 +495,8 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric("redundant_moves_eliminated", stats.moves_eliminated);
   mgr.incr_metric("source_regs_replaced_with_representative",
                   stats.replaced_sources);
+  mgr.incr_metric("methods_skipped_due_to_too_many_registers",
+                  stats.skipped_due_to_too_many_registers);
   TRACE(RME,
         1,
         "%d redundant moves eliminated\n",
@@ -484,6 +505,10 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
         1,
         "%d source registers replaced with representative\n",
         mgr.get_metric("source_regs_replaced_with_representative"));
+  TRACE(RME,
+        1,
+        "%d methods skipped due to too many registers\n",
+        mgr.get_metric("methods_skipped_due_to_too_many_registers"));
 }
 
 static CopyPropagationPass s_pass;

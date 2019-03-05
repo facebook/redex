@@ -42,6 +42,7 @@ class CopyPropagationPass : public Pass {
     jw.get("wide_registers", false, m_config.wide_registers);
     jw.get("static_finals", false, m_config.static_finals);
     jw.get("debug", false, m_config.debug);
+    jw.get("max_estimated_registers", 3000, m_config.max_estimated_registers);
   }
 
   struct Config {
@@ -55,6 +56,7 @@ class CopyPropagationPass : public Pass {
 
     // this is set by PassManager, not by JsonWrapper
     bool regalloc_has_run{false};
+    size_t max_estimated_registers{3000};
   } m_config;
 };
 
@@ -63,10 +65,13 @@ namespace copy_propagation_impl {
 struct Stats {
   size_t moves_eliminated{0};
   size_t replaced_sources{0};
+  size_t skipped_due_to_too_many_registers{0};
 
   Stats() = default;
-  Stats(size_t elim, size_t replaced)
-      : moves_eliminated(elim), replaced_sources(replaced) {}
+  Stats(size_t elim, size_t replaced, size_t skipped)
+      : moves_eliminated(elim),
+        replaced_sources(replaced),
+        skipped_due_to_too_many_registers(skipped) {}
 
   Stats operator+(const Stats& other);
 };
@@ -78,7 +83,7 @@ class CopyPropagation final {
 
   Stats run(Scope scope);
 
-  Stats run(IRCode*);
+  Stats run(IRCode*, DexMethod* = nullptr);
 
  private:
   const CopyPropagationPass::Config& m_config;
