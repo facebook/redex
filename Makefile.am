@@ -120,6 +120,7 @@ libredex_la_SOURCES = \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
 	libredex/InstructionLowering.cpp \
+	libredex/IODIMetadata.cpp \
 	libredex/IRAssembler.cpp \
 	libredex/IRCode.cpp \
 	libredex/IRInstruction.cpp \
