@@ -297,10 +297,15 @@ void change_visibility(DexMethod* method);
 void relocate_method(DexMethod* method, DexType* to_type);
 
 /**
- * Relocates the method only if it doesn't require any changes to the
- * referenced methods (none of the referenced methods would need to change
- * into a virtual / static method). It also updates the visibility of
- * the accessed members.
+ * Checks if a method can be relocated, i.e. if it doesn't require any changes
+ * to thereferenced methods (none of the referenced methods would need to change
+ * into a virtual / static method).
+ */
+bool no_changes_when_relocating_method(const DexMethod* method);
+
+/**
+ * Relocates the method only if relocate_method_if_no_changes returns true.
+ * It also updates the visibility of the accessed members.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
 

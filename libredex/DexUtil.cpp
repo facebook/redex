@@ -584,10 +584,9 @@ void change_visibility(DexMethod* method) {
   }
 }
 
-bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
-  // Check that visibility / accessibility changes to the current method
-  // won't need to change a referenced method into a virtual or static one.
-  // If it does, we simply bail out.
+// Check that visibility / accessibility changes to the current method
+// won't need to change a referenced method into a virtual or static one.
+bool no_changes_when_relocating_method(const DexMethod* method) {
   auto code = method->get_code();
   always_assert(code);
 
@@ -604,6 +603,14 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
         return false;
       }
     }
+  }
+
+  return true;
+}
+
+bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
+  if (!no_changes_when_relocating_method(method)) {
+    return false;
   }
 
   set_public(method);
