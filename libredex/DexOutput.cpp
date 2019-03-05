@@ -454,8 +454,6 @@ public:
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
   void emit_name_based_locators();
-  const std::unordered_set<std::string>& get_method_whitelisted_substrings(
-      const ConfigFiles& cfg);
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
 
@@ -1812,23 +1810,6 @@ void GatheredTypes::set_method_to_weight(
   m_method_to_weight = method_to_weight;
 }
 
-const std::unordered_set<std::string>&
-DexOutput::get_method_whitelisted_substrings(const ConfigFiles& cfg) {
-  if (m_method_sorting_whitelisted_substrings.empty()) {
-    const auto json_cfg = cfg.get_json_config();
-    Json::Value json_result;
-    json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
-                 json_result);
-    if (json_result != Json::nullValue) {
-      for (auto const& json_element : json_result) {
-        m_method_sorting_whitelisted_substrings.insert(json_element.asString());
-      }
-    }
-  }
-
-  return m_method_sorting_whitelisted_substrings;
-}
-
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
                         const ConfigFiles& cfg) {
@@ -1837,7 +1818,7 @@ void DexOutput::prepare(SortMode string_mode,
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
     m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
     m_gtypes->set_method_sorting_whitelisted_substrings(
-        get_method_whitelisted_substrings(cfg));
+        cfg.get_method_sorting_whitelisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);

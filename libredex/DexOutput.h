@@ -179,7 +179,6 @@ class GatheredTypes {
   void sort_dexmethod_emitlist_default_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_cls_order(std::vector<DexMethod*>& lmeth);
   void sort_dexmethod_emitlist_clinit_order(std::vector<DexMethod*>& lmeth);
-  const std::unordered_set<std::string>& get_method_whitelisted_substrings();
   void sort_dexmethod_emitlist_profiled_order(std::vector<DexMethod*>& lmeth);
   void set_method_sorting_whitelisted_substrings(
       const std::unordered_set<std::string>& whitelisted_substrings);

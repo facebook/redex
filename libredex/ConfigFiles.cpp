@@ -162,6 +162,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
   if (m_profiled_methods_filename != "") {
     load_method_to_weight();
   }
+  load_method_sorting_whitelisted_substrings();
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
@@ -284,4 +285,16 @@ void ConfigFiles::load_method_to_weight() {
   assert_log(count > 0, "Method profile file %s didn't contain valid entries\n",
              m_profiled_methods_filename.c_str());
   TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d\n", count);
+}
+
+void ConfigFiles::load_method_sorting_whitelisted_substrings() {
+  const auto json_cfg = get_json_config();
+  Json::Value json_result;
+  json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
+               json_result);
+  if (json_result != Json::nullValue) {
+    for (auto const& json_element : json_result) {
+      m_method_sorting_whitelisted_substrings.insert(json_element.asString());
+    }
+  }
 }
