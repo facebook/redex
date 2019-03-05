@@ -76,6 +76,14 @@ bool TypeErasureInterDexPlugin::should_skip_class(const DexClass* clazz) {
 }
 
 /*
+ * Not relocating methods of all the classes that we have generated.
+ */
+bool TypeErasureInterDexPlugin::should_not_relocate_methods_of_class(
+    const DexClass* clazz) {
+  return !!m_generated_types.count(clazz);
+}
+
+/*
  * NOTE: We want to "make room" for all the classes that might
  * potentially get merged here.
  *
@@ -84,11 +92,13 @@ bool TypeErasureInterDexPlugin::should_skip_class(const DexClass* clazz) {
  * will make sure that those classes actually get added.
  */
 void TypeErasureInterDexPlugin::gather_refs(
+    const interdex::DexInfo& dex_info,
     const DexClass* cls,
     std::vector<DexMethodRef*>& mrefs,
     std::vector<DexFieldRef*>& frefs,
     std::vector<DexType*>& trefs,
-    std::vector<DexClass*>* erased_classes) {
+    std::vector<DexClass*>* erased_classes,
+    bool should_not_relocate_methods_of_class) {
 
   std::vector<DexMethod*> methods = cls->get_dmethods();
   const std::vector<DexMethod*>& vmethods = cls->get_vmethods();

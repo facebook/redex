@@ -28,6 +28,7 @@
   TM(CLP_LITHO)          \
   TM(CONSTP)             \
   TM(CPG)                \
+  TM(CS)                 \
   TM(CUSTOMSORT)         \
   TM(DBGSTRIP)           \
   TM(DC)                 \

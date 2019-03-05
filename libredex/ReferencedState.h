@@ -65,6 +65,8 @@ class ReferencedState {
 
   bool m_no_optimizations{false};
 
+  bool m_generated{false};
+
   int32_t m_api_level{-1};
 
   // InterDex subgroup, if any.
@@ -266,6 +268,11 @@ class ReferencedState {
 
   bool no_optimizations() const { return m_no_optimizations; }
   void set_no_optimizations() { m_no_optimizations = true; }
+
+  // Methods and classes marked as "generated" tend to not have stable names,
+  // and don't properly participate in coldstart tracking.
+  bool is_generated() const { return m_generated; }
+  void set_generated() { m_generated = true; }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

@@ -574,6 +574,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                               !merger.has_mergeables());
     // TODO: replace this with an annotation.
     cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
+    cls->rstate.set_generated();
 
     add_class(cls, scope, stores);
     merger_classes.push_back(cls);

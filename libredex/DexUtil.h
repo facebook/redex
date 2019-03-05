@@ -298,10 +298,17 @@ void relocate_method(DexMethod* method, DexType* to_type);
 
 /**
  * Checks if a method can be relocated, i.e. if it doesn't require any changes
- * to thereferenced methods (none of the referenced methods would need to change
- * into a virtual / static method).
+ * to the referenced methods (none of the referenced methods would need to
+ * change into a virtual / static method).
  */
 bool no_changes_when_relocating_method(const DexMethod* method);
+
+/**
+ * Check that the method contains no invoke-super instruction; this is a
+ * requirement to relocate a method outside of its original inheritance
+ * hierarchy.
+ */
+bool no_invoke_super(const DexMethod* method);
 
 /**
  * Relocates the method only if relocate_method_if_no_changes returns true.

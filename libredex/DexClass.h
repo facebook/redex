@@ -1203,7 +1203,7 @@ struct dexmethods_comparator {
 
 inline unsigned int get_method_weight_if_available(
     DexMethodRef* mref,
-    std::unordered_map<std::string, unsigned int>* method_to_weight) {
+    const std::unordered_map<std::string, unsigned int>* method_to_weight) {
 
   if (mref->is_def()) {
     DexMethod* method = static_cast<DexMethod*>(mref);
@@ -1219,8 +1219,9 @@ inline unsigned int get_method_weight_if_available(
 }
 
 inline unsigned int get_method_weight_override(
-    DexMethodRef* m, std::unordered_set<std::string>* whitelisted_substrings) {
-  DexMethod* method = static_cast<DexMethod*>(m);
+    DexMethodRef* mref,
+    const std::unordered_set<std::string>* whitelisted_substrings) {
+  DexMethod* method = static_cast<DexMethod*>(mref);
   const std::string& deobfname = method->get_deobfuscated_name();
   for (const std::string& substr : *whitelisted_substrings) {
 

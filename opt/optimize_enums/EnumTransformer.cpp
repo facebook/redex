@@ -228,6 +228,7 @@ struct EnumUtil {
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
     cc.set_super(get_object_type());
     DexClass* cls = cc.create();
+    cls->rstate.set_generated();
 
     auto values_field = make_values_field(cls);
     auto clinit_method = make_clinit_method(cls, fields_count);

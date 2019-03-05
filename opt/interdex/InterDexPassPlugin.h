@@ -11,6 +11,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexStructure.h"
 #include "PluginRegistry.h"
 
 namespace interdex {
@@ -24,13 +25,21 @@ class InterDexPassPlugin {
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass* clazz) = 0;
 
+  // Whether the InterDex pass logic is allowed to move around methods
+  // of a particular class.
+  virtual bool should_not_relocate_methods_of_class(const DexClass* clazz) {
+    return false;
+  }
+
   // Calculate the amount of refs that any classes from additional_classes
   // will add to the output dex (see below).
-  virtual void gather_refs(const DexClass* cls,
+  virtual void gather_refs(const DexInfo& dex_info,
+                           const DexClass* cls,
                            std::vector<DexMethodRef*>& mrefs,
                            std::vector<DexFieldRef*>& frefs,
                            std::vector<DexType*>& trefs,
-                           std::vector<DexClass*>* erased_classes) = 0;
+                           std::vector<DexClass*>* erased_classes,
+                           bool should_not_relocate_methods_of_class) = 0;
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector& outdex,

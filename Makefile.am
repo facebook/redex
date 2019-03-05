@@ -26,6 +26,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/basic-block \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
+	-I$(top_srcdir)/opt/class-splitting \
 	-I$(top_srcdir)/opt/constant-propagation \
 	-I$(top_srcdir)/opt/dedup_blocks \
 	-I$(top_srcdir)/opt/delinit \
@@ -211,6 +212,7 @@ redex_all_SOURCES = \
 	opt/basic-block/BasicBlockProfile.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
+	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/ConstantPropagationTransform.cpp \
