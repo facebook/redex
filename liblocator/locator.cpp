@@ -85,7 +85,7 @@ void Locator::encodeGlobalClassIndex(
   *pos++ = ';';
   *pos++ = '\0';
 
-  assert(pos - buf <= encoded_global_class_index_max);
+  assert(static_cast<uint32_t>(pos - buf) <= encoded_global_class_index_max);
 }
 
 }
