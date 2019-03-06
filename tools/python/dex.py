@@ -700,16 +700,17 @@ class debug_info_item(AutoParser):
 
     def get_line_table(self):
         if self.line_table is None:
+            line_table = []
             ops = self.get_ops()
             row = debug_info_item.row()
             for op_args in ops:
-                op = op_args[0]
+                op = op_args.op
                 if op == DBG_END_SEQUENCE:
                     break
                 if op == DBG_ADVANCE_PC:
-                    row.address += op.addr_offset
+                    row.address += op_args.addr_offset
                 elif op == DBG_ADVANCE_LINE:
-                    row.line += op.line_offset
+                    row.line += op_args.line_offset
                 elif op == DBG_START_LOCAL:
                     pass
                 elif op == DBG_START_LOCAL_EXTENDED:
@@ -723,13 +724,14 @@ class debug_info_item(AutoParser):
                 elif op == DBG_SET_EPILOGUE_BEGIN:
                     row.epilogue_begin = True
                 elif op == DBG_SET_FILE:
-                    row.source_file = op.name_idx
+                    row.source_file = op_args.name_idx
                 else:
-                    row.line += op.line_offset
-                    row.address += op.addr_offset
-                    self.line_table.append(copy.copy(row))
+                    row.line += op_args.line_offset
+                    row.address += op_args.addr_offset
+                    line_table.append(copy.copy(row))
                     row.prologue_end = False
                     row.epilogue_begin = False
+            self.line_table = line_table
         return self.line_table
 
     def get_ops(self, reset_offset=True):
