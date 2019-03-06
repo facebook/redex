@@ -144,6 +144,10 @@ struct ConfigFiles {
 
   const std::string& get_printseeds() const { return m_printseeds; }
 
+  uint32_t get_instruction_size_bitwidth_limit() const {
+    return m_instruction_size_bitwidth_limit;
+  }
+
   const JsonWrapper& get_json_config() const { return m_json; }
 
  private:
@@ -169,6 +173,10 @@ struct ConfigFiles {
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
+
+  // limits the output instruction size of any DexMethod to 2^n
+  // 0 when limit is not present
+  uint32_t m_instruction_size_bitwidth_limit;
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;

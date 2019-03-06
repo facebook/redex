@@ -163,6 +163,13 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     load_method_to_weight();
   }
   load_method_sorting_whitelisted_substrings();
+  uint32_t instruction_size_bitwidth_limit =
+      config.get("instruction_size_bitwidth_limit", 0).asUInt();
+  always_assert_log(
+      instruction_size_bitwidth_limit < 32,
+      "instruction_size_bitwidth_limit must be between 0 and 31, actual: %u\n",
+      instruction_size_bitwidth_limit);
+  m_instruction_size_bitwidth_limit = instruction_size_bitwidth_limit;
 }
 
 ConfigFiles::ConfigFiles(const Json::Value& config) : ConfigFiles(config, "") {}
