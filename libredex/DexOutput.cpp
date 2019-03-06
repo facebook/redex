@@ -849,6 +849,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
+    check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output + m_offset));
@@ -856,6 +857,24 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_stats.num_instructions += code->get_instructions().size();
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
+}
+
+void DexOutput::check_method_instruction_size_limit(const ConfigFiles& cfg,
+                                                    int size,
+                                                    const char* method_name) {
+  always_assert_log(size >= 0, "Size of method cannot be negative: %d\n", size);
+
+  uint32_t instruction_size_bitwidth_limit =
+      cfg.get_instruction_size_bitwidth_limit();
+
+  if (instruction_size_bitwidth_limit) {
+    uint64_t hard_instruction_size_limit = 1L
+                                           << instruction_size_bitwidth_limit;
+    always_assert_log(
+        ((uint64_t)size) <= hard_instruction_size_limit,
+        "Size of method exceeded limit. size: %d, limit: %d, method: %s\n",
+        size, hard_instruction_size_limit, method_name);
+  }
 }
 
 void DexOutput::generate_static_values() {

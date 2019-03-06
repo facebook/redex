@@ -313,4 +313,7 @@ class DexOutput {
                const std::vector<SortMode>& code_mode,
                const ConfigFiles& cfg);
   void write();
+  static void check_method_instruction_size_limit(const ConfigFiles& cfg,
+                                                  int size,
+                                                  const char* method_name);
 };
