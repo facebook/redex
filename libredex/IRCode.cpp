@@ -247,17 +247,23 @@ static void associate_debug_entries(IRList* ir,
                                     DexDebugItem& dbg,
                                     const EntryAddrBiMap& bm) {
   for (auto& entry : dbg.get_entries()) {
-    auto insert_point = bm.by<Addr>().at(entry.addr);
+    auto insert_point_it = bm.by<Addr>().find(entry.addr);
+    if (insert_point_it == bm.by<Addr>().end()) {
+      // This should not happen if our input is an "ordinary" dx/d8-generated
+      // dex file, but things like IODI can generate debug entries that don't
+      // correspond to code addresses.
+      continue;
+    }
     MethodItemEntry* mentry;
     switch (entry.type) {
-      case DexDebugEntryType::Instruction:
-        mentry = new MethodItemEntry(std::move(entry.insn));
-        break;
-      case DexDebugEntryType::Position:
-        mentry = new MethodItemEntry(std::move(entry.pos));
-        break;
+    case DexDebugEntryType::Instruction:
+      mentry = new MethodItemEntry(std::move(entry.insn));
+      break;
+    case DexDebugEntryType::Position:
+      mentry = new MethodItemEntry(std::move(entry.pos));
+      break;
     }
-    ir->insert_before(ir->iterator_to(*insert_point), *mentry);
+    ir->insert_before(ir->iterator_to(*insert_point_it->second), *mentry);
   }
   dbg.get_entries().clear();
 }
