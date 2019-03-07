@@ -185,6 +185,10 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
       std::vector<std::string> gen_names;
       gen_spec.get("other_roots", {}, gen_names);
       load_types(gen_names, model.gen_types);
+
+      std::vector<std::string> gen_anno_names;
+      gen_spec.get("annos", {}, gen_anno_names);
+      load_types(gen_anno_names, model.gen_annos);
     }
     model_spec.get("include_primary_dex", false, model.include_primary_dex);
     model_spec.get("dex_sharding", false, model.dex_sharding);
