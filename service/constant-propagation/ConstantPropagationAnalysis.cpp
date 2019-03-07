@@ -6,6 +6,7 @@
  */
 
 #include "ConstantPropagationAnalysis.h"
+#include <set>
 
 // Note: MSVC STL doesn't implement std::isnan(Integral arg). We need to provide
 // an override of fpclassify for integral types.
@@ -51,7 +52,17 @@ bool addition_out_of_bounds(int64_t a, int64_t b) {
   int32_t max = std::numeric_limits<int32_t>::max();
   int32_t min = std::numeric_limits<int32_t>::min();
   if ((b > 0 && a > max - b) || (b < 0 && a < min - b)) {
-    TRACE(CONSTP, 5, "%d, %d is out of bounds", a, b);
+    TRACE(CONSTP, 5, "%d + %d is out of bounds", a, b);
+    return true;
+  }
+  return false;
+}
+
+bool subtraction_out_of_bounds(int64_t a, int64_t b) {
+  int32_t max = std::numeric_limits<int32_t>::max();
+  int32_t min = std::numeric_limits<int32_t>::min();
+  if ((b > 0 && a < min + b) || (b < 0 && a > max + b)) {
+    TRACE(CONSTP, 5, "%d - %d is out of bounds", a, b);
     return true;
   }
   return false;
@@ -257,18 +268,42 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
                                           ConstantEnvironment* env) {
   auto op = insn->opcode();
-  if (op == OPCODE_ADD_INT_LIT8 || op == OPCODE_ADD_INT_LIT16) {
-    // add-int/lit8 is the most common arithmetic instruction: about .29% of
-    // all instructions. All other arithmetic instructions are less than .05%
+  const static std::set<IROpcode> accepted_opcodes = {
+      OPCODE_ADD_INT_LIT16, OPCODE_ADD_INT_LIT8, // addition
+      OPCODE_RSUB_INT, OPCODE_RSUB_INT_LIT8, // reverse subtraction
+      // TODO: add more instructions
+  };
+  if (accepted_opcodes.find(op) != accepted_opcodes.end()) {
     int32_t lit = insn->get_literal();
     TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
           lit);
 
     auto result = SignedConstantDomain::top();
     auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
-    if (cst && !addition_out_of_bounds(lit, *cst)) {
-      result = SignedConstantDomain(*cst + lit);
+
+    if (cst) {
+      switch (op) {
+      case OPCODE_ADD_INT_LIT16:
+      case OPCODE_ADD_INT_LIT8:
+        // add-int/lit8 is the most common arithmetic instruction: about .29% of
+        // all instructions. All other arithmetic instructions are less than
+        // .05%
+        if (!addition_out_of_bounds(*cst, lit)) {
+          result = SignedConstantDomain(*cst + lit);
+        }
+        break;
+      // TODO: add more
+      case OPCODE_RSUB_INT:
+      case OPCODE_RSUB_INT_LIT8:
+        if (!subtraction_out_of_bounds(lit, *cst)) {
+          result = SignedConstantDomain(lit - *cst);
+        }
+        break;
+      default:
+        break;
+      }
     }
+
     env->set(insn->dest(), result);
     return true;
   }

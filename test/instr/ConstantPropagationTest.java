@@ -156,4 +156,17 @@ public class ConstantPropagationTest {
     x++;
     assertThat(x).isEqualTo(Integer.MIN_VALUE);
   }
+
+  @Test
+  public void lit_minus() {
+    int x = one();
+    int y = 5 - x;
+    int z;
+    if (y == 4) {
+      z = 42;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(42);
+  }
 }
