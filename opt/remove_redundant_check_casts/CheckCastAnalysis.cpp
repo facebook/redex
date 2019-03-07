@@ -46,8 +46,7 @@ void CheckCastAnalysis::analyze_instruction(IRInstruction* insn,
   }
 
   case OPCODE_NEW_INSTANCE:
-  case OPCODE_CHECK_CAST:
-  case OPCODE_INSTANCE_OF: {
+  case OPCODE_CHECK_CAST: {
     DexType* type = insn->get_type();
     current_state->set(RESULT_REGISTER, Domain(type));
     break;
