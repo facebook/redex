@@ -113,7 +113,9 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   }
   */
   case OPCODE_ADD_INT_LIT16:
-  case OPCODE_ADD_INT_LIT8: {
+  case OPCODE_ADD_INT_LIT8:
+  case OPCODE_RSUB_INT:
+  case OPCODE_RSUB_INT_LIT8: {
     replace_with_const(env, it);
     break;
   }
