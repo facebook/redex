@@ -1160,7 +1160,7 @@ uint32_t emit_instruction_offset_debug_info(
     if (!iodi_metadata.can_safely_use_iodi(it.method)) {
       continue;
     }
-    uint32_t real_param_size = dbg_item->get_param_names().size();
+    uint32_t real_param_size = it.method->get_proto()->get_args()->size();
     uint32_t param_size = per_arity ? real_param_size : 0;
     auto& max_size = param_to_size[param_size];
     auto size = dc->size();
@@ -1218,7 +1218,7 @@ uint32_t emit_instruction_offset_debug_info(
                               offset, code_debug_map);
     if (use_iodi) {
       uint32_t param_size =
-          per_arity ? dbg->get_param_names().size() : max_param;
+          per_arity ? it.method->get_proto()->get_args()->size() : max_param;
       auto offset_it = param_to_offset.find(param_size);
       always_assert_log(offset_it != offset_end,
                         "Expected to find param to offset");
