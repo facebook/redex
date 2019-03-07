@@ -40,6 +40,8 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
   for (auto merger : mergers) {
     for (const auto type : merger->mergeables) {
       auto type_tag = type_tag_utils::parse_model_type_tag(type_class(type));
+      always_assert_log(
+          type_tag != boost::none, "Type tag is missing from %s\n", SHOW(type));
       type_tags.set_type_tag(type, *type_tag);
     }
   }
