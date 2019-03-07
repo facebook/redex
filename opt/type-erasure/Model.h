@@ -93,6 +93,8 @@ struct ModelSpec {
   size_t min_count{1};
   // set of generated types
   std::unordered_set<DexType*> gen_types;
+  // set of annotations marking generated code
+  std::unordered_set<DexType*> gen_annos;
   // whether to perform type erasure per dex. If set to true, this would be
   // handled at InterDex level, thorough TypeErasureInterDexPlugin.
   bool dex_sharding{false};
