@@ -32,7 +32,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
-	-I$(top_srcdir)/opt/hotness-score \
 	-I$(top_srcdir)/opt/inlineinit \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
@@ -224,7 +223,6 @@ redex_all_SOURCES = \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
-	opt/hotness-score/HotnessScore.cpp \
 	opt/inlineinit/InlineInit.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/interdex/CrossDexRefMinimizer.cpp \
