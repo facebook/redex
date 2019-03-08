@@ -161,6 +161,8 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model_spec.get("enabled", true, model.enabled);
     model_spec.get("needs_type_tag", true, model.needs_type_tag);
     model_spec.get("has_type_tag", false, model.has_type_tag);
+    model_spec.get("pass_additional_type_tag_to_ctor", true,
+                   model.pass_additional_type_tag_to_ctor);
     size_t min_count;
     model_spec.get("min_count", 1, min_count);
     model.min_count = min_count > 0 ? min_count : 0;

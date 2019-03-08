@@ -462,6 +462,11 @@ void ModelMethodMerger::merge_ctors() {
     ctor_set.insert(ctors.begin(), ctors.end());
   }
 
+  bool pass_type_tag_param =
+      (m_model_spec.has_type_tag &&
+       m_model_spec.pass_additional_type_tag_to_ctor) ||
+      (!m_model_spec.has_type_tag && m_model_spec.needs_type_tag);
+  TRACE(TERA, 5, "pass type tag param %d\n", pass_type_tag_param);
   //////////////////////////////////////////
   // Create dispatch and fixes
   //////////////////////////////////////////
@@ -496,16 +501,14 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Create dispatch.
-      bool pass_type_tag_param =
-          !m_model_spec.has_type_tag && m_model_spec.needs_type_tag;
       auto dispatch_arg_list = type_reference::append_and_make(
           ctor_proto->get_args(), get_int_type());
       auto dispatch_proto =
-          m_model_spec.needs_type_tag
+          pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
       dispatch::Spec spec{target_type,
-                          pass_type_tag_param
+                          (pass_type_tag_param && !m_model_spec.has_type_tag)
                               ? dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM
                               : dispatch::Type::CTOR,
                           "<init>",
@@ -571,7 +574,7 @@ void ModelMethodMerger::merge_ctors() {
   //////////////////////////////////////////
   auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
   update_call_refs(
-      call_sites, type_tags, old_to_new_callee, m_model_spec.needs_type_tag);
+      call_sites, type_tags, old_to_new_callee, pass_type_tag_param);
 }
 
 void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
