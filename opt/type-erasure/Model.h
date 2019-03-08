@@ -88,6 +88,8 @@ struct ModelSpec {
   bool needs_type_tag{true};
   // has a predefined and usable type tag
   bool has_type_tag{false};
+  // pass an additional type tag param to ctor
+  bool pass_additional_type_tag_to_ctor{true};
   // minimum nuber of mergeables to make it into a MergerType
   // (no optimization otherwise)
   size_t min_count{1};
@@ -200,6 +202,8 @@ class Model {
   bool is_merge_per_interdex_set_enabled() const {
     return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
   }
+
+  const ModelSpec get_model_spec() const { return m_spec; }
 
   bool needs_type_tag() const { return m_spec.needs_type_tag; }
   bool has_type_tag() const { return m_spec.has_type_tag; }
