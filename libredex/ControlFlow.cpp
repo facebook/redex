@@ -2171,6 +2171,15 @@ void ControlFlowGraph::remove_block(Block* block) {
   }
   delete_pred_edges(block);
   delete_succ_edges(block);
+
+  std::unordered_set<DexPosition*> deleted_positions;
+  for (const auto& mie : *block) {
+    if (mie.type == MFLOW_POSITION) {
+      deleted_positions.insert(mie.pos.get());
+    }
+  }
+  remove_dangling_parents(deleted_positions);
+
   auto id = block->id();
   auto num_removed = m_blocks.erase(id);
   always_assert_log(num_removed == 1,
