@@ -594,7 +594,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       current_state->set_abstract_obj(
           RESULT_REGISTER,
           AbstractObjectDomain(
-              AbstractObject(element_kind, callee->get_class(), element_name)));
+              AbstractObject(element_kind, receiver.dex_type, element_name)));
       return;
     }
     case FIELD:

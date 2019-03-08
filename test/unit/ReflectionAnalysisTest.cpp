@@ -175,7 +175,7 @@ IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS{LFoo;}(REFLECTION)}\n\
 NEW_ARRAY v3, [Ljava/lang/Class; {1, CLASS{LFoo;}(REFLECTION)}\n\
 IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v3 {1, CLASS{LFoo;}(REFLECTION)}\n\
 INVOKE_VIRTUAL v1, v2, v3, Ljava/lang/Class;.getMethod:(Ljava/lang/String;[Ljava/lang/Class;)Ljava/lang/reflect/Method; {1, CLASS{LFoo;}(REFLECTION)}\n\
-MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, METHOD{Ljava/lang/Class;:bar}}\n");
+MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, METHOD{LFoo;:bar}}\n");
 }
 
 TEST_F(ReflectionAnalysisTest, getField) {
@@ -198,5 +198,5 @@ TEST_F(ReflectionAnalysisTest, getField) {
 CONST_STRING \"bar\" {1, CLASS{LFoo;}(REFLECTION);4294967294, CLASS{LFoo;}(REFLECTION)}\n\
 IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS{LFoo;}(REFLECTION)}\n\
 INVOKE_VIRTUAL v1, v2, Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field; {1, CLASS{LFoo;}(REFLECTION)}\n\
-MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, FIELD{Ljava/lang/Class;:bar}}\n");
+MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, FIELD{LFoo;:bar}}\n");
 }
