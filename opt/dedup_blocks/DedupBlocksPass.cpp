@@ -56,9 +56,9 @@
  * it will have a lower block id).
  *
  * We could delete the line number information inside the canonical block, but
- * arguably, having stack traces that point to similar looking code (in a different
- * location) is better than having stack traces point to the nearest line of
- * source code before or after the merged block.
+ * arguably, having stack traces that point to similar looking code (in a
+ * different location) is better than having stack traces point to the nearest
+ * line of source code before or after the merged block.
  *
  * Deleting the line info would also make things complicated if `cleanup()` is
  * inlined into `getBar()`. We would be unable to reconstruct the inlined stack
@@ -229,7 +229,8 @@ class DedupBlocksImpl {
       std::unordered_map<cfg::Block*, BlockSet, BlockHasher, BlocksInSameGroup>;
   struct PostfixSplitGroup {
     BlockSet postfix_blocks;
-    std::map<cfg::Block*, IRList::reverse_iterator> postfix_block_its;
+    std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
+        postfix_block_its;
     size_t insn_count;
   };
 
@@ -420,12 +421,14 @@ class DedupBlocksImpl {
 
       // Keep track of best we've seen so far.
       BlockSet best_blocks;
-      std::map<cfg::Block*, IRList::reverse_iterator> best_block_its;
+      std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
+          best_block_its;
       size_t best_insn_count = 0;
       size_t best_saved_insn = 0;
 
       // Get (reverse) iterators for all blocks.
-      std::map<cfg::Block*, IRList::reverse_iterator> block_iterator_map;
+      std::map<cfg::Block*, IRList::reverse_iterator, BlockCompare>
+          block_iterator_map;
       for (auto block : succ_blocks) {
         block_iterator_map[block] = block->rbegin();
       }
@@ -558,8 +561,6 @@ class DedupBlocksImpl {
             "split_postfix: splitting blocks.size() = %d, instruction at %d\n",
             group.postfix_blocks.size(), group.insn_count);
 
-      BlockSet split_blocks;
-
       // Split the blocks at the reverse iterator where we determine to be
       // the best location.
       for (const auto& block_it_pair : group.postfix_block_its) {
@@ -603,7 +604,6 @@ class DedupBlocksImpl {
         // Split the block
         auto split_block =
             cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
-        split_blocks.insert(split_block);
         TRACE(DEDUP_BLOCKS, 4,
               "split_postfix: split block : old = %d, new = %d\n", block->id(),
               split_block->id());
