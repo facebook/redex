@@ -104,6 +104,7 @@ class IODIMetadata {
   EntryMap m_entries;
   // This exists for can_safely_use_iodi
   MethodToPrettyMap m_pretty_map;
+  std::unordered_set<const DexMethod*> m_huge_methods;
   Scope m_scope;
 
   // Internal helper:
@@ -122,6 +123,10 @@ class IODIMetadata {
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.
   void mark_methods(DexStoresVector& scope);
+
+  // This is called while lowering to dex to note that a method has been
+  // determined to be too big for a given dex.
+  void mark_method_huge(const DexMethod* method, uint32_t size);
 
   // Returns whether we can symbolicate using IODI for the given method.
   bool can_safely_use_iodi(const DexMethod* method) const;

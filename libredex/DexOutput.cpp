@@ -1087,6 +1087,44 @@ void DexOutput::generate_annotations() {
 }
 
 namespace {
+struct DebugMetadata {
+  DexDebugItem* dbg;
+  dex_code_item* dci;
+  uint32_t line_start;
+  std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+};
+
+DebugMetadata calculate_debug_metadata(
+    DexDebugItem* dbg,
+    DexCode* dc,
+    dex_code_item* dci,
+    PositionMapper* pos_mapper,
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
+  std::vector<DebugLineItem> debug_line_info;
+  DebugMetadata metadata;
+  metadata.dbg = dbg;
+  metadata.dci = dci;
+  metadata.dbgops = generate_debug_instructions(
+      dbg, pos_mapper, &metadata.line_start, &debug_line_info);
+  if (dbg_lines != nullptr) {
+    (*dbg_lines)[dc] = debug_line_info;
+  }
+  return metadata;
+}
+
+int emit_debug_info_for_metadata(DexOutputIdx* dodx,
+                                 const DebugMetadata& metadata,
+                                 uint8_t* output,
+                                 uint32_t offset,
+                                 bool set_dci_offset = true) {
+  int size = metadata.dbg->encode(dodx, output + offset, metadata.line_start,
+                                  metadata.dbgops);
+  if (set_dci_offset) {
+    metadata.dci->debug_info_off = offset;
+  }
+  return size;
+}
+
 int emit_debug_info(
     DexOutputIdx* dodx,
     bool emit_positions,
@@ -1098,19 +1136,11 @@ int emit_debug_info(
     uint32_t offset,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
   // No align requirement for debug items.
-  std::vector<DebugLineItem> debug_line_info;
-  uint32_t line_start{0};
-  auto dbgops = generate_debug_instructions(dbg, pos_mapper, &line_start,
-                                            &debug_line_info);
-  int size = 0;
-  if (emit_positions) {
-    size = dbg->encode(dodx, output + offset, line_start, dbgops);
-    dci->debug_info_off = offset;
-  }
-  if (dbg_lines != nullptr) {
-    (*dbg_lines)[dc] = debug_line_info;
-  }
-  return size;
+  DebugMetadata metadata =
+      calculate_debug_metadata(dbg, dc, dci, pos_mapper, dbg_lines);
+  return emit_positions
+             ? emit_debug_info_for_metadata(dodx, metadata, output, offset)
+             : 0;
 }
 
 // Returns a DexDebugInstruction corresponding to emitting a line entry
@@ -1135,55 +1165,189 @@ uint32_t emit_instruction_offset_debug_info(
     bool per_arity,
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit>& code_items,
-    const IODIMetadata& iodi_metadata,
+    IODIMetadata& iodi_metadata,
     uint8_t* output,
     uint32_t offset,
     int* dbgcount,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_map) {
   // Algo is as follows:
-  // 1) Calculate max method size for each method of N params
-  // 2) Emit one debug program that will emit a position for each pc up to
-  //    size calculated in (1) for each method of N params
-  // 3) Tie all code items back to debug program emitted in (2)
+  // 1) Collect method sizes for each method of N params
+  // 2) For each arity:
+  //   2.1) Determine the biggest methods that we will support (see below)
+  //   2.2) Emit one debug program that will emit a position for each pc up to
+  //        the size calculated in 2.1
+  // 3) Tie all code items back to debug program emitted in (2) and emit
+  //    any normal debug info for any methods that can't use IODI (either due
+  //    to being too big or being unsupported)
   //
   // If per_arity is false then all the "of N params" are replaced with a
   // calculated max param size.
-  std::unordered_map<uint32_t, uint32_t> param_to_size;
-  // (1)
+  struct MethodKey {
+    const DexMethod* method;
+    uint32_t size;
+  };
+  struct Compare {
+    bool operator()(const MethodKey& left, const MethodKey& right) {
+      return left.size > right.size &&
+             (uintptr_t)left.method > (uintptr_t)right.method;
+    }
+  };
+  using DebugSize = uint32_t;
+  using DebugMethodMap = std::map<MethodKey, DebugSize, Compare>;
+  // 1)
   uint32_t max_param = 0;
+  std::map<uint32_t, DebugMethodMap> param_to_sizes;
+  std::unordered_map<const DexMethod*, DebugMetadata> method_to_debug_meta;
+  // We need this to calculate the size of normal debug programs for each
+  // method. Hopefully no debug program is > 128k. Its ok to increase this
+  // in the future.
+  constexpr int tmpSize = 128 * 1024;
+  uint8_t* tmp = (uint8_t*)malloc(tmpSize);
   for (auto& it : code_items) {
     DexCode* dc = it.code;
     const auto dbg_item = dc->get_debug_item();
     if (!dbg_item) {
       continue;
     }
-    if (!iodi_metadata.can_safely_use_iodi(it.method)) {
+    dex_code_item* dci = it.code_item;
+    DexMethod* method = it.method;
+    // We still want to fill in pos_mapper and code_debug_map, so run the
+    // usual code to emit debug info. We cache this and use it later if
+    // it turns out we want to emit normal debug info for a given method.
+    DebugMetadata metadata = calculate_debug_metadata(
+        dbg_item, dc, it.code_item, pos_mapper, code_debug_map);
+    int debug_size =
+        emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
+    always_assert_log(debug_size < tmpSize, "Tmp buffer overrun");
+    method_to_debug_meta.emplace(method, std::move(metadata));
+    if (!iodi_metadata.can_safely_use_iodi(method)) {
       continue;
     }
-    uint32_t real_param_size = it.method->get_proto()->get_args()->size();
+    uint32_t real_param_size = method->get_proto()->get_args()->size();
     uint32_t param_size = per_arity ? real_param_size : 0;
-    auto& max_size = param_to_size[param_size];
-    auto size = dc->size();
-    if (size > max_size) {
-      max_size = size;
-    }
+    param_to_sizes[param_size][{method, dc->size()}] = debug_size;
     if (real_param_size > max_param) {
       max_param = real_param_size;
     }
   }
-  // (2)
+  free((void*)tmp);
+  // 2)
   std::unordered_map<uint32_t, uint32_t> param_to_offset;
   uint32_t initial_offset = offset;
-  for (auto& pts : param_to_size) {
+  for (auto& pts : param_to_sizes) {
     auto param_size = per_arity ? pts.first : max_param;
-    auto insns_size = pts.second;
-    TRACE(OPUT, 2,
-          "[emit_instruction_offset_debug_info][param_to_size] %u : %u\n",
-          param_size, insns_size);
+    // 2.1) In order to understand the following algorithm we need to understand
+    // how IODI gets its win:
+    //
+    // The win is calculated as the total usual debug info size minus the size
+    // of debug info when IODI is enabled. This means, when allowing the methods
+    // that IODI is enabled for be an input:
+    //
+    // win(IODI_methods) = normal_debug_size(all methods)
+    //        - (IODI_debug_size(IODI_methods)
+    //            + normal_debug_size(all_methods - IODI_methods))
+    // where
+    //  normal_debug_size(M) = the size of usual debug programs for all m in M
+    //  IODI_debug_size(M) =
+    //                      -----
+    //                      \
+    //                       \     max(len(m) + padding | m in M, arity(m) = i)
+    //                       /
+    //                      /
+    //                      -----
+    //                  i in arities(M)
+    //   or, in plain english, add together the size of a debug program for
+    //   each arity i. Fixing an arity i, the size is calulcated as the max
+    //   length of a method with arity i with some constant padding added
+    //   (the header of the dbg program)
+    //
+    // Simplifying the above a bit we get that:
+    //
+    // win(IM) =
+    //          -----
+    //          \
+    //           \     normal_debug_size({ m in IM | arity(m) = i})
+    //           /       - max(len(m) + padding | m in IM, arity(m) = i)
+    //          /
+    //          -----
+    //      i in arities(IM)
+    //
+    // In order to maximize win we need to determine the best set of methods
+    // that should use IODI (i.e. this is a maximization problem of win over
+    // IM above). Since the summand above only depends on methods with arity i,
+    // we can focus on maximizing the summand alone after fixing i. Thus we need
+    // to maximize:
+    //
+    // win(IM) = normal_debug_size({ m in IM | arity(m) = i})
+    //            - max(len(m) + padding | m in IM, arity(m) = i)
+    //
+    // It's clear that removing any method m s.t. len(m) < max(len(m) ...)
+    // will make the overall win smaller, so our only chance is to remove the
+    // biggest method. After removing the biggest method, or m_1, we get
+    // a win delta of:
+    //
+    // win_delta_1 = len(m_1) - len(m_2) - normal_debug_size(m_1)
+    // where m_2 is the next biggest method.
+    //
+    // We can continue to calulcate more win_deltas if we were to remove the
+    // subsequent biggest methods:
+    //
+    // win_delta_i = len(m_1) - len(m_{i+1})
+    //                        - sum(j = 1, j < i, normal_debug_size(m_j))
+    // or in other words, the delta of the iodi programs minus the cost of
+    // incorporating all the normal debug programs up to i.
+    //
+    // Since there is no regularity condition on normal_debug_size(m) the
+    // max of win_delta_i may occur for any i (indeed there may be an esoteric
+    // case where all the debug programs are tiny but all the methods are
+    // pretty large and thus its best to not use any IODI programs)
+
+    auto& sizes = pts.second;
+    always_assert(sizes.size() > 0);
+
+    auto iter = sizes.begin();
+    // This is len(m_1) from above
+    uint64_t base_iodi_size = iter->first.size;
+    // This is that final sum in win_delta_i. It starts with just the debug
+    // cost of m_1.
+    uint64_t total_normal_dbg_cost = iter->second;
+    // This keeps track of the best win delta. By default the delta is 0 (we
+    // can always make everything use iodi)
+    int64_t max_win_delta = 0;
+    // By default the best iter is the first one.
+    auto best_iter = iter;
+
+    auto end = sizes.end();
+    for (iter = std::next(iter); iter != end; iter++) {
+      uint64_t iodi_size = iter->first.size;
+      // This is calculated as:
+      //   "how much do we save by using a smaller iodi program after
+      //    removing the cost of not using an iodi program for the larger
+      //    methods"
+      int64_t win_delta = (base_iodi_size - iodi_size) - total_normal_dbg_cost;
+      // If it's as good as the win then we use it because we want to make
+      // as small debug programs as possible due to dex2oat
+      if (win_delta >= max_win_delta) {
+        max_win_delta = win_delta;
+        best_iter = iter;
+      }
+      total_normal_dbg_cost += iter->second;
+    }
+    // Now we've found which methods are too large to be beneficial. Tell IODI
+    // infra about these large methods
+    size_t num_big = 0;
+    for (auto big = sizes.begin(); big != best_iter; big++) {
+      iodi_metadata.mark_method_huge(big->first.method, big->first.size);
+      num_big += 1;
+    }
+
+    // 2.2) Emit IODI programs (other debug programs will be emitted below)
+    auto insns_size = best_iter->first.size;
+    TRACE(IODI, 2,
+          "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u\n",
+          offset, param_size, sizes.size(), num_big, sizes.size() - num_big,
+          insns_size);
     param_to_offset[param_size] = offset;
-    TRACE(OPUT, 2,
-          "[emit_instruction_offset_debug_info][param_to_offset] %u : %u\n",
-          param_size, offset);
     std::vector<DexString*> params;
     for (size_t i = 0; i < param_size; i++) {
       params.push_back(nullptr);
@@ -1201,7 +1365,7 @@ uint32_t emit_instruction_offset_debug_info(
     offset += DexDebugItem::encode(nullptr, output + offset, 0, params, dbgops);
     *dbgcount += 1;
   }
-  // (3)
+  // 3)
   auto offset_end = param_to_offset.end();
   for (auto& it : code_items) {
     DexCode* dc = it.code;
@@ -1210,13 +1374,10 @@ uint32_t emit_instruction_offset_debug_info(
       continue;
     }
     dex_code_item* dci = it.code_item;
-    bool use_iodi = iodi_metadata.can_safely_use_iodi(it.method);
-    // We still want to fill in pos_mapper and code_debug_map, so run the
-    // usual code to emit debug info, additionally we actual emit the usual
-    // debug info if we can't safely use iodi.
-    offset += emit_debug_info(dodx, !use_iodi, dbg, dc, dci, pos_mapper, output,
-                              offset, code_debug_map);
-    if (use_iodi) {
+    // If a method is too big then it's been marked as so internally, so this
+    // will return false.
+    DexMethod* method = it.method;
+    if (iodi_metadata.can_safely_use_iodi(method)) {
       uint32_t param_size =
           per_arity ? it.method->get_proto()->get_args()->size() : max_param;
       auto offset_it = param_to_offset.find(param_size);
@@ -1224,6 +1385,8 @@ uint32_t emit_instruction_offset_debug_info(
                         "Expected to find param to offset");
       dci->debug_info_off = offset_it->second;
     } else {
+      offset += emit_debug_info_for_metadata(
+          dodx, method_to_debug_meta.at(method), output, offset, true);
       *dbgcount += 1;
     }
   }
