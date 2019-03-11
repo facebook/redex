@@ -316,6 +316,7 @@ class IRList {
    */
   size_t sum_opcode_sizes() const;
   size_t sum_non_internal_opcode_sizes() const;
+  size_t sum_dex_opcode_sizes() const;
 
   /*
    * Returns the number of instructions.

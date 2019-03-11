@@ -112,10 +112,23 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   }
 }
 
+void IODIMetadata::mark_method_huge(const DexMethod* method, uint32_t size) {
+  m_huge_methods.insert(method);
+  TRACE(IODI, 3, "[IODI] %s is too large to benefit from IODI: %u\n",
+        SHOW(method), size);
+}
+
 // Returns whether we can symbolicate using IODI for the given method.
 bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
-  // We can use IODI if we don't have a collision or if the method isn't virtual
+  // We can use IODI if we don't have a collision, if the method isn't virtual
+  // and if it isn't too big.
   //
+  // It turns out for some methods using IODI isn't beneficial. See
+  // comment in emit_instruction_offset_debug_info for more info.
+  if (m_huge_methods.count(method) > 0) {
+    return false;
+  }
+
   // Eventually we can relax this constraint and calculate the subset of methods
   // that cannot be called externally and use those for IODI as well.
   if (!method->is_virtual()) {
@@ -441,8 +454,9 @@ void IODIMetadata::write(
   ofs.write((const char*)&header, sizeof(Header));
   TRACE(IODI, 1,
         "[IODI] Emitted %u singles, %u duplicates, ignored %u duplicates."
-        " %u emitted dups had debug items and %u non-emitted dups had debug"
-        " items\n",
+        " %u emitted dups had debug items, %u non-emitted dups had debug"
+        " items and %u methods were too big\n",
         single_count, dup_meth_count_emitted, dup_meth_count_not_emitted,
-        dup_meth_with_dbg_count_emitted, dup_meth_with_dbg_count_not_emitted);
+        dup_meth_with_dbg_count_emitted, dup_meth_with_dbg_count_not_emitted,
+        m_huge_methods.size());
 }
