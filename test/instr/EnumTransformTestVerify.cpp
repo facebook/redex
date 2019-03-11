@@ -75,7 +75,7 @@ TEST_F(PreVerify, transform) {
 
 TEST_F(PostVerify, transform) {
   EnumUtil util;
-  // SCORE class
+  // SCORE class is optimized.
   auto enum_cls = find_class_named(classes, util.enum_score_class_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_EQ(enum_cls->get_super_class(), get_object_type());
@@ -84,7 +84,11 @@ TEST_F(PostVerify, transform) {
   // EnumUtil
   auto util_cls = find_class_named(classes, "Lredex/$EnumUtils;");
   EXPECT_NE(util_cls, nullptr);
-  EXPECT_EQ(util_cls->get_sfields().size(), 5);
+  // SCORE and PURE_SCORE are optimized, number of generated static fields
+  // should be at least 4. Note that some enum classes from support library may
+  // be optimized so that the number of generated static fields may be greater
+  // than 4.
+  EXPECT_GE(util_cls->get_sfields().size(), 4);
   // A SCORE[][] field => An Integer[][] field.
   EXPECT_EQ(DexField::get_field(DexType::get_type(util.class_name),
                                 DexString::make_string(util.array_name),
@@ -96,10 +100,10 @@ TEST_F(PostVerify, transform) {
                           make_array_type(get_integer_type(), 2));
   EXPECT_NE(array_field, nullptr);
 
-  // PURE_SCORE enum class is deleted.
+  // PURE_SCORE enum class is optimized and deleted.
   EXPECT_EQ(find_class_named(classes, util.enum_pure_score_class_name),
             nullptr);
 
-  // Other enums
+  // Other enums are not optimized.
   expect_other_enums(classes);
 }
