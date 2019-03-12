@@ -98,6 +98,7 @@
   TM(TIME)               \
   TM(TRACKRESOURCES)     \
   TM(TYPE)               \
+  TM(UCM)                \
   TM(UNTF)               \
   TM(VERIFY)             \
   TM(ANALYSIS_REF_GRAPH) \
