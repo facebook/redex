@@ -136,9 +136,9 @@ TEST(ProguardTest, assortment) {
   auto android_env_sdk = std::getenv("ANDROID_SDK");
   auto android_config_sdk = std::getenv("sdk_path");
 
-  auto android_sdk = (strncmp(android_config_sdk,"None", 4) != 0) ?
-    android_config_sdk :
-    android_env_sdk;
+  auto android_sdk = (strncmp(android_config_sdk, "None", 4) != 0)
+                         ? android_config_sdk
+                         : android_env_sdk;
 
   ASSERT_NE(nullptr, android_sdk);
   auto android_target = std::getenv("android_target");

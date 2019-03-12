@@ -107,6 +107,12 @@ struct ModelSpec {
   bool include_primary_dex{false};
   // Devirtualize/staticize non-virtual methods
   bool devirtualize_non_virtuals{false};
+  // Merge static methods within shape.
+  bool merge_static_methods_within_shape{false};
+  // Merge direct methods within shape.
+  bool merge_direct_methods_within_shape{false};
+  // Merge nonvirt methods within shape.
+  bool merge_nonvirt_methods_within_shape{false};
   // Process @MethodMeta annotations
   bool process_method_meta{false};
   // Max mergeable count per merger type
@@ -325,7 +331,6 @@ class Model {
             const TypeSystem& type_system,
             ConfigFiles* cfg = nullptr);
 
-  void build_hierarchy(const DexType* root);
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
   MergerType* build_mergers(const DexType* root);
@@ -420,4 +425,20 @@ class Model {
       walk_hierarchy_helper(walker, child);
     }
   }
+};
+
+struct ModelStats {
+  uint32_t m_num_classes_merged = 0;
+  uint32_t m_num_generated_classes = 0;
+  uint32_t m_num_ctor_dedupped = 0;
+  uint32_t m_num_static_non_virt_dedupped = 0;
+  uint32_t m_num_vmethods_dedupped = 0;
+  uint32_t m_num_const_lifted_methods = 0;
+  // Stats of methods merging within each class. They are number of merged
+  // methods minus number of dispatch methods.
+  uint32_t m_num_merged_static_methods = 0;
+  uint32_t m_num_merged_direct_methods = 0;
+  uint32_t m_num_merged_nonvirt_methods = 0;
+
+  ModelStats& operator+=(const ModelStats& stats);
 };

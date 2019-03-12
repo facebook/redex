@@ -53,9 +53,7 @@ uint16_t reg_from_str(const std::string& reg_str) {
   return reg;
 }
 
-std::string reg_to_str(uint16_t reg) {
-  return "v" + std::to_string(reg);
-}
+std::string reg_to_str(uint16_t reg) { return "v" + std::to_string(reg); }
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
@@ -118,16 +116,19 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
 
 namespace {
 
-s_expr _to_s_expr(const DexPosition* pos, uint32_t parent_idx) {
+std::string get_dbg_label(uint32_t i) { return ("dbg_" + std::to_string(i)); }
+
+s_expr _to_s_expr(const DexPosition* pos, uint32_t idx, uint32_t parent_idx) {
+  auto idx_str = get_dbg_label(idx);
+  auto parent_idx_str = get_dbg_label(parent_idx);
   return s_expr({
-    s_expr(".pos"),
-    s_expr(show(pos->method)),
-    s_expr(pos->file->c_str()),
-    s_expr(std::to_string(pos->line)),
-    s_expr(std::to_string(parent_idx)),
+      s_expr(".pos:" + idx_str),
+      s_expr(show(pos->method)),
+      s_expr(pos->file->c_str()),
+      s_expr(std::to_string(pos->line)),
+      s_expr(parent_idx_str),
   });
 }
-
 }
 
 std::vector<s_expr> to_s_exprs(
@@ -141,22 +142,26 @@ std::vector<s_expr> to_s_exprs(
       if (*pos_emitted == *snay) {
         // Shane thought he could hide from us... hah! a quick linear search
         // got him
-        return { _to_s_expr(pos, i) };
+        positions_emitted->push_back(pos);
+        return {_to_s_expr(pos, positions_emitted->size() - 1, i)};
       }
     }
     auto result = to_s_exprs(snay, positions_emitted);
-    result.push_back(_to_s_expr(pos, positions_emitted->size() - 1));
+    always_assert(positions_emitted->size() > 0);
+    auto parent_idx = positions_emitted->size() - 1;
+    positions_emitted->push_back(pos);
+    auto pos_idx = positions_emitted->size() - 1;
+    result.push_back(_to_s_expr(pos, pos_idx, parent_idx));
     return result;
   } else {
     positions_emitted->push_back(pos);
-    return {
-      s_expr({
-        s_expr(".pos"),
+    auto idx_str = get_dbg_label(positions_emitted->size() - 1);
+    return {s_expr({
+        s_expr(".pos:" + idx_str),
         s_expr(show(pos->method)),
         s_expr(pos->file->c_str()),
         s_expr(std::to_string(pos->line)),
-      })
-    };
+    })};
   }
 }
 
@@ -264,7 +269,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
 
 std::unique_ptr<DexPosition> position_from_s_expr(
     const s_expr& e,
-    const std::vector<DexPosition*>& positions) {
+    const std::unordered_map<std::string, DexPosition*>& positions) {
   std::string method_str;
   std::string file_str;
   std::string line_str;
@@ -274,26 +279,30 @@ std::unique_ptr<DexPosition> position_from_s_expr(
       s_patn(&file_str),
       s_patn(&line_str),
   }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
-  auto* dex_method =
-      static_cast<DexMethod*>(DexMethod::make_method(method_str));
-  // We should ideally allow DexPosition to take non-concrete methods too...
-  always_assert(dex_method->is_concrete());
   auto* file = DexString::make_string(file_str);
   uint32_t line;
   std::istringstream in(line_str);
   in >> line;
   auto pos = std::make_unique<DexPosition>(line);
-  pos->bind(dex_method, file);
+  pos->bind(DexString::make_string(method_str), file);
   if (!parent_expr.is_nil()) {
     std::string parent_str;
     s_patn({
-        s_patn(&parent_str),
-    }).must_match(e, "Expected 4th arg of pos directive to be a string");
-    uint32_t parent_idx = UINT32_MAX;
-    std::istringstream parent_in(parent_str);
-    parent_in >> parent_idx;
-    always_assert(parent_idx < positions.size());
-    pos->parent = positions[parent_idx];
+               s_patn(&parent_str),
+           })
+        .must_match(parent_expr,
+                    "Expected 4th arg of pos directive to be a string");
+
+    // Try and find parent matching parent_str at end of expr
+    auto iter = positions.find(parent_str);
+    if (iter != positions.end()) {
+      pos->parent = iter->second;
+    } else {
+      pos->parent = nullptr;
+      fprintf(stderr,
+              "Failed to find parent position with label %s\n",
+              parent_str.c_str());
+    }
   } else {
     pos->parent = nullptr;
   }
@@ -544,7 +553,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   LabelDefs label_defs;
   LabelRefs label_refs;
   boost::optional<uint16_t> max_reg;
-  std::vector<DexPosition*> positions;
+  std::unordered_map<std::string, DexPosition*> positions;
 
   // map from catch name to catch marker pointer
   const auto& catches = get_catch_name_map(insns_expr);
@@ -553,9 +562,16 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
     std::string keyword;
     s_expr tail;
     if (s_patn({s_patn(&keyword)}, tail).match_with(insns_expr[i])) {
-      if (keyword == ".pos") {
+      // check if keyword starts with ".pos"
+      if (strncmp(keyword.c_str(), ".pos", 4) == 0) {
         auto pos = position_from_s_expr(tail, positions);
-        positions.push_back(pos.get());
+        // check if keyword also has dbg label
+        if (keyword != ".pos") {
+          // get dbg label found after colon in keyword string
+          auto key = keyword.substr(keyword.find(":") + 1);
+          // insert pos into positions map using dbg label as key
+          positions[key] = pos.get();
+        }
         code->push_back(std::move(pos));
       } else if (keyword.substr(0, 4) == ".try") {
         // Try markers look like this:

@@ -141,7 +141,8 @@ TEST(ResStringPool, ReplaceStringsInXmlLayout) {
   // right.
   size_t length;
   int file_descriptor;
-  auto fp = map_file(std::getenv("test_layout_path"), file_descriptor, length);
+  auto fp =
+      map_file(std::getenv("test_layout_path"), &file_descriptor, &length);
 
   std::map<std::string, std::string> shortened_names;
   shortened_names.emplace("com.example.test.CustomViewGroup", "Z.a");
@@ -202,7 +203,7 @@ void assert_serialized_data(void* original, size_t length, android::Vector<char>
 TEST(ResTable, TestRoundTrip) {
   size_t length;
   int file_descriptor;
-  auto fp = map_file(std::getenv("test_arsc_path"), file_descriptor, length);
+  auto fp = map_file(std::getenv("test_arsc_path"), &file_descriptor, &length);
   android::ResTable table;
   ASSERT_EQ(table.add(fp, length), 0);
   // Just invoke the serialize method to ensure the same data comes back
@@ -215,7 +216,7 @@ TEST(ResTable, TestRoundTrip) {
 TEST(ResTable, AppendNewType) {
   size_t length;
   int file_descriptor;
-  auto fp = map_file(std::getenv("test_arsc_path"), file_descriptor, length);
+  auto fp = map_file(std::getenv("test_arsc_path"), &file_descriptor, &length);
   android::ResTable table;
   ASSERT_EQ(table.add(fp, length), 0);
   // Read the number of original types.

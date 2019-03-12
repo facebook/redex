@@ -19,17 +19,18 @@
 #include <unordered_map>
 #include <utility>
 
+#include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexAccess.h"
 #include "DexClass.h"
+#include "DexTypeDomain.h"
 #include "DexUtil.h"
 #include "FiniteAbstractDomain.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "Match.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Show.h"
@@ -128,18 +129,11 @@ using TypeDomain = FiniteAbstractDomain<IRType,
                                         TypeLattice::Encoding,
                                         &type_lattice>;
 
-using register_t = uint32_t;
-
-// We use this special register to denote the result of a method invocation or a
-// filled-array creation. If the result is a wide value, RESULT_REGISTER + 1
-// holds the second component of the result.
-constexpr register_t RESULT_REGISTER =
-    std::numeric_limits<register_t>::max() - 1;
+using register_t = ir_analyzer::register_t;
+using namespace ir_analyzer;
 
 using BasicTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, TypeDomain>;
-
-using DexTypeDomain = ConstantAbstractDomain<const DexType*>;
 
 using DexTypeEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, DexTypeDomain>;
@@ -166,8 +160,8 @@ class TypeEnvironment final
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  boost::optional<const DexType*> get_concrete_type(register_t reg) const {
-    return get<1>().get(reg).get_constant();
+  boost::optional<const DexType*> get_dex_type(register_t reg) const {
+    return get<1>().get(reg).get_dex_type();
   }
 
   void set_concrete_type(register_t reg, const DexTypeDomain& dex_type) {
@@ -182,15 +176,13 @@ class TypeCheckingException final : public std::runtime_error {
       : std::runtime_error(what_arg) {}
 };
 
-class TypeInference final
-    : public MonotonicFixpointIterator<cfg::GraphInterface, TypeEnvironment> {
+class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
  public:
-  using NodeId = cfg::Block*;
 
   TypeInference(const cfg::ControlFlowGraph& cfg,
                 bool enable_polymorphic_constants,
                 bool verify_moves)
-      : MonotonicFixpointIterator(cfg, cfg.blocks().size()),
+      : BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants),
         m_verify_moves(verify_moves),
@@ -260,19 +252,6 @@ class TypeInference final
     m_inference = false;
   }
 
-  void analyze_node(const NodeId& node,
-                    TypeEnvironment* current_state) const override {
-    for (auto& mie : InstructionIterable(node)) {
-      analyze_instruction(mie.insn, current_state);
-    }
-  }
-
-  TypeEnvironment analyze_edge(
-      const EdgeId&,
-      const TypeEnvironment& exit_state_at_source) const override {
-    return exit_state_at_source;
-  }
-
   // This method is used in two different modes. When m_inference == true, it
   // analyzes an instruction and updates the type environment accordingly. It is
   // used in this mode during the fixpoint iteration. Once a fixpoint has
@@ -287,7 +266,7 @@ class TypeInference final
   // type checking mode, they are used to check that the inferred type of a
   // register matches with its expected type, as derived from the context.
   void analyze_instruction(IRInstruction* insn,
-                           TypeEnvironment* current_state) const {
+                           TypeEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
     case IOPCODE_LOAD_PARAM_OBJECT:
@@ -308,8 +287,7 @@ class TypeInference final
     case OPCODE_MOVE_OBJECT: {
       assume_reference(current_state, insn->src(0), /* in_move */ true);
       if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
-        const auto& dex_type_opt =
-            current_state->get_concrete_type(insn->src(0));
+        const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
         set_reference(current_state, insn->dest(), dex_type_opt);
       } else {
         set_type(
@@ -338,7 +316,7 @@ class TypeInference final
       assume_reference(current_state, RESULT_REGISTER);
       set_reference(current_state,
                     insn->dest(),
-                    current_state->get_concrete_type(RESULT_REGISTER));
+                    current_state->get_dex_type(RESULT_REGISTER));
       break;
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
@@ -519,7 +497,7 @@ class TypeInference final
     case OPCODE_AGET_OBJECT: {
       assume_reference(current_state, insn->src(0));
       assume_integer(current_state, insn->src(1));
-      const auto dex_type_opt = current_state->get_concrete_type(insn->src(0));
+      const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
       if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
         const auto etype = get_array_component_type(*dex_type_opt);
         set_reference(current_state, RESULT_REGISTER, etype);
@@ -1444,6 +1422,19 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
     return BOTTOM;
   }
   return it->second.get_type(reg).element();
+}
+
+const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
+                                           uint16_t reg) const {
+  check_completion();
+  auto& type_envs = m_type_inference->m_type_envs;
+  auto it = type_envs.find(insn);
+  if (it == type_envs.end()) {
+    // The instruction doesn't belong to this method. We treat this as
+    // unreachable code and return BOTTOM.
+    return nullptr;
+  }
+  return *it->second.get_dex_type(reg);
 }
 
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {

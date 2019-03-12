@@ -400,9 +400,102 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   return dispatch_method;
 }
 
+/**
+ * This is an informal classification since we only care about direct, static,
+ * virtual and constructor methods when creating dispatch method.
+ */
+dispatch::Type possible_type(DexMethod* method) {
+  if (method->is_external() || !method->get_code()) {
+    return dispatch::OTHER_TYPE;
+  }
+  if (is_init(method)) {
+    return dispatch::CTOR;
+  } else if (is_static(method)) {
+    return dispatch::STATIC;
+  } else if (method->is_virtual()) {
+    return dispatch::VIRTUAL;
+  } else {
+    return dispatch::DIRECT;
+  }
+}
+
+DexProto* append_int_arg(DexProto* proto) {
+  auto args_list = proto->get_args()->get_type_list();
+  args_list.push_back(get_int_type());
+  return DexProto::make_proto(
+      proto->get_rtype(), DexTypeList::make_type_list(std::move(args_list)));
+}
+
+#define LOG_AND_RETURN(fmt, ...)                       \
+  do {                                                 \
+    fprintf(stderr, "[dispatch] " fmt, ##__VA_ARGS__); \
+    return nullptr;                                    \
+  } while (0)
+/**
+ * Check that all the methods have the the same proto and all of them should be
+ * direct, static, or virtual, create a method ref with an additional method tag
+ * argument.
+ */
+DexMethodRef* create_dispatch_method_ref(
+    const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
+
+  if (indices_to_callee.size() < 2) {
+    LOG_AND_RETURN("Not enough methods(should >= 2) in indices_to_callee %lu\n",
+                   indices_to_callee.size());
+  }
+  auto first_method = indices_to_callee.begin()->second;
+  auto this_type =
+      is_static(first_method) ? nullptr : first_method->get_class();
+  auto method_type = possible_type(first_method);
+  if (method_type != dispatch::STATIC && method_type != dispatch::VIRTUAL &&
+      method_type != dispatch::DIRECT) {
+    LOG_AND_RETURN("Unsuported method type %u(%x) for %s\n", method_type,
+                   first_method->get_access(), SHOW(first_method));
+  }
+
+  for (auto& p : indices_to_callee) {
+    auto meth = p.second;
+    auto cur_meth_type = possible_type(meth);
+    if (cur_meth_type != method_type) {
+      LOG_AND_RETURN(
+          "Different method type: %u(%x) for %s v.s. %u(%x) for %s\n",
+          method_type, first_method->get_access(), SHOW(first_method),
+          cur_meth_type, meth->get_access(), SHOW(meth));
+    }
+    if (this_type && this_type != meth->get_class()) {
+      LOG_AND_RETURN("Different `this` type : %s v.s. %s\n", SHOW(first_method),
+                     SHOW(meth));
+    }
+    if (meth->get_proto() != first_method->get_proto()) {
+      LOG_AND_RETURN("Different protos : %s v.s. %s\n", SHOW(first_method),
+                     SHOW(meth));
+    }
+  }
+  auto cls = first_method->get_class();
+  auto dispatch_proto = append_int_arg(first_method->get_proto());
+  auto dispatch_name =
+      dispatch::gen_dispatch_name(cls, dispatch_proto, first_method->str());
+  return DexMethod::make_method(cls, dispatch_name, dispatch_proto);
+}
+#undef LOG_AND_RETURN
+
+DexAccessFlags get_dispatch_access(DexMethod* origin_method) {
+  auto method_type = possible_type(origin_method);
+  if (method_type == dispatch::STATIC) {
+    return ACC_STATIC | ACC_PUBLIC;
+  } else if (method_type == dispatch::VIRTUAL) {
+    return ACC_PUBLIC;
+  } else {
+    always_assert(method_type == dispatch::DIRECT);
+    return ACC_PRIVATE;
+  }
+}
+
 } // namespace
 
 namespace dispatch {
+
+constexpr const char* DISPATCH_PREFIX = "$dispatch$";
 
 DispatchMethod create_virtual_dispatch(
     const Spec& spec,
@@ -476,4 +569,89 @@ DexMethod* create_ctor_or_static_dispatch(
   return materialize_dispatch(orig_method, mc);
 }
 
+// TODO(fengliu): There are some redundant logic with other dispatch creating
+// methods, will do some refactor in near future.
+DexMethod* create_simple_dispatch(
+    const std::map<SwitchIndices, DexMethod*>& indices_to_callee,
+    DexAnnotationSet* anno,
+    bool with_debug_item) {
+  auto dispatch_ref = create_dispatch_method_ref(indices_to_callee);
+  if (!dispatch_ref) {
+    return nullptr;
+  }
+  auto return_type = dispatch_ref->get_proto()->get_rtype();
+  auto first_method = indices_to_callee.begin()->second;
+  auto access = get_dispatch_access(first_method);
+  MethodCreator mc(dispatch_ref, access, nullptr, true);
+  auto args = mc.get_reg_args();
+  auto method_tag_loc = *args.rbegin();
+  // The mc's last argument is a "method tag", pop the argument and pass the
+  // rest to the mergeables.
+  args.pop_back();
+  auto main_block = mc.get_main_block();
+
+  std::map<SwitchIndices, MethodBlock*> cases;
+  for (auto& p : indices_to_callee) {
+    cases[p.first] = nullptr;
+  }
+  auto default_block = main_block->switch_op(method_tag_loc, cases);
+  bool has_return_value = (return_type != get_void_type());
+  auto res_loc =
+      has_return_value ? mc.make_local(return_type) : Location::empty();
+  for (auto& p : cases) {
+    auto case_block = p.second;
+    auto callee = indices_to_callee.at(p.first);
+    case_block->invoke(callee, args);
+    if (has_return_value) {
+      case_block->move_result(res_loc, return_type);
+      case_block->ret(res_loc);
+    } else {
+      case_block->ret_void();
+    }
+  }
+
+  auto method = mc.create();
+  method->rstate = first_method->rstate;
+  return method;
+}
+
+DexString* gen_dispatch_name(DexType* owner,
+                             DexProto* proto,
+                             std::string orig_name) {
+  auto simple_name = DexString::make_string(DISPATCH_PREFIX + orig_name);
+  if (DexMethod::get_method(owner, simple_name, proto) == nullptr) {
+    return simple_name;
+  }
+
+  size_t count = 0;
+  while (true) {
+    auto suffix = "$" + std::to_string(count);
+    auto dispatch_name = DexString::make_string(simple_name->str() + suffix);
+    auto existing_meth = DexMethod::get_method(owner, dispatch_name, proto);
+    if (existing_meth == nullptr) {
+      return dispatch_name;
+    }
+    ++count;
+  }
+}
+
+bool may_be_dispatch(const DexMethod* method) {
+  const auto& name = method->str();
+  if (name.find(DISPATCH_PREFIX) != 0) {
+    return false;
+  }
+  auto code = method->get_code();
+  uint32_t branches = 0;
+  for (auto& mie : InstructionIterable(code)) {
+    auto op = mie.insn->opcode();
+    if (is_switch(op)) {
+      return true;
+    }
+    branches += is_conditional_branch(op);
+    if (branches > 1) {
+      return true;
+    }
+  }
+  return false;
+}
 } // namespace dispatch

@@ -22,6 +22,12 @@ struct RedexOptions {
   bool verify_none_enabled{false};
   bool is_art_build{false};
   bool instrument_pass_enabled{false};
+  int32_t min_sdk{0};
+
+  // Encode the struct to entry_data for redex-opt tool.
+  void serialize(Json::Value& entry_data) const;
+  // Decode the entry_data and update the struct.
+  void deserialize(const Json::Value& entry_data);
 };
 
 class PassManager {

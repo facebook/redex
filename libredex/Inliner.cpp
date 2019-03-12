@@ -8,6 +8,7 @@
 #include "Inliner.h"
 
 #include "AnnoUtils.h"
+#include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
@@ -165,7 +166,7 @@ bool method_ok(DexType* type, DexMethodRef* meth) {
   return false;
 }
 
-}
+} // namespace
 
 MultiMethodInliner::MultiMethodInliner(
     const std::vector<DexClass*>& scope,
@@ -173,23 +174,21 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const Config& config)
-        : resolver(resolve_fn)
-        , xstores(stores)
-        , m_scope(scope)
-        , m_config(config) {
+    : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
   // walk every opcode in scope looking for calls to inlinable candidates
   // and build a map of callers to callees and the reverse callees to callers
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-          if (callee != nullptr && callee->is_concrete() &&
-              candidates.find(callee) != candidates.end()) {
-            callee_caller[callee].push_back(meth);
-            caller_callee[meth].push_back(callee);
-          }
-        }
-      });
+                [&](DexMethod* meth, IRInstruction* insn) {
+                  if (is_invoke(insn->opcode())) {
+                    auto callee =
+                        resolver(insn->get_method(), opcode_to_search(insn));
+                    if (callee != nullptr && callee->is_concrete() &&
+                        candidates.find(callee) != candidates.end()) {
+                      callee_caller[callee].push_back(meth);
+                      caller_callee[meth].push_back(callee);
+                    }
+                  }
+                });
 }
 
 void MultiMethodInliner::inline_methods() {
@@ -301,24 +300,44 @@ void MultiMethodInliner::inline_callees(
 }
 
 void MultiMethodInliner::inline_inlinables(
-    DexMethod* caller,
+    DexMethod* caller_method,
     const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables) {
+
+  auto caller = caller_method->get_code();
+  std::unordered_set<IRCode*> need_deconstruct;
+  if (m_config.use_cfg_inliner && !caller->editable_cfg_built()) {
+    need_deconstruct.reserve(1 + inlinables.size());
+    need_deconstruct.insert(caller);
+    for (const auto& inlinable : inlinables) {
+      need_deconstruct.insert(inlinable.first->get_code());
+    }
+    for (auto code : need_deconstruct) {
+      always_assert(!code->editable_cfg_built());
+      code->build_cfg(/* editable */ true);
+    }
+  }
+
   // attempt to inline all inlinable candidates
-  size_t estimated_insn_size = caller->get_code()->sum_opcode_sizes();
+  size_t estimated_insn_size = caller->editable_cfg_built()
+                                   ? caller->cfg().sum_opcode_sizes()
+                                   : caller->sum_opcode_sizes();
   for (auto inlinable : inlinables) {
-    auto callee = inlinable.first;
+    auto callee_method = inlinable.first;
+    auto callee = callee_method->get_code();
     auto callsite = inlinable.second;
 
-    if (!is_inlinable(caller, callee, callsite->insn, estimated_insn_size)) {
+    if (!is_inlinable(caller_method, callee_method, callsite->insn,
+                      estimated_insn_size)) {
       continue;
     }
 
     TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n", SHOW(callee),
-          caller->get_code()->get_registers_size(), SHOW(caller),
-          callee->get_code()->get_registers_size());
+          caller->get_registers_size(), SHOW(caller),
+          callee->get_registers_size());
 
     if (m_config.use_cfg_inliner) {
-      bool success = inliner::inline_with_cfg(caller, callee, callsite->insn);
+      bool success = inliner::inline_with_cfg(caller_method, callee_method,
+                                              callsite->insn);
       if (!success) {
         continue;
       }
@@ -326,27 +345,32 @@ void MultiMethodInliner::inline_inlinables(
       // Logging before the call to inline_method to get the most relevant line
       // number near callsite before callsite gets replaced. Should be ok as
       // inline_method does not fail to inline.
-      log_opt(INLINED, caller, callsite->insn);
+      log_opt(INLINED, caller_method, callsite->insn);
 
-      inliner::inline_method(caller->get_code(), callee->get_code(), callsite);
+      inliner::inline_method(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
-    estimated_insn_size += callee->get_code()->sum_opcode_sizes();
-    TRACE(MMINL,
-          6,
-          "checking visibility usage of members in %s\n",
+    estimated_insn_size += callee->editable_cfg_built()
+                               ? callee->cfg().sum_opcode_sizes()
+                               : callee->sum_opcode_sizes();
+
+    TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
           SHOW(callee));
-    change_visibility(callee);
+    change_visibility(callee_method);
     info.calls_inlined++;
-    inlined.insert(callee);
+    inlined.insert(callee_method);
+  }
+
+  for (IRCode* code : need_deconstruct) {
+    code->clear_cfg();
   }
 }
 
 /**
  * Defines the set of rules that determine whether a function is inlinable.
  */
-bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
-                                      const DexMethod* callee,
+bool MultiMethodInliner::is_inlinable(DexMethod* caller,
+                                      DexMethod* callee,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
@@ -371,6 +395,28 @@ bool MultiMethodInliner::is_inlinable(const DexMethod* caller,
   }
   if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
     log_nopt(INL_TOO_BIG, caller, insn);
+    return false;
+  }
+
+  // Don't inline code into a method that doesn't have the same (or higher)
+  // required API. We don't want to bring API specific code into a class where
+  // it's not supported.
+  int32_t callee_api = api::LevelChecker::get_method_level(callee);
+  if (callee_api != api::LevelChecker::get_min_level() &&
+      callee_api > api::LevelChecker::get_method_level(caller)) {
+    // check callee_api against the minimum and short-circuit because most
+    // methods don't have a required api and we want that to be fast.
+    log_nopt(INL_REQUIRES_API, caller, insn);
+    TRACE(MMINL, 4,
+          "Refusing to inline %s\n"
+          "              into %s\n because of API boundaries.",
+          show_deobfuscated(callee).c_str(), show_deobfuscated(caller).c_str());
+    return false;
+  }
+
+  DexClass* cls = type_class(callee->get_class());
+  if (has_any_annotation(cls, m_config.no_inline) ||
+      has_any_annotation(callee, m_config.no_inline)) {
     return false;
   }
 
@@ -404,7 +450,9 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  auto callee_size = callee->get_code()->sum_opcode_sizes();
+  const IRCode* code = callee->get_code();
+  auto callee_size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
+                                                : code->sum_opcode_sizes();
   if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
     info.caller_too_large++;
     return true;
@@ -438,11 +486,6 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 
 bool MultiMethodInliner::should_inline(const DexMethod* caller,
                                        const DexMethod* callee) const {
-  DexClass* cls = type_class(callee->get_class());
-  if (has_any_annotation(cls, m_config.no_inline) ||
-      has_any_annotation(callee, m_config.no_inline)) {
-    return false;
-  }
   if (has_any_annotation(callee, m_config.force_inline)) {
     return true;
   }
@@ -517,8 +560,13 @@ bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
  * in which case we cannot inline.
  */
 bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
+  const IRCode* code = callee->get_code();
   std::vector<DexType*> types;
-  callee->get_code()->gather_catch_types(types);
+  if (code->editable_cfg_built()) {
+    code->cfg().gather_catch_types(types);
+  } else {
+    code->gather_catch_types(types);
+  }
   for (auto type : types) {
     auto cls = type_class(type);
     if (cls != nullptr && cls->is_external() && !is_public(cls)) {
@@ -1221,7 +1269,10 @@ void inline_tail_call(DexMethod* caller,
 bool inline_with_cfg(DexMethod* caller_method,
                      DexMethod* callee_method,
                      IRInstruction* callsite) {
-  auto& caller_cfg = caller_method->get_code()->cfg();
+
+  auto caller_code = caller_method->get_code();
+  always_assert(caller_code->editable_cfg_built());
+  auto& caller_cfg = caller_code->cfg();
   const cfg::InstructionIterator& callsite_it = caller_cfg.find_insn(callsite);
   if (callsite_it.is_end()) {
     // The callsite is not in the caller cfg. This is probably because the
@@ -1238,8 +1289,10 @@ bool inline_with_cfg(DexMethod* caller_method,
   // inline_cfg does not fail to inline.
   log_opt(INLINED, caller_method, callsite);
 
-  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it,
-                              callee_method->get_code()->cfg());
+  auto callee_code = callee_method->get_code();
+  always_assert(callee_code->editable_cfg_built());
+  cfg::CFGInliner::inline_cfg(&caller_cfg, callsite_it, callee_code->cfg());
+
   return true;
 }
 

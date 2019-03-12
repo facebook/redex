@@ -379,6 +379,10 @@ struct MethodBlock {
 struct MethodCreator {
  public:
   MethodCreator(DexMethod* meth);
+  MethodCreator(DexMethodRef* ref,
+                DexAccessFlags access,
+                DexAnnotationSet* anno = nullptr,
+                bool with_debug_item = false);
   MethodCreator(DexType* cls,
                 DexString* name,
                 DexProto* proto,
@@ -393,6 +397,8 @@ struct MethodCreator {
     always_assert(i < static_cast<int>(locals.size()));
     return locals.at(i);
   }
+
+  std::vector<Location> get_reg_args();
 
   /**
    * Make a new local of the given type.
@@ -475,6 +481,7 @@ struct MethodCreator {
   DexMethod* method;
   IRCode* meth_code;
   std::vector<Location> locals;
+  std::vector<MethodBlock*> blocks;
   MethodBlock* main_block;
 
   friend std::string show(const MethodCreator*);

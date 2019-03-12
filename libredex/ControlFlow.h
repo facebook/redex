@@ -150,9 +150,7 @@ class Edge final {
            equals_ignore_source_and_target(that);
   }
 
-  bool operator!=(const Edge& that) const {
-    return !(*this == that);
-  }
+  bool operator!=(const Edge& that) const { return !(*this == that); }
 
   bool equals_ignore_source(const Edge& that) const {
     return m_target == that.m_target && equals_ignore_source_and_target(that);
@@ -172,7 +170,9 @@ class Edge final {
   Block* src() const { return m_src; }
   Block* target() const { return m_target; }
   EdgeType type() const { return m_type; }
-  boost::optional<CaseKey> case_key() const { return m_case_key; }
+  ThrowInfo* throw_info() const { return m_throw_info.get(); }
+  const boost::optional<CaseKey>& case_key() const { return m_case_key; }
+  void set_case_key(boost::optional<CaseKey> k) { m_case_key = k; }
 };
 
 std::ostream& operator<<(std::ostream& os, const Edge& e);
@@ -196,24 +196,16 @@ class Block final {
   explicit Block(ControlFlowGraph* parent, BlockId id)
       : m_id(id), m_parent(parent) {}
 
-  ~Block() {
-    m_entries.clear_and_dispose();
-  }
+  ~Block() { m_entries.clear_and_dispose(); }
 
   // copy constructor
   Block(const Block& b, MethodItemEntryCloner* cloner);
 
   BlockId id() const { return m_id; }
-  const std::vector<Edge*>& preds() const {
-    return m_preds;
-  }
-  const std::vector<Edge*>& succs() const {
-    return m_succs;
-  }
+  const std::vector<Edge*>& preds() const { return m_preds; }
+  const std::vector<Edge*>& succs() const { return m_succs; }
 
-  bool operator<(const Block& other) const {
-    return this->id() < other.id();
-  }
+  bool operator<(const Block& other) const { return this->id() < other.id(); }
 
   // return true if `b` is a predecessor of this.
   // optionally supply a specific type of predecessor. The default,
@@ -234,14 +226,10 @@ class Block final {
 
   bool is_catch() const;
 
-  bool same_try(Block* other) const;
+  bool same_try(const Block* other) const;
 
   void remove_opcode(const ir_list::InstructionIterator&);
   void remove_opcode(const IRList::iterator& it);
-
-  // use this to make edits to the "straight-line" code in this block. Do not
-  // attempt to insert any control flow instructions
-  IRList& get_entries() { return m_entries; }
 
   opcode::Branchingness branchingness();
 
@@ -249,6 +237,8 @@ class Block final {
   bool empty() const { return m_entries.empty(); }
 
   uint32_t num_opcodes() const;
+
+  uint32_t sum_opcode_sizes() const;
 
   // return an iterator to the last MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_last_insn();
@@ -258,6 +248,10 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  // If this block has a single outgoing goto edge, return the target.
+  // Otherwise, return nullptr
+  Block* follow_goto() const;
+
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
 
@@ -265,6 +259,25 @@ class Block final {
   // Returns a not-none CaseKey for multi targets, boost::none otherwise.
   boost::optional<Edge::CaseKey> remove_first_matching_target(
       MethodItemEntry* branch);
+
+  // These assume that the iterator is inside this block
+  InstructionIterator to_cfg_instruction_iterator(
+      const ir_list::InstructionIterator& list_it);
+  InstructionIterator to_cfg_instruction_iterator(
+      const IRList::iterator& list_it);
+  InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
+
+  // These forward to implementations in ControlFlowGraph, See comment there
+  bool insert_before(const InstructionIterator& position,
+                     const std::vector<IRInstruction*>& insns);
+  bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+  bool insert_after(const InstructionIterator& position,
+                    const std::vector<IRInstruction*>& insns);
+  bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+  bool push_front(const std::vector<IRInstruction*>& insns);
+  bool push_front(IRInstruction* insn);
+  bool push_back(const std::vector<IRInstruction*>& insns);
+  bool push_back(IRInstruction* insn);
 
  private:
   friend class ControlFlowGraph;
@@ -303,6 +316,8 @@ struct DominatorInfo {
 class ControlFlowGraph {
 
  public:
+  static constexpr bool DEBUG{false};
+
   ControlFlowGraph() = default;
   ControlFlowGraph(const ControlFlowGraph&) = delete;
 
@@ -310,7 +325,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = false);
+  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = true);
   ~ControlFlowGraph();
 
   /*
@@ -318,6 +333,15 @@ class ControlFlowGraph {
    */
   IRList* linearize();
 
+  // TODO: this copies blocks, but it should probably offer a read-only view
+  // into the blocks map instead.
+  //
+  // If a block is created or destroyed while we're iterating on a copy, the
+  // copy is now stale. That stale copy may have a pointer to a deleted block or
+  // it may be incomplete (not iterating over the newly creating block).
+  //
+  // A read-only view would be better because block creation and destruction
+  // operations don't invalidate std::map iterators.
   std::vector<Block*> blocks() const;
 
   Block* create_block();
@@ -353,10 +377,13 @@ class ControlFlowGraph {
   // args are arguments to an Edge constructor
   template <class... Args>
   void add_edge(Args&&... args) {
-    Edge* edge = new Edge(std::forward<Args>(args)...);
-    m_edges.insert(edge);
-    edge->src()->m_succs.emplace_back(edge);
-    edge->target()->m_preds.emplace_back(edge);
+    add_edge(new Edge(std::forward<Args>(args)...));
+  }
+
+  void add_edge(Edge* e) {
+    m_edges.insert(e);
+    e->src()->m_succs.emplace_back(e);
+    e->target()->m_preds.emplace_back(e);
   }
 
   using EdgeSet = std::unordered_set<Edge*>;
@@ -372,8 +399,7 @@ class ControlFlowGraph {
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists
   template <typename EdgePredicate>
-  Edge* get_pred_edge_if(
-      const Block* block, EdgePredicate predicate) const {
+  Edge* get_pred_edge_if(const Block* block, EdgePredicate predicate) const {
     for (Edge* e : block->preds()) {
       if (predicate(e)) {
         return e;
@@ -383,8 +409,7 @@ class ControlFlowGraph {
   }
 
   template <typename EdgePredicate>
-  Edge* get_succ_edge_if(
-      const Block* block, EdgePredicate predicate) const {
+  Edge* get_succ_edge_if(const Block* block, EdgePredicate predicate) const {
     for (Edge* e : block->succs()) {
       if (predicate(e)) {
         return e;
@@ -395,8 +420,8 @@ class ControlFlowGraph {
 
   // return all edges for which predicate returns true
   template <typename EdgePredicate>
-  std::vector<Edge*> get_pred_edges_if(
-      const Block* block, EdgePredicate predicate) const {
+  std::vector<Edge*> get_pred_edges_if(const Block* block,
+                                       EdgePredicate predicate) const {
     const auto& preds = block->preds();
     std::vector<Edge*> result;
     for (Edge* e : preds) {
@@ -408,8 +433,8 @@ class ControlFlowGraph {
   }
 
   template <typename EdgePredicate>
-  std::vector<Edge*> get_succ_edges_if(
-      const Block* block, EdgePredicate predicate) const {
+  std::vector<Edge*> get_succ_edges_if(const Block* block,
+                                       EdgePredicate predicate) const {
     const auto& succs = block->succs();
     std::vector<Edge*> result;
     for (Edge* e : succs) {
@@ -422,16 +447,14 @@ class ControlFlowGraph {
 
   // return the first edge of the given type
   // or nullptr if no such edge exists
-  Edge* get_pred_edge_of_type(
-      const Block* block, EdgeType type) const;
-  Edge* get_succ_edge_of_type(
-      const Block* block, EdgeType type) const;
+  Edge* get_pred_edge_of_type(const Block* block, EdgeType type) const;
+  Edge* get_succ_edge_of_type(const Block* block, EdgeType type) const;
 
   // return all edges of the given type
-  std::vector<Edge*> get_pred_edges_of_type(
-      const Block* block, EdgeType type) const;
-  std::vector<Edge*> get_succ_edges_of_type(
-      const Block* block, EdgeType type) const;
+  std::vector<Edge*> get_pred_edges_of_type(const Block* block,
+                                            EdgeType type) const;
+  std::vector<Edge*> get_succ_edges_of_type(const Block* block,
+                                            EdgeType type) const;
 
   // delete_..._edge:
   //   * These functions remove edges from the graph and free the memory
@@ -442,9 +465,7 @@ class ControlFlowGraph {
   void delete_edges_between(Block* p, Block* s);
 
   template <typename EdgePredicate>
-  void delete_edge_if(Block* source,
-                      Block* target,
-                      EdgePredicate predicate) {
+  void delete_edge_if(Block* source, Block* target, EdgePredicate predicate) {
     free_edges(remove_edge_if(source, target, predicate));
   }
 
@@ -463,6 +484,9 @@ class ControlFlowGraph {
   /*
    * Split this block into two blocks. After this call, `it` will be the last
    * instruction in the predecessor block.
+   *
+   * The existing block will become the predecessor. All code after `it` will be
+   * moved into the new block (the successor). Return the (new) successor.
    */
   Block* split_block(const cfg::InstructionIterator& it);
 
@@ -478,6 +502,59 @@ class ControlFlowGraph {
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
   void remove_opcode(const InstructionIterator& it);
+
+  // Insertion Methods (insert_before/after and push_front/back):
+  //  * These methods add instructions to the CFG
+  //  * They do not add branch (if-*, switch-*) instructions to the cfg (use
+  //    create_branch for that)
+  //  * If the inserted instruction requires a block boundary after it, the
+  //    block will be split, instructions will be moved to the next
+  //    (non-exceptional) block and the next insertion from `insns` will also
+  //    occur in the next block. This invalidates iterators into the CFG.
+  //  * If the inserted instruction could end the method (return-* or throw),
+  //    then instructions after the insertion point will be removed and
+  //    successor edges will be removed from the block. When inserting a return
+  //    or throw, it must be the last in `insns`. This invalidates
+  //    iterators into the CFG.
+  //
+  // insert insns before position
+  // return a boolean:
+  //   true means that iterators into the CFG are now invalid
+  //   false means that iterators are still valid
+  bool insert_before(const InstructionIterator& position,
+                     const std::vector<IRInstruction*>& insns);
+  // insert insns after position
+  bool insert_after(const InstructionIterator& position,
+                    const std::vector<IRInstruction*>& insns);
+  // insert insns at the beginning of block b
+  bool push_front(Block* b, const std::vector<IRInstruction*>& insns);
+  // insert insns at the end of block b
+  bool push_back(Block* b, const std::vector<IRInstruction*>& insns);
+
+  // Convenience functions that add just one instruction.
+  bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+  bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+  bool push_front(Block* b, IRInstruction* insn);
+  bool push_back(Block* b, IRInstruction* insn);
+
+  // Create a conditional branch, which consists of:
+  // * inserting an `if` instruction at the end of b
+  // * Possibly add an EDGE_GOTO to the false block (`fls` may be null if b
+  //   already has a goto leaving it)
+  // * add an EDGE_BRANCH to the true block
+  void create_branch(Block* b, IRInstruction* insn, Block* fls, Block* tru);
+
+  // Create an `if` or `switch`, which consists of:
+  // * insert an `if` or `switch` instruction at the end of b
+  // * Possibly add an EDGE_GOTO to the default block (`goto_block` may be null
+  //   if b already has a goto leaving it)
+  // * add EDGE_BRANCHes to the other blocks based on the `case_to_block`
+  //   vector.
+  void create_branch(
+      Block* b,
+      IRInstruction* insn,
+      Block* goto_block,
+      const std::vector<std::pair<int32_t, Block*>>& case_to_block);
 
   // delete old_block and reroute its predecessors to new_block
   void replace_block(Block* old_block, Block* new_block);
@@ -528,6 +605,8 @@ class ControlFlowGraph {
 
   uint32_t num_opcodes() const;
 
+  uint32_t sum_opcode_sizes() const;
+
   uint16_t allocate_temp() { return m_registers_size++; }
 
   uint16_t allocate_wide_temp() {
@@ -550,6 +629,12 @@ class ControlFlowGraph {
   // by default, start at the entry block
   boost::sub_range<IRList> get_param_instructions();
 
+  void gather_catch_types(std::vector<DexType*>& types) const;
+  void gather_strings(std::vector<DexString*>& strings) const;
+  void gather_types(std::vector<DexType*>& types) const;
+  void gather_fields(std::vector<DexFieldRef*>& fields) const;
+  void gather_methods(std::vector<DexMethodRef*>& methods) const;
+
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
@@ -557,12 +642,12 @@ class ControlFlowGraph {
    */
   void deep_copy(ControlFlowGraph* new_cfg) const;
 
-  cfg::InstructionIterator to_cfg_instruction_iterator(
-      Block* b, const ir_list::InstructionIterator& list_it);
-
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
   InstructionIterator find_insn(IRInstruction* insn);
+
+  // choose an order of blocks for output
+  std::vector<Block*> order();
 
  private:
   using BranchToTargets =
@@ -601,8 +686,6 @@ class ControlFlowGraph {
   // Assumes m_editable is true
   void remove_try_catch_markers();
 
-  // choose an order of blocks for output
-  std::vector<Block*> order();
   // helper functions
   using Chain = std::vector<Block*>;
   void build_chains(std::vector<std::unique_ptr<Chain>>* chains,
@@ -659,6 +742,10 @@ class ControlFlowGraph {
   // block
   void no_unreferenced_edges() const;
 
+  bool insert(const InstructionIterator& position,
+              const std::vector<IRInstruction*>& insns,
+              bool before);
+
   // remove_..._edge:
   //   * These functions remove edges from the graph.
   //   * They do not free the memory of the edge. `free_edge` does that.
@@ -692,11 +779,12 @@ class ControlFlowGraph {
         forward_edges.end());
 
     auto& reverse_edges = target->m_preds;
-    reverse_edges.erase(
-        std::remove_if(reverse_edges.begin(),
-                       reverse_edges.end(),
-                       [&to_remove](Edge* e) { return to_remove.count(e) > 0; }),
-        reverse_edges.end());
+    reverse_edges.erase(std::remove_if(reverse_edges.begin(),
+                                       reverse_edges.end(),
+                                       [&to_remove](Edge* e) {
+                                         return to_remove.count(e) > 0;
+                                       }),
+                        reverse_edges.end());
 
     if (cleanup) {
       cleanup_deleted_edges(to_remove);
@@ -808,7 +896,6 @@ class ControlFlowGraph {
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};
-  static constexpr bool DEBUG{false};
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.
@@ -843,7 +930,8 @@ class InstructionIteratorImpl {
   using Iterator = typename std::
       conditional<is_const, IRList::const_iterator, IRList::iterator>::type;
 
-  Cfg& m_cfg;
+  // Use a pointer so that we can be copy constructible
+  Cfg* m_cfg;
   ControlFlowGraph::Blocks::const_iterator m_block;
 
   // Depends on C++14 Null Forward Iterators
@@ -855,10 +943,10 @@ class InstructionIteratorImpl {
 
   // go to beginning of next block, skipping empty blocks
   void to_next_block() {
-    while (m_block != m_cfg.m_blocks.end() &&
+    while (m_block != m_cfg->m_blocks.end() &&
            m_it.unwrap() == m_block->second->m_entries.end()) {
       ++m_block;
-      if (m_block != m_cfg.m_blocks.end()) {
+      if (m_block != m_cfg->m_blocks.end()) {
         Block* b = m_block->second;
         m_it = ir_list::InstructionIteratorImpl<is_const>(b->m_entries.begin(),
                                                           b->m_entries.end());
@@ -873,7 +961,7 @@ class InstructionIteratorImpl {
   InstructionIteratorImpl(Cfg& cfg,
                           Block* b,
                           const ir_list::InstructionIterator& it)
-      : m_cfg(cfg), m_block(m_cfg.m_blocks.find(b->id())), m_it(it) {}
+      : m_cfg(&cfg), m_block(m_cfg->m_blocks.find(b->id())), m_it(it) {}
 
  public:
   using reference = Mie&;
@@ -882,21 +970,32 @@ class InstructionIteratorImpl {
   using pointer = Mie*;
   using iterator_category = std::forward_iterator_tag;
 
+  // TODO: Is it possible to recover a valid state of iterators into the CFG
+  // after an insertion operation?
+  //
+  // The goal is to maintain a valid state within the CFG at all times. If the
+  // user wants to insert an instruction that ends the block (return, can_throw,
+  // if, switch, etc.), the block needs to split. When you split a block into
+  // two parts, you're moving code from one block to another. When code is moved
+  // `InstructionIterator`s may be left in an invalid state because their `m_it`
+  // is pointing into a different block than `m_block`.
+
   InstructionIteratorImpl() = delete;
 
-  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(cfg) {
-    always_assert(m_cfg.editable());
+  explicit InstructionIteratorImpl(Cfg& cfg, bool is_begin) : m_cfg(&cfg) {
+    always_assert(m_cfg->editable());
     if (is_begin) {
-      m_block = m_cfg.m_blocks.begin();
-      if (m_block != m_cfg.m_blocks.end()) {
-        auto iterable = ir_list::InstructionIterableImpl<is_const>(m_block->second);
+      m_block = m_cfg->m_blocks.begin();
+      if (m_block != m_cfg->m_blocks.end()) {
+        auto iterable =
+            ir_list::InstructionIterableImpl<is_const>(m_block->second);
         m_it = iterable.begin();
         if (m_it == iterable.end()) {
           to_next_block();
         }
       }
     } else {
-      m_block = m_cfg.m_blocks.end();
+      m_block = m_cfg->m_blocks.end();
     }
   }
 
@@ -932,25 +1031,24 @@ class InstructionIteratorImpl {
     if (!ControlFlowGraph::DEBUG) {
       return;
     }
-    always_assert_log(m_block != m_cfg.m_blocks.end(), "%s", SHOW(m_cfg));
-    always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(), "%s", SHOW(m_cfg));
+    always_assert_log(m_block != m_cfg->m_blocks.end(), "%s", SHOW(*m_cfg));
+    always_assert_log(m_it != ir_list::InstructionIteratorImpl<is_const>(),
+                      "%s", SHOW(*m_cfg));
   }
 
   bool is_end() const {
-    return m_block == m_cfg.m_blocks.end() &&
+    return m_block == m_cfg->m_blocks.end() &&
            m_it == ir_list::InstructionIteratorImpl<is_const>();
   }
 
-  Iterator unwrap() const {
-    return m_it.unwrap();
-  }
+  Iterator unwrap() const { return m_it.unwrap(); }
 
   Block* block() const {
     assert_not_end();
     return m_block->second;
   }
 
-  const ControlFlowGraph& cfg() const { return m_cfg; }
+  Cfg& cfg() const { return *m_cfg; }
 };
 
 // Iterate through all IRInstructions in the CFG.
@@ -987,7 +1085,8 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
 
 } // namespace cfg
 
-inline cfg::InstructionIterable InstructionIterable(cfg::ControlFlowGraph& cfg) {
+inline cfg::InstructionIterable InstructionIterable(
+    cfg::ControlFlowGraph& cfg) {
   return cfg::InstructionIterable(cfg);
 }
 

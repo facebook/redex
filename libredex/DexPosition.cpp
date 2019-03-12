@@ -13,10 +13,12 @@
 #include "DexPosition.h"
 #include "DexUtil.h"
 
-DexPosition::DexPosition(uint32_t line) : line(line), parent(nullptr) {}
+DexPosition::DexPosition(uint32_t line) : line(line) {}
 
-void DexPosition::bind(DexMethod* method_, DexString* file_) {
-  always_assert(method_ != nullptr);
+DexPosition::DexPosition(DexString* method, DexString* file, uint32_t line)
+    : method(method), file(file), line(line) {}
+
+void DexPosition::bind(DexString* method_, DexString* file_) {
   this->method = method_;
   this->file = file_;
 }
@@ -161,10 +163,10 @@ void RealPositionMapper::write_map_v2() {
                 << show(pos) << " was not registered" << std::endl;
     }
     // of the form "class_name.method_name:(arg_types)return_type"
-    auto full_method_name = pos->method->get_deobfuscated_name();
+    const auto& full_method_name = pos->method->str();
     // strip out the args and return type
     auto qualified_method_name =
-      full_method_name.substr(0, full_method_name.find(":"));
+        full_method_name.substr(0, full_method_name.find(":"));
     auto class_name = JavaNameUtil::internal_to_external(
         qualified_method_name.substr(0, qualified_method_name.rfind(".")));
     auto method_name =

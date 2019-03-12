@@ -136,8 +136,8 @@ class MultiMethodInliner {
    * Return true if the callee is inlinable into the caller.
    * The predicates below define the constraints for inlining.
    */
-  bool is_inlinable(const DexMethod* caller,
-                    const DexMethod* callee,
+  bool is_inlinable(DexMethod* caller,
+                    DexMethod* callee,
                     const IRInstruction* insn,
                     size_t estimated_insn_size);
 

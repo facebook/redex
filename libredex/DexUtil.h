@@ -277,6 +277,12 @@ inline bool is_any_init(const DexMethodRef* method) {
 }
 
 /**
+ * Subclass check. Copied from VirtualScope.
+ * We can make this much faster in time.
+ */
+bool is_subclass(const DexType* parent, const DexType* child);
+
+/**
  * Change the visibility of members accessed in a method.
  * We make everything public but we could be more precise and only
  * relax visibility as needed.
@@ -291,10 +297,22 @@ void change_visibility(DexMethod* method);
 void relocate_method(DexMethod* method, DexType* to_type);
 
 /**
- * Relocates the method only if it doesn't require any changes to the
- * referenced methods (none of the referenced methods would need to change
- * into a virtual / static method). It also updates the visibility of
- * the accessed members.
+ * Checks if a method can be relocated, i.e. if it doesn't require any changes
+ * to the referenced methods (none of the referenced methods would need to
+ * change into a virtual / static method).
+ */
+bool no_changes_when_relocating_method(const DexMethod* method);
+
+/**
+ * Check that the method contains no invoke-super instruction; this is a
+ * requirement to relocate a method outside of its original inheritance
+ * hierarchy.
+ */
+bool no_invoke_super(const DexMethod* method);
+
+/**
+ * Relocates the method only if relocate_method_if_no_changes returns true.
+ * It also updates the visibility of the accessed members.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
 

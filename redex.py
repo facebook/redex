@@ -74,12 +74,14 @@ def write_debugger_commands(args):
     """
     fd, gdb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-gdb-')
     with os.fdopen(fd, 'w') as f:
+        f.write('cd %s\n' % quote(os.getcwd()))
         f.write('gdb --args ')
         f.write(' '.join(map(quote, args)))
         os.fchmod(fd, 0o775)
 
     fd, lldb_script_name = tempfile.mkstemp(suffix='.sh', prefix='redex-lldb-')
     with os.fdopen(fd, 'w') as f:
+        f.write('cd %s\n' % quote(os.getcwd()))
         f.write('lldb -- ')
         f.write(' '.join(map(quote, args)))
         os.fchmod(fd, 0o775)
@@ -191,7 +193,7 @@ def run_redex_binary(state):
     start = timer()
 
     if state.args.debug:
-        print(' '.join(map(quote, args)))
+        print('cd %s && %s' % (os.getcwd(), ' '.join(map(quote, args))))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
@@ -838,10 +840,10 @@ def finalize_redex(state):
                          'reachability graph', 'redex-reachability-graph')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'method-override-graph',
                          'method override graph', 'redex-method-override-graph')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
+                         'iodi metadata', 'iodi-metadata')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
-                                     'iodi metadata', 'iodi-metadata')
 
     if state.config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all

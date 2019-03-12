@@ -295,10 +295,11 @@ int DexDebugItem::encode(
 }
 
 void DexDebugItem::bind_positions(DexMethod* method, DexString* file) {
+  auto* method_str = DexString::make_string(show(method));
   for (auto& entry : m_dbg_entries) {
     switch (entry.type) {
     case DexDebugEntryType::Position:
-      entry.pos->bind(method, file);
+      entry.pos->bind(method_str, file);
       break;
     case DexDebugEntryType::Instruction:
       break;
@@ -597,6 +598,33 @@ DexMethodRef* DexMethod::make_method(
       DexString::make_string(name),
       DexProto::make_proto(DexType::make_type(return_type.c_str()),
                            DexTypeList::make_type_list(std::move(dex_types))));
+}
+
+void DexClass::set_deobfuscated_name(const std::string& name) {
+  // If the class has an old deobfuscated_name which is not equal to
+  // `show(self)`, erase the name mapping from the global type map.
+  if (!m_deobfuscated_name.empty()) {
+    auto old_name = DexString::make_string(m_deobfuscated_name);
+    if (old_name != m_self->get_name()) {
+      g_redex->remove_type_name(old_name);
+    }
+  }
+  m_deobfuscated_name = name;
+  auto new_name = DexString::make_string(m_deobfuscated_name);
+  if (new_name == m_self->get_name()) {
+    return;
+  }
+  auto existing_type = g_redex->get_type(new_name);
+  if (existing_type != nullptr) {
+    fprintf(stderr,
+            "Unable to alias type '%s' to deobfuscated name '%s' because type "
+            "'%s' already exists.\n",
+            m_self->c_str(),
+            new_name->c_str(),
+            existing_type->c_str());
+    return;
+  }
+  g_redex->alias_type_name(m_self, new_name);
 }
 
 void DexClass::remove_method(const DexMethod* m) {

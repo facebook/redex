@@ -28,11 +28,11 @@
   TM(CLP_LITHO)          \
   TM(CONSTP)             \
   TM(CPG)                \
+  TM(CS)                 \
   TM(CUSTOMSORT)         \
   TM(DBGSTRIP)           \
   TM(DC)                 \
   TM(DCE)                \
-  TM(DEAD_CODE)          \
   TM(DEDUP_BLOCKS)       \
   TM(DEDUP_RES)          \
   TM(DELINIT)            \
@@ -50,11 +50,12 @@
   TM(INLRES)             \
   TM(INSTRUMENT)         \
   TM(INTF)               \
-  TM(LITHO_BLD)          \
+  TM(BLD_PATTERN)        \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
   TM(METH_DEDUP)         \
+  TM(METH_MERGER)        \
   TM(MMINL)              \
   TM(MMODE)              \
   TM(MORTIROLO)          \
@@ -62,6 +63,7 @@
   TM(OBFUSCATE)          \
   TM(OPTRES)             \
   TM(ORIGINALNAME)       \
+  TM(OSDCE)              \
   TM(OUTLINE)            \
   TM(PEEPHOLE)           \
   TM(PGR)                \
@@ -72,9 +74,11 @@
   TM(REACH)              \
   TM(REACH_DUMP)         \
   TM(REFU)               \
+  TM(REFL)               \
   TM(REG)                \
   TM(RELO)               \
   TM(RENAME)             \
+  TM(RG)                 \
   TM(RME)                \
   TM(RMGOTO)             \
   TM(RMU)                \

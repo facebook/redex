@@ -19,7 +19,19 @@ class PluginEntry : public Plugin {
  public:
   typedef std::function<T*()> Creator;
   void register_plugin(const std::string& plugin_name, Creator&& creator) {
+    if (m_creators.count(plugin_name) != 0) {
+      // TODO: Make this an error once all existing configurations have been
+      // cleaned up.
+      fprintf(stderr,
+              "[plugins] Warning: A plug-in of this name has already been "
+              "registered :: %s\n",
+              plugin_name.c_str());
+      m_ordered_creator_names.erase(std::find(m_ordered_creator_names.begin(),
+                                              m_ordered_creator_names.end(),
+                                              plugin_name));
+    }
     m_creators[plugin_name] = std::move(creator);
+    m_ordered_creator_names.push_back(plugin_name);
   }
   std::unique_ptr<T> create(const std::string& plugin_name) {
     if (m_creators.count(plugin_name)) {
@@ -29,14 +41,16 @@ class PluginEntry : public Plugin {
   }
   std::vector<std::unique_ptr<T>> create_plugins() {
     std::vector<std::unique_ptr<T>> res;
-    for (const auto& creator : m_creators) {
-      res.emplace_back(std::unique_ptr<T>(creator.second()));
+    for (const auto& name : m_ordered_creator_names) {
+      Creator& creator = m_creators.at(name);
+      res.emplace_back(std::unique_ptr<T>(creator()));
     }
     return res;
   }
 
  private:
   std::unordered_map<std::string, Creator> m_creators;
+  std::vector<std::string> m_ordered_creator_names;
 };
 
 /**

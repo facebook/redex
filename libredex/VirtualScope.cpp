@@ -684,21 +684,6 @@ bool build_signature_map(const ClassHierarchy& hierarchy,
   return escape_up | escape_down;
 }
 
-/**
- * Subclass check.
- * We can make this much faster in time.
- */
-bool is_subclass(const DexType* parent, const DexType* child) {
-  auto super = child;
-  while (super != nullptr) {
-    if (parent == super) return true;
-    const auto cls = type_class(super);
-    if (cls == nullptr) break;
-    super = cls->get_super_class();
-  }
-  return false;
-}
-
 const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
                                       const DexType* type,
                                       const DexMethod* meth) {

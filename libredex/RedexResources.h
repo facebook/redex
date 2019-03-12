@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <map>
 #include <set>
 #include <string>
@@ -19,17 +20,16 @@
 const char* const ONCLICK_ATTRIBUTE = "android:onClick";
 
 std::string read_entire_file(const std::string& filename);
-void write_entire_file(const std::string& filename, const std::string& contents);
-void* map_file(
-    const char* path,
-    int& file_descriptor,
-    size_t& length,
-    const bool mode_write = false);
-size_t write_serialized_data(
-    const android::Vector<char>& cVec,
-    int file_descriptor,
-    void* file_pointer,
-    const size_t& length);
+void write_entire_file(const std::string& filename,
+                       const std::string& contents);
+void* map_file(const char* path,
+               int* file_descriptor,
+               size_t* length,
+               const bool mode_write = false);
+size_t write_serialized_data(const android::Vector<char>& cVec,
+                             int file_descriptor,
+                             void* file_pointer,
+                             size_t length);
 void unmap_and_close(int file_descriptor, void* file_pointer, size_t length);
 
 std::string get_string_attribute_value(const android::ResXMLTree& parser,
@@ -38,6 +38,7 @@ bool has_raw_attribute_value(const android::ResXMLTree& parser,
                              const android::String16& attribute_name,
                              android::Res_value& out_value);
 
+boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename);
 
 /*
  * These are all the components which may contain references to Java classes in
@@ -137,22 +138,21 @@ int rename_classes_in_layout(
     size_t* out_num_renamed,
     ssize_t* out_size_delta);
 
-
 /**
  * Follows the reference links for a resource for all configurations.
- * Returns all the nodes visited, as well as all the string values seen.
+ * Outputs all the nodes visited, as well as all the string values seen.
  */
 void walk_references_for_resource(
-   uint32_t resID,
-   std::unordered_set<uint32_t>& nodes_visited,
-   std::unordered_set<std::string>& leaf_string_values,
-   android::ResTable* table);
+    const android::ResTable& table,
+    uint32_t resID,
+    std::unordered_set<uint32_t>* nodes_visited,
+    std::unordered_set<std::string>* leaf_string_values);
 
 std::unordered_set<uint32_t> get_js_resources(
-   const std::string& directory,
-   const std::vector<std::string>& js_assets_lists,
-   const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
+    const std::string& directory,
+    const std::vector<std::string>& js_assets_lists,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
 
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
-   std::vector<std::string> prefixes,
-   std::map<std::string, std::vector<uint32_t>> name_to_ids);
+    const std::vector<std::string>& prefixes,
+    const std::map<std::string, std::vector<uint32_t>>& name_to_ids);

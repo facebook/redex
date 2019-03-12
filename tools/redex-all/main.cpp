@@ -25,6 +25,7 @@
 #include <unistd.h>
 #endif
 
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <json/json.h>
 
@@ -36,14 +37,15 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "NoOptimizationsMatcher.h"
 #include "OptData.h"
-#include "PassManager.h"
 #include "PassRegistry.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
 #include "ReachableClasses.h"
 #include "RedexContext.h"
+#include "RedexResources.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -137,7 +139,7 @@ Json::Value default_config() {
   const auto passes = {
       "ReBindRefsPass",        "BridgePass",     "SynthPass",
       "FinalInlinePass",       "DelSuperPass",   "SingleImplPass",
-      "SimpleInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
+      "MethodInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass", "RegAllocPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
@@ -292,7 +294,8 @@ Arguments parse_args(int argc, char* argv[]) {
 
   if (vm.count("config")) {
     const std::string& config_file = take_last(vm["config"]);
-    args.entry_data["config"] = config_file;
+    args.entry_data["config"] =
+        boost::filesystem::absolute(config_file).string();
     args.config = redex::parse_config(config_file);
   }
 
@@ -447,10 +450,17 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
 }
 
 Json::Value get_times() {
+  using ms = std::chrono::milliseconds;
+  using std::chrono::duration_cast;
   Json::Value list(Json::arrayValue);
-  for (auto t : Timer::get_times()) {
+  for (const auto& event : Timer::get_times()) {
     Json::Value element;
-    element[t.first] = std::round(t.second * 10) / 10.0;
+    element["event"] = event.name;
+    element["depth"] = event.depth;
+    element["start"] = static_cast<Json::Int64>(
+        duration_cast<ms>(event.start.time_since_epoch()).count());
+    element["end"] = static_cast<Json::Int64>(
+        duration_cast<ms>(event.end.time_since_epoch()).count());
     list.append(element);
   }
   return list;
@@ -599,7 +609,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
 
-  args.entry_data["jars"] = Json::arrayValue;
+  std::set<std::string> library_jars;
   for (const auto& jar_path : args.jar_paths) {
     std::istringstream jar_stream(jar_path);
     std::string dependent_jar_path;
@@ -608,7 +618,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
             2,
             "Dependent JAR specified on command-line: %s\n",
             dependent_jar_path.c_str());
-      args.entry_data["jars"].append(dependent_jar_path);
+      library_jars.emplace(dependent_jar_path);
     }
   }
 
@@ -648,13 +658,13 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   }
 
   Scope external_classes;
-  if (!args.entry_data["jars"].empty()) {
+  args.entry_data["jars"] = Json::arrayValue;
+  if (!library_jars.empty()) {
     Timer t("Load library jars");
     const JsonWrapper& json_cfg = cfg.get_json_config();
     read_dup_class_whitelist(json_cfg);
 
-    for (const auto& _library_jar : args.entry_data["jars"]) {
-      const std::string library_jar = _library_jar.asString();
+    for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
@@ -665,6 +675,10 @@ void redex_frontend(ConfigFiles& cfg, /* input */
                     << std::endl;
           exit(EXIT_FAILURE);
         }
+        args.entry_data["jars"].append(basedir_path);
+      } else {
+        auto abs_path = boost::filesystem::absolute(library_jar);
+        args.entry_data["jars"].append(abs_path.string());
       }
     }
   }
@@ -681,6 +695,12 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     Timer t("Processing proguard rules");
     process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
                            pg_config);
+  }
+  {
+    Timer t("No Optimizations Rules");
+    // this will change rstate of methods
+    redex::process_no_optimizations_rules(cfg.get_no_optimizations_annos(),
+                                          scope);
   }
   {
     Timer t("Initializing reachable classes");
@@ -889,6 +909,7 @@ void dump_class_method_info_map(const std::string file_path,
     }
   });
 }
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -898,7 +919,7 @@ int main(int argc, char* argv[]) {
   signal(SIGBUS, crash_backtrace_handler);
 #endif
 
-  std::string stats_output_path;
+  std::string timings_output_path;
   Json::Value stats;
   {
     Timer redex_all_main_timer("redex-all main()");
@@ -924,6 +945,14 @@ int main(int argc, char* argv[]) {
     DexStoresVector stores;
     ConfigFiles cfg(args.config, args.out_dir);
 
+    std::string apk_dir;
+    cfg.get_json_config().get("apk_dir", "", apk_dir);
+    const std::string& manifest_filename = apk_dir + "/AndroidManifest.xml";
+    boost::optional<int32_t> maybe_sdk = get_min_sdk(manifest_filename);
+    if (maybe_sdk != boost::none) {
+      args.redex_options.min_sdk = *maybe_sdk;
+    }
+
     redex_frontend(cfg, args, *pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
@@ -944,23 +973,31 @@ int main(int argc, char* argv[]) {
             stores);
       }
     } else {
-      redex::write_all_intermediate(cfg, args.output_ir_dir, stores,
-                                    args.entry_data);
+      redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
+                                    stores, args.entry_data);
     }
 
-    stats_output_path =
+    std::string stats_output_path =
         cfg.metafile(args.config.get("stats_output", "").asString());
+    {
+      std::ofstream out(stats_output_path);
+      Json::StyledStreamWriter writer;
+      writer.write(out, stats);
+    }
+
+    timings_output_path =
+        cfg.metafile(args.config.get("timings_output", "").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;
     }
   }
+
   // now that all the timers are done running, we can collect the data
-  stats["output_stats"]["time_stats"] = get_times();
-  Json::StyledStreamWriter writer;
   {
-    std::ofstream out(stats_output_path);
-    writer.write(out, stats);
+    std::ofstream out(timings_output_path);
+    Json::StyledStreamWriter writer;
+    writer.write(out, get_times());
   }
 
   TRACE(MAIN, 1, "Done.\n");

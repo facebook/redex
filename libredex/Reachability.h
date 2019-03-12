@@ -304,7 +304,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     int* num_ignore_check_strings,
     bool record_reachability = false);
 
-void sweep(DexStoresVector& stores, const ReachableObjects& reachables);
+void sweep(DexStoresVector& stores,
+           const ReachableObjects& reachables,
+           ConcurrentSet<std::string>* removed_symbols);
 
 struct ObjectCounts {
   size_t num_classes{0};

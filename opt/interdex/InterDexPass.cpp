@@ -192,8 +192,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   treat_generated_stores(stores, &interdex);
   dexen = interdex.take_outdex();
 
+  auto final_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
-    plugin->cleanup(original_scope);
+    plugin->cleanup(final_scope);
   }
   mgr.set_metric(METRIC_COLD_START_SET_DEX_COUNT,
                  interdex.get_num_cold_start_set_dexes());

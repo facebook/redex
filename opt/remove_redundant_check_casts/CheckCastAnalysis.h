@@ -7,20 +7,21 @@
 
 #pragma once
 
+#include <boost/optional.hpp>
 #include <vector>
 
+#include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "IRCode.h"
-#include "MonotonicFixpointIterator.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace check_casts {
 
 namespace impl {
 
-using register_t = uint32_t;
+using register_t = ir_analyzer::register_t;
 
 using Domain = sparta::ConstantAbstractDomain<const DexType*>;
 
@@ -28,25 +29,17 @@ using Environment =
     sparta::PatriciaTreeMapAbstractEnvironment<register_t, Domain>;
 
 class CheckCastAnalysis final
-    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
-                                               Environment> {
+    : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   explicit CheckCastAnalysis(cfg::ControlFlowGraph* cfg, DexMethod* method)
-      : MonotonicFixpointIterator(*cfg, cfg->blocks().size()),
-        m_method(method) {}
+      : ir_analyzer::BaseIRAnalyzer<Environment>(*cfg), m_method(method) {}
 
-  void analyze_node(const NodeId& node, Environment* env) const override;
-
-  Environment analyze_edge(
-      cfg::Edge* const& edge,
-      const Environment& exit_state_at_source) const override;
-
-  // TODO: use boost::optional
-  std::unordered_map<IRInstruction*, IRInstruction*>
+  std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>>
   collect_redundant_checks_replacement();
 
  private:
-  void analyze_instruction(IRInstruction* insn, Environment* env) const;
+  void analyze_instruction(IRInstruction* insn,
+                           Environment* env) const override;
   const DexMethod* m_method;
 };
 

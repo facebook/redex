@@ -110,6 +110,11 @@ struct ConfigFiles {
     return m_method_to_weight;
   }
 
+  const std::unordered_set<std::string>&
+  get_method_sorting_whitelisted_substrings() const {
+    return m_method_sorting_whitelisted_substrings;
+  }
+
   bool save_move_map() const { return m_move_map; }
 
   const MethodMap& get_moved_methods_map() const {
@@ -139,6 +144,10 @@ struct ConfigFiles {
 
   const std::string& get_printseeds() const { return m_printseeds; }
 
+  uint32_t get_instruction_size_bitwidth_limit() const {
+    return m_instruction_size_bitwidth_limit;
+  }
+
   const JsonWrapper& get_json_config() const { return m_json; }
 
  private:
@@ -149,6 +158,7 @@ struct ConfigFiles {
   std::vector<std::string> load_coldstart_methods();
   std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
   void load_method_to_weight();
+  void load_method_sorting_whitelisted_substrings();
 
   bool m_move_map{false};
   bool m_load_class_lists_attempted{false};
@@ -161,7 +171,12 @@ struct ConfigFiles {
   std::vector<std::string> m_coldstart_methods;
   std::unordered_map<std::string, std::vector<std::string> > m_class_lists;
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
+  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
+
+  // limits the output instruction size of any DexMethod to 2^n
+  // 0 when limit is not present
+  uint32_t m_instruction_size_bitwidth_limit;
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;

@@ -8,7 +8,6 @@
 -dontwarn sun.misc.**
 -dontwarn android.test.**
 -dontwarn android.support.test.**
--dontwarn androidx.test.**
 -dontwarn com.facebook.ultralight.**
 -dontwarn com.facebook.graphservice.**
-
+-dontwarn androidx.test.**

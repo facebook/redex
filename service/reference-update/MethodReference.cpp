@@ -31,54 +31,36 @@ IRInstruction* make_invoke(DexMethod* callee,
   return invoke;
 }
 
-void patch_callsite_var_additional_args(
-    const CallSiteSpec& spec,
-    const boost::optional<std::vector<uint32_t>>& additional_args) {
-  const auto caller = spec.caller;
-  const auto call_insn = spec.call_insn;
-  const auto callee = spec.new_callee;
-  TRACE(REFU, 9, " patching call site at %s\n", SHOW(call_insn));
-
-  // Update package protected or protected methods to public.
-  if (is_static(callee) || is_any_init(callee) || !is_private(callee)) {
-    set_public(callee);
+void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
+  if (is_static(new_callee.method) || is_any_init(new_callee.method) ||
+      new_callee.method->is_virtual()) {
+    set_public(new_callee.method);
   }
-  always_assert_log(
-      is_public(callee) || callee->get_class() == caller->get_class(),
-      "Updating a call site of %s when not accessible from %s\n",
-      SHOW(callee), SHOW(caller));
+  always_assert_log(is_public(new_callee.method) ||
+                        new_callee.method->get_class() ==
+                            callsite.caller->get_class(),
+                    "\tUpdating a callsite of %s when not accessible from %s\n",
+                    SHOW(new_callee.method), SHOW(callsite.caller));
 
-  auto code = caller->get_code();
-  std::vector<uint16_t> additional_arg_regs;
-  std::vector<IRInstruction*> load_additional_args;
-  if (additional_args != boost::none) {
-    const auto& args = additional_args.get();
-    for (const auto arg : args) {
-      auto arg_reg = code->allocate_temp();
-      additional_arg_regs.push_back(arg_reg);
-      load_additional_args.push_back(make_load_const(arg_reg, arg));
+  auto code = callsite.caller->get_code();
+  auto iterator = code->iterator_to(*callsite.mie);
+  auto insn = callsite.mie->insn;
+  if (new_callee.additional_args != boost::none) {
+    const auto& args = new_callee.additional_args.get();
+    auto old_size = insn->srcs_size();
+    insn->set_arg_word_count(old_size + args.size());
+    size_t pos = old_size;
+    for (uint32_t arg : args) {
+      auto reg = code->allocate_temp();
+      // Seems it is different from dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL,
+      // arg}}) which will cause instruction_lowering crash. Why?
+      auto load_const = make_load_const(reg, arg);
+      code->insert_before(iterator, load_const);
+      insn->set_src(pos++, reg);
     }
   }
-
+  insn->set_method(new_callee.method);
   // Assuming the following move-result is there and good.
-  std::vector<uint16_t> args;
-  for (size_t i = 0; i < call_insn->srcs_size(); i++) {
-    args.push_back(call_insn->src(i));
-  }
-    for (const auto additional_arg_reg : additional_arg_regs) {
-      args.push_back(additional_arg_reg);
-    }
-  auto invoke = make_invoke(callee, call_insn->opcode(), args);
-  std::vector<IRInstruction*> new_call_insns;
-    for (const auto load_additional_arg : load_additional_args) {
-      new_call_insns.push_back(load_additional_arg);
-    }
-  new_call_insns.push_back(invoke);
-  code->insert_after(call_insn, new_call_insns);
-
-  // remove original call.
-  code->remove_opcode(call_insn);
-  TRACE(REFU, 9, " patched call site in %s\n%s\n", SHOW(caller), SHOW(code));
 }
 
 void update_call_refs_simple(
@@ -116,57 +98,44 @@ void update_call_refs_simple(
   walk::parallel::code(scope, patcher);
 }
 
-void patch_callsite(
-    const CallSiteSpec& spec,
-    const boost::optional<uint32_t>& additional_arg) {
-  std::vector<uint32_t> additional_args;
-  if (additional_arg != boost::none) {
-    additional_args.push_back(additional_arg.get());
-    patch_callsite_var_additional_args(
-        spec, boost::optional<std::vector<uint32_t>>(additional_args));
-  } else {
-    patch_callsite_var_additional_args(spec, boost::none);
-  }
-}
-
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees) {
-  auto patcher = [&](DexMethod* meth) {
+  if (callees.empty()) {
+    CallSites empty;
+    return empty;
+  }
+  auto patcher = [&](DexMethod* caller) {
     CallSites call_sites;
-    auto code = meth->get_code();
+    auto code = caller->get_code();
     if (!code) {
       return call_sites;
     }
 
-    for (auto& mie : InstructionIterable(meth->get_code())) {
+    for (auto& mie : InstructionIterable(caller->get_code())) {
       auto insn = mie.insn;
       if (!insn->has_method()) {
         continue;
       }
 
-      const auto method =
+      const auto callee =
           resolve_method(insn->get_method(),
                          opcode_to_search(const_cast<IRInstruction*>(insn)));
-      if (method == nullptr || callees.count(method) == 0) {
+      if (callee == nullptr || callees.count(callee) == 0) {
         continue;
       }
 
-      call_sites.emplace_back(meth, insn);
-      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(meth));
+      call_sites.emplace_back(caller, &mie, callee);
+      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(caller));
     }
 
     return call_sites;
   };
 
-  CallSites call_sites =
-      walk::parallel::reduce_methods<CallSites>(
-          scope,
-          patcher,
-          [](CallSites left, CallSites right) {
-            left.insert(left.end(), right.begin(), right.end());
-            return left;
-          });
+  CallSites call_sites = walk::parallel::reduce_methods<CallSites>(
+      scope, patcher, [](CallSites left, CallSites right) {
+        left.insert(left.end(), right.begin(), right.end());
+        return left;
+      });
   return call_sites;
 }
-
 } // namespace method_reference

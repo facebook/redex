@@ -47,7 +47,19 @@ struct RedexContext {
 
   DexType* make_type(DexString* dstring);
   DexType* get_type(DexString* dstring);
+
+  /**
+   * Change the name of a type, but do not remove the old name from the mapping
+   */
+  void set_type_name(DexType* type, DexString* new_name);
+  /**
+   * Add an additional name to refer to a type (a deobfuscated name for example)
+   */
   void alias_type_name(DexType* type, DexString* new_name);
+  /**
+   * Remove a name -> type entry from the map
+   */
+  void remove_type_name(DexString* name);
 
   DexFieldRef* make_field(const DexType* container,
                           const DexString* name,

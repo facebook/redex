@@ -14,21 +14,7 @@ namespace check_casts {
 
 namespace impl {
 
-// We use this special register to denote the result of a method invocation or
-// an operation that may throw an exception.
-register_t RESULT_REGISTER = std::numeric_limits<register_t>::max();
-
-void CheckCastAnalysis::analyze_node(const NodeId& node,
-                                     Environment* current_state) const {
-  for (const auto& mie : InstructionIterable(*node)) {
-    analyze_instruction(mie.insn, current_state);
-  }
-}
-
-Environment CheckCastAnalysis::analyze_edge(
-    const EdgeId&, const Environment& exit_state_at_source) const {
-  return exit_state_at_source;
-}
+using namespace ir_analyzer;
 
 void CheckCastAnalysis::analyze_instruction(IRInstruction* insn,
                                             Environment* current_state) const {
@@ -101,12 +87,12 @@ void CheckCastAnalysis::analyze_instruction(IRInstruction* insn,
   }
 }
 
-std::unordered_map<IRInstruction*, IRInstruction*>
+std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>>
 CheckCastAnalysis::collect_redundant_checks_replacement() {
   auto* code = m_method->get_code();
   auto& cfg = code->cfg();
 
-  std::unordered_map<IRInstruction*, IRInstruction*> insns;
+  std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>> insns;
 
   for (cfg::Block* block : cfg.blocks()) {
     auto env = get_entry_state_at(block);
@@ -120,12 +106,12 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
           auto src = insn->src(0);
           auto dst = ir_list::move_result_pseudo_of(it.unwrap())->dest();
           if (src == dst) {
-            insns[insn] = nullptr;
+            insns[insn] = boost::none;
           } else {
             auto new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
             new_move->set_src(0, src);
             new_move->set_dest(dst);
-            insns[insn] = new_move;
+            insns[insn] = boost::optional<IRInstruction*>(new_move);
           }
         }
       }

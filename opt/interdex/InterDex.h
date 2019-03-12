@@ -83,6 +83,7 @@ class InterDex {
 
  private:
   bool should_skip_class(const DexInfo& dex_info, DexClass* clazz);
+  bool should_not_relocate_methods_of_class(const DexClass* clazz);
   bool emit_class(const DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,

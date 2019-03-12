@@ -184,26 +184,26 @@ TEST_F(StripDebugInfoTest, dropLineNumbersPreSafeNopAfterInlined) {
       },
       R"(
     (
-     (.pos "LFoo;.bar:()I" "Foo.java" 419)
+     (.pos:dbg_0 "LFoo;.bar:()I" "Foo.java" 419)
      (const v1 420)
-     (.pos "LFoo;.bar:()I" "Foo.java" 420)
+     (.pos:dbg_1 "LFoo;.bar:()I" "Foo.java" 420)
      (const v0 420)
-     (.pos "LFoo;.baz:()I" "Foo.java" 12 0)
+     (.pos:dbg_2 "LFoo;.baz:()I" "Foo.java" 12 dbg_0)
      (const v1 432)
-     (.pos "LFoo;.bar:()I" "Foo.java" 421)
+     (.pos:dbg_3 "LFoo;.bar:()I" "Foo.java" 421)
      (add-int v0 v1 v1)
      (return v1)
     )
 )",
       R"(
     (
-     (.pos "LFoo;.bar:()I" "Foo.java" 419)
+     (.pos:dbg_0 "LFoo;.bar:()I" "Foo.java" 419)
      (const v1 420)
-     (.pos "LFoo;.bar:()I" "Foo.java" 420)
+     (.pos:dbg_1 "LFoo;.bar:()I" "Foo.java" 420)
      (const v0 420)
-     (.pos "LFoo;.baz:()I" "Foo.java" 12 0)
+     (.pos:dbg_2 "LFoo;.baz:()I" "Foo.java" 12 dbg_0)
      (const v1 432)
-     (.pos "LFoo;.bar:()I" "Foo.java" 421)
+     (.pos:dbg_3 "LFoo;.bar:()I" "Foo.java" 421)
      (add-int v0 v1 v1)
      (return v1)
     )

@@ -10,7 +10,7 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "IRInstruction.h"
-#include "MethodMerger.h"
+#include "ModelMethodMerger.h"
 
 struct ModelSpec;
 using TypeSet = std::set<const DexType*, dextypes_comparator>;

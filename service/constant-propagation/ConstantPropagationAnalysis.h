@@ -10,6 +10,7 @@
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
+#include "MonotonicFixpointIterator.h"
 
 namespace constant_propagation {
 
@@ -207,6 +208,16 @@ class BoxedBooleanAnalyzer final
   static bool analyze_invoke(const BoxedBooleanAnalyzerState&,
                              const IRInstruction*,
                              ConstantEnvironment*);
+};
+
+class StringAnalyzer
+    : public InstructionAnalyzerBase<StringAnalyzer, ConstantEnvironment> {
+ public:
+  static bool analyze_const_string(const IRInstruction* insn,
+                                   ConstantEnvironment* env) {
+    env->set(RESULT_REGISTER, StringDomain(insn->get_string()));
+    return true;
+  }
 };
 
 /*

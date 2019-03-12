@@ -11,7 +11,6 @@
 #include "ClassAssemblingUtils.h"
 #include "DexUtil.h"
 #include "MethodReference.h"
-#include "Model.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "TypeReference.h"
@@ -428,60 +427,6 @@ std::string merger_info(const MergerType& merger) {
   return ss.str();
 }
 
-std::map<DexMethod*, DexType*, dexmethods_comparator>
-collect_static_relocation_candidates(
-    const Scope& scope, const std::unordered_set<DexMethod*>& methods) {
-
-  std::unordered_map<DexMethod*, std::unordered_set<DexType*>> method_to_types;
-  const auto collect_static_relocation_candidates = [&](DexMethod* method,
-                                                        IRInstruction* insn) {
-    if (!insn->has_method()) {
-      return;
-    }
-
-    DexMethod* current_meth =
-        resolve_method(insn->get_method(), opcode_to_search(insn));
-    if (!current_meth || methods.count(current_meth) == 0) {
-      return;
-    }
-
-    method_to_types[current_meth].emplace(method->get_class());
-  };
-  walk::opcodes(scope,
-                [&](DexMethod*) { return true; },
-                collect_static_relocation_candidates);
-
-  std::map<DexMethod*, DexType*, dexmethods_comparator> methods_to_relocate;
-  for (const auto& pair : method_to_types) {
-    DexMethod* method = pair.first;
-    auto& types = pair.second;
-
-    if (types.size() == 1) {
-      DexType* type = *types.begin();
-      if (type != method->get_class()) {
-        methods_to_relocate[method] = type;
-      }
-    }
-  }
-  return methods_to_relocate;
-}
-
-uint32_t relocate_methods(
-    const std::map<DexMethod*, DexType*, dexmethods_comparator>&
-        methods_to_relocate) {
-  uint32_t num_relocated = 0;
-  for (auto& pair : methods_to_relocate) {
-    DexMethod* method = pair.first;
-    DexType* to_type = pair.second;
-    if (relocate_method_if_no_changes(method, to_type)) {
-      num_relocated++;
-    }
-  }
-
-  TRACE(TERA, 4, "Relocated %d static methods\n", num_relocated);
-  return num_relocated;
-}
-
 void set_interfaces(DexClass* cls, const TypeSet& intfs) {
   if (!intfs.empty()) {
     auto intf_list = std::deque<DexType*>();
@@ -517,7 +462,7 @@ void fix_existing_merger_cls(const Model& model,
 }
 
 // Trim the debug map to only contain mergeable methods.
-void trim_method_dedup_map(
+void trim_method_debug_map(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
   TRACE(TERA, 5, "Method debug map un-trimmed %d\n", method_debug_map.size());
@@ -578,28 +523,15 @@ void ModelMerger::update_merger_fields(const MergerType& merger) {
   m_merger_fields[merger.type] = merger_fields;
 }
 
-void ModelMerger::relocate_static_methods(Scope& scope) {
-
-  // Find candidates
-  std::map<DexMethod*, DexType*, dexmethods_comparator> methods_to_relocate =
-      collect_static_relocation_candidates(scope, m_static_methods);
-  m_num_relocated_methods = relocate_methods(methods_to_relocate);
-}
-
 void ModelMerger::update_stats(const std::string model_name,
                                const std::vector<const MergerType*>& mergers,
-                               MethodMerger& mm) {
+                               ModelMethodMerger& mm) {
   for (auto merger : mergers) {
-    m_num_classes_merged += merger->mergeables.size();
+    m_stats.m_num_classes_merged += merger->mergeables.size();
   }
   // Print method stats
-  mm.print_method_stats(model_name, m_num_classes_merged);
-  m_num_ctor_dedupped += mm.get_num_ctor_dedupped();
-  m_num_static_non_virt_dedupped += mm.get_num_static_non_virt_dedupped();
-  m_num_vmethods_dedupped += mm.get_num_vmethods_dedupped();
-  m_num_const_lifted_methods += mm.get_num_const_lifted_methods();
-  // Keep track of all static methods.
-  add_static_methods(mm.get_static_methods());
+  mm.print_method_stats(model_name, m_stats.m_num_classes_merged);
+  m_stats += mm.get_stats();
 }
 
 std::vector<DexClass*> ModelMerger::merge_model(
@@ -607,6 +539,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     DexStoresVector& stores,
     Model& model,
     boost::optional<size_t> max_num_dispatch_target) {
+  Timer t("merge_model");
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
   MergedTypeNames merged_type_names;
@@ -643,6 +576,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                               !merger.has_mergeables());
     // TODO: replace this with an annotation.
     cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
+    cls->rstate.set_generated();
 
     add_class(cls, scope, stores);
     merger_classes.push_back(cls);
@@ -686,28 +620,21 @@ std::vector<DexClass*> ModelMerger::merge_model(
                                  type_tag_fields,
                                  method_debug_map,
                                  generate_type_tags);
-  trim_method_dedup_map(mergeable_to_merger, method_debug_map);
+  trim_method_debug_map(mergeable_to_merger, method_debug_map);
   update_refs_to_mergeable_fields(
       scope, to_materialize, mergeable_to_merger, m_merger_fields);
 
   // Merge methods
-  MethodMerger mm(scope,
-                  to_materialize,
-                  type_tag_fields,
-                  &type_tags,
-                  method_debug_map,
-                  model.get_model_spec(),
-                  max_num_dispatch_target);
+  ModelMethodMerger mm(scope,
+                       to_materialize,
+                       type_tag_fields,
+                       &type_tags,
+                       method_debug_map,
+                       model.get_model_spec(),
+                       max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
   update_const_string_type_refs(scope, merged_type_names);
-
-  // Relocate static methods only if merging "globally",
-  // If dex sharding is enabled, changes will happen at InterDex level,
-  // when we shouldn't simply move methods around.
-  if (!model.is_dex_sharding_enabled()) {
-    relocate_static_methods(scope);
-  }
 
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
@@ -715,22 +642,28 @@ std::vector<DexClass*> ModelMerger::merge_model(
   post_process(model, type_tags, mergeable_to_merger_ctor);
 
   TRACE(TERA, 3, "created %d merger classes\n", merger_classes.size());
-  m_num_generated_classes = merger_classes.size();
+  m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
 }
 
 void ModelMerger::update_redex_stats(const std::string& prefix,
                                      PassManager& mgr) const {
   mgr.incr_metric((prefix + "_merger_class_generated").c_str(),
-                  m_num_generated_classes);
-  mgr.incr_metric((prefix + "_class_merged").c_str(), m_num_classes_merged);
-  mgr.incr_metric((prefix + "_ctor_dedupped").c_str(), m_num_ctor_dedupped);
+                  m_stats.m_num_generated_classes);
+  mgr.incr_metric((prefix + "_class_merged").c_str(),
+                  m_stats.m_num_classes_merged);
+  mgr.incr_metric((prefix + "_ctor_dedupped").c_str(),
+                  m_stats.m_num_ctor_dedupped);
   mgr.incr_metric((prefix + "_static_non_virt_dedupped").c_str(),
-                  m_num_static_non_virt_dedupped);
+                  m_stats.m_num_static_non_virt_dedupped);
   mgr.incr_metric((prefix + "_vmethods_dedupped").c_str(),
-                  m_num_vmethods_dedupped);
-  mgr.set_metric((prefix + "_relocated_methods").c_str(),
-                 m_num_relocated_methods);
+                  m_stats.m_num_vmethods_dedupped);
   mgr.set_metric((prefix + "_const_lifted_methods").c_str(),
-                 m_num_const_lifted_methods);
+                 m_stats.m_num_const_lifted_methods);
+  mgr.incr_metric((prefix + "_merged_static_methods").c_str(),
+                  m_stats.m_num_merged_static_methods);
+  mgr.incr_metric((prefix + "_merged_direct_methods").c_str(),
+                  m_stats.m_num_merged_direct_methods);
+  mgr.incr_metric((prefix + "_merged_nonvirt_methods").c_str(),
+                  m_stats.m_num_merged_nonvirt_methods);
 }

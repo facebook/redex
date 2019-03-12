@@ -84,6 +84,11 @@ static size_t remove_block(IRCode* code, cfg::Block* b) {
   return insns_removed;
 }
 
+/**
+ * TODO: The method is deprecated since it doesn't delete the edges associated
+ * with the deleted blocks, use ControlFlowGraph::remove_unreachable_blocks()
+ * instead.
+ */
 size_t remove_unreachable_blocks(IRCode* code) {
   auto& cfg = code->cfg();
   const auto& blocks = cfg.blocks();

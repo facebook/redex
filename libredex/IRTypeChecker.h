@@ -239,6 +239,8 @@ class IRTypeChecker final {
    */
   IRType get_type(IRInstruction* insn, uint16_t reg) const;
 
+  const DexType* get_dex_type(IRInstruction* insn, uint16_t reg) const;
+
  private:
   void check_completion() const {
     always_assert_log(m_complete,

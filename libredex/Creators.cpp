@@ -34,7 +34,9 @@ DexProto* make_static_sig(DexMethod* meth) {
 } // namespace
 
 MethodBlock::MethodBlock(IRList::iterator iterator, MethodCreator* creator)
-    : mc(creator), curr(iterator) {}
+    : mc(creator), curr(iterator) {
+  mc->blocks.push_back(this);
+}
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());
@@ -602,6 +604,16 @@ IRList::iterator MethodCreator::make_switch_block(
   return meth_code->make_switch_block(++curr, insn, default_block, cases);
 }
 
+std::vector<Location> MethodCreator::get_reg_args() {
+  std::vector<Location> args;
+  uint32_t args_size = method->get_proto()->get_args()->size();
+  if (!is_static(method)) {
+    args_size += 1;
+  }
+  args.insert(args.end(), locals.begin(), locals.begin() + args_size);
+  return args;
+}
+
 MethodCreator::MethodCreator(DexMethod* meth)
     : method(meth)
     , meth_code(meth->get_code()) {
@@ -610,6 +622,17 @@ MethodCreator::MethodCreator(DexMethod* meth)
   load_locals(meth);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }
+
+MethodCreator::MethodCreator(DexMethodRef* ref,
+                             DexAccessFlags access,
+                             DexAnnotationSet* anno,
+                             bool with_debug_item)
+    : MethodCreator(ref->get_class(),
+                    ref->get_name(),
+                    ref->get_proto(),
+                    access,
+                    anno,
+                    with_debug_item){};
 
 MethodCreator::MethodCreator(DexType* cls,
                              DexString* name,
@@ -649,7 +672,7 @@ DexMethod* MethodCreator::create() {
     }
   }
   // now allocate the rest at the start
-  size_t temp_reg {0};
+  size_t temp_reg{0};
   for (size_t i = 0; i < meth_code->get_registers_size(); ++i) {
     if (reg_map.find(i) != reg_map.end()) {
       continue;

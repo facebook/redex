@@ -56,6 +56,9 @@ TEST_F(PreVerify, ConstantPropagation) {
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
+    if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
+      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
+    }
     code->clear_cfg();
   }
 }
@@ -79,6 +82,10 @@ TEST_F(PostVerify, ConstantPropagation) {
     EXPECT_EQ(0, count_ifs(code->cfg()));
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
+    }
+
+    if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
+      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
     }
 
     if (meth->get_name()->str().find("overflow") != std::string::npos) {

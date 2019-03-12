@@ -9,11 +9,11 @@
 
 #include <ostream>
 
+#include "BaseIRAnalyzer.h"
 #include "CallGraph.h"
 #include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
-#include "MonotonicFixpointIterator.h"
 #include "ObjectDomain.h"
 #include "PatriciaTreeMapAbstractPartition.h"
 #include "PatriciaTreeSetAbstractDomain.h"
@@ -22,9 +22,10 @@
 
 /*
  * This analysis identifies heap values that are allocated within a given
- * method and never escape it. Specifically, it determines all the pointers
+ * method and have not escaped it. Specifically, it determines all the pointers
  * that a given register may contain, and figures out which of these pointers
- * must not escape.
+ * must not have escaped on any path from the method entry to the current
+ * program point.
  *
  * Note that we do not model instance fields or array elements, so any values
  * written to them will be treated as escaping, even if the containing object
@@ -33,47 +34,57 @@
 
 namespace local_pointers {
 
-using reg_t = uint32_t;
-
-constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
+using reg_t = ir_analyzer::register_t;
 
 using PointerSet = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
 using PointerEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, PointerSet>;
 
-using HeapDomain =
-    sparta::PatriciaTreeMapAbstractPartition<const IRInstruction*,
-                                             EscapeDomain>;
+inline bool may_alloc(IROpcode op) {
+  return op == OPCODE_NEW_INSTANCE || op == OPCODE_NEW_ARRAY ||
+         op == OPCODE_FILLED_NEW_ARRAY || is_invoke(op);
+}
 
-class Environment final
-    : public sparta::ReducedProductAbstractDomain<Environment,
-                                                  PointerEnvironment,
-                                                  HeapDomain> {
+class Environment final : public sparta::ReducedProductAbstractDomain<
+                              Environment,
+                              PointerEnvironment,
+                              PointerSet /* may-escape pointers */> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
-      const std::tuple<PointerEnvironment, HeapDomain>&) {}
+      const std::tuple<PointerEnvironment, PointerSet>&) {}
 
   const PointerEnvironment& get_pointer_environment() const {
     return ReducedProductAbstractDomain::get<0>();
   }
 
-  const HeapDomain& get_heap() const {
-    return ReducedProductAbstractDomain::get<1>();
+  bool may_have_escaped(const IRInstruction* ptr) const {
+    if (is_always_escaping(ptr)) {
+      return true;
+    }
+    return ReducedProductAbstractDomain::get<1>().contains(ptr);
   }
 
   PointerSet get_pointers(reg_t reg) const {
     return get_pointer_environment().get(reg);
   }
 
-  EscapeDomain get_pointee(const IRInstruction* insn) const {
-    return get_heap().get(insn);
-  }
-
   void set_pointers(reg_t reg, PointerSet pset) {
     apply<0>([&](PointerEnvironment* penv) { penv->set(reg, pset); });
+  }
+
+  void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) {
+    set_pointers(reg, PointerSet(pointer));
+    apply<1>([&](PointerSet* may_escape) { may_escape->remove(pointer); });
+  }
+
+  void set_may_escape_pointer(reg_t reg, const IRInstruction* pointer) {
+    set_pointers(reg, PointerSet(pointer));
+    if (!is_always_escaping(pointer)) {
+      apply<1>([&](PointerSet* may_escape) { may_escape->add(pointer); });
+    }
   }
 
   /*
@@ -85,33 +96,36 @@ class Environment final
     if (!pointers.is_value()) {
       return;
     }
-    apply<1>([&](HeapDomain* heap) {
+    apply<1>([&](PointerSet* may_escape) {
       for (const auto* pointer : pointers.elements()) {
-        heap->set(pointer, EscapeDomain(EscapeState::MAY_ESCAPE));
+        if (!is_always_escaping(pointer)) {
+          may_escape->add(pointer);
+        }
       }
     });
   }
 
+ private:
   /*
-   * Set :reg to contain the single abstract pointer :insn, which points to a
-   * value with :escape_state.
+   * This method tells us whether we should always treat as may-escapes all the
+   * non-null pointers written by the given instruction to its dest register.
+   * This is a small performance optimization -- it means we don't have to
+   * populate our may_escape set with as many pointers.
+   *
+   * For instructions that don't write any non-null pointer values to their
+   * dests, this method will be vacuously true.
    */
-  void set_pointer_at(reg_t reg,
-                      const IRInstruction* insn,
-                      EscapeState escape_state) {
-    apply<0>(
-        [&](PointerEnvironment* penv) { penv->set(reg, PointerSet(insn)); });
-    apply<1>(
-        [&](HeapDomain* heap) { heap->set(insn, EscapeDomain(escape_state)); });
+  static bool is_always_escaping(const IRInstruction* ptr) {
+    auto op = ptr->opcode();
+    return !may_alloc(op) && op != IOPCODE_LOAD_PARAM_OBJECT;
   }
 };
 
-inline bool is_alloc_opcode(IROpcode op) {
-  return op == OPCODE_NEW_INSTANCE || op == OPCODE_NEW_ARRAY ||
-         op == OPCODE_FILLED_NEW_ARRAY;
-}
-
 using ParamSet = sparta::PatriciaTreeSetAbstractDomain<uint16_t>;
+
+// For denoting that a returned value is freshly allocated in the summarized
+// method and only escaped at the return opcode(s).
+constexpr uint16_t FRESH_RETURN = std::numeric_limits<uint16_t>::max();
 
 struct EscapeSummary {
   // The elements of this set represent the indexes of the src registers that
@@ -145,28 +159,16 @@ sparta::s_expr to_s_expr(const EscapeSummary&);
 using InvokeToSummaryMap =
     std::unordered_map<const IRInstruction*, EscapeSummary>;
 
-class FixpointIterator final
-    : public sparta::MonotonicFixpointIterator<cfg::GraphInterface,
-                                               Environment> {
+class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap())
-      : MonotonicFixpointIterator(cfg),
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
         m_invoke_to_summary_map(invoke_to_summary_map) {}
 
-  void analyze_node(const NodeId& block, Environment* env) const override {
-    for (auto& mie : InstructionIterable(block)) {
-      analyze_instruction(mie.insn, env);
-    }
-  }
-
-  void analyze_instruction(const IRInstruction* insn, Environment* env) const;
-
-  Environment analyze_edge(const EdgeId&,
-                           const Environment& entry_env) const override {
-    return entry_env;
-  }
+  void analyze_instruction(IRInstruction* insn,
+                           Environment* env) const override;
 
  private:
   // A map of the invoke instructions in the analyzed method to their respective

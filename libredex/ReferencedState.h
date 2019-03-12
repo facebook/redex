@@ -63,6 +63,12 @@ class ReferencedState {
 
   bool m_keep_name{false};
 
+  bool m_no_optimizations{false};
+
+  bool m_generated{false};
+
+  int32_t m_api_level{-1};
+
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
   boost::optional<size_t> m_interdex_subgroup{boost::none};
@@ -225,6 +231,15 @@ class ReferencedState {
   void set_allowshrinking() { m_set_allowshrinking = true; }
   void unset_allowshrinking() { m_unset_allowshrinking = true; }
 
+  // This one should only be used by UnmarkProguardKeepPass to unmark proguard
+  // keep rule after proguard file processing is finished. Because
+  // ProguardMatcher uses parallel processing, using this will result in race
+  // condition.
+  void force_unset_allowshrinking() {
+    m_set_allowshrinking = true;
+    m_unset_allowshrinking = false;
+  }
+
   void set_allowobfuscation() { m_set_allowobfuscation = true; }
   void unset_allowobfuscation() { m_unset_allowobfuscation = true; }
 
@@ -246,6 +261,18 @@ class ReferencedState {
   bool has_interdex_subgroup() const {
     return m_interdex_subgroup != boost::none;
   }
+
+  // -1 means unknown, e.g. for a method created by Redex
+  int32_t get_api_level() const { return m_api_level; }
+  void set_api_level(int api_level) { m_api_level = api_level; }
+
+  bool no_optimizations() const { return m_no_optimizations; }
+  void set_no_optimizations() { m_no_optimizations = true; }
+
+  // Methods and classes marked as "generated" tend to not have stable names,
+  // and don't properly participate in coldstart tracking.
+  bool is_generated() const { return m_generated; }
+  void set_generated() { m_generated = true; }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

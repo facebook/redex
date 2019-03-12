@@ -257,6 +257,8 @@ bool is_load_param(IROpcode);
 
 bool is_move_result_pseudo(IROpcode);
 
+bool is_move_result_or_move_result_pseudo(IROpcode op);
+
 bool is_move(IROpcode);
 
 IROpcode load_param_to_move(IROpcode);

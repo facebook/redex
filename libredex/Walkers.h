@@ -252,8 +252,8 @@ class walk {
                               MethodFilterFn filter,
                               InsnWalkerFn walker) {
     iterate_code(cls, filter, [&walker](DexMethod* m, IRCode& code) {
-      editable_cfg_adapter::iterate(&code, [&walker, &m](MethodItemEntry* mie) {
-        walker(m, mie->insn);
+      editable_cfg_adapter::iterate(&code, [&walker, &m](MethodItemEntry& mie) {
+        walker(m, mie.insn);
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
     });

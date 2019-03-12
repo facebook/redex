@@ -8,11 +8,13 @@
 #include "RenameClassesV2.h"
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/regex.hpp>
 #include <map>
 #include <string>
-#include <vector>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -166,25 +168,30 @@ RenameClassesPassV2::build_dont_rename_resources(
 
 std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
-  std::unordered_set<std::string> dont_rename_class_name_literals;
-
-  // Gather strings from const-string opcodes
-  auto match = std::make_tuple(
-    m::const_string(/* const-string {vX}, <any string> */)
-  );
-  walk::matching_opcodes(scope, match,
-      [&](const DexMethod*, const std::vector<IRInstruction*>& insns){
-        IRInstruction* const_string = insns[0];
-        auto classname = JavaNameUtil::external_to_internal(
-          const_string->get_string()->c_str());
-        if (DexType::get_type(classname)) {
-          TRACE(RENAME, 4,
-                "Found const-string of: %s, marking %s unrenameable\n",
-                const_string->get_string()->c_str(), classname.c_str());
-          dont_rename_class_name_literals.insert(classname);
-        }
-      });
-  return dont_rename_class_name_literals;
+  using namespace boost::algorithm;
+  std::vector<DexString*> all_strings;
+  for (auto clazz : scope) {
+    clazz->gather_strings(all_strings);
+  }
+  sort_unique(all_strings);
+  std::unordered_set<std::string> result;
+  boost::regex external_name_regex{
+      "((org)|(com)|(android(x|\\.support)))\\."
+      "([a-zA-Z][a-zA-Z\\d_$]*\\.)*"
+      "[a-zA-Z][a-zA-Z\\d_$]*"};
+  for (auto dex_str : all_strings) {
+    const std::string& s = dex_str->str();
+    if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
+      const std::string& internal_name = JavaNameUtil::external_to_internal(s);
+      auto cls = type_class(DexType::get_type(internal_name));
+      if (cls != nullptr && !cls->is_external()) {
+        result.insert(internal_name);
+        TRACE(RENAME, 4, "Found %s in string pool before renaming\n",
+              s.c_str());
+      }
+    }
+  }
+  return result;
 }
 
 std::unordered_set<std::string>
@@ -464,7 +471,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   sort_unique(all_strings);
   int sketchy_strings = 0;
   for (auto s : all_strings) {
-    if (external_names.find(s->c_str()) != external_names.end() ||
+    if (external_names.find(s->str()) != external_names.end() ||
         aliases.has(s)) {
       TRACE(RENAME, 2, "Found %s in string pool after renaming\n", s->c_str());
       sketchy_strings++;
@@ -475,6 +482,64 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
             "WARNING: Found a number of sketchy class-like strings after class "
             "renaming. Re-run with TRACE=RENAME:2 for more details.\n");
   }
+}
+
+/* In Signature annotations, parameterized types of the form Foo<Bar> get
+ * represented as the strings
+ *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
+ *   or
+ *   "Lcom/baz/Foo<" "Lcom/baz/Bar;" ">"
+ *
+ * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
+ * Signature annotations suck.
+ *
+ * This method transforms the input to the form expected by the alias map:
+ *   "Lcom/baz/Foo;"
+ * looks that up in the map, then transforms back to the form of the input.
+ */
+DexString* lookup_signature_annotation(const AliasMap& aliases,
+                                       DexString* anno) {
+  bool has_bracket = false;
+  bool added_semicolon = false;
+  std::string anno_str = anno->str();
+  // anno_str looks like one of these
+  // Lcom/baz/Foo<
+  // Lcom/baz/Foo;
+  // Lcom/baz/Foo
+  if (anno_str.back() == '<') {
+    anno_str.pop_back();
+    has_bracket = true;
+  }
+  // anno_str looks like one of these
+  // Lcom/baz/Foo;
+  // Lcom/baz/Foo
+  if (anno_str.back() != ';') {
+    anno_str.push_back(';');
+    added_semicolon = true;
+  }
+  // anno_str looks like this
+  // Lcom/baz/Foo;
+
+  // Use get_string because if it's in the map, then it must also already exist
+  DexString* transformed_anno = DexString::get_string(anno_str);
+  if (transformed_anno != nullptr && aliases.has(transformed_anno)) {
+    DexString* obfu = aliases.at(transformed_anno);
+    if (!added_semicolon && !has_bracket) {
+      return obfu;
+    }
+    std::string obfu_str = obfu->str();
+    // We need to transform back to the original format of the input
+    if (added_semicolon) {
+      always_assert(obfu_str.back() == ';');
+      obfu_str.pop_back();
+    }
+    if (has_bracket) {
+      always_assert(obfu_str.back() != '<');
+      obfu_str.push_back('<');
+    }
+    return DexString::make_string(obfu_str);
+  }
+  return nullptr;
 }
 
 void RenameClassesPassV2::eval_classes(
@@ -688,7 +753,7 @@ void RenameClassesPassV2::rename_classes(
       mgr.incr_metric(METRIC_FORCE_RENAMED_CLASSES, 1);
       TRACE(RENAME, 2, "Forced renamed: '%s'\n", oldname->c_str());
     } else if (m_dont_rename_reasons.find(clazz) !=
-          m_dont_rename_reasons.end()) {
+               m_dont_rename_reasons.end()) {
       auto reason = m_dont_rename_reasons[clazz];
       std::string metric = dont_rename_reason_to_metric(reason.code);
       mgr.incr_metric(metric, 1);
@@ -727,7 +792,7 @@ void RenameClassesPassV2::rename_classes(
 
     auto dstring = DexString::make_string(descriptor);
     aliases.add_class_alias(clazz, dstring);
-    dtype->assign_name_alias(dstring);
+    dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
     std::string new_str(descriptor);
     //    proguard_map.update_class_mapping(old_str, new_str);
@@ -750,7 +815,7 @@ void RenameClassesPassV2::rename_classes(
       dstring = DexString::make_string(newarraytype);
 
       aliases.add_alias(oldname, dstring);
-      arraytype->assign_name_alias(dstring);
+      arraytype->set_name(dstring);
     }
   }
 
@@ -800,29 +865,6 @@ void RenameClassesPassV2::rename_classes(
    * Strings rather than Type's, so they have to be explicitly
    * handled.
    */
-
-  /* In Signature annotations, parameterized types of the form Foo<Bar> get
-   * represented as the strings
-   *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
-   *
-   * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
-   * So, we have to alias those strings if they exist. Signature annotations
-   * suck.
-   */
-  for (const auto& apair : aliases.get_class_map()) {
-    char buf[MAX_DESCRIPTOR_LENGTH];
-    const char *sourcestr = apair.first->c_str();
-    size_t sourcelen = strlen(sourcestr);
-    if (sourcestr[sourcelen - 1] != ';') continue;
-    strcpy(buf, sourcestr);
-    buf[sourcelen - 1] = '\0';
-    auto dstring = DexString::get_string(buf);
-    if (dstring == nullptr) continue;
-    strcpy(buf, apair.second->c_str());
-    buf[strlen(apair.second->c_str()) - 1] = '\0';
-    auto target = DexString::make_string(buf);
-    aliases.add_alias(dstring, target);
-  }
   static DexType *dalviksig =
     DexType::get_type("Ldalvik/annotation/Signature;");
   walk::annotations(scope, [&](DexAnnotation* anno) {
@@ -836,11 +878,12 @@ void RenameClassesPassV2::rename_classes(
       for (auto strev : *evs) {
         if (strev->evtype() != DEVT_STRING) continue;
         auto stringev = static_cast<DexEncodedValueString*>(strev);
-        if (aliases.has(stringev->string())) {
+        DexString* old_str = stringev->string();
+        DexString* new_str = lookup_signature_annotation(aliases, old_str);
+        if (new_str != nullptr) {
           TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'\n",
-              stringev->string()->c_str(),
-              aliases.at(stringev->string())->c_str());
-          stringev->string(aliases.at(stringev->string()));
+                old_str->c_str(), new_str->c_str());
+          stringev->string(new_str);
         }
       }
     }
@@ -871,7 +914,7 @@ void RenameClassesPassV2::rename_classes_in_layouts(
     }
     size_t num_renamed = 0;
     ssize_t out_delta = 0;
-    TRACE(RENAME, 5, "Begin rename Views in layout %s\n", path.c_str());
+    TRACE(RENAME, 6, "Begin rename Views in layout %s\n", path.c_str());
     rename_classes_in_layout(path, aliases_for_layouts, &num_renamed, &out_delta);
     TRACE(
       RENAME,

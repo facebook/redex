@@ -362,127 +362,9 @@ void GatheredTypes::gather_components() {
 }
 
 constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
-typedef std::map<DexAnnotation*, uint32_t> annomap_t;
-typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
-typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
-typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
 
-enum class DebugInfoKind {
-  Normal = 0,
-  NoPositions = 1,
-  InstructionOffsets = 2,
-  InstructionOffsetsPerArity = 3,
-  Max = 4,
-};
-
-struct CodeItemEmit {
-  DexMethod* method;
-  DexCode* code;
-  dex_code_item* code_item;
-
-  CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
-      : method(meth), code(c), code_item(ci) {}
-};
-
-class DexOutput {
-public:
-  dex_stats_t m_stats;
- private:
-  DexClasses* m_classes;
-  DexOutputIdx* dodx;
-  GatheredTypes* m_gtypes;
-  uint8_t* m_output;
-  uint32_t m_offset;
-  const char* m_filename;
-  size_t m_store_number;
-  size_t m_dex_number;
-  DebugInfoKind m_debug_info_kind;
-  IODIMetadata* m_iodi_metadata;
-  PositionMapper* m_pos_mapper;
-  std::string m_method_mapping_filename;
-  std::string m_class_mapping_filename;
-  std::string m_pg_mapping_filename;
-  std::string m_bytecode_offset_filename;
-  std::unordered_map<DexTypeList*, uint32_t> m_tl_emit_offsets;
-  std::vector<CodeItemEmit> m_code_item_emits;
-  std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
-  std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
-  std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
-  std::unordered_map<DexClass*, uint32_t> m_cdi_offsets;
-  std::unordered_map<DexClass*, uint32_t> m_static_values;
-  dex_header hdr;
-  std::vector<dex_map_item> m_map_items;
-  LocatorIndex* m_locator_index;
-  bool m_emit_name_based_locators;
-  const ConfigFiles& m_config_files;
-  std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
-
-  void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
-  void generate_string_data(SortMode mode = SortMode::DEFAULT);
-  void generate_type_data();
-  void generate_proto_data();
-  void generate_field_data();
-  void generate_method_data();
-  void generate_class_data();
-  void generate_class_data_items();
-
-  // Sort code according to a sequence of sorting modes, ordered by precedence.
-  // e.g. passing {SortMode::CLINIT_FIRST, SortMode::CLASS_ORDER} means that
-  // clinit methods come before all other methods, and remaining methods are sorted
-  // by class.
-  void generate_code_items(const std::vector<SortMode>& modes);
-  void generate_static_values();
-  void unique_annotations(annomap_t& annomap,
-                          std::vector<DexAnnotation*>& annolist);
-  void unique_asets(annomap_t& annomap,
-                    asetmap_t& asetmap,
-                    std::vector<DexAnnotationSet*>& asetlist);
-  void unique_xrefs(asetmap_t& asetmap,
-                    xrefmap_t& xrefmap,
-                    std::vector<ParamAnnotations*>& xreflist);
-  void unique_adirs(asetmap_t& asetmap,
-                    xrefmap_t& xrefmap,
-                    adirmap_t& adirmap,
-                    std::vector<DexAnnotationDirectory*>& adirlist);
-  void generate_annotations();
-  void generate_debug_items();
-  void generate_typelist_data();
-  void generate_map();
-  void finalize_header();
-  void init_header_offsets();
-  void write_symbol_files();
-  void align_output() { m_offset = (m_offset + 3) & ~3; }
-  void emit_locator(Locator locator);
-  void emit_name_based_locators();
-  const std::unordered_set<std::string>& get_method_whitelisted_substrings(
-      const ConfigFiles& cfg);
-  std::unique_ptr<Locator> locator_for_descriptor(
-      const std::unordered_set<DexString*>& type_names, DexString* descriptor);
-
- public:
-  DexOutput(const char* path,
-            DexClasses* classes,
-            LocatorIndex* locator_index,
-            bool emit_name_based_locators,
-            size_t store_number,
-            size_t dex_number,
-            DebugInfoKind debug_info_kind,
-            IODIMetadata* iodi_metadata,
-            const ConfigFiles& config_files,
-            PositionMapper* pos_mapper,
-            std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-            std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-                code_debug_lines,
-            const std::string& method_mapping_path,
-            const std::string& class_mapping_path,
-            const std::string& pg_mapping_path,
-            const std::string& bytecode_offset_path);
-  ~DexOutput();
-  void prepare(SortMode string_mode,
-               const std::vector<SortMode>& code_mode,
-               const ConfigFiles& cfg);
-  void write();
-};
+CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
+    : method(meth), code(c), code_item(ci) {}
 
 DexOutput::DexOutput(
     const char* path,
@@ -555,6 +437,16 @@ DexOutput::locator_for_descriptor(
   const std::unordered_set<DexString*>& type_names,
   DexString* descriptor)
 {
+  if (m_emit_name_based_locators) {
+    const char* s = descriptor->c_str();
+    uint32_t global_clsnr = Locator::decodeGlobalClassIndex(s);
+    if (global_clsnr != Locator::invalid_global_class_index) {
+      // We don't need locators for renamed classes since
+      // name-based-locators are enabled.
+      return nullptr;
+    }
+  }
+
   LocatorIndex* locator_index = m_locator_index;
   if (locator_index != nullptr) {
     auto locator_it = locator_index->find(descriptor);
@@ -957,6 +849,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
         "Undefined method in generate_code_items()\n\t prototype: %s\n", SHOW(meth));
     align_output();
     int size = code->encode(dodx, (uint32_t*)(m_output + m_offset));
+    check_method_instruction_size_limit(m_config_files, size, SHOW(meth));
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output + m_offset));
@@ -964,6 +857,24 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_stats.num_instructions += code->get_instructions().size();
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
+}
+
+void DexOutput::check_method_instruction_size_limit(const ConfigFiles& cfg,
+                                                    int size,
+                                                    const char* method_name) {
+  always_assert_log(size >= 0, "Size of method cannot be negative: %d\n", size);
+
+  uint32_t instruction_size_bitwidth_limit =
+      cfg.get_instruction_size_bitwidth_limit();
+
+  if (instruction_size_bitwidth_limit) {
+    uint64_t hard_instruction_size_limit = 1L
+                                           << instruction_size_bitwidth_limit;
+    always_assert_log(
+        ((uint64_t)size) <= hard_instruction_size_limit,
+        "Size of method exceeded limit. size: %d, limit: %d, method: %s\n",
+        size, hard_instruction_size_limit, method_name);
+  }
 }
 
 void DexOutput::generate_static_values() {
@@ -1965,23 +1876,6 @@ void GatheredTypes::set_method_to_weight(
   m_method_to_weight = method_to_weight;
 }
 
-const std::unordered_set<std::string>&
-DexOutput::get_method_whitelisted_substrings(const ConfigFiles& cfg) {
-  if (m_method_sorting_whitelisted_substrings.empty()) {
-    const auto json_cfg = cfg.get_json_config();
-    Json::Value json_result;
-    json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
-                 json_result);
-    if (json_result != Json::nullValue) {
-      for (auto const& json_element : json_result) {
-        m_method_sorting_whitelisted_substrings.insert(json_element.asString());
-      }
-    }
-  }
-
-  return m_method_sorting_whitelisted_substrings;
-}
-
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
                         const ConfigFiles& cfg) {
@@ -1990,7 +1884,7 @@ void DexOutput::prepare(SortMode string_mode,
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
     m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
     m_gtypes->set_method_sorting_whitelisted_substrings(
-        get_method_whitelisted_substrings(cfg));
+        cfg.get_method_sorting_whitelisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);

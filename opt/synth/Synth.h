@@ -19,6 +19,7 @@ class SynthPass : public Pass {
     jw.get("max_passes", 5, m_pass_config.max_passes);
     jw.get("synth_only", false, m_pass_config.synth_only);
     jw.get("remove_pub", true, m_pass_config.remove_pub);
+    jw.get("remove_constructors", true, m_pass_config.remove_constructors);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

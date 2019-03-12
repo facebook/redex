@@ -149,7 +149,7 @@ DexClass* create_class(const DexType* type,
   always_assert(!pkg_name.empty());
   auto name = std::string(type->get_name()->c_str());
   name = pkg_name + "/" + name.substr(1);
-  t->assign_name_alias(DexString::make_string(name));
+  t->set_name(DexString::make_string(name));
   // Create class.
   ClassCreator creator(t);
   creator.set_access(access);
@@ -306,7 +306,7 @@ void patch_iget(DexMethod* meth,
   switch (op) {
   case OPCODE_IGET_OBJECT: {
     auto dest = std::next(it)->insn->dest();
-    auto cast = MethodMerger::make_check_cast(original_field_type, dest);
+    auto cast = ModelMethodMerger::make_check_cast(original_field_type, dest);
     meth->get_code()->insert_after(insn, cast);
     break;
   }

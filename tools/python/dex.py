@@ -10,11 +10,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from file_extract import AutoParser
+from io import BytesIO
+
 import bisect
 import copy
 import dict_utils
 import file_extract
-from file_extract import AutoParser
 import numbers
 import operator
 import optparse
@@ -23,7 +25,10 @@ import re
 import six
 import string
 import sys
-import StringIO
+
+
+def text(s):
+    return unicode(s) if sys.version_info[0] < 3 else str(s)
 
 
 def get_uleb128_byte_size(value):
@@ -41,7 +46,7 @@ def get_uleb128p1_byte_size(value):
 # ----------------------------------------------------------------------
 # Constants
 # ----------------------------------------------------------------------
-MAGIC = "dex\n"
+MAGIC = b"dex\n"
 ENDIAN_CONSTANT = 0x12345678
 REVERSE_ENDIAN_CONSTANT = 0x78563412
 NO_INDEX = 0xffffffff
@@ -186,7 +191,7 @@ class TypeCode(dict_utils.Enum):
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True,
              parent_path=None):
-        f.write(str(self))
+        f.write(text(self))
 
 
 # ----------------------------------------------------------------------
@@ -352,7 +357,7 @@ class class_data_item(AutoParser):
 
     @classmethod
     def create_empty(cls):
-        data = file_extract.FileExtract(StringIO.StringIO('\0\0\0\0'), '=')
+        data = file_extract.FileExtract(BytesIO(b'\0\0\0\0'), '=')
         return class_data_item(data)
 
 # ----------------------------------------------------------------------
@@ -695,16 +700,17 @@ class debug_info_item(AutoParser):
 
     def get_line_table(self):
         if self.line_table is None:
+            line_table = []
             ops = self.get_ops()
             row = debug_info_item.row()
             for op_args in ops:
-                op = op_args[0]
+                op = op_args.op
                 if op == DBG_END_SEQUENCE:
                     break
                 if op == DBG_ADVANCE_PC:
-                    row.address += op.addr_offset
+                    row.address += op_args.addr_offset
                 elif op == DBG_ADVANCE_LINE:
-                    row.line += op.line_offset
+                    row.line += op_args.line_offset
                 elif op == DBG_START_LOCAL:
                     pass
                 elif op == DBG_START_LOCAL_EXTENDED:
@@ -718,13 +724,14 @@ class debug_info_item(AutoParser):
                 elif op == DBG_SET_EPILOGUE_BEGIN:
                     row.epilogue_begin = True
                 elif op == DBG_SET_FILE:
-                    row.source_file = op.name_idx
+                    row.source_file = op_args.name_idx
                 else:
-                    row.line += op.line_offset
-                    row.address += op.addr_offset
-                    self.line_table.append(copy.copy(row))
+                    row.line += op_args.line_offset
+                    row.address += op_args.addr_offset
+                    line_table.append(copy.copy(row))
                     row.prologue_end = False
                     row.epilogue_begin = False
+            self.line_table = line_table
         return self.line_table
 
     def get_ops(self, reset_offset=True):
@@ -1381,7 +1388,7 @@ class File:
         self.proguard = None
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
-        self.data = file_extract.FileExtract(open(self.path), '=', 4)
+        self.data = file_extract.FileExtract(open(self.path, 'rb'), '=', 4)
         self.header = header_item(self.data)
         self.map_list = None
         self.string_ids = None
@@ -1472,7 +1479,7 @@ class File:
     def get_string(self, index):
         strings = self.get_strings()
         if index < len(strings):
-            return strings[index].data
+            return file_extract.hex_escape(strings[index].data)
         return None
 
     def get_typename(self, type_id):
@@ -1964,7 +1971,7 @@ class Opcode00(Opcode):
             self.element_width = code_units.get_code_unit()
             self.size = code_units.get_uint()
             num_code_units = int((self.size * self.element_width + 1) / 2)
-            encoder = file_extract.FileEncode(StringIO.StringIO(), 'little', 4)
+            encoder = file_extract.FileEncode(BytesIO(), 'little', 4)
             for i in range(num_code_units):
                 encoder.put_uint16(code_units.get_code_unit())
             encoder.seek(0)
@@ -2964,7 +2971,7 @@ class Opcode2B(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
-        self.branch = inst.get_uint32(1)
+        self.branch = inst.get_sint32(1)
 
     def dump(self, f=sys.stdout):
         f.write('%s v%u, %8.8x // +%8.8x' % (self.get_name(), self.reg,
@@ -2983,7 +2990,7 @@ class Opcode2C(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
-        self.branch = inst.get_uint32(1)
+        self.branch = inst.get_sint32(1)
 
     def dump(self, f=sys.stdout):
         f.write('%s v%u, %8.8x // +%8.8x' % (self.get_name(), self.reg,
@@ -3968,6 +3975,11 @@ def main():
                       help='Don\'t print information coming from abstract'
                       ' classes when passing --code, --debug or --all.',
                       default=False)
+    parser.add_option('--counts',
+                      action='store_true',
+                      dest='dump_counts',
+                      help='Dump the DEX opcode counts',
+                      default=False)
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -3976,6 +3988,7 @@ def main():
     total_opcode_byte_size = 0
     total_file_size = 0
     op_name_to_size = {}
+    op_name_to_count = {}
     string_counts = {}
     i = 0
 
@@ -4035,7 +4048,8 @@ def main():
         if options.dump_code_items:
             dex.dump_code_items(options)
         if (options.dump_disassembly or options.dump_stats or
-                options.check_encoding or options.new_encoding):
+                options.check_encoding or options.new_encoding
+                or options.dump_counts):
             if options.dump_stats:
                 for string_item in dex.get_strings():
                     if string_item.data not in string_counts:
@@ -4058,7 +4072,7 @@ def main():
                     file_opcodes_byte_size += opcodes_bytes_size
                     total_opcode_byte_size += opcodes_bytes_size
                     if (options.dump_stats or options.check_encoding or
-                            options.new_encoding):
+                            options.new_encoding or options.dump_counts):
                         for dex_inst in method.get_instructions():
                             if options.dump_stats:
                                 op_name = dex_inst.get_name()
@@ -4066,6 +4080,11 @@ def main():
                                 if op_name not in op_name_to_size:
                                     op_name_to_size[op_name] = 0
                                 op_name_to_size[op_name] += size
+                            if options.dump_counts:
+                                op_name = dex_inst.get_name()
+                                if op_name not in op_name_to_count:
+                                    op_name_to_count[op_name] = 0
+                                op_name_to_count[op_name] += 1
                             if options.check_encoding:
                                 code_bytes_inefficiently_encoded += (
                                     dex_inst.check_encoding())
@@ -4138,6 +4157,12 @@ def main():
             print('%-8u %5.2f %s' % (byte_size, percentage, op_name))
         print('-------- ----- ---------------------------------')
         print('%-8u 100.0' % (total_opcode_byte_size))
+
+    if options.dump_counts:
+        print('COUNT    OPCODE')
+        print('======== =================================')
+        for op_name, count in op_name_to_count.items():
+            print('%-8u %s' % (count, op_name))
 
     if i > 0:
         if options.check_encoding:

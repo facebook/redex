@@ -6,8 +6,8 @@ set -o pipefail
 # the output of dexdump, and returns a diff of the two with extraneous info
 # (like addresses) filtered out .
 
-INPUT=$1
-REDEXOUT=$2
+INPUT_A=$1
+INPUT_B=$2
 
 IGNORE_RENAME=false
 if [[ "$3" == '--ignore-rename' ]]
@@ -16,24 +16,6 @@ then
 fi
 
 TEMPDIR=`mktemp -d 2>/dev/null || mktemp -d -t 'extractdexdump'`
-OUTA=$TEMPDIR/alpha.filt.dexdump
-OUTB=$TEMPDIR/beta.filt.dexdump
-OUTDIFF=$TEMPDIR/diff
-if [ ! -f $INPUT ]; then
-    echo "No such file $INPUT, bailing"
-    exit 1;
-fi
-DEXDUMP=
-if [[ "$INPUT" =~ dex$ ]]; then
-    DEXDUMP="dexdump -d"
-elif [[ "$INPUT" =~ apk$ ]]; then
-    FBANDROID="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../../.."
-    DEXDUMP="$(realpath "$FBANDROID/scripts/ordering/extractdexdump")"
-else
-    DEXDUMP=cat
-fi
-
-export LC_ALL=C
 
 function strip_cruft() {
     local GET_DUMP_CMD="$1"
@@ -46,7 +28,7 @@ function strip_cruft() {
         RENAME_CLASS_DEFINITION='s/X\..../X\.xxx/g'
     fi
     echo Running $GET_DUMP_CMD
-    time $GET_DUMP_CMD | \
+    $GET_DUMP_CMD | \
         sed 's/^Processing .*dex//' | \
         sed 's/^Opened .*dex//' | \
         sed 's/^  source_file_idx   : [0-9]* /  source_file_idx   : /' | \
@@ -65,8 +47,84 @@ function strip_cruft() {
         > "$OUT"
 }
 
-strip_cruft "$DEXDUMP $INPUT" "$OUTA"
-strip_cruft "$DEXDUMP $REDEXOUT" "$OUTB"
+# Compare dexfiles in the folder1 and folder2.
+function compare_ir_folder() {
+    folder1=$1
+    folder2=$2
+    dex_count1=$(find "$folder1" -name '*.dex'|wc -l)
+    dex_count2=$(find "$folder2" -name '*.dex'|wc -l)
+    if [ "$dex_count1" -ne "$dex_count2" ]
+    then
+        echo "[x] Different dex files count, $dex_count1 in $folder1, $dex_count2 in $folder2"
+        exit 1
+    fi
+
+    for folder in $folder1 $folder2
+    do
+        for file in irmeta.bin entry.json
+        do
+            if [ ! -f "$folder/$file" ]
+            then
+                echo "[x] $folder/$file is missing"
+                exit 1
+            fi
+        done
+    done
+
+    # Compare dex files and irmeta.bin. Check md5sum before running dexdump.
+    EXIT_STATUS=0
+    cd "$folder1" || exit
+    md5sum ./*.dex irmeta.bin > "$TEMPDIR/md5.txt"
+    cd "$folder2" || exit
+    files=$(md5sum -c "$TEMPDIR/md5.txt" --quiet 2>/dev/null | awk -F: '{print $1}')
+
+    cd "$TEMPDIR" || exit
+    for f in $files
+    do
+        if [ "$f" = irmeta.bin ]; then
+            echo "[x] irmeta.bin are different"
+            EXIT_STATUS=1
+            continue
+        fi
+        strip_cruft "dexdump -d $folder1/$f" "$f.txt.1" >/dev/null
+        strip_cruft "dexdump -d $folder2/$f" "$f.txt.2" >/dev/null
+        if ! diff --speed-large-files -u "$f.txt.1" "$f.txt.2" > "$f.txt.diff"
+        then
+            echo "[x] See difference in $TEMPDIR/$f.txt.diff"
+            EXIT_STATUS=1
+        fi
+    done
+
+    test $EXIT_STATUS -eq 0 && echo "[OK] All the dex files and meta data are the same!"
+    exit $EXIT_STATUS
+}
+
+export LC_ALL=C
+
+if [ -d "$INPUT_A" ]; then
+    # Inputs are IR folders, compare the files in the folders and exit.
+    compare_ir_folder "$INPUT_A" "$INPUT_B"
+    exit 1;
+elif [ ! -f "$INPUT_A" ]; then
+    echo "No such file $INPUT_A, bailing"
+    exit 1;
+fi
+
+OUTA=$TEMPDIR/alpha.filt.dexdump
+OUTB=$TEMPDIR/beta.filt.dexdump
+OUTDIFF=$TEMPDIR/diff
+DEXDUMP=
+if [[ "$INPUT_A" =~ dex$ ]]; then
+    DEXDUMP="dexdump -d"
+elif [[ "$INPUT_A" =~ apk$ ]]; then
+    FBANDROID="$(dirname "$(realpath "${BASH_SOURCE[0]}")")/../../.."
+    DEXDUMP="$(realpath "$FBANDROID/scripts/ordering/extractdexdump")"
+else
+    DEXDUMP="cat"
+fi
+
+strip_cruft "$DEXDUMP $INPUT_A" "$OUTA"
+strip_cruft "$DEXDUMP $INPUT_B" "$OUTB"
 
 diff --speed-large-files -u $OUTA $OUTB > $OUTDIFF
 if [ $? == 0 ]; then

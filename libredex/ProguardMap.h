@@ -14,6 +14,7 @@
 #include <string>
 
 #include "DexClass.h"
+#include "ProguardLineRange.h"
 
 /**
  * ProguardMap parses ProGuard's mapping.txt file that maps de-obfuscated class
@@ -80,6 +81,23 @@ struct ProguardMap {
    */
   std::string deobfuscate_method(const std::string& method) const;
 
+  struct Frame {
+    DexString* method;
+    uint32_t line;
+    Frame(DexString* s, uint32_t line) : method(s), line(line) {}
+  };
+
+  /**
+   * Translate obfuscated stack frame to un-obfuscated series of frames. The
+   * frames should be ordered with callees preceding their callers.
+   */
+  std::vector<Frame> deobfuscate_frame(DexString*, uint32_t line) const;
+
+  /**
+   * Obtain line range vector for a given obfuscated method name.
+   */
+  ProguardLineRangeVector& method_lines(const std::string& obfuscated_method);
+
   bool empty() const { return m_classMap.empty() && m_fieldMap.empty() &&
                               m_methodMap.empty() ; }
 
@@ -105,6 +123,7 @@ struct ProguardMap {
   std::unordered_map<std::string, std::string> m_obfClassMap;
   std::unordered_map<std::string, std::string> m_obfFieldMap;
   std::unordered_map<std::string, std::string> m_obfMethodMap;
+  std::unordered_map<std::string, ProguardLineRangeVector> m_obfMethodLinesMap;
 
   // Interfaces that are (most likely) coalesced by Proguard.
   std::unordered_set<std::string> m_pg_coalesced_interfaces;
@@ -121,6 +140,17 @@ struct ProguardMap {
 void apply_deobfuscated_names(
   const std::vector<DexClasses>&,
   const ProguardMap&);
+
+// Exposed for testing purposes.
+namespace pg_impl {
+
+DexString* file_name_from_method_string(const DexString* method);
+
+void apply_deobfuscated_positions(IRCode*, const ProguardMap&);
+
+std::string lines_key(const std::string& method_name);
+
+} // namespace pg_impl
 
 /**
  * Convert a dot-style name to a dexdump-style name, e.g.:

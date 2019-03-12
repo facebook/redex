@@ -126,11 +126,13 @@ bool is_canary(DexClass* clazz) {
 
 void gather_refs(
     const std::vector<std::unique_ptr<interdex::InterDexPassPlugin>>& plugins,
+    const interdex::DexInfo& dex_info,
     const DexClass* cls,
     interdex::MethodRefs* mrefs,
     interdex::FieldRefs* frefs,
     interdex::TypeRefs* trefs,
-    std::vector<DexClass*>* erased_classes) {
+    std::vector<DexClass*>* erased_classes,
+    bool should_not_relocate_methods_of_class) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> type_refs;
@@ -139,8 +141,8 @@ void gather_refs(
   cls->gather_types(type_refs);
 
   for (const auto& plugin : plugins) {
-    plugin->gather_refs(cls, method_refs, field_refs, type_refs,
-                        erased_classes);
+    plugin->gather_refs(dex_info, cls, method_refs, field_refs, type_refs,
+                        erased_classes, should_not_relocate_methods_of_class);
   }
 
   mrefs->insert(method_refs.begin(), method_refs.end());
@@ -191,6 +193,18 @@ bool InterDex::should_skip_class(const DexInfo& dex_info, DexClass* clazz) {
   return false;
 }
 
+bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
+  for (const auto& plugin : m_plugins) {
+    if (plugin->should_not_relocate_methods_of_class(clazz)) {
+      TRACE(IDEX, 4, "IDEX: Not relocating methods of class :: %s\n",
+            SHOW(clazz));
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool InterDex::emit_class(const DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
@@ -214,8 +228,9 @@ bool InterDex::emit_class(const DexInfo& dex_info,
   MethodRefs clazz_mrefs;
   FieldRefs clazz_frefs;
   TypeRefs clazz_trefs;
-  gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
-              erased_classes);
+  gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
+              &clazz_trefs, erased_classes,
+              should_not_relocate_methods_of_class(clazz));
 
   bool fits_current_dex = m_dexes_structure.add_class_to_current_dex(
       clazz_mrefs, clazz_frefs, clazz_trefs, clazz);
@@ -230,8 +245,9 @@ bool InterDex::emit_class(const DexInfo& dex_info,
     clazz_frefs.clear();
     clazz_trefs.clear();
     if (erased_classes) erased_classes->clear();
-    gather_refs(m_plugins, clazz, &clazz_mrefs, &clazz_frefs, &clazz_trefs,
-                erased_classes);
+    gather_refs(m_plugins, dex_info, clazz, &clazz_mrefs, &clazz_frefs,
+                &clazz_trefs, erased_classes,
+                should_not_relocate_methods_of_class(clazz));
 
     m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
                                           clazz);

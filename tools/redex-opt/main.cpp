@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 #include <iostream>
 
 #include "DexClass.h"
-#include "PassManager.h"
 #include "PassRegistry.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -20,6 +20,7 @@ struct Arguments {
   std::string input_ir_dir;
   std::string output_ir_dir;
   std::vector<std::string> pass_names;
+  RedexOptions redex_options;
 };
 
 Arguments parse_args(int argc, char* argv[]) {
@@ -53,11 +54,11 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("output-ir")) {
     args.output_ir_dir = vm["output-ir"].as<std::string>();
   }
-  if (args.output_ir_dir.empty() ||
-      !redex::dir_is_writable(args.output_ir_dir)) {
-    std::cerr << "output-dir is empty or not writable\n";
+  if (args.output_ir_dir.empty()) {
+    std::cerr << "output-dir is empty\n";
     exit(EXIT_FAILURE);
   }
+  boost::filesystem::create_directory(args.output_ir_dir);
 
   if (vm.count("pass-name")) {
     args.pass_names = vm["pass-name"].as<std::vector<std::string>>();
@@ -104,16 +105,18 @@ int main(int argc, char* argv[]) {
   DexStoresVector stores;
 
   redex::load_all_intermediate(args.input_ir_dir, stores, &entry_data);
+  args.redex_options.deserialize(entry_data);
 
   Json::Value config_data = process_entry_data(entry_data, args);
   ConfigFiles cfg(std::move(config_data), args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
-  PassManager manager(passes, config_data);
+  PassManager manager(passes, config_data, args.redex_options);
   manager.set_testing_mode();
   manager.run_passes(stores, cfg);
 
-  redex::write_all_intermediate(cfg, args.output_ir_dir, stores, entry_data);
+  redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
+                                stores, entry_data);
 
   delete g_redex;
   return 0;

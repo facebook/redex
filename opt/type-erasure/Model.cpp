@@ -295,19 +295,6 @@ void Model::init(const Scope& scope,
   m_metric.all_types = m_types.size();
 }
 
-void Model::build_hierarchy(const DexType* root) {
-  for (const auto& type : m_types) {
-    if (type == root) {
-      continue;
-    }
-    const auto& cls = type_class(type);
-    const auto& super = cls->get_super_class();
-    assert(super != nullptr && super != get_object_type());
-    m_hierarchy[super].insert(type);
-    m_parents[type] = super;
-  }
-}
-
 void Model::build_hierarchy(const TypeSet& roots) {
   for (const auto& type : m_types) {
     if (roots.count(type) > 0) {
@@ -525,6 +512,12 @@ void Model::create_mergers_helper(
   }
 }
 
+/**
+ * Excluding the types specified in the "exclude" option of the config.
+ * We don't perform any checks on the given types. We simply assume the good
+ * intention of adding them as excluded types in the config, and exclude them
+ * from the merging transformation.
+ */
 void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
@@ -541,6 +534,15 @@ void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
   TRACE(TERA, 4, "Excluded %ld\n", m_excluded.size());
 }
 
+/**
+ * Try to identify types referenced by operations that Type Erasure does not
+ * support. Such operations include reflections, instanceof checks on
+ * no-type-tag shapes.
+ * Ideally, part of the checks we perform below should be enforced at Java
+ * source level. That is we should restrict such use cases on the generated Java
+ * classes. As a result, we can make those generated classes easier to optimize
+ * by Type Erasure.
+ */
 void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   for (const auto& type : m_types) {
     const auto& cls = type_class(type);
@@ -565,6 +567,8 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     for (const auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
 
+      // Java language level enforcement recommended!
+      //
       // For mergeables with type tags, it is not safe to merge those used
       // with CONST_CLASS or NEW_ARRAY since we will lose granularity as we
       // can't map to the old type anymore.
@@ -573,6 +577,8 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         continue;
       }
 
+      // Java language level enforcement recommended!
+      //
       // For mergeables without a type tag, it is not safe to merge
       // those used in an INSTANCE_OF, since we might lose granularity.
       //
@@ -709,8 +715,7 @@ void Model::shape_merger(const MergerType& merger,
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
       const auto field_type = field->get_type();
-      static const auto string_type = DexType::make_type("Ljava/lang/String;");
-      if (field_type == string_type) {
+      if (field_type == get_string_type()) {
         shape.string_fields++;
         continue;
       }
@@ -1047,7 +1052,6 @@ void Model::map_fields(MergerType& merger, const TypeSet& classes) {
  * belong to the mergeable types.
  */
 void Model::collect_methods() {
-
   // collect all vmethods and dmethods of mergeable types into the merger
   for (auto& merger_it : m_mergers) {
     auto& merger = merger_it.second;
@@ -1445,6 +1449,7 @@ Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
                          ConfigFiles& cfg) {
+  Timer t("build_model");
   TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
@@ -1479,6 +1484,7 @@ void Model::update_redex_stats(PassManager& mgr) const {
 Model Model::build_model(const Scope& scope,
                          const ModelSpec& spec,
                          const TypeSet& types) {
+  Timer t("build_model");
   TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
@@ -1487,4 +1493,17 @@ Model Model::build_model(const Scope& scope,
 
   update_model(model);
   return model;
+}
+
+ModelStats& ModelStats::operator+=(const ModelStats& stats) {
+  m_num_classes_merged += stats.m_num_classes_merged;
+  m_num_generated_classes += stats.m_num_generated_classes;
+  m_num_ctor_dedupped += stats.m_num_ctor_dedupped;
+  m_num_static_non_virt_dedupped += stats.m_num_static_non_virt_dedupped;
+  m_num_vmethods_dedupped += stats.m_num_vmethods_dedupped;
+  m_num_const_lifted_methods += stats.m_num_const_lifted_methods;
+  m_num_merged_static_methods += stats.m_num_merged_static_methods;
+  m_num_merged_direct_methods += stats.m_num_merged_direct_methods;
+  m_num_merged_nonvirt_methods += stats.m_num_merged_nonvirt_methods;
+  return *this;
 }

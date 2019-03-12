@@ -20,6 +20,7 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "OptDataDefs.h"
 #include "Resolver.h"
@@ -38,7 +39,7 @@ namespace {
 bool get_line_num(const DexMethod* method,
                   const IRInstruction* insn,
                   size_t* line_num) {
-  auto code = method->get_code();
+  const IRCode* code = method->get_code();
   always_assert_log(!insn || (insn && code),
                     "Logged method with instructions must contain code\n");
   if (code == nullptr) {
@@ -47,21 +48,25 @@ bool get_line_num(const DexMethod* method,
   // If a target instruction isn't specified, just get the first position.
   bool find_first_pos = insn == nullptr;
   size_t cur_line = 0;
-  for (const auto& mie : *code) {
+  bool success{false};
+  editable_cfg_adapter::iterate_all(code, [&](const MethodItemEntry& mie) {
     if (mie.type == MFLOW_POSITION) {
       cur_line = mie.pos->line;
       if (find_first_pos) {
         *line_num = cur_line;
-        return true;
+        success = true;
+        return editable_cfg_adapter::LOOP_BREAK;
       }
     }
     if (mie.type == MFLOW_OPCODE && mie.insn == insn) {
       // We want to get the last position found before the insn we care about.
       *line_num = cur_line;
-      return true;
+      success = true;
+      return editable_cfg_adapter::LOOP_BREAK;
     }
-  }
-  return false;
+    return editable_cfg_adapter::LOOP_CONTINUE;
+  });
+  return success;
 }
 
 /**
@@ -433,6 +438,8 @@ void OptDataMapper::init_nopt_messages() {
       {INL_EXTERN_CATCH,
        "Didn''t inline: callee has a non-public external catch type"},
       {INL_TOO_BIG, "Didn''t inline: estimated inlined method size is too big"},
+      {INL_REQUIRES_API,
+       "Didn''t inline: The callee has a higher required api level."},
       {INL_CREATE_VMETH,
        "Didn''t inline: callee contains invokes of methods not visible to the "
        "caller"},

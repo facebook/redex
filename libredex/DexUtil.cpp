@@ -515,12 +515,23 @@ void relocate_method(DexMethod* method, DexType* to_type) {
   to_cls->add_method(method);
 }
 
+bool is_subclass(const DexType* parent, const DexType* child) {
+  auto super = child;
+  while (super != nullptr) {
+    if (parent == super) return true;
+    const auto cls = type_class(super);
+    if (cls == nullptr) break;
+    super = cls->get_super_class();
+  }
+  return false;
+}
+
 void change_visibility(DexMethod* method) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  editable_cfg_adapter::iterate(code, [](MethodItemEntry* mie) {
-    auto insn = mie->insn;
+  editable_cfg_adapter::iterate(code, [](MethodItemEntry& mie) {
+    auto insn = mie.insn;
 
     if (insn->has_field()) {
       auto cls = type_class(insn->get_field()->get_class());
@@ -560,7 +571,11 @@ void change_visibility(DexMethod* method) {
   });
 
   std::vector<DexType*> types;
-  method->get_code()->gather_catch_types(types);
+  if (code->editable_cfg_built()) {
+    code->cfg().gather_catch_types(types);
+  } else {
+    code->gather_catch_types(types);
+  }
   for (auto type : types) {
     auto cls = type_class(type);
     if (cls != nullptr && !cls->is_external()) {
@@ -569,10 +584,9 @@ void change_visibility(DexMethod* method) {
   }
 }
 
-bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
-  // Check that visibility / accessibility changes to the current method
-  // won't need to change a referenced method into a virtual or static one.
-  // If it does, we simply bail out.
+// Check that visibility / accessibility changes to the current method
+// won't need to change a referenced method into a virtual or static one.
+bool no_changes_when_relocating_method(const DexMethod* method) {
   auto code = method->get_code();
   always_assert(code);
 
@@ -589,6 +603,28 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
         return false;
       }
     }
+  }
+
+  return true;
+}
+
+bool no_invoke_super(const DexMethod* method) {
+  auto code = method->get_code();
+  always_assert(code);
+
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
+  if (!no_changes_when_relocating_method(method)) {
+    return false;
   }
 
   set_public(method);

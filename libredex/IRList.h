@@ -101,7 +101,7 @@ enum MethodItemType {
   // The target of a goto, if, or switch. Also known as a "label"
   MFLOW_TARGET,
 
-  // These hold information about the next MFLOW_(DEX_)OPCODE
+  // These hold information about the following `MFLOW_(DEX_)OPCODE`s
   MFLOW_DEBUG,
   MFLOW_POSITION,
 

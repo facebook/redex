@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <unordered_set>
 
+#include "ApiLevelChecker.h"
 #include "ApkManager.h"
 #include "CommandProfiling.h"
 #include "ConfigFiles.h"
@@ -42,6 +43,22 @@ std::string get_apk_dir(const Json::Value& config) {
 }
 
 } // namespace
+
+void RedexOptions::serialize(Json::Value& entry_data) const {
+  auto& options = entry_data["redex_options"];
+  options["verify_none_enabled"] = verify_none_enabled;
+  options["is_art_build"] = is_art_build;
+  options["instrument_pass_enabled"] = instrument_pass_enabled;
+  options["min_sdk"] = min_sdk;
+}
+
+void RedexOptions::deserialize(const Json::Value& entry_data) {
+  const auto& options_data = entry_data["redex_options"];
+  verify_none_enabled = options_data["verify_none_enabled"].asBool();
+  is_art_build = options_data["is_art_build"].asBool();
+  instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
+  min_sdk = options_data["min_sdk"].asInt();
+}
 
 std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<redex::ProguardConfiguration>();
@@ -143,6 +160,11 @@ void PassManager::run_type_checker(const Scope& scope,
 void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
+
+  {
+    Timer t("API Level Checker");
+    api::LevelChecker::init(m_redex_options.min_sdk, scope);
+  }
 
   char* seeds_output_file = std::getenv("REDEX_SEEDS_FILE");
   if (seeds_output_file) {

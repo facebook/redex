@@ -181,7 +181,7 @@ bool implements_removables(const TypeSet& removable, DexClass* cls) {
 
 void get_impls(DexType* intf,
                const TypeSet& removable,
-               std::unordered_set<DexType*>& new_intfs) {
+               std::set<DexType*, dextypes_comparator>& new_intfs) {
   const auto cls_intf = type_class(intf);
   if (cls_intf == nullptr) return;
   for (const auto& super_intf : cls_intf->get_interfaces()->get_type_list()) {
@@ -196,7 +196,7 @@ void get_impls(DexType* intf,
 void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
   TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s\n",
       SHOW(cls), SHOW(cls->get_interfaces()));
-  std::unordered_set<DexType*> new_intfs;
+  std::set<DexType*, dextypes_comparator> new_intfs;
   for (const auto& intf : cls->get_interfaces()->get_type_list()) {
     if (removable.count(intf) == 0) {
       new_intfs.insert(intf);

@@ -8,6 +8,7 @@
 #include "IROpcode.h"
 
 #include "Debug.h"
+#include "DexInstruction.h"
 #include "DexOpcode.h"
 
 namespace opcode {
@@ -1008,6 +1009,10 @@ bool is_move(IROpcode op) {
 bool is_move_result_pseudo(IROpcode op) {
   return op >= IOPCODE_MOVE_RESULT_PSEUDO &&
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+}
+
+bool is_move_result_or_move_result_pseudo(IROpcode op) {
+  return is_move_result(op) || is_move_result_pseudo(op);
 }
 
 IROpcode load_param_to_move(IROpcode op) {

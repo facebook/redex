@@ -119,3 +119,20 @@ TEST(MakeSwitch, MultiIndices) {
 
   delete g_redex;
 }
+
+TEST(CreatorsTest, ClassCreator) {
+  g_redex = new RedexContext();
+  std::string foo("Lfoo;");
+  ClassCreator cc(DexType::make_type(foo.c_str()));
+  cc.set_super(get_object_type());
+  auto cls = cc.create();
+  std::string bar("Lbar;");
+  cls->set_deobfuscated_name(bar);
+
+  auto foo_type = DexType::get_type(foo);
+  auto bar_type = DexType::get_type(bar);
+  EXPECT_EQ(foo_type, cls->get_type());
+  EXPECT_EQ(bar_type, cls->get_type());
+
+  delete g_redex;
+}

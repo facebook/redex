@@ -48,6 +48,10 @@ RedexContext::~RedexContext() {
   }
   // Delete DexMethods.
   for (auto const& it : s_method_map) {
+    delete static_cast<DexMethod*>(it.second);
+  }
+  // Delete DexClasses.
+  for (auto const& it : m_type_to_class) {
     delete it.second;
   }
 
@@ -117,14 +121,20 @@ DexType* RedexContext::get_type(DexString* dstring) {
   return s_type_map.get(dstring, nullptr);
 }
 
+void RedexContext::set_type_name(DexType* type, DexString* new_name) {
+  alias_type_name(type, new_name);
+  type->m_name = new_name;
+}
+
 void RedexContext::alias_type_name(DexType* type, DexString* new_name) {
   always_assert_log(
       !s_type_map.count(new_name),
       "Bailing, attempting to alias a symbol that already exists! '%s'\n",
       new_name->c_str());
-  type->m_name = new_name;
   s_type_map.emplace(new_name, type);
 }
+
+void RedexContext::remove_type_name(DexString* name) { s_type_map.erase(name); }
 
 DexFieldRef* RedexContext::make_field(const DexType* container,
                                       const DexString* name,
@@ -174,8 +184,7 @@ void RedexContext::mutate_field(DexFieldRef* field,
   if (rename_on_collision && s_field_map.find(r) != s_field_map.end()) {
     uint32_t i = 0;
     while (true) {
-      r.name = DexString::make_string(
-          ("f$" + std::to_string(i++)).c_str());
+      r.name = DexString::make_string(("f$" + std::to_string(i++)).c_str());
       if (s_field_map.find(r) == s_field_map.end()) {
         break;
       }
@@ -264,14 +273,32 @@ void RedexContext::mutate_method(DexMethodRef* method,
   r.proto = new_spec.proto != nullptr ? new_spec.proto : method->m_spec.proto;
 
   if (s_method_map.count(r) && rename_on_collision) {
+    // Never rename constructors, which causes runtime verification error:
+    // "Method 42(Foo;.$init$$0) is marked constructor, but doesn't match name"
+    always_assert_log(
+        show(r.name) != "<init>" && show(r.name) != "<clinit>",
+        "you should not rename constructor on a collision, %s.%s:%s exists",
+        SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
     if (new_spec.cls == nullptr) {
       // Either method prototype or name is going to be changed, and we hit a
-      // collision. Make an unique name: "m$[name]$[0-9]+".
+      // collision. Make an unique name: "name$[0-9]+". But in case of <clinit>,
+      // libdex rejects a name like "<clinit>$1". See:
+      // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#115
+      // Valid characters can be found here: [_a-zA-Z0-9$\-]
+      // http://androidxref.com/9.0.0_r3/xref/dalvik/libdex/DexUtf.cpp#50
+      // If a method name begins with "<", it must end with ">". We generate a
+      // name like "$clinit$$42" by replacing <, > with $.
       uint32_t i = 0;
+      std::string prefix;
+      if (r.name->str().front() == '<') {
+        assert(r.name->str().back() == '>');
+        prefix =
+            "$" + r.name->str().substr(1, r.name->str().length() - 2) + "$$";
+      } else {
+        prefix = r.name->str() + "$";
+      }
       do {
-        r.name = DexString::make_string(
-            ("m$" + std::string(r.name->c_str()) + "$" + std::to_string(i++))
-                .c_str());
+        r.name = DexString::make_string((prefix + std::to_string(i++)).c_str());
       } while (s_method_map.count(r));
     } else {
       // We are about to change its class. Use a better name to remeber its
@@ -287,9 +314,15 @@ void RedexContext::mutate_method(DexMethodRef* method,
                 std::sregex_token_iterator(),
                 std::back_inserter(parts));
 
-      // Make a name like "m$[name]$Bar$foo".
+      // Make a name like "name$Bar$foo", or "$clinit$$Bar$foo".
       std::stringstream ss;
-      ss << "m$" << *old_spec.name;
+      if (old_spec.name->str().front() == '<') {
+        ss << "$"
+           << old_spec.name->str().substr(1, old_spec.name->str().length() - 2)
+           << "$";
+      } else {
+        ss << *old_spec.name;
+      }
       for (auto part = parts.rbegin(); part != parts.rend(); ++part) {
         ss << "$" << *part;
         r.name = DexString::make_string(ss.str());
@@ -301,8 +334,13 @@ void RedexContext::mutate_method(DexMethodRef* method,
     }
   }
 
-  always_assert_log(!s_method_map.count(r),
-                    "Another method of the same signature already exists");
+  if (s_method_map.count(r)) {
+    auto& m = *s_method_map.find(r)->second;
+    always_assert_log(!s_method_map.count(r),
+                      "Another method of the same signature already exists %s"
+                      " %s %s",
+                      SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
+  }
   s_method_map.emplace(r, method);
 
   // We just updated DexMethodSpec, which will update this method's name.

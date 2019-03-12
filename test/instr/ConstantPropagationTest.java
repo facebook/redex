@@ -14,7 +14,7 @@ import org.junit.Test;
 
 public class ConstantPropagationTest {
 
-  // use SimpleInline so redex sees these constants but `javac` and d8 do not
+  // use MethodInline so redex sees these constants but `javac` and d8 do not
   long getLong() {
     return 0x0002000300040005L;
   }
@@ -155,5 +155,18 @@ public class ConstantPropagationTest {
     int x = Integer.MAX_VALUE;
     x++;
     assertThat(x).isEqualTo(Integer.MIN_VALUE);
+  }
+
+  @Test
+  public void lit_minus() {
+    int x = one();
+    int y = 5 - x;
+    int z;
+    if (y == 4) {
+      z = 42;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(42);
   }
 }

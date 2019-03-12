@@ -1,3 +1,5 @@
+.DS_Store
+
 **/*.o
 **/*.lo
 **/.deps
@@ -34,3 +36,13 @@
 /build-cmake/
 redex-src-strings-map.txt
 pyredex/__pycache__
+
+website/translated_docs
+website/build/
+website/yarn.lock
+website/node_modules
+website/i18n/*
+website/package-lock.json
+
+package-lock.json
+yarn.lock
