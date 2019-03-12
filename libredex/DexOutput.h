@@ -104,7 +104,8 @@ dex_stats_t write_classes_to_dex(
     PositionMapper* line_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    IODIMetadata* iodi_metadata);
+    IODIMetadata* iodi_metadata,
+    const std::string& dex_magic);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -282,7 +283,7 @@ class DexOutput {
   void generate_typelist_data();
   void generate_map();
   void finalize_header();
-  void init_header_offsets();
+  void init_header_offsets(const std::string& dex_magic);
   void write_symbol_files();
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
@@ -311,7 +312,8 @@ class DexOutput {
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
-               const ConfigFiles& cfg);
+               const ConfigFiles& cfg,
+               const std::string& dex_magic);
   void write();
   static void check_method_instruction_size_limit(const ConfigFiles& cfg,
                                                   int size,

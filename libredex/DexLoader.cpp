@@ -33,14 +33,28 @@ class DexLoader {
     if (m_idx) delete m_idx;
     if (m_file.is_open()) m_file.close();
   }
-  DexClasses load_dex(const char* location, dex_stats_t* stats);
+  const dex_header* get_dex_header(const char* location);
+  DexClasses load_dex(const char* location,
+                      dex_stats_t* stats,
+                      bool support_dex_v37);
   void load_dex_class(int num);
   void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
 };
 
-static void validate_dex_header(const dex_header* dh, size_t dexsize) {
-  if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC, sizeof(dh->magic))) {
-    always_assert_log(false, "Bad dex magic %s\n", dh->magic);
+static void validate_dex_header(const dex_header* dh,
+                                size_t dexsize,
+                                bool support_dex_v37) {
+  if (support_dex_v37) {
+    // support_dex_v37 flag enables parsing v37 dex, but does not disable
+    // parsing v35 dex.
+    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic)) &&
+        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
+      always_assert_log(false, "Bad v35 or v37 dex magic %s\n", dh->magic);
+    }
+  } else {
+    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
+      always_assert_log(false, "Bad v35 dex magic %s\n", dh->magic);
+    }
   }
   always_assert_log(
     dh->file_size == dexsize,
@@ -171,14 +185,20 @@ void DexLoader::load_dex_class(int num) {
   m_classes->at(num) = dc;
 }
 
-DexClasses DexLoader::load_dex(const char* location, dex_stats_t* stats) {
+const dex_header* DexLoader::get_dex_header(const char* location) {
   m_file.open(location, boost::iostreams::mapped_file::readonly);
   if (!m_file.is_open()) {
     fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
     exit(EXIT_FAILURE);
   }
-  auto dh = reinterpret_cast<const dex_header*>(m_file.const_data());
-  validate_dex_header(dh, m_file.size());
+  return reinterpret_cast<const dex_header*>(m_file.const_data());
+}
+
+DexClasses DexLoader::load_dex(const char* location,
+                               dex_stats_t* stats,
+                               bool support_dex_v37) {
+  auto dh = get_dex_header(location);
+  validate_dex_header(dh, m_file.size(), support_dex_v37);
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
@@ -227,21 +247,30 @@ static void balloon_all(const Scope& scope) {
   wq.run_all();
 }
 
-DexClasses load_classes_from_dex(const char* location, bool balloon) {
+DexClasses load_classes_from_dex(const char* location,
+                                 bool balloon,
+                                 bool support_dex_v37) {
   dex_stats_t stats;
-  return load_classes_from_dex(location, &stats, balloon);
+  return load_classes_from_dex(location, &stats, balloon, support_dex_v37);
 }
 
 DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
-                                 bool balloon) {
+                                 bool balloon,
+                                 bool support_dex_v37) {
   TRACE(MAIN, 1, "Loading classes from dex from %s\n", location);
   DexLoader dl(location);
-  auto classes = dl.load_dex(location, stats);
+  auto classes = dl.load_dex(location, stats, support_dex_v37);
   if (balloon) {
     balloon_all(classes);
   }
   return classes;
+}
+
+const std::string load_dex_magic_from_dex(const char* location) {
+  DexLoader dl(location);
+  auto dh = dl.get_dex_header(location);
+  return dh->magic;
 }
 
 void balloon_for_test(const Scope& scope) { balloon_all(scope); }

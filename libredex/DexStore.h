@@ -35,6 +35,7 @@ public:
 class DexStore {
   std::vector<DexClasses> m_dexen;
   DexMetadata m_metadata;
+  std::string dex_magic = "";
   bool m_generated = false;
 
  public:
@@ -43,6 +44,10 @@ class DexStore {
   DexStore(const std::string name);
 
   std::string get_name() const;
+  const std::string& get_dex_magic() const { return dex_magic; }
+  void set_dex_magic(const std::string& input_dex_magic) {
+    dex_magic = input_dex_magic;
+  }
   std::vector<DexClasses>& get_dexen();
   const std::vector<DexClasses>& get_dexen() const;
   std::vector<std::string> get_dependencies() const;

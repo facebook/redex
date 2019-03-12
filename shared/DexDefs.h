@@ -23,7 +23,8 @@
  *
  */
 
-#define DEX_HEADER_DEXMAGIC "dex\n035"
+#define DEX_HEADER_DEXMAGIC_V35 "dex\n035"
+#define DEX_HEADER_DEXMAGIC_V37 "dex\n037"
 #define ENDIAN_CONSTANT (0x12345678)
 
 #define TYPE_HEADER_ITEM             (0x0000)

@@ -1485,8 +1485,10 @@ static void fix_jumbos(DexClasses* classes, DexOutputIdx* dodx) {
   walk::methods(*classes, [&](DexMethod* m) { fix_method_jumbos(m, dodx); });
 }
 
-void DexOutput::init_header_offsets() {
-  memcpy(hdr.magic, DEX_HEADER_DEXMAGIC, sizeof(hdr.magic));
+void DexOutput::init_header_offsets(const std::string& dex_magic) {
+  always_assert_log(dex_magic.length() > 0,
+                    "Invalid dex magic from input APK\n");
+  memcpy(hdr.magic, dex_magic.c_str(), sizeof(hdr.magic));
   insert_map_item(TYPE_HEADER_ITEM, 1, 0);
 
   m_offset = hdr.header_size = sizeof(dex_header);
@@ -1878,7 +1880,8 @@ void GatheredTypes::set_method_to_weight(
 
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
-                        const ConfigFiles& cfg) {
+                        const ConfigFiles& cfg,
+                        const std::string& dex_magic) {
 
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
@@ -1888,7 +1891,7 @@ void DexOutput::prepare(SortMode string_mode,
   }
 
   fix_jumbos(m_classes, dodx);
-  init_header_offsets();
+  init_header_offsets(dex_magic);
   generate_static_values();
   generate_typelist_data();
   generate_string_data(string_mode);
@@ -1960,7 +1963,8 @@ dex_stats_t write_classes_to_dex(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    IODIMetadata* iodi_metadata) {
+    IODIMetadata* iodi_metadata,
+    const std::string& dex_magic) {
   const JsonWrapper& json_cfg = cfg.get_json_config();
   auto method_mapping_filename =
       cfg.metafile(json_cfg.get("method_mapping", std::string()));
@@ -2013,7 +2017,7 @@ dex_stats_t write_classes_to_dex(
                              pg_mapping_filename,
                              bytecode_offset_filename);
 
-  dout.prepare(string_sort_mode, code_sort_mode, cfg);
+  dout.prepare(string_sort_mode, code_sort_mode, cfg, dex_magic);
   dout.write();
   return dout.m_stats;
 }

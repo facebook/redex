@@ -130,7 +130,8 @@ void write_intermediate_dex(const ConfigFiles& cfg,
                            pos_mapper.get(),
                            nullptr,
                            nullptr,
-                           nullptr /* IODIMetadata* */);
+                           nullptr /* IODIMetadata* */,
+                           stores[0].get_dex_magic());
       auto basename = boost::filesystem::path(ss.str()).filename().string();
       store_files["list"].append(basename);
     }

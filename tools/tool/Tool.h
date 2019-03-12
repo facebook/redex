@@ -43,7 +43,8 @@ class Tool {
   DexStoresVector init(const std::string& system_jar_paths,
                        const std::string& apk_dir,
                        const std::string& dexen_dir,
-                       bool balloon = true);
+                       bool balloon = true,
+                       bool support_dex_v37 = false);
 
   void add_standard_options(po::options_description& options) const;
 

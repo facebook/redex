@@ -69,6 +69,7 @@ int main(int argc, char* argv[]) {
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
 
   DexStore store("classes");
+  store.set_dex_magic(load_dex_magic_from_dex(dex));
   store.add_classes(classes);
   DexStoresVector stores;
   stores.emplace_back(std::move(store));
@@ -84,7 +85,8 @@ int main(int argc, char* argv[]) {
                        pos_mapper.get(),
                        nullptr,
                        nullptr,
-                       nullptr /* IODIMetadata* */);
+                       nullptr /* IODIMetadata* */,
+                       stores[0].get_dex_magic());
 
   delete g_redex;
   return 0;

@@ -592,6 +592,20 @@ void write_debug_line_mapping(
   ofs << line_out.str();
 }
 
+const std::string get_dex_magic(std::vector<std::string>& dex_files) {
+  always_assert_log(dex_files.size() > 0, "APK contains no dex file\n");
+  // Get dex magic from the first dex file since all dex magic
+  // should be consistent within one APK.
+  return load_dex_magic_from_dex(dex_files[0].c_str());
+}
+
+static void assert_dex_magic_consistency(const std::string& source,
+                                         const std::string& target) {
+  always_assert_log(source.compare(target) == 0,
+                    "APK contains dex file of different versions: %s vs %s\n",
+                    source.c_str(), target.c_str());
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -623,6 +637,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   }
 
   DexStore root_store("classes");
+  // Only set dex magic to root DexStore since all dex magic
+  // should be consistent within one APK.
+  root_store.set_dex_magic(get_dex_magic(args.dex_files));
   stores.emplace_back(std::move(root_store));
 
   {
@@ -632,6 +649,8 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     for (const auto& filename : args.dex_files) {
       if (filename.size() >= 5 &&
           filename.compare(filename.size() - 4, 4, ".dex") == 0) {
+        assert_dex_magic_consistency(stores[0].get_dex_magic(),
+                                     load_dex_magic_from_dex(filename.c_str()));
         dex_stats_t dex_stats;
         DexClasses classes =
             load_classes_from_dex(filename.c_str(), &dex_stats);
@@ -643,6 +662,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
         store_metadata.parse(filename);
         DexStore store(store_metadata);
         for (const auto& file_path : store_metadata.get_files()) {
+          assert_dex_magic_consistency(
+              stores[0].get_dex_magic(),
+              load_dex_magic_from_dex(file_path.c_str()));
           dex_stats_t dex_stats;
           DexClasses classes =
               load_classes_from_dex(file_path.c_str(), &dex_stats);
@@ -803,7 +825,8 @@ void redex_backend(const PassManager& manager,
           pos_mapper.get(),
           needs_method_to_id ? &method_to_id : nullptr,
           debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines,
-          iodi_metadata_filename.empty() ? nullptr : &iodi_metadata);
+          iodi_metadata_filename.empty() ? nullptr : &iodi_metadata,
+          stores[0].get_dex_magic());
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
