@@ -212,12 +212,18 @@ DexClass* CrossDexRefMinimizer::front() const {
 
 DexClass* CrossDexRefMinimizer::worst() const {
   auto max_it = m_class_infos.begin();
-  for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
-    const CrossDexRefMinimizer::ClassInfo& max_class_info = max_it->second;
+  const CrossDexRefMinimizer::ClassInfo& max_class_info = max_it->second;
+  uint64_t max_value = max_class_info.get_primary_priority_denominator();
+
+  for (auto it = std::next(max_it); it != m_class_infos.end(); ++it) {
     const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
-    if (class_info.get_primary_priority_denominator() >
-        max_class_info.get_primary_priority_denominator()) {
+    uint64_t value = class_info.get_primary_priority_denominator();
+    // Prefer the largest denominator, or if equal, the class that was inserted
+    // earlier (smaller index) to make things deterministic.
+    if (value > max_value ||
+        (value == max_value && class_info.index < max_it->second.index)) {
       max_it = it;
+      max_value = value;
     }
   }
 
@@ -230,6 +236,7 @@ DexClass* CrossDexRefMinimizer::worst() const {
         format_infrequent_refs_array(max_it->second.infrequent_refs_weight)
             .c_str(),
         max_it->second.refs.size());
+
   return max_it->first;
 }
 
