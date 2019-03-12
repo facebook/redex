@@ -68,16 +68,6 @@ bool subtraction_out_of_bounds(int64_t a, int64_t b) {
   return false;
 }
 
-bool multiply_out_of_bounds(int64_t a, int64_t b) {
-  int32_t max = std::numeric_limits<int32_t>::max();
-  int32_t min = std::numeric_limits<int32_t>::min();
-  if (a && b && ((a * b / b != a) || (a * b / a != b))) {
-    TRACE(CONSTP, 5, "%d * %d is out of bounds", a, b);
-    return true;
-  }
-  return false;
-}
-
 // Propagate the result of a compare if the operands are known constants.
 // If we know enough, put -1, 0, or 1 into the destination register.
 //
@@ -278,89 +268,43 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
                                           ConstantEnvironment* env) {
   auto op = insn->opcode();
-  int32_t lit = insn->get_literal();
-  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn), lit);
+  const static std::set<IROpcode> accepted_opcodes = {
+      OPCODE_ADD_INT_LIT16, OPCODE_ADD_INT_LIT8, // addition
+      OPCODE_RSUB_INT, OPCODE_RSUB_INT_LIT8, // reverse subtraction
+      // TODO: add more instructions
+  };
+  if (accepted_opcodes.find(op) != accepted_opcodes.end()) {
+    int32_t lit = insn->get_literal();
+    TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn),
+          lit);
 
-  auto result = SignedConstantDomain::top();
-  auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+    auto result = SignedConstantDomain::top();
+    auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
 
-  if (cst) {
-    bool use_result_reg = false;
-    switch (op) {
-    case OPCODE_ADD_INT_LIT16:
-    case OPCODE_ADD_INT_LIT8: {
-      // add-int/lit8 is the most common arithmetic instruction: about .29% of
-      // all instructions. All other arithmetic instructions are less than
-      // .05%
-      if (!addition_out_of_bounds(*cst, lit)) {
-        result = SignedConstantDomain(*cst + lit);
+    if (cst) {
+      switch (op) {
+      case OPCODE_ADD_INT_LIT16:
+      case OPCODE_ADD_INT_LIT8:
+        // add-int/lit8 is the most common arithmetic instruction: about .29% of
+        // all instructions. All other arithmetic instructions are less than
+        // .05%
+        if (!addition_out_of_bounds(*cst, lit)) {
+          result = SignedConstantDomain(*cst + lit);
+        }
+        break;
+      // TODO: add more
+      case OPCODE_RSUB_INT:
+      case OPCODE_RSUB_INT_LIT8:
+        if (!subtraction_out_of_bounds(lit, *cst)) {
+          result = SignedConstantDomain(lit - *cst);
+        }
+        break;
+      default:
+        break;
       }
-      break;
     }
-    case OPCODE_RSUB_INT:
-    case OPCODE_RSUB_INT_LIT8: {
-      if (!subtraction_out_of_bounds(lit, *cst)) {
-        result = SignedConstantDomain(lit - *cst);
-      }
-      break;
-    }
-    case OPCODE_MUL_INT_LIT16:
-    case OPCODE_MUL_INT_LIT8: {
-      if (!multiply_out_of_bounds(*cst, lit)) {
-        result = SignedConstantDomain(*cst * lit);
-      }
-      break;
-    }
-    case OPCODE_DIV_INT_LIT16:
-    case OPCODE_DIV_INT_LIT8: {
-      if (lit != 0) {
-        result = SignedConstantDomain(*cst / lit);
-      }
-      use_result_reg = true;
-      break;
-    }
-    case OPCODE_REM_INT_LIT16:
-    case OPCODE_REM_INT_LIT8: {
-      if (lit != 0) {
-        result = SignedConstantDomain(*cst % lit);
-      }
-      use_result_reg = true;
-      break;
-    }
-    case OPCODE_AND_INT_LIT16:
-    case OPCODE_AND_INT_LIT8: {
-      result = SignedConstantDomain(*cst & lit);
-      break;
-    }
-    case OPCODE_OR_INT_LIT16:
-    case OPCODE_OR_INT_LIT8: {
-      result = SignedConstantDomain(*cst | lit);
-      break;
-    }
-    case OPCODE_XOR_INT_LIT16:
-    case OPCODE_XOR_INT_LIT8: {
-      result = SignedConstantDomain(*cst ^ lit);
-      break;
-    }
-    // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
-    // the following operations have the second operand masked.
-    case OPCODE_SHL_INT_LIT8: {
-      result = SignedConstantDomain(*cst << (lit & 0x1f));
-      break;
-    }
-    case OPCODE_SHR_INT_LIT8: {
-      result = SignedConstantDomain(*cst >> (lit & 0x1f));
-      break;
-    }
-    case OPCODE_USHR_INT_LIT8: {
-      uint32_t ucst = *cst;
-      result = SignedConstantDomain(ucst >> (lit & 0x1f));
-      break;
-    }
-    default:
-      break;
-    }
-    env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), result);
+
+    env->set(insn->dest(), result);
     return true;
   }
   return analyze_default(insn, env);

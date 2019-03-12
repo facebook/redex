@@ -59,26 +59,6 @@ TEST_F(PreVerify, ConstantPropagation) {
     if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
       EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
     }
-    if (meth->get_name()->str().find("multiply_lit_const") !=
-        std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_MUL_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("multiply_large_lit_const") !=
-        std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_MUL_INT_LIT16));
-    }
-    if (meth->get_name()->str().find("shl_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("if_shr_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_SHR_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("ushr_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("modulo_3") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_REM_INT_LIT8));
-    }
     code->clear_cfg();
   }
 }
@@ -100,35 +80,17 @@ TEST_F(PostVerify, ConstantPropagation) {
     }
 
     EXPECT_EQ(0, count_ifs(code->cfg()));
-    if (meth->get_name()->str().find("overflow") != std::string::npos) {
-      // make sure we don't fold overflow at compile time
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
-    }
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
+
     if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
       EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
     }
-    if (meth->get_name()->str().find("multiply_lit_const") !=
-        std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_MUL_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("multiply_large_lit_const") !=
-        std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_MUL_INT_LIT16));
-    }
-    if (meth->get_name()->str().find("shl_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("if_shr_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_SHR_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("ushr_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
-    }
-    if (meth->get_name()->str().find("modulo_3") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_REM_INT_LIT8));
+
+    if (meth->get_name()->str().find("overflow") != std::string::npos) {
+      // make sure we don't fold overflow at compile time
+      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
     }
     code->clear_cfg();
   }

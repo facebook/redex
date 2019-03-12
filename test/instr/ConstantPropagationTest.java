@@ -132,14 +132,6 @@ public class ConstantPropagationTest {
     return 1;
   }
 
-  private int two() {
-    return 2;
-  }
-
-  private int sixteen() {
-    return 16;
-  }
-
   // This test intentionally does not use the same constant literal more than
   // once. The reason is that d8 will load that constant and re-use the
   // register rather than using a add-int/lit instruction. Currently
@@ -166,7 +158,7 @@ public class ConstantPropagationTest {
   }
 
   @Test
-  public void if_lit_minus() {
+  public void lit_minus() {
     int x = one();
     int y = 5 - x;
     int z;
@@ -176,83 +168,5 @@ public class ConstantPropagationTest {
       z = 0;
     }
     assertThat(z).isEqualTo(42);
-  }
-
-  @Test
-  public void if_multiply_lit_const() {
-    int x = two();
-    int y = 42 * x;
-    int z;
-    if (y == 84) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
-  }
-
-  @Test
-  public void if_multiply_large_lit_const() {
-    int x = two();
-    int y = 32767 * x;
-    int z;
-    if (y == 65534) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
-  }
-
-  @Test
-  public void if_shl_lit_const() {
-    int x = two();
-    int y = x << 2;
-    int z;
-    if (y == 8) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
-  }
-
-  @Test
-  public void if_shr_lit_const() {
-    int x = sixteen();
-    int y = x >> 2;
-    int z;
-    if (y == 4) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
-  }
-
-  @Test
-  public void if_ushr_lit_const() {
-    int x = neg1() * 16;
-    int y = x >>> 5;
-    int z;
-    if (y == 134217727) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
-  }
-
-  @Test
-  public void if_modulo_3() {
-    int x = sixteen();
-    int y = x % 3;
-    int z;
-    if (y == 1) {
-      z = 1;
-    } else {
-      z = 0;
-    }
-    assertThat(z).isEqualTo(1);
   }
 }
