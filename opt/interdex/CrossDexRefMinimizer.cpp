@@ -210,7 +210,7 @@ DexClass* CrossDexRefMinimizer::front() const {
   return m_prioritized_classes.front();
 }
 
-DexClass* CrossDexRefMinimizer::worst() const {
+DexClass* CrossDexRefMinimizer::worst() {
   auto max_it = m_class_infos.begin();
   const CrossDexRefMinimizer::ClassInfo& max_class_info = max_it->second;
   uint64_t max_value = max_class_info.get_primary_priority_denominator();
@@ -236,7 +236,7 @@ DexClass* CrossDexRefMinimizer::worst() const {
         format_infrequent_refs_array(max_it->second.infrequent_refs_weight)
             .c_str(),
         max_it->second.refs.size());
-
+  m_stats.worst_classes.emplace_back(max_it->first, max_value);
   return max_it->first;
 }
 
