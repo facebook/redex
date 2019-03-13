@@ -202,12 +202,19 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   plugins.clear();
 
-  auto cross_dex_ref_minimizer_stats =
+  const auto& cross_dex_ref_minimizer_stats =
       interdex.get_cross_dex_ref_minimizer_stats();
   mgr.set_metric(METRIC_REORDER_CLASSES, cross_dex_ref_minimizer_stats.classes);
   mgr.set_metric(METRIC_REORDER_RESETS, cross_dex_ref_minimizer_stats.resets);
   mgr.set_metric(METRIC_REORDER_REPRIORITIZATIONS,
                  cross_dex_ref_minimizer_stats.reprioritizations);
+  const auto& worst_classes = cross_dex_ref_minimizer_stats.worst_classes;
+  for (size_t i = 0; i < worst_classes.size(); ++i) {
+    auto& p = worst_classes.at(i);
+    std::string metric =
+        METRIC_REORDER_CLASSES_WORST + std::to_string(i) + "_" + SHOW(p.first);
+    mgr.set_metric(metric, p.second);
+  }
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,

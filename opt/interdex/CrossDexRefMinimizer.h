@@ -31,6 +31,7 @@ struct CrossDexRefMinimizerStats {
   size_t classes{0};
   size_t resets{0};
   size_t reprioritizations{0};
+  std::vector<std::pair<DexClass*, uint64_t>> worst_classes;
 };
 
 struct CrossDexRefMinimizerConfig {
@@ -110,7 +111,7 @@ class CrossDexRefMinimizer {
   DexClass* front() const;
   // "Worst" in the sense of having the biggest (adjusted) unapplied refs
   // weight.
-  DexClass* worst() const;
+  DexClass* worst();
   // "Erasing" a class applies its refs, updating
   // the priorities of all remaining classes.
   // "Resetting" must happen when the previous dex was flushed and the given

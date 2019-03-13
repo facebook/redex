@@ -25,6 +25,7 @@ constexpr const char* METRIC_REORDER_CLASSES = "num_reorder_classes";
 constexpr const char* METRIC_REORDER_RESETS = "num_reorder_resets";
 constexpr const char* METRIC_REORDER_REPRIORITIZATIONS =
     "num_reorder_reprioritization";
+constexpr const char* METRIC_REORDER_CLASSES_WORST = "reorder_classes_worst";
 
 class InterDexPass : public Pass {
  public:
