@@ -210,21 +210,38 @@ DexClass* CrossDexRefMinimizer::front() const {
   return m_prioritized_classes.front();
 }
 
-DexClass* CrossDexRefMinimizer::worst() {
-  auto max_it = m_class_infos.begin();
-  const CrossDexRefMinimizer::ClassInfo& max_class_info = max_it->second;
-  uint64_t max_value = max_class_info.get_primary_priority_denominator();
+DexClass* CrossDexRefMinimizer::worst(bool generated) {
+  auto max_it = m_class_infos.end();
+  uint64_t max_value = 0;
 
-  for (auto it = std::next(max_it); it != m_class_infos.end(); ++it) {
+  for (auto it = m_class_infos.begin(); it != m_class_infos.end(); ++it) {
+    // If requested, let's skip generated classes, as they tend to be not stable
+    // and may cause drastic build-over-build changes.
+    if (it->first->rstate.is_generated() != generated) {
+      continue;
+    }
+
     const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
     uint64_t value = class_info.get_primary_priority_denominator();
-    // Prefer the largest denominator, or if equal, the class that was inserted
-    // earlier (smaller index) to make things deterministic.
-    if (value > max_value ||
-        (value == max_value && class_info.index < max_it->second.index)) {
-      max_it = it;
-      max_value = value;
+
+    // Prefer the largest denominator
+    if (value < max_value) {
+      continue;
     }
+
+    // If equal, prefer the class that was inserted earlier (smaller index) to
+    // make things deterministic.
+    if (value == max_value && max_it != m_class_infos.end() &&
+        class_info.index > max_it->second.index) {
+      continue;
+    }
+
+    max_it = it;
+    max_value = value;
+  }
+
+  if (max_it == m_class_infos.end()) {
+    return nullptr;
   }
 
   TRACE(IDEX, 3,
@@ -238,6 +255,19 @@ DexClass* CrossDexRefMinimizer::worst() {
         max_it->second.refs.size());
   m_stats.worst_classes.emplace_back(max_it->first, max_value);
   return max_it->first;
+}
+
+DexClass* CrossDexRefMinimizer::worst() {
+  always_assert(!m_class_infos.empty());
+  // We prefer to find a class that is not generated. Only when such a class
+  // doesn't exist (because all classes are generated), then we pick the worst
+  // generated class.
+  DexClass* cls = worst(/* generated */ false);
+  if (cls == nullptr) {
+    cls = worst(/* generated */ true);
+  }
+  always_assert(cls != nullptr);
+  return cls;
 }
 
 void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {

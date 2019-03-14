@@ -102,6 +102,7 @@ class CrossDexRefMinimizer {
   };
   void reprioritize(
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
+  DexClass* worst(bool generated);
 
  public:
   CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
