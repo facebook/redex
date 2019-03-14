@@ -1187,7 +1187,7 @@ uint32_t emit_instruction_offset_debug_info(
     uint32_t size;
   };
   struct Compare {
-    bool operator()(const MethodKey& left, const MethodKey& right) {
+    bool operator()(const MethodKey& left, const MethodKey& right) const {
       return left.size > right.size &&
              (uintptr_t)left.method > (uintptr_t)right.method;
     }
