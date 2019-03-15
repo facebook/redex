@@ -1201,8 +1201,8 @@ uint32_t emit_instruction_offset_debug_info(
   // We need this to calculate the size of normal debug programs for each
   // method. Hopefully no debug program is > 128k. Its ok to increase this
   // in the future.
-  constexpr int tmpSize = 128 * 1024;
-  uint8_t* tmp = (uint8_t*)malloc(tmpSize);
+  constexpr int TMP_SIZE = 128 * 1024;
+  uint8_t* tmp = (uint8_t*)malloc(TMP_SIZE);
   for (auto& it : code_items) {
     DexCode* dc = it.code;
     const auto dbg_item = dc->get_debug_item();
@@ -1218,7 +1218,7 @@ uint32_t emit_instruction_offset_debug_info(
         dbg_item, dc, it.code_item, pos_mapper, code_debug_map);
     int debug_size =
         emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
-    always_assert_log(debug_size < tmpSize, "Tmp buffer overrun");
+    always_assert_log(debug_size < TMP_SIZE, "Tmp buffer overrun");
     method_to_debug_meta.emplace(method, std::move(metadata));
     if (!iodi_metadata.can_safely_use_iodi(method)) {
       continue;
@@ -1240,8 +1240,8 @@ uint32_t emit_instruction_offset_debug_info(
     // how IODI gets its win:
     //
     // The win is calculated as the total usual debug info size minus the size
-    // of debug info when IODI is enabled. This means, when allowing the methods
-    // that IODI is enabled for be an input:
+    // of debug info when IODI is enabled. Thus, given a set of methods for
+    // which IODI is enabled we have the following formula:
     //
     // win(IODI_methods) = normal_debug_size(all methods)
     //        - (IODI_debug_size(IODI_methods)
@@ -1257,7 +1257,7 @@ uint32_t emit_instruction_offset_debug_info(
     //                      -----
     //                  i in arities(M)
     //   or, in plain english, add together the size of a debug program for
-    //   each arity i. Fixing an arity i, the size is calulcated as the max
+    //   each arity i. Fixing an arity i, the size is calculated as the max
     //   length of a method with arity i with some constant padding added
     //   (the header of the dbg program)
     //
@@ -1289,7 +1289,7 @@ uint32_t emit_instruction_offset_debug_info(
     // win_delta_1 = len(m_1) - len(m_2) - normal_debug_size(m_1)
     // where m_2 is the next biggest method.
     //
-    // We can continue to calulcate more win_deltas if we were to remove the
+    // We can continue to calculate more win_deltas if we were to remove the
     // subsequent biggest methods:
     //
     // win_delta_i = len(m_1) - len(m_{i+1})
@@ -1300,7 +1300,7 @@ uint32_t emit_instruction_offset_debug_info(
     // Since there is no regularity condition on normal_debug_size(m) the
     // max of win_delta_i may occur for any i (indeed there may be an esoteric
     // case where all the debug programs are tiny but all the methods are
-    // pretty large and thus its best to not use any IODI programs)
+    // pretty large and thus it's best to not use any IODI programs)
 
     auto& sizes = pts.second;
     always_assert(sizes.size() > 0);
