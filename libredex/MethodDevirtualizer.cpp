@@ -106,7 +106,11 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
 
 void make_methods_static(const std::unordered_set<DexMethod*>& methods,
                          bool keep_this) {
-  for (auto method : methods) {
+  // TODO" Change callers to pass this as a sorted vector or an ordered set.
+  std::vector<DexMethod*> meth_list(methods.begin(), methods.end());
+  std::sort(meth_list.begin(), meth_list.end(), compare_dexmethods);
+
+  for (auto* method : meth_list) {
     TRACE(VIRT,
           2,
           "Staticized method: %s, keep this: %d\n",
