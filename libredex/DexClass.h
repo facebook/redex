@@ -1258,6 +1258,10 @@ inline bool compare_dexmethods_profiled(
     weight_b = get_method_weight_override(b, whitelisted_substrings);
   }
 
+  if (weight_a == weight_b) {
+    return compare_dexmethods(a, b);
+  }
+
   return weight_a > weight_b;
 }
 
