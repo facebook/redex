@@ -1279,6 +1279,11 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
         std::vector<Chain*> result;
         result.reserve(chain->size());
 
+        // TODO: Sort the outputs by edge type, case key, and throw index
+        //  * We may be able to use fewer debug positions if we emit case blocks
+        //    in the original order.
+        //  * Right now, it seems the switches are being output in reverse
+        //    order, which is annoying for writing tests.
         const auto& end = chain->end();
         for (auto it = chain->begin(); it != end;) {
           Block* b = *it;
