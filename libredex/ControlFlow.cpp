@@ -792,7 +792,8 @@ void ControlFlowGraph::remove_empty_blocks() {
       continue;
     }
 
-    const auto& succs = b->succs();
+    const auto& succs = get_succ_edges_if(
+        b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
     if (succs.size() > 0) {
       always_assert_log(succs.size() == 1,
                         "too many successors for empty block %d:\n%s",
@@ -808,6 +809,14 @@ void ControlFlowGraph::remove_empty_blocks() {
 
       // Remove the one goto edge from b to succ
       delete_edges_between(b, succ);
+
+      // If b was a predecessor of the exit block (for example, part of an
+      // infinite loop) we need to transfer that info to `succ` because `b` will
+      // be made unreachable and deleted by simplify
+      auto ghost = get_succ_edge_of_type(b, EDGE_GHOST);
+      if (ghost != nullptr) {
+        set_edge_source(ghost, succ);
+      }
 
       // Redirect from b's predecessors to b's successor (skipping b). We
       // can't move edges around while we iterate through the edge list
@@ -919,12 +928,6 @@ void ControlFlowGraph::sanity_check() const {
       always_assert_log(num_goto_succs < 2, "block %d, %s", b->id(),
                         SHOW(*this));
     }
-  }
-
-  if (exit_block() != nullptr) {
-    always_assert_log(exit_block()->succs().empty(),
-                      "exit block has outgoing edges. block %d in \n%s",
-                      exit_block()->id(), SHOW(*this));
   }
 
   for (const auto& entry : m_blocks) {
