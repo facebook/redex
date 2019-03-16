@@ -17,6 +17,7 @@
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
+#include "SwitchEquivFinder.h"
 #include "Walkers.h"
 
 /**
@@ -618,7 +619,7 @@ class OptimizeEnums {
       fixpoint.run(optimize_enums::Environment());
       std::unordered_set<IRInstruction*> switches;
       for (const auto& info : fixpoint.collect()) {
-        const auto pair = switches.insert((*info.switch_ordinal)->insn);
+        const auto pair = switches.insert((*info.branch)->insn);
         bool insert_occurred = pair.second;
         if (!insert_occurred) {
           // Make sure we don't have any duplicate switch opcodes. We can't
@@ -675,14 +676,14 @@ class OptimizeEnums {
    * MOVE_RESULT <v_ordinal>
    * AGET <v_field>, <v_ordinal>
    * MOVE_RESULT_PSEUDO <v_dest>
-   * *_SWITCH <v_dest>
+   * *_SWITCH <v_dest>              ; or IF_EQZ <v_dest> <v_some_constant>
    *
    * to
    *
    * INVOKE_VIRTUAL <v_enum> Enum;.ordinal:()
    * MOVE_RESULT <v_ordinal>
    * MOVE <v_dest>, <v_ordinal>
-   * *_SWITCH <v_dest>
+   * SPARSE_SWITCH <v_dest>
    *
    * if <v_field> was fetched using SGET_OBJECT <lookup_table_holder>
    *
@@ -696,21 +697,61 @@ class OptimizeEnums {
       const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases,
       const optimize_enums::Info& info) {
-    auto& cfg = info.switch_ordinal->cfg();
-    auto switch_block = info.switch_ordinal->block();
-    auto field_enum_map = generated_switch_cases.at(info.array_field);
-    for (cfg::Edge* edge :
-         cfg.get_succ_edges_of_type(switch_block, cfg::EDGE_BRANCH)) {
-      auto old_case_key = edge->case_key();
-      always_assert(old_case_key != boost::none);
+    auto& cfg = info.branch->cfg();
+    auto branch_block = info.branch->block();
+
+    // Use the SwitchEquivFinder to handle not just switch statements but also
+    // trees of if and switch statements
+    SwitchEquivFinder finder(&cfg, *info.branch, *info.reg);
+    if (!finder.success()) {
+      return;
+    }
+
+    // Remove the switch statement so we can rebuild it with the correct case
+    // keys. This removes all edges to the if-else blocks and the blocks will
+    // eventually be removed by cfg.simplify()
+    cfg.remove_opcode(*info.branch);
+
+    cfg::Block* fallthrough = nullptr;
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    const auto& field_enum_map = generated_switch_cases.at(info.array_field);
+    for (const auto& pair : finder.key_to_case()) {
+      auto old_case_key = pair.first;
+      cfg::Block* leaf = pair.second;
+
+      // if-else chains will load constants to compare against. Sometimes the
+      // leaves will use these values so we have to copy those values to the
+      // beginning of the leaf blocks. Any dead instructions will be cleaned up
+      // by LDCE.
+      const auto& extra_loads = finder.extra_loads();
+      const auto& loads_for_this_leaf = extra_loads.find(leaf);
+      if (loads_for_this_leaf != extra_loads.end()) {
+        for (const auto& register_and_insn : loads_for_this_leaf->second) {
+          IRInstruction* insn = register_and_insn.second;
+          if (insn != nullptr) {
+            // null instruction pointers are used to signify the upper half of a
+            // wide load.
+            auto copy = new IRInstruction(*insn);
+            TRACE(ENUM, 4, "adding %s to B%d\n", SHOW(copy), leaf->id());
+            leaf->push_front(copy);
+          }
+        }
+      }
+
+      if (old_case_key == boost::none) {
+        always_assert_log(fallthrough == nullptr, "only 1 fallthrough allowed");
+        fallthrough = leaf;
+        continue;
+      }
+
       auto search = field_enum_map.find(*old_case_key);
       always_assert_log(search != field_enum_map.end(),
                         "can't find case key %d leaving block %d\n%s\nin %s\n",
-                        *old_case_key, switch_block->id(), info.str().c_str(),
+                        *old_case_key, branch_block->id(), info.str().c_str(),
                         SHOW(cfg));
       auto field_enum = search->second;
       auto new_case_key = enum_field_to_ordinal.at(field_enum);
-      edge->set_case_key(new_case_key);
+      cases.emplace_back(new_case_key, leaf);
     }
 
     // Add a new register to hold the ordinal and then use it to
@@ -725,7 +766,7 @@ class OptimizeEnums {
     //  AGET <v_field>, <v_ordinal>
     //  MOVE_RESULT_PSEUDO <v_dest>
     //  ...
-    //  *_SWITCH <v_new_reg> // will use <v_new_reg> instead of <v_dest>
+    //  SPARSE_SWITCH <v_new_reg> // will use <v_new_reg> instead of <v_dest>
     //
     // NOTE: We leave CopyPropagation to clean up the extra moves and
     //       LDCE the array access.
@@ -738,8 +779,40 @@ class OptimizeEnums {
     move_ordinal_result->set_dest(new_ordinal_reg);
     cfg.insert_after(move_ordinal_it, move_ordinal_result);
 
-    auto switch_insn = (*info.switch_ordinal)->insn;
-    switch_insn->set_src(0, new_ordinal_reg);
+    // TODO?: Would it be possible to keep the original if-else tree form that
+    // D8 made?  It would probably be better to build a more general purpose
+    // switch -> if-else converter pass and run it after this pass.
+    if (cases.size() > 1) {
+      // Dex Lowering will convert this to packed if that would be better
+      IRInstruction* new_switch = new IRInstruction(OPCODE_SPARSE_SWITCH);
+      new_switch->set_src(0, new_ordinal_reg);
+      cfg.create_branch(branch_block, new_switch, fallthrough, cases);
+    } else if (cases.size() == 1) {
+      // Only one non-fallthrough case, we can use an if statement.
+      // const vKey, case_key
+      // if-eqz vOrdinal, vKey
+      int32_t key = cases[0].first;
+      cfg::Block* target = cases[0].second;
+      IRInstruction* const_load = new IRInstruction(OPCODE_CONST);
+      auto key_reg = cfg.allocate_temp();
+      const_load->set_dest(key_reg);
+      const_load->set_literal(key);
+      branch_block->push_back(const_load);
+
+      IRInstruction* new_if = new IRInstruction(OPCODE_IF_EQ);
+      new_if->set_src(0, new_ordinal_reg);
+      new_if->set_src(1, key_reg);
+      cfg.create_branch(branch_block, new_if, fallthrough, target);
+    } else {
+      // Just one case, set the goto edge's target to the fallthrough block.
+      always_assert(cases.empty());
+      if (fallthrough != nullptr) {
+        auto existing_goto =
+            cfg.get_succ_edge_of_type(branch_block, cfg::EDGE_GOTO);
+        always_assert(existing_goto != nullptr);
+        cfg.set_edge_target(existing_goto, fallthrough);
+      }
+    }
 
     m_lookup_tables_replaced.emplace(info.array_field);
   }

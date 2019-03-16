@@ -29,10 +29,12 @@
  *  AGET <v_field>, <v_ordinal>
  *  MOVE_RESULT_PSEUDO <v_dest>
  *  ...
- *  *_SWITCH <v_dest>
+ *  *_SWITCH <v_dest>            ; or IF_EQZ <v_dest> <v_some_constant>
  *
  * But we want to find cases that have interleaved unrelated instructions or
  * block boundaries between them, so we use the sparta analysis framework.
+ * Also, we need to handle switches that have been turned into if-else chains by
+ * D8, so we actually look for enums in branch instructions, not just switches.
  *
  * We track information about which instructions wrote to a given register in
  * the `info` struct. If we reach a switch statement with all the fields filled,
@@ -48,11 +50,12 @@ struct Info {
   DexField* array_field{nullptr};
   boost::optional<cfg::InstructionIterator> invoke;
   boost::optional<cfg::InstructionIterator> aget;
-  boost::optional<cfg::InstructionIterator> switch_ordinal;
+  boost::optional<cfg::InstructionIterator> branch;
+  boost::optional<uint16_t> reg;
 
   bool operator==(const Info& other) const {
     return array_field == other.array_field && invoke == other.invoke &&
-           aget == other.aget && switch_ordinal == other.switch_ordinal;
+           aget == other.aget && branch == other.branch;
   }
 
   std::string str() const {
@@ -67,8 +70,8 @@ struct Info {
     if (aget) {
       o << "  " << show(**aget) << "\n";
     }
-    if (switch_ordinal) {
-      o << "  " << show(**switch_ordinal) << "\n";
+    if (branch) {
+      o << "  " << show(**branch) << "\n";
     }
     o << "}";
     return o.str();

@@ -10,6 +10,44 @@
 
 namespace optimize_enums {
 
+bool has_all_but_branch(boost::optional<Info> info) {
+  return info && info->array_field && info->invoke && info->aget;
+}
+
+// If exactly one of the input registers is holding the case key for an enum,
+// return an info struct with that register filled in. Otherwise, return none.
+boost::optional<Info> get_enum_reg(const Environment& env,
+                                   IRInstruction* insn) {
+  if (insn->srcs_size() == 1) {
+    // *-switch or if-*z
+    auto reg = insn->src(0);
+    auto info = env.get(reg).get_constant();
+    if (has_all_but_branch(info)) {
+      info->reg = reg;
+      return info;
+    }
+  } else {
+    // if-* v1 v2
+    // Only one of the registers should have the case key in it. Return that
+    // one. If both registers do then return none.
+    always_assert(insn->srcs_size() == 2);
+    uint16_t l_reg = insn->src(0);
+    uint16_t r_reg = insn->src(1);
+    boost::optional<Info> left = env.get(l_reg).get_constant();
+    boost::optional<Info> right = env.get(r_reg).get_constant();
+    bool l_has = has_all_but_branch(left);
+    bool r_has = has_all_but_branch(right);
+    if (l_has && !r_has) {
+      left->reg = l_reg;
+      return left;
+    } else if (!l_has && r_has) {
+      right->reg = r_reg;
+      return right;
+    }
+  }
+  return boost::none;
+}
+
 void analyze_default(cfg::InstructionIterator it, Environment* env) {
   auto insn = it->insn;
   if (insn->dests_size()) {
@@ -47,6 +85,17 @@ void analyze_invoke(cfg::InstructionIterator it, Environment* env) {
     Info info;
     info.invoke = it;
     env->set(RESULT_REGISTER, Domain(info));
+  } else {
+    analyze_default(it, env);
+  }
+}
+
+void analyze_branch(cfg::InstructionIterator it, Environment* env) {
+  auto insn = it->insn;
+  auto info = get_enum_reg(*env, insn);
+  if (has_all_but_branch(info)) {
+    info->branch = it;
+    env->set(*info->reg, Domain(*info));
   } else {
     analyze_default(it, env);
   }
@@ -103,17 +152,17 @@ std::vector<Info> Iterator::collect() const {
     for (auto it = ii.begin(); it != ii.end(); ++it) {
       auto insn = it->insn;
       auto op = insn->opcode();
-      auto cfg_it = b->to_cfg_instruction_iterator(it);
-      if (is_switch(op)) {
-        auto info = env.get(insn->src(0)).get_constant();
-        if (info && info->array_field != nullptr &&
-            info->invoke != boost::none && info->aget != boost::none) {
-          info->switch_ordinal = cfg_it;
-          result.push_back(*info);
+      const auto& cfg_it = b->to_cfg_instruction_iterator(it);
+      if (is_branch(op)) {
+        auto info = get_enum_reg(env, insn);
+        if (info && info->branch == boost::none) {
+          // We check to make sure info.branch is none because we want to only
+          // get the first branch of the if-else chain.
+          info->branch = cfg_it;
+          result.emplace_back(*info);
         }
-      } else {
-        analyze_insn(cfg_it, &env);
       }
+      analyze_insn(cfg_it, &env);
     }
   }
   return result;
@@ -135,6 +184,22 @@ void Iterator::analyze_insn(cfg::InstructionIterator it,
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     analyze_move_result(it, env);
+    break;
+  case OPCODE_PACKED_SWITCH:
+  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE:
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE:
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ:
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ:
+    analyze_branch(it, env);
     break;
   case OPCODE_AGET:
   case OPCODE_AGET_WIDE:
