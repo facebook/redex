@@ -379,6 +379,8 @@ void IODIMetadata::write(
   size_t dup_meth_with_dbg_count_not_emitted = 0;
   size_t dup_meth_with_dbg_count_emitted = 0;
 
+  size_t single_huge_count = 0;
+
   for (const auto& it : m_entries) {
     if (it.second.is_duplicate()) {
       always_assert(it.second.size() > 1);
@@ -433,6 +435,12 @@ void IODIMetadata::write(
         }
       }
     } else {
+      if (!can_safely_use_iodi(it.second.get_method())) {
+        // This will occur if at some point a method was marked as huge during
+        // encoding.
+        single_huge_count += 1;
+        continue;
+      }
       single_count += 1;
       always_assert_log(single_count != 0, "Too many sgls found, overflowed");
       always_assert(it.first.size() < UINT16_MAX);
@@ -455,8 +463,8 @@ void IODIMetadata::write(
   TRACE(IODI, 1,
         "[IODI] Emitted %u singles, %u duplicates, ignored %u duplicates."
         " %u emitted dups had debug items, %u non-emitted dups had debug"
-        " items and %u methods were too big\n",
+        " items and %u methods were too big, %u were collision free\n",
         single_count, dup_meth_count_emitted, dup_meth_count_not_emitted,
         dup_meth_with_dbg_count_emitted, dup_meth_with_dbg_count_not_emitted,
-        m_huge_methods.size());
+        m_huge_methods.size(), single_huge_count);
 }
