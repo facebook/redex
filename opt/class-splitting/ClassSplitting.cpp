@@ -9,7 +9,7 @@
  * This pass splits out static methods with weight 0
  * in the cold-start dexes.
  * The approach here is a new interdex plugin. This enables...
- * - only treating classes that end up in the primary / cold-start dexes;
+ * - only treating classes that end up in the non-primary cold-start dexes;
  * - accounting for extra classes, which is important to determine when a dex
  *   is full.
  *
@@ -75,9 +75,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     // be relocated. If so, we make sure that we account for possibly needed
     // extra target classes.
 
-    // We are only going to relocate perf-critical classes.
+    // We are only going to relocate perf-critical classes, i.e. classes in
+    // cold-start dexes that are not in the primary dex. (Reshuffling methods
+    // in the primary dex may cause issues as it may cause references to
+    // secondary dexes to be inspected by the VM too early.)
     always_assert(!dex_info.mixed_mode || dex_info.coldstart);
-    if (!(dex_info.primary || dex_info.coldstart)) {
+    if (!dex_info.coldstart || dex_info.primary) {
       return;
     }
 
