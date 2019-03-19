@@ -315,7 +315,9 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
     // as in https://source.android.com/devices/tech/dalvik/dalvik-bytecode
     // the following operations have the second operand masked.
     case OPCODE_SHL_INT_LIT8: {
-      result = (*cst) << (lit & 0x1f);
+      uint32_t ucst = *cst;
+      uint32_t uresult = ucst << (lit & 0x1f);
+      result = (int32_t)uresult;
       break;
     }
     case OPCODE_SHR_INT_LIT8: {
