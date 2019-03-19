@@ -12,6 +12,7 @@
 #include "EnumClinitAnalysis.h"
 #include "EnumUpcastAnalysis.h"
 #include "OptData.h"
+#include "TypeReference.h"
 #include "Walkers.h"
 
 /**
@@ -721,7 +722,14 @@ class EnumTransformer final {
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
     post_update_enum_classes(scope);
-    update_all_methods_fields(scope);
+    // Update all methods and fields references by replacing the candidate enum
+    // types with Integer type.
+    std::unordered_map<DexType*, DexType*> type_mapping;
+    for (auto& pair : m_enum_attrs) {
+      type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
+    }
+    type_reference::TypeRefUpdater updater(type_mapping, "$OE$");
+    updater.update_methods_fields(scope);
   }
 
   uint32_t get_int_objs_count() { return m_int_objs; }
@@ -930,127 +938,6 @@ class EnumTransformer final {
 
   DexType* try_convert_to_int_type(DexType* type) {
     return m_enum_util->try_convert_to_int_type(m_enum_attrs, type);
-  }
-
-  /**
-   * Update members and member refs.
-   */
-  void update_all_methods_fields(Scope& scope) {
-    // Change specs of all the other methods and fields if their specs contain
-    // any candidate enum types.
-    walk::parallel::methods(scope,
-                            [&](DexMethod* method) { mangling(method); });
-    walk::parallel::fields(scope, [&](DexField* field) { mangling(field); });
-    // Update refs.
-    ConcurrentSet<DexMethodRef*> methods;
-    ConcurrentSet<DexFieldRef*> fields;
-    walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (insn->has_field()) {
-          fields.insert(insn->get_field());
-        } else if (insn->has_method()) {
-          methods.insert(insn->get_method());
-        }
-      }
-    });
-    {
-      auto wq = workqueue_foreach<DexFieldRef*>(
-          [this](DexFieldRef* field) { mangling(field); });
-      for (auto field : fields) {
-        wq.add_item(field);
-      }
-      wq.run_all();
-    }
-    {
-      auto wq = workqueue_foreach<DexMethodRef*>(
-          [this](DexMethodRef* method) { mangling(method); });
-      for (auto method : methods) {
-        wq.add_item(method);
-      }
-      wq.run_all();
-    }
-  }
-
-  // org_name + "$OE$" + string(seed)
-  DexString* gen_new_name(DexString* org_name, size_t seed) {
-    auto name = std::make_unique<char[]>(org_name->size() + 18);
-    char* p = name.get();
-    memcpy(p, org_name->c_str(), org_name->size());
-    p += org_name->size();
-    *p++ = '$';
-    *p++ = 'O';
-    *p++ = 'E';
-    *p++ = '$';
-    while (seed) {
-      int d = seed % 62;
-      if (d < 10) {
-        *p++ = d + '0';
-      } else if (d < 36) {
-        *p++ = d - 10 + 'a';
-      } else {
-        *p++ = d - 36 + 'A';
-      }
-      seed /= 62;
-    }
-    *p = 0;
-    return DexString::make_string(name.get(), p - name.get());
-  }
-
-  /**
-   * Change a field to Integer if its original type is a candidate enum.
-   */
-  void mangling(DexFieldRef* field) {
-    DexType* new_type = try_convert_to_int_type(field->get_type());
-    if (new_type) {
-      size_t seed = 0;
-      boost::hash_combine(seed, field->get_type()->str());
-      DexFieldSpec spec;
-      spec.name = gen_new_name(field->get_name(), seed);
-      spec.type = new_type;
-      field->change(spec);
-    }
-  }
-
-  /**
-   * Change proto of a method if its proto contains any candidate enums.
-   */
-  void mangling(DexMethodRef* method) {
-    size_t seed = 0;
-    DexProto* proto = method->get_proto();
-    DexType* rtype = try_convert_to_int_type(proto->get_rtype());
-    if (rtype) {
-      boost::hash_combine(seed, -1);
-      boost::hash_combine(seed, proto->get_rtype()->str());
-    } else { // Keep unchanged.
-      rtype = proto->get_rtype();
-    }
-    std::deque<DexType*> new_args;
-    size_t id = 0;
-    for (DexType* arg : proto->get_args()->get_type_list()) {
-      DexType* new_arg = try_convert_to_int_type(arg);
-      if (new_arg) {
-        boost::hash_combine(seed, id);
-        boost::hash_combine(seed, arg->str());
-      } else { // Keep unchanged.
-        new_arg = arg;
-      }
-      new_args.push_back(new_arg);
-      ++id;
-    }
-    if (seed) {
-      DexProto* new_proto = DexProto::make_proto(
-          rtype, DexTypeList::make_type_list(std::move(new_args)));
-      DexMethodSpec spec;
-      // TODO: (fengliu) <init> signature may be conflicted with other.
-      if (!is_init(method)) {
-        spec.name = gen_new_name(method->get_name(), seed);
-      }
-      spec.proto = new_proto;
-      method->change(spec,
-                     false /* rename on collision */,
-                     true /* update deobfuscated name */);
-    }
   }
 
   DexStoresVector& m_stores;

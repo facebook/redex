@@ -95,9 +95,167 @@ void fix_colliding_method(
   });
 }
 
+/**
+ * The old types should all have definitions so that it's unlikely that we are
+ * trying to update a virtual method that may override any external virtual
+ * method.
+ */
+void assert_old_types_have_definitions(
+    const std::unordered_map<DexType*, DexType*>& old_to_new) {
+  for (auto& pair : old_to_new) {
+    auto cls = type_class(pair.first);
+    always_assert_log(
+        cls && cls->is_def(),
+        "\t[type-reference] Old type %s should have deffinition\n",
+        SHOW(pair.first));
+  }
+}
+
 } // namespace
 
 namespace type_reference {
+
+void TypeRefUpdater::update_methods_fields(const Scope& scope) {
+  // Change specs of all the other methods and fields if their specs contain
+  // any candidate types.
+  walk::parallel::methods(scope, [this](DexMethod* method) {
+    if (mangling(method)) {
+      always_assert_log(can_rename(method), "Method %s can not be renamed\n");
+    }
+  });
+  walk::parallel::fields(scope, [this](DexField* field) {
+    if (mangling(field)) {
+      always_assert_log(can_rename(field), "Field %s can not be renamed\n");
+    }
+  });
+  // Update all the method refs and field refs.
+  ConcurrentSet<DexMethodRef*> methods;
+  ConcurrentSet<DexFieldRef*> fields;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_field()) {
+        fields.insert(insn->get_field());
+      } else if (insn->has_method()) {
+        methods.insert(insn->get_method());
+      }
+    }
+  });
+  {
+    auto wq = workqueue_foreach<DexFieldRef*>(
+        [this](DexFieldRef* field) { mangling(field); });
+    for (auto field : fields) {
+      wq.add_item(field);
+    }
+    wq.run_all();
+  }
+  {
+    auto wq = workqueue_foreach<DexMethodRef*>(
+        [this](DexMethodRef* method) { mangling(method); });
+    for (auto method : methods) {
+      wq.add_item(method);
+    }
+    wq.run_all();
+  }
+}
+
+DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
+  uint32_t level = get_array_level(type);
+  DexType* elem_type = type;
+  if (level) {
+    elem_type = get_array_type(type);
+  }
+  if (m_old_to_new.count(elem_type)) {
+    auto new_type = m_old_to_new.at(elem_type);
+    return level ? make_array_type(new_type, level) : new_type;
+  }
+  return nullptr;
+}
+
+/**
+ * org_name + m_mangling_affix + seed
+ */
+DexString* TypeRefUpdater::gen_new_name(const DexString* org_name,
+                                        size_t seed) {
+  std::string new_name = org_name->str() + m_mangling_affix;
+  while (seed) {
+    int d = seed % 62;
+    if (d < 10) {
+      new_name.push_back(d + '0');
+    } else if (d < 36) {
+      new_name.push_back(d - 10 + 'a');
+    } else {
+      new_name.push_back(d - 36 + 'A');
+    }
+    seed /= 62;
+  }
+  return DexString::make_string(new_name);
+}
+
+bool TypeRefUpdater::mangling(DexFieldRef* field) {
+  DexType* new_type = try_convert_to_new_type(field->get_type());
+  if (new_type) {
+    size_t seed = 0;
+    boost::hash_combine(seed, field->get_type()->str());
+    DexFieldSpec spec;
+    spec.name = gen_new_name(field->get_name(), seed);
+    spec.type = new_type;
+    field->change(spec);
+    TRACE(REFU, 9, "Update field %s \n", SHOW(field));
+    return true;
+  }
+  return false;
+}
+
+bool TypeRefUpdater::mangling(DexMethodRef* method) {
+  size_t seed = 0;
+  DexProto* proto = method->get_proto();
+  DexType* rtype = try_convert_to_new_type(proto->get_rtype());
+  if (rtype) {
+    boost::hash_combine(seed, -1);
+    boost::hash_combine(seed, proto->get_rtype()->str());
+  } else { // Keep unchanged.
+    rtype = proto->get_rtype();
+  }
+  std::deque<DexType*> new_args;
+  size_t id = 0;
+  for (DexType* arg : proto->get_args()->get_type_list()) {
+    DexType* new_arg = try_convert_to_new_type(arg);
+    if (new_arg) {
+      boost::hash_combine(seed, id);
+      boost::hash_combine(seed, arg->str());
+    } else { // Keep unchanged.
+      new_arg = arg;
+    }
+    new_args.push_back(new_arg);
+    ++id;
+  }
+  // Do not need update the signature.
+  if (seed == 0) {
+    return false;
+  }
+  DexProto* new_proto = DexProto::make_proto(
+      rtype, DexTypeList::make_type_list(std::move(new_args)));
+  DexMethodSpec spec;
+  if (!is_init(method)) {
+    spec.name = gen_new_name(method->get_name(), seed);
+  }
+  spec.proto = new_proto;
+  // TODO: (fengliu) Handle collided <init> signatures instead of assertion
+  // failure.
+  method->change(spec,
+                 false /* rename on collision */,
+                 true /* update deobfuscated name */);
+  TRACE(REFU, 9, "Update method %s \n", SHOW(method));
+  return true;
+}
+
+TypeRefUpdater::TypeRefUpdater(
+    const std::unordered_map<DexType*, DexType*>& old_to_new,
+    const std::string mangling_affix)
+    : m_old_to_new(old_to_new), m_mangling_affix(mangling_affix) {
+  assert_old_types_have_definitions(old_to_new);
+}
 
 std::string get_method_signature(const DexMethod* method) {
   std::ostringstream ss;

@@ -15,6 +15,60 @@ using TypeSet = std::set<const DexType*, dextypes_comparator>;
 
 namespace type_reference {
 
+/**
+ * Update old type reference to new type reference in all the fields and methods
+ * in the scope, but is not responsible for updating opcodes. The users should
+ * take care of other part of transformations to make sure the updating being
+ * valide.
+ * This supports updating virtual methods through name mangling instead of
+ * walking through virtual scopes.
+ * Usage examples:
+ *    1. Replace candidate enum types with Integer type after we finish the code
+ *       transformation.
+ *    2. Replace interfaces or parent classes references with new type
+ *       references after we merge them to their single implementation or single
+ *       child classes.
+ */
+class TypeRefUpdater final {
+ public:
+  /**
+   * The old types should all have definitions so that it's unlikely that we are
+   * trying to update a virtual method that may override any external virtual
+   * method.
+   * Pass a mangling_affix for distinguishing your optimization, like "$OE$" is
+   * for OptimizeEnumsPass.
+   */
+  TypeRefUpdater(const std::unordered_map<DexType*, DexType*>& old_to_new,
+                 const std::string mangling_affix);
+
+  void update_methods_fields(const Scope& scope);
+
+ private:
+  /**
+   * Try to convert "type" to a new type. Return nullptr if it's not found in
+   * the old_to_new mapping. LOld; => LNew; [LOld; => [LNew;
+   * [[LOld; => [[LNew;
+   * ...
+   */
+  DexType* try_convert_to_new_type(DexType* type);
+  /**
+   * Change a field to new type if its original type is a candidate.
+   * Return true if the field is updated.
+   */
+  bool mangling(DexFieldRef* field);
+  /**
+   * Change proto of a method if its proto contains any candidate.
+   */
+  bool mangling(DexMethodRef* method);
+  /**
+   * org_name + m_mangling_affix + seed
+   */
+  DexString* gen_new_name(const DexString* org_name, size_t seed);
+
+  const std::unordered_map<DexType*, DexType*>& m_old_to_new;
+  const std::string m_mangling_affix;
+};
+
 // A helper to stringify method signature for the method dedup mapping file.
 std::string get_method_signature(const DexMethod* method);
 
