@@ -132,6 +132,14 @@ bool HeapEscapeAnalyzer::analyze_invoke(const IRInstruction* insn,
   return true;
 }
 
+bool HeapEscapeAnalyzer::analyze_filled_new_array(const IRInstruction* insn,
+                                                  ConstantEnvironment* env) {
+  for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    set_escaped(insn->src(i), env);
+  }
+  return true;
+}
+
 bool LocalArrayAnalyzer::analyze_new_array(const IRInstruction* insn,
                                            ConstantEnvironment* env) {
   auto length = env->get<SignedConstantDomain>(insn->src(0));

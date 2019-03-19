@@ -38,6 +38,7 @@
   X(array_length)     \
   X(new_instance)     \
   X(new_array)        \
+  X(filled_new_array) \
   X(fill_array_data)  \
   X(throw)            \
   X(goto)             \
@@ -386,8 +387,10 @@ class InstructionAnalyzerCombiner final {
       return analyze_new_instance(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY:
       return analyze_new_array(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case OPCODE_FILLED_NEW_ARRAY:
+      return analyze_filled_new_array(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }

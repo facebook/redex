@@ -91,6 +91,8 @@ class HeapEscapeAnalyzer final
   static bool analyze_aput(const IRInstruction* insn, ConstantEnvironment* env);
   static bool analyze_invoke(const IRInstruction* insn,
                              ConstantEnvironment* env);
+  static bool analyze_filled_new_array(const IRInstruction* insn,
+                                       ConstantEnvironment* env);
 };
 
 /*

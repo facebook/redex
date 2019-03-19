@@ -217,6 +217,33 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaPut) {
   EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
 }
 
+TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaFilledNewArray) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 0)
+     (const v1 1)
+     (new-array v1 "[I") ; create an array of length 1
+     (move-result-pseudo-object v2)
+     (aput v1 v2 v0) ; write 1 into arr[0]
+     (move-object v3 v2) ; create an alias
+     (filled-new-array (v3) "[[I")
+     (move-result-object v4)
+     (aget v2 v0)
+     (move-result-pseudo v3)
+
+     (if-eqz v3 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+
+  auto expected = assembler::to_s_expr(code.get());
+  do_const_prop(code.get(), ArrayAnalyzer());
+  EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+}
+
 TEST_F(ConstantPropagationTest, OutOfBoundsWrite) {
   auto code = assembler::ircode_from_string(R"( (
      (const v0 1)
