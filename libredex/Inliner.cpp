@@ -175,20 +175,54 @@ MultiMethodInliner::MultiMethodInliner(
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const Config& config)
     : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
-  // walk every opcode in scope looking for calls to inlinable candidates
-  // and build a map of callers to callees and the reverse callees to callers
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod* meth, IRInstruction* insn) {
-                  if (is_invoke(insn->opcode())) {
-                    auto callee =
-                        resolver(insn->get_method(), opcode_to_search(insn));
-                    if (callee != nullptr && callee->is_concrete() &&
-                        candidates.find(callee) != candidates.end()) {
-                      callee_caller[callee].push_back(meth);
-                      caller_callee[meth].push_back(callee);
+  // Walk every opcode in scope looking for calls to inlinable candidates and
+  // build a map of callers to callees and the reverse callees to callers. If
+  // within_dex is false, we build the map for all the candidates. If within_dex
+  // is true, we properly exclude methods who have callers being located in
+  // another dex from the candidates.
+  if (m_config.within_dex) {
+    std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
+                                                     candidates.end());
+    XDexRefs x_dex(stores);
+    walk::opcodes(scope, [](DexMethod* caller) { return true; },
+                  [&](DexMethod* caller, IRInstruction* insn) {
+                    if (is_invoke(insn->opcode())) {
+                      auto callee =
+                          resolver(insn->get_method(), opcode_to_search(insn));
+                      if (callee != nullptr && callee->is_concrete() &&
+                          candidate_callees.count(callee)) {
+                        if (x_dex.cross_dex_ref(caller, callee)) {
+                          candidate_callees.erase(callee);
+                          if (callee_caller.count(callee)) {
+                            callee_caller.erase(callee);
+                          }
+                        } else {
+                          callee_caller[callee].push_back(caller);
+                        }
+                      }
                     }
-                  }
-                });
+                  });
+    for (auto& pair : callee_caller) {
+      DexMethod* callee = const_cast<DexMethod*>(pair.first);
+      auto& callers = pair.second;
+      for (auto caller : callers) {
+        caller_callee[caller].push_back(callee);
+      }
+    }
+  } else {
+    walk::opcodes(scope, [](DexMethod* caller) { return true; },
+                  [&](DexMethod* caller, IRInstruction* insn) {
+                    if (is_invoke(insn->opcode())) {
+                      auto callee =
+                          resolver(insn->get_method(), opcode_to_search(insn));
+                      if (callee != nullptr && callee->is_concrete() &&
+                          candidates.count(callee)) {
+                        callee_caller[callee].push_back(caller);
+                        caller_callee[caller].push_back(callee);
+                      }
+                    }
+                  });
+  }
 }
 
 void MultiMethodInliner::inline_methods() {

@@ -7,11 +7,13 @@
 
 #include <gtest/gtest.h>
 
+#include "ApiLevelChecker.h"
+#include "Creators.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "Inliner.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "Inliner.h"
 #include "RedexTest.h"
 
 struct MethodInlineTest : public RedexTest {};
@@ -32,6 +34,59 @@ void test_inliner(const std::string& caller_str,
 
   EXPECT_EQ(assembler::to_string(expected.get()),
             assembler::to_string(caller.get()));
+}
+
+DexClass* create_a_class(const char* description) {
+  ClassCreator cc(DexType::make_type(description));
+  cc.set_super(get_object_type());
+  return cc.create();
+}
+
+/**
+ * Create a method like
+ * void {{name}}() {
+ *   const v0 {{val}};
+ * }
+ */
+DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
+  auto proto =
+      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_PUBLIC);
+  auto main_block = mc.get_main_block();
+  auto loc = mc.make_local(get_int_type());
+  main_block->load_const(loc, val);
+  main_block->ret_void();
+  auto method = mc.create();
+  cls->add_method(method);
+  return method;
+}
+
+/**
+ * Create a method calls other methods.
+ * void {{name}}() {
+ *   other1();
+ *   other2();
+ *   ...
+ * }
+ */
+DexMethod* make_a_method_calls_others(DexClass* cls,
+                                      const char* name,
+                                      std::vector<DexMethod*> methods) {
+  auto proto =
+      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+  auto ref = DexMethod::make_method(
+      cls->get_type(), DexString::make_string(name), proto);
+  MethodCreator mc(ref, ACC_PUBLIC);
+  auto main_block = mc.get_main_block();
+  for (auto callee : methods) {
+    main_block->invoke(callee, {});
+  }
+  main_block->ret_void();
+  auto method = mc.create();
+  cls->add_method(method);
+  return method;
 }
 
 /*
@@ -140,4 +195,56 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST_F(MethodInlineTest, test_within_dex_inlining) {
+  MethodRefCache resolve_cache;
+  auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
+    return resolve_method(method, search, resolve_cache);
+  };
+
+  MultiMethodInliner::Config inliner_config;
+  // Only inline methods within dex.
+  inliner_config.within_dex = true;
+
+  DexStoresVector stores;
+  std::unordered_set<DexMethod*> canidates;
+  std::unordered_set<DexMethod*> expected_inlined;
+  auto foo_cls = create_a_class("Lfoo;");
+  auto bar_cls = create_a_class("Lbar;");
+  {
+    // foo is in dex 2, bar is in dex 3.
+    DexStore store("root");
+    store.add_classes({});
+    store.add_classes({foo_cls});
+    store.add_classes({bar_cls});
+    stores.push_back(std::move(store));
+  }
+  {
+    auto foo_m1 = make_a_method(foo_cls, "foo_m1", 1);
+    auto bar_m1 = make_a_method(bar_cls, "bar_m1", 2001);
+    auto bar_m2 = make_a_method(bar_cls, "bar_m2", 2002);
+    canidates.insert(foo_m1);
+    canidates.insert(bar_m1);
+    canidates.insert(bar_m2);
+    // foo_main calls foo_m1 and bar_m2.
+    auto foo_main =
+        make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m2});
+    // bar_main calls bar_m1.
+    auto bar_main = make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
+    // Expect foo_m1 and bar_m1 be inlined if `within_dex` is true.
+    expected_inlined.insert(foo_m1);
+    expected_inlined.insert(bar_m1);
+  }
+  auto scope = build_class_scope(stores);
+  api::LevelChecker::init(0, scope);
+
+  MultiMethodInliner inliner(
+      scope, stores, canidates, resolver, inliner_config);
+  inliner.inline_methods();
+  auto inlined = inliner.get_inlined();
+  EXPECT_EQ(inlined.size(), expected_inlined.size());
+  for (auto method : expected_inlined) {
+    EXPECT_EQ(inlined.count(method), 1);
+  }
 }

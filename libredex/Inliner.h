@@ -74,6 +74,10 @@ class MultiMethodInliner {
     bool multiple_callers{false};
     bool inline_small_non_deletables{false};
     bool use_cfg_inliner{false};
+    // We can do global inlining before InterDexPass, but after InterDexPass, we
+    // can only inline methods within each dex. Set within_dex to true if
+    // inlining is needed after InterDex.
+    bool within_dex{false};
     std::unordered_set<DexType*> black_list;
     std::unordered_set<DexType*> caller_black_list;
     std::unordered_set<DexType*> whitelist_no_method_limit;
@@ -231,7 +235,7 @@ class MultiMethodInliner {
    * This method does *not* need to return a subset of is_inlinable. We will
    * only inline callsites that pass both should_inline and is_inlinable.
    *
-   * Note that this filter  will only be applied  when inlining is initiated via
+   * Note that this filter will only be applied when inlining is initiated via
    * a call to `inline_methods()`, but not if `inline_callees()` is invoked
    * directly.
    */

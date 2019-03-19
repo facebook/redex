@@ -216,3 +216,21 @@ class XStoreRefs {
     return true;
   }
 };
+
+/**
+ * We can not increase method references of any dex after interdex. The XDexRefs
+ * is used for quick validation for crossing-dex references.
+ */
+class XDexRefs {
+  std::vector<std::unordered_set<const DexType*>> m_dexes;
+
+ public:
+  explicit XDexRefs(const DexStoresVector& stores);
+
+  size_t get_dex_idx(const DexType* type) const;
+
+  /**
+   * Return true if the caller and callee are in different dexes.
+   */
+  bool cross_dex_ref(const DexMethod* caller, const DexMethod* callee) const;
+};

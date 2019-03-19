@@ -93,3 +93,29 @@ XStoreRefs::XStoreRefs(const DexStoresVector& stores) {
     }
   }
 }
+
+XDexRefs::XDexRefs(const DexStoresVector& stores) {
+  for (size_t store_idx = 0; store_idx < stores.size(); ++store_idx) {
+    auto& store = stores[store_idx];
+    for (size_t id = 0; id < store.get_dexen().size(); id++) {
+      m_dexes.push_back(std::unordered_set<const DexType*>());
+      auto& dex = m_dexes.back();
+      for (const auto cls : store.get_dexen()[id]) {
+        dex.insert(cls->get_type());
+      }
+    }
+  }
+}
+
+size_t XDexRefs::get_dex_idx(const DexType* type) const {
+  for (size_t dex_idx = 0; dex_idx < m_dexes.size(); dex_idx++) {
+    if (m_dexes[dex_idx].count(type) > 0) return dex_idx;
+  }
+  always_assert_log(false, "type %s not in the current APK", SHOW(type));
+}
+
+bool XDexRefs::cross_dex_ref(const DexMethod* caller,
+                             const DexMethod* callee) const {
+  size_t dex_idx = get_dex_idx(callee->get_class());
+  return m_dexes[dex_idx].count(caller->get_class()) == 0;
+}

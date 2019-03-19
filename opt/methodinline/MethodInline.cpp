@@ -37,7 +37,7 @@ void MethodInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassM
 
   populate_blacklist(scope);
 
-  auto resolver = [&](DexMethodRef* method, MethodSearch search) {
+  auto resolver = [this](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, resolved_refs);
   };
 
