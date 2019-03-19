@@ -69,7 +69,7 @@ bool inline_with_cfg(DexMethod* caller_method,
 class MultiMethodInliner {
  public:
   struct Config {
-    bool throws_inline;
+    bool throws_inline{false};
     bool enforce_method_size_limit{true};
     bool multiple_callers{false};
     bool inline_small_non_deletables{false};
