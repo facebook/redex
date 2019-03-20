@@ -213,11 +213,8 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
 
         // If a method is devirtualizable, proceed with live arg computation.
         if (method->is_virtual()) {
-          auto virt_scope = m_type_system.find_virtual_scope(method);
-          if (virt_scope == nullptr || !is_non_virtual_scope(virt_scope)) {
-            // TODO: T31388603 -- Remove unused args for true virtuals.
-            return method_stats;
-          }
+          // TODO (see T39183036): Support this use-case properly.
+          return method_stats;
         }
 
         std::vector<IRInstruction*> dead_insns;
