@@ -304,7 +304,9 @@ TEST_F(PostVerify, NonVirtualsUsedArgs) {
   ASSERT_NE(nullptr, use_non_virtual1);
   use_non_virtual1->balloon();
 
-  check_callsite_regs(use_non_virtual1, 1);
+  // Unsupported use-case. Should keep the original 2 arguments, even though one
+  // is technically unused.
+  check_callsite_regs(use_non_virtual1, 2);
 }
 
 // Check protected method arg removal for unused args
@@ -338,7 +340,9 @@ TEST_F(PostVerify, ProtectedNonVirtualsUsedArgs) {
   ASSERT_NE(nullptr, use_non_virtual2);
   use_non_virtual2->balloon();
 
-  check_callsite_regs(use_non_virtual2, 1);
+  // Unsupported use-case. Should keep the original 2 arguments, even though one
+  // is technically unused.
+  check_callsite_regs(use_non_virtual2, 2);
 }
 
 } // namespace
