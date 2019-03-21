@@ -106,6 +106,7 @@ class IODIMetadata {
   MethodToPrettyMap m_pretty_map;
   std::unordered_set<const DexMethod*> m_huge_methods;
   Scope m_scope;
+  bool m_enable_overloaded_methods;
 
   // Internal helper:
   // This will properly push_back a duplicate if method is a duplicate and
@@ -118,7 +119,8 @@ class IODIMetadata {
  public:
   // We can initialize this guy for free. If this feature is enabled then
   // invoke the methods below.
-  IODIMetadata() {}
+  IODIMetadata(bool enable_overloaded_methods = false)
+      : m_enable_overloaded_methods(enable_overloaded_methods) {}
 
   // This fills the internal map of stack trace name -> method. This must be
   // called after the last pass and before anything starts to get lowered.

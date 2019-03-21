@@ -131,8 +131,10 @@ bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
 
   // Eventually we can relax this constraint and calculate the subset of methods
   // that cannot be called externally and use those for IODI as well.
-  if (!method->is_virtual()) {
-    return true;
+  if (m_enable_overloaded_methods) {
+    if (!method->is_virtual()) {
+      return true;
+    }
   }
 
   std::string pretty_name;

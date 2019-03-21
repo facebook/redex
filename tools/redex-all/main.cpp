@@ -776,6 +776,8 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
   auto iodi_metadata_filename =
       cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
+  bool iodi_enable_overloaded_methods =
+      json_cfg.get("iodi_enable_overloaded_methods", false);
   if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
       !iodi_metadata_filename.empty()) {
     fprintf(stderr,
@@ -783,13 +785,16 @@ void redex_backend(const PassManager& manager,
             " debug_line_method_map_v2 and line_number_map_v2 to be set"
             " (these artifacts are required for leaveraging iodi_metadata)!\n");
     iodi_metadata_filename = "";
+  } else {
+    TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
+          iodi_enable_overloaded_methods ? "yes" : "no");
   }
 
   std::unique_ptr<PositionMapper> pos_mapper(
       PositionMapper::make(pos_output, pos_output_v2));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata;
+  IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);
   bool needs_method_to_id = !iodi_metadata_filename.empty() ||
                             !debug_line_mapping_filename_v2.empty();
   if (!iodi_metadata_filename.empty()) {
