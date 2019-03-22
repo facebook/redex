@@ -23,12 +23,12 @@ class UnmarkProguardKeepPass : Pass {
  public:
   UnmarkProguardKeepPass() : Pass("UnmarkProguardKeepPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("supercls_list", {}, m_supercls_list);
     jw.get("package_list", {}, m_package_list);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_supercls_list;

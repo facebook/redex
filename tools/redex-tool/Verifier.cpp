@@ -169,11 +169,11 @@ class Verifier : public Tool {
  public:
   Verifier() : Tool("verify", "verifies references between dexes") {}
 
-  virtual void add_options(po::options_description& options) const {
+  void add_options(po::options_description& options) const override {
     add_standard_options(options);
   }
 
-  virtual void run(const po::variables_map& options) {
+  void run(const po::variables_map& options) override {
     auto stores = init(
       options["jars"].as<std::string>(),
       options["apkdir"].as<std::string>(),

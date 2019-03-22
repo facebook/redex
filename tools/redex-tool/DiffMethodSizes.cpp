@@ -281,7 +281,7 @@ class DiffMethodSizes : public Tool {
  public:
   DiffMethodSizes() : Tool("diff-method-sizes", "compare method sizes") {}
 
-  virtual void add_options(po::options_description& options) const override {
+  void add_options(po::options_description& options) const override {
     options.add_options()(
         "commandline,c",
         po::value<std::string>(),
@@ -296,7 +296,7 @@ class DiffMethodSizes : public Tool {
         "show number of move code and their size for each methods");
   }
 
-  virtual void run(const po::variables_map& options) override {
+  void run(const po::variables_map& options) override {
     if (!options["commandline"].empty()) {
       diff_in_out_jars_from_command_line(
           options["commandline"].as<std::string>());

@@ -20,8 +20,8 @@ class TypeErasurePass : public Pass {
   TypeErasurePass() : Pass("TypeErasurePass") {}
   explicit TypeErasurePass(const char* name) : Pass(name) {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void configure_pass(const JsonWrapper& jw) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  protected:
   virtual ModelMerger* get_model_merger();

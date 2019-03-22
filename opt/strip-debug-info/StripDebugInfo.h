@@ -15,7 +15,7 @@ class StripDebugInfoPass : public Pass {
  public:
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("cls_whitelist", {}, m_config.cls_patterns);
     jw.get("method_whitelist", {}, m_config.meth_patterns);
     jw.get("use_whitelist", false, m_config.use_whitelist);
@@ -35,7 +35,7 @@ class StripDebugInfoPass : public Pass {
            m_config.drop_line_nrs_preceeding_safe);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void set_drop_prologue_end(bool b) { m_config.drop_prologue_end = b; }
   void set_drop_local_variables(bool b) { m_config.drop_local_variables = b; }

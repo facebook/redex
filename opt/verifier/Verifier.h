@@ -13,11 +13,11 @@ class VerifierPass : public Pass {
  public:
   VerifierPass() : Pass("VerifierPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("class_dependencies_output", "", m_class_dependencies_output);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::string m_class_dependencies_output;

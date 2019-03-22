@@ -150,22 +150,22 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
 
 class InlinerTestLargeIfOffsetTrueBranch : public InlinerTestLargeIfOffset {
  public:
-  virtual std::string test_name() {
+  std::string test_name() override {
     return "InlinerTestLargeIfOffsetTrueBranch";
   }
 
-  virtual IROpcode if_op() { return OPCODE_IF_NEZ; }
+  IROpcode if_op() override { return OPCODE_IF_NEZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetTrueBranch);
 
 class InlinerTestLargeIfOffsetFalseBranch : public InlinerTestLargeIfOffset {
  public:
-  virtual std::string test_name() {
+  std::string test_name() override {
     return "InlinerTestLargeIfOffsetFalseBranch";
   }
 
-  virtual IROpcode if_op() { return OPCODE_IF_EQZ; }
+  IROpcode if_op() override { return OPCODE_IF_EQZ; }
 };
 
 REGISTER_TEST(InlinerTestLargeIfOffsetFalseBranch);

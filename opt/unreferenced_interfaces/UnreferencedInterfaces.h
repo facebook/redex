@@ -19,7 +19,7 @@ class UnreferencedInterfacesPass : public Pass {
  public:
   UnreferencedInterfacesPass() : Pass("UnreferencedInterfacesPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Metric {
     size_t candidates{0};

@@ -13,7 +13,7 @@ class StringConcatenatorPass : public Pass {
  public:
   StringConcatenatorPass() : Pass("StringConcatenatorPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const JsonWrapper&) override {}
+  void configure_pass(const JsonWrapper&) override {}
 };

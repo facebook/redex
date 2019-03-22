@@ -13,5 +13,5 @@ class StringSimplificationPass : public Pass {
  public:
   StringSimplificationPass() : Pass("StringSimplificationPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

@@ -81,18 +81,17 @@ class NativeOutlinerCodegen : public Tool {
  public:
   NativeOutlinerCodegen() : Tool("native-outliner-codegen", "codegen helper for native outliner") {}
 
-  virtual void add_options(po::options_description& options) const override {
-  options.add_options()
-    ("input,i",
-     po::value<std::string>()->value_name("/tmp/artifacts.bin")->required(),
-     "(input) path of an artifacts file emitted by NativeOutliner pass")
-    ("output,o",
-     po::value<std::string>()->value_name("NativeOutlined.cpp")->required(),
-     "(output) path of generated code")
-    ;
+  void add_options(po::options_description& options) const override {
+    options.add_options()(
+        "input,i",
+        po::value<std::string>()->value_name("/tmp/artifacts.bin")->required(),
+        "(input) path of an artifacts file emitted by NativeOutliner pass")(
+        "output,o",
+        po::value<std::string>()->value_name("NativeOutlined.cpp")->required(),
+        "(output) path of generated code");
   }
 
-  virtual void run(const po::variables_map& options) override {
+  void run(const po::variables_map& options) override {
     auto inpath = options["input"].as<std::string>();
     auto outpath = options["output"].as<std::string>();
 

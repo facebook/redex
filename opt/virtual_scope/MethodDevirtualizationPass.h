@@ -13,7 +13,7 @@ class MethodDevirtualizationPass : public Pass {
  public:
   MethodDevirtualizationPass() : Pass("MethodDevirtualizationPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("staticize_vmethods_not_using_this",
            true,
            m_staticize_vmethods_not_using_this);
@@ -29,7 +29,7 @@ class MethodDevirtualizationPass : public Pass {
     jw.get("ignore_keep", false, m_ignore_keep);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_staticize_vmethods_not_using_this;

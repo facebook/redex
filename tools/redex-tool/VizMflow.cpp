@@ -48,7 +48,7 @@ class VizMflow : public Tool {
  public:
   VizMflow() : Tool("viz-mflow", "visualize method transforms") {}
 
-  virtual void add_options(po::options_description& options) const {
+  void add_options(po::options_description& options) const override {
     add_standard_options(options);
     options.add_options()
       ("class-filter,c",
@@ -63,7 +63,7 @@ class VizMflow : public Tool {
     ;
   }
 
-  virtual void run(const po::variables_map& options) {
+  void run(const po::variables_map& options) override {
     auto stores = init(
       options["jars"].as<std::string>(),
       options["apkdir"].as<std::string>(),
