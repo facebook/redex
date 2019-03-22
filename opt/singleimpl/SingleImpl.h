@@ -26,7 +26,7 @@ class SingleImplPass : public Pass {
  public:
   SingleImplPass() : Pass("SingleImplPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("white_list", {}, m_pass_config.white_list);
     jw.get("package_white_list", {}, m_pass_config.package_white_list);
     jw.get("black_list", {}, m_pass_config.black_list);
@@ -41,7 +41,7 @@ class SingleImplPass : public Pass {
            m_pass_config.filter_proguard_special_interfaces);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   // count of removed interfaces
   size_t removed_count{0};

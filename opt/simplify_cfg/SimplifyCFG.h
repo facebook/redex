@@ -13,7 +13,7 @@ class SimplifyCFGPass : public Pass {
  public:
   SimplifyCFGPass() : Pass("SimplifyCFGPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const JsonWrapper& jw) override {}
+  void configure_pass(const JsonWrapper& jw) override {}
 };

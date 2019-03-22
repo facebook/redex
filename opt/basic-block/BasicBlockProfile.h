@@ -15,5 +15,5 @@ class BasicBlockProfilePass : public Pass {
  public:
   BasicBlockProfilePass() : Pass("BasicBlockProfilePass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

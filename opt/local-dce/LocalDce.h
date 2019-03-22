@@ -66,8 +66,8 @@ class LocalDcePass : public Pass {
 
   static void run(IRCode* code);
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-private:
+ private:
   static std::unordered_set<DexMethodRef*> find_pure_methods();
 };

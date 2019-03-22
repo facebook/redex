@@ -675,11 +675,11 @@ public:
        name_mapping(name_mapping) {}
 
  // For methods we have to make sure we don't rename <init> or <clinit> ever
- virtual bool can_rename_elem(DexMethod* elem) const override {
+ bool can_rename_elem(DexMethod* elem) const override {
    return should_rename_elem(elem) && operate_on_privates == is_private(elem) &&
           elem->get_name() != initstr && elem->get_name() != clinitstr &&
           name_mapping[elem]->should_rename();
-  }
+ }
 };
 
 // State of the renaming that we need to modify as we rename more fields

@@ -19,7 +19,7 @@ class CheckBreadcrumbsPass : public Pass {
  public:
   CheckBreadcrumbsPass() : Pass("CheckBreadcrumbsPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("fail", false, fail);
     jw.get("fail_if_illegal_refs", false, fail_if_illegal_refs);
     jw.get("reject_illegal_refs_root_store",
@@ -27,9 +27,9 @@ class CheckBreadcrumbsPass : public Pass {
            reject_illegal_refs_root_store);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-private:
+ private:
   bool fail;
   bool fail_if_illegal_refs;
   bool reject_illegal_refs_root_store;

@@ -22,10 +22,10 @@
 class MergeInterfacePass : public Pass {
  public:
   MergeInterfacePass() : Pass("MergeInterfacePass") {}
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("merged_interface_mappings", "", m_merged_interface_mapping_file);
   }
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Metric {
     size_t interfaces_to_merge{0};

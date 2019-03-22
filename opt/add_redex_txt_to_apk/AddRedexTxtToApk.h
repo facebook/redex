@@ -14,5 +14,5 @@ class AddRedexTxtToApkPass : public Pass {
  public:
   AddRedexTxtToApkPass() : Pass("AddRedexTxtToApkPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

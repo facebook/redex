@@ -13,8 +13,8 @@ class ClassSplittingPass : public Pass {
  public:
   ClassSplittingPass() : Pass("ClassSplittingPass") {}
 
-  virtual void configure_pass(const JsonWrapper&) override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void configure_pass(const JsonWrapper&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   size_t m_relocated_methods_per_target_class;

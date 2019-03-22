@@ -106,7 +106,7 @@ class ResultPropagationPass : public Pass {
  public:
   ResultPropagationPass() : Pass("ResultPropagationPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   /*

@@ -53,9 +53,7 @@ class RemoveUnusedArgsPass : public Pass {
  public:
   RemoveUnusedArgsPass() : Pass("RemoveUnusedArgsPass") {}
 
-  virtual void run_pass(DexStoresVector&,
-                        ConfigFiles&,
-                        PassManager& mgr) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
 };
 
 } // namespace remove_unused_args

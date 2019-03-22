@@ -13,5 +13,5 @@ class StaticSinkPass : public Pass {
  public:
   StaticSinkPass() : Pass("StaticSinkPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

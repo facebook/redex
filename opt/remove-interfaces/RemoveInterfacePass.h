@@ -34,8 +34,8 @@ class RemoveInterfacePass : public Pass {
  public:
   RemoveInterfacePass() : Pass("RemoveInterfacePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void configure_pass(const JsonWrapper& jw) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::unordered_set<DexType*> m_interface_roots;

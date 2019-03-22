@@ -14,11 +14,11 @@ class StaticReloPass : public Pass {
  public:
   StaticReloPass() : Pass("StaticReloPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("dont_optimize_annos", {}, m_dont_optimize_annos);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::vector<std::string> m_dont_optimize_annos;

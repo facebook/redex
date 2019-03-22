@@ -13,9 +13,9 @@ class CopyPropagationPass : public Pass {
  public:
   CopyPropagationPass() : Pass("CopyPropagationPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
 
     // This option can only be safely enabled in verify-none. `run_pass` will
     // override this value to false if we aren't in verify-none. Here's why:

@@ -13,5 +13,5 @@ class RemoveEmptyClassesPass : public Pass {
  public:
   RemoveEmptyClassesPass() : Pass("RemoveEmptyClassesPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

@@ -13,12 +13,12 @@ class ObfuscatePass : public Pass {
  public:
   ObfuscatePass() : Pass("ObfuscatePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("avoid_colliding_debug_name", false,
            m_config.avoid_colliding_debug_name);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Config {
     bool avoid_colliding_debug_name{false};
