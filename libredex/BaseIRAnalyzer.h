@@ -31,8 +31,7 @@ class BaseIRAnalyzer
       : sparta::MonotonicFixpointIterator<cfg::GraphInterface, Domain>(
             cfg, cfg.blocks().size()) {}
 
-  virtual void analyze_node(const NodeId& node,
-                            Domain* current_state) const override {
+  void analyze_node(const NodeId& node, Domain* current_state) const override {
     for (auto& mie : InstructionIterable(node)) {
       analyze_instruction(mie.insn, current_state);
     }
@@ -60,8 +59,7 @@ class BaseBackwardsIRAnalyzer
             sparta::BackwardsFixpointIterationAdaptor<cfg::GraphInterface>,
             Domain>(cfg, cfg.blocks().size()) {}
 
-  virtual void analyze_node(const NodeId& node,
-                            Domain* current_state) const override {
+  void analyze_node(const NodeId& node, Domain* current_state) const override {
     for (auto it = node->rbegin(); it != node->rend(); ++it) {
       if (it->type == MFLOW_OPCODE) {
         analyze_instruction(it->insn, current_state);
