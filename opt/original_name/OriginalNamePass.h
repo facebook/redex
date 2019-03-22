@@ -14,13 +14,13 @@ class OriginalNamePass : public Pass {
  public:
   OriginalNamePass() : Pass("OriginalNamePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("hierarchy_roots", {}, m_hierarchy_roots);
   }
 
-  virtual void run_pass(DexStoresVector& stores,
-                        ConfigFiles& cfg,
-                        PassManager& mgr) override;
+  void run_pass(DexStoresVector& stores,
+                ConfigFiles& cfg,
+                PassManager& mgr) override;
 
  private:
   void build_hierarchies(

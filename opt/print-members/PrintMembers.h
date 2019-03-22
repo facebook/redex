@@ -15,7 +15,7 @@ class PrintMembersPass : public Pass {
  public:
   PrintMembersPass() : Pass("PrintMembersPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("show_code", false, m_config.show_code);
     jw.get("show_sfields", true, m_config.show_sfields);
     jw.get("show_ifields", true, m_config.show_ifields);
@@ -40,7 +40,7 @@ class PrintMembersPass : public Pass {
     }
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   void handle_method(DexMethod* m, const char* type);

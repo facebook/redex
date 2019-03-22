@@ -73,10 +73,10 @@ class DexDebugOpcodeSetFile : public DexDebugInstruction {
     m_str = str;
   }
 
-  virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
-  virtual void gather_strings(std::vector<DexString*>& lstring) const;
+  void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+  void gather_strings(std::vector<DexString*>& lstring) const override;
 
-  virtual std::unique_ptr<DexDebugInstruction> clone() const {
+  std::unique_ptr<DexDebugInstruction> clone() const override {
     return std::make_unique<DexDebugOpcodeSetFile>(*this);
   }
 
@@ -103,11 +103,11 @@ class DexDebugOpcodeStartLocal : public DexDebugInstruction {
     if (sig) m_opcode = DBG_START_LOCAL_EXTENDED;
   }
 
-  virtual void encode(DexOutputIdx* dodx, uint8_t*& encdata);
-  virtual void gather_strings(std::vector<DexString*>& lstring) const;
-  virtual void gather_types(std::vector<DexType*>& ltype) const;
+  void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_types(std::vector<DexType*>& ltype) const override;
 
-  virtual std::unique_ptr<DexDebugInstruction> clone() const {
+  std::unique_ptr<DexDebugInstruction> clone() const override {
     return std::make_unique<DexDebugOpcodeStartLocal>(*this);
   }
 

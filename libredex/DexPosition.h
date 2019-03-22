@@ -62,18 +62,16 @@ class RealPositionMapper : public PositionMapper {
   RealPositionMapper(const std::string& filename,
                      const std::string& filename_v2)
       : m_filename(filename), m_filename_v2(filename_v2) {}
-  virtual DexString* get_source_file(const DexClass*);
-  virtual uint32_t position_to_line(DexPosition*);
-  virtual void register_position(DexPosition* pos);
-  virtual void write_map();
+  DexString* get_source_file(const DexClass*) override;
+  uint32_t position_to_line(DexPosition*) override;
+  void register_position(DexPosition* pos) override;
+  void write_map() override;
 };
 
 class NoopPositionMapper : public PositionMapper {
  public:
-  virtual DexString* get_source_file(const DexClass*);
-  virtual uint32_t position_to_line(DexPosition* pos) {
-    return pos->line;
-  }
-  virtual void register_position(DexPosition* pos) {}
-  virtual void write_map() {}
+  DexString* get_source_file(const DexClass*) override;
+  uint32_t position_to_line(DexPosition* pos) override { return pos->line; }
+  void register_position(DexPosition* pos) override {}
+  void write_map() override {}
 };

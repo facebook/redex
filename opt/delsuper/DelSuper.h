@@ -14,5 +14,5 @@ class DelSuperPass : public Pass {
  public:
   DelSuperPass() : Pass("DelSuperPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

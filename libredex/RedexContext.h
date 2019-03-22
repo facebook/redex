@@ -214,7 +214,7 @@ class duplicate_class : public std::exception {
         m_location_2(location_2),
         m_msg(make_msg(class_name, location_1, location_2)) {}
 
-  virtual const char* what() const throw() { return m_msg.c_str(); }
+  const char* what() const throw() override { return m_msg.c_str(); }
 
   const std::string m_class_name;
   const std::string m_location_1;
@@ -243,7 +243,7 @@ class aggregate_exception : public std::exception {
       : m_exceptions(exns) {}
 
   // We do not really want to have this called directly
-  virtual const char* what() const throw() { return "one or more exception"; }
+  const char* what() const throw() override { return "one or more exception"; }
 
   const std::vector<std::exception_ptr> m_exceptions;
 };

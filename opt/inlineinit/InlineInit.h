@@ -21,7 +21,7 @@ class InlineInitPass : public Pass {
  public:
   InlineInitPass() : Pass("InlineInitPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> black_list;
     jw.get("class_black_list", {}, black_list);
     for (const auto& type_s : black_list) {
@@ -30,5 +30,5 @@ class InlineInitPass : public Pass {
     }
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

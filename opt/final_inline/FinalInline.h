@@ -27,7 +27,7 @@ class FinalInlinePass : public Pass {
  public:
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> temp_config_list;
     jw.get("black_list_annos", {}, temp_config_list);
     for (const auto& type_s : temp_config_list) {
@@ -66,7 +66,7 @@ class FinalInlinePass : public Pass {
                                              bool inline_string_fields,
                                              bool inline_wide_fields);
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Config {
     std::vector<DexType*> black_list_annos;

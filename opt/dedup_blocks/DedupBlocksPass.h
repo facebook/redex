@@ -13,9 +13,9 @@ class DedupBlocksPass : public Pass {
  public:
   DedupBlocksPass() : Pass("DedupBlocksPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     std::vector<std::string> method_black_list_names;
     jw.get("method_black_list", {}, method_black_list_names);
     for (std::string name : method_black_list_names) {

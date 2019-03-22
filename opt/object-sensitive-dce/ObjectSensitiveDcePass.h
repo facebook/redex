@@ -19,7 +19,7 @@ class ObjectSensitiveDcePass final : public Pass {
  public:
   ObjectSensitiveDcePass() : Pass("ObjectSensitiveDcePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     std::string s;
     jw.get("side_effect_summaries", "", s);
     if (s != "") {

@@ -20,7 +20,7 @@ class MethodInlinePass : public Pass {
  public:
   MethodInlinePass() : Pass("MethodInlinePass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("virtual", true, m_virtual_inline);
     jw.get("throws", false, m_inliner_config.throws_inline);
     jw.get("enforce_method_size_limit",
@@ -60,7 +60,7 @@ class MethodInlinePass : public Pass {
     }
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope);

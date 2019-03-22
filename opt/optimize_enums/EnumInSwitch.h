@@ -87,9 +87,8 @@ class Iterator final
  public:
   explicit Iterator(cfg::ControlFlowGraph* cfg)
       : MonotonicFixpointIterator(*cfg), m_cfg(cfg) {}
-  virtual void analyze_node(cfg::Block* const& block,
-                            Environment* env) const override;
-  virtual Environment analyze_edge(
+  void analyze_node(cfg::Block* const& block, Environment* env) const override;
+  Environment analyze_edge(
       cfg::Edge* const& edge,
       const Environment& exit_state_at_source) const override;
 

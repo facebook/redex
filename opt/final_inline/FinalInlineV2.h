@@ -22,7 +22,7 @@ class FinalInlinePassV2 : public Pass {
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("aggressively_delete", true, m_config.aggressively_delete);
     jw.get("inline_instance_field", false, m_config.inline_instance_field);
     std::vector<std::string> temp_config_list;
@@ -40,7 +40,7 @@ class FinalInlinePassV2 : public Pass {
       const Scope&,
       const constant_propagation::EligibleIfields& eligible_ifields,
       Config config = Config());
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   Config m_config;

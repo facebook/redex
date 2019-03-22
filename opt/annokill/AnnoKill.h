@@ -89,7 +89,7 @@ class AnnoKillPass : public Pass {
   AnnoKillPass() : Pass("AnnoKillPass") {}
   explicit AnnoKillPass(const char* name) : Pass(name) {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("keep_annos", {}, m_keep_annos);
     jw.get("kill_annos", {}, m_kill_annos);
     jw.get("force_kill_annos", {}, m_force_kill_annos);
@@ -99,7 +99,7 @@ class AnnoKillPass : public Pass {
     jw.get("annotated_keep_annos", dflt, m_annotated_keep_annos);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   virtual bool only_force_kill() const { return false; }
 

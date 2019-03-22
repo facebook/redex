@@ -18,7 +18,7 @@ namespace dtv_impl {
 
 class DexTypeValue final : public sparta::AbstractValue<DexTypeValue> {
  public:
-  ~DexTypeValue() {
+  ~DexTypeValue() override {
     static_assert(std::is_default_constructible<DexType*>::value,
                   "Constant is not default constructible");
     static_assert(std::is_copy_constructible<DexType*>::value,

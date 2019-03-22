@@ -15,7 +15,7 @@ class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("instrumentation_strategy", "", m_options.instrumentation_strategy);
     jw.get("analysis_class_name", "", m_options.analysis_class_name);
     jw.get("analysis_method_name", "", m_options.analysis_method_name);
@@ -35,7 +35,7 @@ class InstrumentPass : public Pass {
     jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Options {
     std::string instrumentation_strategy;

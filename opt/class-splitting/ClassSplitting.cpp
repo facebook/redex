@@ -54,23 +54,21 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       : m_target_class_size_threshold(target_class_size_threshold),
         m_mgr(mgr) {}
 
-  virtual void configure(const Scope& scope, ConfigFiles& cfg) override {
+  void configure(const Scope& scope, ConfigFiles& cfg) override {
     m_method_to_weight = &cfg.get_method_to_weight();
     m_method_sorting_whitelisted_substrings =
         &cfg.get_method_sorting_whitelisted_substrings();
   };
 
-  virtual bool should_skip_class(const DexClass* clazz) override {
-    return false;
-  }
+  bool should_skip_class(const DexClass* clazz) override { return false; }
 
-  virtual void gather_refs(const interdex::DexInfo& dex_info,
-                           const DexClass* cls,
-                           std::vector<DexMethodRef*>& mrefs,
-                           std::vector<DexFieldRef*>& frefs,
-                           std::vector<DexType*>& trefs,
-                           std::vector<DexClass*>* erased_classes,
-                           bool should_not_relocate_methods_of_class) override {
+  void gather_refs(const interdex::DexInfo& dex_info,
+                   const DexClass* cls,
+                   std::vector<DexMethodRef*>& mrefs,
+                   std::vector<DexFieldRef*>& frefs,
+                   std::vector<DexType*>& trefs,
+                   std::vector<DexClass*>* erased_classes,
+                   bool should_not_relocate_methods_of_class) override {
     // Here, we are going to check if any methods in the given class should
     // be relocated. If so, we make sure that we account for possibly needed
     // extra target classes.
@@ -137,8 +135,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     }
   }
 
-  virtual DexClasses additional_classes(const DexClassesVector& outdex,
-                                        const DexClasses& classes) override {
+  DexClasses additional_classes(const DexClassesVector& outdex,
+                                const DexClasses& classes) override {
     // Here, we are going to do the final determination of what to relocate ---
     // After checking if things still look as they did before, and no other
     // interdex pass or feature tinkered with the relocatability...
@@ -226,7 +224,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     return target_classes;
   }
 
-  virtual void cleanup(const std::vector<DexClass*>& scope) override {
+  void cleanup(const std::vector<DexClass*>& scope) override {
     // Here we do the actual relocation.
     for (auto& p : m_methods_to_relocate) {
       DexMethod* method = p.first;

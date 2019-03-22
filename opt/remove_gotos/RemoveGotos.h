@@ -13,7 +13,7 @@ class RemoveGotosPass : public Pass {
  public:
   RemoveGotosPass() : Pass("RemoveGotosPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   size_t run(DexMethod*);
 };

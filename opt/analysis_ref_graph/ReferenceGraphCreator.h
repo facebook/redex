@@ -17,7 +17,7 @@ class CreateReferenceGraphPass : public Pass {
  public:
   CreateReferenceGraphPass() : Pass("CreateReferenceGraphPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("gather_all", false, config.gather_all);
 
     jw.get("refs_in_annotations", true, config.refs_in_annotations);
@@ -28,7 +28,7 @@ class CreateReferenceGraphPass : public Pass {
     jw.get("resolve_methods", false, config.resolve_methods);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   struct Config {

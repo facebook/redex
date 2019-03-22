@@ -19,10 +19,10 @@ class ConstantPropagationPass : public Pass {
 
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override;
-  virtual void run_pass(DexStoresVector& stores,
-                        ConfigFiles& cfg,
-                        PassManager& mgr) override;
+  void configure_pass(const JsonWrapper& jw) override;
+  void run_pass(DexStoresVector& stores,
+                ConfigFiles& cfg,
+                PassManager& mgr) override;
 
  private:
   Config m_config;
