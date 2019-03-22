@@ -128,6 +128,15 @@ class A extends Base implements Interface1, Interface3, StringsGetter {
     return passThrough("SA");
   }
 
+  @MethodMeta(constantTypes = "III",
+              constantValues = "1:1:42")
+  public int multipleRepeatingConstants() {
+    int val = passThrough(1);
+    val += passThrough(1);
+    val += passThrough(42);
+    return val;
+  }
+
   // Puting the array allocation here so the analysis will not exclude A as a
   // mergeable type.
   public static A[] getArray() {
@@ -465,6 +474,7 @@ public class TypeErasureAdvancedTest {
     assertThat(a.getIntTypeA()).isEqualTo(11);
     assertThat(b.getIntTypeB()).isEqualTo(12);
     assertThat(a.getStringInvalidType()).isEqualTo("SA");
+    assertThat(a.multipleRepeatingConstants()).isEqualTo(44);
 
     C c = new C();
     c.init(false, (byte) 3, (char) 4, (short) 5, 6, "Oh C!");
