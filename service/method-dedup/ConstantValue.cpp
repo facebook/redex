@@ -158,6 +158,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
 std::vector<ConstantValues::ConstantValueLoad>
 ConstantValues::collect_constant_loads(const IRCode* code) {
   std::vector<ConstantValueLoad> const_val_loads;
+  std::unordered_set<IRInstruction*> matched_loads;
   for (auto& const_val : m_const_vals) {
     if (const_val.is_invalid()) {
       continue;
@@ -170,7 +171,19 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
       continue;
     }
     for (auto& load : const_loads) {
+      if (matched_loads.count(load.first) > 0) {
+        // If the same const load insn has been matched for multiple const
+        // values in the @MethodMeta annotation, we skip it.
+        // Trying to lift the same const load insn later will lead to a crash.
+        continue;
+      }
       const_val_loads.emplace_back(const_val, load);
+      TRACE(METH_DEDUP,
+            9,
+            "const value: %s matched with const-load %s\n",
+            const_val.to_str().c_str(),
+            SHOW(load.first));
+      matched_loads.insert(load.first);
     }
   }
   return const_val_loads;

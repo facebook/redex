@@ -73,10 +73,10 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   MethodToConstants lifted_constants;
   for (auto method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));
-    auto kinds_str = parse_str_anno_value(
-        method, s_method_meta_anno, CONST_TYPE_ANNO_ATTR_NAME);
-    auto vals_str = parse_str_anno_value(
-        method, s_method_meta_anno, CONST_VALUE_ANNO_ATTR_NAME);
+    auto kinds_str = parse_str_anno_value(method, s_method_meta_anno,
+                                          CONST_TYPE_ANNO_ATTR_NAME);
+    auto vals_str = parse_str_anno_value(method, s_method_meta_anno,
+                                         CONST_VALUE_ANNO_ATTR_NAME);
 
     ConstantValues const_vals(type_tags,
                               kinds_str,
@@ -112,8 +112,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     // Find a non-conflicting name
     auto name = method->get_name();
     std::string suffix = "$r";
-    while (overlaps_with_an_existing_virtual_scope(
-        method->get_class(), name, new_proto)) {
+    while (overlaps_with_an_existing_virtual_scope(method->get_class(), name,
+                                                   new_proto)) {
       name = DexString::make_string(name->c_str() + suffix);
       TRACE(METH_DEDUP,
             9,
