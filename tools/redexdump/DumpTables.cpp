@@ -366,9 +366,7 @@ class DexDebugInstructionReader {
 uint32_t count_debug_instructions(const uint8_t*& encdata) {
   struct DexDebugInstructionCounter : public DexDebugInstructionReader {
     int sum;
-    void handle_default(DexDebugItemOpcode op) {
-      sum++;
-    }
+    void handle_default(DexDebugItemOpcode op) override { sum++; }
   };
   auto counter = DexDebugInstructionCounter();
   counter.read(encdata);
@@ -385,36 +383,41 @@ void disassemble_debug(ddump_data* rd, uint32_t offset) {
     read_uleb128(&data);
   }
   struct DexDebugInstructionPrinter : public DexDebugInstructionReader {
-    void handle_advance_pc(DexDebugItemOpcode op, uint32_t arg) {
+    void handle_advance_pc(DexDebugItemOpcode op, uint32_t arg) override {
       redump("DBG_ADVANCE_PC %u\n", arg);
     }
-    void handle_advance_line(DexDebugItemOpcode op, int32_t arg) {
+    void handle_advance_line(DexDebugItemOpcode op, int32_t arg) override {
       redump("DBG_ADVANCE_LINE %d\n", arg);
     }
-    void handle_start_local(DexDebugItemOpcode op, uint32_t reg,
-        uint32_t name_idx, uint32_t type_idx) {
+    void handle_start_local(DexDebugItemOpcode op,
+                            uint32_t reg,
+                            uint32_t name_idx,
+                            uint32_t type_idx) override {
       redump("DBG_START_LOCAL %d\n", reg);
     }
-    void handle_start_local_extended(DexDebugItemOpcode op, uint32_t reg,
-        uint32_t, uint32_t, uint32_t) {
+    void handle_start_local_extended(DexDebugItemOpcode op,
+                                     uint32_t reg,
+                                     uint32_t,
+                                     uint32_t,
+                                     uint32_t) override {
       redump("DBG_START_LOCAL_EXTENDED %d\n", reg);
     }
-    void handle_end_local(DexDebugItemOpcode op, uint32_t reg) {
+    void handle_end_local(DexDebugItemOpcode op, uint32_t reg) override {
       redump("DBG_END_LOCAL %d\n", reg);
     }
-    void handle_restart_local(DexDebugItemOpcode op, uint32_t reg) {
+    void handle_restart_local(DexDebugItemOpcode op, uint32_t reg) override {
       redump("DBG_RESTART_LOCAL %d\n", reg);
     }
-    void handle_set_file(DexDebugItemOpcode op, uint32_t arg) {
+    void handle_set_file(DexDebugItemOpcode op, uint32_t arg) override {
       redump("DBG_SET_FILE\n");
     }
-    void handle_set_prologue_end(DexDebugItemOpcode op) {
+    void handle_set_prologue_end(DexDebugItemOpcode op) override {
       redump("DBG_SET_PROLOGUE_END\n");
     }
-    void handle_set_epilogue_begin(DexDebugItemOpcode op) {
+    void handle_set_epilogue_begin(DexDebugItemOpcode op) override {
       redump("DBG_SET_EPILOGUE_BEGIN\n");
     }
-    void handle_default(DexDebugItemOpcode op) {
+    void handle_default(DexDebugItemOpcode op) override {
       redump("DBG_SPECIAL 0x%02x\n", (uint32_t)op);
     }
   };

@@ -11,7 +11,7 @@
 #include "TestGenerator.h"
 
 class DceTest : public EquivalenceTest {
-  virtual void transform_method(DexMethod* m) {
+  void transform_method(DexMethod* m) override {
     LocalDcePass::run(m->get_code());
   }
 };

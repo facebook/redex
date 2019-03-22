@@ -19,7 +19,7 @@ class UpCodeMotionPass : public Pass {
 
   UpCodeMotionPass() : Pass("UpCodeMotionPass") {}
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static Stats process_code(IRCode*);
 };

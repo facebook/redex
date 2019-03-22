@@ -13,11 +13,11 @@ class ShortenSrcStringsPass : public Pass {
  public:
   ShortenSrcStringsPass() : Pass("ShortenSrcStringsPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("filename_mappings", "filename_mappings.txt", m_filename_mappings);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   std::string m_filename_mappings;

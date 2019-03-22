@@ -37,7 +37,7 @@ class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("rename_annotations", false, m_rename_annotations);
     jw.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
     jw.get("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
@@ -52,10 +52,12 @@ class RenameClassesPassV2 : public Pass {
         dont_rename_specific.end());
   }
 
-  virtual void eval_pass(DexStoresVector& stores,
-      ConfigFiles& cfg, PassManager& mgr) override;
-  virtual void run_pass(DexStoresVector& stores,
-      ConfigFiles& cfg, PassManager& mgr) override;
+  void eval_pass(DexStoresVector& stores,
+                 ConfigFiles& cfg,
+                 PassManager& mgr) override;
+  void run_pass(DexStoresVector& stores,
+                ConfigFiles& cfg,
+                PassManager& mgr) override;
 
  private:
   std::unordered_map<const DexType*, std::string>

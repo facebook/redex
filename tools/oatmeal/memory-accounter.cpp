@@ -149,7 +149,7 @@ class MultiBufferMemoryAccounter : public MemoryAccounter {
   void markBufferConsumed(ConstBuffer subBuffer) override;
   void addBuffer(ConstBuffer buf) override;
 
-  virtual ~MultiBufferMemoryAccounter() = default;
+  ~MultiBufferMemoryAccounter() override = default;
 
  private:
   std::vector<MemoryAccounterImpl> accounters_;

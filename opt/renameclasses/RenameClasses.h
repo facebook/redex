@@ -13,14 +13,14 @@ class RenameClassesPass : public Pass {
  public:
   RenameClassesPass() : Pass("RenameClassesPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override {
+  void configure_pass(const JsonWrapper& jw) override {
     jw.get("rename_annotations", false, m_rename_annotations);
     jw.get("pre_filter_whitelist", {}, m_pre_filter_whitelist);
     jw.get("post_filter_whitelist", {}, m_post_filter_whitelist);
     jw.get("untouchable_hierarchies", {}, m_untouchable_hierarchies);
   }
 
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_rename_annotations;

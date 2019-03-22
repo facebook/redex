@@ -57,7 +57,7 @@ class ConstantArrayDomain final
   static void reduce_product(
       std::tuple<ArrayLengthDomain, ArrayValuesDomain>& domains) {}
 
-  ~ConstantArrayDomain() {
+  ~ConstantArrayDomain() override {
     // The destructor is the only method that is guaranteed to be created when
     // a class template is instantiated. This is a good place to perform all
     // the sanity checks on the template parameters.
@@ -84,8 +84,7 @@ class ConstantArrayDomain final
     canonicalize();
   }
 
-  virtual void widen_with(
-      const ConstantArrayDomain<Domain>& other_domain) override {
+  void widen_with(const ConstantArrayDomain<Domain>& other_domain) override {
     SuperType::widen_with(other_domain);
     canonicalize();
   }
