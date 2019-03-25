@@ -1187,9 +1187,15 @@ uint32_t emit_instruction_offset_debug_info(
     uint32_t size;
   };
   struct Compare {
+    // We want to sort using size as a major key and method as a minor key. The
+    // minor key only exists to ensure different methods get different entries,
+    // even if they have the same size as another method.
     bool operator()(const MethodKey& left, const MethodKey& right) const {
-      return left.size > right.size &&
-             (uintptr_t)left.method > (uintptr_t)right.method;
+      if (left.size == right.size) {
+        return (uintptr_t)left.method > (uintptr_t)right.method;
+      } else {
+        return left.size > right.size;
+      }
     }
   };
   using DebugSize = uint32_t;
@@ -1225,7 +1231,10 @@ uint32_t emit_instruction_offset_debug_info(
     }
     uint32_t real_param_size = method->get_proto()->get_args()->size();
     uint32_t param_size = per_arity ? real_param_size : 0;
-    param_to_sizes[param_size][{method, dc->size()}] = debug_size;
+    auto res = param_to_sizes[param_size].emplace(MethodKey{method, dc->size()},
+                                                  debug_size);
+    always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
+                      dc->size());
     if (real_param_size > max_param) {
       max_param = real_param_size;
     }
@@ -1233,6 +1242,8 @@ uint32_t emit_instruction_offset_debug_info(
   free((void*)tmp);
   // 2)
   std::unordered_map<uint32_t, uint32_t> param_to_offset;
+  // Used to verify that a given IODI program is big enough for a method.
+  std::unordered_map<uint32_t, uint32_t> param_to_debug_size;
   uint32_t initial_offset = offset;
   for (auto& pts : param_to_sizes) {
     auto param_size = per_arity ? pts.first : max_param;
@@ -1300,7 +1311,11 @@ uint32_t emit_instruction_offset_debug_info(
     // Since there is no regularity condition on normal_debug_size(m) the
     // max of win_delta_i may occur for any i (indeed there may be an esoteric
     // case where all the debug programs are tiny but all the methods are
-    // pretty large and thus it's best to not use any IODI programs)
+    // pretty large and thus it's best to not use any IODI programs).
+    //
+    // Note, the above assumes win(IM) > 0 at some point, but that may not be
+    // true. In order to verify that using IODI is useful we need to verify that
+    // win(IM) > 0 for whatever maximal IM is found was found above.
 
     auto& sizes = pts.second;
     always_assert(sizes.size() > 0);
@@ -1333,6 +1348,15 @@ uint32_t emit_instruction_offset_debug_info(
       }
       total_normal_dbg_cost += iter->second;
     }
+    size_t padding = 1 + 1 + param_size + 1;
+    if (param_size >= 128) {
+      padding += 1;
+      if (param_size >= 16384) {
+        padding += 1;
+      }
+    }
+    auto insns_size = best_iter->first.size;
+    auto iodi_size = insns_size + padding;
     // Now we've found which methods are too large to be beneficial. Tell IODI
     // infra about these large methods
     size_t num_big = 0;
@@ -1342,11 +1366,24 @@ uint32_t emit_instruction_offset_debug_info(
     }
 
     // 2.2) Emit IODI programs (other debug programs will be emitted below)
-    auto insns_size = best_iter->first.size;
+    size_t num_small_enough = sizes.size() - num_big;
     TRACE(IODI, 2,
           "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u\n",
-          offset, param_size, sizes.size(), num_big, sizes.size() - num_big,
+          offset, param_size, sizes.size(), num_big, num_small_enough,
           insns_size);
+    if (num_small_enough == 0) {
+      continue;
+    }
+    param_to_debug_size[param_size] = insns_size;
+    if (traceEnabled(IODI, 4)) {
+      double ammortized_cost = (double)iodi_size / (double)num_small_enough;
+      for (auto it = best_iter; it != end; it++) {
+        TRACE(IODI, 4,
+              "[IODI][savings] %s saved %u bytes, cost of %f, net %f\n",
+              SHOW(it->first.method), it->second, ammortized_cost,
+              (double)it->second - ammortized_cost);
+      }
+    }
     param_to_offset[param_size] = offset;
     std::vector<DexString*> params;
     for (size_t i = 0; i < param_size; i++) {
@@ -1378,11 +1415,16 @@ uint32_t emit_instruction_offset_debug_info(
     // will return false.
     DexMethod* method = it.method;
     if (iodi_metadata.can_safely_use_iodi(method)) {
+      // Here we sanity check to make sure that all IODI programs are at least
+      // as long as they need to be.
       uint32_t param_size =
           per_arity ? it.method->get_proto()->get_args()->size() : max_param;
       auto offset_it = param_to_offset.find(param_size);
       always_assert_log(offset_it != offset_end,
-                        "Expected to find param to offset");
+                        "Expected to find param to offset: %s", SHOW(method));
+      always_assert_log(dc->size() <= param_to_debug_size.at(param_size),
+                        "Expected IODI program to be big enough for %s",
+                        SHOW(method));
       dci->debug_info_off = offset_it->second;
     } else {
       offset += emit_debug_info_for_metadata(
