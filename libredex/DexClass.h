@@ -1300,6 +1300,26 @@ inline DexClass* type_class_internal(const DexType* t) {
   return dc;
 }
 
+class duplicate_method : public std::exception {
+ public:
+  duplicate_method(const std::string& method_name)
+      : m_method_name(method_name), m_msg(make_msg(method_name)) {}
+
+  virtual const char* what() const throw() { return m_msg.c_str(); }
+
+  const std::string m_method_name;
+
+ private:
+  const std::string m_msg;
+
+  std::string make_msg(const std::string& method_name) {
+    std::ostringstream oss;
+    oss << "Found duplicate methods defined in the same class: " << method_name;
+
+    return oss.str();
+  }
+};
+
 DISALLOW_DEFAULT_COMPARATOR(DexClass)
 DISALLOW_DEFAULT_COMPARATOR(DexCode)
 DISALLOW_DEFAULT_COMPARATOR(DexDebugInstruction)

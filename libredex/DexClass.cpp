@@ -717,17 +717,27 @@ void DexClass::load_class_data_item(DexIdx* idx,
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
   }
+
+  std::unordered_set<DexMethod*> method_pointer_cache;
+
   ndex = 0;
   for (uint32_t i = 0; i < dmethod_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
+    // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), false);
+    if (method_pointer_cache.count(dm)) {
+      // found duplicate methods
+      throw duplicate_method(SHOW(dm));
+    } else {
+      method_pointer_cache.insert(dm);
+    }
     m_dmethods.push_back(dm);
   }
   ndex = 0;
@@ -735,12 +745,19 @@ void DexClass::load_class_data_item(DexIdx* idx,
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
+    // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     auto dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), true);
+    if (method_pointer_cache.count(dm)) {
+      // found duplicate methods
+      throw duplicate_method(SHOW(dm));
+    } else {
+      method_pointer_cache.insert(dm);
+    }
     m_vmethods.push_back(dm);
   }
 }
