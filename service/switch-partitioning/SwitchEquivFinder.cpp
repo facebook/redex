@@ -56,14 +56,16 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, uint16_t reg) {
   return true;
 }
 
-// Do an in-place set intersection
-void intersect(SwitchEquivFinder::InstructionSet* existing_loads,
-               const SwitchEquivFinder::InstructionSet& new_loads) {
+bool equals(const SwitchEquivFinder::InstructionSet& a,
+            const SwitchEquivFinder::InstructionSet& b) {
 
-  const auto& should_keep =
-      [&new_loads](const std::pair<uint16_t, IRInstruction*>& it) {
-        const auto& search = new_loads.find(it.first);
-        if (search != new_loads.end()) {
+  if (a.size() != b.size()) {
+    return false;
+  }
+  const auto& has_equivalent =
+      [&b](const std::pair<uint16_t, IRInstruction*>& it) {
+        const auto& search = b.find(it.first);
+        if (search != b.end()) {
           bool just_one_null =
               (search->second == nullptr) != (it.second == nullptr);
           if (just_one_null) {
@@ -77,13 +79,12 @@ void intersect(SwitchEquivFinder::InstructionSet* existing_loads,
         return false;
       };
 
-  for (auto it = existing_loads->begin(); it != existing_loads->end();) {
-    if (should_keep(*it)) {
-      ++it;
-    } else {
-      it = existing_loads->erase(it);
+  for (auto it = a.begin(); it != a.end(); ++it) {
+    if (!has_equivalent(*it)) {
+      return false;
     }
   }
+  return true;
 }
 
 } // namespace
@@ -156,11 +157,15 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
         const auto& pair = m_extra_loads.emplace(next, loads);
         bool already_there = !pair.second;
         if (already_there) {
-          // There are multiple ways to reach leaf. The register state is the
-          // set intersection of the incoming register states from each edge.
-          auto& it = pair.first;
-          InstructionSet* existing_loads = &it->second;
-          ::intersect(existing_loads, loads);
+          // There are multiple ways to reach this leaf. Make sure the extra
+          // loads are consistent.
+          const auto& it = pair.first;
+          const InstructionSet& existing_loads = it->second;
+          if (!::equals(existing_loads, loads)) {
+            TRACE(SWITCH_EQUIV, 2, "Failure Reason: divergent entry states\n");
+            TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
+            return false;
+          }
         }
       } else {
         non_leaves.insert(next);

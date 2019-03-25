@@ -155,6 +155,8 @@ TEST(OptimizeEnums, if_chain) {
       (const v2 1)
       (if-eq v2 v0 :case1)
 
+      (return v0)
+
       (:case0)
       (return v0)
 
@@ -173,15 +175,12 @@ TEST(OptimizeEnums, if_chain) {
   bool checked_one = false;
   bool checked_zero = false;
   bool found_fallthrough = false;
-  size_t fallthrough_id = 0;
-  size_t zero_id = 0;
   for (const auto& key_and_case : finder.key_to_case()) {
     boost::optional<int32_t> key = key_and_case.first;
     cfg::Block* leaf = key_and_case.second;
     if (key == boost::none) {
       always_assert(!found_fallthrough);
       found_fallthrough = true;
-      fallthrough_id = leaf->id();
       continue;
     }
     const auto& extra_loads = finder.extra_loads();
@@ -198,11 +197,9 @@ TEST(OptimizeEnums, if_chain) {
     } else if (key == 0) {
       EXPECT_EQ(extra_loads.end(), search);
       checked_zero = true;
-      zero_id = leaf->id();
     }
   }
   EXPECT_TRUE(found_fallthrough);
-  EXPECT_EQ(fallthrough_id, zero_id);
   EXPECT_TRUE(checked_one);
   EXPECT_TRUE(checked_zero);
   code->clear_cfg();
@@ -252,19 +249,7 @@ TEST(OptimizeEnums, extra_loads_intersect) {
   EXPECT_EQ(1, results.size());
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
-  ASSERT_TRUE(finder.success());
-  for (const auto& key_and_case : finder.key_to_case()) {
-    boost::optional<int32_t> key = key_and_case.first;
-    cfg::Block* leaf = key_and_case.second;
-    if (key == boost::none || *key == 1) {
-      continue;
-    }
-    EXPECT_EQ(0, *key);
-    const auto& extra_loads = finder.extra_loads();
-    const auto& search = extra_loads.find(leaf);
-    EXPECT_EQ(extra_loads.end(), search);
-  }
-  code->clear_cfg();
+  ASSERT_FALSE(finder.success());
   delete g_redex;
 }
 
@@ -313,19 +298,7 @@ TEST(OptimizeEnums, extra_loads_wide) {
   EXPECT_EQ(1, results.size());
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
-  ASSERT_TRUE(finder.success());
-  for (const auto& key_and_case : finder.key_to_case()) {
-    boost::optional<int32_t> key = key_and_case.first;
-    cfg::Block* leaf = key_and_case.second;
-    if (key == boost::none || *key == 1) {
-      continue;
-    }
-    EXPECT_EQ(0, *key);
-    const auto& extra_loads = finder.extra_loads();
-    const auto& search = extra_loads.find(leaf);
-    EXPECT_EQ(extra_loads.end(), search);
-  }
-  code->clear_cfg();
+  ASSERT_FALSE(finder.success());
   delete g_redex;
 }
 
@@ -365,22 +338,7 @@ TEST(OptimizeEnums, extra_loads_wide2) {
   EXPECT_EQ(1, results.size());
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
-  ASSERT_TRUE(finder.success());
-  for (const auto& key_and_case : finder.key_to_case()) {
-    boost::optional<int32_t> key = key_and_case.first;
-    cfg::Block* leaf = key_and_case.second;
-    if (key == boost::none) {
-      continue;
-    }
-    EXPECT_EQ(0, *key);
-    const auto& extra_loads = finder.extra_loads();
-    const auto& search = extra_loads.find(leaf);
-    EXPECT_NE(extra_loads.end(), search);
-    const auto& loads = search->second;
-    EXPECT_EQ(1, loads.size());
-    EXPECT_EQ(OPCODE_CONST, loads.begin()->second->opcode());
-    EXPECT_EQ(1, loads.begin()->second->get_literal());
-  }
+  ASSERT_FALSE(finder.success());
   code->clear_cfg();
   delete g_redex;
 }
@@ -614,6 +572,43 @@ TEST(OptimizeEnums, goto_default) {
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_TRUE(finder.success());
+  code->clear_cfg();
+  delete g_redex;
+}
+
+TEST(OptimizeEnums, divergent_leaf_entry_state) {
+  g_redex = new RedexContext();
+  setup();
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (sget-object "LFoo;.table:[LBar;")
+      (move-result-pseudo v0)
+      (const v2 0)
+      (invoke-virtual (v2) "LEnum;.ordinal:()I")
+      (move-result v1)
+      (aget v0 v1)
+      (move-result-pseudo v0)
+      (const v1 1)
+      (if-eq v0 v1 :end)
+
+      (const v1 2)
+      (if-eq v0 v1 :end)
+
+      (const v0 3)
+      (return v0)
+
+      (:end)
+      (return v1)
+    )
+  )");
+
+  code->build_cfg();
+  const auto& results = find_enums(&code->cfg());
+  EXPECT_EQ(1, results.size());
+  const auto& info = results[0];
+  SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
+  ASSERT_FALSE(finder.success());
   code->clear_cfg();
   delete g_redex;
 }
