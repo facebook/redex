@@ -83,6 +83,9 @@ class AbstractGraph(object):
     def add_edge(self, n1, n2):
         raise NotImplementedError()
 
+    def list_nodes(self, search_str=None):
+        raise NotImplementedError()
+
     def read_header(self, mapping):
         magic = struct.unpack("<L", mapping.read(4))[0]
         if magic != 0xFACEB000:
@@ -128,6 +131,13 @@ class ReachabilityGraph(AbstractGraph):
     def add_node(self, node):
         self.nodes[(node.type, node.name)] = node
 
+    def list_nodes(self, search_str=None):
+        for key in self.nodes.keys():
+            type = ReachableObjectType.to_string(key[0])
+            name = key[1]
+            if search_str is None or search_str in name:
+                print("(ReachableObjectType.%s, \"%s\")" % (type, name))
+
     @staticmethod
     def add_edge(n1, n2):
         n2.succs.append(n1)
@@ -171,6 +181,11 @@ class MethodOverrideGraph(AbstractGraph):
 
     def add_node(self, node):
         self.nodes[node.name] = node
+
+    def list_nodes(self, search_str=None):
+        for key in self.nodes.keys():
+            if search_str is None or search_str in key:
+                print("\"%s\"" % key)
 
     @staticmethod
     def add_edge(method, child):
