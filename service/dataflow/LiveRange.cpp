@@ -10,6 +10,7 @@
 #include <boost/pending/disjoint_sets.hpp>
 #include <boost/property_map/property_map.hpp>
 
+#include "ControlFlow.h"
 #include "IRCode.h"
 #include "ReachingDefinitions.h"
 
@@ -73,9 +74,8 @@ void unify_defs(const UDChains& chains, DefSets* def_sets) {
   }
 }
 
-UDChains calculate_ud_chains(IRCode* code) {
-  auto& cfg = code->cfg();
-  reaching_defs::FixpointIterator fixpoint_iter(cfg);
+UDChains calculate_ud_chains(const cfg::ControlFlowGraph& cfg) {
+  reaching_defs::FixpointIterator fixpoint_iter{cfg};
   fixpoint_iter.run(reaching_defs::Environment());
   UDChains chains;
   for (cfg::Block* block : cfg.blocks()) {
@@ -107,33 +107,36 @@ bool Use::operator==(const Use& that) const {
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {
-  auto chains = calculate_ud_chains(code);
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto chains = calculate_ud_chains(cfg);
 
   Rank rank;
   Parent parent;
   DefSets def_sets((RankPMap(rank)), (ParentPMap(parent)));
-  for (const auto& mie : InstructionIterable(code)) {
+  for (const auto& mie : cfg::InstructionIterable(cfg)) {
     if (mie.insn->dests_size()) {
       def_sets.make_set(mie.insn);
     }
   }
   unify_defs(chains, &def_sets);
   SymRegMapper sym_reg_mapper(width_aware);
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       auto sym_reg = sym_reg_mapper.make(def_sets.find_set(insn));
       insn->set_dest(sym_reg);
     }
   }
-  for (auto& mie : InstructionIterable(code)) {
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       auto& defs = chains.at(Use{insn, insn->src(i)});
       insn->set_src(i, sym_reg_mapper.at(def_sets.find_set(*defs.begin())));
     }
   }
-  code->set_registers_size(sym_reg_mapper.regs_size());
+  cfg.set_registers_size(sym_reg_mapper.regs_size());
+  code->clear_cfg();
 }
 
 } // namespace live_range

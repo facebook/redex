@@ -43,16 +43,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
               code.get_registers_size(),
               SHOW(&code));
         try {
+          live_range::renumber_registers(&code, /* width_aware */ true);
           // The transformations below all require a CFG. Build it once
           // here instead of requiring each transform to build it.
-          code.build_cfg();
-          // It doesn't make sense to try to allocate registers in
-          // unreachable code. Remove it so that the allocator doesn't
-          // get confused.
-          code.cfg().remove_unreachable_blocks();
-          code.clear_cfg();
-          code.build_cfg(false);
-          live_range::renumber_registers(&code, /* width_aware */ false);
+          code.build_cfg(/* editable */ false);
           graph_coloring::Allocator allocator(m_allocator_config);
           allocator.allocate(m);
           stats.accumulate(allocator.get_stats());

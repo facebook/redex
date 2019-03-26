@@ -94,6 +94,7 @@
   TM(STR_CAT)            \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \
+  TM(SWITCH_EQUIV)       \
   TM(SYNT)               \
   TM(TIME)               \
   TM(TRACKRESOURCES)     \

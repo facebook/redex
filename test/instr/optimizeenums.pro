@@ -5,6 +5,7 @@
 -keep class com.facebook.redextest.OptimizeEnumsTest { *; }
 -keep class com.facebook.redextest.EnumA { *; }
 -keep class com.facebook.redextest.EnumB { *; }
+-keep class com.facebook.redextest.BigEnum { *; }
 -keep class com.facebook.redextest.Foo { *; }
 
 # Don't muck with test infra

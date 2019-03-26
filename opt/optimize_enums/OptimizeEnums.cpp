@@ -10,12 +10,14 @@
 #include "ClassAssemblingUtils.h"
 #include "ConcurrentContainers.h"
 #include "DexClass.h"
+#include "EnumInSwitch.h"
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
+#include "SwitchEquivFinder.h"
 #include "Walkers.h"
 
 /**
@@ -221,65 +223,6 @@ void collect_generated_switch_cases(
 }
 
 /**
- * In the current block, we want to find the setter for aget_insn->src(0)
- * register. If not found, or it is not a field, return nullptr.
- * Otherwise, return it.
- */
-DexField* get_field_setter(const IRInstruction* aget_case,
-                           cfg::Block* block,
-                           size_t reg_field) {
-  // We walk backwards from the end of the block, until we find the
-  // store instruction for `reg_field` (after the usage).
-  bool used = false;
-  auto it_block = block->rbegin();
-  for (; it_block != block->rend(); ++it_block) {
-    if (it_block->type != MFLOW_OPCODE) {
-      continue;
-    }
-
-    auto insn = it_block->insn;
-    if (insn == aget_case) {
-      used = true;
-      continue;
-    }
-
-    if (used && insn->dests_size() > 0 && insn->dest() == reg_field) {
-      // We are trying to match
-      //    SGET_OBJECT <lookup_table_holder>
-      //    MOVE_RESULT <v_field>
-      if (insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
-        return nullptr;
-      }
-      break;
-    }
-  }
-
-  if (it_block == block->rend()) {
-    // We didn't find the setter.
-    return nullptr;
-  }
-
-  // We found the setter. We expect:
-  //   SGET_OBJECT <lookup_table_holder>
-  //   MOVE_RESULT <v_field>
-  //
-  // Check previous instruction too.
-  // We use next because we were iterating on the reversed instruction list.
-  auto previous_it = std::next(it_block);
-  if (previous_it->type != MFLOW_OPCODE) {
-    return nullptr;
-  }
-
-  if (previous_it->insn->opcode() == OPCODE_SGET_OBJECT) {
-    auto field =
-        resolve_field(previous_it->insn->get_field(), FieldSearch::Static);
-    return field;
-  }
-
-  return nullptr;
-}
-
-/**
  * Get `java.lang.Enum`'s ctor.
  * Details: https://developer.android.com/reference/java/lang/Enum.html
  */
@@ -386,7 +329,7 @@ class OptimizeEnums {
    * Replace enum with Boxed Integer object
    */
   void replace_enum_with_int() {
-    ConcurrentSet<DexType*> candidate_enums = collect_simple_enums();
+    const ConcurrentSet<DexType*>& candidate_enums = collect_simple_enums();
     TRACE(ENUM, 1, "\tCandidate enum classes : %d\n", candidate_enums.size());
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         candidate_enums, &m_stores, &m_stats.num_int_objs);
@@ -667,31 +610,63 @@ class OptimizeEnums {
       const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases) {
 
-    // Pattern we are trying to match:
-    //  INVOKE_VIRTUAL <v_enum> <Enum>;.ordinal:()
-    //  MOVE_RESULT <v_ordinal>
-    //  AGET <v_field>, <v_ordinal>
-    //  MOVE_RESULT_PSEUDO <v_dest>
-    //  *_SWITCH <v_dest>
-    auto match = std::make_tuple(
-        m::invoke_virtual(/* invoke-virtual {vX}, <EnumClass>;.ordinal */
-                          m::opcode_method(m::named<DexMethodRef>("ordinal")) &&
-                          m::has_n_args(1)),
-        m::is_opcode(OPCODE_MOVE_RESULT),
-        m::is_opcode(OPCODE_AGET),
-        m::move_result_pseudo(),
-        m::is_opcode(OPCODE_PACKED_SWITCH) ||
-            m::is_opcode(OPCODE_SPARSE_SWITCH));
+    namespace cp = constant_propagation;
+    walk::code(m_scope, [&](DexMethod*, IRCode& code) {
+      code.build_cfg(/* editable */ true);
+      auto& cfg = code.cfg();
+      cfg.calculate_exit_block();
+      optimize_enums::Iterator fixpoint(&cfg);
+      fixpoint.run(optimize_enums::Environment());
+      std::unordered_set<IRInstruction*> switches;
+      for (const auto& info : fixpoint.collect()) {
+        const auto pair = switches.insert((*info.branch)->insn);
+        bool insert_occurred = pair.second;
+        if (!insert_occurred) {
+          // Make sure we don't have any duplicate switch opcodes. We can't
+          // change the register of a switch opcode to two different registers.
+          continue;
+        }
+        if (!check_lookup_table_usage(lookup_table_to_enum,
+                                      enum_field_to_ordinal,
+                                      generated_switch_cases, info)) {
+          continue;
+        }
+        remove_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
+                                  info);
+      }
+      code.clear_cfg();
+    });
+  }
 
-    walk::matching_opcodes_in_block(
-        m_scope,
-        match,
-        [&](DexMethod* meth, cfg::Block* block,
-            const std::vector<IRInstruction*>& insns) {
-          replace_lookup_table_usage(
-              lookup_table_to_enum, enum_field_to_ordinal,
-              generated_switch_cases, insns, block, meth);
-        });
+  /**
+   * Check to make sure this is a valid match. Return false to abort the
+   * optimization.
+   */
+  bool check_lookup_table_usage(
+      const std::unordered_map<DexField*, DexType*>& lookup_table_to_enum,
+      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
+      const GeneratedSwitchCases& generated_switch_cases,
+      const optimize_enums::Info& info) {
+
+    // Check this is called on an enum.
+    auto invoke_ordinal = (*info.invoke)->insn;
+    auto invoke_type = invoke_ordinal->get_method()->get_class();
+    auto invoke_cls = type_class(invoke_type);
+    if (!invoke_cls || !is_enum(invoke_cls)) {
+      return false;
+    }
+
+    auto lookup_table = info.array_field;
+    if (!lookup_table || lookup_table_to_enum.count(lookup_table) == 0) {
+      return false;
+    }
+
+    // Check the current enum corresponds.
+    auto current_enum = lookup_table_to_enum.at(lookup_table);
+    if (current_enum != invoke_type) {
+      return false;
+    }
+    return true;
   }
 
   /**
@@ -701,90 +676,82 @@ class OptimizeEnums {
    * MOVE_RESULT <v_ordinal>
    * AGET <v_field>, <v_ordinal>
    * MOVE_RESULT_PSEUDO <v_dest>
-   * *_SWITCH <v_dest>
+   * *_SWITCH <v_dest>              ; or IF_EQZ <v_dest> <v_some_constant>
    *
    * to
    *
    * INVOKE_VIRTUAL <v_enum> Enum;.ordinal:()
    * MOVE_RESULT <v_ordinal>
    * MOVE <v_dest>, <v_ordinal>
-   * *_SWITCH <v_dest>
+   * SPARSE_SWITCH <v_dest>
    *
    * if <v_field> was fetched using SGET_OBJECT <lookup_table_holder>
    *
-   * and updating switch cases (aka MFLOW_TARGETS) to the enum field's ordinal
+   * and updating switch cases (on the edges) to the enum field's ordinal
    *
    * NOTE: We leave unused code around, since LDCE should remove it
    *       if it isn't used afterwards (which is expected), but we are
    *       being conservative.
-   *
-   * TODO: This approach might still not cover all the usages, but it is
-   *       pretty close. For the perfect coverage, implement an analysis here.
    */
-  void replace_lookup_table_usage(
-      const std::unordered_map<DexField*, DexType*>& lookup_table_to_enum,
+  void remove_lookup_table_usage(
       const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
       const GeneratedSwitchCases& generated_switch_cases,
-      const std::vector<IRInstruction*>& insns,
-      cfg::Block* block,
-      DexMethod* meth) {
-    always_assert(insns.size() == 5);
+      const optimize_enums::Info& info) {
+    auto& cfg = info.branch->cfg();
+    auto branch_block = info.branch->block();
 
-    // Check this is called on an enum.
-    auto invoke_ordinal = insns[0];
-    auto invoke_type = invoke_ordinal->get_method()->get_class();
-    auto invoke_cls = type_class(invoke_type);
-    if (!invoke_cls || !is_enum(invoke_cls)) {
+    // Use the SwitchEquivFinder to handle not just switch statements but also
+    // trees of if and switch statements
+    SwitchEquivFinder finder(&cfg, *info.branch, *info.reg);
+    if (!finder.success()) {
       return;
     }
 
-    // Check that AGET used ordinal number as the index.
-    auto move_ordinal = insns[1];
-    auto reg_ordinal = move_ordinal->dest();
-    auto aget_case = insns[2];
-    auto reg_field = aget_case->src(0);
-    if (aget_case->src(1) != reg_ordinal) {
-      return;
-    }
+    // Remove the switch statement so we can rebuild it with the correct case
+    // keys. This removes all edges to the if-else blocks and the blocks will
+    // eventually be removed by cfg.simplify()
+    cfg.remove_opcode(*info.branch);
 
-    auto lookup_table = get_field_setter(aget_case, block, reg_field);
-    if (!lookup_table || lookup_table_to_enum.count(lookup_table) == 0) {
-      return;
-    }
+    cfg::Block* fallthrough = nullptr;
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    const auto& field_enum_map = generated_switch_cases.at(info.array_field);
+    for (const auto& pair : finder.key_to_case()) {
+      auto old_case_key = pair.first;
+      cfg::Block* leaf = pair.second;
 
-    // Check the current enum corresponds.
-    auto current_enum = lookup_table_to_enum.at(lookup_table);
-    if (current_enum != invoke_type) {
-      return;
-    }
-
-    update_lookup_table_usage(enum_field_to_ordinal, generated_switch_cases,
-                              insns, lookup_table, meth);
-  }
-
-  void update_lookup_table_usage(
-      const std::unordered_map<DexField*, size_t>& enum_field_to_ordinal,
-      const GeneratedSwitchCases& generated_switch_cases,
-      const std::vector<IRInstruction*>& insns,
-      DexField* lookup_table,
-      DexMethod* method) {
-    auto switch_insn = insns[4];
-    auto field_enum_map = generated_switch_cases.at(lookup_table);
-    auto code = method->get_code();
-    for (auto it = code->begin(); it != code->end(); ++it) {
-      if (it->type == MFLOW_TARGET) {
-        auto branch_target = static_cast<BranchTarget*>(it->target);
-
-        if (branch_target->type == BRANCH_MULTI &&
-            branch_target->src != nullptr &&
-            branch_target->src->type == MFLOW_OPCODE &&
-            branch_target->src->insn == switch_insn) {
-
-          auto field_enum = field_enum_map.at(branch_target->case_key);
-          auto new_case_key = enum_field_to_ordinal.at(field_enum);
-          branch_target->case_key = new_case_key;
+      // if-else chains will load constants to compare against. Sometimes the
+      // leaves will use these values so we have to copy those values to the
+      // beginning of the leaf blocks. Any dead instructions will be cleaned up
+      // by LDCE.
+      const auto& extra_loads = finder.extra_loads();
+      const auto& loads_for_this_leaf = extra_loads.find(leaf);
+      if (loads_for_this_leaf != extra_loads.end()) {
+        for (const auto& register_and_insn : loads_for_this_leaf->second) {
+          IRInstruction* insn = register_and_insn.second;
+          if (insn != nullptr) {
+            // null instruction pointers are used to signify the upper half of a
+            // wide load.
+            auto copy = new IRInstruction(*insn);
+            TRACE(ENUM, 4, "adding %s to B%d\n", SHOW(copy), leaf->id());
+            leaf->push_front(copy);
+          }
         }
       }
+
+      if (old_case_key == boost::none) {
+        always_assert_log(fallthrough == nullptr, "only 1 fallthrough allowed");
+        fallthrough = leaf;
+        continue;
+      }
+
+      auto search = field_enum_map.find(*old_case_key);
+      always_assert_log(search != field_enum_map.end(),
+                        "can't find case key %d leaving block %d\n%s\nin %s\n",
+                        *old_case_key, branch_block->id(), info.str().c_str(),
+                        SHOW(cfg));
+      auto field_enum = search->second;
+      auto new_case_key = enum_field_to_ordinal.at(field_enum);
+      cases.emplace_back(new_case_key, leaf);
     }
 
     // Add a new register to hold the ordinal and then use it to
@@ -795,24 +762,59 @@ class OptimizeEnums {
     //  INVOKE_VIRTUAL <v_enum> <Enum>;.ordinal:()
     //  MOVE_RESULT <v_ordinal>
     //  MOVE <v_new_reg> <v_ordinal> // Newly added
+    //  ...
     //  AGET <v_field>, <v_ordinal>
     //  MOVE_RESULT_PSEUDO <v_dest>
-    //  *_SWITCH <v_new_reg> // will use <v_new_reg> instead of <v_dest>
+    //  ...
+    //  SPARSE_SWITCH <v_new_reg> // will use <v_new_reg> instead of <v_dest>
     //
     // NOTE: We leave CopyPropagation to clean up the extra moves and
     //       LDCE the array access.
-    auto move_ordinal = insns[1];
+    auto move_ordinal_it = cfg.move_result_of(*info.invoke);
+    auto move_ordinal = move_ordinal_it->insn;
     auto reg_ordinal = move_ordinal->dest();
-    auto new_ordinal_reg = code->allocate_temp();
+    auto new_ordinal_reg = cfg.allocate_temp();
     auto move_ordinal_result = new IRInstruction(OPCODE_MOVE);
     move_ordinal_result->set_src(0, reg_ordinal);
     move_ordinal_result->set_dest(new_ordinal_reg);
-    code->insert_after(move_ordinal,
-                       std::vector<IRInstruction*>{move_ordinal_result});
+    cfg.insert_after(move_ordinal_it, move_ordinal_result);
 
-    switch_insn->set_src(0, new_ordinal_reg);
+    // TODO?: Would it be possible to keep the original if-else tree form that
+    // D8 made?  It would probably be better to build a more general purpose
+    // switch -> if-else converter pass and run it after this pass.
+    if (cases.size() > 1) {
+      // Dex Lowering will convert this to packed if that would be better
+      IRInstruction* new_switch = new IRInstruction(OPCODE_SPARSE_SWITCH);
+      new_switch->set_src(0, new_ordinal_reg);
+      cfg.create_branch(branch_block, new_switch, fallthrough, cases);
+    } else if (cases.size() == 1) {
+      // Only one non-fallthrough case, we can use an if statement.
+      // const vKey, case_key
+      // if-eqz vOrdinal, vKey
+      int32_t key = cases[0].first;
+      cfg::Block* target = cases[0].second;
+      IRInstruction* const_load = new IRInstruction(OPCODE_CONST);
+      auto key_reg = cfg.allocate_temp();
+      const_load->set_dest(key_reg);
+      const_load->set_literal(key);
+      branch_block->push_back(const_load);
 
-    m_lookup_tables_replaced.emplace(lookup_table);
+      IRInstruction* new_if = new IRInstruction(OPCODE_IF_EQ);
+      new_if->set_src(0, new_ordinal_reg);
+      new_if->set_src(1, key_reg);
+      cfg.create_branch(branch_block, new_if, fallthrough, target);
+    } else {
+      // Just one case, set the goto edge's target to the fallthrough block.
+      always_assert(cases.empty());
+      if (fallthrough != nullptr) {
+        auto existing_goto =
+            cfg.get_succ_edge_of_type(branch_block, cfg::EDGE_GOTO);
+        always_assert(existing_goto != nullptr);
+        cfg.set_edge_target(existing_goto, fallthrough);
+      }
+    }
+
+    m_lookup_tables_replaced.emplace(info.array_field);
   }
 
   /**

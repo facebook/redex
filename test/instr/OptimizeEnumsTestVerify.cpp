@@ -17,6 +17,7 @@ constexpr const char* FOO = "Lcom/facebook/redextest/Foo;";
 constexpr const char* FOO_ANONYMOUS = "Lcom/facebook/redextest/Foo$1;";
 constexpr const char* ENUM_A = "Lcom/facebook/redextest/EnumA;";
 constexpr const char* ENUM_B = "Lcom/facebook/redextest/EnumB;";
+constexpr const char* BIG_ENUM = "Lcom/facebook/redextest/BigEnum;";
 
 std::unordered_set<size_t> collect_switch_cases(DexMethodRef* method_ref) {
   auto method = static_cast<DexMethod*>(method_ref);
@@ -38,13 +39,17 @@ TEST_F(PreVerify, GeneratedClass) {
   auto enumA = find_class_named(classes, ENUM_A);
   EXPECT_NE(nullptr, enumA);
 
-  auto foo = find_class_named(classes, FOO);
-  EXPECT_NE(nullptr, foo);
-  auto foo_anonymous = find_class_named(classes, FOO_ANONYMOUS);
-  EXPECT_NE(nullptr, foo_anonymous);
-
   auto enumB = find_class_named(classes, ENUM_B);
   EXPECT_NE(nullptr, enumB);
+
+  auto bigEnum = find_class_named(classes, BIG_ENUM);
+  EXPECT_NE(nullptr, bigEnum);
+
+  auto foo = find_class_named(classes, FOO);
+  EXPECT_NE(nullptr, foo);
+
+  auto foo_anonymous = find_class_named(classes, FOO_ANONYMOUS);
+  EXPECT_NE(nullptr, foo_anonymous);
 
   auto method_use_enumA = DexMethod::get_method(
       "Lcom/facebook/redextest/Foo;.useEnumA:(Lcom/facebook/redextest/"
@@ -77,6 +82,9 @@ TEST_F(PostVerify, GeneratedClass) {
 
   auto enumB = find_class_named(classes, ENUM_B);
   EXPECT_NE(nullptr, enumB);
+
+  auto bigEnum = find_class_named(classes, BIG_ENUM);
+  EXPECT_NE(nullptr, bigEnum);
 
   auto foo = find_class_named(classes, FOO);
   EXPECT_NE(nullptr, foo);

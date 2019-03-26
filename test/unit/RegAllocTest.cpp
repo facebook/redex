@@ -85,12 +85,12 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
      (move-result-pseudo-object v0)
      (check-cast v0 "Ljava/lang/Object;")
      (move-result-pseudo-object v0)
+     (return-void)
     )
 )");
   code->set_registers_size(1);
 
-  code->build_cfg(/* editable */ false);
-  live_range::renumber_registers(code.get(), /* width_aware */ false);
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -99,6 +99,7 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
      (move-result-pseudo-object v1)
      (check-cast v1 "Ljava/lang/Object;")
      (move-result-pseudo-object v2)
+     (return-void)
     )
 )");
   EXPECT_EQ(assembler::to_s_expr(code.get()),
@@ -125,11 +126,11 @@ TEST_F(RegAllocTest, LiveRange) {
      (:if-true-label)
      (check-cast v0 "Ljava/lang/Object;")
      (move-result-pseudo-object v0)
+     (return-void)
     )
 )");
 
-  code->build_cfg(/* editable */ false);
-  live_range::renumber_registers(code.get(), /* width_aware */ false);
+  live_range::renumber_registers(code.get(), /* width_aware */ true);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -149,10 +150,11 @@ TEST_F(RegAllocTest, LiveRange) {
      (:if-true-label)
      (check-cast v2 "Ljava/lang/Object;")
      (move-result-pseudo-object v5)
+     (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_EQ(assembler::to_string(code.get()),
+            assembler::to_string(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 6);
 }
 
@@ -166,10 +168,10 @@ TEST_F(RegAllocTest, WidthAwareLiveRange) {
      (move-result-pseudo-object v0)
      (check-cast v0 "Ljava/lang/Object;")
      (move-result-pseudo-object v0)
+     (return-void)
     )
 )");
 
-  code->build_cfg(/* editable */ false);
   live_range::renumber_registers(code.get(), /* width_aware */ true);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -181,6 +183,7 @@ TEST_F(RegAllocTest, WidthAwareLiveRange) {
      (move-result-pseudo-object v3) ; skip v2 since we have a wide value in v1
      (check-cast v3 "Ljava/lang/Object;")
      (move-result-pseudo-object v4)
+     (return-void)
     )
 )");
   EXPECT_EQ(assembler::to_s_expr(code.get()),
