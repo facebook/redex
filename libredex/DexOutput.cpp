@@ -371,6 +371,7 @@ DexOutput::DexOutput(
     DexClasses* classes,
     LocatorIndex* locator_index,
     bool emit_name_based_locators,
+    bool normal_primary_dex,
     size_t store_number,
     size_t dex_number,
     DebugInfoKind debug_info_kind,
@@ -403,6 +404,7 @@ DexOutput::DexOutput(
   m_dex_number = dex_number;
   m_locator_index = locator_index;
   m_emit_name_based_locators = emit_name_based_locators;
+  m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
 }
 
@@ -1967,6 +1969,73 @@ void DexOutput::write() {
   write_symbol_files();
 }
 
+class UniqueReferences {
+ public:
+  std::unordered_set<DexString*> strings;
+  std::unordered_set<DexType*> types;
+  std::unordered_set<DexProto*> protos;
+  std::unordered_set<DexFieldRef*> fields;
+  std::unordered_set<DexMethodRef*> methods;
+  int total_strings_size{0};
+  int total_types_size{0};
+  int total_protos_size{0};
+  int total_fields_size{0};
+  int total_methods_size{0};
+  int dexes{0};
+};
+UniqueReferences s_unique_references;
+
+void DexOutput::metrics() {
+  if (s_unique_references.dexes++ == 1 && !m_normal_primary_dex) {
+    // clear out info from first (primary) dex
+    s_unique_references.strings.clear();
+    s_unique_references.types.clear();
+    s_unique_references.protos.clear();
+    s_unique_references.fields.clear();
+    s_unique_references.methods.clear();
+    s_unique_references.total_strings_size = 0;
+    s_unique_references.total_types_size = 0;
+    s_unique_references.total_protos_size = 0;
+    s_unique_references.total_fields_size = 0;
+    s_unique_references.total_methods_size = 0;
+  }
+
+  for (auto& p : dodx->string_to_idx()) {
+    s_unique_references.strings.insert(p.first);
+  }
+  m_stats.num_unique_strings = s_unique_references.strings.size();
+  s_unique_references.total_strings_size += dodx->string_to_idx().size();
+  m_stats.strings_total_size = s_unique_references.total_strings_size;
+
+  for (auto& p : dodx->type_to_idx()) {
+    s_unique_references.types.insert(p.first);
+  }
+  m_stats.num_unique_types = s_unique_references.types.size();
+  s_unique_references.total_types_size += dodx->type_to_idx().size();
+  m_stats.types_total_size = s_unique_references.total_types_size;
+
+  for (auto& p : dodx->proto_to_idx()) {
+    s_unique_references.protos.insert(p.first);
+  }
+  m_stats.num_unique_protos = s_unique_references.protos.size();
+  s_unique_references.total_protos_size += dodx->proto_to_idx().size();
+  m_stats.protos_total_size = s_unique_references.total_protos_size;
+
+  for (auto& p : dodx->field_to_idx()) {
+    s_unique_references.fields.insert(p.first);
+  }
+  m_stats.num_unique_field_refs = s_unique_references.fields.size();
+  s_unique_references.total_fields_size += dodx->field_to_idx().size();
+  m_stats.field_refs_total_size = s_unique_references.total_fields_size;
+
+  for (auto& p : dodx->method_to_idx()) {
+    s_unique_references.methods.insert(p.first);
+  }
+  m_stats.num_unique_method_refs = s_unique_references.methods.size();
+  s_unique_references.total_methods_size += dodx->method_to_idx().size();
+  m_stats.method_refs_total_size = s_unique_references.total_methods_size;
+}
+
 static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   if (sort_bytecode == "class_order") {
     return SortMode::CLASS_ORDER;
@@ -2026,6 +2095,9 @@ dex_stats_t write_classes_to_dex(
     string_sort_mode = SortMode::CLASS_ORDER;
   }
 
+  auto interdex_config = json_cfg.get("InterDexPass", Json::Value());
+  auto normal_primary_dex =
+      interdex_config.get("normal_primary_dex", false).asBool();
   auto sort_bytecode_cfg = json_cfg.get("bytecode_sort_mode", Json::Value());
   std::vector<SortMode> code_sort_mode;
 
@@ -2046,6 +2118,7 @@ dex_stats_t write_classes_to_dex(
                              classes,
                              locator_index,
                              emit_name_based_locators,
+                             normal_primary_dex,
                              store_number,
                              dex_number,
                              debug_info_kind,
@@ -2061,6 +2134,7 @@ dex_stats_t write_classes_to_dex(
 
   dout.prepare(string_sort_mode, code_sort_mode, cfg, dex_magic);
   dout.write();
+  dout.metrics();
   return dout.m_stats;
 }
 

@@ -415,6 +415,18 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_annotations"] = stats.num_annotations;
   val["num_bytes"] = stats.num_bytes;
   val["num_instructions"] = stats.num_instructions;
+
+  val["num_unique_types"] = stats.num_unique_types;
+  val["num_unique_protos"] = stats.num_unique_protos;
+  val["num_unique_strings"] = stats.num_unique_strings;
+  val["num_unique_method_refs"] = stats.num_unique_method_refs;
+  val["num_unique_field_refs"] = stats.num_unique_field_refs;
+
+  val["types_total_size"] = stats.types_total_size;
+  val["protos_total_size"] = stats.protos_total_size;
+  val["strings_total_size"] = stats.strings_total_size;
+  val["method_refs_total_size"] = stats.method_refs_total_size;
+  val["field_refs_total_size"] = stats.field_refs_total_size;
   return val;
 }
 

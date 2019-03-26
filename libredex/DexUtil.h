@@ -465,6 +465,18 @@ struct dex_stats_t {
   int num_type_lists = 0;
   int num_bytes = 0;
   int num_instructions = 0;
+
+  int num_unique_strings = 0;
+  int num_unique_types = 0;
+  int num_unique_protos = 0;
+  int num_unique_method_refs = 0;
+  int num_unique_field_refs = 0;
+
+  int strings_total_size = 0;
+  int types_total_size = 0;
+  int protos_total_size = 0;
+  int method_refs_total_size = 0;
+  int field_refs_total_size = 0;
 };
 
 dex_stats_t&

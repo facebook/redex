@@ -501,6 +501,16 @@ dex_stats_t&
   lhs.num_type_lists += rhs.num_type_lists;
   lhs.num_bytes += rhs.num_bytes;
   lhs.num_instructions += rhs.num_instructions;
+  lhs.num_unique_types += rhs.num_unique_types;
+  lhs.num_unique_protos += rhs.num_unique_protos;
+  lhs.num_unique_strings += rhs.num_unique_strings;
+  lhs.num_unique_method_refs += rhs.num_unique_method_refs;
+  lhs.num_unique_field_refs += rhs.num_unique_field_refs;
+  lhs.types_total_size += rhs.types_total_size;
+  lhs.protos_total_size += rhs.protos_total_size;
+  lhs.strings_total_size += rhs.strings_total_size;
+  lhs.method_refs_total_size += rhs.method_refs_total_size;
+  lhs.field_refs_total_size += rhs.field_refs_total_size;
   return lhs;
 }
 

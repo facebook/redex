@@ -69,6 +69,7 @@ class DexOutputIdx {
     delete m_method;
   }
 
+  dexstring_to_idx& string_to_idx() const { return *m_string; }
   dextype_to_idx& type_to_idx() const { return *m_type; }
   dexproto_to_idx& proto_to_idx() const { return *m_proto; }
   dexfield_to_idx& field_to_idx() const { return *m_field; }
@@ -248,6 +249,7 @@ class DexOutput {
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
   bool m_emit_name_based_locators;
+  bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
@@ -296,6 +298,7 @@ class DexOutput {
             DexClasses* classes,
             LocatorIndex* locator_index,
             bool emit_name_based_locators,
+            bool normal_primary_dex,
             size_t store_number,
             size_t dex_number,
             DebugInfoKind debug_info_kind,
@@ -315,6 +318,7 @@ class DexOutput {
                const ConfigFiles& cfg,
                const std::string& dex_magic);
   void write();
+  void metrics();
   static void check_method_instruction_size_limit(const ConfigFiles& cfg,
                                                   int size,
                                                   const char* method_name);
