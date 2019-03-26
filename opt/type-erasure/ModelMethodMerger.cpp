@@ -560,9 +560,6 @@ void ModelMethodMerger::merge_ctors() {
       dispatches.emplace(dispatch);
     }
     // Update mergeable ctor map
-    if (m_model_spec.has_type_tag) {
-      always_assert(dispatches.size() == 1);
-    }
     for (auto type : pair.first->mergeables) {
       for (auto dispatch : dispatches) {
         m_mergeable_to_merger_ctor[type] = dispatch;
