@@ -639,7 +639,9 @@ std::vector<DexClass*> ModelMerger::merge_model(
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();
   write_out_type_mapping(mergeable_to_merger, method_dedup_map, s_mapping_file);
-  post_process(model, type_tags, mergeable_to_merger_ctor);
+  if (!to_materialize.empty()) {
+    post_process(model, type_tags, mergeable_to_merger_ctor);
+  }
 
   TRACE(TERA, 3, "created %d merger classes\n", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
