@@ -644,13 +644,17 @@ def prepare_redex(args):
     log('Extracting apk...')
     unzip_apk(args.input_apk, extracted_apk_dir)
 
-    dex_mode = unpacker.detect_secondary_dex_mode(extracted_apk_dir)
+    dex_file_path = extracted_apk_dir
+    if os.path.splitext(args.out)[1] == "aab":
+        dex_file_path = join(extracted_apk_dir,"base","dex")
+
+    dex_mode = unpacker.detect_secondary_dex_mode(dex_file_path)
     log('Detected dex mode ' + str(type(dex_mode).__name__))
     if not dex_dir:
         dex_dir = make_temp_dir('.redex_dexen', debug_mode)
 
     log('Unpacking dex files')
-    dex_mode.unpackage(extracted_apk_dir, dex_dir)
+    dex_mode.unpackage(dex_file_path, dex_dir)
 
     log('Detecting Application Modules')
     application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
@@ -771,8 +775,12 @@ def finalize_redex(state):
     log("Emit Locator Strings: %s" % have_locators)
     log("Emit Name Based Locator Strings: %s" % have_name_based_locators)
 
+    dex_file_path = extracted_apk_dir
+    if os.path.splitext(state.args.out)[1] == "aab":
+        dex_file_path = join(extracted_apk_dir,"base","dex")
+
     state.dex_mode.repackage(
-        state.extracted_apk_dir, state.dex_dir, have_locators, have_name_based_locators, fast_repackage=state.args.dev
+        dex_file_path, state.dex_dir, have_locators, have_name_based_locators, fast_repackage=state.args.dev
     )
 
     locator_store_id = 1
