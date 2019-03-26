@@ -728,7 +728,7 @@ class EnumTransformer final {
     for (auto& pair : m_enum_attrs) {
       type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
     }
-    type_reference::TypeRefUpdater updater(type_mapping, "$OE$");
+    type_reference::TypeRefUpdater updater(type_mapping);
     updater.update_methods_fields(scope);
   }
 

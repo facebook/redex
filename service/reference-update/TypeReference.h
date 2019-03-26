@@ -18,16 +18,17 @@ namespace type_reference {
 /**
  * Update old type reference to new type reference in all the fields and methods
  * in the scope, but is not responsible for updating opcodes. The users should
- * take care of other part of transformations to make sure the updating being
- * valide.
- * This supports updating virtual methods through name mangling instead of
- * walking through virtual scopes.
+ * take care of other part of analysis and transformations to make sure the
+ * updating being valid. This supports updating virtual methods through name
+ * mangling instead of walking through virtual scopes.
  * Usage examples:
  *    1. Replace candidate enum types with Integer type after we finish the code
  *       transformation.
  *    2. Replace interfaces or parent classes references with new type
  *       references after we merge them to their single implementation or single
  *       child classes.
+ * If the original name of a method or a field is "member_name", the updated
+ * name may be "member_name$RDX$some_hash_value".
  */
 class TypeRefUpdater final {
  public:
@@ -35,11 +36,8 @@ class TypeRefUpdater final {
    * The old types should all have definitions so that it's unlikely that we are
    * trying to update a virtual method that may override any external virtual
    * method.
-   * Pass a mangling_affix for distinguishing your optimization, like "$OE$" is
-   * for OptimizeEnumsPass.
    */
-  TypeRefUpdater(const std::unordered_map<DexType*, DexType*>& old_to_new,
-                 const std::string mangling_affix);
+  TypeRefUpdater(const std::unordered_map<DexType*, DexType*>& old_to_new);
 
   void update_methods_fields(const Scope& scope);
 
@@ -63,10 +61,10 @@ class TypeRefUpdater final {
   /**
    * org_name + m_mangling_affix + seed
    */
-  DexString* gen_new_name(const DexString* org_name, size_t seed);
+  DexString* gen_new_name(const std::string& org_name, size_t seed);
 
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
-  const std::string m_mangling_affix;
+  const std::string m_mangling_affix = "$RDX$";
 };
 
 // A helper to stringify method signature for the method dedup mapping file.

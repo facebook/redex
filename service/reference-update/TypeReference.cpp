@@ -120,12 +120,14 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   // any candidate types.
   walk::parallel::methods(scope, [this](DexMethod* method) {
     if (mangling(method)) {
-      always_assert_log(can_rename(method), "Method %s can not be renamed\n");
+      always_assert_log(
+          can_rename(method), "Method %s can not be renamed\n", SHOW(method));
     }
   });
   walk::parallel::fields(scope, [this](DexField* field) {
     if (mangling(field)) {
-      always_assert_log(can_rename(field), "Field %s can not be renamed\n");
+      always_assert_log(
+          can_rename(field), "Field %s can not be renamed\n", SHOW(field));
     }
   });
   // Update all the method refs and field refs.
@@ -173,11 +175,12 @@ DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
 }
 
 /**
- * org_name + m_mangling_affix + seed
+ * org_name(without mangling suffix) + m_mangling_affix + seed
  */
-DexString* TypeRefUpdater::gen_new_name(const DexString* org_name,
+DexString* TypeRefUpdater::gen_new_name(const std::string& org_name,
                                         size_t seed) {
-  std::string new_name = org_name->str() + m_mangling_affix;
+  auto end = org_name.find(m_mangling_affix);
+  std::string new_name = org_name.substr(0, end) + m_mangling_affix;
   while (seed) {
     int d = seed % 62;
     if (d < 10) {
@@ -197,8 +200,9 @@ bool TypeRefUpdater::mangling(DexFieldRef* field) {
   if (new_type) {
     size_t seed = 0;
     boost::hash_combine(seed, field->get_type()->str());
+    boost::hash_combine(seed, field->str());
     DexFieldSpec spec;
-    spec.name = gen_new_name(field->get_name(), seed);
+    spec.name = gen_new_name(field->str(), seed);
     spec.type = new_type;
     field->change(spec);
     TRACE(REFU, 9, "Update field %s \n", SHOW(field));
@@ -238,7 +242,8 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
       rtype, DexTypeList::make_type_list(std::move(new_args)));
   DexMethodSpec spec;
   if (!is_init(method)) {
-    spec.name = gen_new_name(method->get_name(), seed);
+    boost::hash_combine(seed, method->str());
+    spec.name = gen_new_name(method->str(), seed);
   }
   spec.proto = new_proto;
   // TODO: (fengliu) Handle collided <init> signatures instead of assertion
@@ -251,9 +256,8 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
 }
 
 TypeRefUpdater::TypeRefUpdater(
-    const std::unordered_map<DexType*, DexType*>& old_to_new,
-    const std::string mangling_affix)
-    : m_old_to_new(old_to_new), m_mangling_affix(mangling_affix) {
+    const std::unordered_map<DexType*, DexType*>& old_to_new)
+    : m_old_to_new(old_to_new) {
   assert_old_types_have_definitions(old_to_new);
 }
 
