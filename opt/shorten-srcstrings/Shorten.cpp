@@ -67,6 +67,17 @@ static void strip_src_strings(
   size_t string_savings = 0;
   std::unordered_map<DexString*, std::vector<DexString*>> global_src_strings;
   std::unordered_set<DexString*> shortened_used;
+  for (auto& classes : DexStoreClassesIterator(stores)) {
+    for (auto const& clazz : classes) {
+      auto src_string = clazz->get_source_file();
+      if (src_string) {
+        // inserting actual source files into this set will cause them to not
+        // get used --- as the whole point of this analysis is to substitute
+        // source file strings
+        shortened_used.insert(src_string);
+      }
+    }
+  }
 
   for (auto& classes : DexStoreClassesIterator(stores)) {
     std::unordered_map<DexString*, DexString*> src_to_shortened;
@@ -75,6 +86,10 @@ static void strip_src_strings(
       clazz->gather_strings(current_dex_strings);
     }
     sort_unique(current_dex_strings, compare_dexstrings);
+    // reverse current_dex_strings vector, so that we prefer strings that will
+    // get smaller indices
+    std::reverse(std::begin(current_dex_strings),
+                 std::end(current_dex_strings));
 
     for (auto const& clazz : classes) {
       auto src_string = clazz->get_source_file();
