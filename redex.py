@@ -579,12 +579,18 @@ def ensure_libs_dir(libs_dir, sub_dir):
         os.mkdir(libs_dir)
         os.mkdir(sub_dir)
         return libs_dir
+
+def get_file_ext(file_name):
+    return os.path.splitext(file_name)[1]
     
 def get_dex_file_path(args, extracted_apk_dir):
     # base on file extension check if input is
     # an apk file (".apk") or an Android bundle file (".aab")
-    log("APK: "+os.path.splitext(args.input_apk)[1])
-    if os.path.splitext(args.input_apk)[1] == ".aab":
+    # TODO: support loadable modules (at this point only
+    # very basic support is provided - in case of Android bundles 
+    # "regular" apk file content is moved to the "base"
+    # sub-directory of the bundle archive)
+    if get_file_ext(args.input_apk) == ".aab":
         return join(extracted_apk_dir, "base", "dex")
     else:
         return extracted_apk_dir
@@ -592,6 +598,15 @@ def get_dex_file_path(args, extracted_apk_dir):
 def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
 
+    # avoid accidentally mixing up file formats since we now support
+    # both apk files and Android bundle files
+    if not args.unpack_only:
+        assert get_file_ext(args.input_apk) == get_file_ext(args.out),\
+            "Input file extension (\"" +\
+            get_file_ext(args.input_apk) +\
+            "\") should be the same as output file extension (\"" +\
+            get_file_ext(args.out) + "\")"
+    
     extracted_apk_dir = None
     dex_dir = None
     if args.unpack_only and args.unpack_dest:
