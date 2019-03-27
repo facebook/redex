@@ -98,7 +98,7 @@ class PassManager {
   PassInfo* m_current_pass_info;
 
   std::unique_ptr<redex::ProguardConfiguration> m_pg_config;
-  const RedexOptions& m_redex_options;
+  const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};
 
