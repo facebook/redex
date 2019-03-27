@@ -198,6 +198,11 @@ class RootSetMarker {
    */
   void mark(const Scope& scope);
 
+  /**
+   * marks everything as seed
+   */
+  void mark_all_as_seed(const Scope& scope);
+
   bool is_canary(const DexClass* cls);
 
   virtual bool should_mark_cls(const DexClass* cls);
@@ -299,10 +304,11 @@ class TransitiveClosureMarker {
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    DexStoresVector& stores,
+    const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
-    bool record_reachability = false);
+    bool record_reachability = false,
+    bool should_mark_all_as_seed = false);
 
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,

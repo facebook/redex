@@ -363,7 +363,7 @@ Scope build_class_scope(const T& dexen) {
   }
   return v;
 };
-Scope build_class_scope(DexStoresVector& stores);
+Scope build_class_scope(const DexStoresVector& stores);
 
 /**
  * Posts the changes made to the Scope& object to the

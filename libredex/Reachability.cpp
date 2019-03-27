@@ -87,6 +87,30 @@ bool RootSetMarker::should_mark_cls(const DexClass* cls) {
   return root(cls) || is_canary(cls);
 }
 
+void RootSetMarker::mark_all_as_seed(const Scope& scope) {
+  walk::parallel::classes(scope, [&](const DexClass* cls) {
+    TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
+    push_seed(cls);
+
+    for (auto const& f : cls->get_ifields()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      push_seed(f);
+    }
+    for (auto const& f : cls->get_sfields()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      push_seed(f);
+    }
+    for (auto const& m : cls->get_dmethods()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+      push_seed(m);
+    }
+    for (auto const& m : cls->get_vmethods()) {
+      TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
+      push_seed(m);
+    }
+  });
+}
+
 /*
  * Initializes the root set by marking and pushing nodes onto the work queue.
  * Also conditionally marks class member seeds.
@@ -467,10 +491,11 @@ IgnoreSets::IgnoreSets(const JsonWrapper& jw) {
 }
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    DexStoresVector& stores,
+    const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
-    bool record_reachability) {
+    bool record_reachability,
+    bool should_mark_all_as_seed) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<ReachableObjects>();
@@ -483,7 +508,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
                                 &cond_marked,
                                 reachable_objects.get(),
                                 &root_set);
-  root_set_marker.mark(scope);
+  if (should_mark_all_as_seed) {
+    root_set_marker.mark_all_as_seed(scope);
+  } else {
+    root_set_marker.mark(scope);
+  }
 
   size_t num_threads = std::max(1u, std::thread::hardware_concurrency() / 2);
   auto stats_arr = std::make_unique<Stats[]>(num_threads);

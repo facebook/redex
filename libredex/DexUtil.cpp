@@ -384,7 +384,7 @@ bool passes_args_through(IRInstruction* insn,
   return insn->srcs_size() + ignore == param_count;
 }
 
-Scope build_class_scope(DexStoresVector& stores) {
+Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
