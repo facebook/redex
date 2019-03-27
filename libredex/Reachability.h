@@ -308,7 +308,9 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability = false,
-    bool should_mark_all_as_seed = false);
+    bool should_mark_all_as_seed = false,
+    std::unique_ptr<const method_override_graph::Graph>*
+        out_method_override_graph = nullptr);
 
 void sweep(DexStoresVector& stores,
            const ReachableObjects& reachables,

@@ -495,7 +495,8 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
     bool record_reachability,
-    bool should_mark_all_as_seed) {
+    bool should_mark_all_as_seed,
+    std::unique_ptr<const mog::Graph>* out_method_override_graph) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<ReachableObjects>();
@@ -537,6 +538,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
     }
   }
+
+  if (out_method_override_graph) {
+    *out_method_override_graph = std::move(method_override_graph);
+  }
+
   return reachable_objects;
 }
 
