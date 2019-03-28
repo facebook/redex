@@ -327,38 +327,7 @@ void GatheredTypes::build_method_map() {
 }
 
 void GatheredTypes::gather_components() {
-  // Gather references reachable from each class.
-  for (auto const& cls : *m_classes) {
-    cls->gather_strings(m_lstring);
-    cls->gather_types(m_ltype);
-    cls->gather_fields(m_lfield);
-    cls->gather_methods(m_lmethod);
-  }
-
-  // Remove duplicates to speed up the later loops.
-  sort_unique(m_lstring);
-  sort_unique(m_ltype);
-
-  // Gather types and strings needed for field and method refs.
-  sort_unique(m_lmethod);
-  for (auto meth : m_lmethod) {
-    meth->gather_types_shallow(m_ltype);
-    meth->gather_strings_shallow(m_lstring);
-  }
-
-  sort_unique(m_lfield);
-  for (auto field : m_lfield) {
-    field->gather_types_shallow(m_ltype);
-    field->gather_strings_shallow(m_lstring);
-  }
-
-  // Gather strings needed for each type.
-  sort_unique(m_ltype);
-  for (auto type : m_ltype) {
-    if (type) m_lstring.push_back(type->get_name());
-  }
-
-  sort_unique(m_lstring);
+  ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, *m_classes);
 }
 
 constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;

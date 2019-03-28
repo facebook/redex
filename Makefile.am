@@ -29,6 +29,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/class-splitting \
 	-I$(top_srcdir)/opt/constant-propagation \
 	-I$(top_srcdir)/opt/dedup_blocks \
+	-I$(top_srcdir)/opt/dedup-strings \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
@@ -221,6 +222,7 @@ redex_all_SOURCES = \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
+	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \

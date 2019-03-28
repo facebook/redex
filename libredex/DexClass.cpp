@@ -1036,6 +1036,7 @@ DexClass::DexClass(DexIdx* idx,
       m_source_file(idx->get_nullable_stringidx(cdef->source_file_idx)),
       m_anno(nullptr),
       m_external(false),
+      m_perf_sensitive(false),
       m_location(location) {
   load_class_annotations(idx, cdef->annotations_off);
   auto deva = std::unique_ptr<DexEncodedValueArray>(
@@ -1105,12 +1106,13 @@ void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   if (m_anno) m_anno->gather_types(ltype);
 }
 
-void DexClass::gather_strings(std::vector<DexString*>& lstring) const {
+void DexClass::gather_strings(std::vector<DexString*>& lstring,
+                              bool exclude_loads) const {
   for (auto const& m : m_dmethods) {
-    m->gather_strings(lstring);
+    m->gather_strings(lstring, exclude_loads);
   }
   for (auto const& m : m_vmethods) {
-    m->gather_strings(lstring);
+    m->gather_strings(lstring, exclude_loads);
   }
   for (auto const& f : m_sfields) {
     f->gather_strings(lstring);
@@ -1201,9 +1203,10 @@ void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-void DexMethod::gather_strings(std::vector<DexString*>& lstring) const {
+void DexMethod::gather_strings(std::vector<DexString*>& lstring,
+                               bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
-  if (m_code) m_code->gather_strings(lstring);
+  if (m_code && !exclude_loads) m_code->gather_strings(lstring);
   if (m_anno) m_anno->gather_strings(lstring);
   auto param_anno = get_param_anno();
   if (param_anno) {
@@ -1279,4 +1282,44 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
     m_method->gather_types_shallow(ltype);
     break;
   }
+}
+
+void gather_components(std::vector<DexString*>& lstring,
+                       std::vector<DexType*>& ltype,
+                       std::vector<DexFieldRef*>& lfield,
+                       std::vector<DexMethodRef*>& lmethod,
+                       const DexClasses& classes,
+                       bool exclude_loads) {
+  // Gather references reachable from each class.
+  for (auto const& cls : classes) {
+    cls->gather_strings(lstring, exclude_loads);
+    cls->gather_types(ltype);
+    cls->gather_fields(lfield);
+    cls->gather_methods(lmethod);
+  }
+
+  // Remove duplicates to speed up the later loops.
+  sort_unique(lstring);
+  sort_unique(ltype);
+
+  // Gather types and strings needed for field and method refs.
+  sort_unique(lmethod);
+  for (auto meth : lmethod) {
+    meth->gather_types_shallow(ltype);
+    meth->gather_strings_shallow(lstring);
+  }
+
+  sort_unique(lfield);
+  for (auto field : lfield) {
+    field->gather_types_shallow(ltype);
+    field->gather_strings_shallow(lstring);
+  }
+
+  // Gather strings needed for each type.
+  sort_unique(ltype);
+  for (auto type : ltype) {
+    if (type) lstring.push_back(type->get_name());
+  }
+
+  sort_unique(lstring);
 }

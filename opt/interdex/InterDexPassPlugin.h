@@ -41,6 +41,10 @@ class InterDexPassPlugin {
                            std::vector<DexClass*>* erased_classes,
                            bool should_not_relocate_methods_of_class) = 0;
 
+  // In each dex, reserve this many mrefs to be potentially added after the
+  // inter-dex pass
+  virtual size_t reserve_mrefs() { return 0; }
+
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector& outdex,
                                         const DexClasses& classes) = 0;
