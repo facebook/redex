@@ -20,6 +20,7 @@
   TM(ARGS)               \
   TM(BBPROFILE)          \
   TM(BIND)               \
+  TM(BPH)                \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
   TM(CFG)                \

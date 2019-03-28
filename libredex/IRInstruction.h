@@ -310,7 +310,7 @@ class IRInstruction final {
   }
 
   // Compute current instruction's hash.
-  uint64_t hash();
+  uint64_t hash() const;
 
  private:
   IROpcode m_opcode;

@@ -24,6 +24,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/basic-block \
+	-I$(top_srcdir)/opt/branch-prefix-hoisting \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/class-splitting \
@@ -212,6 +213,7 @@ redex_all_SOURCES = \
 	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
+	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
