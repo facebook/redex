@@ -41,6 +41,9 @@
  * }
  * given that the hoisted instructions doesn't have a side effect on the branch
  * condition.
+ *
+ * Note: if an instruction gets hoisted may throw, the line numbers in stack
+ * trace may be pointing to before the branch.
  */
 
 namespace {
@@ -171,6 +174,13 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
   return 0;
 }
 
+void BranchPrefixHoistingPass::skip_pos_debug(IRList::iterator& it,
+                                              const IRList::iterator& end) {
+  while (it != end && (it->type == MFLOW_POSITION || it->type == MFLOW_DEBUG)) {
+    it++;
+  }
+}
+
 std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
     const std::unordered_set<uint16_t>& crit_regs) {
@@ -187,8 +197,9 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
   bool proceed = true;
   std::vector<IRInstruction> insns_to_hoist;
   while (proceed) {
-    // check if at least one block reaches the end
+    // skip pos and debug info and check if at least one block reaches the end
     for (unsigned i = 0; i < block_iters.size(); i++) {
+      skip_pos_debug(block_iters[i], succ_blocks[i]->end());
       if (block_iters[i] == succ_blocks[i]->end()) {
         // at least one block is empty, we are done
         return insns_to_hoist;
@@ -257,7 +268,9 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
   cfg.insert_before(it, heap_insn_objs);
 
   for (auto succ_block : succ_blocks) {
-    auto to_remove = succ_block->begin();
+    auto to_remove =
+        ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
+
     for (auto insn : insns_to_hoist) {
       if (opcode::is_move_result_pseudo(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
@@ -266,7 +279,8 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
       // verify the insn we want to remove
       always_assert(*(to_remove->insn) == insn);
       succ_block->remove_opcode(to_remove);
-      to_remove = succ_block->begin();
+      to_remove =
+          ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
     }
   }
 }

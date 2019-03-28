@@ -43,4 +43,6 @@ class BranchPrefixHoistingPass : public Pass {
   static std::vector<IRInstruction> get_insns_to_hoist(
       const std::vector<cfg::Block*>& succ_blocks,
       const std::unordered_set<uint16_t>& crit_regs);
+
+  static void skip_pos_debug(IRList::iterator& it, const IRList::iterator& end);
 };
