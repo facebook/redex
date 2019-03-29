@@ -85,11 +85,9 @@ std::string get_string_attribute_value(
   return std::string("");
 }
 
-bool has_raw_attribute_value(
-    const android::ResXMLTree& parser,
-    const android::String16& attribute_name,
-    android::Res_value& outValue
-  ) {
+bool has_raw_attribute_value(const android::ResXMLTree& parser,
+                             const android::String16& attribute_name,
+                             android::Res_value& outValue) {
   const size_t attr_count = parser.getAttributeCount();
 
   for (size_t i = 0; i < attr_count; ++i) {
@@ -111,6 +109,17 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
   if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
     always_assert(raw_value.dataType & android::Res_value::TYPE_INT_BOOLEAN);
     return static_cast<bool>(raw_value.data);
+  }
+  return default_value;
+}
+
+int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
+                                       const android::String16& attribute_name,
+                                       int32_t default_value) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    always_assert(raw_value.dataType & android::Res_value::TYPE_INT_DEC);
+    return static_cast<int>(raw_value.data);
   }
   return default_value;
 }
