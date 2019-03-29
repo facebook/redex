@@ -268,7 +268,8 @@ class CombinedGraph(object):
                 # find child in reachability graph, then build edge
                 method_child = self.reachability_graph.get_node(child.name)
                 for pred in method_node.preds:
-                    self.reachability_graph.add_edge(method_child, pred)
+                    if pred.type == ReachableObjectType.METHOD:
+                        self.reachability_graph.add_edge(method_child, pred)
 
         self.nodes = self.reachability_graph.nodes
 
