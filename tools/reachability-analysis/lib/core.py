@@ -7,7 +7,11 @@
 
 import array
 import mmap
+import os
+import shutil
 import struct
+import subprocess
+import tempfile
 
 
 class ReachableObjectType(object):
@@ -48,6 +52,20 @@ def is_seed(node_name):
     return node_name == "<SEED>"
 
 
+def show_list_with_idx(list):
+    ret = ""
+    i = 0
+    while i < len(list):
+        ret += "%d: %s\n" % (i, list[i])
+        i += 1
+
+    return ret
+
+
+def download_from_everstore(handle, filename):
+    subprocess.check_call(["clowder", "get", handle, filename])
+
+
 class ReachableObject(object):
     def __init__(self, type, name):
         self.type = type
@@ -59,7 +77,41 @@ class ReachableObject(object):
         return self.name
 
     def __repr__(self):
-        return "<RO %s>" % self.name
+        ret = "%s: %s\n" % (ReachableObjectType.to_string(self.type), self.name)
+        ret += "Reachable from %d predecessor(s):\n" % len(self.preds)
+        ret += show_list_with_idx(self.preds)
+        ret += "Reaching %d successor(s):\n" % len(self.succs)
+        ret += show_list_with_idx(self.succs)
+        return ret
+
+
+class ReachableMethod(ReachableObject):
+    # we need override info for a method
+    def __init__(self, ro, mog):
+        self.type = ro.type
+        self.name = ro.name
+        self.preds = ro.preds
+        self.succs = ro.succs
+        self.overriding = []
+        self.overriden_by = []
+
+        if self.name in mog.nodes.keys():
+            n = mog.nodes[self.name]
+            self.overriding = n.parents
+            self.overriden_by = n.children
+
+    def __repr__(self):
+        ret = super(ReachableMethod, self).__repr__()
+        if len(self.overriding) != 0:
+            ret += "Overriding %s methods:\n" % len(self.overriding)
+            ret += show_list_with_idx(
+                list(map(lambda n: n.name, self.overriding)))
+
+        if len(self.overriden_by) != 0:
+            ret += "Overriden by %s methods:\n" % len(self.overriden_by)
+            ret += show_list_with_idx(
+                list(map(lambda n: n.name, self.overriden_by)))
+        return ret
 
 
 class AbstractGraph(object):
@@ -140,8 +192,11 @@ class ReachabilityGraph(AbstractGraph):
 
     @staticmethod
     def add_edge(n1, n2):
-        n2.succs.append(n1)
-        n1.preds.append(n2)
+        if n1 not in n2.succs:
+            n2.succs.append(n1)
+
+        if n2 not in n1.preds:
+            n1.preds.append(n2)
 
     def get_node(self, node_name):
         if is_method(node_name):
@@ -191,3 +246,75 @@ class MethodOverrideGraph(AbstractGraph):
     def add_edge(method, child):
         method.children.append(child)
         child.parents.append(method)
+
+
+class CombinedGraph(object):
+    def __init__(self, reachability, method_override):
+        self.reachability_graph = ReachabilityGraph()
+        self.reachability_graph.load(reachability)
+        self.method_override_graph = MethodOverrideGraph()
+        self.method_override_graph.load(method_override)
+
+        # extract information from the override graph
+        for (type, name) in self.reachability_graph.nodes:
+            if type == ReachableObjectType.METHOD:
+                self.reachability_graph.nodes[(type, name)] = ReachableMethod(
+                    self.reachability_graph.nodes[(type, name)],
+                    self.method_override_graph)
+
+        for method in self.method_override_graph.nodes.keys():
+            method_node = self.reachability_graph.get_node(method)
+            for child in method_node.overriden_by:
+                # find child in reachability graph, then build edge
+                method_child = self.reachability_graph.get_node(child.name)
+                for pred in method_node.preds:
+                    self.reachability_graph.add_edge(method_child, pred)
+
+        self.nodes = self.reachability_graph.nodes
+
+    @staticmethod
+    def from_everstore(reachability, method_override):
+        temp_dir = tempfile.mkdtemp()
+        r_tmp = os.path.join(temp_dir, "redex-reachability.graph")
+        download_from_everstore(reachability, r_tmp)
+        mog_tmp = os.path.join(temp_dir, "redex-method-override.graph")
+        download_from_everstore(method_override, mog_tmp)
+        ret = CombinedGraph(r_tmp, mog_tmp)
+        shutil.rmtree(temp_dir)
+        return ret
+
+    def node(self, search_str=None, search_type=None):
+        node = None
+        known_names = []
+        for (type, name) in self.nodes.keys():
+            if search_type is not None and type != search_type:
+                # Classes and Annotations may have naming collisions
+                # if that happens, use the search_type argument to filter
+                continue
+            if search_str is None or search_str in name:
+                known_names += [(type, name)]
+
+        if search_str is not None and len(known_names) == 1:
+            # know exactly one
+            node = self.nodes[known_names[0]]
+        elif search_str is not None:
+            # there could be names containing name of another node
+            # in this case we prefer the only exact match
+            exact_match = list(filter(
+                (lambda n: n[1] == search_str), known_names))
+            if len(exact_match) == 1:
+                node = self.nodes[exact_match[0]]
+
+        # if after all we still can't get which one does the user want,
+        # print all options
+        if node is None:
+            print("Found %s matching names:" % len(known_names))
+            idx = 0
+            for (type, name) in known_names:
+                print("%d: (ReachableObjectType.%s, \"%s\")"
+                    % (idx, ReachableObjectType.to_string(type), name))
+                idx += 1
+
+            return lambda i: self.nodes[known_names[i]]
+
+        return node
