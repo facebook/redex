@@ -8,6 +8,7 @@
 #include "Peephole.h"
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <unordered_map>
 #include <unordered_set>
@@ -104,6 +105,8 @@ enum class Literal {
   Compare_Strings_A_B,
   // Directive: Write the length of string A as a 16-bit integer.
   Length_String_A,
+  // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
+  Mul_Div_To_Shift_Log2,
 };
 
 enum class String {
@@ -439,6 +442,8 @@ struct Matcher {
       return new IRInstruction(OPCODE_CONST_STRING);
 
     case OPCODE_CONST:
+    case OPCODE_SHR_INT_LIT8:
+    case OPCODE_SHL_INT_LIT8:
       assert(replace.kind == DexPattern::Kind::literal);
       return new IRInstruction((IROpcode)opcode);
 
@@ -646,6 +651,12 @@ struct Matcher {
         case Literal::A: {
           auto a = matched_literals.at(Literal::A);
           replace->set_literal(a);
+          break;
+        }
+        case Literal::Mul_Div_To_Shift_Log2: {
+          auto a = matched_literals.at(Literal::Mul_Div_To_Shift_Log2);
+          assert(a > 0);
+          replace->set_literal(static_cast<uint64_t>(log2(a)));
           break;
         }
         default:
@@ -1364,15 +1375,31 @@ static bool first_instruction_literal_is(const Matcher& m) {
   return m.matched_instructions.front()->get_literal() == VALUE;
 }
 
+static bool first_instruction_literal_is_power_of_two(const Matcher& m) {
+  if (m.matched_instructions.empty()) {
+    return false;
+  }
+  auto literal = m.matched_instructions.front()->get_literal();
+  return literal > 0 && ((literal & (literal - 1)) == 0);
+}
+
 DexPattern mul_lit(Register src, Register dst) {
-  return {{OPCODE_MUL_INT_LIT8,
-           OPCODE_MUL_INT_LIT16},
-          {src},
-          {dst}};
+  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}};
+}
+
+DexPattern mul_literal_kind(Register src, Register dst, Literal lit) {
+  return {{OPCODE_MUL_INT_LIT8, OPCODE_MUL_INT_LIT16}, {src}, {dst}, {lit}};
 }
 
 std::vector<DexPattern> div_lit(Register src, Register dst) {
   return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}},
+          {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
+}
+
+std::vector<DexPattern> div_literal_kind(Register src,
+                                         Register dst,
+                                         Literal lit) {
+  return {{{OPCODE_DIV_INT_LIT8, OPCODE_DIV_INT_LIT16}, {src}, {}, {lit}},
           {{IOPCODE_MOVE_RESULT_PSEUDO}, {}, {dst}}};
 }
 
@@ -1416,6 +1443,26 @@ const std::vector<Pattern>& get_arith_patterns() {
        {// Eliminates the literal-carrying halfword
         {{OPCODE_MOVE}, {Register::A}, {Register::B}}},
        first_instruction_literal_is<0>},
+
+      // Replace mul 2^n with shl n
+      {"Arith_MulLit_Power2",
+       {mul_literal_kind(Register::A, Register::B,
+                         Literal::Mul_Div_To_Shift_Log2)},
+       {{{OPCODE_SHL_INT_LIT8},
+         {Register::A},
+         {Register::B},
+         Literal::Mul_Div_To_Shift_Log2}},
+       first_instruction_literal_is_power_of_two},
+
+      // Replace div 2^n with shr n
+      {"Arith_DivLit_Power2",
+       {div_literal_kind(Register::A, Register::B,
+                         Literal::Mul_Div_To_Shift_Log2)},
+       {{{OPCODE_SHR_INT_LIT8},
+         {Register::A},
+         {Register::B},
+         Literal::Mul_Div_To_Shift_Log2}},
+       first_instruction_literal_is_power_of_two},
   };
   return kArithPatterns;
 }
