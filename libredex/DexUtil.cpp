@@ -511,6 +511,8 @@ dex_stats_t&
   lhs.strings_total_size += rhs.strings_total_size;
   lhs.method_refs_total_size += rhs.method_refs_total_size;
   lhs.field_refs_total_size += rhs.field_refs_total_size;
+  lhs.num_dbg_items += rhs.num_dbg_items;
+  lhs.dbg_total_size += rhs.dbg_total_size;
   return lhs;
 }
 

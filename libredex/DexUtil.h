@@ -477,6 +477,9 @@ struct dex_stats_t {
   int protos_total_size = 0;
   int method_refs_total_size = 0;
   int field_refs_total_size = 0;
+
+  int num_dbg_items = 0;
+  int dbg_total_size = 0;
 };
 
 dex_stats_t&

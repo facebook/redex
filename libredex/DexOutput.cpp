@@ -1447,6 +1447,8 @@ void DexOutput::generate_debug_items() {
   if (emit_positions) {
     insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
   }
+  m_stats.num_dbg_items += dbgcount;
+  m_stats.dbg_total_size += m_offset - dbg_start;
 }
 
 void DexOutput::generate_map() {

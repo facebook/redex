@@ -427,6 +427,9 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["strings_total_size"] = stats.strings_total_size;
   val["method_refs_total_size"] = stats.method_refs_total_size;
   val["field_refs_total_size"] = stats.field_refs_total_size;
+
+  val["num_dbg_items"] = stats.num_dbg_items;
+  val["dbg_total_size"] = stats.dbg_total_size;
   return val;
 }
 
