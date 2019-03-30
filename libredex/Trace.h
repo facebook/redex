@@ -48,7 +48,6 @@
   TM(IDEX)               \
   TM(GETTER)             \
   TM(INL)                \
-  TM(INLINIT)            \
   TM(INLRES)             \
   TM(INSTRUMENT)         \
   TM(INTF)               \
