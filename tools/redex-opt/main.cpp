@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "DexClass.h"
+#include "DexLoader.h"
 #include "PassRegistry.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -105,6 +106,14 @@ int main(int argc, char* argv[]) {
   DexStoresVector stores;
 
   redex::load_all_intermediate(args.input_ir_dir, stores, &entry_data);
+
+  // Set input dex magic to the first DexStore from the first dex file
+  if (stores.size() > 0) {
+    auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
+                          entry_data["dex_list"][0]["list"][0].asString();
+    stores[0].set_dex_magic(load_dex_magic_from_dex(first_dex_path.c_str()));
+  }
+
   args.redex_options.deserialize(entry_data);
 
   Json::Value config_data = process_entry_data(entry_data, args);
