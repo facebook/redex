@@ -465,6 +465,9 @@ struct dex_stats_t {
   int num_type_lists = 0;
   int num_bytes = 0;
   int num_instructions = 0;
+
+  int num_dbg_items = 0;
+  int dbg_total_size = 0;
 };
 
 dex_stats_t&

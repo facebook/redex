@@ -500,6 +500,8 @@ dex_stats_t&
   lhs.num_type_lists += rhs.num_type_lists;
   lhs.num_bytes += rhs.num_bytes;
   lhs.num_instructions += rhs.num_instructions;
+  lhs.num_dbg_items += rhs.num_dbg_items;
+  lhs.dbg_total_size += rhs.dbg_total_size;
   return lhs;
 }
 
