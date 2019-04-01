@@ -793,6 +793,11 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
+  if (manager.get_redex_options().is_art_build &&
+      !iodi_metadata_filename.empty()) {
+    iodi_metadata_filename = "";
+    fprintf(stderr, "Disabling IODI because this is an ART build.\n");
+  }
   if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
       !iodi_metadata_filename.empty()) {
     fprintf(stderr,
@@ -800,7 +805,7 @@ void redex_backend(const PassManager& manager,
             " debug_line_method_map_v2 and line_number_map_v2 to be set"
             " (these artifacts are required for leaveraging iodi_metadata)!\n");
     iodi_metadata_filename = "";
-  } else {
+  } else if (!iodi_metadata_filename.empty()) {
     TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
           iodi_enable_overloaded_methods ? "yes" : "no");
   }
