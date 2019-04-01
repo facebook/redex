@@ -340,7 +340,6 @@ class Model {
                                       bool include_primary_dex);
 
   // MergerType creator helpers
-  MergerType& create_merger(const DexType* type);
   MergerType& create_dummy_merger(const DexType* type);
   void create_dummy_mergers_if_children(const DexType* type);
   MergerType& create_merger_shape(const DexType* shape_type,

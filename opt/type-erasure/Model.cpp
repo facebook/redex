@@ -376,12 +376,6 @@ void Model::build_interdex_groups(ConfigFiles* cfg) {
   s_num_interdex_groups = group_id + 1;
 }
 
-MergerType& Model::create_merger(const DexType* type) {
-  auto& merger = m_mergers[type];
-  merger.type = type;
-  return merger;
-}
-
 MergerType& Model::create_dummy_merger(const DexType* type) {
   auto& merger = m_mergers[type];
   merger.type = type;
