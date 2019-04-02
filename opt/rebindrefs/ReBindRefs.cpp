@@ -141,6 +141,13 @@ struct Rebinder {
           case OPCODE_SGET_BYTE:
           case OPCODE_SGET_CHAR:
           case OPCODE_SGET_SHORT:
+          case OPCODE_SPUT:
+          case OPCODE_SPUT_WIDE:
+          case OPCODE_SPUT_OBJECT:
+          case OPCODE_SPUT_BOOLEAN:
+          case OPCODE_SPUT_BYTE:
+          case OPCODE_SPUT_CHAR:
+          case OPCODE_SPUT_SHORT:
             rebind_field(insn, FieldSearch::Static);
             break;
           case OPCODE_IGET:
@@ -150,6 +157,13 @@ struct Rebinder {
           case OPCODE_IGET_BYTE:
           case OPCODE_IGET_CHAR:
           case OPCODE_IGET_SHORT:
+          case OPCODE_IPUT:
+          case OPCODE_IPUT_WIDE:
+          case OPCODE_IPUT_OBJECT:
+          case OPCODE_IPUT_BOOLEAN:
+          case OPCODE_IPUT_BYTE:
+          case OPCODE_IPUT_CHAR:
+          case OPCODE_IPUT_SHORT:
             rebind_field(insn, FieldSearch::Instance);
             break;
           default:
