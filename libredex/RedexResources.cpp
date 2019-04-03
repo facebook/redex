@@ -107,8 +107,9 @@ bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               bool default_value) {
   android::Res_value raw_value;
   if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
-    always_assert(raw_value.dataType & android::Res_value::TYPE_INT_BOOLEAN);
-    return static_cast<bool>(raw_value.data);
+    if (raw_value.dataType == android::Res_value::TYPE_INT_BOOLEAN) {
+      return static_cast<bool>(raw_value.data);
+    }
   }
   return default_value;
 }
@@ -118,8 +119,9 @@ int get_int_attribute_or_default_value(const android::ResXMLTree& parser,
                                        int32_t default_value) {
   android::Res_value raw_value;
   if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
-    always_assert(raw_value.dataType & android::Res_value::TYPE_INT_DEC);
-    return static_cast<int>(raw_value.data);
+    if (raw_value.dataType == android::Res_value::TYPE_INT_DEC) {
+      return static_cast<int>(raw_value.data);
+    }
   }
   return default_value;
 }
