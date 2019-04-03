@@ -16,8 +16,17 @@ struct Location;
 namespace dispatch {
 
 enum Type {
-  // Ctor that takes the generated type tag as the last parameter.
-  CTOR_WITH_TYPE_TAG_PARAM,
+  // All ctor dispatch takes in a type tag param whether that's injected by
+  // Redex or not.
+  // If Redex appends the type tag param, it's guaranteed to be the last param.
+  // Otherwise, the position of the type tag param is encoded in
+  // `type_tag_param_idx`.
+  // When Redex generates and injects the type tag param, sometimes the ctor
+  // dispatch needs to save its value to a dedicated field synthesized by Redex.
+  CTOR_SAVE_TYPE_TAG_PARAM,
+  // A ctor dispatch that does not handle the field assignment of the type tag
+  // param. This means that the assignment is handled by the existing input
+  // program.
   CTOR,
   STATIC,
   VIRTUAL,
@@ -34,6 +43,7 @@ struct Spec {
   DexField* type_tag_field;
   DexMethod* overridden_meth;
   boost::optional<size_t> max_num_dispatch_target;
+  boost::optional<size_t> type_tag_param_idx;
   bool keep_debug_info;
 
   Spec(DexType* owner_type,
@@ -53,6 +63,28 @@ struct Spec {
         overridden_meth(overridden_meth),
         keep_debug_info(keep_debug_info) {
     max_num_dispatch_target = boost::none;
+    type_tag_param_idx = boost::none;
+  }
+
+  Spec(DexType* owner_type,
+       Type type,
+       const std::string name,
+       DexProto* proto,
+       DexAccessFlags access_flags,
+       DexField* type_tag_field,
+       DexMethod* overridden_meth,
+       boost::optional<size_t> type_tag_param_idx,
+       bool keep_debug_info)
+      : owner_type(owner_type),
+        type(type),
+        name(name),
+        proto(proto),
+        access_flags(access_flags),
+        type_tag_field(type_tag_field),
+        overridden_meth(overridden_meth),
+        type_tag_param_idx(type_tag_param_idx),
+        keep_debug_info(keep_debug_info) {
+    max_num_dispatch_target = boost::none;
   }
 
   Spec(DexType* owner_type,
@@ -63,6 +95,7 @@ struct Spec {
        DexField* type_tag_field,
        DexMethod* overridden_meth,
        boost::optional<size_t> max_num_dispatch_target,
+       boost::optional<size_t> type_tag_param_idx,
        bool keep_debug_info)
       : owner_type(owner_type),
         type(type),
@@ -72,6 +105,7 @@ struct Spec {
         type_tag_field(type_tag_field),
         overridden_meth(overridden_meth),
         max_num_dispatch_target(max_num_dispatch_target),
+        type_tag_param_idx(type_tag_param_idx),
         keep_debug_info(keep_debug_info) {}
 };
 

@@ -101,6 +101,26 @@ void fix_visibility_helper(DexMethod* method,
   change_visibility(method);
 }
 
+boost::optional<size_t> get_ctor_type_tag_param_idx(
+    const bool pass_type_tag_param, const DexProto* ctor_proto) {
+  boost::optional<size_t> type_tag_param_idx = boost::none;
+  if (pass_type_tag_param) {
+    return type_tag_param_idx;
+  }
+
+  auto type_list = ctor_proto->get_args()->get_type_list();
+  size_t idx = 0;
+  for (auto type : type_list) {
+    if (type == get_int_type()) {
+      always_assert_log(!type_tag_param_idx,
+                        "More than one potential type tag param found!");
+      type_tag_param_idx = boost::optional<size_t>(idx);
+    }
+    ++idx;
+  }
+  return type_tag_param_idx;
+}
+
 } // namespace
 
 void MethodStats::add(const MethodOrderedSet& methods) {
@@ -417,6 +437,7 @@ void ModelMethodMerger::merge_virtual_methods(
                         type_tag_field,
                         overridden_meth,
                         m_max_num_dispatch_target,
+                        boost::none,
                         m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
@@ -507,16 +528,18 @@ void ModelMethodMerger::merge_ctors() {
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
-      dispatch::Spec spec{target_type,
-                          (pass_type_tag_param && !m_model_spec.has_type_tag)
-                              ? dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM
-                              : dispatch::Type::CTOR,
-                          "<init>",
-                          dispatch_proto,
-                          ACC_PUBLIC | ACC_CONSTRUCTOR,
-                          type_tag_field,
-                          nullptr, // overridden_meth
-                          m_model_spec.keep_debug_info};
+      dispatch::Spec spec{
+          target_type,
+          (pass_type_tag_param && !m_model_spec.has_type_tag)
+              ? dispatch::Type::CTOR_SAVE_TYPE_TAG_PARAM
+              : dispatch::Type::CTOR,
+          "<init>",
+          dispatch_proto,
+          ACC_PUBLIC | ACC_CONSTRUCTOR,
+          type_tag_field,
+          nullptr, // overridden_meth
+          get_ctor_type_tag_param_idx(pass_type_tag_param, ctor_proto),
+          m_model_spec.keep_debug_info};
       auto indices_to_callee = get_dedupped_indices_map(ctors);
       if (indices_to_callee.size() > 1) {
         always_assert_log(
