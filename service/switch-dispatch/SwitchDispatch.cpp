@@ -88,11 +88,11 @@ Location get_return_location(const dispatch::Spec& spec, MethodCreator* mc) {
 }
 
 bool save_type_tag_to_field(const dispatch::Spec& spec) {
-  return spec.type == dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM;
+  return spec.type == dispatch::Type::CTOR_SAVE_TYPE_TAG_PARAM;
 }
 
 bool is_ctor(const dispatch::Spec& spec) {
-  return spec.type == dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM ||
+  return spec.type == dispatch::Type::CTOR_SAVE_TYPE_TAG_PARAM ||
          spec.type == dispatch::Type::CTOR;
 }
 
@@ -491,6 +491,26 @@ DexAccessFlags get_dispatch_access(DexMethod* origin_method) {
   }
 }
 
+size_t get_type_tag_location_for_ctor_and_static(const dispatch::Spec& spec,
+                                                 const DexTypeList* arg_list) {
+  if (spec.type == dispatch::Type::CTOR) {
+    if (spec.type_tag_param_idx) {
+      // The local variable idx is param idx + 1 because of the first implicit
+      // `this` argument to ctors.
+      return *spec.type_tag_param_idx + 1;
+    }
+    // No type tag. Return a dummy value.
+    return arg_list->size();
+  } else if (spec.type == dispatch::Type::CTOR_SAVE_TYPE_TAG_PARAM) {
+    return arg_list->size();
+  } else if (spec.type == dispatch::Type::STATIC) {
+    always_assert(is_static(spec.access_flags));
+    return arg_list->size() - 1;
+  }
+
+  always_assert_log(false, "Unexpected dispatch type %d\n", spec.type);
+}
+
 } // namespace
 
 namespace dispatch {
@@ -528,9 +548,8 @@ DexMethod* create_ctor_or_static_dispatch(
   auto orig_method = indices_to_callee.begin()->second;
   auto mc = init_method_creator(spec, orig_method);
   auto dispatch_arg_list = spec.proto->get_args();
-  auto type_tag_loc =
-      mc->get_local(is_static(spec.access_flags) ? dispatch_arg_list->size() - 1
-                                                 : dispatch_arg_list->size());
+  auto type_tag_loc = mc->get_local(
+      get_type_tag_location_for_ctor_and_static(spec, dispatch_arg_list));
   auto ret_loc = get_return_location(spec, mc);
   auto mb = mc->get_main_block();
   // Set type tag field only when using synthesized type tags.
