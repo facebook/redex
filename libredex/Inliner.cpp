@@ -631,15 +631,24 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
-        if (unknown_virtual(insn, callee, caller)) {
-          log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
-          can_inline = false;
-          return editable_cfg_adapter::LOOP_BREAK;
-        }
-        if (unknown_field(insn, callee, caller)) {
-          log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
-          can_inline = false;
-          return editable_cfg_adapter::LOOP_BREAK;
+        // if the caller and callee are in the same class, we don't have to
+        // worry about unknown virtuals -- private / protected methods will
+        // remain accessible
+        if (caller->get_class() != callee->get_class()) {
+          if (unknown_virtual(insn)) {
+            log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+            can_inline = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          if (unknown_field(insn)) {
+            log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+            can_inline = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
+          if (check_android_os_version(insn)) {
+            can_inline = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
         }
         if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
           info.throws++;
@@ -725,16 +734,7 @@ bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
  * But we need to make all methods public across the hierarchy and for methods
  * we don't know we have no idea whether the method was public or not anyway.
  */
-
-bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
-                                         const DexMethod* callee,
-                                         const DexMethod* caller) {
-  // if the caller and callee are in the same class, we don't have to worry
-  // about unknown virtuals -- private / protected methods will remain
-  // accessible
-  if (caller->get_class() == callee->get_class()) {
-    return false;
-  }
+bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
     auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
@@ -774,15 +774,7 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn,
  * But we need to make all fields public across the hierarchy and for fields
  * we don't know we have no idea whether the field was public or not anyway.
  */
-bool MultiMethodInliner::unknown_field(IRInstruction* insn,
-                                       const DexMethod* callee,
-                                       const DexMethod* caller) {
-  // if the caller and callee are in the same class, we don't have to worry
-  // about unknown fields -- private / protected fields will remain
-  // accessible
-  if (caller->get_class() == callee->get_class()) {
-    return false;
-  }
+bool MultiMethodInliner::unknown_field(IRInstruction* insn) {
   if (is_ifield_op(insn->opcode()) || is_sfield_op(insn->opcode())) {
     auto ref = insn->get_field();
     DexField* field = resolve_field(ref, is_sfield_op(insn->opcode())
@@ -793,6 +785,35 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn,
     }
     if (!field->is_concrete() && !is_public(field)) {
       info.non_pub_field++;
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * return true if `insn` is
+ *   sget android.os.Build.VERSION.SDK_INT
+ */
+bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
+  // Referencing a method or field that doesn't exist on the OS version of the
+  // current device causes a "soft error" for the entire class that the
+  // reference resides in. Soft errors aren't worrisome from a correctness
+  // perspective (though they may cause the class to run slower on some devices)
+  // but there's a bug in Android 5 that triggers an erroneous "hard error"
+  // after a "soft error".
+  //
+  // The exact conditions that trigger the Android 5 bug aren't currently known.
+  // As a quick fix, we're refusing to inline methods that check the OS's
+  // version. This generally works because the reference to the non-existent
+  // field/method is usually guarded by checking that
+  // `android.os.build.VERSION.SDK_INT` is larger than the required api level.
+  auto op = insn->opcode();
+  if (is_sget(op)) {
+    auto ref = insn->get_field();
+    DexField* field = resolve_field(ref, FieldSearch::Static);
+    if (field != nullptr &&
+        field == DexField::get_field("Landroid/os/Build$VERSION;.SDK_INT:I")) {
       return true;
     }
   }
