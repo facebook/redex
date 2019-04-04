@@ -110,8 +110,25 @@ InterDexGroupingType get_merge_per_interdex_type(
 
   always_assert_log(string_to_grouping.count(merge_per_interdex_set) > 0,
                     "InterDex Grouping Type %s not found. Please check the list"
-                    " of accepted values.", merge_per_interdex_set.c_str());
+                    " of accepted values.",
+                    merge_per_interdex_set.c_str());
   return string_to_grouping.at(merge_per_interdex_set);
+}
+
+TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
+  const static std::unordered_map<std::string, TypeTagConfig> string_to_config =
+      {{"none", TypeTagConfig::NONE},
+       {"generate", TypeTagConfig::GENERATE},
+       {"input-pass-type-tag-to-ctor",
+        TypeTagConfig::INPUT_PASS_TYPE_TAG_TO_CTOR},
+       {"input-handled", TypeTagConfig::INPUT_HANDLED}};
+  always_assert_log(string_to_config.count(type_tag_config) > 0,
+                    "Type tag config type %s not found. Please check the list"
+                    " of accepted values.",
+                    type_tag_config.c_str());
+  TRACE(TERA, 5, "type tag config %s %d\n", type_tag_config.c_str(),
+        string_to_config.at(type_tag_config));
+  return string_to_config.at(type_tag_config);
 }
 
 } // namespace
@@ -159,10 +176,9 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     JsonWrapper model_spec = JsonWrapper(value);
     ModelSpec model;
     model_spec.get("enabled", true, model.enabled);
-    model_spec.get("needs_type_tag", true, model.needs_type_tag);
-    model_spec.get("has_type_tag", false, model.has_type_tag);
-    model_spec.get("pass_additional_type_tag_to_ctor", true,
-                   model.pass_additional_type_tag_to_ctor);
+    std::string type_tag_config;
+    model_spec.get("type_tag_config", "generate", type_tag_config);
+    model.type_tag_config = get_type_tag_config(type_tag_config);
     size_t min_count;
     model_spec.get("min_count", 1, min_count);
     model.min_count = min_count > 0 ? min_count : 0;
@@ -201,7 +217,8 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model.merge_per_interdex_set =
         get_merge_per_interdex_type(merge_per_interdex_set);
 
-    always_assert_log(!model.merge_per_interdex_set || model.needs_type_tag,
+    always_assert_log(!model.merge_per_interdex_set ||
+                          (model.type_tag_config != TypeTagConfig::NONE),
                       "Cannot group when type tag is not needed.");
     always_assert_log(!model.dex_sharding || !model.merge_per_interdex_set,
                       "Cannot have both dex sharding and group sharding "

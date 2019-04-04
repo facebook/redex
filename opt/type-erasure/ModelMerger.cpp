@@ -61,23 +61,24 @@ DexField* scan_type_tag_field(const char* type_tag_field_name,
   return field;
 }
 
-// TODO: find type tag field via annotation
+// If no type tags, the result is empty.
 MergerToField get_type_tag_fields(
     const std::vector<const DexType*>& model_root_types,
     const std::vector<const MergerType*>& mergers,
-    bool has_type_tag,
+    bool input_has_type_tag,
     bool generate_type_tags) {
   MergerToField merger_to_type_tag_field;
   for (const auto model_root_type : model_root_types) {
     for (auto merger : mergers) {
       DexField* field = nullptr;
-      if (has_type_tag) {
+      if (input_has_type_tag) {
         field =
             scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, model_root_type);
+        merger_to_type_tag_field[merger] = field;
       } else if (generate_type_tags) {
         field = scan_type_tag_field(INTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
+        merger_to_type_tag_field[merger] = field;
       }
-      merger_to_type_tag_field[merger] = field;
     }
   }
   return merger_to_type_tag_field;
@@ -343,7 +344,7 @@ void update_refs_to_mergeable_types(
     const TypeTags& type_tags,
     const MergerToField& type_tag_fields,
     std::unordered_map<DexMethod*, std::string>& method_debug_map,
-    bool generate_type_tags) {
+    bool has_type_tags) {
   // Update simple type referencing instructions to instantiate merger type.
   update_code_type_refs(scope, mergeable_to_merger);
   type_reference::update_method_signature_type_references(
@@ -353,7 +354,8 @@ void update_refs_to_mergeable_types(
           method_debug_map));
   type_reference::update_field_type_references(scope, mergeable_to_merger);
   // Fix INSTANCE_OF
-  if (!generate_type_tags) {
+  if (!has_type_tags) {
+    always_assert(type_tag_fields.empty());
     update_instance_of_no_type_tag(scope, mergeable_to_merger);
     return;
   }
@@ -543,8 +545,8 @@ std::vector<DexClass*> ModelMerger::merge_model(
   std::vector<const MergerType*> to_materialize;
   std::vector<DexClass*> merger_classes;
   MergedTypeNames merged_type_names;
-  bool has_type_tag = model.has_type_tag();
-  bool generate_type_tags = model.needs_type_tag();
+  const auto model_spec = model.get_model_spec();
+  bool input_has_type_tag = model_spec.input_has_type_tag();
 
   model.walk_hierarchy([&](const MergerType& merger) {
     // a model hierarchy is walked top down BFS style.
@@ -572,7 +574,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                               model.get_parent(type),
                               m_merger_fields.at(type),
                               intfs,
-                              generate_type_tags && !has_type_tag,
+                              model_spec.generate_type_tag(),
                               !merger.has_mergeables());
     // TODO: replace this with an annotation.
     cls->rstate.set_interdex_subgroup(merger.interdex_subgroup);
@@ -586,7 +588,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     }
     // Bail out if we should not generate type tags and there are vmethods
     // or intfs_methods.
-    if (!generate_type_tags) {
+    if (model_spec.no_type_tag()) {
       if (merger.vmethods.size() || merger.intfs_methods.size()) {
         TRACE(TERA,
               5,
@@ -608,10 +610,12 @@ std::vector<DexClass*> ModelMerger::merge_model(
     }
   }
 
-  TypeTags type_tags = has_type_tag ? collect_type_tags(to_materialize)
-                                    : gen_type_tags(to_materialize);
-  auto type_tag_fields = get_type_tag_fields(
-      model.get_roots(), to_materialize, has_type_tag, generate_type_tags);
+  TypeTags type_tags = input_has_type_tag ? collect_type_tags(to_materialize)
+                                          : gen_type_tags(to_materialize);
+  auto type_tag_fields = get_type_tag_fields(model.get_roots(),
+                                             to_materialize,
+                                             input_has_type_tag,
+                                             model_spec.generate_type_tag());
   std::unordered_map<DexMethod*, std::string> method_debug_map;
   update_refs_to_mergeable_types(scope,
                                  to_materialize,
@@ -619,7 +623,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
                                  type_tags,
                                  type_tag_fields,
                                  method_debug_map,
-                                 generate_type_tags);
+                                 model_spec.has_type_tag());
   trim_method_debug_map(mergeable_to_merger, method_debug_map);
   update_refs_to_mergeable_fields(
       scope, to_materialize, mergeable_to_merger, m_merger_fields);

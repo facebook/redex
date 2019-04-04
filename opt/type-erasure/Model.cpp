@@ -547,7 +547,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   }
   TRACE(TERA, 4, "Non mergeables (no delete) %ld\n", m_non_mergeables.size());
 
-  bool has_type_tag = needs_type_tag();
+  bool has_type_tag = m_spec.has_type_tag();
   const auto& const_generated = generated;
   const auto& const_types = m_types;
   auto patcher = [has_type_tag, &const_generated,
