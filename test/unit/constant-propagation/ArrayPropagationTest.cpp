@@ -64,7 +64,7 @@ TEST_F(ConstantPropagationTest, ConstantArrayOperations) {
       EXPECT_TRUE(arr.get(i).is_bottom());
       arr.set(i, SignedConstantDomain(1));
       EXPECT_TRUE(arr.is_bottom());
-      EXPECT_THROW(arr.length(), std::runtime_error);
+      EXPECT_THROW(arr.length(), RedexException);
     }
   }
 

@@ -22,5 +22,5 @@ TEST(DexOutput, checkMethodInstructionSizeLimit) {
       DexOutput::check_method_instruction_size_limit(cfg, 65536, "method"));
   EXPECT_THROW(
       DexOutput::check_method_instruction_size_limit(cfg, 65537, "method"),
-      std::runtime_error);
+      RedexException);
 }
