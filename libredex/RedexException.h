@@ -17,6 +17,7 @@ enum RedexError {
   // define errors here
   INTERNAL_ERROR = 1,
   GENERIC_ASSERTION_ERROR = 2,
+  CACHE_INDEX_OUT_OF_BOUND = 3,
 };
 
 class RedexException : public std::exception {
