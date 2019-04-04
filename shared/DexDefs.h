@@ -95,6 +95,11 @@ PACKED(struct dex_map_item {
   uint32_t offset /* From start of file */;
 });
 
+PACKED(struct dex_map_list {
+  uint32_t size; /* Number of items below */
+  dex_map_item items[];
+});
+
 #define DEX_NO_INDEX (0xffffffff)
 PACKED(struct dex_class_def {
   uint32_t typeidx;
