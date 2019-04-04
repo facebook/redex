@@ -338,7 +338,7 @@ struct Matcher {
       }
 
       if (dex_pattern.dests.size() != 0) {
-        assert(dex_pattern.dests.size() == 1);
+        redex_assert(dex_pattern.dests.size() == 1);
         if (!match_reg(dex_pattern.dests[0], insn->dest())) {
           return false;
         }
@@ -369,7 +369,7 @@ struct Matcher {
       return false;
     };
 
-    assert(match_index < pattern.match.size());
+    redex_assert(match_index < pattern.match.size());
     if (!match_instruction(pattern.match[match_index])) {
       // Okay, this is the PG's heuristic. Retry only if the failure occurs on
       // the second opcode of the pattern.
@@ -382,7 +382,7 @@ struct Matcher {
             SHOW(insn));
       reset();
       if (retry) {
-        assert(match_index == 0);
+        redex_assert(match_index == 0);
         if (!match_instruction(pattern.match[match_index])) {
           return false;
         }
@@ -422,7 +422,7 @@ struct Matcher {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_VIRTUAL:
-      assert(replace.kind == DexPattern::Kind::method);
+      redex_assert(replace.kind == DexPattern::Kind::method);
       return (new IRInstruction((IROpcode)opcode))
           ->set_method(replace.method)
           ->set_arg_word_count(replace.srcs.size());
@@ -434,17 +434,17 @@ struct Matcher {
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_NEG_INT:
-      assert(replace.kind == DexPattern::Kind::none);
+      redex_assert(replace.kind == DexPattern::Kind::none);
       return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_CONST_STRING:
-      assert(replace.kind == DexPattern::Kind::string);
+      redex_assert(replace.kind == DexPattern::Kind::string);
       return new IRInstruction(OPCODE_CONST_STRING);
 
     case OPCODE_CONST:
     case OPCODE_SHR_INT_LIT8:
     case OPCODE_SHL_INT_LIT8:
-      assert(replace.kind == DexPattern::Kind::literal);
+      redex_assert(replace.kind == DexPattern::Kind::literal);
       return new IRInstruction((IROpcode)opcode);
 
     case OPCODE_IPUT:
@@ -475,7 +475,7 @@ struct Matcher {
     case OPCODE_SGET_SHORT:
     case OPCODE_SGET_WIDE:
     case OPCODE_SGET_OBJECT:
-      assert(replace.kind == DexPattern::Kind::field);
+      redex_assert(replace.kind == DexPattern::Kind::field);
       return new IRInstruction(static_cast<IROpcode>(opcode));
 
     case OPCODE_APUT:
@@ -492,7 +492,7 @@ struct Matcher {
     case OPCODE_AGET_SHORT:
     case OPCODE_AGET_WIDE:
     case OPCODE_AGET_OBJECT:
-      assert(replace.kind == DexPattern::Kind::none);
+      redex_assert(replace.kind == DexPattern::Kind::none);
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
 
@@ -519,7 +519,7 @@ struct Matcher {
 
       // Fill the arguments appropriately.
       if (replace_info.dests.size() > 0) {
-        assert(replace_info.dests.size() == 1);
+        redex_assert(replace_info.dests.size() == 1);
         const Register dest = replace_info.dests[0];
         always_assert(matched_regs.find(dest) != end(matched_regs));
         replace->set_dest(matched_regs.at(dest));
@@ -655,7 +655,7 @@ struct Matcher {
         }
         case Literal::Mul_Div_To_Shift_Log2: {
           auto a = matched_literals.at(Literal::Mul_Div_To_Shift_Log2);
-          assert(a > 0);
+          redex_assert(a > 0);
           replace->set_literal(static_cast<uint64_t>(log2(a)));
           break;
         }

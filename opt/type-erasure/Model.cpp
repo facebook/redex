@@ -51,7 +51,7 @@ void load_generated_types(const ModelSpec& spec,
   generated.insert(models.begin(), models.end());
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     generated.insert(type);
     if (is_interface(cls)) {
       const auto& impls = type_system.get_implementors(type);
@@ -302,7 +302,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    assert(super != nullptr && super != get_object_type());
+    redex_assert(super != nullptr && super != get_object_type());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -515,7 +515,7 @@ void Model::create_mergers_helper(
 void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     if (is_interface(cls)) {
       const auto& impls = m_type_system.get_implementors(type);
       m_excluded.insert(impls.begin(), impls.end());

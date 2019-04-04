@@ -41,7 +41,7 @@ double calculate_speedup(std::vector<int>& wait_times, int num_threads) {
   auto para_sum = wq.run_all();
   auto para_end = std::chrono::high_resolution_clock::now();
 
-  assert(sum == para_sum);
+  redex_assert(sum == para_sum);
 
   double duration1 =
       std::chrono::duration_cast<T>(single_end - single_start).count();

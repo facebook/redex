@@ -710,11 +710,11 @@ class DexCode {
     return *m_insns;
   }
   std::vector<DexInstruction*>& get_instructions() {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   const std::vector<DexInstruction*>& get_instructions() const {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   void set_instructions(std::vector<DexInstruction*>* insns) {
@@ -1093,9 +1093,15 @@ class DexClass {
   // Removes the method from this class
   void remove_method(const DexMethod* m);
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
-  std::vector<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
+  std::vector<DexField*>& get_sfields() {
+    redex_assert(!m_external);
+    return m_sfields;
+  }
   const std::vector<DexField*>& get_ifields() const { return m_ifields; }
-  std::vector<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
+  std::vector<DexField*>& get_ifields() {
+    redex_assert(!m_external);
+    return m_ifields;
+  }
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);

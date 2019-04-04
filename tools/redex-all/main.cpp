@@ -942,7 +942,7 @@ void dump_class_method_info_map(const std::string file_path,
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
     }
 
-    assert(!class_map.count(cls));
+    redex_assert(!class_map.count(cls));
     const int cls_idx = (class_map[cls] = class_map.size());
     ofs << "C," << cls_idx << "," << show(cls) << "," << show_deobfuscated(cls)
         << "," << (cls->get_dmethods().size() + cls->get_vmethods().size())

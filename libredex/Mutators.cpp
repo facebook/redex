@@ -24,9 +24,9 @@ void drop_this(DexMethod* method) {
     auto insn = mie.insn;
     if (insn->dests_size()) {
       auto dest = insn->dest();
-      assert(dest != this_reg);
+      redex_assert(dest != this_reg);
       // Make sure the `this` register isn't the upper half of a wide pair.
-      assert(!insn->dest_is_wide() || insn->dest() != (this_reg - 1));
+      redex_assert(!insn->dest_is_wide() || insn->dest() != (this_reg - 1));
       if (dest > this_reg) {
         insn->set_dest(dest - 1);
       }

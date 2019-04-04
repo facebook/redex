@@ -67,7 +67,7 @@ DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
   if (exists(single_impls, type)) return type;
   if (is_array(type)) {
     auto array_type = get_array_type(type);
-    assert(array_type);
+    redex_assert(array_type);
     const auto sit = single_impls.find(array_type);
     if (sit != single_impls.end()) {
       escape_interface(sit->first, HAS_ARRAY_TYPE);
@@ -238,7 +238,7 @@ void AnalysisImpl::escape_with_clinit() {
 void AnalysisImpl::escape_with_sfields() {
   for (auto const& intf_it : single_impls) {
     auto intf_cls = type_class(intf_it.first);
-    assert(intf_cls->get_ifields().size() == 0);
+    redex_assert(intf_cls->get_ifields().size() == 0);
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
     if (sfields.size() == 0) continue;
@@ -487,7 +487,7 @@ void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
 void SingleImplAnalysis::get_interfaces(TypeList& to_optimize) const {
   for (const auto& sit : single_impls) {
     auto& data = sit.second;
-    assert(!data.is_escaped());
+    redex_assert(!data.is_escaped());
     if (data.children.empty()) {
       to_optimize.push_back(sit.first);
     }

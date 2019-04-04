@@ -57,7 +57,7 @@ class DexIdx {
     if (m_string_cache[stridx] == nullptr) {
       m_string_cache[stridx] = get_stringidx_fromdex(stridx);
     }
-    assert(m_string_cache[stridx]);
+    redex_assert(m_string_cache[stridx]);
     return m_string_cache[stridx];
   }
 
@@ -79,7 +79,7 @@ class DexIdx {
     if (m_type_cache[typeidx] == nullptr) {
       m_type_cache[typeidx] = get_typeidx_fromdex(typeidx);
     }
-    assert(m_type_cache[typeidx]);
+    redex_assert(m_type_cache[typeidx]);
     return m_type_cache[typeidx];
   }
 
@@ -92,7 +92,7 @@ class DexIdx {
     if (m_field_cache[fidx] == nullptr) {
       m_field_cache[fidx] = get_fieldidx_fromdex(fidx);
     }
-    assert(m_field_cache[fidx]);
+    redex_assert(m_field_cache[fidx]);
     return m_field_cache[fidx];
   }
 
@@ -105,7 +105,7 @@ class DexIdx {
     if (m_method_cache[midx] == nullptr) {
       m_method_cache[midx] = get_methodidx_fromdex(midx);
     }
-    assert(m_method_cache[midx]);
+    redex_assert(m_method_cache[midx]);
     return m_method_cache[midx];
   }
 
@@ -118,7 +118,7 @@ class DexIdx {
     if (m_proto_cache[pidx] == nullptr) {
       m_proto_cache[pidx] = get_protoidx_fromdex(pidx);
     }
-    assert(m_proto_cache[pidx]);
+    redex_assert(m_proto_cache[pidx]);
     return m_proto_cache[pidx];
   }
 

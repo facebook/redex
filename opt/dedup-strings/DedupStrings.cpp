@@ -192,7 +192,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
                                DexString::make_string("$const$string"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
-  assert(strings.size() > 0);
+  redex_assert(strings.size() > 0);
   auto id_arg = method_creator.get_local(0);
   auto res_var = method_creator.make_local(get_string_type());
   auto main_block = method_creator.get_main_block();
@@ -535,8 +535,8 @@ DedupStrings::get_strings_to_dedup(
           "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}\n",
           dexnr, i, info.duplicate_string_loads, SHOW(s));
 
-      assert(info.index == 0xFFFFFFFF);
-      assert(info.const_string_method == nullptr);
+      redex_assert(info.index == 0xFFFFFFFF);
+      redex_assert(info.const_string_method == nullptr);
       info.index = i;
       info.const_string_method = const_string_method;
     }

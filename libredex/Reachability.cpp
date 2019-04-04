@@ -170,7 +170,7 @@ void RootSetMarker::push_seed(const DexMethod* method) {
 template <class Seed>
 void RootSetMarker::record_is_seed(Seed* seed) {
   if (m_record_reachability) {
-    assert(seed != nullptr);
+    redex_assert(seed != nullptr);
     m_reachable_objects->record_is_seed(seed);
   }
 }
@@ -464,7 +464,7 @@ template <class Parent, class Object>
 void TransitiveClosureMarker::record_reachability(Parent* parent,
                                                   Object* object) {
   if (m_record_reachability) {
-    assert(parent != nullptr && object != nullptr);
+    redex_assert(parent != nullptr && object != nullptr);
     m_reachable_objects->record_reachability(parent, object);
   }
 }
@@ -587,7 +587,7 @@ void ReachableObjects::record_reachability(Parent* parent, Object* object) {
 
 template <class Seed>
 void ReachableObjects::record_is_seed(Seed* seed) {
-  assert(seed != nullptr);
+  redex_assert(seed != nullptr);
   const auto& keep_reasons = seed->rstate.keep_reasons();
   m_retainers_of.update(
       ReachableObject(seed),

@@ -516,13 +516,13 @@ void DexMethod::set_code(std::unique_ptr<IRCode> code) {
 }
 
 void DexMethod::balloon() {
-  assert(m_code == nullptr);
+  redex_assert(m_code == nullptr);
   m_code = std::make_unique<IRCode>(this);
   m_dex_code.reset();
 }
 
 void DexMethod::sync() {
-  assert(m_dex_code == nullptr);
+  redex_assert(m_dex_code == nullptr);
   m_dex_code = m_code->sync(this);
   m_code.reset();
 }
@@ -539,7 +539,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexString* name) {
   auto m = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
-  assert(m != that);
+  redex_assert(m != that);
   if (that->m_anno) {
     m->m_anno = new DexAnnotationSet(*that->m_anno);
   }
@@ -635,13 +635,13 @@ void DexClass::remove_method(const DexMethod* m) {
     erased = true;
     meths.erase(it);
   }
-  assert(erased);
+  redex_assert(erased);
 }
 
 void DexMethod::become_virtual() {
-  assert(!m_virtual);
+  redex_assert(!m_virtual);
   auto cls = type_class(m_spec.cls);
-  assert(!cls->is_external());
+  redex_assert(!cls->is_external());
   cls->remove_method(this);
   m_virtual = true;
   auto& vmethods = cls->get_vmethods();
@@ -798,7 +798,7 @@ void DexClass::remove_field(const DexField* f) {
     erase = true;
     fields.erase(it);
   }
-  assert(erase);
+  redex_assert(erase);
 }
 
 void DexClass::sort_fields() {
@@ -875,7 +875,7 @@ int DexClass::encode(DexOutputIdx* dodx,
                       "\nOffending method: %s",
                       SHOW(this),
                       SHOW(m));
-    assert(!m->is_virtual());
+    redex_assert(!m->is_virtual());
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -894,7 +894,7 @@ int DexClass::encode(DexOutputIdx* dodx,
                       "\nOffending method: %s",
                       SHOW(this),
                       SHOW(m));
-    assert(m->is_virtual());
+    redex_assert(m->is_virtual());
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -940,7 +940,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
         DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
           method->attach_param_annotation_set(j, aset);
-          assert(method->get_param_anno());
+          redex_assert(method->get_param_anno());
         }
       }
     }

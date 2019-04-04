@@ -295,7 +295,7 @@ class ClassScopes {
         std::vector<const VirtualScope*> intf_scopes;
         TypeSet intfs;
         for (auto& scope : sig_it.second) {
-          assert(type_class(scope.type) != nullptr);
+          redex_assert(type_class(scope.type) != nullptr);
           if (scope.interfaces.empty()) continue;
           intf_scopes.emplace_back(&scope);
           intfs.insert(scope.interfaces.begin(), scope.interfaces.end());

@@ -400,7 +400,7 @@ void load_root_dexen(DexStore& store,
                      bool support_dex_v37) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
-  assert(fs::is_directory(dexen_dir_path));
+  redex_assert(fs::is_directory(dexen_dir_path));
 
   // Discover dex files
   auto end = fs::directory_iterator();

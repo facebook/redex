@@ -291,7 +291,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
       uint32_t i = 0;
       std::string prefix;
       if (r.name->str().front() == '<') {
-        assert(r.name->str().back() == '>');
+        redex_assert(r.name->str().back() == '>');
         prefix =
             "$" + r.name->str().substr(1, r.name->str().length() - 2) + "$$";
       } else {

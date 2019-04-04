@@ -53,26 +53,26 @@ Vinfo::Vinfo(const std::vector<DexClass*>& scope) {
 }
 
 const DexMethod* Vinfo::get_decl(const DexMethod* meth) {
-  assert(m_vinfos.find(meth) != m_vinfos.end());
+  redex_assert(m_vinfos.find(meth) != m_vinfos.end());
   return m_vinfos[meth].decl;
 }
 
 bool Vinfo::is_override(const DexMethod* meth) {
-  assert(m_vinfos.find(meth) != m_vinfos.end());
+  redex_assert(m_vinfos.find(meth) != m_vinfos.end());
   return m_vinfos[meth].override_of;
 }
 
 const DexMethod* Vinfo::get_overriden_method(const DexMethod* meth) {
-  assert(m_vinfos.find(meth) != m_vinfos.end());
+  redex_assert(m_vinfos.find(meth) != m_vinfos.end());
   return m_vinfos[meth].override_of;
 }
 
 bool Vinfo::is_overriden(const DexMethod* meth) {
-  assert(m_vinfos.find(meth) != m_vinfos.end());
+  redex_assert(m_vinfos.find(meth) != m_vinfos.end());
   return m_vinfos[meth].is_overriden;
 }
 
 const methods_t& Vinfo::get_override_methods(const DexMethod* meth) {
-  assert(m_vinfos.find(meth) != m_vinfos.end());
+  redex_assert(m_vinfos.find(meth) != m_vinfos.end());
   return m_vinfos[meth].overriden_by;
 }

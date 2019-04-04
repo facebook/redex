@@ -272,7 +272,7 @@ void insert_invoke_static_call_bb(IRCode* code,
       auto reg_method_id = code->allocate_temp();
       method_id_inst->set_dest(reg_method_id);
 
-      assert(reg_bb_vector.size() != 0);
+      redex_assert(reg_bb_vector.size() != 0);
       if (reg_bb_vector.size() <= 5) {
         IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
         // Method to be invoked depends on the number of vectors in current
@@ -334,7 +334,7 @@ int instrument_onBasicBlockBegin(
     int& all_methods_inst,
     std::map<int, std::pair<std::string, int>>& method_id_name_map,
     std::map<size_t, int>& bb_vector_stat) {
-  assert(code != nullptr);
+  redex_assert(code != nullptr);
 
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
@@ -369,7 +369,7 @@ int instrument_onBasicBlockBegin(
   // Method ID (actually, the short array offset) and bit vectors * n.
   size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
   ++bb_vector_stat[num_vectors];
-  assert(method_onMethodExit_map.count(index_to_method));
+  redex_assert(method_onMethodExit_map.count(index_to_method));
   insert_invoke_static_call_bb(code, method_id,
                                method_onMethodExit_map.at(index_to_method),
                                reg_bb_vector);
@@ -401,7 +401,7 @@ int instrument_onBasicBlockBegin(
 
   // We use intentionally obfuscated name to guarantee the uniqueness.
   const auto& method_name = show(method);
-  assert(!method_id_name_map.count(method_id));
+  redex_assert(!method_id_name_map.count(method_id));
   method_id_name_map.emplace(method_id,
                              std::make_pair(method_name, blocks.size()));
 
@@ -430,7 +430,7 @@ void instrument_onMethodBegin(DexMethod* method,
                               int index,
                               DexMethod* method_onMethodBegin) {
   IRCode* code = method->get_code();
-  assert(code != nullptr);
+  redex_assert(code != nullptr);
 
   IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
   const_inst->set_literal(index);
@@ -516,7 +516,7 @@ void patch_array_size(DexClass& analysis_cls,
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
-        assert(method == clinit);
+        redex_assert(method == clinit);
         if (insts[2]->get_field()->get_name()->str() != array_name) {
           return;
         }

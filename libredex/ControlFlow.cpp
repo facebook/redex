@@ -2234,7 +2234,7 @@ std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
       return true;
     }();
     if (all_succs_visited) {
-      assert(curr == stack.back());
+      redex_assert(curr == stack.back());
       postorder.push_back(curr);
       stack.pop_back();
     }

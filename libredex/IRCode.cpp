@@ -968,7 +968,7 @@ bool IRCode::try_sync(DexCode* code) {
       active_try = &mentry;
       continue;
     }
-    assert(tentry->type == TRY_END);
+    redex_assert(tentry->type == TRY_END);
     auto try_end = &mentry;
     auto try_start = active_try;
     active_try = nullptr;

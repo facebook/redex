@@ -21,10 +21,10 @@ constexpr bool debug =
 #ifdef _MSC_VER
 #define DEBUG_ONLY
 
-#define not_reached() \
-  do {                \
-    assert(false);    \
-    __assume(false);  \
+#define not_reached()    \
+  do {                   \
+    redex_assert(false); \
+    __assume(false);     \
   } while (true)
 
 #define assert_fail_impl(e, type, msg, ...) \
@@ -34,7 +34,7 @@ constexpr bool debug =
 
 #define not_reached()        \
   do {                       \
-    assert(false);           \
+    redex_assert(false);     \
     __builtin_unreachable(); \
   } while (true)
 
@@ -65,11 +65,11 @@ constexpr bool debug =
 #undef assert
 
 #ifdef NDEBUG
-#define assert(e) static_cast<void>(0)
+#define redex_assert(e) static_cast<void>(0)
 #define assert_log(e, msg, ...) static_cast<void>(0)
 #define assert_type_log(e, type, msg, ...) static_cast<void>(0)
 #else
-#define assert(e) always_assert(e)
+#define redex_assert(e) always_assert(e)
 #define assert_log(e, msg, ...) always_assert_log(e, msg, ##__VA_ARGS__)
 #define assert_type_log(e, type, msg, ...) \
   always_assert_type_log(e, type, msg, ##__VA_ARGS__)
