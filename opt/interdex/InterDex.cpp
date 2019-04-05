@@ -177,7 +177,7 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
 
 namespace interdex {
 
-bool InterDex::should_skip_class(const DexInfo& dex_info, DexClass* clazz) {
+bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
       TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
@@ -185,6 +185,11 @@ bool InterDex::should_skip_class(const DexInfo& dex_info, DexClass* clazz) {
     }
   }
 
+  return false;
+}
+
+bool InterDex::should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
+                                                   DexClass* clazz) {
   if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
     TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
     return true;
@@ -220,7 +225,8 @@ bool InterDex::emit_class(const DexInfo& dex_info,
     return false;
   }
 
-  if (check_if_skip && should_skip_class(dex_info, clazz)) {
+  if (check_if_skip && (should_skip_class_due_to_plugin(clazz) ||
+                        should_skip_class_due_to_mixed_mode(dex_info, clazz))) {
     return false;
   }
 
@@ -635,8 +641,20 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   std::vector<DexClass*> filtered_scope;
   for (DexClass* cls : scope) {
     // Don't bother with classes that emit_class will skip anyway
-    if (is_canary(cls) || m_dexes_structure.has_class(cls) ||
-        should_skip_class(EMPTY_DEX_INFO, cls)) {
+    if (is_canary(cls) || m_dexes_structure.has_class(cls)) {
+      continue;
+    }
+
+    if (should_skip_class_due_to_plugin(cls)) {
+      // Skipping a class due to a plugin might mean that (members of) of the
+      // class will get emitted later via the additional-class mechanism,
+      // which is accounted for via the erased_classes reported through the
+      // plugin's gather_refs callback. So we'll also sample those classes here.
+      m_cross_dex_ref_minimizer.sample(cls);
+      continue;
+    }
+
+    if (should_skip_class_due_to_mixed_mode(EMPTY_DEX_INFO, cls)) {
       continue;
     }
 
@@ -676,7 +694,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     for (DexClass* erased_cls : erased_classes) {
       TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}\n",
             SHOW(erased_cls));
-      always_assert(should_skip_class(EMPTY_DEX_INFO, erased_cls));
+      always_assert(should_skip_class_due_to_plugin(erased_cls));
       m_cross_dex_ref_minimizer.insert(erased_cls);
       m_cross_dex_ref_minimizer.erase(erased_cls, /* emitted */ true,
                                       /* overflowed */ false);

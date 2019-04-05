@@ -84,8 +84,10 @@ class InterDex {
   void add_dexes_from_store(const DexStore& store);
 
  private:
-  bool should_skip_class(const DexInfo& dex_info, DexClass* clazz);
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
+  bool should_skip_class_due_to_plugin(DexClass* clazz);
+  bool should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
+                                           DexClass* clazz);
   bool emit_class(const DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,
