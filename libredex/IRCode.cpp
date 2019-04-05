@@ -166,13 +166,23 @@ static bool multi_target_compare_case_key(const BranchTarget* a,
   return (a->case_key < b->case_key);
 }
 
-static bool multi_contains_gaps(const std::vector<BranchTarget*>& targets) {
-  int32_t key = targets.front()->case_key;
-  for (auto target : targets) {
-    if (target->case_key != key) return true;
-    key++;
-  }
-  return false;
+// Computes number of entries needed for a packed switch, accounting for any
+// holes that might exist
+static uint64_t get_packed_switch_size(
+    const std::vector<BranchTarget*>& targets) {
+  int32_t first_key = targets.front()->case_key;
+  int32_t last_key = targets.back()->case_key;
+  always_assert(first_key <= last_key);
+  return (uint64_t)((int64_t)last_key - first_key + 1);
+}
+
+// Whether a sparse switch statement will be more compact than a packed switch
+static bool sufficiently_sparse(const std::vector<BranchTarget*>& targets) {
+  uint64_t size = get_packed_switch_size(targets);
+  // packed switches must have less than 2^16 entries, and
+  // sparse switches pay off once there are more holes than entries
+  return size > std::numeric_limits<uint16_t>::max() ||
+         size / 2 > targets.size();
 }
 
 static void insert_multi_branch_target(IRList* ir,
@@ -890,7 +900,7 @@ bool IRCode::try_sync(DexCode* code) {
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
     always_assert_log(
         !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
-    if (multi_contains_gaps(targets)) {
+    if (sufficiently_sparse(targets)) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;
       auto sparse_payload = std::make_unique<uint16_t[]>(count);
@@ -920,14 +930,22 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      const size_t count = (targets.size() * 2) + 4;
+      const uint64_t size = get_packed_switch_size(targets);
+      always_assert(size <= std::numeric_limits<uint16_t>::max());
+      const size_t count = (size * 2) + 4;
       auto packed_payload = std::make_unique<uint16_t[]>(count);
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
-      packed_payload[1] = targets.size();
+      packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
-      *psdata++ = targets.front()->case_key;
+      int32_t next_key = *psdata++ = targets.front()->case_key;
       for (BranchTarget* target : targets) {
+        // Fill in holes with relative offsets that are falling through to the
+        // instruction after the switch instruction
+        for (; next_key != target->case_key; ++next_key) {
+          *psdata++ = 3; // packed-switch statement is three code units
+        }
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
+        ++next_key;
       }
       // Emit align nop
       if (addr & 1) {
