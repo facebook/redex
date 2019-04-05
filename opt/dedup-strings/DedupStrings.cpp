@@ -498,7 +498,10 @@ DedupStrings::get_strings_to_dedup(
     m_stats.duplicate_string_loads += duplicate_string_loads;
     m_stats.expected_size_reduction +=
         total_size_reduction - hosting_code_size_increase;
-    strings_to_dedup.insert({s, {duplicate_string_loads, dexes_to_dedup}});
+    DedupStringInfo dedup_string_info;
+    dedup_string_info.duplicate_string_loads = duplicate_string_loads;
+    dedup_string_info.dexes_to_dedup = dexes_to_dedup;
+    strings_to_dedup.emplace(s, std::move(dedup_string_info));
     strings_in_dexes[hosting_dexnr].push_back(s);
 
     TRACE(
