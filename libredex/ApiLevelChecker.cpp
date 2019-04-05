@@ -14,7 +14,8 @@ namespace api {
 // these values until g_redex exists and the classes have been loaded from the
 // dex file
 int32_t LevelChecker::s_min_level = 0;
-DexType* LevelChecker::s_requires_api = nullptr;
+DexType* LevelChecker::s_requires_api_old = nullptr;
+DexType* LevelChecker::s_requires_api_new = nullptr;
 DexType* LevelChecker::s_target_api = nullptr;
 bool LevelChecker::s_has_been_init = false;
 
@@ -23,13 +24,11 @@ void LevelChecker::init(int32_t min_level, const Scope& scope) {
 
   s_has_been_init = true;
   s_min_level = min_level;
-  s_requires_api =
+  s_requires_api_old =
       DexType::get_type("Landroid/support/annotation/RequiresApi;");
-  if (s_requires_api == nullptr) {
-    s_requires_api = DexType::get_type("Landroidx/annotation/RequiresApi;");
-  }
+  s_requires_api_new = DexType::get_type("Landroidx/annotation/RequiresApi;");
   s_target_api = DexType::get_type("Landroid/annotation/TargetApi;");
-  if (s_requires_api == nullptr) {
+  if (s_requires_api_old == nullptr && s_requires_api_new == nullptr) {
     fprintf(stderr,
             "WARNING: Unable to find RequiresApi annotation. It's either "
             "unused (okay) or been deleted (not okay)\n");
