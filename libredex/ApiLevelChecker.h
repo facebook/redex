@@ -67,13 +67,15 @@ class LevelChecker {
    */
   template <typename DexMember>
   static int32_t get_level(const DexMember* member) {
-    if ((s_requires_api == nullptr && s_target_api == nullptr) ||
+    if ((s_requires_api_old == nullptr && s_requires_api_new == nullptr &&
+         s_target_api == nullptr) ||
         member->get_anno_set() == nullptr) {
       return -1;
     }
     for (const auto& anno : member->get_anno_set()->get_annotations()) {
-      if (anno->type() != nullptr &&
-          (anno->type() == s_requires_api || anno->type() == s_target_api)) {
+      if (anno->type() != nullptr && (anno->type() == s_requires_api_old ||
+                                      anno->type() == s_requires_api_new ||
+                                      anno->type() == s_target_api)) {
         const auto& elems = anno->anno_elems();
         always_assert(elems.size() == 1);
         const DexAnnotationElement& api_elem = elems[0];
@@ -98,7 +100,8 @@ class LevelChecker {
    * initialization, these are read-only and safe to use in parallel
    */
   static int32_t s_min_level;
-  static DexType* s_requires_api;
+  static DexType* s_requires_api_old;
+  static DexType* s_requires_api_new;
   static DexType* s_target_api;
   static bool s_has_been_init;
 };
