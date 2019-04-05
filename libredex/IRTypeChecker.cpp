@@ -658,6 +658,15 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
       auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
+      size_t expected_args =
+          (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+      if (insn->arg_word_count() != expected_args) {
+        std::ostringstream out;
+        out << SHOW(insn) << ": argument count mismatch; "
+            << "expected " << expected_args << ", "
+            << "but found " << insn->arg_word_count() << " instead";
+        throw TypeCheckingException(out.str());
+      }
       size_t src_idx{0};
       if (insn->opcode() != OPCODE_INVOKE_STATIC) {
         // The first argument is a reference to the object instance on which the
@@ -665,8 +674,6 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
         assume_reference(current_state, insn->src(src_idx++));
       }
       for (DexType* arg_type : arg_types) {
-        always_assert_log(
-            insn->arg_word_count() > src_idx, "invalid insn %s\n", SHOW(insn));
         if (is_object(arg_type)) {
           assume_reference(current_state, insn->src(src_idx++));
           continue;

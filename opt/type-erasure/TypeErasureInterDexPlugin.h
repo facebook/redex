@@ -36,6 +36,8 @@ class TypeErasureInterDexPlugin : public interdex::InterDexPassPlugin {
     m_type_system = std::make_unique<TypeSystem>(m_scope);
   }
 
+  void add_to_scope(DexClass* cls) { m_scope.push_back(cls); }
+
   bool should_skip_class(const DexClass* clazz) override;
 
   bool should_not_relocate_methods_of_class(const DexClass* clazz) override;

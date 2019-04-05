@@ -120,7 +120,7 @@ class CrossDexRefMinimizer {
   // Gather frequency counts; must be called for relevant classes before
   // inserting them
   void sample(DexClass* cls);
-  void insert(DexClass* cls);
+  void insert(DexClass* cls, bool ignore_cls = false);
   bool empty() const;
   DexClass* front() const;
   // "Worst" in the sense of having the biggest (adjusted) unapplied refs
@@ -133,7 +133,7 @@ class CrossDexRefMinimizer {
   // This function returns the number of applied refs.
   void erase(DexClass* cls, bool emitted, bool reset);
   const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
-  const CrossDexRefMinimizerStats stats() const { return m_stats; }
+  const CrossDexRefMinimizerStats& stats() const { return m_stats; }
 };
 
 } // namespace interdex

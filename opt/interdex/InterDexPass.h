@@ -27,6 +27,11 @@ constexpr const char* METRIC_REORDER_REPRIORITIZATIONS =
     "num_reorder_reprioritization";
 constexpr const char* METRIC_REORDER_CLASSES_WORST = "reorder_classes_worst";
 
+constexpr const char* METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS =
+    "num_classes_added_for_relocated_methods";
+constexpr const char* METRIC_RELOCATABLE_METHODS = "num_relocatable_methods";
+constexpr const char* METRIC_RELOCATED_METHODS = "num_relocated_methods";
+
 class InterDexPass : public Pass {
  public:
   InterDexPass() : Pass(INTERDEX_PASS_NAME) {
@@ -52,9 +57,13 @@ class InterDexPass : public Pass {
   bool m_emit_scroll_set_marker;
   bool m_minimize_cross_dex_refs;
   CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
+  bool m_minimize_cross_dex_refs_relocate_methods;
+  size_t m_relocated_methods_per_class;
 
-  virtual void run_pass(
-      DexStoresVector&, DexClassesVector&, Scope&, ConfigFiles&, PassManager&);
+  virtual void run_pass(DexStoresVector&,
+                        DexClassesVector&,
+                        ConfigFiles&,
+                        PassManager&);
 };
 
 } // namespace interdex

@@ -149,11 +149,13 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
          m_minimize_cross_dex_refs_config.type_ref_weight);
   jw.get("minimize_cross_dex_refs_string_ref_weight", 90,
          m_minimize_cross_dex_refs_config.string_ref_weight);
+  jw.get("minimize_cross_dex_refs_relocate_methods", false,
+         m_minimize_cross_dex_refs_relocate_methods);
+  jw.get("relocated_methods_per_class", 64, m_relocated_methods_per_class);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
                             DexClassesVector& dexen,
-                            Scope& original_scope,
                             ConfigFiles& cfg,
                             PassManager& mgr) {
   // Setup all external plugins.
@@ -162,6 +164,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   auto plugins = registry->create_plugins();
   size_t reserve_mrefs = 0;
+  auto original_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
     plugin->configure(original_scope, cfg);
     reserve_mrefs += plugin->reserve_mrefs();
@@ -171,7 +174,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, m_emit_scroll_set_marker,
                     m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_minimize_cross_dex_refs_config, reserve_mrefs);
+                    m_minimize_cross_dex_refs_config,
+                    m_minimize_cross_dex_refs_relocate_methods,
+                    m_relocated_methods_per_class, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
@@ -217,6 +222,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
         METRIC_REORDER_CLASSES_WORST + std::to_string(i) + "_" + SHOW(p.first);
     mgr.set_metric(metric, p.second);
   }
+
+  const auto& stats = interdex.get_stats();
+  mgr.set_metric(METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS,
+                 stats.classes_added_for_relocated_methods);
+  mgr.set_metric(METRIC_RELOCATABLE_METHODS, stats.relocatable_methods);
+  mgr.set_metric(METRIC_RELOCATED_METHODS, stats.relocated_methods);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -229,11 +240,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  auto original_scope = build_class_scope(stores);
-
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(stores, store.get_dexen(), original_scope, cfg, mgr);
+      run_pass(stores, store.get_dexen(), cfg, mgr);
     }
   }
 }

@@ -18,6 +18,12 @@
 
 namespace interdex {
 
+struct InterDexStats {
+  size_t classes_added_for_relocated_methods{0};
+  size_t relocatable_methods{0};
+  size_t relocated_methods{0};
+};
+
 class InterDex {
  public:
   InterDex(const DexClassesVector& dexen,
@@ -32,6 +38,8 @@ class InterDex {
            bool emit_canaries,
            bool minimize_cross_dex_refs,
            const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config,
+           bool minimize_cross_dex_refs_relocate_methods,
+           size_t relocated_methods_per_class,
            size_t reserve_mrefs)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
@@ -41,6 +49,9 @@ class InterDex {
         m_normal_primary_dex(normal_primary_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
+        m_minimize_cross_dex_refs_relocate_methods(
+            minimize_cross_dex_refs_relocate_methods),
+        m_relocated_methods_per_class(relocated_methods_per_class),
         m_cross_dex_ref_minimizer(minimize_cross_dex_refs_config) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
@@ -70,9 +81,11 @@ class InterDex {
     return m_dexes_structure.get_num_scroll_dexes();
   }
 
-  CrossDexRefMinimizerStats get_cross_dex_ref_minimizer_stats() const {
+  const CrossDexRefMinimizerStats& get_cross_dex_ref_minimizer_stats() const {
     return m_cross_dex_ref_minimizer.stats();
   }
+
+  const InterDexStats& get_stats() const { return m_stats; }
 
   /**
    * Only call this if you know what you are doing.
@@ -85,6 +98,7 @@ class InterDex {
 
  private:
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
+  void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
   bool should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
                                            DexClass* clazz);
@@ -100,7 +114,20 @@ class InterDex {
   void emit_interdex_classes(
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes);
+  struct RelocatedMethodInfo {
+    DexMethod* method;
+    DexClass* source_class;
+  };
+  void init_cross_dex_ref_minimizer_and_relocate_methods(
+      const Scope& scope,
+      std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated);
   void emit_remaining_classes(const Scope& scope);
+  void re_relocate_method(
+      DexClass* cls,
+      std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated,
+      DexClass*& relocated_class_in_dex,
+      size_t& relocated_class_in_dex_size,
+      std::unordered_set<DexClass*>& classes_in_current_dex);
   void emit_mixed_mode_classes(const std::vector<DexType*>& interdexorder,
                                bool can_touch_interdex_order);
   void flush_out_dex(DexInfo dex_info);
@@ -130,6 +157,8 @@ class InterDex {
   bool m_normal_primary_dex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
+  bool m_minimize_cross_dex_refs_relocate_methods;
+  size_t m_relocated_methods_per_class;
 
   MixedModeInfo m_mixed_mode_info;
   DexesStructure m_dexes_structure;
@@ -138,6 +167,7 @@ class InterDex {
   std::vector<DexType*> m_scroll_markers;
 
   CrossDexRefMinimizer m_cross_dex_ref_minimizer;
+  InterDexStats m_stats;
 };
 
 } // namespace interdex

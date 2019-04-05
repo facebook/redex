@@ -270,4 +270,16 @@ void DexStructure::check_refs_count() {
   // TODO: do we need to re-check linear_alloc_limit?
 }
 
+void DexStructure::squash_empty_last_class(DexClass* clazz) {
+  always_assert(m_classes.back() == clazz);
+  always_assert(clazz->get_dmethods().empty());
+  always_assert(clazz->get_vmethods().empty());
+  always_assert(clazz->get_sfields().empty());
+  always_assert(clazz->get_ifields().empty());
+  always_assert(!is_interface(clazz));
+  m_classes.pop_back();
+  m_trefs.erase(clazz->get_type());
+  m_squashed_classes.push_back(clazz);
+}
+
 } // namespace interdex

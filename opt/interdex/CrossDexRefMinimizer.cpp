@@ -150,7 +150,7 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   }
 }
 
-void CrossDexRefMinimizer::insert(DexClass* cls) {
+void CrossDexRefMinimizer::insert(DexClass* cls, bool ignore_cls) {
   always_assert(m_class_infos.count(cls) == 0);
   ++m_stats.classes;
   CrossDexRefMinimizer::ClassInfo& class_info =
@@ -201,6 +201,9 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     add_weight(mref, m_config.method_ref_weight);
   }
   for (auto type : types) {
+    if (ignore_cls && type == cls->get_type()) {
+      continue;
+    }
     add_weight(type, m_config.type_ref_weight);
   }
   for (auto string : strings) {

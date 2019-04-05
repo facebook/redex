@@ -198,6 +198,12 @@ bool InterDex::should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
   return false;
 }
 
+void InterDex::add_to_scope(DexClass* cls) {
+  for (auto& plugin : m_plugins) {
+    plugin->add_to_scope(cls);
+  }
+}
+
 bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_not_relocate_methods_of_class(clazz)) {
@@ -621,15 +627,9 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          not_already_included.end());
 }
 
-void InterDex::emit_remaining_classes(const Scope& scope) {
-  if (!m_minimize_cross_dex_refs) {
-    for (DexClass* cls : scope) {
-      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true,
-                 /* perf_sensitive */ false);
-    }
-    return;
-  }
-
+void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
+    const Scope& scope,
+    std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated) {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%d, field ref weight %d, type ref weight %d, string ref weight %d.\n",
@@ -638,13 +638,70 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
         m_cross_dex_ref_minimizer.get_config().string_ref_weight);
 
-  std::vector<DexClass*> filtered_scope;
+  size_t next_method_id = 0;
+
+  std::vector<std::pair<DexClass*, bool>> classes_to_insert;
+  // Emit classes using some algorithm to group together classes which
+  // tend to share the same refs.
   for (DexClass* cls : scope) {
-    // Don't bother with classes that emit_class will skip anyway
+    // Don't bother with classes that emit_class will skip anyway.
+    // (Postpone checking should_skip_class until after we have possibly
+    // extracted relocatable methods.)
     if (is_canary(cls) || m_dexes_structure.has_class(cls)) {
       continue;
     }
 
+    // Let's identify some static methods that we can freely relocate!
+    // For each relocatable method, we are going to create a separate
+    // class, just to hold that relocatable method. This enables us to use the
+    // existing class-based infrastructure to prioritize these methods.
+    // Don't worry, later we are going to erase most of those classes again,
+    // consolidating the relocated methods in just a few classes.
+    // TODO: Give up on all annotations isn't sufficient, as the InterDex pass
+    // tends to run after most annotations have been removed. Also, we really
+    // want to make sure that we don't violate any Android API version or other
+    // contracts; also see below for methods.
+    if (m_minimize_cross_dex_refs_relocate_methods &&
+        !should_not_relocate_methods_of_class(cls) && !cls->is_external() &&
+        !cls->get_clinit() && cls->get_anno_set() == nullptr) {
+      std::vector<DexMethod*> relocatable_methods;
+      for (DexMethod* m : cls->get_dmethods()) {
+        if (is_static(m) && !is_clinit(m) && m->is_concrete() &&
+            can_rename(m) && !root(m) && m->get_anno_set() == nullptr &&
+            no_changes_when_relocating_method(m) && no_invoke_super(m)) {
+          relocatable_methods.push_back(m);
+        }
+      }
+
+      for (DexMethod* m : relocatable_methods) {
+        std::string new_type_name =
+            "Lredex/$Relocated" + std::to_string(next_method_id) + ";";
+        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}\n",
+              m->get_class()->get_name()->c_str(), m->get_name()->c_str(),
+              new_type_name.c_str(), m->get_name()->c_str());
+
+        DexType* new_type = DexType::make_type(new_type_name.c_str());
+        ClassCreator cc(new_type);
+        cc.set_access(ACC_PUBLIC | ACC_FINAL);
+        cc.set_super(get_object_type());
+        DexClass* relocated_cls = cc.create();
+        relocate_method(m, new_type);
+        ++next_method_id;
+
+        // Tell all plugins that the new class is now effectively part of the
+        // scope.
+        add_to_scope(relocated_cls);
+
+        // It's important to call should_skip_class here, as some plugins
+        // build up state for each class via this call.
+        always_assert(!should_skip_class_due_to_plugin(relocated_cls));
+
+        classes_to_insert.emplace_back(relocated_cls, /* ignore_cls */ true);
+        relocated.insert({relocated_cls, {m, cls}});
+      }
+    }
+
+    // Don't bother with classes that emit_class will skip anyway
     if (should_skip_class_due_to_plugin(cls)) {
       // Skipping a class due to a plugin might mean that (members of) of the
       // class will get emitted later via the additional-class mechanism,
@@ -658,19 +715,36 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
       continue;
     }
 
-    filtered_scope.push_back(cls);
+    classes_to_insert.emplace_back(cls, /* ignore_cls */ false);
   }
 
   // Initialize ref frequency counts
-  for (DexClass* cls : filtered_scope) {
-    m_cross_dex_ref_minimizer.sample(cls);
+  for (auto& p : classes_to_insert) {
+    m_cross_dex_ref_minimizer.sample(p.first);
   }
 
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
-  for (DexClass* cls : filtered_scope) {
-    m_cross_dex_ref_minimizer.insert(cls);
+  for (auto& p : classes_to_insert) {
+    DexClass* cls = p.first;
+    bool ignore_cls = p.second;
+    m_cross_dex_ref_minimizer.insert(cls, ignore_cls);
   }
+}
+
+void InterDex::emit_remaining_classes(const Scope& scope) {
+  if (!m_minimize_cross_dex_refs) {
+    for (DexClass* cls : scope) {
+      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true,
+                 /* perf_sensitive */ false);
+    }
+    return;
+  }
+
+  std::unordered_map<DexClass*, RelocatedMethodInfo> relocated;
+  init_cross_dex_ref_minimizer_and_relocate_methods(scope, relocated);
+
+  TRACE(IDEX, 2, "[dex ordering] relocated %d methods\n", relocated.size());
 
   int dexnum = m_dexes_structure.get_num_dexes();
   // Strategy for picking the next class to emit:
@@ -680,6 +754,9 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   //   prefers classes that share many applied refs and bring in few unapplied
   //   refs
   bool pick_worst = true;
+  DexClass* relocated_class_in_dex = nullptr;
+  size_t relocated_class_in_dex_size = 0;
+  std::unordered_set<DexClass*> classes_in_current_dex;
   while (!m_cross_dex_ref_minimizer.empty()) {
     DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
                                : m_cross_dex_ref_minimizer.front();
@@ -689,6 +766,17 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
+
+    // Let's merge relocated helper classes
+    if (overflowed) {
+      classes_in_current_dex.clear();
+      relocated_class_in_dex = nullptr;
+      relocated_class_in_dex_size = 0;
+    }
+    classes_in_current_dex.insert(cls);
+
+    re_relocate_method(cls, relocated, relocated_class_in_dex,
+                       relocated_class_in_dex_size, classes_in_current_dex);
 
     // We can treat *refs owned by "erased classes" as effectively being emitted
     for (DexClass* erased_cls : erased_classes) {
@@ -702,6 +790,54 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
 
     pick_worst = (pick_worst && !emitted) || overflowed;
     dexnum = new_dexnum;
+  }
+}
+
+void InterDex::re_relocate_method(
+    DexClass* cls,
+    std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated,
+    DexClass*& relocated_class_in_dex,
+    size_t& relocated_class_in_dex_size,
+    std::unordered_set<DexClass*>& classes_in_current_dex) {
+  auto relocated_it = relocated.find(cls);
+  if (relocated_it != relocated.end()) {
+    ++m_stats.relocatable_methods;
+    const RelocatedMethodInfo& info = relocated_it->second;
+    DexMethod* method = info.method;
+    always_assert(method->get_class() == cls->get_type());
+    DexClass* target_class = nullptr;
+    if (classes_in_current_dex.count(info.source_class)) {
+      // We are going to move the method back to the class where it came from,
+      // effectively undoing the relocation.
+      target_class = info.source_class;
+    } else {
+      set_public(method);
+      change_visibility(method);
+      ++m_stats.relocated_methods;
+      // For runtime performance reasons, we avoid having just one giant
+      // class with a vast number of static methods. Instead, we retain
+      // several classes once a certain threshold is exceeded.
+      if (relocated_class_in_dex == nullptr ||
+          relocated_class_in_dex_size >= m_relocated_methods_per_class) {
+        relocated_class_in_dex = cls;
+        relocated_class_in_dex_size = 0;
+        ++m_stats.classes_added_for_relocated_methods;
+      } else {
+        // We are going to merge the method into an already emitted
+        // relocation target class, allowing us to get rid of an extra
+        // relocation class.
+        target_class = relocated_class_in_dex;
+      }
+      ++relocated_class_in_dex_size;
+    }
+    if (target_class) {
+      TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}\n",
+            cls->get_name()->c_str(), method->get_name()->c_str(),
+            target_class == info.source_class ? "back " : "",
+            target_class->get_name()->c_str(), method->get_name()->c_str());
+      relocate_method(method, target_class->get_type());
+      m_dexes_structure.squash_empty_last_class(cls);
+    }
   }
 }
 
@@ -825,8 +961,12 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
   }
 
   for (auto& plugin : m_plugins) {
-    auto add_classes = plugin->additional_classes(
-        m_outdex, m_dexes_structure.get_current_dex_classes());
+    DexClasses classes = m_dexes_structure.get_current_dex_classes();
+    const DexClasses& squashed_classes =
+        m_dexes_structure.get_current_dex_squashed_classes();
+    classes.insert(classes.end(), squashed_classes.begin(),
+                   squashed_classes.end());
+    auto add_classes = plugin->additional_classes(m_outdex, classes);
     for (auto add_class : add_classes) {
       TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s\n",
             SHOW(add_class));
