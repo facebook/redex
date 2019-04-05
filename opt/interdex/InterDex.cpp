@@ -655,7 +655,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
           m_cross_dex_relocator_config.relocate_virtual_methods ? "yes" : "no");
   }
 
-  std::vector<std::pair<DexClass*, bool>> classes_to_insert;
+  std::vector<DexClass*> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
   for (DexClass* cls : scope) {
@@ -679,7 +679,8 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
         // build up state for each class via this call.
         always_assert(!should_skip_class_due_to_plugin(relocated_cls));
 
-        classes_to_insert.emplace_back(relocated_cls, /* ignore_cls */ true);
+        m_cross_dex_ref_minimizer.ignore(relocated_cls);
+        classes_to_insert.emplace_back(relocated_cls);
       }
     }
 
@@ -697,20 +698,18 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
       continue;
     }
 
-    classes_to_insert.emplace_back(cls, /* ignore_cls */ false);
+    classes_to_insert.emplace_back(cls);
   }
 
   // Initialize ref frequency counts
-  for (auto& p : classes_to_insert) {
-    m_cross_dex_ref_minimizer.sample(p.first);
+  for (DexClass* cls : classes_to_insert) {
+    m_cross_dex_ref_minimizer.sample(cls);
   }
 
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
-  for (auto& p : classes_to_insert) {
-    DexClass* cls = p.first;
-    bool ignore_cls = p.second;
-    m_cross_dex_ref_minimizer.insert(cls, ignore_cls);
+  for (DexClass* cls : classes_to_insert) {
+    m_cross_dex_ref_minimizer.insert(cls);
   }
 }
 

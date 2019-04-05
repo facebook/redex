@@ -123,6 +123,13 @@ void CrossDexRefMinimizer::gather_refs(DexClass* cls,
   std::sort(strings.begin(), strings.end(), compare_dexstrings);
 }
 
+void CrossDexRefMinimizer::ignore(DexClass* cls) {
+  // By setting the count to the maximum value here, the class will later appear
+  // to have an extremely high frequency and thus get skipped from
+  // consideration by insert/add_weight.
+  m_ref_counts[cls->get_type()] = std::numeric_limits<size_t>::max();
+}
+
 void CrossDexRefMinimizer::sample(DexClass* cls) {
   std::vector<DexMethodRef*> method_refs;
   std::vector<DexFieldRef*> field_refs;
@@ -131,8 +138,8 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   gather_refs(cls, method_refs, field_refs, types, strings);
   auto increment = [& ref_counts = m_ref_counts,
                     &max_ref_count = m_max_ref_count](void* ref) {
-    size_t count = ++ref_counts[ref];
-    if (count > max_ref_count) {
+    size_t& count = ref_counts[ref];
+    if (count < std::numeric_limits<size_t>::max() && ++count > max_ref_count) {
       max_ref_count = count;
     }
   };
@@ -150,7 +157,7 @@ void CrossDexRefMinimizer::sample(DexClass* cls) {
   }
 }
 
-void CrossDexRefMinimizer::insert(DexClass* cls, bool ignore_cls) {
+void CrossDexRefMinimizer::insert(DexClass* cls) {
   always_assert(m_class_infos.count(cls) == 0);
   ++m_stats.classes;
   CrossDexRefMinimizer::ClassInfo& class_info =
@@ -201,9 +208,6 @@ void CrossDexRefMinimizer::insert(DexClass* cls, bool ignore_cls) {
     add_weight(mref, m_config.method_ref_weight);
   }
   for (auto type : types) {
-    if (ignore_cls && type == cls->get_type()) {
-      continue;
-    }
     add_weight(type, m_config.type_ref_weight);
   }
   for (auto string : strings) {
