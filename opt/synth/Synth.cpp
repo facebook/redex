@@ -390,31 +390,7 @@ IRInstruction* make_iget(DexField* field, uint16_t src) {
 }
 
 IRInstruction* make_sget(DexField* field) {
-  auto const opcode = [&]() {
-    switch (type_to_datatype(field->get_type())) {
-    case DataType::Array:
-    case DataType::Object:
-      return OPCODE_SGET_OBJECT;
-    case DataType::Boolean:
-      return OPCODE_SGET_BOOLEAN;
-    case DataType::Byte:
-      return OPCODE_SGET_BYTE;
-    case DataType::Char:
-      return OPCODE_SGET_CHAR;
-    case DataType::Short:
-      return OPCODE_SGET_SHORT;
-    case DataType::Int:
-    case DataType::Float:
-      return OPCODE_SGET;
-    case DataType::Long:
-    case DataType::Double:
-      return OPCODE_SGET_WIDE;
-    case DataType::Void:
-      redex_assert(false);
-    }
-    not_reached();
-  }();
-
+  auto const opcode = opcode::sget_opcode_for_field(field);
   return (new IRInstruction(opcode))->set_field(field);
 }
 

@@ -12,6 +12,8 @@
 
 #include "Show.h"
 
+class DexField;
+
 enum DexOpcode : uint16_t;
 
 namespace opcode {
@@ -268,6 +270,8 @@ IROpcode invert_conditional_branch(IROpcode op);
 IROpcode move_result_pseudo_for_iget(IROpcode op);
 
 IROpcode move_result_pseudo_for_sget(IROpcode op);
+
+IROpcode sget_opcode_for_field(const DexField* field);
 
 enum Branchingness {
   BRANCH_NONE,
