@@ -151,7 +151,7 @@ DexField* add_dependent_field(DexClass* cls,
   cls->add_field(field);
   // Initialize it to the value of the parent
   auto parent_type = parent->get_type();
-  assert(init_ops.count(parent_type->c_str()) != 0);
+  redex_assert(init_ops.count(parent_type->c_str()) != 0);
   auto ops = init_ops[parent_type->c_str()];
   auto clinit = cls->get_clinit();
   auto code = clinit->get_code();

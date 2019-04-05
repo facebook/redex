@@ -51,7 +51,7 @@ void load_generated_types(const ModelSpec& spec,
   generated.insert(models.begin(), models.end());
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     generated.insert(type);
     if (is_interface(cls)) {
       const auto& impls = type_system.get_implementors(type);
@@ -302,7 +302,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    assert(super != nullptr && super != get_object_type());
+    redex_assert(super != nullptr && super != get_object_type());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -374,12 +374,6 @@ void Model::build_interdex_groups(ConfigFiles* cfg) {
   // group_id + 1 represents the number of groups (considering the classes
   // outside of the interdex order as a group on its own).
   s_num_interdex_groups = group_id + 1;
-}
-
-MergerType& Model::create_merger(const DexType* type) {
-  auto& merger = m_mergers[type];
-  merger.type = type;
-  return merger;
 }
 
 MergerType& Model::create_dummy_merger(const DexType* type) {
@@ -521,7 +515,7 @@ void Model::create_mergers_helper(
 void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     if (is_interface(cls)) {
       const auto& impls = m_type_system.get_implementors(type);
       m_excluded.insert(impls.begin(), impls.end());
@@ -553,7 +547,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   }
   TRACE(TERA, 4, "Non mergeables (no delete) %ld\n", m_non_mergeables.size());
 
-  bool has_type_tag = needs_type_tag();
+  bool has_type_tag = m_spec.has_type_tag();
   const auto& const_generated = generated;
   const auto& const_types = m_types;
   auto patcher = [has_type_tag, &const_generated,

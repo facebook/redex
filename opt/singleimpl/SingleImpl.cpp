@@ -119,7 +119,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
         std::move(single_impls), ch, scope, m_pass_config);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
     removed_count += optimized;
-    assert(scope_size > scope.size());
+    redex_assert(scope_size > scope.size());
   }
 
   TRACE(INTF, 1, "Removed interfaces %ld\n", removed_count);

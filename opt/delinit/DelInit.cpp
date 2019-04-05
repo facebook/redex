@@ -430,7 +430,7 @@ int DeadRefs::remove_unreachable() {
   int dmethodcnt = 0;
   int ifieldcnt = 0;
   for (const auto& meth : vmethods) {
-    assert(meth->is_virtual());
+    redex_assert(meth->is_virtual());
     auto cls = type_class(meth->get_class());
     auto& methods = cls->get_vmethods();
     auto meth_it = std::find(methods.begin(), methods.end(), meth);
@@ -446,7 +446,7 @@ int DeadRefs::remove_unreachable() {
   TRACE(DELINIT, 2, "Removed %d vmethods\n", vmethodcnt);
 
   for (const auto& field : ifields) {
-    assert(!is_static(field));
+    redex_assert(!is_static(field));
     auto cls = type_class(field->get_class());
     auto& fields = cls->get_ifields();
     auto field_it = std::find(fields.begin(), fields.end(), field);
@@ -464,7 +464,7 @@ int DeadRefs::remove_unreachable() {
   int called_dmeths = 0;
   int dont_delete_dmeths = 0;
   for (const auto& meth : dmethods) {
-    assert(!meth->is_virtual());
+    redex_assert(!meth->is_virtual());
     if (called.count(meth) > 0) {
       called_dmeths++;
       continue;

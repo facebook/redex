@@ -710,11 +710,11 @@ class DexCode {
     return *m_insns;
   }
   std::vector<DexInstruction*>& get_instructions() {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   const std::vector<DexInstruction*>& get_instructions() const {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   void set_instructions(std::vector<DexInstruction*>* insns) {
@@ -1004,7 +1004,8 @@ class DexMethod : public DexMethodRef {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<DexString*>& lstring,
+                      bool exclude_loads = false) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1030,6 +1031,7 @@ class DexClass {
   DexString* m_source_file;
   DexAnnotationSet* m_anno;
   bool m_external;
+  bool m_perf_sensitive;
   std::string m_deobfuscated_name;
   const std::string m_location; // TODO: string interning
   std::vector<DexField*> m_sfields;
@@ -1091,9 +1093,15 @@ class DexClass {
   // Removes the method from this class
   void remove_method(const DexMethod* m);
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
-  std::vector<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
+  std::vector<DexField*>& get_sfields() {
+    redex_assert(!m_external);
+    return m_sfields;
+  }
   const std::vector<DexField*>& get_ifields() const { return m_ifields; }
-  std::vector<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
+  std::vector<DexField*>& get_ifields() {
+    redex_assert(!m_external);
+    return m_ifields;
+  }
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
@@ -1157,9 +1165,15 @@ class DexClass {
   int encode(DexOutputIdx* dodx, dexcode_to_offset& dco, uint8_t* output);
 
   void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
+  void gather_strings(std::vector<DexString*>& lstring,
+                      bool exclude_loads = false) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+
+  // Whether to optimize for perf, instead of space.
+  // This bit is only set by the InterDex pass and not available earlier.
+  bool is_perf_sensitive() const { return m_perf_sensitive; }
+  void set_perf_sensitive(bool value) { m_perf_sensitive = value; }
 
  private:
   void sort_methods();
@@ -1285,9 +1299,7 @@ struct dexmethods_profiled_comparator {
  * Return the DexClass that represents the DexType in input or nullptr if
  * no such DexClass exists.
  */
-inline DexClass* type_class(const DexType* t) {
-  return g_redex->type_class(t);
-}
+inline DexClass* type_class(const DexType* t) { return g_redex->type_class(t); }
 
 /**
  * Return the DexClass that represents an internal DexType or nullptr if
@@ -1295,30 +1307,20 @@ inline DexClass* type_class(const DexType* t) {
  */
 inline DexClass* type_class_internal(const DexType* t) {
   auto dc = type_class(t);
-  if (dc == nullptr || dc->is_external())
-    return nullptr;
+  if (dc == nullptr || dc->is_external()) return nullptr;
   return dc;
 }
 
-class duplicate_method : public std::exception {
- public:
-  duplicate_method(const std::string& method_name)
-      : m_method_name(method_name), m_msg(make_msg(method_name)) {}
-
-  virtual const char* what() const throw() { return m_msg.c_str(); }
-
-  const std::string m_method_name;
-
- private:
-  const std::string m_msg;
-
-  std::string make_msg(const std::string& method_name) {
-    std::ostringstream oss;
-    oss << "Found duplicate methods defined in the same class: " << method_name;
-
-    return oss.str();
-  }
-};
+/**
+ * For a set of classes, compute all referenced strings, types, fields and
+ * methods, such that components are sorted and unique.
+ */
+void gather_components(std::vector<DexString*>& lstring,
+                       std::vector<DexType*>& ltype,
+                       std::vector<DexFieldRef*>& lfield,
+                       std::vector<DexMethodRef*>& lmethod,
+                       const DexClasses& classes,
+                       bool exclude_loads = false);
 
 DISALLOW_DEFAULT_COMPARATOR(DexClass)
 DISALLOW_DEFAULT_COMPARATOR(DexCode)

@@ -284,7 +284,7 @@ TEST(IRInstruction, SelectConst) {
   EXPECT_EQ(DOPCODE_CONST, select_const_opcode(insn));
 
   insn->set_literal(0xf0ffffffffffffff);
-  EXPECT_THROW(select_const_opcode(insn), std::runtime_error);
+  EXPECT_THROW(select_const_opcode(insn), RedexException);
 
   auto wide_insn = dasm(OPCODE_CONST_WIDE, {0_v});
 
@@ -355,7 +355,7 @@ TEST(IRInstruction, SelectBinopLit) {
 
     // literal > 16 bits
     insn->set_literal(0xffffff);
-    EXPECT_THROW(select_binop_lit_opcode(insn), std::runtime_error)
+    EXPECT_THROW(select_binop_lit_opcode(insn), RedexException)
         << "at " << show(ops[i]);
   }
   delete g_redex;

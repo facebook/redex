@@ -114,12 +114,14 @@ namespace facebook {
 // never be found in the Android platform.
 //
 class Locator {
+ public:
   // Number of bits in the locator we reserve for store number
   constexpr static const uint32_t strnr_bits = 16;
 
   // Number of bits in the locator we reserve for dex number
   constexpr static const uint32_t dexnr_bits = 6;
 
+ private:
   // Number of bits (lower bound) available for a class number
   constexpr static const uint32_t clsnr_bits = 20;
 

@@ -33,7 +33,7 @@ namespace {
 void set_type_refs(DexType* intf, SingleImplData& data) {
   for (auto opcode : data.typerefs) {
     TRACE(INTF, 3, "(TREF) %s\n", SHOW(opcode));
-    assert(opcode->get_type() == intf);
+    redex_assert(opcode->get_type() == intf);
     opcode->set_type(data.cls);
     TRACE(INTF, 3, "(TREF) \t=> %s\n", SHOW(opcode));
   }
@@ -183,10 +183,10 @@ struct OptimizationImpl {
  */
 void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     auto f = static_cast<DexField*>(DexField::make_field(
         field->get_class(), field->get_name(), data.cls));
-    assert(f != field);
+    redex_assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s\n", SHOW(field));
     f->set_deobfuscated_name(field->get_deobfuscated_name());
     f->rstate = field->rstate;
@@ -208,12 +208,12 @@ void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
 void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     DexFieldRef* f = DexField::make_field(
         field->get_class(), field->get_name(), data.cls);
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
-      assert(f != opcode->get_field());
+      redex_assert(f != opcode->get_field());
       opcode->set_field(f);
       TRACE(INTF, 3, "(FREF) \t=> %s\n", SHOW(opcode));
     }
@@ -236,10 +236,10 @@ void OptimizationImpl::set_method_defs(DexType* intf,
       always_assert(meth_it->second->is_def());
       meth = static_cast<DexMethod*>(meth_it->second);
       TRACE(INTF, 4, "(MDEF) current: %s\n", SHOW(meth));
-      assert(!single_impls->is_single_impl(method->get_class()) ||
-             single_impls->is_escaped(method->get_class()));
-      assert(!single_impls->is_single_impl(meth->get_class()) ||
-             single_impls->is_escaped(meth->get_class()));
+      redex_assert(!single_impls->is_single_impl(method->get_class()) ||
+                   single_impls->is_escaped(method->get_class()));
+      redex_assert(!single_impls->is_single_impl(meth->get_class()) ||
+                   single_impls->is_escaped(meth->get_class()));
     }
     auto proto = get_or_make_proto(intf, data.cls, meth->get_proto());
     TRACE(INTF,
@@ -249,7 +249,7 @@ void OptimizationImpl::set_method_defs(DexType* intf,
           SHOW(meth->get_name()),
           SHOW(meth->get_proto()),
           SHOW(proto));
-    assert(proto != meth->get_proto());
+    redex_assert(proto != meth->get_proto());
     auto new_meth = static_cast<DexMethod*>(DexMethod::make_method(
         meth->get_class(), meth->get_name(), proto));
     // new_meth may have already existed in RedexContext, so
@@ -263,7 +263,7 @@ void OptimizationImpl::set_method_defs(DexType* intf,
         meth->get_simple_deobfuscated_name() + ":" + show_deobfuscated(proto);
     new_meth->set_deobfuscated_name(new_deob_name);
     new_meth->rstate = meth->rstate;
-    assert(new_meth != meth);
+    redex_assert(new_meth != meth);
     setup_method(meth, new_meth);
     new_methods[method] = new_meth;
     auto owner = type_class(new_meth->get_class());
@@ -288,10 +288,10 @@ void OptimizationImpl::set_method_refs(DexType* intf,
       // given we have escaped to "next pass" all collisions
       new_meth = meth_it->second;
       TRACE(INTF, 4, "current: %s\n", SHOW(new_meth));
-      assert(!single_impls->is_single_impl(method->get_class()) ||
-             single_impls->is_escaped(method->get_class()));
-      assert(!single_impls->is_single_impl(new_meth->get_class()) ||
-             single_impls->is_escaped(new_meth->get_class()));
+      redex_assert(!single_impls->is_single_impl(method->get_class()) ||
+                   single_impls->is_escaped(method->get_class()));
+      redex_assert(!single_impls->is_single_impl(new_meth->get_class()) ||
+                   single_impls->is_escaped(new_meth->get_class()));
     }
     // next 2 lines will generate no new proto or method when the ref matches
     // a def, which should be very common.
@@ -305,7 +305,7 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     auto created_meth = DexMethod::make_method(
             new_meth->get_class(), new_meth->get_name(), proto);
     if (created_meth->is_def() && method->is_def()) {
-      assert(new_meth->is_def());
+      redex_assert(new_meth->is_def());
       auto new_deob_name =
           type_class(new_meth->get_class())->get_deobfuscated_name() + "." +
           show(static_cast<DexMethod*>(new_meth)
@@ -320,7 +320,7 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(created_meth));
     for (auto opcode : mrefit.second) {
       TRACE(INTF, 3, "(MREF) %s\n", SHOW(opcode));
-      assert(opcode->get_method() != created_meth);
+      redex_assert(opcode->get_method() != created_meth);
       opcode->set_method(created_meth);
       TRACE(INTF, 3, "(MREF) \t=> %s\n", SHOW(opcode));
     }
@@ -375,22 +375,22 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
-      assert(new_meth->is_virtual());
+      redex_assert(new_meth->is_virtual());
       impl->add_method(new_meth);
       TRACE(INTF, 3, "(MITF) moved interface method %s\n", SHOW(new_meth));
     } else {
       TRACE(INTF, 3, "(MITF) found method impl %s\n", SHOW(new_meth));
     }
-    assert(new_methods.find(meth) == new_methods.end());
+    redex_assert(new_methods.find(meth) == new_methods.end());
     new_methods[method] = new_meth;
   }
 
   // rewrite invoke-interface to invoke-virtual
   for (const auto& mref_it : data.intf_methodrefs) {
     auto m = mref_it.first;
-    assert(new_methods.find(m) != new_methods.end());
+    redex_assert(new_methods.find(m) != new_methods.end());
     auto new_m = new_methods[m];
-    assert(new_m && new_m != m);
+    redex_assert(new_m && new_m != m);
     TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(new_m));
     for (auto mop : mref_it.second) {
       TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(mop));
@@ -442,7 +442,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
 EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
                                                      SingleImplData& data) {
   for (const auto field : data.fielddefs) {
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     auto collision =
         resolve_field(field->get_class(), field->get_name(), data.cls);
     if (collision) return FIELD_COLLISION;
@@ -462,7 +462,7 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
       method = static_cast<DexMethod*>(meth_it->second);
     }
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
-    assert(proto != method->get_proto());
+    redex_assert(proto != method->get_proto());
     DexMethod* collision = find_collision(ch,
                                           method->get_name(),
                                           proto,
@@ -489,7 +489,7 @@ void OptimizationImpl::drop_single_impl_collision(DexType* intf,
     if (type != intf && single_impls->is_single_impl(type) &&
         !single_impls->is_escaped(type)) {
       single_impls->escape_interface(type, NEXT_PASS);
-      assert(optimized.find(type) == optimized.end());
+      redex_assert(optimized.find(type) == optimized.end());
     }
   };
 

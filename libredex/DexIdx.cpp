@@ -37,7 +37,7 @@ DexIdx::~DexIdx() {
 }
 
 DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
-  assert(stridx < m_string_ids_size);
+  redex_assert(stridx < m_string_ids_size);
   uint32_t stroff = m_string_ids[stridx].offset;
   always_assert_log(
     stroff < ((dex_header*)m_dexbase)->file_size,
@@ -49,14 +49,14 @@ DexString* DexIdx::get_stringidx_fromdex(uint32_t stridx) {
 }
 
 DexType* DexIdx::get_typeidx_fromdex(uint32_t typeidx) {
-  assert(typeidx < m_type_ids_size);
+  redex_assert(typeidx < m_type_ids_size);
   uint32_t stridx = m_type_ids[typeidx].string_idx;
   DexString* dexstr = get_stringidx(stridx);
   return DexType::make_type(dexstr);
 }
 
 DexFieldRef* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
-  assert(fidx < m_field_ids_size);
+  redex_assert(fidx < m_field_ids_size);
   DexType* container = get_typeidx(m_field_ids[fidx].classidx);
   DexType* ftype = get_typeidx(m_field_ids[fidx].typeidx);
   DexString* name = get_stringidx(m_field_ids[fidx].nameidx);
@@ -64,7 +64,7 @@ DexFieldRef* DexIdx::get_fieldidx_fromdex(uint32_t fidx) {
 }
 
 DexMethodRef* DexIdx::get_methodidx_fromdex(uint32_t midx) {
-  assert(midx < m_method_ids_size);
+  redex_assert(midx < m_method_ids_size);
   DexType* container = get_typeidx(m_method_ids[midx].classidx);
   DexProto* proto = get_protoidx(m_method_ids[midx].protoidx);
   DexString* name = get_stringidx(m_method_ids[midx].nameidx);
@@ -72,7 +72,7 @@ DexMethodRef* DexIdx::get_methodidx_fromdex(uint32_t midx) {
 }
 
 DexProto* DexIdx::get_protoidx_fromdex(uint32_t pidx) {
-  assert(pidx < m_proto_ids_size);
+  redex_assert(pidx < m_proto_ids_size);
   DexType* rtype = get_typeidx(m_proto_ids[pidx].rtypeidx);
   DexString* shorty = get_stringidx(m_proto_ids[pidx].shortyidx);
   DexTypeList* args = get_type_list(m_proto_ids[pidx].param_off);

@@ -255,7 +255,7 @@ bool needs_range_conversion(const IRInstruction* insn) {
   return false;
 }
 
-uint64_t IRInstruction::hash() {
+uint64_t IRInstruction::hash() const {
   std::vector<uint64_t> bits;
   bits.push_back(opcode());
 

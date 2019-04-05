@@ -101,6 +101,26 @@ void fix_visibility_helper(DexMethod* method,
   change_visibility(method);
 }
 
+boost::optional<size_t> get_ctor_type_tag_param_idx(
+    const bool pass_type_tag_param, const DexProto* ctor_proto) {
+  boost::optional<size_t> type_tag_param_idx = boost::none;
+  if (pass_type_tag_param) {
+    return type_tag_param_idx;
+  }
+
+  auto type_list = ctor_proto->get_args()->get_type_list();
+  size_t idx = 0;
+  for (auto type : type_list) {
+    if (type == get_int_type()) {
+      always_assert_log(!type_tag_param_idx,
+                        "More than one potential type tag param found!");
+      type_tag_param_idx = boost::optional<size_t>(idx);
+    }
+    ++idx;
+  }
+  return type_tag_param_idx;
+}
+
 } // namespace
 
 void MethodStats::add(const MethodOrderedSet& methods) {
@@ -165,8 +185,9 @@ ModelMethodMerger::ModelMethodMerger(
       m_max_num_dispatch_target(max_num_dispatch_target) {
   for (const auto& mtf : type_tag_fields) {
     auto type_tag_field = mtf.second;
-    assert((type_tag_field && type_tag_field->is_concrete()) ||
-           !model_spec.needs_type_tag);
+    if (model_spec.generate_type_tag()) {
+      always_assert(type_tag_field && type_tag_field->is_concrete());
+    }
   }
   // Collect ctors, non_ctors.
   for (const MergerType* merger : mergers) {
@@ -314,10 +335,6 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
   return merger_ctor->get_class();
 }
 
-bool ModelMethodMerger::no_type_tags() {
-  return !m_model_spec.has_type_tag && !m_model_spec.needs_type_tag;
-}
-
 DexMethod* ModelMethodMerger::create_instantiation_factory(
     DexType* owner_type,
     std::string name,
@@ -417,6 +434,7 @@ void ModelMethodMerger::merge_virtual_methods(
                         type_tag_field,
                         overridden_meth,
                         m_max_num_dispatch_target,
+                        boost::none,
                         m_model_spec.keep_debug_info};
     dispatch::DispatchMethod dispatch = create_dispatch_method(spec, meth_lst);
     dispatch_methods.emplace_back(target_cls, dispatch.main_dispatch);
@@ -462,10 +480,7 @@ void ModelMethodMerger::merge_ctors() {
     ctor_set.insert(ctors.begin(), ctors.end());
   }
 
-  bool pass_type_tag_param =
-      (m_model_spec.has_type_tag &&
-       m_model_spec.pass_additional_type_tag_to_ctor) ||
-      (!m_model_spec.has_type_tag && m_model_spec.needs_type_tag);
+  bool pass_type_tag_param = m_model_spec.pass_type_tag_to_ctor();
   TRACE(TERA, 5, "pass type tag param %d\n", pass_type_tag_param);
   //////////////////////////////////////////
   // Create dispatch and fixes
@@ -475,7 +490,9 @@ void ModelMethodMerger::merge_ctors() {
     auto merger = pair.first;
     auto target_type = const_cast<DexType*>(merger->type);
     auto target_cls = type_class(target_type);
-    auto type_tag_field = m_type_tag_fields.at(merger);
+    auto type_tag_field = m_type_tag_fields.count(merger) > 0
+                              ? m_type_tag_fields.at(merger)
+                              : nullptr;
     // Group by proto.
     std::unordered_map<DexProto*, std::vector<DexMethod*>> proto_to_ctors;
     for (const auto m : pair.second) {
@@ -507,20 +524,22 @@ void ModelMethodMerger::merge_ctors() {
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)
               : ctor_proto;
-      dispatch::Spec spec{target_type,
-                          (pass_type_tag_param && !m_model_spec.has_type_tag)
-                              ? dispatch::Type::CTOR_WITH_TYPE_TAG_PARAM
-                              : dispatch::Type::CTOR,
-                          "<init>",
-                          dispatch_proto,
-                          ACC_PUBLIC | ACC_CONSTRUCTOR,
-                          type_tag_field,
-                          nullptr, // overridden_meth
-                          m_model_spec.keep_debug_info};
+      dispatch::Spec spec{
+          target_type,
+          (m_model_spec.generate_type_tag())
+              ? dispatch::Type::CTOR_SAVE_TYPE_TAG_PARAM
+              : dispatch::Type::CTOR,
+          "<init>",
+          dispatch_proto,
+          ACC_PUBLIC | ACC_CONSTRUCTOR,
+          type_tag_field,
+          nullptr, // overridden_meth
+          get_ctor_type_tag_param_idx(pass_type_tag_param, ctor_proto),
+          m_model_spec.keep_debug_info};
       auto indices_to_callee = get_dedupped_indices_map(ctors);
       if (indices_to_callee.size() > 1) {
         always_assert_log(
-            !no_type_tags(),
+            m_model_spec.has_type_tag(),
             "No type tag config cannot handle multiple dispatch targets!");
       }
       m_stats.m_num_ctor_dedupped += ctors.size() - indices_to_callee.size();
@@ -696,7 +715,9 @@ void ModelMethodMerger::merge_virt_itf_methods() {
     auto merger_cls = type_class(merger_type);
     always_assert(merger_cls);
     auto super_type = merger_cls->get_super_class();
-    auto type_tag_field = m_type_tag_fields.at(merger);
+    auto type_tag_field = m_type_tag_fields.count(merger) > 0
+                              ? m_type_tag_fields.at(merger)
+                              : nullptr;
     std::vector<MergerType::VirtualMethod> virt_methods;
 
     for (auto& vm_lst : merger->vmethods) {

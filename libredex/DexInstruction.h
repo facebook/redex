@@ -62,7 +62,7 @@ class DexInstruction : public Gatherable {
       : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
-    assert(m_count == 1);
+    redex_assert(m_count == 1);
     m_arg[0] = arg;
   }
 

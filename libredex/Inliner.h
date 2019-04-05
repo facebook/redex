@@ -190,19 +190,21 @@ class MultiMethodInliner {
    * we cannot inline as we could cause a verification error if the method
    * was package/protected and we move the call out of context.
    */
-  bool unknown_virtual(IRInstruction* insn,
-                       const DexMethod* caller,
-                       const DexMethod* callee);
+  bool unknown_virtual(IRInstruction* insn);
 
   /**
-   * Return true if the callee contains a call to an unknown field.
+   * Return true if the callee contains an access to an unknown field.
    * We cannot determine the visibility of the field accessed and thus
    * we cannot inline as we could cause a verification error if the field
    * was package/protected and we move the access out of context.
    */
-  bool unknown_field(IRInstruction* insn,
-                     const DexMethod* callee,
-                     const DexMethod* caller);
+  bool unknown_field(IRInstruction* insn);
+
+  /**
+   * return true if `insn` is
+   *   sget android.os.Build.VERSION.SDK_INT
+   */
+  bool check_android_os_version(IRInstruction* insn);
 
   /**
    * Return true if a caller is in a DEX in a store and any opcode in callee

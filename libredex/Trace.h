@@ -20,6 +20,7 @@
   TM(ARGS)               \
   TM(BBPROFILE)          \
   TM(BIND)               \
+  TM(BPH)                \
   TM(BRIDGE)             \
   TM(BUILDERS)           \
   TM(CFG)                \
@@ -38,6 +39,7 @@
   TM(DELINIT)            \
   TM(DELMET)             \
   TM(DRAC)               \
+  TM(DS)                 \
   TM(EMPTY)              \
   TM(ENUM)               \
   TM(FINALINLINE)        \
@@ -46,7 +48,6 @@
   TM(IDEX)               \
   TM(GETTER)             \
   TM(INL)                \
-  TM(INLINIT)            \
   TM(INLRES)             \
   TM(INSTRUMENT)         \
   TM(INTF)               \

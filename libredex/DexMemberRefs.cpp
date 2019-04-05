@@ -55,7 +55,7 @@ static std::vector<std::string> split_args(std::string args) {
     }
     if (ch == 'L') {
       auto semipos = args.find(';', end);
-      assert(semipos != std::string::npos);
+      redex_assert(semipos != std::string::npos);
       end = semipos + 1;
     }
     ret.emplace_back(args.substr(begin, end - begin));

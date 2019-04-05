@@ -8,10 +8,12 @@
 #include "Debug.h"
 
 #include <exception>
+#include <memory>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 #ifndef _MSC_VER
 #include <execinfo.h>
@@ -36,21 +38,46 @@ void crash_backtrace_handler(int sig) {
   raise(sig);
 }
 
+std::string v_format2string(const char* fmt, va_list ap) {
+  va_list backup;
+  va_copy(backup, ap);
+  size_t size = vsnprintf(NULL, 0, fmt, ap);
+  // size is the number of chars would had been written
+
+  std::unique_ptr<char[]> buffer = std::make_unique<char[]>(size + 1);
+  vsnprintf(buffer.get(), size + 1, fmt, backup);
+  va_end(backup);
+  std::string ret(buffer.get());
+  return ret;
+}
+
+std::string format2string(const char* fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+
+  auto ret = v_format2string(fmt, ap);
+  va_end(ap);
+
+  return ret;
+}
+
 void assert_fail(const char* expr,
                  const char* file,
                  unsigned line,
                  const char* func,
+                 RedexError type,
                  const char* fmt,
                  ...) {
   va_list ap;
   va_start(ap, fmt);
-  fprintf(
-      stderr, "%s:%u: %s: assertion `%s' failed.\n", file, line, func, expr);
-  vfprintf(stderr, fmt, ap);
-  fprintf(stderr, "\n");
+  std::string msg = format2string(
+      "%s:%u: %s: assertion `%s' failed. ", file, line, func, expr);
+
+  msg += v_format2string(fmt, ap);
+
   va_end(ap);
   // our signal handlers will call this too, but they won't print the full
   // stack if the exception has been rethrown
   crash_backtrace();
-  throw std::runtime_error("Redex assertion failure");
+  throw RedexException(type, msg);
 }

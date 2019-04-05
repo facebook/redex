@@ -177,6 +177,81 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   }
   stats->num_annotations += anno_offsets.size();
   stats->num_type_lists += type_lists.size();
+
+  const dex_map_list* map_list =
+      reinterpret_cast<const dex_map_list*>(m_file.const_data() + dh->map_off);
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    const auto& item = map_list->items[i];
+    if (item.type != TYPE_DEBUG_INFO_ITEM) {
+      continue;
+    }
+    const uint8_t* encdata = m_idx->get_uleb_data(item.offset);
+    const uint8_t* initial_encdata = encdata;
+    stats->num_dbg_items += item.size;
+    for (uint32_t j = 0; j < item.size; j++) {
+      // line_start
+      read_uleb128(&encdata);
+      // param_count
+      uint32_t param_count = read_uleb128(&encdata);
+      while (param_count--) {
+        // Each parameter is one uleb128p1
+        read_uleb128p1(&encdata);
+      }
+      bool running = true;
+      while (running) {
+        uint8_t opcode = *encdata++;
+        switch (opcode) {
+        case DBG_END_SEQUENCE:
+          running = false;
+          break;
+        case DBG_ADVANCE_PC:
+        case DBG_END_LOCAL:
+        case DBG_RESTART_LOCAL:
+          // each of these opcodes has one uleb128 arg:
+          // - addr_diff
+          // - register_num
+          // - register_num
+          read_uleb128(&encdata);
+          break;
+        case DBG_ADVANCE_LINE:
+          // line_diff
+          read_sleb128(&encdata);
+          break;
+        case DBG_START_LOCAL:
+          // register_num
+          read_uleb128(&encdata);
+          // name_idx
+          read_uleb128p1(&encdata);
+          // type_idx
+          read_uleb128p1(&encdata);
+          break;
+        case DBG_START_LOCAL_EXTENDED:
+          // register_num
+          read_uleb128(&encdata);
+          // name_idx
+          read_uleb128p1(&encdata);
+          // type_idx
+          read_uleb128p1(&encdata);
+          // sig_idx
+          read_uleb128p1(&encdata);
+          break;
+        case DBG_SET_FILE:
+          // name_idx
+          read_uleb128p1(&encdata);
+          break;
+        case DBG_SET_PROLOGUE_END:
+        case DBG_SET_EPILOGUE_BEGIN:
+          // These cases have no args
+          break;
+        default:
+          // These are special opcodes. We separate them out to the default
+          // case to show we're properly interpretting this program.
+          break;
+        }
+      }
+    }
+    stats->dbg_total_size += encdata - initial_encdata;
+  }
 }
 
 void DexLoader::load_dex_class(int num) {

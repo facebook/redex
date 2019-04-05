@@ -15,6 +15,7 @@ class TypeTags {
   void set_type_tag(const DexType* type, uint32_t type_tag);
   uint32_t get_type_tag(const DexType* type) const;
   const DexType* get_type(uint32_t type_tag) const;
+  size_t size() const;
 
   typedef
       typename std::unordered_map<uint32_t, const DexType*>::iterator iterator;

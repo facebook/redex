@@ -384,7 +384,7 @@ bool passes_args_through(IRInstruction* insn,
   return insn->srcs_size() + ignore == param_count;
 }
 
-Scope build_class_scope(DexStoresVector& stores) {
+Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
@@ -400,7 +400,7 @@ void load_root_dexen(DexStore& store,
                      bool support_dex_v37) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
-  assert(fs::is_directory(dexen_dir_path));
+  redex_assert(fs::is_directory(dexen_dir_path));
 
   // Discover dex files
   auto end = fs::directory_iterator();
@@ -511,6 +511,8 @@ dex_stats_t&
   lhs.strings_total_size += rhs.strings_total_size;
   lhs.method_refs_total_size += rhs.method_refs_total_size;
   lhs.field_refs_total_size += rhs.field_refs_total_size;
+  lhs.num_dbg_items += rhs.num_dbg_items;
+  lhs.dbg_total_size += rhs.dbg_total_size;
   return lhs;
 }
 
@@ -597,26 +599,34 @@ void change_visibility(DexMethod* method) {
 
 // Check that visibility / accessibility changes to the current method
 // won't need to change a referenced method into a virtual or static one.
-bool no_changes_when_relocating_method(const DexMethod* method) {
+bool gather_invoked_direct_methods_that_prevent_relocation(
+    const DexMethod* method,
+    std::unordered_set<DexMethodRef*>* direct_methods_preventing_relocation) {
   auto code = method->get_code();
   always_assert(code);
 
+  bool can_relocate = true;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
       auto meth = resolve_method(insn->get_method(), MethodSearch::Direct);
-      if (!meth) {
-        return false;
+      if (meth) {
+        always_assert(meth->is_def());
+        if (!is_init(meth)) {
+          meth = nullptr;
+        }
       }
-
-      always_assert(meth->is_def());
-      if (!is_init(meth)) {
-        return false;
+      if (!meth) {
+        can_relocate = false;
+        if (!direct_methods_preventing_relocation) {
+          break;
+        }
+        direct_methods_preventing_relocation->emplace(insn->get_method());
       }
     }
   }
 
-  return true;
+  return can_relocate;
 }
 
 bool no_invoke_super(const DexMethod* method) {
@@ -634,7 +644,7 @@ bool no_invoke_super(const DexMethod* method) {
 }
 
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
-  if (!no_changes_when_relocating_method(method)) {
+  if (!gather_invoked_direct_methods_that_prevent_relocation(method)) {
     return false;
   }
 

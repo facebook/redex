@@ -360,7 +360,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_CHECK_CAST: {
       const auto aobj = current_state->get_abstract_obj(insn->src(0));
-      current_state->set_abstract_obj(RESULT_REGISTER, aobj);
+      current_state->set_abstract_obj(
+          RESULT_REGISTER,
+          AbstractObjectDomain(
+              AbstractObject(AbstractObjectKind::OBJECT, insn->get_type())));
       const auto obj = aobj.get_object();
       if (obj && obj->obj_kind == AbstractObjectKind::CLASS) {
         current_state->set_class_source(

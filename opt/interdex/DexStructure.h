@@ -36,6 +36,8 @@ class DexStructure {
 
   const DexClasses& get_all_classes() const { return m_classes; }
 
+  const DexClasses& get_squashed_classes() const { return m_squashed_classes; }
+
   /**
    * Only call this if you know what you are doing. This will leave the
    * current instance is in an unusable state.
@@ -49,6 +51,7 @@ class DexStructure {
                          const FieldRefs& clazz_frefs,
                          const TypeRefs& clazz_trefs,
                          size_t linear_alloc_limit,
+                         size_t method_refs_limit,
                          size_t type_refs_limit,
                          DexClass* clazz);
 
@@ -60,18 +63,25 @@ class DexStructure {
 
   void check_refs_count();
 
+  void squash_empty_last_class(DexClass* clazz);
+
  private:
   size_t m_linear_alloc_size;
   TypeRefs m_trefs;
   MethodRefs m_mrefs;
   FieldRefs m_frefs;
   std::vector<DexClass*> m_classes;
+  std::vector<DexClass*> m_squashed_classes;
 };
 
 class DexesStructure {
  public:
   const DexClasses& get_current_dex_classes() const {
     return m_current_dex.get_all_classes();
+  }
+
+  const DexClasses& get_current_dex_squashed_classes() const {
+    return m_current_dex.get_squashed_classes();
   }
 
   size_t get_num_coldstart_dexes() const { return m_info.num_coldstart_dexes; }
@@ -106,6 +116,10 @@ class DexesStructure {
     m_type_refs_limit = type_refs_limit;
   }
 
+  void set_reserve_mrefs(size_t reserve_mrefs) {
+    m_reserve_mrefs = reserve_mrefs;
+  }
+
   /**
    * Tries to add the class to the current dex. If it can't, it returns false.
    * Throws if the class already exists in the dexes.
@@ -125,6 +139,10 @@ class DexesStructure {
                            DexClass* clazz);
   void add_class_no_checks(DexClass* clazz) {
     add_class_no_checks(MethodRefs(), FieldRefs(), TypeRefs(), clazz);
+  }
+
+  void squash_empty_last_class(DexClass* clazz) {
+    m_current_dex.squash_empty_last_class(clazz);
   }
 
   /**
@@ -147,6 +165,7 @@ class DexesStructure {
 
   int64_t m_linear_alloc_limit;
   int64_t m_type_refs_limit;
+  size_t m_reserve_mrefs;
 
   struct DexesInfo {
     size_t num_dexes{0};

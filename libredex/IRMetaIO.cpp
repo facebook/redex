@@ -65,7 +65,7 @@ DexField* find_field(const DexClass* cls, const std::string& name) {
       std::find_if(cls->get_ifields().begin(),
                    cls->get_ifields().end(),
                    [&](const DexField* f) { return f->str() == name; });
-  assert(result2 != cls->get_ifields().end());
+  redex_assert(result2 != cls->get_ifields().end());
   return *result2;
 }
 
@@ -88,7 +88,7 @@ DexMethod* find_method(const DexClass* cls, const std::string& name_and_proto) {
       [&](const DexMethod* m) {
         return m->get_name() == method_name && show(m->get_proto()) == proto;
       });
-  assert(result2 != cls->get_vmethods().end());
+  redex_assert(result2 != cls->get_vmethods().end());
   return *result2;
 }
 

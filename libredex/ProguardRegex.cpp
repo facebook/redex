@@ -133,7 +133,7 @@ std::string form_type_regex(std::string proguard_regex) {
 // Convert a ProGuard Java type type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
 std::string convert_wildcard_type(std::string typ) {
-  assert(!typ.empty());
+  redex_assert(!typ.empty());
   const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.
   std::string wildcard_descriptor;

@@ -352,7 +352,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
       // Static synthetics should never be virtual.
       for (auto vmethod : cls->get_vmethods()) {
         (void)vmethod;
-        assert(!is_static_synthetic(vmethod));
+        redex_assert(!is_static_synthetic(vmethod));
       }
     }
   }
@@ -381,7 +381,7 @@ IRInstruction* make_iget(DexField* field, uint16_t src) {
     case DataType::Double:
       return OPCODE_IGET_WIDE;
     case DataType::Void:
-      assert(false);
+      redex_assert(false);
     }
     not_reached();
   }();
@@ -390,31 +390,7 @@ IRInstruction* make_iget(DexField* field, uint16_t src) {
 }
 
 IRInstruction* make_sget(DexField* field) {
-  auto const opcode = [&]() {
-    switch (type_to_datatype(field->get_type())) {
-    case DataType::Array:
-    case DataType::Object:
-      return OPCODE_SGET_OBJECT;
-    case DataType::Boolean:
-      return OPCODE_SGET_BOOLEAN;
-    case DataType::Byte:
-      return OPCODE_SGET_BYTE;
-    case DataType::Char:
-      return OPCODE_SGET_CHAR;
-    case DataType::Short:
-      return OPCODE_SGET_SHORT;
-    case DataType::Int:
-    case DataType::Float:
-      return OPCODE_SGET;
-    case DataType::Long:
-    case DataType::Double:
-      return OPCODE_SGET_WIDE;
-    case DataType::Void:
-      assert(false);
-    }
-    not_reached();
-  }();
-
+  auto const opcode = opcode::sget_opcode_for_field(field);
   return (new IRInstruction(opcode))->set_field(field);
 }
 
@@ -436,7 +412,7 @@ void replace_getter_wrapper(IRCode* transform,
                             IRInstruction* move_result,
                             DexField* field) {
   TRACE(SYNT, 2, "Optimizing getter wrapper call: %s\n", SHOW(insn));
-  assert(field->is_concrete());
+  redex_assert(field->is_concrete());
   set_public(field);
 
   auto new_get = is_static(field)
@@ -456,7 +432,7 @@ void update_invoke(IRCode* transform,
                    DexMethod* method) {
   auto op = insn->opcode();
   auto new_invoke = [&] {
-    assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
+    redex_assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
     auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC
                   : OPCODE_INVOKE_DIRECT;
     auto ret = new IRInstruction(new_op);
@@ -511,7 +487,7 @@ bool replace_method_wrapper(const ClassHierarchy& ch,
   TRACE(SYNT, 3, "  wrapper:%p wrappee:%p\n", wrapper, wrappee);
   TRACE(SYNT, 3, "  wrapper: %s\n", SHOW(wrapper));
   TRACE(SYNT, 3, "  wrappee: %s\n", SHOW(wrappee));
-  assert(wrappee->is_concrete() && wrapper->is_concrete());
+  redex_assert(wrappee->is_concrete() && wrapper->is_concrete());
 
   if (is_static(wrapper) && !is_static(wrappee)) {
     assert(can_update_wrappee(ch, wrappee, wrapper));
@@ -533,12 +509,12 @@ void replace_ctor_wrapper(IRCode* transform,
                           IRInstruction* ctor_insn,
                           DexMethod* ctor) {
   TRACE(SYNT, 2, "Optimizing static ctor: %s\n", SHOW(ctor_insn));
-  assert(ctor->is_concrete());
+  redex_assert(ctor->is_concrete());
   set_public(ctor);
 
   auto op = ctor_insn->opcode();
   auto new_ctor_call = [&] {
-    assert(op == OPCODE_INVOKE_DIRECT);
+    redex_assert(op == OPCODE_INVOKE_DIRECT);
     auto ret = new IRInstruction(OPCODE_INVOKE_DIRECT);
     ret->set_method(ctor)->set_arg_word_count(
         ctor_insn->arg_word_count() - 1);
@@ -733,7 +709,7 @@ void remove_dead_methods(
   size_t other_removed = 0;
   size_t pub_meth = 0;
   auto remove_meth = [&](DexMethod* meth) {
-    assert(meth->is_concrete());
+    redex_assert(meth->is_concrete());
     if (!can_remove(meth, synthConfig)) {
       return;
     }
@@ -807,7 +783,7 @@ void remove_dead_methods(
 
   metrics.ctors_removed_count += (synth_removed + pub_meth);
 
-  assert(other_removed == 0);
+  redex_assert(other_removed == 0);
   ssms.next_pass = ssms.next_pass && any_remove;
 }
 
@@ -896,7 +872,7 @@ bool optimize(const ClassHierarchy& ch,
               const SynthConfig& synthConfig,
               SynthMetrics& metrics) {
   auto ssms = analyze(ch, classes, synthConfig);
-  assert(trace_analysis(ssms));
+  redex_assert(trace_analysis(ssms));
   do_transform(ch, classes, ssms, synthConfig, metrics);
   return ssms.next_pass;
 }

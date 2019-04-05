@@ -22,6 +22,12 @@ class InterDexPassPlugin {
   // before running its implementation.
   virtual void configure(const Scope& original_scope, ConfigFiles& cfg) = 0;
 
+  // The InterDex pass might create additional classes, e.g. to hold
+  // methods it relocates. Such classes get announced with this callback.
+  // Note that such additional class are not allowed to affect virtual scopes of
+  // classes in the original scope.
+  virtual void add_to_scope(DexClass* cls) {}
+
   // Will prevent clazz from going into any output dex.
   virtual bool should_skip_class(const DexClass* clazz) = 0;
 
@@ -40,6 +46,10 @@ class InterDexPassPlugin {
                            std::vector<DexType*>& trefs,
                            std::vector<DexClass*>* erased_classes,
                            bool should_not_relocate_methods_of_class) = 0;
+
+  // In each dex, reserve this many mrefs to be potentially added after the
+  // inter-dex pass
+  virtual size_t reserve_mrefs() { return 0; }
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector& outdex,

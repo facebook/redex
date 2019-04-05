@@ -68,7 +68,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     for (auto it = ii.begin(); it != end; ++it) {
       auto insn = it->insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        assert(insn->get_method() == m_callee);
+        redex_assert(insn->get_method() == m_callee);
         invoke_it = it.unwrap();
         break;
       }
@@ -137,7 +137,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     for (auto it = ii.begin(); it != end; ++it) {
       auto insn = it->insn;
       if (insn->opcode() == OPCODE_INVOKE_STATIC) {
-        assert(insn->get_method() == m_callee);
+        redex_assert(insn->get_method() == m_callee);
         invoke_it = it.unwrap();
         break;
       }

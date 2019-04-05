@@ -291,7 +291,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
       uint32_t i = 0;
       std::string prefix;
       if (r.name->str().front() == '<') {
-        assert(r.name->str().back() == '>');
+        redex_assert(r.name->str().back() == '>');
         prefix =
             "$" + r.name->str().substr(1, r.name->str().length() - 2) + "$$";
       } else {
@@ -375,7 +375,10 @@ void RedexContext::publish_class(DexClass* cls) {
             dex_1.c_str(),
             dex_2.c_str());
 
-      throw duplicate_class(class_name, dex_1, dex_2);
+      throw RedexException(
+          RedexError::DUPLICATE_CLASSES,
+          "Found duplicate class in two different files.",
+          {{"class", class_name}, {"dex1", dex_1}, {"dex2", dex_2}});
     }
   }
   m_type_to_class.emplace(type, cls);

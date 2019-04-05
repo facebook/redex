@@ -41,7 +41,7 @@ const DexMethod* find_override(const DexMethod* method,
   get_all_children(ch, cls->get_type(), children);
   for (auto const& childtype : children) {
     auto const& child = type_class(childtype);
-    assert(child);
+    redex_assert(child);
     for (auto const& child_method : child->get_vmethods()) {
       if (signatures_match(method, child_method)) {
         return child_method;

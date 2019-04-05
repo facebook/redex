@@ -190,6 +190,24 @@ class PeepholeTest : public ::testing::Test {
         dasm(put, field, {0_v, 5_v})};
   }
 
+  IRInstructionList op_put_move(IROpcode put,
+                                IROpcode mov,
+                                bool is_wide = false) {
+    using namespace dex_asm;
+
+    DexFieldRef* field =
+        DexField::make_field(dex_class->get_type(),
+                             DexString::make_string("field_name"),
+                             get_int_type());
+
+    return IRInstructionList{
+        dasm(OPCODE_NEW_INSTANCE, dex_class->get_type(), {}),
+        dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {5_v}),
+        is_wide ? dasm(OPCODE_CONST_WIDE, {0_v, 11_L})
+                : dasm(OPCODE_CONST, {0_v, 22_L}),
+        dasm(put, field, {0_v, 5_v}), dasm(mov, {3_v, 0_v})};
+  }
+
   IRInstructionList op_putget(IROpcode put,
                               IROpcode get,
                               IROpcode move_result_pseudo,
@@ -222,13 +240,26 @@ class PeepholeTest : public ::testing::Test {
                           : dasm(move_result_pseudo, {3_v})};
   }
 
-  void put_get_test_helper(const std::string& test_name,
-                           IROpcode put,
-                           IROpcode get,
-                           IROpcode move_result_pseudo,
-                           bool is_wide = false) {
-    IRInstructionList input = op_putget(put, get, move_result_pseudo, is_wide);
+  void put_get_test_helper_same_regs(const std::string& test_name,
+                                     IROpcode put,
+                                     IROpcode get,
+                                     IROpcode move_result_pseudo,
+                                     bool is_wide = false) {
+    IRInstructionList input =
+        op_putget(put, get, move_result_pseudo, is_wide, true);
     IRInstructionList expected = op_put(put, is_wide);
+    test_1(test_name, input, expected);
+  }
+
+  void put_get_test_helper_diff_regs(const std::string& test_name,
+                                     IROpcode put,
+                                     IROpcode get,
+                                     IROpcode mov,
+                                     IROpcode move_result_pseudo,
+                                     bool is_wide = false) {
+    IRInstructionList input =
+        op_putget(put, get, move_result_pseudo, is_wide, false);
+    IRInstructionList expected = op_put_move(put, mov, is_wide);
     test_1(test_name, input, expected);
   }
 
@@ -267,40 +298,101 @@ TEST_F(PeepholeTest, Arithmetic) {
   test_1("div16_neg1_to_neg",
          op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, -1),
          negate);
+  test_1("mul8_4_to_shl8_2",
+         op_lit(OPCODE_MUL_INT_LIT8, 4),
+         op_lit(OPCODE_SHL_INT_LIT8, 2));
+  test_1("mul16_4_to_shl8_2",
+         op_lit(OPCODE_MUL_INT_LIT16, 4),
+         op_lit(OPCODE_SHL_INT_LIT8, 2));
+  test_1("mul16_1048576_to_shl8_20",
+         op_lit(OPCODE_MUL_INT_LIT16, 1048576),
+         op_lit(OPCODE_SHL_INT_LIT8, 20));
+  test_1("div8_4_to_shr8_2",
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, 4),
+         op_lit(OPCODE_SHR_INT_LIT8, 2));
+  test_1("div16_4_to_shr8_2",
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, 4),
+         op_lit(OPCODE_SHR_INT_LIT8, 2));
+  test_1("div16_1073741824_to_shr8_30",
+         op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT16, 1073741824),
+         op_lit(OPCODE_SHR_INT_LIT8, 30));
 
   // These should result in no changes
   test_1_nochange("add8_15", op_lit(OPCODE_ADD_INT_LIT8, 15));
   test_1_nochange("add16_1", op_lit(OPCODE_ADD_INT_LIT16, 1));
   test_1_nochange("mult8_3", op_lit(OPCODE_MUL_INT_LIT8, 3));
   test_1_nochange("mult16_12", op_lit(OPCODE_MUL_INT_LIT16, 12));
+  test_1_nochange("mult8_9", op_lit(OPCODE_MUL_INT_LIT8, 9));
+  test_1_nochange("mult8_-512", op_lit(OPCODE_MUL_INT_LIT8, -512));
+  test_1_nochange("div8_81",
+                  op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, 81));
+  test_1_nochange("div8_-2147483648",
+                  op_lit_move_result_pseudo(OPCODE_DIV_INT_LIT8, -2147483648));
 }
 
 TEST_F(PeepholeTest, RemovePutGetPair) {
-  put_get_test_helper(
+  put_get_test_helper_same_regs(
       "remove_put_get", OPCODE_IPUT, OPCODE_IGET, IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper("remove_put_get_byte",
-                      OPCODE_IPUT_BYTE,
-                      OPCODE_IGET_BYTE,
-                      IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper("remove_put_get_char",
-                      OPCODE_IPUT_CHAR,
-                      OPCODE_IGET_CHAR,
-                      IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper("remove_put_get_boolean",
-                      OPCODE_IPUT_BOOLEAN,
-                      OPCODE_IGET_BOOLEAN,
-                      IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper("remove_put_get_short",
-                      OPCODE_IPUT_SHORT,
-                      OPCODE_IGET_SHORT,
-                      IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_same_regs("remove_put_get_byte",
+                                OPCODE_IPUT_BYTE,
+                                OPCODE_IGET_BYTE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_same_regs("remove_put_get_char",
+                                OPCODE_IPUT_CHAR,
+                                OPCODE_IGET_CHAR,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_same_regs("remove_put_get_boolean",
+                                OPCODE_IPUT_BOOLEAN,
+                                OPCODE_IGET_BOOLEAN,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_same_regs("remove_put_get_short",
+                                OPCODE_IPUT_SHORT,
+                                OPCODE_IGET_SHORT,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_same_regs("remove_put_get_wide",
+                                OPCODE_IPUT_WIDE,
+                                OPCODE_IGET_WIDE,
+                                IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
+                                true);
+}
 
-  put_get_test_helper("remove_put_get_wide",
-                      OPCODE_IPUT_WIDE,
-                      OPCODE_IGET_WIDE,
-                      IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
-                      true);
+TEST_F(PeepholeTest, RemovePutGetPairDiffSrcDest) {
+  // Test the case where the source register of the put instruction is
+  // different from the dest of the get instruction.
+  put_get_test_helper_diff_regs("remove_put_get",
+                                OPCODE_IPUT,
+                                OPCODE_IGET,
+                                OPCODE_MOVE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_diff_regs("remove_put_get_byte",
+                                OPCODE_IPUT_BYTE,
+                                OPCODE_IGET_BYTE,
+                                OPCODE_MOVE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_diff_regs("remove_put_get_char",
+                                OPCODE_IPUT_CHAR,
+                                OPCODE_IGET_CHAR,
+                                OPCODE_MOVE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_diff_regs("remove_put_get_boolean",
+                                OPCODE_IPUT_BOOLEAN,
+                                OPCODE_IGET_BOOLEAN,
+                                OPCODE_MOVE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_diff_regs("remove_put_get_short",
+                                OPCODE_IPUT_SHORT,
+                                OPCODE_IGET_SHORT,
+                                OPCODE_MOVE,
+                                IOPCODE_MOVE_RESULT_PSEUDO);
+  put_get_test_helper_diff_regs("remove_put_get_wide",
+                                OPCODE_IPUT_WIDE,
+                                OPCODE_IGET_WIDE,
+                                OPCODE_MOVE_WIDE,
+                                IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
+                                true);
+}
 
+TEST_F(PeepholeTest, RemovePutGetPairNoReplacement) {
   // Negative case, no match/replacement.
   put_get_test_helper_nochange("remove_put_get_byte_nochange",
                                OPCODE_IPUT,
@@ -310,14 +402,6 @@ TEST_F(PeepholeTest, RemovePutGetPair) {
                                OPCODE_IPUT_CHAR,
                                OPCODE_IGET_BYTE,
                                IOPCODE_MOVE_RESULT_PSEUDO);
-  put_get_test_helper_nochange(
-      "remove_put_get_char_diff_register_nochange",
-      OPCODE_IPUT_CHAR,
-      OPCODE_IGET_CHAR,
-      IOPCODE_MOVE_RESULT_PSEUDO,
-      false,
-      false);
-
   put_get_test_helper_nochange(
       "remove_put_get_char_volatile_field_register_nochange",
       OPCODE_IPUT_CHAR,
@@ -497,6 +581,182 @@ TEST(PeepholeTestS, RemoveStaticPutGetLong) {
       )");
 }
 
+TEST(PeepholeTestS, RemoveStaticPutGetIntDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:I",
+    R"(
+       (
+        (const v0 1)
+        (sput v0 "LFoo;.bar:I")
+        (sget "LFoo;.bar:I")
+        (move-result-pseudo v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const v0 1)
+        (sput v0 "LFoo;.bar:I")
+        (move v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetByteDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:B",
+    R"(
+       (
+        (const v0 1)
+        (sput-byte v0 "LFoo;.bar:B")
+        (sget-byte "LFoo;.bar:B")
+        (move-result-pseudo v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const v0 1)
+        (sput-byte v0 "LFoo;.bar:B")
+        (move v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetBoolDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:Z",
+    R"(
+       (
+        (const v0 1)
+        (sput-boolean v0 "LFoo;.bar:Z")
+        (sget-boolean "LFoo;.bar:Z")
+        (move-result-pseudo v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const v0 1)
+        (sput-boolean v0 "LFoo;.bar:Z")
+        (move v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetCharDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:C",
+    R"(
+       (
+        (const v0 1)
+        (sput-char v0 "LFoo;.bar:C")
+        (sget-char "LFoo;.bar:C")
+        (move-result-pseudo v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const v0 1)
+        (sput-char v0 "LFoo;.bar:C")
+        (move v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetShortDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:S",
+    R"(
+       (
+        (const v0 1)
+        (sput-short v0 "LFoo;.bar:S")
+        (sget-short "LFoo;.bar:S")
+        (move-result-pseudo v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const v0 1)
+        (sput-short v0 "LFoo;.bar:S")
+        (move v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetLongDiffSrcDest) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:J",
+    R"(
+       (
+        (const-wide v0 1)
+        (sput-wide v0 "LFoo;.bar:J")
+        (sget-wide "LFoo;.bar:J")
+        (move-result-pseudo-wide v3)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const-wide v0 1)
+        (sput-wide v0 "LFoo;.bar:J")
+        (move-wide v3 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetLongOverlapDiffSrcDest_v1) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:J",
+    R"(
+       (
+        (const-wide v0 1)
+        (sput-wide v0 "LFoo;.bar:J")
+        (sget-wide "LFoo;.bar:J")
+        (move-result-pseudo-wide v1)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const-wide v0 1)
+        (sput-wide v0 "LFoo;.bar:J")
+        (move-wide v1 v0)
+        (return-void)
+       )
+      )");
+}
+
+TEST(PeepholeTestS, RemoveStaticPutGetLongOverlapDiffSrcDest_v2) {
+  sputget_peep_hole_test(
+    "LFoo;.bar:J",
+    R"(
+       (
+        (const-wide v1 1)
+        (sput-wide v1 "LFoo;.bar:J")
+        (sget-wide "LFoo;.bar:J")
+        (move-result-pseudo-wide v0)
+        (return-void)
+       )
+      )",
+    R"(
+       (
+        (const-wide v1 1)
+        (sput-wide v1 "LFoo;.bar:J")
+        (move-wide v0 v1)
+        (return-void)
+       )
+      )");
+}
+
 TEST(PeepholeTestS, RemoveStaticPutGetNegativeIntByte) {
   // Negative (put & get byte)
   sputget_peep_hole_test_negative(
@@ -522,21 +782,6 @@ TEST(PeepholeTestS, RemoveStaticPutGetNegativeCharByte) {
         (sput-char v0 "LFoo;.bar:C")
         (sget-byte "LFoo;.bar:C")
         (move-result-pseudo v0)
-        (return-void)
-       )
-      )");
-}
-
-TEST(PeepholeTestS, RemoveStaticPutGetNegativeRegMismatch) {
-  // Negative (different reg)
-  sputget_peep_hole_test_negative(
-    "LFoo;.bar:I",
-    R"(
-       (
-        (const v0 1)
-        (sput v0 "LFoo;.bar:I")
-        (sget "LFoo;.bar:I")
-        (move-result-pseudo v1)
         (return-void)
        )
       )");
