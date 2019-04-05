@@ -19,3 +19,8 @@ uint32_t TypeTags::get_type_tag(const DexType* type) const {
 const DexType* TypeTags::get_type(uint32_t type_tag) const {
   return m_tag_to_type.at(type_tag);
 }
+
+size_t TypeTags::size() const {
+  always_assert(m_tag_to_type.size() == m_type_to_tag.size());
+  return m_tag_to_type.size();
+}

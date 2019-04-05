@@ -137,7 +137,5 @@ class ModelMethodMerger {
   void update_to_static(
       const std::set<DexMethod*, dexmethods_comparator>& methods);
 
-  bool no_type_tags();
-
   std::string get_method_signature_string(DexMethod* meth);
 };
