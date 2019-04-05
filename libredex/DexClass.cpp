@@ -732,12 +732,12 @@ void DexClass::load_class_data_item(DexIdx* idx,
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), false);
-    if (method_pointer_cache.count(dm)) {
-      // found duplicate methods
-      throw duplicate_method(SHOW(dm));
-    } else {
-      method_pointer_cache.insert(dm);
-    }
+
+    assert_or_throw(
+        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
+        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+
+    method_pointer_cache.insert(dm);
     m_dmethods.push_back(dm);
   }
   ndex = 0;
@@ -752,12 +752,12 @@ void DexClass::load_class_data_item(DexIdx* idx,
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), true);
-    if (method_pointer_cache.count(dm)) {
-      // found duplicate methods
-      throw duplicate_method(SHOW(dm));
-    } else {
-      method_pointer_cache.insert(dm);
-    }
+
+    assert_or_throw(
+        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
+        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+
+    method_pointer_cache.insert(dm);
     m_vmethods.push_back(dm);
   }
 }

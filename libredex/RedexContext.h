@@ -204,38 +204,6 @@ struct RedexContext {
   bool m_record_keep_reasons{false};
 };
 
-class duplicate_class : public std::exception {
- public:
-  duplicate_class(const std::string& class_name,
-                  const std::string& location_1,
-                  const std::string& location_2)
-      : m_class_name(class_name),
-        m_location_1(location_1),
-        m_location_2(location_2),
-        m_msg(make_msg(class_name, location_1, location_2)) {}
-
-  const char* what() const throw() override { return m_msg.c_str(); }
-
-  const std::string m_class_name;
-  const std::string m_location_1;
-  const std::string m_location_2;
-
- private:
-  const std::string m_msg;
-
-  std::string make_msg(const std::string& class_name,
-                       const std::string& location_1,
-                       const std::string& location_2) {
-    std::ostringstream oss;
-    oss << "Found duplicate class in two different files. Class "
-        << m_class_name << "\n"
-        << "  1: " << location_1 << "\n"
-        << "  2: " << location_2 << "\n";
-
-    return oss.str();
-  }
-};
-
 // One or more exceptions
 class aggregate_exception : public std::exception {
  public:

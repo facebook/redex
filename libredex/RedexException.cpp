@@ -30,3 +30,12 @@ RedexException::RedexException(
 }
 
 const char* RedexException::what() const throw() { return m_msg.c_str(); }
+
+void assert_or_throw(bool cond,
+                     RedexError type,
+                     const std::string& message,
+                     const std::map<std::string, std::string>& extra_info) {
+  if (!cond) {
+    throw RedexException(type, message, extra_info);
+  }
+}

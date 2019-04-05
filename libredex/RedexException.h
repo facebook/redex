@@ -18,6 +18,8 @@ enum RedexError {
   INTERNAL_ERROR = 1,
   GENERIC_ASSERTION_ERROR = 2,
   CACHE_INDEX_OUT_OF_BOUND = 3,
+  DUPLICATE_CLASSES = 4,
+  DUPLICATE_METHODS = 5,
 };
 
 class RedexException : public std::exception {
@@ -35,3 +37,8 @@ class RedexException : public std::exception {
  private:
   std::string m_msg;
 };
+
+void assert_or_throw(bool cond,
+                     RedexError type = RedexError::GENERIC_ASSERTION_ERROR,
+                     const std::string& message = "",
+                     const std::map<std::string, std::string>& extra_info = {});
