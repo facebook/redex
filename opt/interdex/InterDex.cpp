@@ -11,7 +11,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "ApiLevelChecker.h"
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
@@ -629,8 +628,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
 }
 
 void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
-    const Scope& scope,
-    std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated) {
+    const Scope& scope) {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%d, field ref weight %d, type ref weight %d, string ref weight %d.\n",
@@ -639,7 +637,23 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
         m_cross_dex_ref_minimizer.get_config().string_ref_weight);
 
-  size_t next_method_id = 0;
+  if (m_cross_dex_relocator_config.relocate_static_methods ||
+      m_cross_dex_relocator_config.relocate_non_static_direct_methods ||
+      m_cross_dex_relocator_config.relocate_virtual_methods) {
+    m_cross_dex_relocator = new CrossDexRelocator(
+        m_cross_dex_relocator_config, m_original_scope, m_dexes_structure);
+
+    TRACE(IDEX, 2,
+          "[dex ordering] Cross-dex-relocator active, max relocated methods "
+          "per class: %zu, relocating static methods: %s, non-static direct "
+          "methods: %s, virtual methods: %s\n",
+          m_cross_dex_relocator_config.max_relocated_methods_per_class,
+          m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
+          m_cross_dex_relocator_config.relocate_non_static_direct_methods
+              ? "yes"
+              : "no",
+          m_cross_dex_relocator_config.relocate_virtual_methods ? "yes" : "no");
+  }
 
   std::vector<std::pair<DexClass*, bool>> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
@@ -652,40 +666,11 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
       continue;
     }
 
-    // Let's identify some static methods that we can freely relocate!
-    // For each relocatable method, we are going to create a separate
-    // class, just to hold that relocatable method. This enables us to use the
-    // existing class-based infrastructure to prioritize these methods.
-    // Don't worry, later we are going to erase most of those classes again,
-    // consolidating the relocated methods in just a few classes.
-    if (m_minimize_cross_dex_refs_relocate_methods &&
-        !should_not_relocate_methods_of_class(cls) && !cls->is_external() &&
-        !cls->get_clinit()) {
-      std::vector<DexMethod*> relocatable_methods;
-      for (DexMethod* m : cls->get_dmethods()) {
-        if (is_static(m) && !is_clinit(m) && m->is_concrete() &&
-            can_rename(m) && !root(m) && !m->rstate.no_optimizations() &&
-            no_changes_when_relocating_method(m) && no_invoke_super(m)) {
-          relocatable_methods.push_back(m);
-        }
-      }
-
-      for (DexMethod* m : relocatable_methods) {
-        std::string new_type_name =
-            "Lredex/$Relocated" + std::to_string(next_method_id) + ";";
-        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}\n",
-              m->get_class()->get_name()->c_str(), m->get_name()->c_str(),
-              new_type_name.c_str(), m->get_name()->c_str());
-
-        DexType* new_type = DexType::make_type(new_type_name.c_str());
-        ClassCreator cc(new_type);
-        cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(get_object_type());
-        DexClass* relocated_cls = cc.create();
-        int api_level = api::LevelChecker::get_method_level(m);
-        relocate_method(m, new_type);
-        ++next_method_id;
-
+    if (m_cross_dex_relocator != nullptr &&
+        !should_not_relocate_methods_of_class(cls)) {
+      std::vector<DexClass*> relocated_classes;
+      m_cross_dex_relocator->relocate_methods(cls, relocated_classes);
+      for (DexClass* relocated_cls : relocated_classes) {
         // Tell all plugins that the new class is now effectively part of the
         // scope.
         add_to_scope(relocated_cls);
@@ -695,7 +680,6 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
         always_assert(!should_skip_class_due_to_plugin(relocated_cls));
 
         classes_to_insert.emplace_back(relocated_cls, /* ignore_cls */ true);
-        relocated.insert({relocated_cls, {m, cls, api_level}});
       }
     }
 
@@ -739,10 +723,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     return;
   }
 
-  std::unordered_map<DexClass*, RelocatedMethodInfo> relocated;
-  init_cross_dex_ref_minimizer_and_relocate_methods(scope, relocated);
-
-  TRACE(IDEX, 2, "[dex ordering] relocated %d methods\n", relocated.size());
+  init_cross_dex_ref_minimizer_and_relocate_methods(scope);
 
   int dexnum = m_dexes_structure.get_num_dexes();
   // Strategy for picking the next class to emit:
@@ -752,9 +733,6 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   //   prefers classes that share many applied refs and bring in few unapplied
   //   refs
   bool pick_worst = true;
-  std::unordered_map<int32_t, RelocatedTargetClassInfo>
-      relocated_target_classes;
-  std::unordered_set<DexClass*> classes_in_current_dex;
   while (!m_cross_dex_ref_minimizer.empty()) {
     DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
                                : m_cross_dex_ref_minimizer.front();
@@ -765,15 +743,13 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     bool overflowed = dexnum != new_dexnum;
     m_cross_dex_ref_minimizer.erase(cls, emitted, overflowed);
 
-    // Let's merge relocated helper classes
-    if (overflowed) {
-      classes_in_current_dex.clear();
-      relocated_target_classes.clear();
+    if (m_cross_dex_relocator != nullptr) {
+      // Let's merge relocated helper classes
+      if (overflowed) {
+        m_cross_dex_relocator->current_dex_overflowed();
+      }
+      m_cross_dex_relocator->add_to_current_dex(cls);
     }
-    classes_in_current_dex.insert(cls);
-
-    re_relocate_method(cls, classes_in_current_dex, relocated,
-                       relocated_target_classes);
 
     // We can treat *refs owned by "erased classes" as effectively being emitted
     for (DexClass* erased_cls : erased_classes) {
@@ -790,52 +766,9 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
   }
 }
 
-void InterDex::re_relocate_method(
-    DexClass* cls,
-    const std::unordered_set<DexClass*>& classes_in_current_dex,
-    const std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated,
-    std::unordered_map<int32_t, RelocatedTargetClassInfo>&
-        relocated_target_classes) {
-  auto relocated_it = relocated.find(cls);
-  if (relocated_it != relocated.end()) {
-    ++m_stats.relocatable_methods;
-    const RelocatedMethodInfo& info = relocated_it->second;
-    DexMethod* method = info.method;
-    always_assert(method->get_class() == cls->get_type());
-    DexClass* target_class = nullptr;
-    if (classes_in_current_dex.count(info.source_class)) {
-      // We are going to move the method back to the class where it came from,
-      // effectively undoing the relocation.
-      target_class = info.source_class;
-    } else {
-      set_public(method);
-      change_visibility(method);
-      ++m_stats.relocated_methods;
-      // For runtime performance reasons, we avoid having just one giant
-      // class with a vast number of static methods. Instead, we retain
-      // several classes once a certain threshold is exceeded.
-      auto it = relocated_target_classes.find(info.api_level);
-      if (it == relocated_target_classes.end() ||
-          it->second.size >= m_relocated_methods_per_class) {
-        relocated_target_classes[info.api_level] = {cls, 1};
-        ++m_stats.classes_added_for_relocated_methods;
-      } else {
-        // We are going to merge the method into an already emitted
-        // relocation target class, allowing us to get rid of an extra
-        // relocation class.
-        RelocatedTargetClassInfo& target_class_info = it->second;
-        target_class = target_class_info.cls;
-        ++target_class_info.size;
-      }
-    }
-    if (target_class) {
-      TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}\n",
-            cls->get_name()->c_str(), method->get_name()->c_str(),
-            target_class == info.source_class ? "back " : "",
-            target_class->get_name()->c_str(), method->get_name()->c_str());
-      relocate_method(method, target_class->get_type());
-      m_dexes_structure.squash_empty_last_class(cls);
-    }
+void InterDex::cleanup(const Scope& final_scope) {
+  if (m_cross_dex_relocator != nullptr) {
+    m_cross_dex_relocator->cleanup(final_scope);
   }
 }
 

@@ -149,9 +149,18 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
          m_minimize_cross_dex_refs_config.type_ref_weight);
   jw.get("minimize_cross_dex_refs_string_ref_weight", 90,
          m_minimize_cross_dex_refs_config.string_ref_weight);
-  jw.get("minimize_cross_dex_refs_relocate_methods", false,
-         m_minimize_cross_dex_refs_relocate_methods);
-  jw.get("relocated_methods_per_class", 64, m_relocated_methods_per_class);
+  jw.get("minimize_cross_dex_refs_relocate_static_methods", false,
+         m_cross_dex_relocator_config.relocate_static_methods);
+  jw.get("minimize_cross_dex_refs_relocate_non_static_direct_methods", false,
+         m_cross_dex_relocator_config.relocate_non_static_direct_methods);
+  jw.get("minimize_cross_dex_refs_relocate_virtual_methods", false,
+         m_cross_dex_relocator_config.relocate_virtual_methods);
+
+  // The actual number of relocated methods per class tends to be just a
+  // fraction of this number, as relocated methods get re-relocated back into
+  // their original class when they end up in the same dex.
+  jw.get("max_relocated_methods_per_class", 200,
+         m_cross_dex_relocator_config.max_relocated_methods_per_class);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -170,13 +179,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     reserve_mrefs += plugin->reserve_mrefs();
   }
 
-  InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
-                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
-                    m_normal_primary_dex, m_emit_scroll_set_marker,
-                    m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_minimize_cross_dex_refs_config,
-                    m_minimize_cross_dex_refs_relocate_methods,
-                    m_relocated_methods_per_class, reserve_mrefs);
+  InterDex interdex(
+      original_scope, dexen, mgr.apk_manager(), cfg, plugins,
+      m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
+      m_normal_primary_dex, m_emit_scroll_set_marker, m_emit_canaries,
+      m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
+      m_cross_dex_relocator_config, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
@@ -200,6 +208,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   dexen = interdex.take_outdex();
 
   auto final_scope = build_class_scope(stores);
+  interdex.cleanup(final_scope);
   for (const auto& plugin : plugins) {
     plugin->cleanup(final_scope);
   }
@@ -223,11 +232,23 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     mgr.set_metric(metric, p.second);
   }
 
-  const auto& stats = interdex.get_stats();
+  const auto cross_dex_relocator_stats =
+      interdex.get_cross_dex_relocator_stats();
   mgr.set_metric(METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS,
-                 stats.classes_added_for_relocated_methods);
-  mgr.set_metric(METRIC_RELOCATABLE_METHODS, stats.relocatable_methods);
-  mgr.set_metric(METRIC_RELOCATED_METHODS, stats.relocated_methods);
+                 cross_dex_relocator_stats.classes_added_for_relocated_methods);
+  mgr.set_metric(METRIC_RELOCATABLE_STATIC_METHODS,
+                 cross_dex_relocator_stats.relocatable_static_methods);
+  mgr.set_metric(
+      METRIC_RELOCATABLE_NON_STATIC_DIRECT_METHODS,
+      cross_dex_relocator_stats.relocatable_non_static_direct_methods);
+  mgr.set_metric(METRIC_RELOCATABLE_VIRTUAL_METHODS,
+                 cross_dex_relocator_stats.relocatable_virtual_methods);
+  mgr.set_metric(METRIC_RELOCATED_STATIC_METHODS,
+                 cross_dex_relocator_stats.relocated_static_methods);
+  mgr.set_metric(METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS,
+                 cross_dex_relocator_stats.relocated_non_static_direct_methods);
+  mgr.set_metric(METRIC_RELOCATED_VIRTUAL_METHODS,
+                 cross_dex_relocator_stats.relocated_virtual_methods);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,

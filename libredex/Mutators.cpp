@@ -57,10 +57,10 @@ namespace mutators {
 void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
   auto proto = method->get_proto();
   auto params = proto->get_args()->get_type_list();
-  auto clstype = method->get_class();
+  auto cls_type = method->get_class();
   if (keep == KeepThis::Yes) {
     // make `this` an explicit parameter
-    params.push_front(clstype);
+    params.push_front(cls_type);
     auto new_args = DexTypeList::make_type_list(std::move(params));
     auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
     DexMethodSpec spec;
@@ -88,10 +88,50 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
 
   // changing the method proto means that we need to change its position in the
   // dmethod list
-  auto cls = type_class(clstype);
+  auto cls = type_class(cls_type);
   cls->remove_method(method);
   method->set_virtual(false);
   cls->add_method(method);
 }
 
+void make_non_static(DexMethod* method, bool make_virtual) {
+  always_assert(method->get_access() & ACC_STATIC);
+  auto proto = method->get_proto();
+  auto params = proto->get_args()->get_type_list();
+  auto cls_type = method->get_class();
+  // Limitation: We can only deal with static methods that have a first
+  // of the parameter class type.
+  always_assert(cls_type == params.front());
+  params.pop_front();
+  auto new_args = DexTypeList::make_type_list(std::move(params));
+  auto new_proto = DexProto::make_proto(proto->get_rtype(), new_args);
+  DexMethodSpec spec;
+  spec.proto = new_proto;
+  method->change(spec,
+                 true /* rename on collision */,
+                 true /* update deobfuscated name */);
+
+  auto code = method->get_code();
+  // If the debug info param count doesn't match the param count in the
+  // method signature, ART will not parse any of the debug info for the
+  // method. Note that this shows up as a runtime error and not a
+  // verification error. To avoid that, we insert a nullptr here.
+  if (code) {
+    auto debug = code->get_debug_item();
+    if (debug) {
+      auto& param_names = debug->get_param_names();
+      param_names.erase(param_names.begin());
+    }
+  }
+  method->set_access(method->get_access() & ~ACC_STATIC);
+
+  // changing the method proto means that we need to change its position in the
+  // dmethod list
+  auto cls = type_class(cls_type);
+  cls->remove_method(method);
+  if (make_virtual) {
+    method->set_virtual(true);
+  }
+  cls->add_method(method);
+}
 }

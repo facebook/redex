@@ -129,7 +129,7 @@ inline bool is_impl_scope(const VirtualScope* scope) {
 
 /**
  * Return true if a VirtualScope is composed by a single non impl method.
- * Effectively if themethod is devirtualizable.
+ * Effectively if the method is devirtualizable.
  */
 inline bool is_non_virtual_scope(const VirtualScope* scope) {
   if (scope->methods[0].second ==
