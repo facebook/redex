@@ -117,17 +117,22 @@ class InterDex {
   struct RelocatedMethodInfo {
     DexMethod* method;
     DexClass* source_class;
+    int api_level;
   };
   void init_cross_dex_ref_minimizer_and_relocate_methods(
       const Scope& scope,
       std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated);
   void emit_remaining_classes(const Scope& scope);
+  struct RelocatedTargetClassInfo {
+    DexClass* cls;
+    size_t size{0}; // number of methods
+  };
   void re_relocate_method(
       DexClass* cls,
-      std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated,
-      DexClass*& relocated_class_in_dex,
-      size_t& relocated_class_in_dex_size,
-      std::unordered_set<DexClass*>& classes_in_current_dex);
+      const std::unordered_set<DexClass*>& classes_in_current_dex,
+      const std::unordered_map<DexClass*, RelocatedMethodInfo>& relocated,
+      std::unordered_map<int32_t, RelocatedTargetClassInfo>&
+          relocated_target_classes);
   void emit_mixed_mode_classes(const std::vector<DexType*>& interdexorder,
                                bool can_touch_interdex_order);
   void flush_out_dex(DexInfo dex_info);
