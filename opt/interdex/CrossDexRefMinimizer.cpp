@@ -100,6 +100,56 @@ void CrossDexRefMinimizer::reprioritize(
   }
 }
 
+void CrossDexRefMinimizer::gather_refs(DexClass* cls,
+                                       std::vector<DexMethodRef*>& method_refs,
+                                       std::vector<DexFieldRef*>& field_refs,
+                                       std::vector<DexType*>& types,
+                                       std::vector<DexString*>& strings) {
+  cls->gather_methods(method_refs);
+  cls->gather_fields(field_refs);
+  cls->gather_types(types);
+  cls->gather_strings(strings);
+
+  // remove duplicates to speed up actual sorting
+  sort_unique(method_refs);
+  sort_unique(field_refs);
+  sort_unique(types);
+  sort_unique(strings);
+
+  // sort deterministically
+  std::sort(method_refs.begin(), method_refs.end(), compare_dexmethods);
+  std::sort(field_refs.begin(), field_refs.end(), compare_dexfields);
+  std::sort(types.begin(), types.end(), compare_dextypes);
+  std::sort(strings.begin(), strings.end(), compare_dexstrings);
+}
+
+void CrossDexRefMinimizer::sample(DexClass* cls) {
+  std::vector<DexMethodRef*> method_refs;
+  std::vector<DexFieldRef*> field_refs;
+  std::vector<DexType*> types;
+  std::vector<DexString*> strings;
+  gather_refs(cls, method_refs, field_refs, types, strings);
+  auto increment = [& ref_counts = m_ref_counts,
+                    &max_ref_count = m_max_ref_count](void* ref) {
+    size_t count = ++ref_counts[ref];
+    if (count > max_ref_count) {
+      max_ref_count = count;
+    }
+  };
+  for (auto ref : method_refs) {
+    increment(ref);
+  }
+  for (auto ref : field_refs) {
+    increment(ref);
+  }
+  for (auto ref : types) {
+    increment(ref);
+  }
+  for (auto ref : strings) {
+    increment(ref);
+  }
+}
+
 void CrossDexRefMinimizer::insert(DexClass* cls) {
   always_assert(m_class_infos.count(cls) == 0);
   ++m_stats.classes;
@@ -116,44 +166,49 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   std::vector<DexFieldRef*> field_refs;
   std::vector<DexType*> types;
   std::vector<DexString*> strings;
-  cls->gather_methods(method_refs);
-  sort_unique(method_refs);
-  cls->gather_fields(field_refs);
-  sort_unique(field_refs);
-  cls->gather_types(types);
-  sort_unique(types);
-  cls->gather_strings(strings);
-  sort_unique(strings);
+  gather_refs(cls, method_refs, field_refs, types, strings);
+
   auto& refs = class_info.refs;
-  uint64_t refs_weight = 0;
   refs.reserve(method_refs.size() + field_refs.size() + types.size() +
                strings.size());
+  uint64_t& refs_weight = class_info.refs_weight;
+
+  auto add_weight = [& ref_counts = m_ref_counts,
+                     max_ref_count = m_max_ref_count, &refs,
+                     &refs_weight](void* ref, size_t weight) {
+    auto it = ref_counts.find(ref);
+    auto ref_count = it == ref_counts.end() ? 1 : it->second;
+    double frequency = ref_count * 1.0 / max_ref_count;
+    // We skip reference that...
+    // - only ever appear once (those won't help with prioritization), and
+    // - and those which appear extremely frequently (and are therefore likely
+    //   to be referenced by every dex anyway)
+    bool skipping = ref_count == 1 || frequency > (1.0 / 8);
+    TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s\n", ref_count,
+          max_ref_count, frequency, skipping ? "(skipping)" : "");
+    if (!skipping) {
+      refs.emplace_back(ref, weight);
+      refs_weight += weight;
+    }
+  };
 
   // Record all references with a particular weight.
   // The weights are somewhat arbitrary, but they were chosen after trying many
   // different values and observing the effect on APK size.
+  // We discount references that occur in many classes.
   // TODO: Try some other variations.
   for (auto mref : method_refs) {
-    uint32_t weight = m_config.method_ref_weight;
-    refs.emplace_back(mref, weight);
-    refs_weight += weight;
+    add_weight(mref, m_config.method_ref_weight);
   }
   for (auto type : types) {
-    uint32_t weight = m_config.type_ref_weight;
-    refs.emplace_back(type, weight);
-    refs_weight += weight;
+    add_weight(type, m_config.type_ref_weight);
   }
   for (auto string : strings) {
-    uint32_t weight = m_config.string_ref_weight;
-    refs.emplace_back(string, weight);
-    refs_weight += weight;
+    add_weight(string, m_config.string_ref_weight);
   }
   for (auto fref : field_refs) {
-    uint32_t weight = m_config.field_ref_weight;
-    refs.emplace_back(fref, weight);
-    refs_weight += weight;
+    add_weight(fref, m_config.field_ref_weight);
   }
-  class_info.refs_weight = refs_weight;
 
   std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
       affected_classes;

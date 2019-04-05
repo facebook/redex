@@ -100,13 +100,26 @@ class CrossDexRefMinimizer {
     std::array<int32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight{};
     int64_t applied_refs_weight{0};
   };
+
   void reprioritize(
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
   DexClass* worst(bool generated);
 
+  std::unordered_map<void*, size_t> m_ref_counts;
+  size_t m_max_ref_count{0};
+
+  void gather_refs(DexClass* cls,
+                   std::vector<DexMethodRef*>& method_refs,
+                   std::vector<DexFieldRef*>& field_refs,
+                   std::vector<DexType*>& types,
+                   std::vector<DexString*>& strings);
+
  public:
   CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
       : m_config(config) {}
+  // Gather frequency counts; must be called for relevant classes before
+  // inserting them
+  void sample(DexClass* cls);
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;

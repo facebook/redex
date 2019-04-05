@@ -632,14 +632,25 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
         m_cross_dex_ref_minimizer.get_config().string_ref_weight);
 
-  // Emit classes using some algorithm to group together classes which
-  // tend to share the same refs.
+  std::vector<DexClass*> filtered_scope;
   for (DexClass* cls : scope) {
     // Don't bother with classes that emit_class will skip anyway
     if (is_canary(cls) || m_dexes_structure.has_class(cls) ||
         should_skip_class(EMPTY_DEX_INFO, cls)) {
       continue;
     }
+
+    filtered_scope.push_back(cls);
+  }
+
+  // Initialize ref frequency counts
+  for (DexClass* cls : filtered_scope) {
+    m_cross_dex_ref_minimizer.sample(cls);
+  }
+
+  // Emit classes using some algorithm to group together classes which
+  // tend to share the same refs.
+  for (DexClass* cls : filtered_scope) {
     m_cross_dex_ref_minimizer.insert(cls);
   }
 
