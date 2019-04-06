@@ -164,6 +164,17 @@ std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   return order;
 }
 
+bool has_new_instance_opcode(const cfg::ControlFlowGraph& cfg) {
+  for (const auto& mie :
+       cfg::InstructionIterable(const_cast<cfg::ControlFlowGraph&>(cfg))) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_NEW_INSTANCE) {
+      return true;
+    }
+  }
+  return false;
+}
+
 class DedupBlocksImpl {
  public:
   DedupBlocksImpl(const std::vector<DexClass*>& scope,
@@ -257,10 +268,11 @@ class DedupBlocksImpl {
   // Find blocks with the same exact code
   Duplicates collect_duplicates(const cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
+    const bool has_new_instance = has_new_instance_opcode(cfg);
     Duplicates duplicates;
 
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block)) {
+      if (is_eligible(block, has_new_instance)) {
         // Find a group that matches this one. The key equality function of this
         // map is actually a check that they are duplicates, not that they're
         // the same block.
@@ -385,10 +397,11 @@ class DedupBlocksImpl {
       const cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
     PostfixSplitGroupMap splitGroupMap;
+    const bool has_new_instance = has_new_instance_opcode(cfg);
 
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block)) {
+      if (is_eligible(block, has_new_instance)) {
         if (block->num_opcodes() >= m_config.block_split_min_opcode_count) {
           // Insert into other blocks that share the same successors
           splitGroupMap[block].postfix_blocks.insert(block);
@@ -681,7 +694,7 @@ class DedupBlocksImpl {
     }
   }
 
-  static bool is_eligible(cfg::Block* block) {
+  static bool is_eligible(cfg::Block* block, bool has_new_instance) {
     if (!has_opcodes(block)) {
       return false;
     }
@@ -691,7 +704,7 @@ class DedupBlocksImpl {
       return false;
     }
 
-    if (constructs_object_from_another_block(block)) {
+    if (has_new_instance && constructs_object_from_another_block(block)) {
       return false;
     }
 
