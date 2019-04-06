@@ -14,6 +14,7 @@
 #include "TypeSystem.h"
 #include "Walkers.h"
 
+#include <cmath>
 #include <fstream>
 #include <string>
 #include <unordered_map>
@@ -31,6 +32,9 @@
 namespace {
 
 static bool debug = false;
+
+// sMethodStats is sharded to sMethodStats1 to sMethodStatsN.
+static constexpr size_t NUM_SHARDS = 8;
 
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
 // "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
@@ -89,7 +93,7 @@ std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
 
   std::cerr << "[InstrumentPass] error: cannot find " << method_name << " in "
             << show(cls) << std::endl;
-  for (auto&& m : cls.get_dmethods()) {
+  for (const auto& m : cls.get_dmethods()) {
     std::cerr << " " << show(m) << std::endl;
   }
   exit(1);
@@ -272,7 +276,7 @@ void insert_invoke_static_call_bb(IRCode* code,
       auto reg_method_id = code->allocate_temp();
       method_id_inst->set_dest(reg_method_id);
 
-      redex_assert(reg_bb_vector.size() != 0);
+      assert(reg_bb_vector.size() != 0);
       if (reg_bb_vector.size() <= 5) {
         IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
         // Method to be invoked depends on the number of vectors in current
@@ -334,7 +338,7 @@ int instrument_onBasicBlockBegin(
     int& all_methods_inst,
     std::map<int, std::pair<std::string, int>>& method_id_name_map,
     std::map<size_t, int>& bb_vector_stat) {
-  redex_assert(code != nullptr);
+  assert(code != nullptr);
 
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
@@ -369,7 +373,7 @@ int instrument_onBasicBlockBegin(
   // Method ID (actually, the short array offset) and bit vectors * n.
   size_t index_to_method = (num_vectors > 5) ? 1 : num_vectors + 1;
   ++bb_vector_stat[num_vectors];
-  redex_assert(method_onMethodExit_map.count(index_to_method));
+  assert(method_onMethodExit_map.count(index_to_method));
   insert_invoke_static_call_bb(code, method_id,
                                method_onMethodExit_map.at(index_to_method),
                                reg_bb_vector);
@@ -401,7 +405,7 @@ int instrument_onBasicBlockBegin(
 
   // We use intentionally obfuscated name to guarantee the uniqueness.
   const auto& method_name = show(method);
-  redex_assert(!method_id_name_map.count(method_id));
+  assert(!method_id_name_map.count(method_id));
   method_id_name_map.emplace(method_id,
                              std::make_pair(method_name, blocks.size()));
 
@@ -430,7 +434,7 @@ void instrument_onMethodBegin(DexMethod* method,
                               int index,
                               DexMethod* method_onMethodBegin) {
   IRCode* code = method->get_code();
-  redex_assert(code != nullptr);
+  assert(code != nullptr);
 
   IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
   const_inst->set_literal(index);
@@ -496,7 +500,7 @@ void instrument_onMethodBegin(DexMethod* method,
 
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void patch_array_size(DexClass& analysis_cls,
-                      const char* array_name,
+                      const std::string array_name,
                       const int array_size) {
   DexMethod* clinit = analysis_cls.get_clinit();
   always_assert(clinit != nullptr);
@@ -516,7 +520,7 @@ void patch_array_size(DexClass& analysis_cls,
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
-        redex_assert(method == clinit);
+        assert(method == clinit);
         if (insts[2]->get_field()->get_name()->str() != array_name) {
           return;
         }
@@ -542,7 +546,8 @@ void patch_array_size(DexClass& analysis_cls,
     exit(1);
   }
 
-  TRACE(INSTRUMENT, 2, "%s array was patched: %d\n", array_name, array_size);
+  TRACE(INSTRUMENT, 2, "%s array was patched: %d\n", SHOW(array_name),
+        array_size);
 }
 
 void patch_static_field(DexClass& analysis_cls,
@@ -600,18 +605,42 @@ void write_basic_block_index_file(
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 } // namespace
 
+auto find_sharded_analysis_methods(const DexClass& cls,
+                                   const std::string& method_name) -> auto {
+  std::unordered_map<std::string, int> names;
+  for (size_t i = 1; i <= NUM_SHARDS; ++i) {
+    names[method_name + std::to_string(i)] = i;
+  }
+
+  std::unordered_map<int, DexMethod*> methods;
+  for (const auto& m : cls.get_dmethods()) {
+    auto found = names.find(m->get_name()->str());
+    if (found != names.end()) {
+      methods[found->second] = m;
+    }
+  }
+
+  if (methods.size() != NUM_SHARDS) {
+    std::cerr << "[InstrumentPass] error: failed to find all " << method_name
+              << "[1-" << NUM_SHARDS << "] in " << show(cls) << std::endl;
+    for (const auto& m : cls.get_dmethods()) {
+      std::cerr << " " << show(m) << std::endl;
+    }
+    exit(1);
+  }
+
+  return std::make_pair(methods, names);
+}
+
 void do_simple_method_tracing(DexClass* analysis_cls,
                               DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm,
                               const InstrumentPass::Options& options) {
-  const auto& method_onMethodBegin_map = find_and_verify_analysis_method(
+  const auto& analysis_methods = find_sharded_analysis_methods(
       *analysis_cls, options.analysis_method_name);
-
-  // This is set to 1 because current method-level tracing invoke call has only
-  // 1 argument.
-  always_assert(method_onMethodBegin_map.count(1));
-  auto method_onMethodBegin = method_onMethodBegin_map.at(1);
+  const auto& analysis_method_map = analysis_methods.first;
+  const auto& analysis_method_names = analysis_methods.second;
 
   // Write metadata file with more information.
   const auto& file_name = cfg.metafile(options.metadata_file_name);
@@ -620,9 +649,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Write meta info of the meta file: the type of the meta file and version.
   ofs << "#,simple-method-tracing,1.0" << std::endl;
 
-  int method_id = 0;
+  size_t method_id = 0;
   int excluded = 0;
   std::unordered_set<std::string> method_names;
+  std::vector<DexMethod*> to_instrument;
 
   auto worker = [&](DexMethod* method, size_t& total_size) -> int {
     const auto& name = method->get_deobfuscated_name();
@@ -642,7 +672,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
         method->get_code()->sum_non_internal_opcode_sizes();
     total_size += sum_opcode_sizes;
 
-    if (method == method_onMethodBegin ||
+    // Excluding analysis methods myselves.
+    if (analysis_method_names.count(method->get_name()->str()) ||
         method == analysis_cls->get_clinit()) {
       ++excluded;
       TRACE(INSTRUMENT, 2, "Excluding analysis method: %s\n", SHOW(method));
@@ -675,9 +706,9 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    TRACE(INSTRUMENT, 5, "%d: %s\n", method_id, SHOW(method));
-    instrument_onMethodBegin(method, method_id * options.num_stats_per_method,
-                             method_onMethodBegin);
+    TRACE(INSTRUMENT, 5, "%zu: %s\n", method_id, SHOW(method));
+    assert(to_instrument.size() == method_id);
+    to_instrument.push_back(method);
 
     // Emit metadata to the file.
     ofs << "M," << method_id << "," << name << "," << sum_opcode_sizes << ",\""
@@ -688,6 +719,18 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   auto scope = build_class_scope(stores);
   TypeSystem ts(scope);
+
+  // We now have sharded method stats arrays. Say we instrument 11 methods and
+  // have three arrays. Each array will have ceil(11/3) = 3 methods, and the
+  // last array may have smaller number of methods.
+  //                    array1        array2       array3
+  //     method ids  [0, 1, 2, 3]  [4, 5, 6, 7]  [8, 9, 10]
+  //   array indices [0, 1, 2, 3]  [0, 1, 2, 3]  [0, 1,  2]
+  // In order to do that, we need to know the total number of methods to be
+  // instrumented. We don't know this number until iterating all methods while
+  // processing exclusions. We take a two-pass approach:
+  //  1) For all methods, collect (method id, method) pairs and write meta data.
+  //  2) Do actual instrumentation.
   for (const auto& cls : scope) {
     const auto& cls_name = cls->get_deobfuscated_name();
     always_assert_log(
@@ -732,6 +775,21 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     }
   }
 
+  // Now we know the total number of methods to be instrumented. Do some
+  // computations and actual instrumentation.
+  const size_t kTotalSize = to_instrument.size();
+  const size_t kShardSize =
+      static_cast<size_t>(std::ceil(double(kTotalSize) / NUM_SHARDS));
+  TRACE(INSTRUMENT, 4, "%zu methods to be instrumented; shard size: %zu\n",
+        kTotalSize, kShardSize);
+  for (size_t i = 0; i < kTotalSize; ++i) {
+    TRACE(INSTRUMENT, 7, "Sharded %zu => [%zu][%zu] %s\n", i, i / kShardSize,
+          i % kShardSize, SHOW(to_instrument[i]));
+    instrument_onMethodBegin(to_instrument[i],
+                             (i % kShardSize) * options.num_stats_per_method,
+                             analysis_method_map.at((i / kShardSize) + 1));
+  }
+
   TRACE(INSTRUMENT,
         1,
         "%d methods were instrumented (%d methods were excluded)\n",
@@ -739,11 +797,17 @@ void do_simple_method_tracing(DexClass* analysis_cls,
         excluded);
 
   // Patch stat array size.
-  patch_array_size(*analysis_cls, "sMethodStats",
-                   method_id * options.num_stats_per_method);
+  for (size_t i = 0; i < NUM_SHARDS; ++i) {
+    patch_array_size(
+        *analysis_cls, "sMethodStats" + std::to_string(i + 1),
+        (i == NUM_SHARDS - 1
+             ? options.num_stats_per_method * (kTotalSize - kShardSize * i)
+             : options.num_stats_per_method * kShardSize));
+  }
 
   // Patch method count constant.
-  patch_static_field(*analysis_cls, "sMethodCount", method_id);
+  always_assert(method_id == kTotalSize);
+  patch_static_field(*analysis_cls, "sMethodCount", kTotalSize);
 
   ofs.close();
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
