@@ -110,7 +110,7 @@ void set_ifield_values(const DexClass* cls,
                        const EligibleIfields& eligible_ifields,
                        ConstantEnvironment* env) {
   always_assert(!cls->is_external());
-  if (cls->get_ctors().size() != 1) {
+  if (cls->get_ctors().size() > 1) {
     return;
   }
   for (auto* ifield : cls->get_ifields()) {

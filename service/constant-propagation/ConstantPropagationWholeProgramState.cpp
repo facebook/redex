@@ -212,7 +212,7 @@ void WholeProgramState::collect_instance_finals(
     const EligibleIfields& eligible_ifields,
     FieldEnvironment field_env) {
   always_assert(!cls->is_external());
-  if (cls->get_ctors().size() != 1) {
+  if (cls->get_ctors().size() > 1) {
     // Not dealing with instance field in class not having exact 1 constructor
     // now. TODO(suree404): Might be able to improve?
     for (auto* field : cls->get_ifields()) {
