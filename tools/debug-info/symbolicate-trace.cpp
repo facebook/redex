@@ -11,7 +11,7 @@
 
 #include "PositionMap.h"
 
-boost::regex trace_regex(R"/((\s+at\s+[^(]*)\(:(\d+)\)\s?)/");
+boost::regex trace_regex(R"/(((\s+at\s+)[^(]*)\(:(\d+)\)\s?)/");
 
 int main(int argc, char** argv) {
   if (argc < 2) {
@@ -22,11 +22,11 @@ int main(int argc, char** argv) {
   for (std::string line; std::getline(std::cin, line);) {
     boost::smatch matches;
     if (boost::regex_match(line, matches, trace_regex)) {
-      auto idx = std::stoi(matches[2]) - 1;
+      auto idx = std::stoi(matches[3]) - 1;
       auto stack = get_stack(*map, idx);
       for (auto pos : stack) {
-        std::cout << matches[1] << "(" << pos.filename << ":" << pos.line
-                  << ")" << std::endl;
+        std::cout << matches[2] << pos.cls << "." << pos.method << "("
+                  << pos.filename << ":" << pos.line << ")" << std::endl;
       }
     } else {
       std::cout << line << std::endl;
