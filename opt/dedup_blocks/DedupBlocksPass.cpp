@@ -165,8 +165,7 @@ std::vector<Entry*> get_id_order(UnorderedMap& umap) {
 }
 
 bool has_new_instance_opcode(const cfg::ControlFlowGraph& cfg) {
-  for (const auto& mie :
-       cfg::InstructionIterable(const_cast<cfg::ControlFlowGraph&>(cfg))) {
+  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
     auto insn = mie.insn;
     if (insn->opcode() == OPCODE_NEW_INSTANCE) {
       return true;
