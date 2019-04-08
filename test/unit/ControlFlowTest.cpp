@@ -553,7 +553,7 @@ TEST(ControlFlow, remove_non_branch) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 
@@ -579,7 +579,7 @@ void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 }
@@ -907,7 +907,7 @@ TEST(ControlFlow, remove_sget) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 
@@ -993,7 +993,7 @@ TEST(ControlFlow, empty_first_block) {
     }
   }
   for (const auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 

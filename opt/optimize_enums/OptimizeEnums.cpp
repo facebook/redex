@@ -710,7 +710,7 @@ class OptimizeEnums {
     // Remove the switch statement so we can rebuild it with the correct case
     // keys. This removes all edges to the if-else blocks and the blocks will
     // eventually be removed by cfg.simplify()
-    cfg.remove_opcode(*info.branch);
+    cfg.remove_insn(*info.branch);
 
     cfg::Block* fallthrough = nullptr;
     std::vector<std::pair<int32_t, cfg::Block*>> cases;

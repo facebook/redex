@@ -134,7 +134,7 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
               //   return $source
               removed_trailing_move = true;
               cloned_return->set_src(0, src_last_insn->src(0));
-              src->remove_opcode(src_last_mie_it);
+              src->remove_insn(src_last_mie_it);
               stats.removed_trailing_moves++;
             }
           }

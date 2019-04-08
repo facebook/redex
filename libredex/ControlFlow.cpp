@@ -177,14 +177,19 @@ bool Block::same_try(const Block* other) const {
   return m_parent->blocks_are_in_same_try(this, other);
 }
 
-void Block::remove_opcode(const ir_list::InstructionIterator& it) {
+void Block::remove_insn(const InstructionIterator& it) {
   always_assert(m_parent->editable());
-  m_parent->remove_opcode(cfg::InstructionIterator(*m_parent, this, it));
+  m_parent->remove_insn(it);
 }
 
-void Block::remove_opcode(const IRList::iterator& it) {
+void Block::remove_insn(const ir_list::InstructionIterator& it) {
   always_assert(m_parent->editable());
-  remove_opcode(ir_list::InstructionIterator(it, end()));
+  remove_insn(to_cfg_instruction_iterator(it));
+}
+
+void Block::remove_insn(const IRList::iterator& it) {
+  always_assert(m_parent->editable());
+  remove_insn(to_cfg_instruction_iterator(it));
 }
 
 opcode::Branchingness Block::branchingness() {
@@ -1115,10 +1120,8 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
   if (goto_edge != nullptr) {
     auto next_block = goto_edge->target();
     if (next_block->starts_with_move_result()) {
-      return cfg::InstructionIterator(
-          *this, next_block,
-          ir_list::InstructionIterator(next_block->get_first_insn(),
-                                       next_block->end()));
+      return next_block->to_cfg_instruction_iterator(
+          next_block->get_first_insn());
     }
   }
   return end;
@@ -1910,7 +1913,7 @@ bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
   return true;
 }
 
-void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
+void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   always_assert(m_editable);
 
   MethodItemEntry& mie = *it;
@@ -2080,7 +2083,8 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       }
       if (is_return(op)) {
         // This block now ends in a return, it must have no successors.
-        delete_succ_edges(b);
+        delete_succ_edge_if(
+            b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
       } else {
         always_assert(is_throw(op));
         // The only valid way to leave this block is via a throw edge.
@@ -2089,38 +2093,36 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         });
       }
       // If this created unreachable blocks, they will be removed by simplify.
-    } else if (opcode::may_throw(op)) {
-      if (!throws.empty()) {
-        invalidated_its = true;
-        // FIXME: Copying the outgoing throw edges isn't enough.
-        // When the editable CFG is constructed, we transform the try regions
-        // into throw edges. We only add these edges to blocks that may throw,
-        // thus losing the knowledge of which blocks were originally inside a
-        // try region. If we add a new throwing instruction here. It may be
-        // added to a block that was originally inside a try region, but we lost
-        // that information already.
-        //
-        // Possible Solutions:
-        // * Rework throw representation to regions instead of duplicated edges?
-        // * User gives a block that we want to copy the throw edges from?
-        // * User specifies which throw edges they want and to which blocks?
+    } else if (opcode::may_throw(op) && !throws.empty()) {
+      invalidated_its = true;
+      // FIXME: Copying the outgoing throw edges isn't enough.
+      // When the editable CFG is constructed, we transform the try regions
+      // into throw edges. We only add these edges to blocks that may throw,
+      // thus losing the knowledge of which blocks were originally inside a
+      // try region. If we add a new throwing instruction here. It may be
+      // added to a block that was originally inside a try region, but we lost
+      // that information already.
+      //
+      // Possible Solutions:
+      // * Rework throw representation to regions instead of duplicated edges?
+      // * User gives a block that we want to copy the throw edges from?
+      // * User specifies which throw edges they want and to which blocks?
 
-        // Split the block after the new instruction.
-        // b has become the predecessor of the new split pair
-        Block* succ =
-            split_block(b->to_cfg_instruction_iterator(new_inserted_it));
+      // Split the block after the new instruction.
+      // b has become the predecessor of the new split pair
+      Block* succ =
+          split_block(b->to_cfg_instruction_iterator(new_inserted_it));
 
-        // Copy the outgoing throw edges of the original block into the block
-        // that now ends with the new instruction
-        for (const Edge* e : throws) {
-          Edge* copy = new Edge(*e);
-          copy->m_src = b;
-          add_edge(copy);
-        }
-        // Continue inserting in the successor block.
-        b = succ;
-        pos = succ->begin();
+      // Copy the outgoing throw edges of the original block into the block
+      // that now ends with the new instruction
+      for (const Edge* e : throws) {
+        Edge* copy = new Edge(*e);
+        copy->m_src = b;
+        add_edge(copy);
       }
+      // Continue inserting in the successor block.
+      b = succ;
+      pos = succ->begin();
     }
   }
   return invalidated_its;

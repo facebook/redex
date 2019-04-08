@@ -278,7 +278,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
       }
       // verify the insn we want to remove
       always_assert(*(to_remove->insn) == insn);
-      succ_block->remove_opcode(to_remove);
+      succ_block->remove_insn(to_remove);
       to_remove =
           ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
     }

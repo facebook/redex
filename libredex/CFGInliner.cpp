@@ -76,7 +76,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // delete the move-result before connecting the cfgs because it's in a block
   // that may be merged into another
   if (!move_res.is_end()) {
-    caller->remove_opcode(move_res);
+    caller->remove_insn(move_res);
   }
 
   // redirect to callee
@@ -88,9 +88,9 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
   TRACE(CFG, 3, "caller after connect %s\n", SHOW(*caller));
 
-  // delete the invoke after connecting the CFGs because remove_opcode will
+  // delete the invoke after connecting the CFGs because remove_insn will
   // remove the outgoing throw if we remove the callsite
-  caller->remove_opcode(callsite);
+  caller->remove_insn(callsite);
 
   if (ControlFlowGraph::DEBUG) {
     caller->sanity_check();
@@ -252,7 +252,7 @@ void CFGInliner::move_return_reg(cfg::ControlFlowGraph* callee,
   }
 
   for (auto& it : to_delete) {
-    callee->remove_opcode(it);
+    callee->remove_insn(it);
   }
 }
 

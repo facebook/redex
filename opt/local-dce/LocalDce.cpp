@@ -210,7 +210,7 @@ void LocalDce::dce(IRCode* code) {
     }
     TRACE(DCE, 2, "DEAD: %s\n", SHOW(it->insn));
     seen.emplace(it->insn);
-    b->remove_opcode(it);
+    b->remove_insn(it);
   }
   auto unreachable_insn_count = cfg.remove_unreachable_blocks();
   cfg.recompute_registers_size();

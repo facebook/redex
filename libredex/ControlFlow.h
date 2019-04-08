@@ -228,8 +228,9 @@ class Block final {
 
   bool same_try(const Block* other) const;
 
-  void remove_opcode(const ir_list::InstructionIterator&);
-  void remove_opcode(const IRList::iterator& it);
+  void remove_insn(const InstructionIterator& it);
+  void remove_insn(const ir_list::InstructionIterator& it);
+  void remove_insn(const IRList::iterator& it);
 
   opcode::Branchingness branchingness();
 
@@ -501,7 +502,7 @@ class ControlFlowGraph {
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
-  void remove_opcode(const InstructionIterator& it);
+  void remove_insn(const InstructionIterator& it);
 
   // Insertion Methods (insert_before/after and push_front/back):
   //  * These methods add instructions to the CFG
