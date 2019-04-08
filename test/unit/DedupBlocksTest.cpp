@@ -706,11 +706,11 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
             assembler::to_string(code));
 }
 
-// in Code: A B C(where B == C,
-//      and they construct an object from A)
-// in CFG:  A -> B
+// in Code: A B C D E (where C == E,
+//      and they construct an object from B and D respectively)
+// in CFG:  A -> B -> C
 //           \
-//            > C
+//            > D -> E
 // out Code: the same as the in Code
 // out CFG: the same as the in CFG
 TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
@@ -718,16 +718,24 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
     (
       (:a)
       (const v0 0)
-      (const v1 1)
-      (new-instance "testClass")
-      (move-result-pseudo-object v0)
-      (if-eqz v0 :c)
+      (if-eqz v0 :d)
 
       (:b)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+
+      (:c)
+      (const v1 1)
       (invoke-direct (v0 v1) "testClass.<init>:(I)V")
       (throw v0)
 
-      (:c)
+      (:d)
+      (new-instance "testClass")
+      (move-result-pseudo-object v0)
+      (const v1 2)
+
+      (:e)
+      (const v1 1)
       (invoke-direct (v0 v1) "testClass.<init>:(I)V")
       (throw v0)
     )
