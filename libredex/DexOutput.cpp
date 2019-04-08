@@ -1212,14 +1212,171 @@ uint32_t emit_instruction_offset_debug_info(
   }
   free((void*)tmp);
   // 2)
-  std::unordered_map<uint32_t, uint32_t> param_to_offset;
-  // Used to verify that a given IODI program is big enough for a method.
-  std::unordered_map<uint32_t, uint32_t> param_to_debug_size;
+  std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (auto& pts : param_to_sizes) {
     auto param_size = per_arity ? pts.first : max_param;
-    // 2.1) In order to understand the following algorithm we need to understand
-    // how IODI gets its win:
+    // 2.1) We determine the methods to use IODI we go through two filtering
+    // phases:
+    //   2.1.1) Filter out methods that will cause an OOM in dexlayout on
+    //          Android 8+
+    //   2.1.2) Filter out methods who increase uncompressed APK size
+
+    auto& sizes = pts.second;
+    always_assert(sizes.size() > 0);
+
+    // 2.1.1) In Android 8+ there's a background optimizer service that
+    // automatically runs dex2oat with a profile collected by the runtime JIT.
+    // This background optimizer includes a system called dexlayout that will
+    // relocate data in order to improve locality. When relocating data it will
+    // inflate debug information into an IR. This inflation currently doesn't
+    // properly unique debug information that has already been inflated, and
+    // instead reinflates debug information everytime a method references it.
+    // Internally this vector is
+    // ${number of position entries in D} * ${number of methods referencing D
+    // entries long for a given debug program D. Without this filtering we've
+    // found that dex2oat will OOM on most devices, resulting in no background
+    // optimization (which regressed e.g. startup quite a bit).
+    //
+    // In order to avoid dex2oat from OOMing we set a hard limit on the
+    // inflated size of a given debug program and instead of emitting one
+    // single debug program for methods of arity A, we emit multiple debug
+    // programs which are bucketed so that the inflated size of any single
+    // debug program is smaller than what would be the inflated size of the
+    // single mega-program shared by all methods.
+    //
+    // Max inflated count is 2^21 = 2M. Any bigger and the vector will grow to
+    // 2^22 entries, any smaller and the vector will grow but not necessarily
+    // be used. For now this has been arbitrarily been chosen.
+    static constexpr size_t MAX_INFLATED_SIZE = 2 * 1024 * 1024;
+    // The best size for us to start at is initialized as the largest method
+    using Iter = DebugMethodMap::iterator;
+    // This iterator will keep track of the smallest method that can use IODI.
+    // If it points to end, then no method should use IODI.
+    Iter best_iter = sizes.begin();
+    Iter end = sizes.end();
+
+    // Bucket the set of methods specified by begin, end into appropriately
+    // sized buckets.
+    // Returns a pair:
+    // - A vector of {IODI size, method count} describing each bucket
+    // - A size_t reflecting the total inflated footprint using the returned
+    //   bucketing
+    // If dry_run is specified then no allocations will be done and the vector
+    // will be emptied (this is used to query for the total inflation size).
+    auto create_buckets = [](Iter begin, Iter end, bool dry_run = false) {
+      // In order to understand this algorithm let's first define what
+      // the "inflated size" of an debug program is:
+      //
+      // The inflated size of a debug program D is the number of entries that
+      // dex2oat will create in a vector when inflating debug info into IR. This
+      // factor is computed as len(D) * ${number of methods using D}.
+      //
+      // Now, this function splits one large IODI program into multiple in order
+      // to reduce the inflated size of each debug program. We must do this so
+      // that dex2oat doesn't OOM. The algorithm proceeds as follows:
+      //
+      // - Define a max bucket size: MAX_BUCKET_INFLATED_SIZE. This is the limit
+      //   on the inflated size of any given IODI debug program. We use this to
+      //   determine how many buckets will be created.
+      // - Since len(D) = max{ len(method) | method uses D } given D a debug
+      //   program we can iterate from largest method to smallest, attempting
+      //   to add the next smallest program into the current bucket and
+      //   otherwise cutting the current bucket off. In pseudo code this is:
+      //
+      //   for method in methods, partially ordered from largest to smallest:
+      //     if method can fit in current bucket:
+      //       add method to current bucket
+      //     else
+      //       close up the current bucket and start a new one for method
+      //
+      //   There must be a precondition that the current bucket contains at
+      //   least one method, otherwise we may run into empty buckets and
+      //   silently ignored methods. We can prove that this by induction. First
+      //   some terminology:
+      //
+      //   bucket_n := The nth bucket that has been created, starting at 0
+      //   method_i := The ith largest method that's iterated over
+      //
+      //   Additionally we know that:
+      //
+      //   inflated_size(bucket_n) = max{ len(M) | M \in bucket_n }
+      //                                  * len(bucket_n)
+      //   and inflated_size(bucket_n) < MAX_BUCKET_INFLATED_SIZE
+      //
+      //   To establish the base case let's filter our set of methods to
+      //     filtered_methods = { M \in methods
+      //                            | len(methods) < MAX_BUCKET_INFLATED_SIZE }
+      //   Now we have method_0 \in filtered_methods is such that
+      //    len(method_0) < MAX_BUCKET_INFLATED_SIZE
+      //   so bucket_0 can at least contain method_0 and thus is non-empty.
+      //
+      //   For the inductive case fix N to be the index of the current bucket
+      //   and I to be the index of a method that cannot fit in the current
+      //   bucket, then we know bucket_N is non-empty (by our inductive
+      //   hypothesis) and thus, by above \exists M \in bucket_N exists s.t.
+      //   len(M) < MAX_BUCKET_INFLATED_SIZE. We know that
+      //   len(method_I) <= len(M) because the methods are partially ordered
+      //   from largest to smallest and method_I comes after M. Thus we
+      //   determine that len(method_I) <= len(M) < MAX_BUCKET_INFLATED_SIZE
+      //   and so method_I can fit into bucket_{N+1}.
+      //
+      // No logic here, just picking 2^{some power} so that vectors don't
+      // unnecessarily expand when inflating debug info for the current bucket.
+      static constexpr size_t MAX_BUCKET_INFLATED_SIZE = 2 * 2 * 2 * 1024;
+      std::vector<std::pair<uint32_t, uint32_t>> result;
+      size_t total_inflated_footprint = 0;
+      if (begin == end) {
+        return std::make_pair(result, total_inflated_footprint);
+      }
+      uint32_t bucket_size = 0;
+      uint32_t bucket_count = 0;
+      auto append_bucket = [&](uint32_t size, uint32_t count) {
+        total_inflated_footprint += size * count;
+        if (!dry_run) {
+          result.emplace_back(size, count);
+        }
+      };
+      // To start we need to bucket any method that's too big for its own good
+      // into its own bucket (this ensures the buckets calculated below contain
+      // at least one entry).
+      while (begin != end && begin->first.size > MAX_BUCKET_INFLATED_SIZE) {
+        append_bucket(begin->first.size, 1);
+        begin++;
+      }
+      for (auto iter = begin; iter != end; iter++) {
+        uint32_t next_size = std::max(bucket_size, iter->first.size);
+        uint32_t next_count = bucket_count + 1;
+        size_t inflated_footprint = next_size * next_count;
+        if (inflated_footprint > MAX_BUCKET_INFLATED_SIZE) {
+          always_assert(bucket_size != 0 && bucket_count != 0);
+          append_bucket(bucket_size, bucket_count);
+          bucket_size = 0;
+          bucket_count = 0;
+        } else {
+          bucket_size = next_size;
+          bucket_count = next_count;
+        }
+      }
+      if (bucket_size > 0 && bucket_count > 0) {
+        append_bucket(bucket_size, bucket_count);
+      }
+      return std::make_pair(result, total_inflated_footprint);
+    };
+
+    // Re-bucketing removing one method at a time until we've found a set of
+    // methods small enough for the given constraints.
+    size_t total_inflated_size = 0;
+    do {
+      total_inflated_size = create_buckets(best_iter, end, true).second;
+    } while (total_inflated_size > MAX_INFLATED_SIZE && ++best_iter != end);
+    size_t total_ignored = std::distance(sizes.begin(), best_iter);
+    TRACE(IODI, 3,
+          "[IODI] (%u) Ignored %u methods because they inflated too much\n",
+          param_size, total_ignored);
+
+    // 2.1.2) In order to filter out methods who increase uncompressed APK size
+    // we need to understand how IODI gets its win:
     //
     // The win is calculated as the total usual debug info size minus the size
     // of debug info when IODI is enabled. Thus, given a set of methods for
@@ -1287,11 +1444,7 @@ uint32_t emit_instruction_offset_debug_info(
     // Note, the above assumes win(IM) > 0 at some point, but that may not be
     // true. In order to verify that using IODI is useful we need to verify that
     // win(IM) > 0 for whatever maximal IM is found was found above.
-
-    auto& sizes = pts.second;
-    always_assert(sizes.size() > 0);
-
-    auto iter = sizes.begin();
+    auto iter = best_iter;
     // This is len(m_1) from above
     uint64_t base_iodi_size = iter->first.size;
     // This is that final sum in win_delta_i. It starts with just the debug
@@ -1300,10 +1453,7 @@ uint32_t emit_instruction_offset_debug_info(
     // This keeps track of the best win delta. By default the delta is 0 (we
     // can always make everything use iodi)
     int64_t max_win_delta = 0;
-    // By default the best iter is the first one.
-    auto best_iter = iter;
 
-    auto end = sizes.end();
     for (iter = std::next(iter); iter != end; iter++) {
       uint64_t iodi_size = iter->first.size;
       // This is calculated as:
@@ -1319,6 +1469,8 @@ uint32_t emit_instruction_offset_debug_info(
       }
       total_normal_dbg_cost += iter->second;
     }
+
+    size_t insns_size = best_iter != end ? best_iter->first.size : 0;
     size_t padding = 1 + 1 + param_size + 1;
     if (param_size >= 128) {
       padding += 1;
@@ -1326,8 +1478,15 @@ uint32_t emit_instruction_offset_debug_info(
         padding += 1;
       }
     }
-    auto insns_size = best_iter->first.size;
     auto iodi_size = insns_size + padding;
+    if (total_normal_dbg_cost < iodi_size) {
+      // If using IODI period isn't valuable then don't use it!
+      best_iter = end;
+      TRACE(IODI, 3,
+            "[IODI] Opting out of IODI for %u arity methods entirely\n",
+            param_size);
+    }
+
     // Now we've found which methods are too large to be beneficial. Tell IODI
     // infra about these large methods
     size_t num_big = 0;
@@ -1335,9 +1494,9 @@ uint32_t emit_instruction_offset_debug_info(
       iodi_metadata.mark_method_huge(big->first.method, big->first.size);
       num_big += 1;
     }
+    size_t num_small_enough = sizes.size() - num_big;
 
     // 2.2) Emit IODI programs (other debug programs will be emitted below)
-    size_t num_small_enough = sizes.size() - num_big;
     TRACE(IODI, 2,
           "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u\n",
           offset, param_size, sizes.size(), num_big, num_small_enough,
@@ -1345,36 +1504,50 @@ uint32_t emit_instruction_offset_debug_info(
     if (num_small_enough == 0) {
       continue;
     }
-    param_to_debug_size[param_size] = insns_size;
+    auto previous_best_iter = best_iter;
+    auto bucket_res = create_buckets(best_iter, end);
+    auto& buckets = bucket_res.first;
+    total_inflated_size = bucket_res.second;
     if (traceEnabled(IODI, 4)) {
       double ammortized_cost = (double)iodi_size / (double)num_small_enough;
       for (auto it = best_iter; it != end; it++) {
         TRACE(IODI, 4,
-              "[IODI][savings] %s saved %u bytes, cost of %f, net %f\n",
-              SHOW(it->first.method), it->second, ammortized_cost,
-              (double)it->second - ammortized_cost);
+              "[IODI][savings] %s saved %u bytes (%u), cost of %f, net %f\n",
+              SHOW(it->first.method), it->second, it->first.size,
+              ammortized_cost, (double)it->second - ammortized_cost);
       }
     }
-    param_to_offset[param_size] = offset;
+    TRACE(IODI, 3,
+          "[IODI][Buckets] Bucketed %u arity methods into %u buckets with total"
+          " inflated size %u:\n",
+          param_size, buckets.size(), total_inflated_size);
+    auto& size_to_offset = param_size_to_oset[param_size];
     std::vector<DexString*> params;
     for (size_t i = 0; i < param_size; i++) {
       params.push_back(nullptr);
     }
-    std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
-    if (insns_size > 0) {
-      // First emit an entry for pc = 0 -> line = 0
-      dbgops.push_back(create_line_entry(0, 0));
-      // Now emit an entry for each pc thereafter
-      // (0x1e increments addr+line by 1)
-      for (size_t i = 1; i < insns_size; i++) {
-        dbgops.push_back(create_line_entry(1, 1));
+    for (auto& bucket : buckets) {
+      auto bucket_size = bucket.first;
+      TRACE(IODI, 3, "  - %u methods in bucket size %u\n", bucket.second,
+            bucket_size);
+      size_to_offset.emplace(bucket_size, offset);
+      std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
+      if (bucket_size > 0) {
+        // First emit an entry for pc = 0 -> line = 0
+        dbgops.push_back(create_line_entry(0, 0));
+        // Now emit an entry for each pc thereafter
+        // (0x1e increments addr+line by 1)
+        for (size_t i = 1; i < bucket_size; i++) {
+          dbgops.push_back(create_line_entry(1, 1));
+        }
       }
+      offset +=
+          DexDebugItem::encode(nullptr, output + offset, 0, params, dbgops);
+      *dbgcount += 1;
     }
-    offset += DexDebugItem::encode(nullptr, output + offset, 0, params, dbgops);
-    *dbgcount += 1;
   }
   // 3)
-  auto offset_end = param_to_offset.end();
+  auto size_offset_end = param_size_to_oset.end();
   for (auto& it : code_items) {
     DexCode* dc = it.code;
     const auto dbg = dc->get_debug_item();
@@ -1390,12 +1563,19 @@ uint32_t emit_instruction_offset_debug_info(
       // as long as they need to be.
       uint32_t param_size =
           per_arity ? it.method->get_proto()->get_args()->size() : max_param;
-      auto offset_it = param_to_offset.find(param_size);
-      always_assert_log(offset_it != offset_end,
+      auto size_offset_it = param_size_to_oset.find(param_size);
+      always_assert_log(size_offset_it != size_offset_end,
                         "Expected to find param to offset: %s", SHOW(method));
-      always_assert_log(dc->size() <= param_to_debug_size.at(param_size),
-                        "Expected IODI program to be big enough for %s",
-                        SHOW(method));
+      auto code_size = dc->size();
+      auto& size_to_offset = size_offset_it->second;
+      // Returns first key >= code_size or end if such an entry doesn't exist.
+      // Aka first debug program long enough to represent a method of size
+      // code_size.
+      auto offset_it = size_to_offset.lower_bound(code_size);
+      auto offset_end = size_to_offset.end();
+      always_assert_log(offset_it != offset_end,
+                        "Expected IODI program to be big enough for %s : %u",
+                        SHOW(method), code_size);
       dci->debug_info_off = offset_it->second;
     } else {
       offset += emit_debug_info_for_metadata(

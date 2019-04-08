@@ -793,11 +793,6 @@ void redex_backend(const PassManager& manager,
       cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
-  if (manager.get_redex_options().is_art_build &&
-      !iodi_metadata_filename.empty()) {
-    iodi_metadata_filename = "";
-    fprintf(stderr, "Disabling IODI because this is an ART build.\n");
-  }
   if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
       !iodi_metadata_filename.empty()) {
     fprintf(stderr,
