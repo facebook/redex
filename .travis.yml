@@ -1,12 +1,9 @@
 sudo: required
 language: cpp
-compiler: gcc-4.9
-dist: trusty
+compiler: gcc-5
+dist: xenial 
 
 before_install:
-  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-  - sudo apt-get -qq update
-  - sudo apt-get install g++-4.9 -y
   - sudo apt-get install -y
       automake
       autoconf
@@ -21,11 +18,11 @@ before_install:
       libiberty-dev
       libjsoncpp-dev
       wget
-  - export CXX='g++-4.9'
+  - export CXX='g++-5'
   - sudo sh get_boost.sh
 
 script:
-  - autoreconf -ivf && ./configure CXX='g++-4.9' && make -j4
+  - autoreconf -ivf && ./configure CXX='g++-5' && make -j4
 
 notifications:
   webhooks: https://code.facebook.com/travis/webhook/
