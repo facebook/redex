@@ -32,6 +32,14 @@
 
 namespace {
 
+constexpr const char* METRIC_REMOVED_SWITCHES = "num_removed_switches";
+constexpr const char* METRIC_REDUCED_SWITCHES = "num_reduced_switches";
+constexpr const char* METRIC_REMAINING_TRIVIAL_SWITCHES =
+    "num_remaining_trivial_switches";
+constexpr const char* METRIC_REMOVED_SPARSE_SWITCH_CASES =
+    "num_removed_sparse_switch_cases";
+constexpr const char* METRIC_REMOVED_PACKED_SWITCH_CASES =
+    "num_removed_packed_switch_cases";
 constexpr const char* METRIC_GOTOS_REPLACED_WITH_RETURNS =
     "num_gotos_replaced_with_returns";
 constexpr const char* METRIC_TRAILING_MOVES_REMOVED =
@@ -46,6 +54,85 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
 
   code->build_cfg(/* editable = true*/);
   auto& cfg = code->cfg();
+
+  // Optimization #0: Remove switches...
+  // - turning them into gotos when all cases branch to the same block
+  // - removing cases that branch to the same block as the "default case"
+  // - this might turn packed switches into sparse switches (but don't worry,
+  //   there's an optimization IRCode that turns them into packed switches at
+  //   the last moment during lowering if that's beneficial for code size)
+  for (cfg::Block* b : cfg.blocks()) {
+    auto br = b->branchingness();
+    if (br != opcode::BRANCH_SWITCH) {
+      continue;
+    }
+
+    auto it = b->get_last_insn();
+    always_assert(it != b->end());
+    auto insn = it->insn;
+    auto opcode = insn->opcode();
+    cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+    cfg::Block* goto_target = goto_edge->target();
+
+    std::unordered_set<cfg::Edge*> fallthrough_edges;
+    auto branch_edges = cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH);
+    for (cfg::Edge* branch_edge : branch_edges) {
+      if (branch_edge->target() == goto_target) {
+        fallthrough_edges.emplace(branch_edge);
+      }
+    }
+
+    if (opcode == OPCODE_SPARSE_SWITCH) {
+      stats.removed_sparse_switch_cases += fallthrough_edges.size();
+    } else {
+      always_assert(opcode == OPCODE_PACKED_SWITCH);
+      stats.removed_packed_switch_cases += fallthrough_edges.size();
+    }
+
+    if (fallthrough_edges.size() == branch_edges.size()) {
+      // all branches fall through; just remove switch...
+      stats.removed_switches++;
+      b->remove_insn(it);
+      continue;
+    }
+
+    if (fallthrough_edges.size() + 1 == branch_edges.size()) {
+      // TODO: Just logging for now; consider turning these into simple `if`
+      // branches
+      stats.remaining_trivial_switches++;
+    }
+
+    if (fallthrough_edges.size() == 0) {
+      // Nothing to optimize here
+      continue;
+    }
+
+    stats.reduced_switches++;
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    for (cfg::Edge* branch_edge :
+         cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH)) {
+      if (!fallthrough_edges.count(branch_edge)) {
+        cases.emplace_back(*branch_edge->case_key(), branch_edge->target());
+      }
+    }
+    always_assert(cases.size() > 0);
+
+    // Sort, to make things tidy and deterministic, and ensure we can rely on
+    // the front and back case keys being ordered properly
+    std::sort(
+        cases.begin(), cases.end(),
+        [](std::pair<int32_t, cfg::Block*> a,
+           std::pair<int32_t, cfg::Block*> b) { return a.first < b.first; });
+
+    auto new_opcode = (int64_t)cases.back().first - cases.front().first + 1 ==
+                              (int64_t)cases.size()
+                          ? OPCODE_PACKED_SWITCH
+                          : OPCODE_SPARSE_SWITCH;
+    IRInstruction* new_switch = new IRInstruction(new_opcode);
+    new_switch->set_src(0, insn->src(0));
+    b->remove_insn(it);
+    cfg.create_branch(b, new_switch, goto_target, cases);
+  }
 
   // Optimization #1: Invert conditional branch conditions and swap goto/branch
   // targets if this may lead to more fallthrough cases where no additional
@@ -227,6 +314,14 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
       },
       [](Stats a, Stats b) {
         Stats c;
+        c.removed_switches = a.removed_switches + b.removed_switches;
+        c.reduced_switches = a.reduced_switches + b.reduced_switches;
+        c.remaining_trivial_switches =
+            a.remaining_trivial_switches + b.remaining_trivial_switches;
+        c.removed_sparse_switch_cases =
+            a.removed_sparse_switch_cases + b.removed_sparse_switch_cases;
+        c.removed_packed_switch_cases =
+            a.removed_packed_switch_cases + b.removed_packed_switch_cases;
         c.replaced_gotos_with_returns =
             a.replaced_gotos_with_returns + b.replaced_gotos_with_returns;
         c.removed_trailing_moves =
@@ -236,6 +331,14 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
         return c;
       });
 
+  mgr.incr_metric(METRIC_REMOVED_SWITCHES, stats.removed_switches);
+  mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);
+  mgr.incr_metric(METRIC_REMAINING_TRIVIAL_SWITCHES,
+                  stats.remaining_trivial_switches);
+  mgr.incr_metric(METRIC_REMOVED_SPARSE_SWITCH_CASES,
+                  stats.removed_sparse_switch_cases);
+  mgr.incr_metric(METRIC_REMOVED_PACKED_SWITCH_CASES,
+                  stats.removed_packed_switch_cases);
   mgr.incr_metric(METRIC_GOTOS_REPLACED_WITH_RETURNS,
                   stats.replaced_gotos_with_returns);
   mgr.incr_metric(METRIC_TRAILING_MOVES_REMOVED, stats.removed_trailing_moves);
