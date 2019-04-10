@@ -204,7 +204,7 @@ MultiMethodInliner::MultiMethodInliner(
                   });
     for (auto& pair : callee_caller) {
       DexMethod* callee = const_cast<DexMethod*>(pair.first);
-      auto& callers = pair.second;
+      const auto& callers = pair.second;
       for (auto caller : callers) {
         caller_callee[caller].push_back(callee);
       }
@@ -548,7 +548,8 @@ static size_t count_important_opcodes(const IRCode* code) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
-  auto caller_count = callee_caller.at(callee).size();
+  const auto& callers = callee_caller.at(callee);
+  auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
   if (!m_opcode_counts.count(callee)) {
@@ -567,17 +568,28 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
   if (caller_count == 1) {
     return false;
   }
+
+  auto callee_class = callee->get_class();
+  bool have_all_callers_same_class = true;
+  for (auto caller : callers) {
+    if (caller->get_class() != callee_class) {
+      have_all_callers_same_class = false;
+      break;
+    }
+  }
+
+  unsigned long locality_advantage = have_all_callers_same_class ? 2 : 0;
   if (m_config.multiple_callers) {
     switch (caller_count) {
     case 2:
-      return code_size > CODE_SIZE_2_CALLERS;
+      return code_size > CODE_SIZE_2_CALLERS + locality_advantage;
     case 3:
-      return code_size > CODE_SIZE_3_CALLERS;
+      return code_size > CODE_SIZE_3_CALLERS + locality_advantage;
     default:
       break;
     }
   }
-  return code_size > CODE_SIZE_ANY_CALLERS;
+  return code_size > CODE_SIZE_ANY_CALLERS + locality_advantage;
 }
 
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
