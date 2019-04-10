@@ -121,6 +121,73 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
   return type_tag_param_idx;
 }
 
+/**
+ * Return switch block from the incoming cfg if it only contains one.
+ */
+cfg::Block* find_single_switch(const cfg::ControlFlowGraph& cfg) {
+  cfg::Block* switch_block = nullptr;
+
+  for (const auto& block : cfg.blocks()) {
+    for (auto& mei : InstructionIterable(block)) {
+      if (is_switch(mei.insn->opcode())) {
+        if (!switch_block) {
+          switch_block = block;
+        } else {
+          // must only contain a single switch
+          return nullptr;
+        }
+      }
+    }
+  }
+  return switch_block;
+}
+
+/**
+ * If there are common ctor invocations in each switch statements,
+ * put them into invocations vector.
+ */
+static void find_common_ctor_invocations(
+    cfg::Block* switch_block,
+    cfg::Block* return_block,
+    DexMethod*& common_ctor,
+    std::vector<IRList::iterator>& invocations) {
+  // edges could point to the same target, but we only care unique targets.
+  std::unordered_set<cfg::Block*> targets;
+  for (auto& s : switch_block->succs()) {
+    targets.insert(s->target());
+  }
+  if (targets.size() <= 1) return;
+
+  for (auto& target : targets) {
+    if (return_block != target->follow_goto()) {
+      // not all switch statements goto return block
+      invocations.clear();
+      return;
+    }
+    auto last_non_goto_insn = target->get_last_insn();
+    if (is_goto(last_non_goto_insn->insn->opcode())) {
+      do {
+        assert_log(last_non_goto_insn != target->get_first_insn(),
+                   "Should have at least one non-goto opcode!");
+        last_non_goto_insn = std::prev(last_non_goto_insn);
+      } while (last_non_goto_insn->type != MFLOW_OPCODE);
+    }
+    if (!is_invoke_direct(last_non_goto_insn->insn->opcode())) {
+      invocations.clear();
+      return;
+    }
+
+    auto meth = resolve_method(last_non_goto_insn->insn->get_method(),
+                               MethodSearch::Direct);
+    // Make sure we found the same init method
+    if (!meth || !is_init(meth) || (common_ctor && common_ctor != meth)) {
+      invocations.clear();
+      return;
+    }
+    common_ctor = meth;
+    invocations.emplace_back(last_non_goto_insn);
+  }
+}
 } // namespace
 
 void MethodStats::add(const MethodOrderedSet& methods) {
@@ -341,8 +408,8 @@ DexMethod* ModelMethodMerger::create_instantiation_factory(
     DexProto* proto,
     const DexAccessFlags access,
     DexMethod* ctor) {
-  auto mc = new MethodCreator(
-      owner_type, DexString::make_string(name), proto, access);
+  auto mc = new MethodCreator(owner_type, DexString::make_string(name), proto,
+                              access);
   auto type_tag_loc = mc->get_local(0);
   auto ret_loc = mc->make_local(proto->get_rtype());
   auto mb = mc->get_main_block();
@@ -351,6 +418,103 @@ DexMethod* ModelMethodMerger::create_instantiation_factory(
   mb->invoke(OPCODE_INVOKE_DIRECT, ctor, args);
   mb->ret(proto->get_rtype(), ret_loc);
   return mc->create();
+}
+
+/**
+ * For a merged constructor, if every switch statement ends up calling the same
+ * super constructor, we sink them to one invocation at the return block right
+ * after the switch statements:
+ *
+ * switch (typeTag) {                   switch (typeTag) {
+ *   case ATypeTag:                       case ATypeTag:
+ *     // do something for A                // do something for A
+ *     super(num);                          break;
+ *     break;                  ==>        case BTypeTag:
+ *   case BTypeTag:                         // do something for B
+ *     // do something for B                break;
+ *     super(num);                      }
+ *     break;                           super(num);
+ * }
+ */
+void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
+  auto dispatch_code = dispatch->get_code();
+  dispatch_code->build_cfg();
+  auto& cfg = dispatch_code->cfg();
+  if (cfg.return_blocks().size() != 1) {
+    dispatch_code->clear_cfg();
+    return;
+  }
+  auto return_block = cfg.return_blocks()[0];
+
+  auto switch_block = find_single_switch(cfg);
+  if (!switch_block) {
+    dispatch_code->clear_cfg();
+    return;
+  }
+
+  std::vector<IRList::iterator> invocations;
+  DexMethod* common_ctor = nullptr;
+  find_common_ctor_invocations(switch_block, return_block, common_ctor,
+                               invocations);
+  if (invocations.size() == 0) {
+    dispatch_code->clear_cfg();
+    return;
+  }
+  assert(common_ctor != nullptr);
+
+  // Move args in common ctor to the same registers in all statements.
+  // For example:
+  //
+  // case_block_1:                         case_block_1:
+  // MOVE_OBJECT v3, v0                    MOVE_OBJECT v3, v0
+  // MOVE v4, v1                           MOVE v4, v1
+  // INVOKE_DIRECT v3, v4                  MOVE_OBJECT v7, v3
+  // GOTO return_block           ==>       MOVE v8, v4
+  // case_block_2:                         GOTO return_block
+  // MOVE_OBJECT v5, v0                    case_block_2:
+  // MOVE v6, v1                           MOVE_OBJECT v5, v0
+  // INVOKE_DIRECT v5, v6                  MOVE v6, v1
+  // GOTO return_block                     MOVE_OBJECT v7, v5
+  //                                       MOVE v8, v6
+  //                                       GOTO return_block
+  //                                       return_block:
+  //                                       INVOKE_DIRECT v7, v8
+  //
+  // Redundent moves should be cleaned up by opt passes like copy propagation.
+  std::vector<uint16_t> new_srcs;
+  auto param_insns =
+      InstructionIterable(common_ctor->get_code()->get_param_instructions());
+  auto param_it = param_insns.begin(), param_end = param_insns.end();
+  for (; param_it != param_end; ++param_it) {
+    if (param_it->insn->opcode() == IOPCODE_LOAD_PARAM_WIDE) {
+      new_srcs.push_back(dispatch_code->allocate_wide_temp());
+    } else {
+      new_srcs.push_back(dispatch_code->allocate_temp());
+    }
+  }
+  cfg.set_registers_size(dispatch_code->get_registers_size());
+
+  for (auto invocation : invocations) {
+    param_it = param_insns.begin();
+    for (size_t i = 0; i < invocation->insn->srcs_size(); ++i, ++param_it) {
+      always_assert(param_it != param_end);
+      auto mov = (new IRInstruction(
+                      opcode::load_param_to_move(param_it->insn->opcode())))
+                     ->set_src(0, invocation->insn->src(i))
+                     ->set_dest(new_srcs[i]);
+      dispatch_code->insert_before(invocation, mov);
+    }
+    dispatch_code->erase_and_dispose(invocation);
+  }
+
+  auto invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
+                    ->set_method(common_ctor)
+                    ->set_arg_word_count(new_srcs.size());
+  for (size_t i = 0; i < new_srcs.size(); ++i) {
+    invoke->set_src(i, new_srcs[i]);
+  }
+  dispatch_code->insert_before(return_block->get_first_insn(), invoke);
+  dispatch_code->clear_cfg();
 }
 
 /**
@@ -551,6 +715,7 @@ void ModelMethodMerger::merge_ctors() {
       type_class(target_type)->add_method(dispatch);
       // Inline entries
       inline_dispatch_entries(dispatch);
+      sink_common_ctor_to_return_block(dispatch);
       auto mergeable_cls = type_class(ctors.front()->get_class());
       always_assert(mergeable_cls->get_super_class() ==
                     target_cls->get_super_class());

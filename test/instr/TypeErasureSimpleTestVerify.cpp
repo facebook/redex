@@ -18,3 +18,23 @@ TEST_F(PostVerify, MergeablesRemoval) {
   verify_type_erased(cls_c);
   verify_type_erased(cls_d);
 }
+
+TEST_F(PostVerify, SinkCommonCtorInvocation) {
+  auto cls = find_class_named(
+      classes, "Lcom/facebook/redextest/SimpleBaseShape0S0000000;");
+
+  for (auto dm : cls->get_dmethods()) {
+    if (dm->get_deobfuscated_name() !=
+        "Lcom/facebook/redextest/SimpleBaseShape0S0000000;.<init>:(Ljava/lang/"
+        "String;I)V")
+      continue;
+
+    int invocation_count = 0;
+    auto param_insns = InstructionIterable(dm->get_code());
+    for (auto param_it = param_insns.begin(); param_it != param_insns.end();
+         ++param_it) {
+      invocation_count += is_invoke_direct(param_it->insn->opcode()) ? 1 : 0;
+    }
+    EXPECT_EQ(invocation_count, 1);
+  }
+}
