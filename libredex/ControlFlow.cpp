@@ -193,7 +193,9 @@ void Block::remove_insn(const IRList::iterator& it) {
 }
 
 opcode::Branchingness Block::branchingness() {
-  always_assert(m_parent->editable());
+  // TODO (cnli): put back 'always_assert(m_parent->editable());'
+  // once ModelMethodMerger::sink_common_ctor_to_return_block update
+  // to editable CFG.
   const auto& last = get_last_insn();
 
   if (succs().empty() ||

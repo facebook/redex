@@ -438,8 +438,9 @@ DexMethod* ModelMethodMerger::create_instantiation_factory(
  */
 void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   auto dispatch_code = dispatch->get_code();
-  dispatch_code->build_cfg();
-  auto& cfg = dispatch_code->cfg();
+  // TODO (cnli): use editable CFG and update insert logic.
+  dispatch_code->build_cfg(/* editable */ false);
+  const auto& cfg = dispatch_code->cfg();
   if (cfg.return_blocks().size() != 1) {
     dispatch_code->clear_cfg();
     return;
@@ -492,7 +493,6 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
       new_srcs.push_back(dispatch_code->allocate_temp());
     }
   }
-  cfg.set_registers_size(dispatch_code->get_registers_size());
 
   for (auto invocation : invocations) {
     param_it = param_insns.begin();
