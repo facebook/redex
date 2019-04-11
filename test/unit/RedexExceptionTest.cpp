@@ -23,7 +23,7 @@ TEST(RedexException, test_assert_log) {
   } catch (const RedexException& e) {
     EXPECT_EQ(RedexError::GENERIC_ASSERTION_ERROR, e.type);
     std::string expected_msg =
-        "void old_assert(): assertion `1 == 2' failed. what? 1 != 2?";
+        "void old_assert(): assertion `1 == 2' failed.\nwhat? 1 != 2?";
     EXPECT_NE(std::string(e.what()).find(expected_msg), std::string::npos);
   }
 }
@@ -35,7 +35,7 @@ TEST(RedexException, test_assert_type_log) {
   } catch (const RedexException& e) {
     EXPECT_EQ(RedexError::INTERNAL_ERROR, e.type);
     std::string expected_msg =
-        "void typed_assert(): assertion `1 == 2' failed. what? 1 != 2?";
+        "void typed_assert(): assertion `1 == 2' failed.\nwhat? 1 != 2?";
     EXPECT_NE(std::string(e.what()).find(expected_msg), std::string::npos);
   }
 }

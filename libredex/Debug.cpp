@@ -71,7 +71,7 @@ void assert_fail(const char* expr,
   va_list ap;
   va_start(ap, fmt);
   std::string msg = format2string(
-      "%s:%u: %s: assertion `%s' failed. ", file, line, func, expr);
+      "%s:%u: %s: assertion `%s' failed.\n", file, line, func, expr);
 
   msg += v_format2string(fmt, ap);
 
