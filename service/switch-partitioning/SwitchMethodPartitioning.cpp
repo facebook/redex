@@ -105,7 +105,9 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
     // be no branch opcode -- the method will always throw an
     // IllegalArgumentException.
     auto op = last_prologue_insn->opcode();
-    always_assert(!verify_default_case || is_branch(op) || op == OPCODE_THROW);
+    always_assert_log(!verify_default_case || is_branch(op) ||
+                          op == OPCODE_THROW,
+                      "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
 
     if (!is_branch(op)) {
       return boost::none;
