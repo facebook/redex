@@ -1217,6 +1217,21 @@ class DexMethod:
                     self.name = name_in_file
         return self.name
 
+    def get_pretty_proto(self):
+        dex = self.get_dex()
+        proto_id = dex.get_proto_id(self.get_method_id().proto_idx)
+        if proto_id is None:
+            return None
+        return_type = dex.get_typename(proto_id.return_type_idx)
+        param = "("
+        if proto_id.parameters_off != 0:
+            # type is type_list
+            param_list = proto_id.get_parameters().list
+            for type_idx in param_list:
+                param += dex.get_typename(type_idx)
+        param += ")"
+        return param + return_type
+
     def get_class(self):
         return self.dex_class
 
@@ -1310,6 +1325,7 @@ class DexClass:
         self.num_direct_methods = 0
         self.mangled = None
         self.demangled = None
+        self.method_mapping = None
 
     def dump(self, f=sys.stdout):
         f.write('\nclass: %s\n' % (self.get_name()))
@@ -1361,6 +1377,33 @@ class DexClass:
             for encoded_method in self.class_def.class_data.virtual_methods:
                 self.methods.append(DexMethod(self, encoded_method, True))
         return self.methods
+
+    def get_method_mapping(self):
+        if self.method_mapping is None:
+            self.method_mapping = {}
+
+            def insert_method(encoded_method, virtual):
+                method = DexMethod(self, encoded_method, virtual)
+                name = method.get_name_in_file()
+                proto = method.get_pretty_proto()
+                name_mapping = self.method_mapping.setdefault(name, {})
+                if proto in name_mapping:
+                    raise Exception(
+                        "Unexpected duplicate method found: {}".format(method))
+                name_mapping[proto] = method
+
+            for encoded_method in self.class_def.class_data.direct_methods:
+                insert_method(encoded_method, False)
+            for encoded_method in self.class_def.class_data.virtual_methods:
+                insert_method(encoded_method, True)
+        return self.method_mapping
+
+    def find_method(self, method_name, proto):
+        methods = self.get_method_mapping()
+        if method_name not in methods:
+            return None
+        proto_map = methods[method_name]
+        return proto_map.get(proto, None)
 
 
 def demangle_classname(mangled):
