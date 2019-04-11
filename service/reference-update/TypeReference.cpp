@@ -111,6 +111,24 @@ void assert_old_types_have_definitions(
   }
 }
 
+DexString* gen_new_name(const std::string& org_name, size_t seed) {
+  constexpr const char* mangling_affix = "$RDX$";
+  auto end = org_name.find(mangling_affix);
+  std::string new_name = org_name.substr(0, end);
+  new_name.append(mangling_affix);
+  while (seed) {
+    int d = seed % 62;
+    if (d < 10) {
+      new_name.push_back(d + '0');
+    } else if (d < 36) {
+      new_name.push_back(d - 10 + 'a');
+    } else {
+      new_name.push_back(d - 36 + 'A');
+    }
+    seed /= 62;
+  }
+  return DexString::make_string(new_name);
+}
 } // namespace
 
 namespace type_reference {
@@ -172,27 +190,6 @@ DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
     return level ? make_array_type(new_type, level) : new_type;
   }
   return nullptr;
-}
-
-/**
- * org_name(without mangling suffix) + m_mangling_affix + seed
- */
-DexString* TypeRefUpdater::gen_new_name(const std::string& org_name,
-                                        size_t seed) {
-  auto end = org_name.find(m_mangling_affix);
-  std::string new_name = org_name.substr(0, end) + m_mangling_affix;
-  while (seed) {
-    int d = seed % 62;
-    if (d < 10) {
-      new_name.push_back(d + '0');
-    } else if (d < 36) {
-      new_name.push_back(d - 10 + 'a');
-    } else {
-      new_name.push_back(d - 36 + 'A');
-    }
-    seed /= 62;
-  }
-  return DexString::make_string(new_name);
 }
 
 bool TypeRefUpdater::mangling(DexFieldRef* field) {
@@ -259,6 +256,24 @@ TypeRefUpdater::TypeRefUpdater(
     const std::unordered_map<DexType*, DexType*>& old_to_new)
     : m_old_to_new(old_to_new) {
   assert_old_types_have_definitions(old_to_new);
+}
+
+DexString* new_name(const DexMethodRef* method) {
+  size_t seed = 0;
+  auto proto = method->get_proto();
+  boost::hash_combine(seed, method->str());
+  boost::hash_combine(seed, proto->get_rtype()->str());
+  for (DexType* arg : proto->get_args()->get_type_list()) {
+    boost::hash_combine(seed, arg->str());
+  }
+  return gen_new_name(method->str(), seed);
+}
+
+DexString* new_name(const DexFieldRef* field) {
+  size_t seed = 0;
+  boost::hash_combine(seed, field->str());
+  boost::hash_combine(seed, field->get_type()->str());
+  return gen_new_name(field->str(), seed);
 }
 
 std::string get_method_signature(const DexMethod* method) {

@@ -58,14 +58,16 @@ class TypeRefUpdater final {
    * Change proto of a method if its proto contains any candidate.
    */
   bool mangling(DexMethodRef* method);
-  /**
-   * org_name + m_mangling_affix + seed
-   */
-  DexString* gen_new_name(const std::string& org_name, size_t seed);
 
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
-  const std::string m_mangling_affix = "$RDX$";
 };
+
+/**
+ * original_name + "$RDX$" + hash_of_signature
+ */
+DexString* new_name(const DexMethodRef* method);
+
+DexString* new_name(const DexFieldRef* field);
 
 // A helper to stringify method signature for the method dedup mapping file.
 std::string get_method_signature(const DexMethod* method);

@@ -13,17 +13,18 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "SingleImpl.h"
-#include "SingleImplUtil.h"
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "Resolver.h"
+#include "SingleImpl.h"
 #include "SingleImplDefs.h"
+#include "SingleImplUtil.h"
 #include "Trace.h"
+#include "TypeReference.h"
 #include "Walkers.h"
-#include "ClassHierarchy.h"
 
 namespace {
 
@@ -148,7 +149,9 @@ struct OptimizationImpl {
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
-  EscapeReason can_optimize(DexType* intf, SingleImplData& data, bool rename);
+  EscapeReason can_optimize(DexType* intf,
+                            SingleImplData& data,
+                            bool rename_on_collision);
   void do_optimize(DexType* intf, SingleImplData& data);
   EscapeReason check_field_collision(DexType* intf, SingleImplData& data);
   EscapeReason check_method_collision(DexType* intf, SingleImplData& data);
@@ -511,12 +514,12 @@ void OptimizationImpl::drop_single_impl_collision(DexType* intf,
  */
 EscapeReason OptimizationImpl::can_optimize(DexType* intf,
                                             SingleImplData& data,
-                                            bool rename) {
+                                            bool rename_on_collision) {
   auto escape = check_field_collision(intf, data);
   if (escape != EscapeReason::NO_ESCAPE) return escape;
   escape = check_method_collision(intf, data);
   if (escape != EscapeReason::NO_ESCAPE) {
-    if (rename) {
+    if (rename_on_collision) {
       rename_possible_collisions(intf, data);
       escape = check_method_collision(intf, data);
     }
@@ -552,44 +555,18 @@ void OptimizationImpl::rename_possible_collisions(
     }
   }
 
-  std::unordered_map<DexString*, DexString*> names;
-  const auto new_name = [&](DexString* name) {
-    const auto& name_it = names.find(name);
-    if (name_it != names.end()) {
-      return name_it->second;
-    }
-    DexString* possible_name = nullptr;
-    static std::string sufx("$r");
-    static int intf_id = 0;
-    while(true) {
-      const auto& str = name->str() + sufx + std::to_string(intf_id++);
-      possible_name = DexString::get_string(str.c_str());
-      if (possible_name == nullptr) {
-        possible_name = DexString::make_string(str.c_str());
-        break;
-      }
-    }
-    names[name] = possible_name;
-    return possible_name;
-  };
-
   for (const auto& meth : data.methoddefs) {
     if (is_constructor(meth)) continue;
-    auto name = new_name(meth->get_name());
+    auto name = type_reference::new_name(meth);
     TRACE(INTF, 9, "Changing name for %s to %s\n", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
   for (const auto& refs_it : data.methodrefs) {
     if (refs_it.first->is_def()) continue;
-    static auto init = DexString::make_string("<init>");
-    always_assert(refs_it.first->get_name() != init);
-    auto name = new_name(refs_it.first->get_name());
+    always_assert(!is_init(refs_it.first));
+    auto name = type_reference::new_name(refs_it.first);
     TRACE(INTF, 9, "Changing name for %s to %s\n",
         SHOW(refs_it.first), SHOW(name));
-    if (names.count(refs_it.first->get_name()) == 0) {
-      TRACE(INTF, 9, "Changing name on missing method def %s",
-          SHOW(refs_it.first));
-    }
     rename(refs_it.first, name);
   }
 }
