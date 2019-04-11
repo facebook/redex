@@ -16,7 +16,7 @@ TEST_F(PreVerify, test) {
 }
 
 TEST_F(PostVerify, test) {
-  ASSERT_NE(find_class_named(classes, "Lcom/facebook/redextest/I_1;"), nullptr);
+  ASSERT_EQ(find_class_named(classes, "Lcom/facebook/redextest/I_1;"), nullptr);
   ASSERT_EQ(find_class_named(classes, "Lcom/facebook/redextest/I_2;"), nullptr);
   ASSERT_EQ(find_class_named(classes, "Lcom/facebook/redextest/I_3;"), nullptr);
 }
