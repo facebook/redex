@@ -492,33 +492,57 @@ void update_method_signature_type_references(
 
   // 5. Last resort. Fix colliding methods for non-virtuals.
   fix_colliding_method(scope, colliding_methods);
+
+  // Ensure that no method references left that still refer old types.
+  walk::parallel::code(scope, [&mergeables](DexMethod*, IRCode& code) {
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_method()) {
+        auto proto = insn->get_method()->get_proto();
+        always_assert_log(
+            !proto_has_reference_to(proto, mergeables),
+            "Find old type in method reference %s, please make sure that "
+            "ReBindRefsPass is enabled before TypeErasurePass\n",
+            SHOW(insn));
+      }
+    }
+  });
 }
 
 void update_field_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
   TRACE(REFU, 4, " updating field refs\n");
-  const auto update_fields = [&](const std::vector<DexField*>& fields) {
-    for (const auto field : fields) {
-      const auto ref_type = field->get_type();
-      const auto type = get_array_type_or_self(ref_type);
-      if (old_to_new.count(type) == 0) {
-        continue;
-      }
-      DexFieldSpec spec;
-      auto new_type = old_to_new.at(type);
-      auto level = get_array_level(ref_type);
-      auto new_type_incl_array = make_array_type(new_type, level);
-      spec.type = new_type_incl_array;
-      field->change(spec);
-      TRACE(REFU, 9, " updating field ref to %s\n", SHOW(type));
+  const auto update_field = [&](DexFieldRef* field) {
+    const auto ref_type = field->get_type();
+    const auto type = get_array_type_or_self(ref_type);
+    if (old_to_new.count(type) == 0) {
+      return;
     }
+    DexFieldSpec spec;
+    auto new_type = old_to_new.at(type);
+    auto level = get_array_level(ref_type);
+    auto new_type_incl_array = make_array_type(new_type, level);
+    spec.type = new_type_incl_array;
+    field->change(spec);
+    TRACE(REFU, 9, " updating field ref to %s\n", SHOW(type));
   };
+  walk::parallel::fields(scope, update_field);
 
-  for (const auto cls : scope) {
-    update_fields(cls->get_ifields());
-    update_fields(cls->get_sfields());
-  }
+  walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->has_field()) {
+        const auto ref_type = insn->get_field()->get_type();
+        const auto type = get_array_type_or_self(ref_type);
+        always_assert_log(
+            old_to_new.count(type) == 0,
+            "Find old type in field reference %s, please make sure that "
+            "ReBindRefsPass is enabled before TypeErasurePass\n",
+            SHOW(insn));
+      }
+    }
+  });
 }
 
 } // namespace type_reference
