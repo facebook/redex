@@ -534,6 +534,7 @@ size_t OptimizationImpl::optimize(
     Scope& scope, const SingleImplConfig& config) {
   TypeList to_optimize;
   single_impls->get_interfaces(to_optimize);
+  std::sort(to_optimize.begin(), to_optimize.end(), compare_dextypes);
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
     if (intf_data.is_escaped()) continue;
