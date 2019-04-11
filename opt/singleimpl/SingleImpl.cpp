@@ -122,6 +122,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     redex_assert(scope_size > scope.size());
   }
 
+  TRACE(INTF, 2, "\ttotal steps %d\n", max_steps);
   TRACE(INTF, 1, "Removed interfaces %ld\n", removed_count);
   TRACE(INTF, 1,
           "Updated invoke-interface to invoke-virtual %ld\n",

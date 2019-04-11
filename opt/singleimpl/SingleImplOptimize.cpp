@@ -168,12 +168,9 @@ struct OptimizationImpl {
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
-  // Maps from original methods to current rewritten methods.
-  // For every interface optimization a set of methods are rewritten
-  // however the analysis maps still hold the original methods to refer
-  // to the various methods/refs to change.
-  // So the optimizer access this map and grabs the latest updated method
-  NewMethods new_methods;
+  // A map from interface method to implementing method. We maintain this global
+  // map for rewriting method references in annotation.
+  NewMethods m_intf_meth_to_impl_meth;
   // list of optimized types
   std::unordered_set<DexType*> optimized;
   const ClassHierarchy& ch;
@@ -224,55 +221,22 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
 }
 
 /**
- * Rewrite all methods sigs by creating new ones. Remove old methods and push
- * the new to the proper class method list.
+ * Change all the method definitions by updating specs.
+ * We will never get collision here since we renamed potential colliding methods
+ * before doing the optimization.
  */
 void OptimizationImpl::set_method_defs(DexType* intf,
                                        SingleImplData& data) {
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s\n", SHOW(method));
-    auto meth = method;
-    auto meth_it = new_methods.find(meth);
-    if (meth_it != new_methods.end()) {
-      // if a method rewrite existed it must not be on a single impl
-      // given we have escaped to next pass all collisions
-      always_assert(meth_it->second->is_def());
-      meth = static_cast<DexMethod*>(meth_it->second);
-      TRACE(INTF, 4, "(MDEF) current: %s\n", SHOW(meth));
-      redex_assert(!single_impls->is_single_impl(method->get_class()) ||
-                   single_impls->is_escaped(method->get_class()));
-      redex_assert(!single_impls->is_single_impl(meth->get_class()) ||
-                   single_impls->is_escaped(meth->get_class()));
-    }
-    auto proto = get_or_make_proto(intf, data.cls, meth->get_proto());
-    TRACE(INTF,
-          5,
-          "(MDEF) make_method: %s.%s - %s => %s\n",
-          SHOW(meth->get_class()),
-          SHOW(meth->get_name()),
-          SHOW(meth->get_proto()),
-          SHOW(proto));
-    redex_assert(proto != meth->get_proto());
-    auto new_meth = static_cast<DexMethod*>(DexMethod::make_method(
-        meth->get_class(), meth->get_name(), proto));
-    // new_meth may have already existed in RedexContext, so
-    // we need to make sure it isn't concrete.
-    // TODO: this is horrible. After we remove methods, we shouldn't
-    // have these zombies lying around.
-    new_meth->clear_annotations();
-    new_meth->make_non_concrete();
-    auto new_deob_name =
-        type_class(meth->get_class())->get_deobfuscated_name() + "." +
-        meth->get_simple_deobfuscated_name() + ":" + show_deobfuscated(proto);
-    new_meth->set_deobfuscated_name(new_deob_name);
-    new_meth->rstate = meth->rstate;
-    redex_assert(new_meth != meth);
-    setup_method(meth, new_meth);
-    new_methods[method] = new_meth;
-    auto owner = type_class(new_meth->get_class());
-    owner->remove_method(meth);
-    owner->add_method(new_meth);
-    TRACE(INTF, 3, "(MDEF)\t=> %s\n", SHOW(new_meth));
+    auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
+    TRACE(INTF, 5, "(MDEF) Update method: %s\n", SHOW(method));
+    redex_assert(proto != method->get_proto());
+    DexMethodSpec spec;
+    spec.proto = proto;
+    method->change(spec, false /* rename on collision */,
+                   true /* update deob name */);
+    TRACE(INTF, 3, "(MDEF)\t=> %s\n", SHOW(method));
   }
 }
 
@@ -283,19 +247,7 @@ void OptimizationImpl::set_method_refs(DexType* intf,
                                        SingleImplData& data) {
   for (auto mrefit : data.methodrefs) {
     auto method = mrefit.first;
-    TRACE(INTF, 3, "(MREF)  %s\n", SHOW(method));
-    auto new_meth = method;
-    auto meth_it = new_methods.find(new_meth);
-    if (meth_it != new_methods.end()) {
-      // if a method rewrite existed it must not be on a single impl
-      // given we have escaped to "next pass" all collisions
-      new_meth = meth_it->second;
-      TRACE(INTF, 4, "current: %s\n", SHOW(new_meth));
-      redex_assert(!single_impls->is_single_impl(method->get_class()) ||
-                   single_impls->is_escaped(method->get_class()));
-      redex_assert(!single_impls->is_single_impl(new_meth->get_class()) ||
-                   single_impls->is_escaped(new_meth->get_class()));
-    }
+    TRACE(INTF, 3, "(MREF) update ref %s\n", SHOW(method));
     // next 2 lines will generate no new proto or method when the ref matches
     // a def, which should be very common.
     // However it does not seem too much of an overkill and more
@@ -304,29 +256,15 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     // method would be returned if there is nothing to change and create.
     // Still we need to change the opcodes where we assert the new method
     // to go in the opcode is in fact different than what was there.
-    auto proto = get_or_make_proto(intf, data.cls, new_meth->get_proto());
-    auto created_meth = DexMethod::make_method(
-            new_meth->get_class(), new_meth->get_name(), proto);
-    if (created_meth->is_def() && method->is_def()) {
-      redex_assert(new_meth->is_def());
-      auto new_deob_name =
-          type_class(new_meth->get_class())->get_deobfuscated_name() + "." +
-          show(static_cast<DexMethod*>(new_meth)
-                   ->get_simple_deobfuscated_name()) +
-          ":" + show_deobfuscated(proto);
-      static_cast<DexMethod*>(created_meth)
-          ->set_deobfuscated_name(new_deob_name);
-      static_cast<DexMethod*>(created_meth)->rstate =
-          static_cast<DexMethod*>(method)->rstate;
+    auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
+    if (proto == method->get_proto()) {
+      continue;
     }
-    new_methods[method] = created_meth;
-    TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(created_meth));
-    for (auto opcode : mrefit.second) {
-      TRACE(INTF, 3, "(MREF) %s\n", SHOW(opcode));
-      redex_assert(opcode->get_method() != created_meth);
-      opcode->set_method(created_meth);
-      TRACE(INTF, 3, "(MREF) \t=> %s\n", SHOW(opcode));
-    }
+    DexMethodSpec spec;
+    spec.proto = proto;
+    method->change(spec, false /* rename on collision */,
+                   true /* update deob name */);
+    TRACE(INTF, 3, "(MREF)\t=> %s\n", SHOW(method));
   }
 }
 
@@ -338,15 +276,8 @@ void OptimizationImpl::set_method_refs(DexType* intf,
 void OptimizationImpl::rewrite_interface_methods(DexType* intf,
                                                  SingleImplData& data) {
   auto intf_cls = type_class(intf);
-  for (auto method : intf_cls->get_vmethods()) {
-    auto meth = method;
-    auto meth_it = new_methods.find(meth);
-    if (meth_it != new_methods.end()) {
-      always_assert(meth_it->second->is_def());
-      meth = static_cast<DexMethod*>(meth_it->second);
-    }
-    drop_single_impl_collision(intf, data, meth);
-    auto impl = type_class(data.cls);
+  auto impl = type_class(data.cls);
+  for (auto meth : intf_cls->get_vmethods()) {
     // Given an interface method and a class determine whether the method
     // is already defined in the class and use it if so.
     // An interface method can be defined in some base class for "convenience"
@@ -368,7 +299,8 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
               impl->get_type(), meth->get_name(), meth->get_proto()));
       // new_meth may not be new, because RedexContext keeps methods around
       // after they are deleted. clear all pre-existing method state.
-      // See related TODO by searching for "this is horrible" in this file.
+      // TODO: this is horrible. After we remove methods, we shouldn't
+      // have these zombies lying around.
       new_meth->clear_annotations();
       new_meth->make_non_concrete();
       auto new_deob_name = impl->get_deobfuscated_name() + "." +
@@ -384,24 +316,22 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     } else {
       TRACE(INTF, 3, "(MITF) found method impl %s\n", SHOW(new_meth));
     }
-    redex_assert(new_methods.find(meth) == new_methods.end());
-    new_methods[method] = new_meth;
+    always_assert(!m_intf_meth_to_impl_meth.count(meth));
+    m_intf_meth_to_impl_meth[meth] = new_meth;
   }
 
   // rewrite invoke-interface to invoke-virtual
   for (const auto& mref_it : data.intf_methodrefs) {
     auto m = mref_it.first;
-    redex_assert(new_methods.find(m) != new_methods.end());
-    auto new_m = new_methods[m];
+    always_assert(m_intf_meth_to_impl_meth.count(m));
+    auto new_m = m_intf_meth_to_impl_meth[m];
     redex_assert(new_m && new_m != m);
     TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(new_m));
     for (auto mop : mref_it.second) {
       TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(mop));
       mop->set_method(new_m);
-      auto op = mop->opcode();
-      if (op == OPCODE_INVOKE_INTERFACE) {
-        mop->set_opcode(OPCODE_INVOKE_VIRTUAL);
-      }
+      always_assert(mop->opcode() == OPCODE_INVOKE_INTERFACE);
+      mop->set_opcode(OPCODE_INVOKE_VIRTUAL);
       SingleImplPass::s_invoke_intf_count++;
       TRACE(INTF, 3, "(MITFOP)\t=>%s\n", SHOW(mop));
     }
@@ -428,8 +358,18 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
         auto value = elem.encoded_value;
         if (value->evtype() == DexEncodedValueTypes::DEVT_METHOD) {
           auto method_value = static_cast<DexEncodedValueMethod*>(value);
-          const auto& meth_it = new_methods.find(method_value->method());
-          if (meth_it == new_methods.end()) continue;
+          const auto& meth_it =
+              m_intf_meth_to_impl_meth.find(method_value->method());
+          if (meth_it == m_intf_meth_to_impl_meth.end()) {
+            // Assert that no optimized interfaces in the method ref. All the
+            // definitions with optimized interfaces are updated, so we simply
+            // assert that the method is a def.
+            always_assert_log(method_value->method()->is_def(),
+                              "Found methodref %s in annotation of class %s, "
+                              "this is not supported by SingleImplPass.\n",
+                              SHOW(method_value->method()), SHOW(cls));
+            continue;
+          }
           TRACE(INTF, 4, "REWRITE: %s\n", SHOW(anno));
           method_value->set_method(meth_it->second);
           TRACE(INTF, 4, "TO: %s\n", SHOW(anno));
@@ -459,11 +399,6 @@ EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
 EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
                                                       SingleImplData& data) {
   for (auto method : data.methoddefs) {
-    auto meth_it = new_methods.find(method);
-    if (meth_it != new_methods.end()) {
-      always_assert(meth_it->second->is_def());
-      method = static_cast<DexMethod*>(meth_it->second);
-    }
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     redex_assert(proto != method->get_proto());
     DexMethod* collision = find_collision(ch,
@@ -471,7 +406,11 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
                                           proto,
                                           type_class(method->get_class()),
                                           method->is_virtual());
-    if (collision) return SIG_COLLISION;
+    if (collision) {
+      TRACE(INTF, 9, "Found collision %s\n", SHOW(method));
+      TRACE(INTF, 9, "\t to %s\n", SHOW(collision));
+      return SIG_COLLISION;
+    }
   }
   return NO_ESCAPE;
 }
@@ -492,7 +431,7 @@ void OptimizationImpl::drop_single_impl_collision(DexType* intf,
     if (type != intf && single_impls->is_single_impl(type) &&
         !single_impls->is_escaped(type)) {
       single_impls->escape_interface(type, NEXT_PASS);
-      redex_assert(optimized.find(type) == optimized.end());
+      always_assert(!optimized.count(type));
     }
   };
 
@@ -528,6 +467,10 @@ EscapeReason OptimizationImpl::can_optimize(DexType* intf,
   for (auto method : data.methoddefs) {
     drop_single_impl_collision(intf, data, method);
   }
+  auto intf_cls = type_class(intf);
+  for (auto method : intf_cls->get_vmethods()) {
+    drop_single_impl_collision(intf, data, method);
+  }
   return NO_ESCAPE;
 }
 
@@ -558,15 +501,15 @@ void OptimizationImpl::rename_possible_collisions(
   for (const auto& meth : data.methoddefs) {
     if (is_constructor(meth)) continue;
     auto name = type_reference::new_name(meth);
-    TRACE(INTF, 9, "Changing name for %s to %s\n", SHOW(meth), SHOW(name));
+    TRACE(INTF, 9, "Changing def name for %s to %s\n", SHOW(meth), SHOW(name));
     rename(meth, name);
   }
   for (const auto& refs_it : data.methodrefs) {
     if (refs_it.first->is_def()) continue;
     always_assert(!is_init(refs_it.first));
     auto name = type_reference::new_name(refs_it.first);
-    TRACE(INTF, 9, "Changing name for %s to %s\n",
-        SHOW(refs_it.first), SHOW(name));
+    TRACE(INTF, 9, "Changing ref name for %s to %s\n", SHOW(refs_it.first),
+          SHOW(name));
     rename(refs_it.first, name);
   }
 }
@@ -593,8 +536,8 @@ size_t OptimizationImpl::optimize(
   single_impls->get_interfaces(to_optimize);
   for (auto intf : to_optimize) {
     auto& intf_data = single_impls->get_single_impl_data(intf);
-    TRACE(INTF, 3, "(OPT) %s => %s\n", SHOW(intf), SHOW(intf_data.cls));
     if (intf_data.is_escaped()) continue;
+    TRACE(INTF, 3, "(OPT) %s => %s\n", SHOW(intf), SHOW(intf_data.cls));
     auto escape = can_optimize(intf, intf_data, config.rename_on_collision);
     if (escape != EscapeReason::NO_ESCAPE) {
       single_impls->escape_interface(intf, escape);
