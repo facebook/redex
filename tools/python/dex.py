@@ -22,7 +22,6 @@ import operator
 import optparse
 import os
 import re
-import six
 import string
 import sys
 
@@ -1448,7 +1447,7 @@ class File:
             self.debug_info_items = list()
             for i in range(size):
                 item = debug_info_item(self.data)
-                _ = item.get_ops(reset_offset=False)
+                item.get_ops(reset_offset=False)
                 self.debug_info_items.append(item)
             self.debug_info_items_total_size = self.data.tell() - offset
             self.data.pop_offset_and_seek()
@@ -1456,7 +1455,7 @@ class File:
 
     def find_class(self, class_ref):
         class_idx = class_ref
-        if isinstance(class_ref, six.string_types):
+        if isinstance(class_ref, str):
             # Make sure the string is in 'L' <classname-with-slashes> ';'
             class_mangled = mangle_classname(class_ref)
             class_str_idx = self.find_string_idx(class_mangled)
