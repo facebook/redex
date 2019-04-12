@@ -15,26 +15,7 @@ class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("instrumentation_strategy", "", m_options.instrumentation_strategy);
-    jw.get("analysis_class_name", "", m_options.analysis_class_name);
-    jw.get("analysis_method_name", "", m_options.analysis_method_name);
-    std::vector<std::string> list;
-    jw.get("blacklist", {}, list);
-    for (const auto& e : list) {
-      m_options.blacklist.insert(e);
-    }
-    jw.get("whitelist", {}, list);
-    for (const auto& e : list) {
-      m_options.whitelist.insert(e);
-    }
-    jw.get("blacklist_file_name", "", m_options.blacklist_file_name);
-    jw.get("metadata_file_name", "instrument-mapping.txt",
-           m_options.metadata_file_name);
-    jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
-    jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
-  }
-
+  void configure_pass(const JsonWrapper& jw) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Options {

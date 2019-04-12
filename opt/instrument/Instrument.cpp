@@ -9,6 +9,8 @@
 
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "InterDexPass.h"
+#include "InterDexPassPlugin.h"
 #include "Match.h"
 #include "Show.h"
 #include "TypeSystem.h"
@@ -35,6 +37,40 @@ static bool debug = false;
 
 // sMethodStats is sharded to sMethodStats1 to sMethodStatsN.
 static constexpr size_t NUM_SHARDS = 8;
+
+class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
+ public:
+  InstrumentInterDexPlugin(size_t max_analysis_methods)
+      : m_max_analysis_methods(max_analysis_methods) {}
+
+  void configure(const Scope& scope, ConfigFiles& cfg) override{};
+
+  bool should_skip_class(const DexClass* clazz) override { return false; }
+
+  void gather_refs(const interdex::DexInfo& dex_info,
+                   const DexClass* cls,
+                   std::vector<DexMethodRef*>& mrefs,
+                   std::vector<DexFieldRef*>& frefs,
+                   std::vector<DexType*>& trefs,
+                   std::vector<DexClass*>* erased_classes,
+                   bool should_not_relocate_methods_of_class) override {}
+
+  size_t reserve_mrefs() override {
+    // In each dex, we will introduce more method refs from analysis methods.
+    // This makes sure that the inter-dex pass keeps space for new method refs.
+    return m_max_analysis_methods;
+  }
+
+  DexClasses additional_classes(const DexClassesVector& outdex,
+                                const DexClasses& classes) override {
+    return {};
+  }
+
+  void cleanup(const std::vector<DexClass*>& scope) override {}
+
+ private:
+  const size_t m_max_analysis_methods;
+};
 
 // For example, say that "Lcom/facebook/debug/" is in the set. We match either
 // "^Lcom/facebook/debug/*" or "^Lcom/facebook/debug;".
@@ -939,6 +975,34 @@ std::unordered_set<std::string> load_blacklist_file(
   return ret;
 }
 } // namespace
+
+void InstrumentPass::configure_pass(const JsonWrapper& jw) {
+  jw.get("instrumentation_strategy", "", m_options.instrumentation_strategy);
+  jw.get("analysis_class_name", "", m_options.analysis_class_name);
+  jw.get("analysis_method_name", "", m_options.analysis_method_name);
+  std::vector<std::string> list;
+  jw.get("blacklist", {}, list);
+  for (const auto& e : list) {
+    m_options.blacklist.insert(e);
+  }
+  jw.get("whitelist", {}, list);
+  for (const auto& e : list) {
+    m_options.whitelist.insert(e);
+  }
+  jw.get("blacklist_file_name", "", m_options.blacklist_file_name);
+  jw.get("metadata_file_name", "instrument-mapping.txt",
+         m_options.metadata_file_name);
+  jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
+  jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
+
+  // Make a small room for additional method refs during InterDex.
+  interdex::InterDexRegistry* registry =
+      static_cast<interdex::InterDexRegistry*>(
+          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+  registry->register_plugin("INSTRUMENT_PASS_PLUGIN", []() {
+    return new InstrumentInterDexPlugin(NUM_SHARDS);
+  });
+}
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
