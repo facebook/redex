@@ -179,10 +179,12 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   refs.reserve(method_refs.size() + field_refs.size() + types.size() +
                strings.size());
   uint64_t& refs_weight = class_info.refs_weight;
+  uint64_t& seed_weight = class_info.seed_weight;
 
   auto add_weight = [& ref_counts = m_ref_counts,
-                     max_ref_count = m_max_ref_count, &refs,
-                     &refs_weight](void* ref, size_t weight) {
+                     max_ref_count = m_max_ref_count, &refs, &refs_weight,
+                     &seed_weight](void* ref, size_t item_weight,
+                                   size_t item_seed_weight) {
     auto it = ref_counts.find(ref);
     auto ref_count = it == ref_counts.end() ? 1 : it->second;
     double frequency = ref_count * 1.0 / max_ref_count;
@@ -194,8 +196,9 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s\n", ref_count,
           max_ref_count, frequency, skipping ? "(skipping)" : "");
     if (!skipping) {
-      refs.emplace_back(ref, weight);
-      refs_weight += weight;
+      refs.emplace_back(ref, item_weight);
+      refs_weight += item_weight;
+      seed_weight += item_seed_weight;
     }
   };
 
@@ -205,16 +208,16 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // We discount references that occur in many classes.
   // TODO: Try some other variations.
   for (auto mref : method_refs) {
-    add_weight(mref, m_config.method_ref_weight);
+    add_weight(mref, m_config.method_ref_weight, 10);
   }
   for (auto type : types) {
-    add_weight(type, m_config.type_ref_weight);
+    add_weight(type, m_config.type_ref_weight, 5);
   }
   for (auto string : strings) {
-    add_weight(string, m_config.string_ref_weight);
+    add_weight(string, m_config.string_ref_weight, 1);
   }
   for (auto fref : field_refs) {
-    add_weight(fref, m_config.field_ref_weight);
+    add_weight(fref, m_config.field_ref_weight, 3);
   }
 
   std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>
@@ -284,7 +287,7 @@ DexClass* CrossDexRefMinimizer::worst(bool generated) {
     }
 
     const CrossDexRefMinimizer::ClassInfo& class_info = it->second;
-    uint64_t value = class_info.get_primary_priority_denominator();
+    uint64_t value = class_info.seed_weight;
 
     // Prefer the largest denominator
     if (value < max_value) {
@@ -307,14 +310,9 @@ DexClass* CrossDexRefMinimizer::worst(bool generated) {
   }
 
   TRACE(IDEX, 3,
-        "[dex ordering] Picked worst class {%s} with priority %016lx; "
-        "index %u; %u applied refs weight, %s infrequent refs weights, %u "
-        "total refs\n",
-        SHOW(max_it->first), max_it->second.get_priority(),
-        max_it->second.index, max_it->second.applied_refs_weight,
-        format_infrequent_refs_array(max_it->second.infrequent_refs_weight)
-            .c_str(),
-        max_it->second.refs.size());
+        "[dex ordering] Picked worst class {%s} with seed %u; "
+        "index %u\n",
+        SHOW(max_it->first), max_value, max_it->second.index);
   m_stats.worst_classes.emplace_back(max_it->first, max_value);
   return max_it->first;
 }

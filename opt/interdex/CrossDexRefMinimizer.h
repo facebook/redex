@@ -82,6 +82,7 @@ class CrossDexRefMinimizer {
     std::vector<std::pair<void*, uint32_t>> refs;
     uint64_t refs_weight;
     uint64_t applied_refs_weight;
+    uint64_t seed_weight{0};
     ClassInfo(uint32_t i)
         : index(i),
           infrequent_refs_weight(),
@@ -125,8 +126,7 @@ class CrossDexRefMinimizer {
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;
-  // "Worst" in the sense of having the biggest (adjusted) unapplied refs
-  // weight.
+  // "Worst" in the sense of having highest seed weight.
   DexClass* worst();
   // "Erasing" a class applies its refs, updating
   // the priorities of all remaining classes.
