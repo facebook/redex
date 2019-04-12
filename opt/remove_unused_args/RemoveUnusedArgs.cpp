@@ -149,7 +149,25 @@ bool RemoveArgs::update_method_signature(
       return false;
     }
 
-    DexMethodSpec spec(method->get_class(), method->get_name(), updated_proto);
+    auto name = method->get_name();
+    if (method->is_virtual()) {
+      // TODO: T31388603 -- Remove unused args for true virtuals.
+
+      // We need to worry about creating shadowing in the virtual scope ---
+      // for this particular method change, but also across all other upcoming
+      // method changes. To this end, we introduce unique names for each arg
+      // list to avoid any such overlaps.
+      // It's okay to update shared m_renamed_virtual_arg_lists map here, since
+      // we are protected by a lock anyway.
+      size_t name_index = m_renamed_virtual_arg_lists[live_args_list]++;
+      std::stringstream ss;
+      // This pass typically runs before the obfuscation pass, so we should not
+      // need to be concerned here about creating long method names
+      ss << name->str() << "$UnusedArgs$" << std::to_string(name_index);
+      name = DexString::make_string(ss.str());
+    }
+
+    DexMethodSpec spec(method->get_class(), name, updated_proto);
     method->change(spec,
                    true /* rename on collision */,
                    true /* update deobfuscated name */);
@@ -213,8 +231,11 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
 
         // If a method is devirtualizable, proceed with live arg computation.
         if (method->is_virtual()) {
-          // TODO (see T39183036): Support this use-case properly.
-          return method_stats;
+          auto virt_scope = m_type_system.find_virtual_scope(method);
+          if (virt_scope == nullptr || !is_non_virtual_scope(virt_scope)) {
+            // TODO: T31388603 -- Remove unused args for true virtuals.
+            return method_stats;
+          }
         }
 
         std::vector<IRInstruction*> dead_insns;
