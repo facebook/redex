@@ -35,11 +35,11 @@ class RemoveArgs {
       std::vector<IRInstruction*>* dead_insns);
 
  private:
-  std::mutex m_lock;
   const Scope& m_scope;
   TypeSystem m_type_system;
   ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
-  std::unordered_map<DexTypeList*, size_t> m_renamed_virtual_arg_lists;
+  std::unordered_map<DexString*, std::unordered_map<DexTypeList*, size_t>>
+      m_renamed_indices;
 
   std::deque<DexType*> get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);

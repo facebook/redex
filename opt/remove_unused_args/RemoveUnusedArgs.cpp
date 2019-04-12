@@ -137,41 +137,35 @@ bool RemoveArgs::update_method_signature(
   auto updated_proto =
       DexProto::make_proto(method->get_proto()->get_rtype(), live_args_list);
 
-  // Enforce sequential execution for the rest of this method, otherwise two
-  // colliding constructors may fail the collision check.
-  {
-    std::lock_guard<std::mutex> guard(m_lock);
-    auto colliding_method = DexMethod::get_method(
-        method->get_class(), method->get_name(), updated_proto);
-    if (colliding_method && colliding_method->is_def() &&
-        is_constructor(static_cast<const DexMethod*>(colliding_method))) {
-      // We can't rename constructors, so we give up on removing args.
-      return false;
-    }
-
-    auto name = method->get_name();
-    if (method->is_virtual()) {
-      // TODO: T31388603 -- Remove unused args for true virtuals.
-
-      // We need to worry about creating shadowing in the virtual scope ---
-      // for this particular method change, but also across all other upcoming
-      // method changes. To this end, we introduce unique names for each arg
-      // list to avoid any such overlaps.
-      // It's okay to update shared m_renamed_virtual_arg_lists map here, since
-      // we are protected by a lock anyway.
-      size_t name_index = m_renamed_virtual_arg_lists[live_args_list]++;
-      std::stringstream ss;
-      // This pass typically runs before the obfuscation pass, so we should not
-      // need to be concerned here about creating long method names
-      ss << name->str() << "$UnusedArgs$" << std::to_string(name_index);
-      name = DexString::make_string(ss.str());
-    }
-
-    DexMethodSpec spec(method->get_class(), name, updated_proto);
-    method->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
+  auto colliding_method = DexMethod::get_method(
+      method->get_class(), method->get_name(), updated_proto);
+  if (colliding_method && colliding_method->is_def() &&
+      is_constructor(static_cast<const DexMethod*>(colliding_method))) {
+    // We can't rename constructors, so we give up on removing args.
+    return false;
   }
+
+  auto name = method->get_name();
+  if (method->is_virtual()) {
+    // TODO: T31388603 -- Remove unused args for true virtuals.
+
+    // We need to worry about creating shadowing in the virtual scope ---
+    // for this particular method change, but also across all other upcoming
+    // method changes. To this end, we introduce unique names for each name and
+    // arg list to avoid any such overlaps.
+    size_t name_index = m_renamed_indices[name][live_args_list]++;
+    std::stringstream ss;
+    // This pass typically runs before the obfuscation pass, so we should not
+    // need to be concerned here about creating long method names.
+    // "uva" stands for unused virtual args
+    ss << name->str() << "$uva" << std::to_string(name_index);
+    name = DexString::make_string(ss.str());
+  }
+
+  DexMethodSpec spec(method->get_class(), name, updated_proto);
+  method->change(spec,
+                 true /* rename on collision */,
+                 true /* update deobfuscated name */);
 
   // We must also update debug info when we change the method proto.
   // We calculate this separately from live_args in case the method isn't
@@ -204,68 +198,103 @@ bool RemoveArgs::update_method_signature(
  * For methods that have unused arguments, record live argument registers.
  */
 RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
-  return walk::parallel::reduce_methods<RemoveArgs::MethodStats>(
-      m_scope,
-      [&](DexMethod* method) -> RemoveArgs::MethodStats {
-        auto method_stats = RemoveArgs::MethodStats();
-        if (method->get_code() == nullptr) {
-          return method_stats;
-        }
-        auto proto = method->get_proto();
-        auto num_args = proto->get_args()->size();
-        // For instance methods, num_args does not count the 'this' argument.
-        if (num_args == 0) {
-          // Nothing to do if the method doesn't have args to remove.
-          return method_stats;
-        }
+  // Phase 1: Find (in parallel) all methods that we can potentially update
 
-        if (!can_rename(method)) {
-          // Nothing to do if ProGuard says we can't change the method args.
-          TRACE(ARGS,
-                5,
-                "Method is disqualified from being updated by ProGuard rules: "
-                "%s\n",
-                SHOW(method));
-          return method_stats;
-        }
+  struct Entry {
+    std::vector<IRInstruction*> dead_insns;
+    std::deque<uint16_t> live_arg_idxs;
+  };
+  ConcurrentMap<DexMethod*, Entry> unordered_entries;
+  walk::parallel::methods(m_scope, [&](DexMethod* method) {
+    if (method->get_code() == nullptr) {
+      return;
+    }
+    auto proto = method->get_proto();
+    auto num_args = proto->get_args()->size();
+    // For instance methods, num_args does not count the 'this' argument.
+    if (num_args == 0) {
+      // Nothing to do if the method doesn't have args to remove.
+      return;
+    }
 
-        // If a method is devirtualizable, proceed with live arg computation.
-        if (method->is_virtual()) {
-          auto virt_scope = m_type_system.find_virtual_scope(method);
-          if (virt_scope == nullptr || !is_non_virtual_scope(virt_scope)) {
-            // TODO: T31388603 -- Remove unused args for true virtuals.
-            return method_stats;
-          }
-        }
+    if (!can_rename(method)) {
+      // Nothing to do if ProGuard says we can't change the method args.
+      TRACE(ARGS,
+            5,
+            "Method is disqualified from being updated by ProGuard rules: "
+            "%s\n",
+            SHOW(method));
+      return;
+    }
 
-        std::vector<IRInstruction*> dead_insns;
-        auto live_arg_idxs = compute_live_args(method, num_args, &dead_insns);
-        if (dead_insns.empty()) {
-          // Nothing to do if there aren't removable arguments.
-          return method_stats;
-        }
+    // If a method is devirtualizable, proceed with live arg computation.
+    if (method->is_virtual()) {
+      auto virt_scope = m_type_system.find_virtual_scope(method);
+      if (virt_scope == nullptr || !is_non_virtual_scope(virt_scope)) {
+        // TODO: T31388603 -- Remove unused args for true virtuals.
+        return;
+      }
+    }
 
-        if (!update_method_signature(method, live_arg_idxs)) {
-          // If we didn't update the signature, we don't want to update
-          // callsites.
-          return method_stats;
-        }
+    std::vector<IRInstruction*> dead_insns;
+    auto live_arg_idxs = compute_live_args(method, num_args, &dead_insns);
+    if (dead_insns.empty()) {
+      return;
+    }
 
-        // We update the method signature, so we must remove unused
-        // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-        for (auto dead_insn : dead_insns) {
-          method->get_code()->remove_opcode(dead_insn);
-        }
-        m_live_arg_idxs_map.emplace(method, live_arg_idxs);
-        method_stats.methods_updated_count++;
-        method_stats.method_params_removed_count += dead_insns.size();
-        return method_stats;
-      },
-      [](RemoveArgs::MethodStats a, RemoveArgs::MethodStats b) {
-        a.method_params_removed_count += b.method_params_removed_count;
-        a.methods_updated_count += b.methods_updated_count;
-        return a;
-      });
+    // Remember entry
+    unordered_entries.emplace(method, (Entry){dead_insns, live_arg_idxs});
+  });
+
+  // Phase 2: Deterministically update proto (including (re)name as needed)
+
+  // Sort entries, so that we process all renaming operations in a
+  // deterministic order.
+  std::vector<std::pair<DexMethod*, Entry>> ordered_entries(
+      unordered_entries.begin(), unordered_entries.end());
+  std::sort(ordered_entries.begin(), ordered_entries.end(),
+            [](const std::pair<DexMethod*, Entry>& a,
+               const std::pair<DexMethod*, Entry>& b) {
+              return compare_dexmethods(a.first, b.first);
+            });
+
+  RemoveArgs::MethodStats method_stats;
+  std::vector<DexClass*> classes;
+  std::unordered_map<DexClass*, std::vector<std::pair<DexMethod*, Entry>>>
+      class_entries;
+  for (auto& p : ordered_entries) {
+    DexMethod* method = p.first;
+    const Entry& entry = p.second;
+    if (!update_method_signature(method, entry.live_arg_idxs)) {
+      continue;
+    }
+
+    // Remember entry for further processing, and log statistics
+    DexClass* cls = type_class(method->get_class());
+    classes.push_back(cls);
+    class_entries[cls].push_back(p);
+    method_stats.methods_updated_count++;
+    method_stats.method_params_removed_count += entry.dead_insns.size();
+  }
+  sort_unique(classes);
+
+  // Phase 3: Update body of updated methods (in parallel)
+
+  walk::parallel::classes(classes, [&](DexClass* cls) {
+    for (auto& p : class_entries.at(cls)) {
+      DexMethod* method = p.first;
+      const Entry& entry = p.second;
+
+      // We update the method signature, so we must remove unused
+      // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
+      for (auto dead_insn : entry.dead_insns) {
+        method->get_code()->remove_opcode(dead_insn);
+      }
+      m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
+    }
+  });
+
+  return method_stats;
 }
 
 /**
