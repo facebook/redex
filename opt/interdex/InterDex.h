@@ -31,7 +31,8 @@ class InterDex {
            bool emit_scroll_set_marker,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
-           const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config)
+           const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config,
+           size_t reserve_mrefs)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
         m_cfg(cfg),
@@ -43,6 +44,7 @@ class InterDex {
         m_cross_dex_ref_minimizer(minimize_cross_dex_refs_config) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
+    m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
   }
 
   void set_mixed_mode_dex_statuses(
@@ -87,6 +89,7 @@ class InterDex {
   bool emit_class(const DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,
+                  bool perf_sensitive,
                   std::vector<DexClass*>* erased_classes = nullptr);
   void emit_primary_dex(
       const DexClasses& primary_dex,
