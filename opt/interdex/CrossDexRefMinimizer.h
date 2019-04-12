@@ -39,6 +39,11 @@ struct CrossDexRefMinimizerConfig {
   size_t field_ref_weight;
   size_t type_ref_weight;
   size_t string_ref_weight;
+
+  size_t method_seed_weight;
+  size_t field_seed_weight;
+  size_t type_seed_weight;
+  size_t string_seed_weight;
 };
 
 // Helper class that maintains a set of dex classes with associated priorities

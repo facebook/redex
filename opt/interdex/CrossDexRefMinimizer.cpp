@@ -208,16 +208,16 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   // We discount references that occur in many classes.
   // TODO: Try some other variations.
   for (auto mref : method_refs) {
-    add_weight(mref, m_config.method_ref_weight, 10);
+    add_weight(mref, m_config.method_ref_weight, m_config.method_seed_weight);
   }
   for (auto type : types) {
-    add_weight(type, m_config.type_ref_weight, 5);
+    add_weight(type, m_config.type_ref_weight, m_config.type_seed_weight);
   }
   for (auto string : strings) {
-    add_weight(string, m_config.string_ref_weight, 1);
+    add_weight(string, m_config.string_ref_weight, m_config.string_seed_weight);
   }
   for (auto fref : field_refs) {
-    add_weight(fref, m_config.field_ref_weight, 3);
+    add_weight(fref, m_config.field_ref_weight, m_config.field_seed_weight);
   }
 
   std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>

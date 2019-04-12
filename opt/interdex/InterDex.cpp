@@ -631,11 +631,17 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
     const Scope& scope) {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
-        "%d, field ref weight %d, type ref weight %d, string ref weight %d.\n",
+        "%d, field ref weight %d, type ref weight %d, string ref weight %d, "
+        "method seed weight %d, field seed weight %d, type seed weight %d, "
+        "string seed weight %d.\n",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
-        m_cross_dex_ref_minimizer.get_config().string_ref_weight);
+        m_cross_dex_ref_minimizer.get_config().string_ref_weight,
+        m_cross_dex_ref_minimizer.get_config().method_seed_weight,
+        m_cross_dex_ref_minimizer.get_config().field_seed_weight,
+        m_cross_dex_ref_minimizer.get_config().type_seed_weight,
+        m_cross_dex_ref_minimizer.get_config().string_seed_weight);
 
   if (m_cross_dex_relocator_config.relocate_static_methods ||
       m_cross_dex_relocator_config.relocate_non_static_direct_methods ||
