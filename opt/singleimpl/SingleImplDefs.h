@@ -70,9 +70,6 @@ enum EscapeReason : uint32_t {
   SIG_COLLISION = 0x10000,
   // interface substitution causes a collision with an existing field
   FIELD_COLLISION = 0x20000,
-  // move the interface to the next pass. Something dropped the interface
-  // for the current pass
-  NEXT_PASS = 0x40000,
 };
 inline EscapeReason operator|=(EscapeReason& a, const EscapeReason b) {
   return (a = static_cast<EscapeReason>(static_cast<uint32_t>(a) |

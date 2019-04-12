@@ -155,9 +155,6 @@ struct OptimizationImpl {
   void do_optimize(DexType* intf, SingleImplData& data);
   EscapeReason check_field_collision(DexType* intf, SingleImplData& data);
   EscapeReason check_method_collision(DexType* intf, SingleImplData& data);
-  void drop_single_impl_collision(DexType* intf,
-                                  SingleImplData& data,
-                                  DexMethod* method);
   void set_field_defs(DexType* intf, SingleImplData& data);
   void set_field_refs(DexType* intf, SingleImplData& data);
   void set_method_defs(DexType* intf, SingleImplData& data);
@@ -416,37 +413,6 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
 }
 
 /**
- * Move all single impl in a single impl method signature to next pass.
- * We make a single optimization per pass over any given single impl so
- * I1, I2 and void I1.m(I2)
- * the first optimization (I1 or I2) moves the other interface to next pass.
- * That is not the case for methods on non optimizable classes, so for
- * I1, I2 and void C.m(I1, I2)
- * then m is changed in a single pass for both I1 and I2.
- */
-void OptimizationImpl::drop_single_impl_collision(DexType* intf,
-                                                  SingleImplData& data,
-                                                  DexMethod* method) {
-  auto check_type = [&](DexType* type) {
-    if (type != intf && single_impls->is_single_impl(type) &&
-        !single_impls->is_escaped(type)) {
-      single_impls->escape_interface(type, NEXT_PASS);
-      always_assert(!optimized.count(type));
-    }
-  };
-
-  auto owner = method->get_class();
-  if (!single_impls->is_single_impl(owner)) return;
-  check_type(owner);
-  auto proto = method->get_proto();
-  check_type(proto->get_rtype());
-  auto args_list = proto->get_args();
-  for (auto arg : args_list->get_type_list()) {
-    check_type(arg);
-  }
-}
-
-/**
  * A single impl can be optimized if:
  * 1- there is no collision in fields rewrite
  * 2- there is no collision in methods rewrite
@@ -463,13 +429,6 @@ EscapeReason OptimizationImpl::can_optimize(DexType* intf,
       escape = check_method_collision(intf, data);
     }
     if (escape != EscapeReason::NO_ESCAPE) return escape;
-  }
-  for (auto method : data.methoddefs) {
-    drop_single_impl_collision(intf, data, method);
-  }
-  auto intf_cls = type_class(intf);
-  for (auto method : intf_cls->get_vmethods()) {
-    drop_single_impl_collision(intf, data, method);
   }
   return NO_ESCAPE;
 }
