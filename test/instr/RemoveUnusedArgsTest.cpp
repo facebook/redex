@@ -273,7 +273,7 @@ TEST_F(PostVerify, PrivatesUsedArgs) {
 }
 
 // Check nonvirtual method arg removal for unused args
-TEST_F(PreVerify, PublicNonVirtualsUsedArgs) {
+TEST_F(PreVerify, PublicNonVirtualsUnusedArgs) {
   auto non_virtuals =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
@@ -294,7 +294,14 @@ TEST_F(PreVerify, PublicNonVirtualsUsedArgs) {
   check_callsite_regs(use_non_virtual1, 2);
 }
 
-TEST_F(PostVerify, NonVirtualsUsedArgs) {
+TEST_F(PostVerify, NonVirtualsUnusedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1$uva0");
+  ASSERT_NE(nullptr, non_virtual1);
+
   auto non_virtuals_user = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
   ASSERT_NE(nullptr, non_virtuals_user);
@@ -308,7 +315,7 @@ TEST_F(PostVerify, NonVirtualsUsedArgs) {
 }
 
 // Check protected method arg removal for unused args
-TEST_F(PreVerify, ProtectedNonVirtualsUsedArgs) {
+TEST_F(PreVerify, ProtectedNonVirtualsUnusedArgs) {
   auto non_virtuals =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
@@ -328,7 +335,14 @@ TEST_F(PreVerify, ProtectedNonVirtualsUsedArgs) {
   check_callsite_regs(use_non_virtual2, 2);
 }
 
-TEST_F(PostVerify, ProtectedNonVirtualsUsedArgs) {
+TEST_F(PostVerify, ProtectedNonVirtualsUnusedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual2 = find_vmethod_named(*non_virtuals, "non_virtual2$uva0");
+  ASSERT_NE(nullptr, non_virtual2);
+
   auto non_virtuals_user = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
   ASSERT_NE(nullptr, non_virtuals_user);
