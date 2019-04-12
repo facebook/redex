@@ -155,7 +155,7 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
          m_minimize_cross_dex_refs_config.field_seed_weight);
   jw.get("minimize_cross_dex_refs_type_ref_weight", 30,
          m_minimize_cross_dex_refs_config.type_seed_weight);
-  jw.get("minimize_cross_dex_refs_string_ref_weight", 10,
+  jw.get("minimize_cross_dex_refs_string_ref_weight", 20,
          m_minimize_cross_dex_refs_config.string_seed_weight);
   jw.get("minimize_cross_dex_refs_relocate_static_methods", false,
          m_cross_dex_relocator_config.relocate_static_methods);
