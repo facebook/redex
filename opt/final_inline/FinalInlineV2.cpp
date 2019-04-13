@@ -532,7 +532,7 @@ size_t FinalInlinePassV2::run_inline_ifields(
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& /* conf */,
                                  PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE,

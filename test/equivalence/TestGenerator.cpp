@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
   EquivalenceTest::generate_all(*runner_cls);
 
   Json::Value json(Json::objectValue);
-  ConfigFiles cfg(json);
+  ConfigFiles conf(json);
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
 
   DexStore store("classes");
@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
                        false /* name-based locators */,
                        0,
                        0,
-                       cfg,
+                       conf,
                        pos_mapper.get(),
                        nullptr,
                        nullptr,

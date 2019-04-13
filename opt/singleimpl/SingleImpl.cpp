@@ -97,13 +97,15 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
 
 const int MAX_PASSES = 8;
 
-void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void SingleImplPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& conf,
+                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   int max_steps = 0;
   size_t previous_invoke_intf_count = s_invoke_intf_count;
   removed_count = 0;
-  const auto& pg_map = cfg.get_proguard_map();
+  const auto& pg_map = conf.get_proguard_map();
   while (true) {
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;

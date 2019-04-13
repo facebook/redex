@@ -239,10 +239,9 @@ void CreateReferenceGraphPass::createAndOutputRefGraph(
   }
 }
 
-void CreateReferenceGraphPass::run_pass(
-    DexStoresVector& stores,
-    ConfigFiles& cfg, /* unused */
-    PassManager& mgr /* unused */) {
+void CreateReferenceGraphPass::run_pass(DexStoresVector& stores,
+                                        ConfigFiles& /* conf */,
+                                        PassManager& /* mgr */) {
 
   type_to_store_map_t type_to_store;
   for (auto& store : stores) {

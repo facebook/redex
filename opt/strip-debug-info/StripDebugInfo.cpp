@@ -237,7 +237,7 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
 } // namespace strip_debug_info_impl
 
 void StripDebugInfoPass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles& cfg,
+                                  ConfigFiles& /* conf */,
                                   PassManager& mgr) {
   auto scope = build_class_scope(stores);
   strip_debug_info_impl::StripDebugInfo impl(m_config);

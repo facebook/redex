@@ -54,10 +54,10 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       : m_target_class_size_threshold(target_class_size_threshold),
         m_mgr(mgr) {}
 
-  void configure(const Scope& scope, ConfigFiles& cfg) override {
-    m_method_to_weight = &cfg.get_method_to_weight();
+  void configure(const Scope& scope, ConfigFiles& conf) override {
+    m_method_to_weight = &conf.get_method_to_weight();
     m_method_sorting_whitelisted_substrings =
-        &cfg.get_method_sorting_whitelisted_substrings();
+        &conf.get_method_sorting_whitelisted_substrings();
   };
 
   bool should_skip_class(const DexClass* clazz) override { return false; }

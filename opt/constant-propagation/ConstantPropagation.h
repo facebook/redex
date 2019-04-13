@@ -21,7 +21,7 @@ class ConstantPropagationPass : public Pass {
 
   void configure_pass(const JsonWrapper& jw) override;
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& conf,
                 PassManager& mgr) override;
 
  private:

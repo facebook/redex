@@ -266,11 +266,11 @@ std::string ModelMerger::s_mapping_file;
 std::string Model::s_outdir;
 
 void TypeErasurePass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& cfg,
+                               ConfigFiles& conf,
                                PassManager& mgr) {
   // Type mapping file
-  ModelMerger::s_mapping_file = cfg.metafile(m_merged_type_mapping_file);
-  Model::s_outdir = cfg.get_outdir();
+  ModelMerger::s_mapping_file = conf.metafile(m_merged_type_mapping_file);
+  Model::s_outdir = conf.get_outdir();
 
   // Setup Interdex plugin if any models.
   if (m_dex_sharding_model_specs.size() > 0) {
@@ -288,13 +288,13 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  Model::build_interdex_groups(&cfg);
+  Model::build_interdex_groups(&conf);
   for (ModelSpec& model_spec : m_model_specs) {
     if (!model_spec.enabled) {
       continue;
     }
     handle_interface_as_root(model_spec, scope, stores);
-    erase_model(model_spec, scope, mgr, stores, cfg);
+    erase_model(model_spec, scope, mgr, stores, conf);
   }
   post_dexen_changes(scope, stores);
 }
@@ -305,13 +305,13 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
                                   Scope& scope,
                                   PassManager& mgr,
                                   DexStoresVector& stores,
-                                  ConfigFiles& cfg) {
+                                  ConfigFiles& conf) {
   TRACE(TERA, 2, "[TERA] erasing %s model\n", spec.name.c_str());
   Timer t("erase_model");
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));
   }
-  auto model = Model::build_model(scope, stores, spec, cfg);
+  auto model = Model::build_model(scope, stores, spec, conf);
   model.update_redex_stats(mgr);
 
   auto mm = get_model_merger();

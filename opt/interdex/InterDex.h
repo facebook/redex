@@ -24,7 +24,7 @@ class InterDex {
   InterDex(const Scope& original_scope,
            const DexClassesVector& dexen,
            ApkManager& apk_manager,
-           ConfigFiles& cfg,
+           ConfigFiles& conf,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
            int64_t type_refs_limit,
@@ -38,7 +38,7 @@ class InterDex {
            size_t reserve_mrefs)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
-        m_cfg(cfg),
+        m_conf(conf),
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
@@ -142,7 +142,7 @@ class InterDex {
   const DexClassesVector& m_dexen;
   DexClassesVector m_outdex;
   ApkManager& m_apk_manager;
-  ConfigFiles& m_cfg;
+  ConfigFiles& m_conf;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   bool m_static_prune_classes;
   bool m_normal_primary_dex;

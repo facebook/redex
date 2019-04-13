@@ -101,7 +101,7 @@ dex_stats_t write_classes_to_dex(
     bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& cfg,
+    const ConfigFiles& conf,
     PositionMapper* line_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
@@ -315,11 +315,11 @@ class DexOutput {
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
-               const ConfigFiles& cfg,
+               const ConfigFiles& conf,
                const std::string& dex_magic);
   void write();
   void metrics();
-  static void check_method_instruction_size_limit(const ConfigFiles& cfg,
+  static void check_method_instruction_size_limit(const ConfigFiles& conf,
                                                   int size,
                                                   const char* method_name);
 };

@@ -37,5 +37,5 @@ class TypeErasurePass : public Pass {
                    Scope& scope,
                    PassManager& mgr,
                    DexStoresVector& stores,
-                   ConfigFiles& cfg);
+                   ConfigFiles& conf);
 };

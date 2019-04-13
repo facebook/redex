@@ -191,7 +191,7 @@ class Model {
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
-                           ConfigFiles& cfg);
+                           ConfigFiles& conf);
   static Model build_model(const Scope& scope,
                            const ModelSpec& spec,
                            const TypeSet& types);
@@ -253,7 +253,7 @@ class Model {
   // output directory
   static std::string s_outdir;
 
-  static void build_interdex_groups(ConfigFiles* cfg);
+  static void build_interdex_groups(ConfigFiles* conf);
 
   /**
    * Print everything about the model.
@@ -350,7 +350,7 @@ class Model {
         const DexStoresVector& stores,
         const ModelSpec& spec,
         const TypeSystem& type_system,
-        ConfigFiles& cfg);
+        ConfigFiles& conf);
   Model(const Scope& scope,
         const ModelSpec& spec,
         const TypeSystem& type_system,
@@ -358,7 +358,7 @@ class Model {
   void init(const Scope& scope,
             const ModelSpec& spec,
             const TypeSystem& type_system,
-            ConfigFiles* cfg = nullptr);
+            ConfigFiles* conf = nullptr);
 
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);

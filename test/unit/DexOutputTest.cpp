@@ -17,10 +17,10 @@ TEST(DexOutput, checkMethodInstructionSizeLimit) {
 
   temp_json >> json_cfg;
   json_cfg["instruction_size_bitwidth_limit"] = 16;
-  ConfigFiles cfg(json_cfg);
+  ConfigFiles conf(json_cfg);
   EXPECT_NO_THROW(
-      DexOutput::check_method_instruction_size_limit(cfg, 65536, "method"));
+      DexOutput::check_method_instruction_size_limit(conf, 65536, "method"));
   EXPECT_THROW(
-      DexOutput::check_method_instruction_size_limit(cfg, 65537, "method"),
+      DexOutput::check_method_instruction_size_limit(conf, 65537, "method"),
       RedexException);
 }

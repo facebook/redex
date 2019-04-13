@@ -355,7 +355,7 @@ size_t RemoveArgs::update_callsites() {
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
-                                    ConfigFiles& cfg,
+                                    ConfigFiles& /* conf */,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
 

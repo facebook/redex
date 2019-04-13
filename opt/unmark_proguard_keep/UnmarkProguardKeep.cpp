@@ -73,7 +73,7 @@ void unmark_keep(const Scope& scope,
 }
 
 void UnmarkProguardKeepPass::run_pass(DexStoresVector& stores,
-                                      ConfigFiles& cfg,
+                                      ConfigFiles& /* conf */,
                                       PassManager& mgr) {
   auto scope = build_class_scope(stores);
   unmark_keep(scope, m_package_list, m_supercls_list);

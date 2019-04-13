@@ -380,7 +380,9 @@ class BridgeRemover {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void BridgePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void BridgePass::run_pass(DexStoresVector& stores,
+                          ConfigFiles& /* conf */,
+                          PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(BRIDGE, 1, "BridgePass not run because no ProGuard configuration was provided.");
     return;

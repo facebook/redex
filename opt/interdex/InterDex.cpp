@@ -530,7 +530,8 @@ std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
 } // namespace
 
 std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
-  const std::vector<std::string>& interdexorder = m_cfg.get_coldstart_classes();
+  const std::vector<std::string>& interdexorder =
+      m_conf.get_coldstart_classes();
 
   // Find generated classes that should be in the interdex order.
   std::vector<std::vector<DexType*>> interdex_group_classes =

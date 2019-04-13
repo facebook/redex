@@ -157,7 +157,7 @@ void PassManager::run_type_checker(const Scope& scope,
   });
 }
 
-void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
@@ -171,27 +171,28 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::string seed_filename = seeds_output_file;
     Timer t("Writing seeds file " + seed_filename);
     std::ofstream seeds_file(seed_filename);
-    redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope, false, false);
-  }
-  if (!cfg.get_printseeds().empty()) {
-    Timer t("Writing seeds to file " + cfg.get_printseeds());
-    std::ofstream seeds_file(cfg.get_printseeds());
-    redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
-    std::ofstream config_file(cfg.get_printseeds() + ".pro");
-    redex::show_configuration(config_file, scope, *m_pg_config);
-    std::ofstream incoming(cfg.get_printseeds() + ".incoming");
-    redex::print_classes(incoming, cfg.get_proguard_map(), scope);
-    std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");
-    redex::print_seeds(shrinking_file, cfg.get_proguard_map(), scope, true,
+    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
                        false);
-    std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false,
+  }
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing seeds to file " + conf.get_printseeds());
+    std::ofstream seeds_file(conf.get_printseeds());
+    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope);
+    std::ofstream config_file(conf.get_printseeds() + ".pro");
+    redex::show_configuration(config_file, scope, *m_pg_config);
+    std::ofstream incoming(conf.get_printseeds() + ".incoming");
+    redex::print_classes(incoming, conf.get_proguard_map(), scope);
+    std::ofstream shrinking_file(conf.get_printseeds() + ".allowshrinking");
+    redex::print_seeds(shrinking_file, conf.get_proguard_map(), scope, true,
+                       false);
+    std::ofstream obfuscation_file(conf.get_printseeds() + ".allowobfuscation");
+    redex::print_seeds(obfuscation_file, conf.get_proguard_map(), scope, false,
                        true);
   }
 
   // Enable opt decision logging if specified in config.
   const Json::Value& opt_decisions_args =
-      cfg.get_json_config()["opt_decisions"];
+      conf.get_json_config()["opt_decisions"];
   if (opt_decisions_args.get("enable_logs", false).asBool()) {
     opt_metadata::OptDataMapper::get_instance().enable_logs();
   }
@@ -202,13 +203,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
     m_current_pass_info = &m_pass_info[i];
-    pass->eval_pass(stores, cfg, *this);
+    pass->eval_pass(stores, conf, *this);
     m_current_pass_info = nullptr;
   }
 
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
-      cfg.get_json_config()["ir_type_checker"];
+      conf.get_json_config()["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
   // When verify_none is enabled, it's OK to have polymorphic constants.
@@ -236,7 +237,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
               ? boost::make_optional(m_profiler_info->command)
               : boost::none);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
-      pass->run_pass(stores, cfg, *this);
+      pass->run_pass(stores, conf, *this);
     }
 
     if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
@@ -254,17 +255,17 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
   run_type_checker(scope, polymorphic_constants, verify_moves,
                    check_no_overwrite_this);
 
-  if (!cfg.get_printseeds().empty()) {
-    Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
             ".outgoing");
     // Recompute the scope.
     scope = build_class_scope(it);
-    std::ofstream outgoing(cfg.get_printseeds() + ".outgoing");
-    redex::print_classes(outgoing, cfg.get_proguard_map(), scope);
+    std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
+    redex::print_classes(outgoing, conf.get_proguard_map(), scope);
   }
 }
 
-void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
+void PassManager::activate_pass(const char* name, const Json::Value& conf) {
   std::string name_str(name);
 
   // Names may or may not have a "#<id>" suffix to indicate their order in the
@@ -276,7 +277,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->configure_pass(JsonWrapper(cfg[name_str]));
+      pass->configure_pass(JsonWrapper(conf[name_str]));
       return;
     }
   }

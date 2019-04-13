@@ -830,13 +830,13 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
 }
 
-void DexOutput::check_method_instruction_size_limit(const ConfigFiles& cfg,
+void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
                                                     int size,
                                                     const char* method_name) {
   always_assert_log(size >= 0, "Size of method cannot be negative: %d\n", size);
 
   uint32_t instruction_size_bitwidth_limit =
-      cfg.get_instruction_size_bitwidth_limit();
+      conf.get_instruction_size_bitwidth_limit();
 
   if (instruction_size_bitwidth_limit) {
     uint64_t hard_instruction_size_limit = 1L
@@ -2075,14 +2075,14 @@ void GatheredTypes::set_method_to_weight(
 
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
-                        const ConfigFiles& cfg,
+                        const ConfigFiles& conf,
                         const std::string& dex_magic) {
 
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
-    m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
+    m_gtypes->set_method_to_weight(conf.get_method_to_weight());
     m_gtypes->set_method_sorting_whitelisted_substrings(
-        cfg.get_method_sorting_whitelisted_substrings());
+        conf.get_method_sorting_whitelisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);
@@ -2221,21 +2221,21 @@ dex_stats_t write_classes_to_dex(
     bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& cfg,
+    const ConfigFiles& conf,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic) {
-  const JsonWrapper& json_cfg = cfg.get_json_config();
+  const JsonWrapper& json_cfg = conf.get_json_config();
   auto method_mapping_filename =
-      cfg.metafile(json_cfg.get("method_mapping", std::string()));
+      conf.metafile(json_cfg.get("method_mapping", std::string()));
   auto class_mapping_filename =
-      cfg.metafile(json_cfg.get("class_mapping", std::string()));
+      conf.metafile(json_cfg.get("class_mapping", std::string()));
   auto pg_mapping_filename =
-      cfg.metafile(json_cfg.get("proguard_map_output", std::string()));
+      conf.metafile(json_cfg.get("proguard_map_output", std::string()));
   auto bytecode_offset_filename =
-      cfg.metafile(json_cfg.get("bytecode_offset_map", std::string()));
+      conf.metafile(json_cfg.get("bytecode_offset_map", std::string()));
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
   DebugInfoKind debug_info_kind = deserialize_debug_info_kind(
       json_cfg.get("debug_info_kind", std::string()));
@@ -2274,7 +2274,7 @@ dex_stats_t write_classes_to_dex(
                              dex_number,
                              debug_info_kind,
                              iodi_metadata,
-                             cfg,
+                             conf,
                              pos_mapper,
                              method_to_id,
                              code_debug_lines,
@@ -2283,7 +2283,7 @@ dex_stats_t write_classes_to_dex(
                              pg_mapping_filename,
                              bytecode_offset_filename);
 
-  dout.prepare(string_sort_mode, code_sort_mode, cfg, dex_magic);
+  dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();
   dout.metrics();
   return dout.m_stats;

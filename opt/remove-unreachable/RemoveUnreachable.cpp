@@ -10,7 +10,7 @@
 #include "PassManager.h"
 
 void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& cfg,
+                                     ConfigFiles& conf,
                                      PassManager& pm) {
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
@@ -41,7 +41,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   pm.incr_metric("methods_removed", before.num_methods - after.num_methods);
 
   if (output_unreachable_symbols) {
-    std::string filepath = cfg.metafile(m_unreachable_symbols_file_name);
+    std::string filepath = conf.metafile(m_unreachable_symbols_file_name);
     write_out_removed_symbols(filepath, removed_symbols);
   }
 }

@@ -137,8 +137,10 @@ void verifyStore(DexStoresVector& stores, DexStore& store, class_to_store_map_t 
 
 } // namespace
 
-void VerifierPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  m_class_dependencies_output = cfg.metafile(m_class_dependencies_output);
+void VerifierPass::run_pass(DexStoresVector& stores,
+                            ConfigFiles& conf,
+                            PassManager& mgr) {
+  m_class_dependencies_output = conf.metafile(m_class_dependencies_output);
   FILE* fd = nullptr;
   if (!m_class_dependencies_output.empty()) {
     fd = fopen(m_class_dependencies_output.c_str(), "w");

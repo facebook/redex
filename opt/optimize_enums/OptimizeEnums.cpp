@@ -274,8 +274,8 @@ std::unordered_map<DexString*, DexProto*> get_safe_enum_methods() {
 
 class OptimizeEnums {
  public:
-  OptimizeEnums(DexStoresVector& stores, ConfigFiles& cfg)
-      : m_stores(stores), m_pg_map(cfg.get_proguard_map()) {
+  OptimizeEnums(DexStoresVector& stores, ConfigFiles& conf)
+      : m_stores(stores), m_pg_map(conf.get_proguard_map()) {
     m_scope = build_class_scope(stores);
     m_java_enum_ctor = get_java_enum_ctor();
   }
@@ -895,9 +895,9 @@ class OptimizeEnums {
 namespace optimize_enums {
 
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& conf,
                                  PassManager& mgr) {
-  OptimizeEnums opt_enums(stores, cfg);
+  OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   opt_enums.replace_enum_with_int();
   opt_enums.stats(mgr);

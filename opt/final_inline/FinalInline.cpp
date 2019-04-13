@@ -628,7 +628,7 @@ size_t FinalInlinePass::propagate_constants_for_test(Scope& scope,
 }
 
 void FinalInlinePass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& cfg,
+                               ConfigFiles& conf,
                                PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(FINALINLINE,

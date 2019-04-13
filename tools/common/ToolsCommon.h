@@ -15,7 +15,7 @@ bool dir_is_writable(const std::string& dir);
 
 Json::Value parse_config(const std::string& config_file);
 
-void write_all_intermediate(const ConfigFiles& cfg,
+void write_all_intermediate(const ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             const RedexOptions& redex_options,
                             DexStoresVector& stores,

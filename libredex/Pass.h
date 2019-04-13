@@ -40,8 +40,12 @@ class Pass {
    * There is no protection against doing so, this is merely a convention.
    */
 
-  virtual void eval_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {};
-  virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) = 0;
+  virtual void eval_pass(DexStoresVector& stores,
+                         ConfigFiles& conf,
+                         PassManager& mgr){};
+  virtual void run_pass(DexStoresVector& stores,
+                        ConfigFiles& conf,
+                        PassManager& mgr) = 0;
 
  private:
   std::string m_name;

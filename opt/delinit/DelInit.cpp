@@ -490,7 +490,9 @@ int DeadRefs::remove_unreachable() {
 
 }
 
-void DelInitPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void DelInitPass::run_pass(DexStoresVector& stores,
+                           ConfigFiles& /* conf */,
+                           PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DELINIT, 1, "DelInitPass not run because no ProGuard configuration was provided.");
     return;

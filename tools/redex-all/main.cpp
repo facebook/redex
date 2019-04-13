@@ -502,15 +502,15 @@ Json::Value get_output_stats(
   return d;
 }
 
-void output_moved_methods_map(const char* path, const ConfigFiles& cfg) {
+void output_moved_methods_map(const char* path, const ConfigFiles& conf) {
   // print out moved methods map
-  if (cfg.save_move_map() && strcmp(path, "")) {
+  if (conf.save_move_map() && strcmp(path, "")) {
     FILE* fd = fopen(path, "w");
     if (fd == nullptr) {
       perror("Error opening method move file");
       return;
     }
-    auto const& move_map = cfg.get_moved_methods_map();
+    auto const& move_map = conf.get_moved_methods_map();
     std::string dummy = "dummy";
     for (const auto& it : move_map) {
       MethodTuple mt = it.first;
@@ -624,7 +624,7 @@ static void assert_dex_magic_consistency(const std::string& source,
 /**
  * Pre processing steps: load dex and configurations
  */
-void redex_frontend(ConfigFiles& cfg, /* input */
+void redex_frontend(ConfigFiles& conf, /* input */
                     Arguments& args, /* inout */
                     redex::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
@@ -698,7 +698,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   args.entry_data["jars"] = Json::arrayValue;
   if (!library_jars.empty()) {
     Timer t("Load library jars");
-    const JsonWrapper& json_cfg = cfg.get_json_config();
+    const JsonWrapper& json_cfg = conf.get_json_config();
     read_dup_class_whitelist(json_cfg);
 
     for (const auto& library_jar : library_jars) {
@@ -723,27 +723,27 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   {
     Timer t("Deobfuscating dex elements");
     for (auto& store : stores) {
-      apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
+      apply_deobfuscated_names(store.get_dexen(), conf.get_proguard_map());
     }
   }
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   {
     Timer t("Processing proguard rules");
-    process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
+    process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
                            pg_config);
   }
   {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
-    redex::process_no_optimizations_rules(cfg.get_no_optimizations_annos(),
+    redex::process_no_optimizations_rules(conf.get_no_optimizations_annos(),
                                           scope);
   }
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, cfg.get_json_config(),
-                           cfg.get_no_optimizations_annos());
+    init_reachable_classes(scope, conf.get_json_config(),
+                           conf.get_no_optimizations_annos());
   }
 }
 
@@ -752,21 +752,21 @@ void redex_frontend(ConfigFiles& cfg, /* input */
  */
 void redex_backend(const PassManager& manager,
                    const std::string& output_dir,
-                   const ConfigFiles& cfg,
+                   const ConfigFiles& conf,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
   instruction_lowering::Stats instruction_lowering_stats;
   {
     bool lower_with_cfg = false;
-    cfg.get_json_config().get("lower_with_cfg", false, lower_with_cfg);
+    conf.get_json_config().get("lower_with_cfg", false, lower_with_cfg);
     Timer t("Instruction lowering");
     instruction_lowering_stats =
         instruction_lowering::run(stores, lower_with_cfg);
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
-  const JsonWrapper& json_cfg = cfg.get_json_config();
+  const JsonWrapper& json_cfg = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
   bool emit_name_based_locators = false;
@@ -784,13 +784,13 @@ void redex_backend(const PassManager& manager,
   std::vector<dex_stats_t> output_dexes_stats;
 
   auto pos_output =
-      cfg.metafile(json_cfg.get("line_number_map", std::string()));
+      conf.metafile(json_cfg.get("line_number_map", std::string()));
   auto pos_output_v2 =
-      cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
+      conf.metafile(json_cfg.get("line_number_map_v2", std::string()));
   auto debug_line_mapping_filename_v2 =
-      cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
+      conf.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
   auto iodi_metadata_filename =
-      cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
+      conf.metafile(json_cfg.get("iodi_metadata", std::string()));
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
   if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
@@ -841,7 +841,7 @@ void redex_backend(const PassManager& manager,
           emit_name_based_locators,
           store_number,
           i,
-          cfg,
+          conf,
           pos_mapper.get(),
           needs_method_to_id ? &method_to_id : nullptr,
           debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines,
@@ -860,9 +860,9 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing opt decisions data");
     const Json::Value& opt_decisions_args =
-        cfg.get_json_config()["opt_decisions"];
+        conf.get_json_config()["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
-      auto opt_decisions_output_path = cfg.metafile(
+      auto opt_decisions_output_path = conf.metafile(
           opt_decisions_args.get("output_file_name", "").asString());
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
@@ -877,14 +877,14 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing stats");
     auto method_move_map =
-        cfg.metafile(json_cfg.get("method_move_map", std::string()));
+        conf.metafile(json_cfg.get("method_move_map", std::string()));
     write_debug_line_mapping(debug_line_mapping_filename_v2, method_to_id,
                              code_debug_lines, stores);
     iodi_metadata.write(iodi_metadata_filename, method_to_id);
     pos_mapper->write_map();
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
-    output_moved_methods_map(method_move_map.c_str(), cfg);
+    output_moved_methods_map(method_move_map.c_str(), conf);
     print_warning_summary();
   }
 }
@@ -986,42 +986,43 @@ int main(int argc, char* argv[]) {
 
     auto pg_config = std::make_unique<redex::ProguardConfiguration>();
     DexStoresVector stores;
-    ConfigFiles cfg(args.config, args.out_dir);
+    ConfigFiles conf(args.config, args.out_dir);
 
     std::string apk_dir;
-    cfg.get_json_config().get("apk_dir", "", apk_dir);
+    conf.get_json_config().get("apk_dir", "", apk_dir);
     const std::string& manifest_filename = apk_dir + "/AndroidManifest.xml";
     boost::optional<int32_t> maybe_sdk = get_min_sdk(manifest_filename);
     if (maybe_sdk != boost::none) {
       args.redex_options.min_sdk = *maybe_sdk;
     }
 
-    redex_frontend(cfg, args, *pg_config, stores, stats);
+    redex_frontend(conf, args, *pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, cfg);
+      manager.run_passes(stores, conf);
     }
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
-      redex_backend(manager, args.out_dir, cfg, stores, stats);
+      redex_backend(manager, args.out_dir, conf, stores, stats);
       if (!args.config.get("class_method_info_map", "").empty()) {
         dump_class_method_info_map(
-            cfg.metafile(
+            conf.metafile(
                 args.config.get("class_method_info_map", "").asString()),
             stores);
       }
     } else {
-      redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
-                                    stores, args.entry_data);
+      redex::write_all_intermediate(conf, args.output_ir_dir,
+                                    args.redex_options, stores,
+                                    args.entry_data);
     }
 
     std::string stats_output_path =
-        cfg.metafile(args.config.get("stats_output", "").asString());
+        conf.metafile(args.config.get("stats_output", "").asString());
     {
       std::ofstream out(stats_output_path);
       Json::StyledStreamWriter writer;
@@ -1029,7 +1030,7 @@ int main(int argc, char* argv[]) {
     }
 
     timings_output_path =
-        cfg.metafile(args.config.get("timings_output", "").asString());
+        conf.metafile(args.config.get("timings_output", "").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;

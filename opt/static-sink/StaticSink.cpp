@@ -116,11 +116,9 @@ std::unordered_set<DexMethod*> strings_to_dexmethods(
   return methods;
 }
 
-std::vector<DexClass*> get_coldstart_classes(
-  const DexClassesVector& dexen,
-  ConfigFiles& cfg
-) {
-  auto interdex_list = cfg.get_coldstart_classes();
+std::vector<DexClass*> get_coldstart_classes(const DexClassesVector& dexen,
+                                             ConfigFiles& conf) {
+  auto interdex_list = conf.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::vector<DexClass*> coldstart_classes;
   for (auto const& dex : dexen) {
@@ -373,17 +371,19 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
 
 }
 
-void StaticSinkPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void StaticSinkPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& conf,
+                              PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(SINK, 1, "StaticSinkPass not run because no ProGuard configuration was provided.");
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(build_class_scope(stores));
   DexClassesVector& root_store = stores[0].get_dexen();
-  auto method_list = cfg.get_coldstart_methods();
+  auto method_list = conf.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);
   TRACE(SINK, 1, "methods used in coldstart: %lu\n", methods.size());
-  auto coldstart_classes = get_coldstart_classes(root_store, cfg);
+  auto coldstart_classes = get_coldstart_classes(root_store, conf);
   count_coldstart_statics(coldstart_classes);
   auto statics = get_noncoldstart_statics(coldstart_classes, methods);
   TRACE(SINK, 1, "statics not used in coldstart: %lu\n", statics.size());

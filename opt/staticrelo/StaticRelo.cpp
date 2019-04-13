@@ -108,14 +108,13 @@ std::unordered_map<const DexClass*, size_t> build_class_to_dex_map(
  * Helper to build a map of DexClass* -> order it appears in cold start list.
  *
  * @param dexen All classes in the dexen
- * @param cfg Our PGO input files
+ * @param conf Our PGO input files
  * @return Unordered map of DexClass* -> cold start class load rank.
  *         Lower rank is earlier in cold start class load.
  */
 std::unordered_map<const DexClass*, size_t> build_class_to_pgo_order_map(
-  const DexClassesVector& dexen,
-  ConfigFiles& cfg) {
-  auto interdex_list = cfg.get_coldstart_classes();
+    const DexClassesVector& dexen, ConfigFiles& conf) {
+  auto interdex_list = conf.get_coldstart_classes();
   std::unordered_map<std::string, DexClass*> class_string_map;
   std::unordered_map<const DexClass*, size_t> coldstart_classes;
   for (auto const& dex : dexen) {
@@ -541,14 +540,14 @@ void delete_classes(
 }
 
 void record_move_data(DexMethod* from_meth,
-    DexClass* from_cls,
-    DexClass* to_cls,
-    ConfigFiles& cfg) {
+                      DexClass* from_cls,
+                      DexClass* to_cls,
+                      ConfigFiles& conf) {
   MethodTuple from_tuple = std::make_tuple(
       from_cls->get_type()->get_name(),
       from_meth->get_name(),
       from_cls->get_source_file());
-  cfg.add_moved_methods(from_tuple, to_cls);
+  conf.add_moved_methods(from_tuple, to_cls);
 }
 
 void do_mutations(PassManager& mgr,
@@ -557,7 +556,7 @@ void do_mutations(PassManager& mgr,
                   std::unordered_map<DexMethod*, DexClass*>& meth_moves,
                   const std::unordered_set<DexMethod*>& meth_deletes,
                   const std::unordered_set<DexClass*>& cls_deletes,
-                  ConfigFiles& cfg) {
+                  ConfigFiles& conf) {
 
   for (auto& meth : meth_deletes) {
     type_class(meth->get_class())->remove_method(meth);
@@ -579,7 +578,7 @@ void do_mutations(PassManager& mgr,
         TRACE(RELO, 5, "skipping class move\n");
         continue;
       }
-      record_move_data(from_meth, from_cls, to_cls, cfg);
+      record_move_data(from_meth, from_cls, to_cls, conf);
       // Move the method to the target class
       from_cls->remove_method(from_meth);
       DexMethodSpec spec;
@@ -605,11 +604,9 @@ void do_mutations(PassManager& mgr,
 }
 
 std::unordered_set<DexType*> get_dont_optimize_annos(
-  const std::vector<std::string>& dont_list,
-  ConfigFiles& cfg
-) {
+    const std::vector<std::string>& dont_list, ConfigFiles& conf) {
   std::unordered_set<DexType*> dont;
-  for (const auto& anno : cfg.get_no_optimizations_annos()) {
+  for (const auto& anno : conf.get_no_optimizations_annos()) {
     dont.emplace(anno);
   }
   for (auto const& dont_anno : dont_list) {
@@ -621,7 +618,9 @@ std::unordered_set<DexType*> get_dont_optimize_annos(
 
 } // namespace
 
-void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void StaticReloPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& conf,
+                              PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(RELO, 1, "StaticReloPass not run because no ProGuard configuration was provided.");
     return;
@@ -638,9 +637,9 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     DexClassesVector& dexen = store.get_dexen();
     auto scope = build_class_scope(dexen);
     auto cls_to_dex = build_class_to_dex_map(dexen);
-    auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, cfg);
-    auto dont_optimize_annos = get_dont_optimize_annos(
-      m_dont_optimize_annos, cfg);
+    auto cls_to_pgo_order = build_class_to_pgo_order_map(dexen, conf);
+    auto dont_optimize_annos =
+        get_dont_optimize_annos(m_dont_optimize_annos, conf);
 
     // Make one pass through all code to find dmethod refs and class refs,
     // needed later on for refining eligibility as well as performing the
@@ -677,7 +676,8 @@ void StaticReloPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
     mgr.incr_metric(METRIC_NUM_DELETED_METHODS, meth_deletes.size());
 
     // Perform all relocation mutations
-    do_mutations(mgr, scope, dexen, meth_moves, meth_deletes, cls_deletes, cfg);
+    do_mutations(mgr, scope, dexen, meth_moves, meth_deletes, cls_deletes,
+                 conf);
   }
 
   // Final report

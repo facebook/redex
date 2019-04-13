@@ -262,19 +262,19 @@ Model::Model(const Scope& scope,
              const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system,
-             ConfigFiles& cfg)
+             ConfigFiles& conf)
     : m_spec(spec), m_type_system(type_system), m_scope(scope) {
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
-  init(scope, spec, type_system, &cfg);
+  init(scope, spec, type_system, &conf);
   find_non_root_store_mergeables(stores, spec.include_primary_dex);
 }
 
 void Model::init(const Scope& scope,
                  const ModelSpec& spec,
                  const TypeSystem& type_system,
-                 ConfigFiles* cfg) {
+                 ConfigFiles* conf) {
   build_hierarchy(spec.roots);
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
@@ -339,12 +339,12 @@ MergerType* Model::build_mergers(const DexType* root) {
   return &merger;
 }
 
-void Model::build_interdex_groups(ConfigFiles* cfg) {
-  if (!cfg) {
+void Model::build_interdex_groups(ConfigFiles* conf) {
+  if (!conf) {
     return;
   }
 
-  const auto& interdex_order = cfg->get_coldstart_classes();
+  const auto& interdex_order = conf->get_coldstart_classes();
   if (interdex_order.size() == 0) {
     // No grouping based on interdex.
     s_num_interdex_groups = 0;
@@ -1442,12 +1442,12 @@ void Model::update_model(Model& model) {
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
-                         ConfigFiles& cfg) {
+                         ConfigFiles& conf) {
   Timer t("build_model");
   TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
-  Model model(scope, stores, spec, type_system, cfg);
+  Model model(scope, stores, spec, type_system, conf);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done\n", model.print().c_str());
 
   update_model(model);

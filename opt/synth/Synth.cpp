@@ -877,7 +877,9 @@ bool optimize(const ClassHierarchy& ch,
   return ssms.next_pass;
 }
 
-void SynthPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void SynthPass::run_pass(DexStoresVector& stores,
+                         ConfigFiles& /* conf */,
+                         PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(SYNT, 1, "SynthPass not run because no ProGuard configuration was provided.");
     return;

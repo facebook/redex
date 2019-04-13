@@ -117,14 +117,14 @@ int main(int argc, char* argv[]) {
   args.redex_options.deserialize(entry_data);
 
   Json::Value config_data = process_entry_data(entry_data, args);
-  ConfigFiles cfg(std::move(config_data), args.output_ir_dir);
+  ConfigFiles conf(std::move(config_data), args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, config_data, args.redex_options);
   manager.set_testing_mode();
-  manager.run_passes(stores, cfg);
+  manager.run_passes(stores, conf);
 
-  redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
+  redex::write_all_intermediate(conf, args.output_ir_dir, args.redex_options,
                                 stores, entry_data);
 
   delete g_redex;

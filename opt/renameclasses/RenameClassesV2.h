@@ -53,10 +53,10 @@ class RenameClassesPassV2 : public Pass {
   }
 
   void eval_pass(DexStoresVector& stores,
-                 ConfigFiles& cfg,
+                 ConfigFiles& conf,
                  PassManager& mgr) override;
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& conf,
                 PassManager& mgr) override;
 
  private:
@@ -79,14 +79,14 @@ class RenameClassesPassV2 : public Pass {
 
   void eval_classes(Scope& scope,
                     const ClassHierarchy& class_hierarchy,
-                    ConfigFiles& cfg,
+                    ConfigFiles& conf,
                     bool rename_annotations,
                     PassManager& mgr);
   void eval_classes_post(Scope& scope,
                          const ClassHierarchy& class_hierarchy,
                          PassManager& mgr);
   void rename_classes(Scope& scope,
-                      ConfigFiles& cfg,
+                      ConfigFiles& conf,
                       bool rename_annotations,
                       PassManager& mgr);
   void rename_classes_in_layouts(const AliasMap& aliases, PassManager& mgr);

@@ -26,7 +26,9 @@
 #include "VirtualScope.h"
 #include "Walkers.h"
 
-void MethodInlinePass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void MethodInlinePass::run_pass(DexStoresVector& stores,
+                                ConfigFiles& /* conf */,
+                                PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(SINL, 1, "MethodInlinePass not run because no ProGuard configuration was provided.");
     return;

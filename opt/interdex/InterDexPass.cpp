@@ -173,7 +173,7 @@ void InterDexPass::configure_pass(const JsonWrapper& jw) {
 
 void InterDexPass::run_pass(DexStoresVector& stores,
                             DexClassesVector& dexen,
-                            ConfigFiles& cfg,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   // Setup all external plugins.
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
@@ -183,16 +183,16 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   size_t reserve_mrefs = 0;
   auto original_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
-    plugin->configure(original_scope, cfg);
+    plugin->configure(original_scope, conf);
     reserve_mrefs += plugin->reserve_mrefs();
   }
 
-  InterDex interdex(
-      original_scope, dexen, mgr.apk_manager(), cfg, plugins,
-      m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
-      m_normal_primary_dex, m_emit_scroll_set_marker, m_emit_canaries,
-      m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
-      m_cross_dex_relocator_config, reserve_mrefs);
+  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
+                    m_normal_primary_dex, m_emit_scroll_set_marker,
+                    m_emit_canaries, m_minimize_cross_dex_refs,
+                    m_minimize_cross_dex_refs_config,
+                    m_cross_dex_relocator_config, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
@@ -260,7 +260,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& cfg,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(
@@ -271,7 +271,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(stores, store.get_dexen(), cfg, mgr);
+      run_pass(stores, store.get_dexen(), conf, mgr);
     }
   }
 }

@@ -245,9 +245,9 @@ void rename_classes(
 }
 
 void RenameClassesPass::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& conf,
                                  PassManager& mgr) {
-  const JsonWrapper& json_cfg = cfg.get_json_config();
+  const JsonWrapper& json_cfg = conf.get_json_config();
   if (json_cfg.get("emit_name_based_locators", false)) {
     // TODO: Purge the old RenameClassesPass entirely everywhere.
     fprintf(stderr,

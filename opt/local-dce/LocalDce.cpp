@@ -265,7 +265,7 @@ void LocalDcePass::run(IRCode* code) {
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& cfg,
+                            ConfigFiles& /* conf */,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DCE, 1,

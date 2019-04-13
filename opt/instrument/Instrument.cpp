@@ -670,7 +670,7 @@ auto find_sharded_analysis_methods(const DexClass& cls,
 
 void do_simple_method_tracing(DexClass* analysis_cls,
                               DexStoresVector& stores,
-                              ConfigFiles& cfg,
+                              ConfigFiles& conf,
                               PassManager& pm,
                               const InstrumentPass::Options& options) {
   const auto& analysis_methods = find_sharded_analysis_methods(
@@ -679,7 +679,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   const auto& analysis_method_names = analysis_methods.second;
 
   // Write metadata file with more information.
-  const auto& file_name = cfg.metafile(options.metadata_file_name);
+  const auto& file_name = conf.metafile(options.metadata_file_name);
   std::ofstream ofs(file_name, std::ofstream::out | std::ofstream::trunc);
 
   // Write meta info of the meta file: the type of the meta file and version.
@@ -876,7 +876,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 //
 void do_basic_block_tracing(DexClass* analysis_cls,
                             DexStoresVector& stores,
-                            ConfigFiles& cfg,
+                            ConfigFiles& conf,
                             PassManager& pm,
                             const InstrumentPass::Options& options) {
 
@@ -892,7 +892,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
       method_id_name_map;
   auto scope = build_class_scope(stores);
 
-  auto interdex_list = cfg.get_coldstart_classes();
+  auto interdex_list = conf.get_coldstart_classes();
   std::unordered_set<std::string> cold_start_classes;
   std::string dex_end_marker0("LDexEndMarker0;");
   for (auto class_string : interdex_list) {
@@ -940,7 +940,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   });
   patch_array_size(*analysis_cls, "sBasicBlockStats", method_index);
 
-  write_basic_block_index_file(cfg.metafile(options.metadata_file_name),
+  write_basic_block_index_file(conf.metafile(options.metadata_file_name),
                                method_id_name_map);
 
   double cumulative = 0.;
@@ -1005,7 +1005,7 @@ void InstrumentPass::configure_pass(const JsonWrapper& jw) {
 }
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& cfg,
+                              ConfigFiles& conf,
                               PassManager& pm) {
   if (!pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1, "--enable-instrument-pass is not specified.\n");
@@ -1057,9 +1057,9 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
         analysis_cls->get_location().c_str());
 
   if (m_options.instrumentation_strategy == "simple_method_tracing") {
-    do_simple_method_tracing(analysis_cls, stores, cfg, pm, m_options);
+    do_simple_method_tracing(analysis_cls, stores, conf, pm, m_options);
   } else if (m_options.instrumentation_strategy == "basic_block_tracing") {
-    do_basic_block_tracing(analysis_cls, stores, cfg, pm, m_options);
+    do_basic_block_tracing(analysis_cls, stores, conf, pm, m_options);
   } else {
     std::cerr << "[InstrumentPass] Unknown instrumentation strategy.\n";
   }

@@ -22,7 +22,7 @@ bool can_remove(DexField* field) {
 }
 
 void PassImpl::run_pass(DexStoresVector& stores,
-                        ConfigFiles& cfg,
+                        ConfigFiles& conf,
                         PassManager& mgr) {
 
   auto scope = build_class_scope(stores);

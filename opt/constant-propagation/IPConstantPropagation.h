@@ -49,7 +49,7 @@ class PassImpl : public Pass {
   }
 
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& conf,
                 PassManager& mgr) override;
 
   /*

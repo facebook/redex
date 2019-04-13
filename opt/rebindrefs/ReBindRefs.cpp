@@ -320,8 +320,9 @@ struct Rebinder {
 
 }
 
-void ReBindRefsPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void ReBindRefsPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& /* conf */,
+                              PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   Rebinder rb(scope, mgr);
   rb.rewrite_refs();

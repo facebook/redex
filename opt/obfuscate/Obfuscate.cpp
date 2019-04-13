@@ -274,8 +274,8 @@ void obfuscate(Scope& scope,
 }
 
 void ObfuscatePass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& cfg,
-                            PassManager& mgr) {
+                             ConfigFiles& /* conf */,
+                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(OBFUSCATE, 1, "ObfuscatePass not run because no ProGuard configuration was provided.");
     return;

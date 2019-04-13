@@ -20,7 +20,7 @@ class InterDexPassPlugin {
  public:
   // Run plugin initialization here. InterDex pass should run this
   // before running its implementation.
-  virtual void configure(const Scope& original_scope, ConfigFiles& cfg) = 0;
+  virtual void configure(const Scope& original_scope, ConfigFiles& conf) = 0;
 
   // The InterDex pass might create additional classes, e.g. to hold
   // methods it relocates. Such classes get announced with this callback.

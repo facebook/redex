@@ -635,7 +635,7 @@ class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
   DedupStringsInterDexPlugin(size_t max_factory_methods)
       : m_max_factory_methods(max_factory_methods) {}
-  void configure(const Scope& scope, ConfigFiles& cfg) override{};
+  void configure(const Scope& scope, ConfigFiles& conf) override{};
   bool should_skip_class(const DexClass* clazz) override { return false; }
   void gather_refs(const interdex::DexInfo& dex_info,
                    const DexClass* cls,
@@ -694,10 +694,10 @@ void DedupStringsPass::configure_pass(const JsonWrapper& jw) {
 }
 
 void DedupStringsPass::run_pass(DexStoresVector& stores,
-                                ConfigFiles& cfg,
+                                ConfigFiles& conf,
                                 PassManager& mgr) {
   DedupStrings ds(m_max_factory_methods, m_use_method_to_weight,
-                  cfg.get_method_to_weight());
+                  conf.get_method_to_weight());
   ds.run(stores);
   const auto stats = ds.get_stats();
   mgr.incr_metric(METRIC_STRINGS_WITHIN_TRY, stats.load_strings_within_try);

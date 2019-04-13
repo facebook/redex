@@ -82,7 +82,7 @@ void write_ir_meta(const std::string& output_ir_dir, DexStoresVector& stores) {
  * Write intermediate dex to files.
  * Development usage only
  */
-void write_intermediate_dex(const ConfigFiles& cfg,
+void write_intermediate_dex(const ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             DexStoresVector& stores,
                             Json::Value& dex_files) {
@@ -126,7 +126,7 @@ void write_intermediate_dex(const ConfigFiles& cfg,
                            false /* name-based locators */,
                            store_number,
                            i,
-                           cfg,
+                           conf,
                            pos_mapper.get(),
                            nullptr,
                            nullptr,
@@ -198,7 +198,7 @@ Json::Value parse_config(const std::string& config_file) {
 /**
  * Dumping dex, IR meta data and entry file
  */
-void write_all_intermediate(const ConfigFiles& cfg,
+void write_all_intermediate(const ConfigFiles& /* conf */,
                             const std::string& output_ir_dir,
                             const RedexOptions& redex_options,
                             DexStoresVector& stores,

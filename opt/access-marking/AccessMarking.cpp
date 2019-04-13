@@ -149,7 +149,7 @@ void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
 } // namespace
 
 void AccessMarkingPass::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& /* conf */,
                                  PassManager& pm) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);

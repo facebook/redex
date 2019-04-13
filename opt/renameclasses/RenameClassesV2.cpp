@@ -542,12 +542,11 @@ DexString* lookup_signature_annotation(const AliasMap& aliases,
   return nullptr;
 }
 
-void RenameClassesPassV2::eval_classes(
-    Scope& scope,
-    const ClassHierarchy& class_hierarchy,
-    ConfigFiles& cfg,
-    bool rename_annotations,
-    PassManager& mgr) {
+void RenameClassesPassV2::eval_classes(Scope& scope,
+                                       const ClassHierarchy& class_hierarchy,
+                                       ConfigFiles& conf,
+                                       bool rename_annotations,
+                                       PassManager& mgr) {
   auto force_rename_hierarchies =
       build_force_rename_hierarchies(mgr, scope, class_hierarchy);
 
@@ -557,7 +556,7 @@ void RenameClassesPassV2::eval_classes(
   auto dont_rename_class_name_literals = build_dont_rename_class_name_literals(scope);
   auto dont_rename_class_for_types_with_reflection =
       build_dont_rename_for_types_with_reflection(scope,
-                                                  cfg.get_proguard_map());
+                                                  conf.get_proguard_map());
   auto dont_rename_canaries = build_dont_rename_canaries(scope);
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
@@ -725,21 +724,20 @@ void RenameClassesPassV2::eval_classes_post(
 }
 
 void RenameClassesPassV2::eval_pass(DexStoresVector& stores,
-                                    ConfigFiles& cfg,
+                                    ConfigFiles& conf,
                                     PassManager& mgr) {
-  auto json = cfg.get_json_config();
+  auto json = conf.get_json_config();
   json.get("apk_dir", "", m_apk_dir);
   TRACE(RENAME, 3, "APK Dir: %s\n", m_apk_dir.c_str());
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
-  eval_classes(scope, class_hierarchy, cfg, m_rename_annotations, mgr);
+  eval_classes(scope, class_hierarchy, conf, m_rename_annotations, mgr);
 }
 
-void RenameClassesPassV2::rename_classes(
-    Scope& scope,
-    ConfigFiles& cfg,
-    bool rename_annotations,
-    PassManager& mgr) {
+void RenameClassesPassV2::rename_classes(Scope& scope,
+                                         ConfigFiles& conf,
+                                         bool rename_annotations,
+                                         PassManager& mgr) {
   // Make everything public
   unpackage_private(scope);
 
@@ -935,7 +933,7 @@ void RenameClassesPassV2::rename_classes_in_layouts(
 }
 
 void RenameClassesPassV2::run_pass(DexStoresVector& stores,
-                                   ConfigFiles& cfg,
+                                   ConfigFiles& conf,
                                    PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(RENAME, 1,
@@ -957,7 +955,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
         "Total classes in scope for renaming: %d chosen number of digits: %d\n",
         total_classes, m_digits);
 
-  rename_classes(scope, cfg, m_rename_annotations, mgr);
+  rename_classes(scope, conf, m_rename_annotations, mgr);
 
   mgr.incr_metric(METRIC_CLASSES_IN_SCOPE, total_classes);
 

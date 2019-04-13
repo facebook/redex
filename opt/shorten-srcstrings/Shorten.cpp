@@ -142,9 +142,10 @@ static void strip_src_strings(
   fclose(fd);
 }
 
-void ShortenSrcStringsPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
-  m_filename_mappings = cfg.metafile(m_filename_mappings);
+void ShortenSrcStringsPass::run_pass(DexStoresVector& stores,
+                                     ConfigFiles& conf,
+                                     PassManager& mgr) {
+  m_filename_mappings = conf.metafile(m_filename_mappings);
   strip_src_strings(stores, m_filename_mappings.c_str(), mgr);
 }
 

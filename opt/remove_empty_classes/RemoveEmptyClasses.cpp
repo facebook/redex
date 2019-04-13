@@ -133,8 +133,9 @@ size_t remove_empty_classes(Scope& classes) {
   return num_classes_removed;
 }
 
-void RemoveEmptyClassesPass::run_pass(
-    DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void RemoveEmptyClassesPass::run_pass(DexStoresVector& stores,
+                                      ConfigFiles& /* conf */,
+                                      PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(EMPTY, 1, "RemoveEmptyClassesPass not run because no ProGuard configuration was provided.");
     return;

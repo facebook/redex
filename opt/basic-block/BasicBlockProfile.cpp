@@ -33,7 +33,7 @@ static size_t num_opcodes_bb(cfg::Block* block) {
 }
 
 void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& cfg,
+                                     ConfigFiles& /* conf */,
                                      PassManager& pm) {
 
   std::unordered_set<cfg::Block*> bb_profiled;

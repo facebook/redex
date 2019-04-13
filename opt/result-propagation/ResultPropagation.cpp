@@ -416,7 +416,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
 }
 
 void ResultPropagationPass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& cfg,
+                                     ConfigFiles& /* conf */,
                                      PassManager& mgr) {
   const auto scope = build_class_scope(stores);
   const auto method_override_graph = method_override_graph::build_graph(scope);
