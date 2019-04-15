@@ -91,6 +91,24 @@ bool analyze_gets_helper(const WholeProgramState* whole_program_state,
   return true;
 }
 
+bool not_eligible_ifield(DexField* field) {
+  return is_static(field) || field->is_external() || !can_delete(field) ||
+         is_volatile(field);
+}
+
+/**
+ * Initialize non-external, can be deleted instance fields' value to be 0.
+ */
+void initialize_ifields(const Scope& scope,
+                        ConstantFieldPartition* field_partition) {
+  walk::fields(scope, [&](DexField* field) {
+    if (not_eligible_ifield(field)) {
+      return;
+    }
+    field_partition->set(field, SignedConstantDomain(0));
+  });
+}
+
 } // namespace
 
 namespace constant_propagation {
@@ -98,13 +116,16 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
   walk::fields(scope, [&](DexField* field) {
-    // Currently, we only consider static fields in our analysis. We also
-    // exclude those marked by keep rules: keep-marked fields may be written to
-    // by non-Dex bytecode.
+    // We exclude those marked by keep rules: keep-marked fields may be
+    // written to by non-Dex bytecode.
     // All fields not in m_known_fields will be bound to Top.
     if (is_static(field) && !root(field)) {
       m_known_fields.emplace(field);
     }
+    if (not_eligible_ifield(field)) {
+      return;
+    }
+    m_known_fields.emplace(field);
   });
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
     m_known_methods.emplace(method);
@@ -119,6 +140,7 @@ WholeProgramState::WholeProgramState(
  */
 void WholeProgramState::collect(
     const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
+  initialize_ifields(scope, &m_field_partition);
   walk::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
@@ -140,23 +162,23 @@ void WholeProgramState::collect(
 }
 
 /*
- * For each static field, do a join over all the values that may have been
+ * For each field, do a join over all the values that may have been
  * written to it at any point in the program.
  *
- * If we are encountering a field write of some value to Foo.someField in the
- * body of Foo.<clinit>, don't do anything -- that value will only be visible
- * to other methods if it remains unchanged up until the end of the <clinit>.
- * In that case, analyze_clinits() will record it.
+ * If we are encountering a static field write of some value to Foo.someField
+ * in the body of Foo.<clinit>, don't do anything -- that value will only be
+ * visible to other methods if it remains unchanged up until the end of the
+ * <clinit>. In that case, analyze_clinits() will record it.
  */
 void WholeProgramState::collect_field_values(const IRInstruction* insn,
                                              const ConstantEnvironment& env,
                                              const DexType* clinit_cls) {
-  if (!is_sput(insn->opcode())) {
+  if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
     return;
   }
   auto field = resolve_field(insn->get_field());
   if (field != nullptr && m_known_fields.count(field)) {
-    if (field->get_class() == clinit_cls) {
+    if (is_sput(insn->opcode()) && field->get_class() == clinit_cls) {
       return;
     }
     auto value = env.get(insn->src(0));
