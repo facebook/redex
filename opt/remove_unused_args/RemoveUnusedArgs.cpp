@@ -174,20 +174,14 @@ bool RemoveArgs::update_method_signature(
                     "We don't treat virtuals, so methods must be defined\n");
 
   if (remove_result) {
-    const char* full_name = method->get_deobfuscated_name().c_str();
-    if (strstr(full_name, ".id") != nullptr) {
-      // HACK: Let's not touch this, it's related to ultralight, and tinkering
-      // with it annoys later pattern matching
-      return false;
-    }
-    if (strncmp(full_name, "Lorg/junit/", 11) == 0 ||
-        strncmp(full_name, "Landroid/support/test/", 22) == 0 ||
-        strncmp(full_name, "Landroidx/test/", 15) == 0 ||
-        strncmp(full_name, "Ljunit/", 7) == 0) {
-      // HACK: Let's not touch these, they are related to the unit test
-      // framework, and this transformation causes bad interactions with
-      // reflection-based unit test runs.
-      return false;
+    const std::string& full_name = method->get_deobfuscated_name();
+    for (const auto& s : m_black_list) {
+      if (full_name.find(s) != std::string::npos) {
+        TRACE(ARGS, 3,
+              "Skipping {%s} due to black list match of {%s} against {%s}\n",
+              SHOW(method), full_name.c_str(), s.c_str());
+        return false;
+      }
     }
   }
 
@@ -435,12 +429,16 @@ size_t RemoveArgs::update_callsites() {
       [](size_t a, size_t b) { return a + b; });
 }
 
+void RemoveUnusedArgsPass::configure_pass(const JsonWrapper& jw) {
+  jw.get("black_list", {}, m_black_list);
+}
+
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& /* conf */,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  RemoveArgs rm_args(scope);
+  RemoveArgs rm_args(scope, m_black_list);
   auto pass_stats = rm_args.run();
   size_t num_callsite_args_removed = pass_stats.callsite_args_removed_count;
   size_t num_method_params_removed = pass_stats.method_params_removed_count;

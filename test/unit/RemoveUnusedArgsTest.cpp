@@ -20,6 +20,7 @@
 
 struct RemoveUnusedArgsTest : testing::Test {
   remove_unused_args::RemoveArgs* m_remove_args;
+  std::vector<std::string> m_black_list;
 
   RemoveUnusedArgsTest() {
     g_redex = new RedexContext();
@@ -28,7 +29,8 @@ struct RemoveUnusedArgsTest : testing::Test {
     auto dummy_t = DexType::make_type("LA;");
     auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
     dummy_scope.push_back(dummy_cls);
-    m_remove_args = new remove_unused_args::RemoveArgs(dummy_scope);
+    m_remove_args =
+        new remove_unused_args::RemoveArgs(dummy_scope, m_black_list);
   }
 
   ~RemoveUnusedArgsTest() { delete g_redex; }

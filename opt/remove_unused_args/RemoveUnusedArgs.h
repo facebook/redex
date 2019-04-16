@@ -29,7 +29,8 @@ class RemoveArgs {
     size_t method_results_removed_count{0};
   };
 
-  RemoveArgs(const Scope& scope) : m_scope(scope), m_type_system(scope){};
+  RemoveArgs(const Scope& scope, const std::vector<std::string>& black_list)
+      : m_scope(scope), m_type_system(scope), m_black_list(black_list){};
   RemoveArgs::PassStats run();
   std::deque<uint16_t> compute_live_args(
       DexMethod* method,
@@ -43,6 +44,7 @@ class RemoveArgs {
   std::unordered_map<DexString*, std::unordered_map<DexTypeList*, size_t>>
       m_renamed_indices;
   ConcurrentSet<DexMethod*> m_result_used;
+  const std::vector<std::string>& m_black_list;
 
   std::deque<DexType*> get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
@@ -59,7 +61,11 @@ class RemoveUnusedArgsPass : public Pass {
  public:
   RemoveUnusedArgsPass() : Pass("RemoveUnusedArgsPass") {}
 
+  void configure_pass(const JsonWrapper& jw) override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
+
+ private:
+  std::vector<std::string> m_black_list;
 };
 
 } // namespace remove_unused_args
