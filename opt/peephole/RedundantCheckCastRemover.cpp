@@ -26,14 +26,17 @@ void RedundantCheckCastRemover::run() {
 
   std::unordered_map<DexMethod*, std::vector<IRInstruction*>> to_remove;
 
-  std::atomic<uint32_t> num_check_casts_removed;
+  std::atomic<uint32_t> num_check_casts_removed(0);
   walk::parallel::matching_opcodes_in_block(
       m_scope,
       match,
-      [](DexMethod* method, cfg::Block*, const std::vector<IRInstruction*>& insns) {
+      [&num_check_casts_removed](DexMethod* method,
+                                 cfg::Block*,
+                                 const std::vector<IRInstruction*>& insns) {
         if (RedundantCheckCastRemover::can_remove_check_cast(insns)) {
           IRInstruction* check_cast = insns[2];
           method->get_code()->remove_opcode(check_cast);
+          num_check_casts_removed++;
 
           TRACE(PEEPHOLE, 8, "redundant check cast in %s\n", SHOW(method));
           for (IRInstruction* insn : insns) {
