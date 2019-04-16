@@ -213,7 +213,7 @@ TEST_F(PostVerify, StaticsUnusedArgs) {
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
   ASSERT_NE(nullptr, statics_user);
 
-  auto use_static3 = find_vmethod_named(*statics_user, "use_static3");
+  auto use_static3 = find_vmethod_named(*statics_user, "use_static3$uva1$0");
   ASSERT_NE(nullptr, use_static3);
   use_static3->balloon();
 
@@ -364,7 +364,7 @@ TEST_F(PostVerify, NonVirtualsUnusedArgs) {
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
 
-  auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1$uva0");
+  auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1$uva0$0");
   ASSERT_NE(nullptr, non_virtual1);
 
   auto non_virtuals_user = find_class_named(
@@ -405,7 +405,7 @@ TEST_F(PostVerify, ProtectedNonVirtualsUnusedArgs) {
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
 
-  auto non_virtual2 = find_vmethod_named(*non_virtuals, "non_virtual2$uva0");
+  auto non_virtual2 = find_vmethod_named(*non_virtuals, "non_virtual2$uva0$0");
   ASSERT_NE(nullptr, non_virtual2);
 
   auto non_virtuals_user = find_class_named(

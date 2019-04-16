@@ -38,6 +38,16 @@ constexpr const char* METRIC_CALLSITE_ARGS_REMOVED = "callsite_args_removed";
 constexpr const char* METRIC_METHOD_PARAMS_REMOVED = "method_params_removed";
 constexpr const char* METRIC_METHODS_UPDATED = "method_signatures_updated";
 constexpr const char* METRIC_METHOD_RESULTS_REMOVED = "method_results_removed";
+constexpr const char* METRIC_DEAD_INSTRUCTION_COUNT =
+    "num_local_dce_dead_instruction_count";
+constexpr const char* METRIC_UNREACHABLE_INSTRUCTION_COUNT =
+    "num_local_dce_unreachable_instruction_count";
+constexpr const char* METRIC_ITERATIONS = "iterations";
+
+static LocalDce::Stats add_dce_stats(LocalDce::Stats a, LocalDce::Stats b) {
+  return {a.dead_instruction_count + b.dead_instruction_count,
+          a.unreachable_instruction_count + b.unreachable_instruction_count};
+};
 
 /**
  * Returns metrics as listed above from running RemoveArgs:
@@ -54,6 +64,7 @@ RemoveArgs::PassStats RemoveArgs::run() {
   pass_stats.callsite_args_removed_count = update_callsites();
   pass_stats.method_results_removed_count =
       method_stats.method_results_removed_count;
+  pass_stats.local_dce_stats = method_stats.local_dce_stats;
   return pass_stats;
 }
 
@@ -173,15 +184,13 @@ bool RemoveArgs::update_method_signature(
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
 
-  if (remove_result) {
-    const std::string& full_name = method->get_deobfuscated_name();
-    for (const auto& s : m_black_list) {
-      if (full_name.find(s) != std::string::npos) {
-        TRACE(ARGS, 3,
-              "Skipping {%s} due to black list match of {%s} against {%s}\n",
-              SHOW(method), full_name.c_str(), s.c_str());
-        return false;
-      }
+  const std::string& full_name = method->get_deobfuscated_name();
+  for (const auto& s : m_black_list) {
+    if (full_name.find(s) != std::string::npos) {
+      TRACE(ARGS, 3,
+            "Skipping {%s} due to black list match of {%s} against {%s}\n",
+            SHOW(method), full_name.c_str(), s.c_str());
+      return false;
     }
   }
 
@@ -214,7 +223,8 @@ bool RemoveArgs::update_method_signature(
     // This pass typically runs before the obfuscation pass, so we should not
     // need to be concerned here about creating long method names.
     // "uva" stands for unused virtual args
-    ss << name->str() << "$uva" << std::to_string(name_index);
+    ss << name->str() << "$uva" << std::to_string(m_iteration) << "$"
+       << std::to_string(name_index);
     name = DexString::make_string(ss.str());
   }
 
@@ -342,6 +352,8 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
 
   // Phase 3: Update body of updated methods (in parallel)
 
+  std::mutex local_dce_stats_mutex;
+  auto& local_dce_stats = method_stats.local_dce_stats;
   walk::parallel::classes(classes, [&](DexClass* cls) {
     for (auto& p : class_entries.at(cls)) {
       DexMethod* method = p.first;
@@ -364,10 +376,19 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
             insn->set_arg_word_count(0);
           }
         }
+
+        std::unordered_set<DexMethodRef*> pure_methods;
+        auto local_dce = LocalDce(pure_methods);
+        local_dce.dce(method->get_code());
+        const auto& stats = local_dce.get_stats();
+        if (stats.dead_instruction_count |
+            stats.unreachable_instruction_count) {
+          std::lock_guard<std::mutex> lock(local_dce_stats_mutex);
+          local_dce_stats = add_dce_stats(local_dce_stats, stats);
+        }
       }
     }
   });
-
   return method_stats;
 }
 
@@ -438,13 +459,26 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  RemoveArgs rm_args(scope, m_black_list);
-  auto pass_stats = rm_args.run();
-  size_t num_callsite_args_removed = pass_stats.callsite_args_removed_count;
-  size_t num_method_params_removed = pass_stats.method_params_removed_count;
-  size_t num_methods_updated = pass_stats.methods_updated_count;
-  size_t num_method_results_removed_count =
-      pass_stats.method_results_removed_count;
+  size_t num_callsite_args_removed = 0;
+  size_t num_method_params_removed = 0;
+  size_t num_methods_updated = 0;
+  size_t num_method_results_removed_count = 0;
+  size_t num_iterations = 0;
+  LocalDce::Stats local_dce_stats{0, 0};
+  while (true) {
+    num_iterations++;
+    RemoveArgs rm_args(scope, m_black_list, m_total_iterations++);
+    auto pass_stats = rm_args.run();
+    if (pass_stats.methods_updated_count == 0) {
+      break;
+    }
+    num_callsite_args_removed += pass_stats.callsite_args_removed_count;
+    num_method_params_removed += pass_stats.method_params_removed_count;
+    num_methods_updated += pass_stats.methods_updated_count;
+    num_method_results_removed_count += pass_stats.method_results_removed_count;
+    local_dce_stats =
+        add_dce_stats(local_dce_stats, pass_stats.local_dce_stats);
+  }
 
   TRACE(ARGS,
         1,
@@ -468,6 +502,11 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   mgr.set_metric(METRIC_METHODS_UPDATED, num_methods_updated);
   mgr.set_metric(METRIC_METHOD_RESULTS_REMOVED,
                  num_method_results_removed_count);
+  mgr.set_metric(METRIC_DEAD_INSTRUCTION_COUNT,
+                 local_dce_stats.dead_instruction_count);
+  mgr.set_metric(METRIC_UNREACHABLE_INSTRUCTION_COUNT,
+                 local_dce_stats.unreachable_instruction_count);
+  mgr.set_metric(METRIC_ITERATIONS, num_iterations);
 }
 
 static RemoveUnusedArgsPass s_pass;

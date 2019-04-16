@@ -10,6 +10,7 @@
 #include <mutex>
 
 #include "ConcurrentContainers.h"
+#include "LocalDce.h"
 #include "PassManager.h"
 #include "TypeSystem.h"
 
@@ -21,16 +22,23 @@ class RemoveArgs {
     size_t method_params_removed_count{0};
     size_t method_results_removed_count{0};
     size_t methods_updated_count{0};
+    LocalDce::Stats local_dce_stats{0, 0};
   };
   struct PassStats {
     size_t method_params_removed_count{0};
     size_t methods_updated_count{0};
     size_t callsite_args_removed_count{0};
     size_t method_results_removed_count{0};
+    LocalDce::Stats local_dce_stats{0, 0};
   };
 
-  RemoveArgs(const Scope& scope, const std::vector<std::string>& black_list)
-      : m_scope(scope), m_type_system(scope), m_black_list(black_list){};
+  RemoveArgs(const Scope& scope,
+             const std::vector<std::string>& black_list,
+             size_t iteration = 0)
+      : m_scope(scope),
+        m_type_system(scope),
+        m_black_list(black_list),
+        m_iteration(iteration){};
   RemoveArgs::PassStats run();
   std::deque<uint16_t> compute_live_args(
       DexMethod* method,
@@ -45,6 +53,7 @@ class RemoveArgs {
       m_renamed_indices;
   ConcurrentSet<DexMethod*> m_result_used;
   const std::vector<std::string>& m_black_list;
+  size_t m_iteration;
 
   std::deque<DexType*> get_live_arg_type_list(
       DexMethod* method, const std::deque<uint16_t>& live_arg_idxs);
@@ -66,6 +75,7 @@ class RemoveUnusedArgsPass : public Pass {
 
  private:
   std::vector<std::string> m_black_list;
+  size_t m_total_iterations{0};
 };
 
 } // namespace remove_unused_args
