@@ -128,7 +128,7 @@ std::unordered_set<const DexMethod*> DedupStrings::get_perf_sensitive_methods(
   std::unordered_set<const DexMethod*> perf_sensitive_methods;
   auto has_weight = [&](DexMethod* method) -> bool {
     return !m_use_method_to_weight ||
-           get_method_weight_if_available(method, &m_method_to_weight);
+           !!get_method_weight_if_available(method, &m_method_to_weight);
   };
   for (size_t dexnr = 0; dexnr < dexen.size(); dexnr++) {
     auto& classes = dexen[dexnr];

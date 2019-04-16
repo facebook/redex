@@ -504,6 +504,7 @@ struct ClassCreator {
     m_cls->m_source_file = nullptr;
     m_cls->m_anno = nullptr;
     m_cls->m_external = false;
+    m_cls->m_perf_sensitive = false;
     m_cls->set_deobfuscated_name(type->get_name()->c_str());
   }
 
