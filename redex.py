@@ -351,15 +351,15 @@ def merge_proguard_maps(
         input_apk_path,
         apk_output_path,
         dex_dir,
-        pg_file):
+        pg_file,
+        redex_pg_out_filename):
     log('running merge proguard step')
     redex_rename_map_path = join(dex_dir, redex_rename_map_path)
     log('redex map is at ' + str(redex_rename_map_path))
     log('pg map is at ' + str(pg_file))
     assert os.path.isfile(redex_rename_map_path)
-    redex_pg_file = "redex-class-rename-map.txt"
     output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_file)
+    output_file = join(output_dir, redex_pg_out_filename)
     # If -dontobfuscate is set, proguard won't produce a mapping file, but
     # buck will create an empty mapping.txt. Check for this case.
     if pg_file and os.path.getsize(pg_file) > 0:
@@ -409,15 +409,15 @@ def overwrite_proguard_maps(
         redex_rename_map_path,
         apk_output_path,
         dex_dir,
-        pg_file):
+        pg_file,
+        redex_pg_out_filename):
     log('running overwrite proguard step')
     redex_rename_map_path = join(dex_dir, redex_rename_map_path)
     log('redex map is at ' + str(redex_rename_map_path))
     log('pg map is at ' + str(pg_file))
     assert os.path.isfile(redex_rename_map_path)
-    redex_pg_file = "redex-class-rename-map.txt"
     output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_file)
+    output_file = join(output_dir, redex_pg_out_filename)
     log('wrote redex pg format mapping file to ' + str(output_file))
     shutil.move(redex_rename_map_path, output_file)
 
@@ -875,6 +875,10 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
+    redex_pg_file = "redex-class-rename-map.txt"
+    if state.config_dict.get('RenameClassesPassV2', '') != '':
+        redex_pg_file = state.config_dict['RenameClassesPassV2'].get('class_rename', redex_pg_file)
+
     if state.config_dict.get('proguard_map_output', '') != '':
         # if our map output strategy is overwrite, we don't merge at all
         # if you enable ObfuscatePass, this needs to be overwrite
@@ -883,14 +887,16 @@ def finalize_redex(state):
                 state.config_dict['proguard_map_output'],
                 state.args.out,
                 state.dex_dir,
-                state.args.proguard_map)
+                state.args.proguard_map,
+                redex_pg_file)
         else:
             merge_proguard_maps(
                 state.config_dict['proguard_map_output'],
                 state.args.input_apk,
                 state.args.out,
                 state.dex_dir,
-                state.args.proguard_map)
+                state.args.proguard_map,
+                redex_pg_file)
     else:
         passes_list = state.config_dict.get('redex', {}).get('passes', [])
         assert 'RenameClassesPass' not in passes_list and\
