@@ -173,11 +173,22 @@ bool RemoveArgs::update_method_signature(
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
 
-  if (remove_result &&
-      strstr(method->get_deobfuscated_name().c_str(), ".id") != nullptr) {
-    // HACK: Let's not touch this, it's related to ultralight, and tinkering
-    // with it annoys later pattern matching
-    return false;
+  if (remove_result) {
+    const char* full_name = method->get_deobfuscated_name().c_str();
+    if (strstr(full_name, ".id") != nullptr) {
+      // HACK: Let's not touch this, it's related to ultralight, and tinkering
+      // with it annoys later pattern matching
+      return false;
+    }
+    if (strncmp(full_name, "Lorg/junit/", 11) == 0 ||
+        strncmp(full_name, "Landroid/support/test/", 22) == 0 ||
+        strncmp(full_name, "Landroidx/test/", 15) == 0 ||
+        strncmp(full_name, "Ljunit/", 7) == 0) {
+      // HACK: Let's not touch these, they are related to the unit test
+      // framework, and this transformation causes bad interactions with
+      // reflection-based unit test runs.
+      return false;
+    }
   }
 
   auto num_orig_args = method->get_proto()->get_args()->get_type_list().size();

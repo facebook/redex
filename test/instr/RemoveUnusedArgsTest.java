@@ -64,6 +64,14 @@ class Statics {
     ciao = "wide_param is alive, obj is dead";
     Statics.wide = wide_param;
   }
+
+  public static int static4_with_result() {
+    return 0;
+  }
+
+  public static int static5_with_result() {
+    return 0;
+  }
 }
 
 class StaticsUser {
@@ -78,6 +86,11 @@ class StaticsUser {
   public void use_static3(Foo foo) {
     double dub = 4.0;
     Statics.static3(foo, dub);
+  }
+
+  public void use_static4_with_result(Foo foo) {
+    int x = Statics.static4_with_result();
+    x = x / x;
   }
 }
 

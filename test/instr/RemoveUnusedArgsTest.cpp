@@ -25,6 +25,17 @@ void check_callsite_regs(DexMethod* method, int num_args_expected) {
   }
 }
 
+// Checks only the first return, whether it returns a value
+void check_return(DexMethod* method, bool value) {
+  for (const auto& mie : InstructionIterable(method->get_code())) {
+    auto insn = mie.insn;
+    if (is_return(insn->opcode())) {
+      EXPECT_EQ(is_return_value(insn->opcode()), value);
+      break;
+    }
+  }
+}
+
 // Sanity check: three foo constructors are defined
 TEST_F(PreVerify, CtorsDefined) {
   auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
@@ -207,6 +218,60 @@ TEST_F(PostVerify, StaticsUnusedArgs) {
   use_static3->balloon();
 
   check_callsite_regs(use_static3, 1);
+}
+
+// Checks that static method result type doesn't change when result is used
+TEST_F(PreVerify, StaticsUsedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static4 = find_dmethod_named(*statics, "static4_with_result");
+  ASSERT_NE(nullptr, static4);
+
+  ASSERT_FALSE(static4->get_proto()->is_void());
+  static4->balloon();
+  check_return(static4, true /* value */);
+}
+
+TEST_F(PostVerify, StaticsUsedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static4 = find_dmethod_named(*statics, "static4_with_result");
+  ASSERT_NE(nullptr, static4);
+
+  ASSERT_FALSE(static4->get_proto()->is_void());
+  static4->balloon();
+  check_return(static4, true /* value */);
+}
+
+// Check static method result removal for unused results
+TEST_F(PreVerify, StaticsUnusedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static5 = find_dmethod_named(*statics, "static5_with_result");
+  ASSERT_NE(nullptr, static5);
+
+  ASSERT_FALSE(static5->get_proto()->is_void());
+  static5->balloon();
+  check_return(static5, true /* value */);
+}
+
+TEST_F(PostVerify, StaticsUnusedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static5 = find_dmethod_named(*statics, "static5_with_result");
+  ASSERT_NE(nullptr, static5);
+
+  ASSERT_TRUE(static5->get_proto()->is_void());
+  static5->balloon();
+  check_return(static5, false /* value */);
 }
 
 // Check overloaded name mangling upon collision
