@@ -37,6 +37,7 @@ namespace remove_unused_args {
 constexpr const char* METRIC_CALLSITE_ARGS_REMOVED = "callsite_args_removed";
 constexpr const char* METRIC_METHOD_PARAMS_REMOVED = "method_params_removed";
 constexpr const char* METRIC_METHODS_UPDATED = "method_signatures_updated";
+constexpr const char* METRIC_METHOD_RESULTS_REMOVED = "method_results_removed";
 
 /**
  * Returns metrics as listed above from running RemoveArgs:
@@ -45,12 +46,46 @@ constexpr const char* METRIC_METHODS_UPDATED = "method_signatures_updated";
  */
 RemoveArgs::PassStats RemoveArgs::run() {
   RemoveArgs::PassStats pass_stats;
-  auto method_stats = update_meths_with_unused_args();
+  gather_results_used();
+  auto method_stats = update_meths_with_unused_args_or_results();
   pass_stats.method_params_removed_count =
       method_stats.method_params_removed_count;
   pass_stats.methods_updated_count = method_stats.methods_updated_count;
   pass_stats.callsite_args_removed_count = update_callsites();
+  pass_stats.method_results_removed_count =
+      method_stats.method_results_removed_count;
   return pass_stats;
+}
+
+/**
+ * Inspects all invoke instructions, and whether they are followed by
+ * move-result instructions, and record this information for each method.
+ */
+void RemoveArgs::gather_results_used() {
+  walk::parallel::code(
+      m_scope, [& result_used = m_result_used](DexMethod*, IRCode& code) {
+        const auto ii = InstructionIterable(code);
+        for (auto it = ii.begin(); it != ii.end(); it++) {
+          auto insn = it->insn;
+          if (!is_invoke(insn->opcode())) {
+            continue;
+          }
+          const auto next = std::next(it);
+          always_assert(next != ii.end());
+          const auto peek = next->insn;
+          if (!is_move_result(peek->opcode())) {
+            continue;
+          }
+          auto method_ref = insn->get_method();
+          if (!method_ref->is_def()) {
+            // TODO: T31388603 -- Remove unused results for true virtuals.
+            continue;
+          }
+          // Since is_def() is true, the following cast is safe and appropriate.
+          DexMethod* method = static_cast<DexMethod*>(method_ref);
+          result_used.insert(method);
+        }
+      });
 }
 
 /**
@@ -99,6 +134,10 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
     fixpoint_iter.analyze_instruction(insn, &live_vars);
   }
 
+  always_assert(live_arg_idxs.size() + dead_insns->size() == is_instance_method
+                    ? num_args + 1
+                    : num_args);
+
   return live_arg_idxs;
 }
 
@@ -128,14 +167,26 @@ std::deque<DexType*> RemoveArgs::get_live_arg_type_list(
  * the updated args list is specified by live_args.
  */
 bool RemoveArgs::update_method_signature(
-    DexMethod* method, const std::deque<uint16_t>& live_arg_idxs) {
+    DexMethod* method,
+    const std::deque<uint16_t>& live_arg_idxs,
+    bool remove_result) {
   always_assert_log(method->is_def(),
                     "We don't treat virtuals, so methods must be defined\n");
+
+  if (remove_result &&
+      strstr(method->get_deobfuscated_name().c_str(), ".id") != nullptr) {
+    // HACK: Let's not touch this, it's related to ultralight, and tinkering
+    // with it annoys later pattern matching
+    return false;
+  }
+
   auto num_orig_args = method->get_proto()->get_args()->get_type_list().size();
   auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
-  auto updated_proto =
-      DexProto::make_proto(method->get_proto()->get_rtype(), live_args_list);
+  DexType* rtype =
+      remove_result ? get_void_type() : method->get_proto()->get_rtype();
+  auto updated_proto = DexProto::make_proto(rtype, live_args_list);
+  always_assert(updated_proto != method->get_proto());
 
   auto colliding_method = DexMethod::get_method(
       method->get_class(), method->get_name(), updated_proto);
@@ -197,12 +248,13 @@ bool RemoveArgs::update_method_signature(
 /**
  * For methods that have unused arguments, record live argument registers.
  */
-RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
+RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
   // Phase 1: Find (in parallel) all methods that we can potentially update
 
   struct Entry {
     std::vector<IRInstruction*> dead_insns;
     std::deque<uint16_t> live_arg_idxs;
+    bool remove_result;
   };
   ConcurrentMap<DexMethod*, Entry> unordered_entries;
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
@@ -210,10 +262,12 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
       return;
     }
     auto proto = method->get_proto();
+    bool result_used = !!m_result_used.count_unsafe(method);
     auto num_args = proto->get_args()->size();
+    bool remove_result = !proto->is_void() && !result_used;
     // For instance methods, num_args does not count the 'this' argument.
-    if (num_args == 0) {
-      // Nothing to do if the method doesn't have args to remove.
+    if (num_args == 0 && !remove_result) {
+      // Nothing to do if the method doesn't have args or result to remove.
       return;
     }
 
@@ -238,12 +292,13 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
 
     std::vector<IRInstruction*> dead_insns;
     auto live_arg_idxs = compute_live_args(method, num_args, &dead_insns);
-    if (dead_insns.empty()) {
+    if (dead_insns.empty() && !remove_result) {
       return;
     }
 
     // Remember entry
-    unordered_entries.emplace(method, (Entry){dead_insns, live_arg_idxs});
+    unordered_entries.emplace(
+        method, (Entry){dead_insns, live_arg_idxs, remove_result});
   });
 
   // Phase 2: Deterministically update proto (including (re)name as needed)
@@ -265,7 +320,8 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
   for (auto& p : ordered_entries) {
     DexMethod* method = p.first;
     const Entry& entry = p.second;
-    if (!update_method_signature(method, entry.live_arg_idxs)) {
+    if (!update_method_signature(method, entry.live_arg_idxs,
+                                 entry.remove_result)) {
       continue;
     }
 
@@ -275,6 +331,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
     class_entries[cls].push_back(p);
     method_stats.methods_updated_count++;
     method_stats.method_params_removed_count += entry.dead_insns.size();
+    method_stats.method_results_removed_count += entry.remove_result ? 1 : 0;
   }
   sort_unique(classes);
 
@@ -285,12 +342,24 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args() {
       DexMethod* method = p.first;
       const Entry& entry = p.second;
 
-      // We update the method signature, so we must remove unused
-      // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
-      for (auto dead_insn : entry.dead_insns) {
-        method->get_code()->remove_opcode(dead_insn);
+      if (!entry.dead_insns.empty()) {
+        // We update the method signature, so we must remove unused
+        // OPCODE_LOAD_PARAM_* to satisfy IRTypeChecker.
+        for (auto dead_insn : entry.dead_insns) {
+          method->get_code()->remove_opcode(dead_insn);
+        }
+        m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
       }
-      m_live_arg_idxs_map.emplace(method, entry.live_arg_idxs);
+
+      if (entry.remove_result) {
+        for (const auto& mie : InstructionIterable(method->get_code())) {
+          auto insn = mie.insn;
+          if (is_return_value(insn->opcode())) {
+            insn->set_opcode(OPCODE_RETURN_VOID);
+            insn->set_arg_word_count(0);
+          }
+        }
+      }
     }
   });
 
@@ -307,7 +376,8 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
     // TODO: T31388603 -- Remove unused args for true virtuals.
     return 0;
   };
-  DexMethod* method = resolve_method(method_ref, opcode_to_search(instr));
+  // Since is_def() is true, the following cast is safe and appropriate.
+  DexMethod* method = static_cast<DexMethod*>(method_ref);
 
   auto kv_pair = m_live_arg_idxs_map.find(method);
   if (kv_pair == m_live_arg_idxs_map.end()) {
@@ -364,6 +434,8 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
   size_t num_callsite_args_removed = pass_stats.callsite_args_removed_count;
   size_t num_method_params_removed = pass_stats.method_params_removed_count;
   size_t num_methods_updated = pass_stats.methods_updated_count;
+  size_t num_method_results_removed_count =
+      pass_stats.method_results_removed_count;
 
   TRACE(ARGS,
         1,
@@ -375,12 +447,18 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
         num_method_params_removed);
   TRACE(ARGS,
         1,
+        "Removed %d redundant method results\n",
+        num_method_results_removed_count);
+  TRACE(ARGS,
+        1,
         "Updated %d methods with redundant parameters\n",
         num_methods_updated);
 
   mgr.set_metric(METRIC_CALLSITE_ARGS_REMOVED, num_callsite_args_removed);
   mgr.set_metric(METRIC_METHOD_PARAMS_REMOVED, num_method_params_removed);
   mgr.set_metric(METRIC_METHODS_UPDATED, num_methods_updated);
+  mgr.set_metric(METRIC_METHOD_RESULTS_REMOVED,
+                 num_method_results_removed_count);
 }
 
 static RemoveUnusedArgsPass s_pass;
