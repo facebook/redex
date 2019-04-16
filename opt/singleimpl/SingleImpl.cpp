@@ -107,6 +107,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   removed_count = 0;
   const auto& pg_map = conf.get_proguard_map();
   while (true) {
+    TRACE(INTF, 9, "\tOPTIMIZE ROUND %d\n", max_steps);
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
     TypeSet intfs;
