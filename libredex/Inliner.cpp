@@ -393,6 +393,9 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
   if (cannot_inline_opcodes(caller, callee, insn)) {
     return false;
   }
+  if (has_any_annotation(callee, m_config.force_inline)) {
+    return true;
+  }
   if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
     log_nopt(INL_TOO_BIG, caller, insn);
     return false;
