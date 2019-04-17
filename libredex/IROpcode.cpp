@@ -8,8 +8,10 @@
 #include "IROpcode.h"
 
 #include "Debug.h"
+#include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexOpcode.h"
+#include "DexUtil.h"
 
 namespace opcode {
 
@@ -1060,6 +1062,31 @@ IROpcode move_result_pseudo_for_sget(IROpcode op) {
     return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
   default:
     always_assert_log(false, "Unexpected opcode %s", SHOW(op));
+  }
+}
+
+IROpcode sget_opcode_for_field(const DexField* field) {
+  switch (type_to_datatype(field->get_type())) {
+  case DataType::Array:
+  case DataType::Object:
+    return OPCODE_SGET_OBJECT;
+  case DataType::Boolean:
+    return OPCODE_SGET_BOOLEAN;
+  case DataType::Byte:
+    return OPCODE_SGET_BYTE;
+  case DataType::Char:
+    return OPCODE_SGET_CHAR;
+  case DataType::Short:
+    return OPCODE_SGET_SHORT;
+  case DataType::Int:
+  case DataType::Float:
+    return OPCODE_SGET;
+  case DataType::Long:
+  case DataType::Double:
+    return OPCODE_SGET_WIDE;
+  case DataType::Void:
+  default:
+    assert(false);
   }
 }
 
