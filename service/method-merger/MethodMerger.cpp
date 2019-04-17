@@ -155,7 +155,7 @@ Stats merge_methods(const MethodGroups& method_groups,
   Stats stats;
   auto all_methods = methodgroups_to_methodset(method_groups);
   if (all_methods.empty()) {
-    stats;
+    return stats;
   }
   method_reference::CallSites callsites =
       method_reference::collect_call_refs(scope, all_methods);
@@ -178,11 +178,11 @@ Stats merge_methods(const MethodGroups& method_groups,
           new_callee.additional_args.get()[0], SHOW(new_callee.method));
   }
   if (traceEnabled(METH_MERGER, 3)) {
-    trace(METH_MERGER, 3, "merged static methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged static methods : %u\n",
           stats.num_merged_static_methods);
-    trace(METH_MERGER, 3, "merged direct methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged direct methods : %u\n",
           stats.num_merged_direct_methods);
-    trace(METH_MERGER, 3, "merged virtual methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged virtual methods : %u\n",
           stats.num_merged_nonvirt_methods);
   }
   return stats;
