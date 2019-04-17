@@ -44,7 +44,6 @@ class RemoveInterfacePass : public Pass {
   size_t m_num_interface_removed = 0;
   size_t m_num_interface_excluded = 0;
   std::unordered_set<const DexType*> m_removed_interfaces;
-  std::unordered_set<const DexType*> m_skip_multiple_targets_roots;
   bool m_include_primary_dex = false;
   bool m_keep_debug_info = false;
   std::unordered_map<size_t, size_t> m_dispatch_stats;
