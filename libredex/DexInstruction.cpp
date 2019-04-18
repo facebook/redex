@@ -497,7 +497,7 @@ DexInstruction* DexInstruction::set_literal(int64_t literal) {
     m_arg[0] = literal >> (opcode() == DOPCODE_CONST_WIDE_HIGH16 ? 48 : 16);
     return this;
   case FMT_f22b:
-    m_arg[0] = (m_arg[0] & 0xFF) | ((literal << 8) & 0xFF00);
+    m_arg[0] = (m_arg[0] & 0xFF) | ((uint64_t(literal) << 8) & 0xFF00);
     return this;
   case FMT_f22s:
     m_arg[0] = literal;

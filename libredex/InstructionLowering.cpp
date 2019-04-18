@@ -19,7 +19,7 @@ namespace instruction_lowering {
 template <int width>
 static bool signed_int_fits(int64_t v) {
   auto shift = 64 - width;
-  return (v << shift >> shift) == v;
+  return int64_t(uint64_t(v) << shift) >> shift == v;
 }
 
 /*
@@ -32,7 +32,7 @@ template <int total_width>
 static bool signed_int_fits_high16(int64_t v) {
   auto right_zeros = total_width - 16;
   auto left_ones = 64 - total_width;
-  return v >> right_zeros << (64 - 16) >> left_ones == v;
+  return int64_t(uint64_t(v >> right_zeros) << (64 - 16)) >> left_ones == v;
 }
 
 /*
