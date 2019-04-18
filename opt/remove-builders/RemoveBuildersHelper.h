@@ -89,9 +89,14 @@ get_tainted_regs(uint16_t regs_size,
 
 class BuilderTransform {
  public:
-  BuilderTransform(const Scope& scope,
+  BuilderTransform(const inliner::InlinerConfig& inliner_config,
+                   const Scope& scope,
                    DexStoresVector& stores,
-                   bool throws_inline) {
+                   bool throws_inline)
+      : m_inliner_config(inliner_config) {
+    // Note: We copy global inline config in the class since it seems that it
+    // may be configured differently from global inliner_config.throws_inline.
+    // Maybe we can refactor this part.
     m_inliner_config.throws_inline = throws_inline;
 
     auto resolver = [&](DexMethodRef* method, MethodSearch search) {
@@ -110,7 +115,7 @@ class BuilderTransform {
 
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;
-  MultiMethodInliner::Config m_inliner_config;
+  inliner::InlinerConfig m_inliner_config;
   MethodRefCache m_resolved_refs;
 };
 

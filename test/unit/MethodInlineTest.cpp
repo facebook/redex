@@ -197,15 +197,14 @@ TEST_F(MethodInlineTest, debugPositionsAfterReturn) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST_F(MethodInlineTest, test_within_dex_inlining) {
+TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   MethodRefCache resolve_cache;
   auto resolver = [&resolve_cache](DexMethodRef* method, MethodSearch search) {
     return resolve_method(method, search, resolve_cache);
   };
 
-  MultiMethodInliner::Config inliner_config;
   // Only inline methods within dex.
-  inliner_config.within_dex = true;
+  bool intra_dex = true;
 
   DexStoresVector stores;
   std::unordered_set<DexMethod*> canidates;
@@ -232,15 +231,17 @@ TEST_F(MethodInlineTest, test_within_dex_inlining) {
         make_a_method_calls_others(foo_cls, "foo_main", {foo_m1, bar_m2});
     // bar_main calls bar_m1.
     auto bar_main = make_a_method_calls_others(bar_cls, "bar_main", {bar_m1});
-    // Expect foo_m1 and bar_m1 be inlined if `within_dex` is true.
+    // Expect foo_m1 and bar_m1 be inlined if `intra_dex` is true.
     expected_inlined.insert(foo_m1);
     expected_inlined.insert(bar_m1);
   }
   auto scope = build_class_scope(stores);
   api::LevelChecker::init(0, scope);
 
+  inliner::InlinerConfig inliner_config;
+  inliner_config.populate_blacklist(scope);
   MultiMethodInliner inliner(
-      scope, stores, canidates, resolver, inliner_config);
+      scope, stores, canidates, resolver, inliner_config, intra_dex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());

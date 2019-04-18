@@ -305,3 +305,58 @@ void ConfigFiles::load_method_sorting_whitelisted_substrings() {
     }
   }
 }
+
+void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
+  Json::Value config;
+  m_json.get("inliner", Json::nullValue, config);
+  if (config == Json::nullValue) {
+    m_json.get("MethodInlinePass", Json::nullValue, config);
+  }
+  if (config == Json::nullValue) {
+    fprintf(stderr, "WARNING: No inliner config\n");
+    return;
+  }
+  JsonWrapper jw(config);
+  jw.get("virtual", true, inliner_config->virtual_inline);
+  jw.get("throws", false, inliner_config->throws_inline);
+  jw.get("enforce_method_size_limit",
+         true,
+         inliner_config->enforce_method_size_limit);
+  jw.get("use_cfg_inliner", false, inliner_config->use_cfg_inliner);
+  jw.get("multiple_callers", false, inliner_config->multiple_callers);
+  jw.get("inline_small_non_deletables",
+         false,
+         inliner_config->inline_small_non_deletables);
+
+  jw.get("black_list", {}, inliner_config->m_black_list);
+  jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);
+
+  std::vector<std::string> no_inline_annos;
+  jw.get("no_inline_annos", {}, no_inline_annos);
+  for (const auto& type_s : no_inline_annos) {
+    auto type = DexType::get_type(type_s.c_str());
+    if (type != nullptr) {
+      inliner_config->no_inline.emplace(type);
+    } else {
+      fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
+              type_s.c_str());
+    }
+  }
+
+  std::vector<std::string> force_inline_annos;
+  jw.get("force_inline_annos", {}, force_inline_annos);
+  for (const auto& type_s : force_inline_annos) {
+    auto type = DexType::get_type(type_s.c_str());
+    if (type != nullptr) {
+      inliner_config->force_inline.emplace(type);
+    } else {
+      fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
+              type_s.c_str());
+    }
+  }
+}
+
+void ConfigFiles::load(const Scope& scope) {
+  get_inliner_config();
+  m_inliner_config->populate_blacklist(scope);
+}

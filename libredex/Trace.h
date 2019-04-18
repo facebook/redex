@@ -46,6 +46,7 @@
   TM(HOTNESS)            \
   TM(ICONSTP)            \
   TM(IDEX)               \
+  TM(INLINE)             \
   TM(GETTER)             \
   TM(INL)                \
   TM(INLRES)             \
@@ -89,7 +90,6 @@
   TM(SDIS)               \
   TM(SHORTEN)            \
   TM(SINK)               \
-  TM(SINL)               \
   TM(SPLIT_RES)          \
   TM(STATIC_RELO)        \
   TM(STR_CAT)            \

@@ -43,8 +43,8 @@ DEBUG_ONLY bool method_breakup(
     for (auto callee : group) {
       callee->get_access() & ACC_STATIC ? stat++ : inst++;
     }
-    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
-        i, group.size(), inst, stat);
+    TRACE(INLINE, 5, "%ld callers %ld: instance %ld, static %ld\n", i,
+          group.size(), inst, stat);
   }
   return true;
 }
@@ -173,14 +173,15 @@ MultiMethodInliner::MultiMethodInliner(
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
-    const Config& config)
+    const inliner::InlinerConfig& config,
+    bool intra_dex /* default is false */)
     : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers. If
-  // within_dex is false, we build the map for all the candidates. If within_dex
+  // intra_dex is false, we build the map for all the candidates. If intra_dex
   // is true, we properly exclude methods who have callers being located in
   // another dex from the candidates.
-  if (m_config.within_dex) {
+  if (intra_dex) {
     std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
                                                      candidates.end());
     XDexRefs x_dex(stores);
@@ -472,7 +473,7 @@ bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
     return true;
   }
   while (cls != nullptr) {
-    if (m_config.black_list.count(cls->get_type())) {
+    if (m_config.get_black_list().count(cls->get_type())) {
       info.blacklisted++;
       return true;
     }
@@ -597,7 +598,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
 
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
   auto cls = caller->get_class();
-  if (m_config.caller_black_list.count(cls)) {
+  if (m_config.get_caller_black_list().count(cls)) {
     info.blacklisted++;
     return true;
   }

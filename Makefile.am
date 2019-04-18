@@ -81,6 +81,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/method-dedup \
+	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-merger \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
@@ -127,6 +128,7 @@ libredex_la_SOURCES = \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/Inliner.cpp \
+	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
 	libredex/IRAssembler.cpp \
@@ -277,8 +279,7 @@ redex_all_SOURCES = \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
-	opt/methodinline/Deleter.cpp \
-	opt/methodinline/MethodInline.cpp \
+	opt/methodinline/MethodInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
@@ -321,6 +322,8 @@ redex_all_SOURCES = \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/Deleter.cpp \
+	service/method-inliner/MethodInliner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \

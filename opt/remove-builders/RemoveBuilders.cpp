@@ -224,7 +224,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 }
 
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles& /* conf */,
+                                  ConfigFiles& conf,
                                   PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(BUILDERS,
@@ -329,7 +329,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexClass*> kept_builders =
       get_builders_with_subclasses(scope);
 
-  BuilderTransform b_transform(scope, stores, false);
+  BuilderTransform b_transform(conf.get_inliner_config(), scope, stores, false);
 
   // Inline non init methods.
   std::unordered_set<DexClass*> removed_builders;

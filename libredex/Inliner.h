@@ -68,29 +68,18 @@ bool inline_with_cfg(DexMethod* caller_method,
  */
 class MultiMethodInliner {
  public:
-  struct Config {
-    bool throws_inline{false};
-    bool enforce_method_size_limit{true};
-    bool multiple_callers{false};
-    bool inline_small_non_deletables{false};
-    bool use_cfg_inliner{false};
-    // We can do global inlining before InterDexPass, but after InterDexPass, we
-    // can only inline methods within each dex. Set within_dex to true if
-    // inlining is needed after InterDex.
-    bool within_dex{false};
-    std::unordered_set<DexType*> black_list;
-    std::unordered_set<DexType*> caller_black_list;
-    std::unordered_set<DexType*> whitelist_no_method_limit;
-    std::unordered_set<DexType*> no_inline;
-    std::unordered_set<DexType*> force_inline;
-  };
-
+  /**
+   * We can do global inlining before InterDexPass, but after InterDexPass, we
+   * can only inline methods within each dex. Set intra_dex to true if
+   * inlining is needed after InterDex.
+   */
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
-      const Config& config);
+      const inliner::InlinerConfig& config,
+      bool intra_dex = false);
 
   ~MultiMethodInliner() {
     invoke_direct_to_static();
@@ -314,7 +303,7 @@ class MultiMethodInliner {
 
   const std::vector<DexClass*>& m_scope;
 
-  const Config& m_config;
+  const inliner::InlinerConfig& m_config;
 
   std::unordered_set<DexMethod*> m_make_static;
 

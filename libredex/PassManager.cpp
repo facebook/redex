@@ -197,6 +197,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     opt_metadata::OptDataMapper::get_instance().enable_logs();
   }
 
+  // Load configurations regarding the scope.
+  conf.load(scope);
+
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
