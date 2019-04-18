@@ -8,7 +8,10 @@
 /*
  * This optimizer pass reduces goto instructions.
  *
- * It does so in two ways:
+ * It does so in a few ways:
+ * 0) Switches get simplified: dropping useless cases, eliminating empty
+ *    switches, or turning them into ifs when beneficial (not strictly reducing
+ *    gotos, but similar effects)
  * 1) When a conditional branch would fallthrough to a block that has multiple
  *    sources, and the branch target only one has one, invert condition and
  *    swap branch and goto target. This reduces the need for additional gotos /
@@ -28,6 +31,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "Liveness.h"
 #include "Walkers.h"
 
 namespace {
@@ -36,6 +40,8 @@ constexpr const char* METRIC_REMOVED_SWITCHES = "num_removed_switches";
 constexpr const char* METRIC_REDUCED_SWITCHES = "num_reduced_switches";
 constexpr const char* METRIC_REMAINING_TRIVIAL_SWITCHES =
     "num_remaining_trivial_switches";
+constexpr const char* METRIC_REPLACED_TRIVIAL_SWITCHES =
+    "num_replaced_trivial_switches";
 constexpr const char* METRIC_REMOVED_SPARSE_SWITCH_CASES =
     "num_removed_sparse_switch_cases";
 constexpr const char* METRIC_REMOVED_PACKED_SWITCH_CASES =
@@ -49,11 +55,37 @@ constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
 
 } // namespace
 
-ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
-  Stats stats;
+void ReduceGotosPass::shift_registers(cfg::ControlFlowGraph* cfg,
+                                      uint16_t* reg) {
+  for (auto& mie : cfg::InstructionIterable(*cfg)) {
+    auto insn = mie.insn;
+    for (uint16_t i = 0; i < insn->srcs_size(); ++i) {
+      insn->set_src(i, insn->src(i) + 1);
+    }
+    if (insn->dests_size()) {
+      insn->set_dest(insn->dest() + 1);
+    }
+  }
+  (*reg)++;
+}
 
-  code->build_cfg(/* editable = true*/);
-  auto& cfg = code->cfg();
+void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
+                                            Stats& stats) {
+  auto blocks = cfg.blocks();
+  std::vector<cfg::Block*> switch_blocks;
+  std::copy_if(blocks.begin(), blocks.end(), std::back_inserter(switch_blocks),
+               [](cfg::Block* b) {
+                 return b->branchingness() == opcode::BRANCH_SWITCH;
+               });
+  if (switch_blocks.size() == 0) {
+    // Let's skip computing the liveness
+    return;
+  }
+
+  LivenessFixpointIterator liveness_iter(cfg);
+  liveness_iter.run(LivenessDomain(cfg.get_registers_size()));
+
+  boost::optional<uint16_t> const_reg;
 
   // Optimization #0: Remove switches...
   // - turning them into gotos when all cases branch to the same block
@@ -61,12 +93,15 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
   // - this might turn packed switches into sparse switches (but don't worry,
   //   there's an optimization IRCode that turns them into packed switches at
   //   the last moment during lowering if that's beneficial for code size)
-  for (cfg::Block* b : cfg.blocks()) {
-    auto br = b->branchingness();
-    if (br != opcode::BRANCH_SWITCH) {
-      continue;
-    }
-
+  // - try turn trivial switches with just one case into ifs; respect the
+  //   limitations of the DEX instructions in terms of register and literal
+  //   bitness, assuming that this pass runs after register allocation.
+  //   (We explored running a remove-switches pass before register allocation
+  //   and the subsequent dedup-blocks pass, but that lead to a dramatic
+  //   decrease in the number of cases that were identified to be unnecessary;
+  //   thus, it seems beneficial to run after register allocation and
+  //   dedup-blocks, and then we have to watch the registers.)
+  for (cfg::Block* b : switch_blocks) {
     auto it = b->get_last_insn();
     always_assert(it != b->end());
     auto insn = it->insn;
@@ -97,8 +132,99 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
     }
 
     if (fallthrough_edges.size() + 1 == branch_edges.size()) {
-      // TODO: Just logging for now; consider turning these into simple `if`
-      // branches
+      // We have exactly one relevant branch (that isn't effectively falling
+      // through)
+      auto live_out_vars = liveness_iter.get_live_out_vars_at(b);
+      auto single_non_fallthrough_edge_it = std::find_if(
+          branch_edges.begin(), branch_edges.end(),
+          [goto_target](cfg::Edge* e) { return e->target() != goto_target; });
+      always_assert(single_non_fallthrough_edge_it != branch_edges.end());
+      cfg::Edge* branch_edge = *single_non_fallthrough_edge_it;
+      cfg::Block* branch_target = branch_edge->target();
+      auto case_key = *branch_edge->case_key();
+      auto reg = insn->src(0);
+      always_assert(reg < 256);
+      // We will try to replace
+      //   switch reg
+      //     case_key => branch_target
+      // with...
+      // 1) if case_key = 0:
+      //      if-eqz reg, branch_target
+      // 2) if reg is not live-out, reg fits in 8 bits and case_key in 8 bits:
+      //      rsub-int/lit8 reg, reg, case_key
+      //      if-eqz reg, branch_target
+      // 3) if reg is not live-out, reg fits in 4 bits and case_key in 16 bits:
+      //      rsub-int reg, reg, case_key
+      //      if-eqz reg, branch_target
+      // 4) if we can allocate another temp register creg with 4 bits:
+      //      const creg, case_key
+      //      if-eq creg, reg, branch_target
+
+      boost::optional<IROpcode> transform_opcode;
+      if (case_key == 0) {
+        // Case 1
+        transform_opcode = OPCODE_NOP;
+      } else if (!live_out_vars.contains(reg)) {
+        if (reg < 256 && (int8_t)case_key == case_key) {
+          // Case 2
+          transform_opcode = OPCODE_RSUB_INT_LIT8;
+        } else if (reg < 16 && (int16_t)case_key == case_key) {
+          // Case 3
+          transform_opcode = OPCODE_RSUB_INT;
+        }
+      }
+
+      if (transform_opcode) {
+        // Case 1, 2, 3
+        stats.replaced_trivial_switches++;
+        stats.reduced_switches++;
+        b->remove_insn(it);
+        if (*transform_opcode != OPCODE_NOP) {
+          IRInstruction* transform_insn = new IRInstruction(*transform_opcode);
+          transform_insn->set_src(0, reg);
+          transform_insn->set_literal(case_key);
+          transform_insn->set_dest(reg);
+          b->push_back(transform_insn);
+        }
+        IRInstruction* if_insn = new IRInstruction(OPCODE_IF_EQZ);
+        if_insn->set_src(0, reg);
+        cfg.create_branch(b, if_insn, goto_target, branch_target);
+        continue;
+      } else if (reg < (const_reg ? 16 : 15)) {
+        if (!const_reg && cfg.get_registers_size() < 16) {
+          // We'll use the register 0, and shift all other registers up by one.
+          // This is because we assume that we run after the register allocation
+          // pass, and all incoming parameters have been assigned to the highest
+          // registers. We maintain this invariant.
+          // Since we didn't use 16 registers before, we know that even after
+          // allocating one more and shifting everything, all registers will
+          // still fit into 4 bits, and thus all instruction register size
+          // requirements will still be met.
+          cfg.allocate_temp();
+          shift_registers(&cfg, &reg);
+          const_reg = 0;
+        }
+        if (const_reg) {
+          // Case 4
+          stats.replaced_trivial_switches++;
+          stats.reduced_switches++;
+          b->remove_insn(it);
+          IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
+          const_insn->set_literal(case_key);
+          const_insn->set_dest(*const_reg);
+          b->push_back(const_insn);
+          IRInstruction* if_insn = new IRInstruction(OPCODE_IF_EQ);
+          if_insn->set_src(0, *const_reg);
+          if_insn->set_src(1, reg);
+          cfg.create_branch(b, if_insn, goto_target, branch_target);
+          continue;
+        }
+      }
+
+      TRACE(RG, 3,
+            "[reduce gotos] Found irreducible trivial switch with register %u, "
+            "case key %d, live out: %d\n",
+            reg, case_key, live_out_vars.contains(insn->src(0)));
       stats.remaining_trivial_switches++;
     }
 
@@ -133,7 +259,10 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
     b->remove_insn(it);
     cfg.create_branch(b, new_switch, goto_target, cases);
   }
+}
 
+void ReduceGotosPass::process_code_ifs(cfg::ControlFlowGraph& cfg,
+                                       Stats& stats) {
   // Optimization #1: Invert conditional branch conditions and swap goto/branch
   // targets if this may lead to more fallthrough cases where no additional
   // goto instruction is needed
@@ -281,7 +410,16 @@ ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
     }
 
   } while (rerun);
+}
 
+ReduceGotosPass::Stats ReduceGotosPass::process_code(IRCode* code) {
+  Stats stats;
+
+  code->build_cfg(/* editable = true*/);
+  code->cfg().calculate_exit_block();
+  auto& cfg = code->cfg();
+  process_code_switches(cfg, stats);
+  process_code_ifs(cfg, stats);
   code->clear_cfg();
 
   return stats;
@@ -316,6 +454,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
         Stats c;
         c.removed_switches = a.removed_switches + b.removed_switches;
         c.reduced_switches = a.reduced_switches + b.reduced_switches;
+        c.replaced_trivial_switches =
+            a.replaced_trivial_switches + b.replaced_trivial_switches;
         c.remaining_trivial_switches =
             a.remaining_trivial_switches + b.remaining_trivial_switches;
         c.removed_sparse_switch_cases =
@@ -335,6 +475,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);
   mgr.incr_metric(METRIC_REMAINING_TRIVIAL_SWITCHES,
                   stats.remaining_trivial_switches);
+  mgr.incr_metric(METRIC_REPLACED_TRIVIAL_SWITCHES,
+                  stats.replaced_trivial_switches);
   mgr.incr_metric(METRIC_REMOVED_SPARSE_SWITCH_CASES,
                   stats.removed_sparse_switch_cases);
   mgr.incr_metric(METRIC_REMOVED_PACKED_SWITCH_CASES,
