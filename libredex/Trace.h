@@ -103,7 +103,6 @@
   TM(UCM)                \
   TM(UNTF)               \
   TM(VERIFY)             \
-  TM(ANALYSIS_REF_GRAPH) \
   TM(VIRT)               \
   TM(TERA)               \
   TM(BRCR)               \

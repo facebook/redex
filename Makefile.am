@@ -20,7 +20,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt \
 	-I$(top_srcdir)/opt/access-marking \
 	-I$(top_srcdir)/opt/add_redex_txt_to_apk \
-	-I$(top_srcdir)/opt/analysis_ref_graph \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/basic-block \
@@ -210,7 +209,6 @@ redex_all_SOURCES = \
 	libredex/DexAsm.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
-	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
 	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
