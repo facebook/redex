@@ -462,8 +462,8 @@ int64_t DexInstruction::get_literal() const {
   case FMT_f21s:
     return signext<16>(m_arg[0]);
   case FMT_f21h:
-    return signext<16>(m_arg[0])
-           << (opcode() == DOPCODE_CONST_WIDE_HIGH16 ? 48 : 16);
+    return int64_t(uint64_t(signext<16>(m_arg[0]))
+                   << (opcode() == DOPCODE_CONST_WIDE_HIGH16 ? 48 : 16));
   case FMT_f22b:
     return signext<8>(m_arg[0] >> 8);
   case FMT_f22s:
