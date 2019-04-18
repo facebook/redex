@@ -114,7 +114,9 @@ void initialize_ifields(const Scope& scope,
 namespace constant_propagation {
 
 WholeProgramState::WholeProgramState(
-    const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
+    const Scope& scope,
+    const interprocedural::FixpointIterator& fp_iter,
+    const std::vector<DexMethod*>& non_true_virtuals) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
@@ -127,8 +129,13 @@ WholeProgramState::WholeProgramState(
     }
     m_known_fields.emplace(field);
   });
+  // Put non true virtual methods in known methods.
+  m_known_methods.insert(non_true_virtuals.begin(), non_true_virtuals.end());
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    m_known_methods.emplace(method);
+    if (!method->is_virtual()) {
+      // Put non virtual methods in known methods.
+      m_known_methods.emplace(method);
+    }
   });
   analyze_clinits(scope, fp_iter, &m_field_partition);
   collect(scope, fp_iter);
@@ -275,7 +282,8 @@ bool WholeProgramAwareAnalyzer::analyze_invoke(
     return false;
   }
   auto op = insn->opcode();
-  if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC) {
+  if (op != OPCODE_INVOKE_DIRECT && op != OPCODE_INVOKE_STATIC &&
+      op != OPCODE_INVOKE_VIRTUAL) {
     return false;
   }
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
