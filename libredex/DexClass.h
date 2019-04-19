@@ -842,6 +842,10 @@ class DexMethod : public DexMethodRef {
     return g_redex->make_method(type, name, proto);
   }
 
+  static DexMethodRef* make_method(const DexMethodSpec& spec) {
+    return g_redex->make_method(spec.cls, spec.name, spec.proto);
+  }
+
   /**
    * Create a copy of method `that`
    */
@@ -893,6 +897,10 @@ class DexMethod : public DexMethodRef {
                                   DexString* name,
                                   DexProto* proto) {
     return g_redex->get_method(type, name, proto);
+  }
+
+  static DexMethodRef* get_method(const DexMethodSpec& spec) {
+    return g_redex->get_method(spec.cls, spec.name, spec.proto);
   }
 
   static DexString* get_unique_name(DexType* type,
