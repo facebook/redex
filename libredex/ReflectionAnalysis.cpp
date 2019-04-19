@@ -635,6 +635,12 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
+      } else if (callee == m_get_fields || callee == m_get_declared_fields) {
+        element_kind = FIELD;
+        element_name = DexString::get_string("");
+      } else if (callee == m_get_methods || callee == m_get_declared_methods) {
+        element_kind = METHOD;
+        element_name = DexString::get_string("");
       }
       if (element_name == nullptr) {
         break;
@@ -694,6 +700,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredMethod",
                              {"Ljava/lang/String;", "[Ljava/lang/Class;"},
                              "Ljava/lang/reflect/Method;")};
+  DexMethodRef* m_get_methods{DexMethod::make_method(
+      "Ljava/lang/Class;", "getMethods", {}, "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* m_get_declared_methods{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethods",
+                             {},
+                             "[Ljava/lang/reflect/Method;")};
   DexMethodRef* m_get_constructor{
       DexMethod::make_method("Ljava/lang/Class;",
                              "getConstructor",
@@ -731,6 +744,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredField",
                              {"Ljava/lang/String;"},
                              "Ljava/lang/reflect/Field;")};
+  DexMethodRef* m_get_fields{DexMethod::make_method(
+      "Ljava/lang/Class;", "getFields", {}, "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* m_get_declared_fields{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredFields",
+                             {},
+                             "[Ljava/lang/reflect/Field;")};
   DexMethodRef* m_get_method_name{DexMethod::make_method(
       "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
   DexMethodRef* m_get_field_name{DexMethod::make_method(
