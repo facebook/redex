@@ -178,15 +178,11 @@ class TypeCheckingException final : public std::runtime_error {
 
 class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
  public:
-
   TypeInference(const cfg::ControlFlowGraph& cfg,
-                bool enable_polymorphic_constants,
-                bool verify_moves)
+                bool enable_polymorphic_constants)
       : BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
-        m_enable_polymorphic_constants(enable_polymorphic_constants),
-        m_verify_moves(verify_moves),
-        m_inference(true) {}
+        m_enable_polymorphic_constants(enable_polymorphic_constants) {}
 
   void run(DexMethod* dex_method) {
     // We need to compute the initial environment by assigning the parameter
@@ -247,24 +243,13 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
   done:
     MonotonicFixpointIterator::run(init_state);
     populate_type_environments();
-    // We turn off the type inference mode. All subsequent calls to
-    // analyze_instruction will perform type checking.
-    m_inference = false;
   }
 
-  // This method is used in two different modes. When m_inference == true, it
-  // analyzes an instruction and updates the type environment accordingly. It is
-  // used in this mode during the fixpoint iteration. Once a fixpoint has
-  // been reached, m_inference is set to false and from this point on, the
-  // method performs type checking only: the type environment is not updated and
-  // the source registers of the instruction are checked against their expected
-  // types.
+  // This method analyzes an instruction and updates the type environment
+  // accordingly during the fixpoint iteration.
   //
-  // Similarly, the various assume_* functions used throughout the code operate
-  // in two different modes. In type inference mode, they are used to refine the
-  // type of a register depending on the context (e.g., from SCALAR to INT). In
-  // type checking mode, they are used to check that the inferred type of a
-  // register matches with its expected type, as derived from the context.
+  // Similarly, the various refine_* functions are used to refine the
+  // type of a register depending on the context (e.g., from SCALAR to INT).
   void analyze_instruction(IRInstruction* insn,
                            TypeEnvironment* current_state) const override {
     switch (insn->opcode()) {
@@ -279,13 +264,13 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_MOVE: {
-      assume_scalar(current_state, insn->src(0), /* in_move */ true);
+      refine_scalar(current_state, insn->src(0));
       set_type(
           current_state, insn->dest(), current_state->get_type(insn->src(0)));
       break;
     }
     case OPCODE_MOVE_OBJECT: {
-      assume_reference(current_state, insn->src(0), /* in_move */ true);
+      refine_reference(current_state, insn->src(0));
       if (current_state->get_type(insn->src(0)) == TypeDomain(REFERENCE)) {
         const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
         set_reference(current_state, insn->dest(), dex_type_opt);
@@ -296,7 +281,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_MOVE_WIDE: {
-      assume_wide_scalar(current_state, insn->src(0));
+      refine_wide_scalar(current_state, insn->src(0));
       TypeDomain td1 = current_state->get_type(insn->src(0));
       TypeDomain td2 = current_state->get_type(insn->src(0) + 1);
       set_type(current_state, insn->dest(), td1);
@@ -305,7 +290,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case IOPCODE_MOVE_RESULT_PSEUDO:
     case OPCODE_MOVE_RESULT: {
-      assume_scalar(current_state, RESULT_REGISTER);
+      refine_scalar(current_state, RESULT_REGISTER);
       set_type(current_state,
                insn->dest(),
                current_state->get_type(RESULT_REGISTER));
@@ -313,7 +298,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT: {
-      assume_reference(current_state, RESULT_REGISTER);
+      refine_reference(current_state, RESULT_REGISTER);
       set_reference(current_state,
                     insn->dest(),
                     current_state->get_dex_type(RESULT_REGISTER));
@@ -321,7 +306,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     case OPCODE_MOVE_RESULT_WIDE: {
-      assume_wide_scalar(current_state, RESULT_REGISTER);
+      refine_wide_scalar(current_state, RESULT_REGISTER);
       set_type(current_state,
                insn->dest(),
                current_state->get_type(RESULT_REGISTER));
@@ -340,15 +325,15 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_RETURN: {
-      assume_scalar(current_state, insn->src(0));
+      refine_scalar(current_state, insn->src(0));
       break;
     }
     case OPCODE_RETURN_WIDE: {
-      assume_wide_scalar(current_state, insn->src(0));
+      refine_wide_scalar(current_state, insn->src(0));
       break;
     }
     case OPCODE_RETURN_OBJECT: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       break;
     }
     case OPCODE_CONST: {
@@ -374,17 +359,17 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case OPCODE_MONITOR_ENTER:
     case OPCODE_MONITOR_EXIT: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       break;
     }
     case OPCODE_CHECK_CAST: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
     case OPCODE_INSTANCE_OF:
     case OPCODE_ARRAY_LENGTH: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
@@ -393,7 +378,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_NEW_ARRAY: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_reference(current_state, RESULT_REGISTER, insn->get_type());
       break;
     }
@@ -405,9 +390,9 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       bool is_array_of_references = is_object(element_type);
       for (size_t i = 0; i < insn->srcs_size(); ++i) {
         if (is_array_of_references) {
-          assume_reference(current_state, insn->src(i));
+          refine_reference(current_state, insn->src(i));
         } else {
-          assume_scalar(current_state, insn->src(i));
+          refine_scalar(current_state, insn->src(i));
         }
       }
       set_reference(current_state, RESULT_REGISTER, insn->get_type());
@@ -417,7 +402,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_THROW: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       break;
     }
     case OPCODE_GOTO: {
@@ -425,57 +410,57 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case OPCODE_PACKED_SWITCH:
     case OPCODE_SPARSE_SWITCH: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       break;
     }
     case OPCODE_CMPL_FLOAT:
     case OPCODE_CMPG_FLOAT: {
-      assume_float(current_state, insn->src(0));
-      assume_float(current_state, insn->src(1));
+      refine_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(1));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_CMPL_DOUBLE:
     case OPCODE_CMPG_DOUBLE: {
-      assume_double(current_state, insn->src(0));
-      assume_double(current_state, insn->src(1));
+      refine_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(1));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_CMP_LONG: {
-      assume_long(current_state, insn->src(0));
-      assume_long(current_state, insn->src(1));
+      refine_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(1));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_IF_EQ:
     case OPCODE_IF_NE: {
-      assume_comparable(current_state, insn->src(0), insn->src(1));
+      refine_comparable(current_state, insn->src(0), insn->src(1));
       break;
     }
     case OPCODE_IF_LT:
     case OPCODE_IF_GE:
     case OPCODE_IF_GT:
     case OPCODE_IF_LE: {
-      assume_integer(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       break;
     }
     case OPCODE_IF_EQZ:
     case OPCODE_IF_NEZ: {
-      assume_comparable_with_zero(current_state, insn->src(0));
+      refine_comparable_with_zero(current_state, insn->src(0));
       break;
     }
     case OPCODE_IF_LTZ:
     case OPCODE_IF_GEZ:
     case OPCODE_IF_GTZ:
     case OPCODE_IF_LEZ: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       break;
     }
     case OPCODE_AGET: {
-      assume_reference(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_scalar(current_state, RESULT_REGISTER);
       break;
     }
@@ -483,20 +468,20 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_AGET_BYTE:
     case OPCODE_AGET_CHAR:
     case OPCODE_AGET_SHORT: {
-      assume_reference(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_AGET_WIDE: {
-      assume_reference(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_wide_scalar(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_AGET_OBJECT: {
-      assume_reference(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
       if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
         const auto etype = get_array_component_type(*dex_type_opt);
@@ -507,34 +492,34 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_APUT: {
-      assume_scalar(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
-      assume_integer(current_state, insn->src(2));
+      refine_scalar(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(2));
       break;
     }
     case OPCODE_APUT_BOOLEAN:
     case OPCODE_APUT_BYTE:
     case OPCODE_APUT_CHAR:
     case OPCODE_APUT_SHORT: {
-      assume_integer(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
-      assume_integer(current_state, insn->src(2));
+      refine_integer(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(2));
       break;
     }
     case OPCODE_APUT_WIDE: {
-      assume_wide_scalar(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
-      assume_integer(current_state, insn->src(2));
+      refine_wide_scalar(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(2));
       break;
     }
     case OPCODE_APUT_OBJECT: {
-      assume_reference(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
-      assume_integer(current_state, insn->src(2));
+      refine_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(2));
       break;
     }
     case OPCODE_IGET: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       const DexType* type = insn->get_field()->get_type();
       if (is_float(type)) {
         set_float(current_state, RESULT_REGISTER);
@@ -547,12 +532,12 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_IGET_BYTE:
     case OPCODE_IGET_CHAR:
     case OPCODE_IGET_SHORT: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_IGET_WIDE: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       const DexType* type = insn->get_field()->get_type();
       if (is_double(type)) {
         set_double(current_state, RESULT_REGISTER);
@@ -562,7 +547,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       break;
     }
     case OPCODE_IGET_OBJECT: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       always_assert(insn->has_field());
       const auto field = insn->get_field();
       set_reference(current_state, RESULT_REGISTER, field->get_type());
@@ -571,29 +556,29 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_IPUT: {
       const DexType* type = insn->get_field()->get_type();
       if (is_float(type)) {
-        assume_float(current_state, insn->src(0));
+        refine_float(current_state, insn->src(0));
       } else {
-        assume_integer(current_state, insn->src(0));
+        refine_integer(current_state, insn->src(0));
       }
-      assume_reference(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(1));
       break;
     }
     case OPCODE_IPUT_BOOLEAN:
     case OPCODE_IPUT_BYTE:
     case OPCODE_IPUT_CHAR:
     case OPCODE_IPUT_SHORT: {
-      assume_integer(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
       break;
     }
     case OPCODE_IPUT_WIDE: {
-      assume_wide_scalar(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
+      refine_wide_scalar(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
       break;
     }
     case OPCODE_IPUT_OBJECT: {
-      assume_reference(current_state, insn->src(0));
-      assume_reference(current_state, insn->src(1));
+      refine_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(1));
       break;
     }
     case OPCODE_SGET: {
@@ -630,9 +615,9 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_SPUT: {
       const DexType* type = insn->get_field()->get_type();
       if (is_float(type)) {
-        assume_float(current_state, insn->src(0));
+        refine_float(current_state, insn->src(0));
       } else {
-        assume_integer(current_state, insn->src(0));
+        refine_integer(current_state, insn->src(0));
       }
       break;
     }
@@ -640,15 +625,15 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_SPUT_BYTE:
     case OPCODE_SPUT_CHAR:
     case OPCODE_SPUT_SHORT: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       break;
     }
     case OPCODE_SPUT_WIDE: {
-      assume_wide_scalar(current_state, insn->src(0));
+      refine_wide_scalar(current_state, insn->src(0));
       break;
     }
     case OPCODE_SPUT_OBJECT: {
-      assume_reference(current_state, insn->src(0));
+      refine_reference(current_state, insn->src(0));
       break;
     }
     case OPCODE_INVOKE_VIRTUAL:
@@ -671,27 +656,27 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       if (insn->opcode() != OPCODE_INVOKE_STATIC) {
         // The first argument is a reference to the object instance on which the
         // method is invoked.
-        assume_reference(current_state, insn->src(src_idx++));
+        refine_reference(current_state, insn->src(src_idx++));
       }
       for (DexType* arg_type : arg_types) {
         if (is_object(arg_type)) {
-          assume_reference(current_state, insn->src(src_idx++));
+          refine_reference(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_integer(arg_type)) {
-          assume_integer(current_state, insn->src(src_idx++));
+          refine_integer(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_long(arg_type)) {
-          assume_long(current_state, insn->src(src_idx++));
+          refine_long(current_state, insn->src(src_idx++));
           continue;
         }
         if (is_float(arg_type)) {
-          assume_float(current_state, insn->src(src_idx++));
+          refine_float(current_state, insn->src(src_idx++));
           continue;
         }
         always_assert(is_double(arg_type));
-        assume_double(current_state, insn->src(src_idx++));
+        refine_double(current_state, insn->src(src_idx++));
       }
       DexType* return_type = dex_method->get_proto()->get_rtype();
       if (is_void(return_type)) {
@@ -719,90 +704,90 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     case OPCODE_NEG_INT:
     case OPCODE_NOT_INT: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_NEG_LONG:
     case OPCODE_NOT_LONG: {
-      assume_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(0));
       set_long(current_state, insn->dest());
       break;
     }
     case OPCODE_NEG_FLOAT: {
-      assume_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(0));
       set_float(current_state, insn->dest());
       break;
     }
     case OPCODE_NEG_DOUBLE: {
-      assume_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(0));
       set_double(current_state, insn->dest());
       break;
     }
     case OPCODE_INT_TO_BYTE:
     case OPCODE_INT_TO_CHAR:
     case OPCODE_INT_TO_SHORT: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_LONG_TO_INT: {
-      assume_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_FLOAT_TO_INT: {
-      assume_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_DOUBLE_TO_INT: {
-      assume_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_INT_TO_LONG: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_long(current_state, insn->dest());
       break;
     }
     case OPCODE_FLOAT_TO_LONG: {
-      assume_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(0));
       set_long(current_state, insn->dest());
       break;
     }
     case OPCODE_DOUBLE_TO_LONG: {
-      assume_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(0));
       set_long(current_state, insn->dest());
       break;
     }
     case OPCODE_INT_TO_FLOAT: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_float(current_state, insn->dest());
       break;
     }
     case OPCODE_LONG_TO_FLOAT: {
-      assume_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(0));
       set_float(current_state, insn->dest());
       break;
     }
     case OPCODE_DOUBLE_TO_FLOAT: {
-      assume_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(0));
       set_float(current_state, insn->dest());
       break;
     }
     case OPCODE_INT_TO_DOUBLE: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_double(current_state, insn->dest());
       break;
     }
     case OPCODE_LONG_TO_DOUBLE: {
-      assume_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(0));
       set_double(current_state, insn->dest());
       break;
     }
     case OPCODE_FLOAT_TO_DOUBLE: {
-      assume_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(0));
       set_double(current_state, insn->dest());
       break;
     }
@@ -815,15 +800,15 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_SHL_INT:
     case OPCODE_SHR_INT:
     case OPCODE_USHR_INT: {
-      assume_integer(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_integer(current_state, insn->dest());
       break;
     }
     case OPCODE_DIV_INT:
     case OPCODE_REM_INT: {
-      assume_integer(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
@@ -833,23 +818,23 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_AND_LONG:
     case OPCODE_OR_LONG:
     case OPCODE_XOR_LONG: {
-      assume_long(current_state, insn->src(0));
-      assume_long(current_state, insn->src(1));
+      refine_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(1));
       set_long(current_state, insn->dest());
       break;
     }
     case OPCODE_DIV_LONG:
     case OPCODE_REM_LONG: {
-      assume_long(current_state, insn->src(0));
-      assume_long(current_state, insn->src(1));
+      refine_long(current_state, insn->src(0));
+      refine_long(current_state, insn->src(1));
       set_long(current_state, RESULT_REGISTER);
       break;
     }
     case OPCODE_SHL_LONG:
     case OPCODE_SHR_LONG:
     case OPCODE_USHR_LONG: {
-      assume_long(current_state, insn->src(0));
-      assume_integer(current_state, insn->src(1));
+      refine_long(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(1));
       set_long(current_state, insn->dest());
       break;
     }
@@ -858,8 +843,8 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_MUL_FLOAT:
     case OPCODE_DIV_FLOAT:
     case OPCODE_REM_FLOAT: {
-      assume_float(current_state, insn->src(0));
-      assume_float(current_state, insn->src(1));
+      refine_float(current_state, insn->src(0));
+      refine_float(current_state, insn->src(1));
       set_float(current_state, insn->dest());
       break;
     }
@@ -868,8 +853,8 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_MUL_DOUBLE:
     case OPCODE_DIV_DOUBLE:
     case OPCODE_REM_DOUBLE: {
-      assume_double(current_state, insn->src(0));
-      assume_double(current_state, insn->src(1));
+      refine_double(current_state, insn->src(0));
+      refine_double(current_state, insn->src(1));
       set_double(current_state, insn->dest());
       break;
     }
@@ -888,7 +873,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_SHL_INT_LIT8:
     case OPCODE_SHR_INT_LIT8:
     case OPCODE_USHR_INT_LIT8: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_integer(current_state, insn->dest());
       break;
     }
@@ -896,7 +881,7 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     case OPCODE_REM_INT_LIT16:
     case OPCODE_DIV_INT_LIT8:
     case OPCODE_REM_INT_LIT8: {
-      assume_integer(current_state, insn->src(0));
+      refine_integer(current_state, insn->src(0));
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
@@ -941,66 +926,48 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
   void set_type(TypeEnvironment* state,
                 register_t reg,
                 const TypeDomain& type) const {
-    if (m_inference) {
-      state->set_type(reg, type);
-    }
+    state->set_type(reg, type);
   }
 
   void set_integer(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(INT));
-    }
+    state->set_type(reg, TypeDomain(INT));
   }
 
   void set_float(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(FLOAT));
-    }
+    state->set_type(reg, TypeDomain(FLOAT));
   }
 
   void set_scalar(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(SCALAR));
-    }
+    state->set_type(reg, TypeDomain(SCALAR));
   }
 
   void set_reference(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(REFERENCE));
-    }
+    state->set_type(reg, TypeDomain(REFERENCE));
   }
 
   void set_reference(
       TypeEnvironment* state,
       register_t reg,
       const boost::optional<const DexType*>& dex_type_opt) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(REFERENCE));
-      const DexTypeDomain dex_type =
-          dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
-      state->set_concrete_type(reg, dex_type);
-    }
+    state->set_type(reg, TypeDomain(REFERENCE));
+    const DexTypeDomain dex_type =
+        dex_type_opt ? DexTypeDomain(*dex_type_opt) : DexTypeDomain::top();
+    state->set_concrete_type(reg, dex_type);
   }
 
   void set_long(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(LONG1));
-      state->set_type(reg + 1, TypeDomain(LONG2));
-    }
+    state->set_type(reg, TypeDomain(LONG1));
+    state->set_type(reg + 1, TypeDomain(LONG2));
   }
 
   void set_double(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(DOUBLE1));
-      state->set_type(reg + 1, TypeDomain(DOUBLE2));
-    }
+    state->set_type(reg, TypeDomain(DOUBLE1));
+    state->set_type(reg + 1, TypeDomain(DOUBLE2));
   }
 
   void set_wide_scalar(TypeEnvironment* state, register_t reg) const {
-    if (m_inference) {
-      state->set_type(reg, TypeDomain(SCALAR1));
-      state->set_type(reg + 1, TypeDomain(SCALAR2));
-    }
+    state->set_type(reg, TypeDomain(SCALAR1));
+    state->set_type(reg + 1, TypeDomain(SCALAR2));
   }
 
   TypeDomain refine_type(const TypeDomain& type,
@@ -1020,104 +987,71 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     return refined_type;
   }
 
-  void assume_type(TypeEnvironment* state,
+  void refine_type(TypeEnvironment* state,
                    register_t reg,
-                   IRType expected,
-                   bool ignore_top = false) const {
-    if (m_inference) {
-      state->update_type(reg, [this, expected](const TypeDomain& type) {
-        return refine_type(
-            type, expected, /* const_type */ CONST, /* scalar_type */ SCALAR);
-      });
-    } else {
-      if (state->is_bottom()) {
-        // There's nothing to do for unreachable code.
-        return;
-      }
-      IRType actual = state->get_type(reg).element();
-      if (ignore_top && actual == TOP) {
-        return;
-      }
-      check_type_match(reg, actual, /* expected */ expected);
-    }
+                   IRType expected) const {
+    state->update_type(reg, [this, expected](const TypeDomain& type) {
+      return refine_type(
+          type, expected, /* const_type */ CONST, /* scalar_type */ SCALAR);
+    });
   }
 
-  void assume_wide_type(TypeEnvironment* state,
+  void refine_wide_type(TypeEnvironment* state,
                         register_t reg,
                         IRType expected1,
                         IRType expected2) const {
-    if (m_inference) {
-      state->update_type(reg, [this, expected1](const TypeDomain& type) {
-        return refine_type(type,
-                           expected1,
-                           /* const_type */ CONST1,
-                           /* scalar_type */ SCALAR1);
-      });
-      state->update_type(reg + 1, [this, expected2](const TypeDomain& type) {
-        return refine_type(type,
-                           expected2,
-                           /* const_type */ CONST2,
-                           /* scalar_type */ SCALAR2);
-      });
-    } else {
-      if (state->is_bottom()) {
-        // There's nothing to do for unreachable code.
-        return;
-      }
-      IRType actual1 = state->get_type(reg).element();
-      IRType actual2 = state->get_type(reg + 1).element();
-      check_wide_type_match(reg,
-                            actual1,
-                            actual2,
-                            /* expected1 */ expected1,
-                            /* expected2 */ expected2);
-    }
+    state->update_type(reg, [this, expected1](const TypeDomain& type) {
+      return refine_type(type,
+                         expected1,
+                         /* const_type */ CONST1,
+                         /* scalar_type */ SCALAR1);
+    });
+    state->update_type(reg + 1, [this, expected2](const TypeDomain& type) {
+      return refine_type(type,
+                         expected2,
+                         /* const_type */ CONST2,
+                         /* scalar_type */ SCALAR2);
+    });
   }
 
-  void assume_reference(TypeEnvironment* state,
-                        register_t reg,
-                        bool in_move = false) const {
-    assume_type(state,
+  void refine_reference(TypeEnvironment* state, register_t reg) const {
+    refine_type(state,
                 reg,
-                /* expected */ REFERENCE,
-                /* ignore_top */ in_move && !m_verify_moves);
+                /* expected */ REFERENCE);
   }
 
-  void assume_scalar(TypeEnvironment* state,
-                     register_t reg,
-                     bool in_move = false) const {
-    assume_type(state,
+  void refine_scalar(TypeEnvironment* state, register_t reg) const {
+    refine_type(state,
                 reg,
-                /* expected */ SCALAR,
-                /* ignore_top */ in_move && !m_verify_moves);
+                /* expected */ SCALAR);
   }
 
-  void assume_integer(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ INT);
+  void refine_integer(TypeEnvironment* state, register_t reg) const {
+    refine_type(state, reg, /* expected */ INT);
   }
 
-  void assume_float(TypeEnvironment* state, register_t reg) const {
-    assume_type(state, reg, /* expected */ FLOAT);
+  void refine_float(TypeEnvironment* state, register_t reg) const {
+    refine_type(state, reg, /* expected */ FLOAT);
   }
 
-  void assume_wide_scalar(TypeEnvironment* state, register_t reg) const {
-    assume_wide_type(
+  void refine_wide_scalar(TypeEnvironment* state, register_t reg) const {
+    refine_wide_type(
         state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
   }
 
-  void assume_long(TypeEnvironment* state, register_t reg) const {
-    assume_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+  void refine_long(TypeEnvironment* state, register_t reg) const {
+    refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
   }
 
-  void assume_double(TypeEnvironment* state, register_t reg) const {
-    assume_wide_type(
+  void refine_double(TypeEnvironment* state, register_t reg) const {
+    refine_wide_type(
         state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
   }
 
   // This is used for the operand of a comparison operation with zero. The
   // complexity here is that this operation may be performed on either an
   // integer or a reference.
-  void assume_comparable_with_zero(TypeEnvironment* state,
+  void refine_comparable_with_zero(TypeEnvironment* state,
                                    register_t reg) const {
     if (state->is_bottom()) {
       // There's nothing to do for unreachable code.
@@ -1131,24 +1065,17 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
     }
     if (!(TypeDomain(t).leq(TypeDomain(REFERENCE)) ||
           TypeDomain(t).leq(TypeDomain(INT)))) {
-      if (m_inference) {
-        // The type is incompatible with the operation and hence, the code that
-        // follows is unreachable.
-        state->set_to_bottom();
-        return;
-      }
-      std::ostringstream out;
-      print_register(out, reg)
-          << ": expected integer or reference type, but found " << t
-          << " instead";
-      throw TypeCheckingException(out.str());
+      // The type is incompatible with the operation and hence, the code that
+      // follows is unreachable.
+      state->set_to_bottom();
+      return;
     }
   }
 
   // This is used for the operands of a comparison operation between two
   // registers. The complexity here is that this operation may be performed on
   // either two integers or two references.
-  void assume_comparable(TypeEnvironment* state,
+  void refine_comparable(TypeEnvironment* state,
                          register_t reg1,
                          register_t reg2) const {
     if (state->is_bottom()) {
@@ -1166,81 +1093,159 @@ class TypeInference final : public BaseIRAnalyzer<TypeEnvironment> {
       // have the REFERENCE type or have non-float scalar types. Note that in
       // the case where one or both types have the SCALAR type, we can't
       // definitely rule out the absence of a type error.
-      if (m_inference) {
-        // The types are incompatible and hence, the code that follows is
-        // unreachable.
-        state->set_to_bottom();
-        return;
-      }
-      std::ostringstream out;
-      print_register(out, reg1) << " and ";
-      print_register(out, reg2)
-          << ": incompatible types in comparison " << t1 << " and " << t2;
-      throw TypeCheckingException(out.str());
-    }
-  }
-
-  void check_type_match(register_t reg, IRType actual, IRType expected) const {
-    if (actual == BOTTOM) {
-      // There's nothing to do for unreachable code.
+      // The types are incompatible and hence, the code that follows is
+      // unreachable.
+      state->set_to_bottom();
       return;
     }
-    if (actual == SCALAR && expected != REFERENCE) {
-      // If the type is SCALAR and we're checking compatibility with an integer
-      // or float type, we just bail out.
-      return;
-    }
-    if (!TypeDomain(actual).leq(TypeDomain(expected))) {
-      std::ostringstream out;
-      print_register(out, reg) << ": expected type " << expected
-                               << ", but found " << actual << " instead";
-      throw TypeCheckingException(out.str());
-    }
-  }
-
-  void check_wide_type_match(register_t reg,
-                             IRType actual1,
-                             IRType actual2,
-                             IRType expected1,
-                             IRType expected2) const {
-    if (actual1 == BOTTOM) {
-      // There's nothing to do for unreachable code.
-      return;
-    }
-
-    if (actual1 == SCALAR1 && actual2 == SCALAR2) {
-      // If type of the pair of registers is (SCALAR1, SCALAR2), we just bail
-      // out.
-      return;
-    }
-    if (!(TypeDomain(actual1).leq(TypeDomain(expected1)) &&
-          TypeDomain(actual2).leq(TypeDomain(expected2)))) {
-      std::ostringstream out;
-      print_register(out, reg)
-          << ": expected type (" << expected1 << ", " << expected2
-          << "), but found (" << actual1 << ", " << actual2 << ") instead";
-      throw TypeCheckingException(out.str());
-    }
-  }
-
-  std::ostringstream& print_register(std::ostringstream& out,
-                                     register_t reg) const {
-    if (reg == RESULT_REGISTER) {
-      out << "result";
-    } else {
-      out << "register v" << reg;
-    }
-    return out;
   }
 
   const cfg::ControlFlowGraph& m_cfg;
   bool m_enable_polymorphic_constants;
-  bool m_verify_moves;
-  bool m_inference;
   std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
 
-  friend class ::IRTypeChecker;
+ public:
+  std::unordered_map<IRInstruction*, TypeEnvironment>& get_type_environments() {
+    return m_type_envs;
+  }
 };
+
+std::ostringstream& print_register(std::ostringstream& out, register_t reg) {
+  if (reg == RESULT_REGISTER) {
+    out << "result";
+  } else {
+    out << "register v" << reg;
+  }
+  return out;
+}
+
+void check_type_match(register_t reg, IRType actual, IRType expected) {
+  if (actual == BOTTOM) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+  if (actual == SCALAR && expected != REFERENCE) {
+    // If the type is SCALAR and we're checking compatibility with an integer
+    // or float type, we just bail out.
+    return;
+  }
+  if (!TypeDomain(actual).leq(TypeDomain(expected))) {
+    std::ostringstream out;
+    print_register(out, reg) << ": expected type " << expected << ", but found "
+                             << actual << " instead";
+    throw TypeCheckingException(out.str());
+  }
+}
+
+void check_wide_type_match(register_t reg,
+                           IRType actual1,
+                           IRType actual2,
+                           IRType expected1,
+                           IRType expected2) {
+  if (actual1 == BOTTOM) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+
+  if (actual1 == SCALAR1 && actual2 == SCALAR2) {
+    // If type of the pair of registers is (SCALAR1, SCALAR2), we just bail
+    // out.
+    return;
+  }
+  if (!(TypeDomain(actual1).leq(TypeDomain(expected1)) &&
+        TypeDomain(actual2).leq(TypeDomain(expected2)))) {
+    std::ostringstream out;
+    print_register(out, reg)
+        << ": expected type (" << expected1 << ", " << expected2
+        << "), but found (" << actual1 << ", " << actual2 << ") instead";
+    throw TypeCheckingException(out.str());
+  }
+}
+
+void assume_type(TypeEnvironment* state,
+                 register_t reg,
+                 IRType expected,
+                 bool ignore_top = false) {
+  if (state->is_bottom()) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+  IRType actual = state->get_type(reg).element();
+  if (ignore_top && actual == TOP) {
+    return;
+  }
+  check_type_match(reg, actual, /* expected */ expected);
+}
+
+void assume_wide_type(TypeEnvironment* state,
+                      register_t reg,
+                      IRType expected1,
+                      IRType expected2) {
+  if (state->is_bottom()) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+  IRType actual1 = state->get_type(reg).element();
+  IRType actual2 = state->get_type(reg + 1).element();
+  check_wide_type_match(reg,
+                        actual1,
+                        actual2,
+                        /* expected1 */ expected1,
+                        /* expected2 */ expected2);
+}
+
+// This is used for the operand of a comparison operation with zero. The
+// complexity here is that this operation may be performed on either an
+// integer or a reference.
+void assume_comparable_with_zero(TypeEnvironment* state, register_t reg) {
+  if (state->is_bottom()) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+  IRType t = state->get_type(reg).element();
+  if (t == SCALAR) {
+    // We can't say anything conclusive about a register that has SCALAR type,
+    // so we just bail out.
+    return;
+  }
+  if (!(TypeDomain(t).leq(TypeDomain(REFERENCE)) ||
+        TypeDomain(t).leq(TypeDomain(INT)))) {
+    std::ostringstream out;
+    print_register(out, reg)
+        << ": expected integer or reference type, but found " << t
+        << " instead";
+    throw TypeCheckingException(out.str());
+  }
+}
+
+// This is used for the operands of a comparison operation between two
+// registers. The complexity here is that this operation may be performed on
+// either two integers or two references.
+void assume_comparable(TypeEnvironment* state,
+                       register_t reg1,
+                       register_t reg2) {
+  if (state->is_bottom()) {
+    // There's nothing to do for unreachable code.
+    return;
+  }
+  IRType t1 = state->get_type(reg1).element();
+  IRType t2 = state->get_type(reg2).element();
+  if (!((TypeDomain(t1).leq(TypeDomain(REFERENCE)) &&
+         TypeDomain(t2).leq(TypeDomain(REFERENCE))) ||
+        (TypeDomain(t1).leq(TypeDomain(SCALAR)) &&
+         TypeDomain(t2).leq(TypeDomain(SCALAR)) && (t1 != FLOAT) &&
+         (t2 != FLOAT)))) {
+    // Two values can be used in a comparison operation if they either both
+    // have the REFERENCE type or have non-float scalar types. Note that in
+    // the case where one or both types have the SCALAR type, we can't
+    // definitely rule out the absence of a type error.
+    std::ostringstream out;
+    print_register(out, reg1) << " and ";
+    print_register(out, reg2)
+        << ": incompatible types in comparison " << t1 << " and " << t2;
+    throw TypeCheckingException(out.str());
+  }
+}
 
 } // namespace irtc_impl
 
@@ -1387,18 +1392,18 @@ void IRTypeChecker::run() {
   code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
   m_type_inference = std::make_unique<irtc_impl::TypeInference>(
-      cfg, m_enable_polymorphic_constants, m_verify_moves);
+      cfg, m_enable_polymorphic_constants);
   m_type_inference->run(m_dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the
   // method. We stop at the first type error encountered.
-  auto& type_envs = m_type_inference->m_type_envs;
+  auto& type_envs = m_type_inference->get_type_environments();
   for (const MethodItemEntry& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
     try {
       auto it = type_envs.find(insn);
       always_assert(it != type_envs.end());
-      m_type_inference->analyze_instruction(insn, &it->second);
+      check_instruction(insn, &it->second);
     } catch (const irtc_impl::TypeCheckingException& e) {
       m_good = false;
       std::ostringstream out;
@@ -1419,9 +1424,567 @@ void IRTypeChecker::run() {
   }
 }
 
+void IRTypeChecker::assume_wide_scalar(irtc_impl::TypeEnvironment* state,
+                                       register_t reg) const {
+  assume_wide_type(
+      state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
+}
+
+void IRTypeChecker::assume_scalar(irtc_impl::TypeEnvironment* state,
+                                  register_t reg,
+                                  bool in_move) const {
+  assume_type(state,
+              reg,
+              /* expected */ SCALAR,
+              /* ignore_top */ in_move && !m_verify_moves);
+}
+
+void IRTypeChecker::assume_integer(irtc_impl::TypeEnvironment* state,
+                                   register_t reg) const {
+  assume_type(state, reg, /* expected */ INT);
+}
+
+void IRTypeChecker::assume_float(irtc_impl::TypeEnvironment* state,
+                                 register_t reg) const {
+  assume_type(state, reg, /* expected */ FLOAT);
+}
+
+void IRTypeChecker::assume_long(irtc_impl::TypeEnvironment* state,
+                                register_t reg) const {
+  assume_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
+}
+
+void IRTypeChecker::assume_double(irtc_impl::TypeEnvironment* state,
+                                  register_t reg) const {
+  assume_wide_type(
+      state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
+}
+
+void IRTypeChecker::assume_reference(irtc_impl::TypeEnvironment* state,
+                                     register_t reg,
+                                     bool in_move) const {
+  assume_type(state,
+              reg,
+              /* expected */ REFERENCE,
+              /* ignore_top */ in_move && !m_verify_moves);
+}
+
+// This method performs type checking only: the type environment is not updated
+// and the source registers of the instruction are checked against their
+// expected types.
+//
+// Similarly, the various assume_* functions used throughout the code to check
+// that the inferred type of a register matches with its expected type, as
+// derived from the context.
+void IRTypeChecker::check_instruction(
+    IRInstruction* insn, irtc_impl::TypeEnvironment* current_state) const {
+  switch (insn->opcode()) {
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE: {
+    // IOPCODE_LOAD_PARAM_* instructions have been processed before the
+    // analysis.
+    break;
+  }
+  case OPCODE_NOP: {
+    break;
+  }
+  case OPCODE_MOVE: {
+    assume_scalar(current_state, insn->src(0), /* in_move */ true);
+    break;
+  }
+  case OPCODE_MOVE_OBJECT: {
+    assume_reference(current_state, insn->src(0), /* in_move */ true);
+    break;
+  }
+  case OPCODE_MOVE_WIDE: {
+    assume_wide_scalar(current_state, insn->src(0));
+    break;
+  }
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+  case OPCODE_MOVE_RESULT: {
+    assume_scalar(current_state, ir_analyzer::RESULT_REGISTER);
+    break;
+  }
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+  case OPCODE_MOVE_RESULT_OBJECT: {
+    assume_reference(current_state, ir_analyzer::RESULT_REGISTER);
+    break;
+  }
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+  case OPCODE_MOVE_RESULT_WIDE: {
+    assume_wide_scalar(current_state, ir_analyzer::RESULT_REGISTER);
+    break;
+  }
+  case OPCODE_MOVE_EXCEPTION: {
+    // We don't know where to grab the type of the just-caught exception.
+    // Simply set to j.l.Throwable here.
+    break;
+  }
+  case OPCODE_RETURN_VOID: {
+    break;
+  }
+  case OPCODE_RETURN: {
+    assume_scalar(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_RETURN_WIDE: {
+    assume_wide_scalar(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_RETURN_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_CONST: {
+    break;
+  }
+  case OPCODE_CONST_WIDE: {
+    break;
+  }
+  case OPCODE_CONST_STRING: {
+    break;
+  }
+  case OPCODE_CONST_CLASS: {
+    break;
+  }
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_CHECK_CAST: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INSTANCE_OF:
+  case OPCODE_ARRAY_LENGTH: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_NEW_INSTANCE: {
+    break;
+  }
+  case OPCODE_NEW_ARRAY: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_FILLED_NEW_ARRAY: {
+    const DexType* element_type = get_array_type(insn->get_type());
+    // We assume that structural constraints on the bytecode are satisfied,
+    // i.e., the type is indeed an array type.
+    always_assert(element_type != nullptr);
+    bool is_array_of_references = is_object(element_type);
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      if (is_array_of_references) {
+        assume_reference(current_state, insn->src(i));
+      } else {
+        assume_scalar(current_state, insn->src(i));
+      }
+    }
+    break;
+  }
+  case OPCODE_FILL_ARRAY_DATA: {
+    break;
+  }
+  case OPCODE_THROW: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_GOTO: {
+    break;
+  }
+  case OPCODE_PACKED_SWITCH:
+  case OPCODE_SPARSE_SWITCH: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_CMPL_FLOAT:
+  case OPCODE_CMPG_FLOAT: {
+    assume_float(current_state, insn->src(0));
+    assume_float(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_CMPL_DOUBLE:
+  case OPCODE_CMPG_DOUBLE: {
+    assume_double(current_state, insn->src(0));
+    assume_double(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_CMP_LONG: {
+    assume_long(current_state, insn->src(0));
+    assume_long(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IF_EQ:
+  case OPCODE_IF_NE: {
+    assume_comparable(current_state, insn->src(0), insn->src(1));
+    break;
+  }
+  case OPCODE_IF_LT:
+  case OPCODE_IF_GE:
+  case OPCODE_IF_GT:
+  case OPCODE_IF_LE: {
+    assume_integer(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IF_EQZ:
+  case OPCODE_IF_NEZ: {
+    assume_comparable_with_zero(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_IF_LTZ:
+  case OPCODE_IF_GEZ:
+  case OPCODE_IF_GTZ:
+  case OPCODE_IF_LEZ: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_AGET: {
+    assume_reference(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_AGET_BOOLEAN:
+  case OPCODE_AGET_BYTE:
+  case OPCODE_AGET_CHAR:
+  case OPCODE_AGET_SHORT: {
+    assume_reference(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_AGET_WIDE: {
+    assume_reference(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_AGET_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_APUT: {
+    assume_scalar(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    assume_integer(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_SHORT: {
+    assume_integer(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    assume_integer(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_WIDE: {
+    assume_wide_scalar(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    assume_integer(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_APUT_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    assume_integer(current_state, insn->src(2));
+    break;
+  }
+  case OPCODE_IGET: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_SHORT: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_IGET_WIDE: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_IGET_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    always_assert(insn->has_field());
+    break;
+  }
+  case OPCODE_IPUT: {
+    const DexType* type = insn->get_field()->get_type();
+    if (is_float(type)) {
+      assume_float(current_state, insn->src(0));
+    } else {
+      assume_integer(current_state, insn->src(0));
+    }
+    assume_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT: {
+    assume_integer(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IPUT_WIDE: {
+    assume_wide_scalar(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_IPUT_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    assume_reference(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_SGET: {
+    break;
+  }
+  case OPCODE_SGET_BOOLEAN:
+  case OPCODE_SGET_BYTE:
+  case OPCODE_SGET_CHAR:
+  case OPCODE_SGET_SHORT: {
+    break;
+  }
+  case OPCODE_SGET_WIDE: {
+    break;
+  }
+  case OPCODE_SGET_OBJECT: {
+    break;
+  }
+  case OPCODE_SPUT: {
+    const DexType* type = insn->get_field()->get_type();
+    if (is_float(type)) {
+      assume_float(current_state, insn->src(0));
+    } else {
+      assume_integer(current_state, insn->src(0));
+    }
+    break;
+  }
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_SPUT_WIDE: {
+    assume_wide_scalar(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_SPUT_OBJECT: {
+    assume_reference(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_INTERFACE: {
+    DexMethodRef* dex_method = insn->get_method();
+    auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
+    size_t expected_args =
+        (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
+    if (insn->arg_word_count() != expected_args) {
+      std::ostringstream out;
+      out << SHOW(insn) << ": argument count mismatch; "
+          << "expected " << expected_args << ", "
+          << "but found " << insn->arg_word_count() << " instead";
+      throw irtc_impl::TypeCheckingException(out.str());
+    }
+    size_t src_idx{0};
+    if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+      // The first argument is a reference to the object instance on which the
+      // method is invoked.
+      assume_reference(current_state, insn->src(src_idx++));
+    }
+    for (DexType* arg_type : arg_types) {
+      if (is_object(arg_type)) {
+        assume_reference(current_state, insn->src(src_idx++));
+        continue;
+      }
+      if (is_integer(arg_type)) {
+        assume_integer(current_state, insn->src(src_idx++));
+        continue;
+      }
+      if (is_long(arg_type)) {
+        assume_long(current_state, insn->src(src_idx++));
+        continue;
+      }
+      if (is_float(arg_type)) {
+        assume_float(current_state, insn->src(src_idx++));
+        continue;
+      }
+      always_assert(is_double(arg_type));
+      assume_double(current_state, insn->src(src_idx++));
+    }
+    break;
+  }
+  case OPCODE_NEG_INT:
+  case OPCODE_NOT_INT: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_NEG_LONG:
+  case OPCODE_NOT_LONG: {
+    assume_long(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_NEG_FLOAT: {
+    assume_float(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_NEG_DOUBLE: {
+    assume_double(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INT_TO_BYTE:
+  case OPCODE_INT_TO_CHAR:
+  case OPCODE_INT_TO_SHORT: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_LONG_TO_INT: {
+    assume_long(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_FLOAT_TO_INT: {
+    assume_float(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_DOUBLE_TO_INT: {
+    assume_double(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INT_TO_LONG: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_FLOAT_TO_LONG: {
+    assume_float(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_DOUBLE_TO_LONG: {
+    assume_double(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INT_TO_FLOAT: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_LONG_TO_FLOAT: {
+    assume_long(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_DOUBLE_TO_FLOAT: {
+    assume_double(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_INT_TO_DOUBLE: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_LONG_TO_DOUBLE: {
+    assume_long(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_FLOAT_TO_DOUBLE: {
+    assume_float(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_ADD_INT:
+  case OPCODE_SUB_INT:
+  case OPCODE_MUL_INT:
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT:
+  case OPCODE_SHL_INT:
+  case OPCODE_SHR_INT:
+  case OPCODE_USHR_INT: {
+    assume_integer(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_DIV_INT:
+  case OPCODE_REM_INT: {
+    assume_integer(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG: {
+    assume_long(current_state, insn->src(0));
+    assume_long(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_DIV_LONG:
+  case OPCODE_REM_LONG: {
+    assume_long(current_state, insn->src(0));
+    assume_long(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_SHL_LONG:
+  case OPCODE_SHR_LONG:
+  case OPCODE_USHR_LONG: {
+    assume_long(current_state, insn->src(0));
+    assume_integer(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_ADD_FLOAT:
+  case OPCODE_SUB_FLOAT:
+  case OPCODE_MUL_FLOAT:
+  case OPCODE_DIV_FLOAT:
+  case OPCODE_REM_FLOAT: {
+    assume_float(current_state, insn->src(0));
+    assume_float(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_ADD_DOUBLE:
+  case OPCODE_SUB_DOUBLE:
+  case OPCODE_MUL_DOUBLE:
+  case OPCODE_DIV_DOUBLE:
+  case OPCODE_REM_DOUBLE: {
+    assume_double(current_state, insn->src(0));
+    assume_double(current_state, insn->src(1));
+    break;
+  }
+  case OPCODE_ADD_INT_LIT16:
+  case OPCODE_RSUB_INT:
+  case OPCODE_MUL_INT_LIT16:
+  case OPCODE_AND_INT_LIT16:
+  case OPCODE_OR_INT_LIT16:
+  case OPCODE_XOR_INT_LIT16:
+  case OPCODE_ADD_INT_LIT8:
+  case OPCODE_RSUB_INT_LIT8:
+  case OPCODE_MUL_INT_LIT8:
+  case OPCODE_AND_INT_LIT8:
+  case OPCODE_OR_INT_LIT8:
+  case OPCODE_XOR_INT_LIT8:
+  case OPCODE_SHL_INT_LIT8:
+  case OPCODE_SHR_INT_LIT8:
+  case OPCODE_USHR_INT_LIT8: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  case OPCODE_DIV_INT_LIT16:
+  case OPCODE_REM_INT_LIT16:
+  case OPCODE_DIV_INT_LIT8:
+  case OPCODE_REM_INT_LIT8: {
+    assume_integer(current_state, insn->src(0));
+    break;
+  }
+  }
+}
+
 IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
   check_completion();
-  auto& type_envs = m_type_inference->m_type_envs;
+  auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
   if (it == type_envs.end()) {
     // The instruction doesn't belong to this method. We treat this as
@@ -1434,7 +1997,7 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
 const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
                                            uint16_t reg) const {
   check_completion();
-  auto& type_envs = m_type_inference->m_type_envs;
+  auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
   if (it == type_envs.end()) {
     // The instruction doesn't belong to this method. We treat this as

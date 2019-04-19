@@ -123,6 +123,7 @@ std::ostream& operator<<(std::ostream& output, const IRType& type);
 namespace irtc_impl {
 
 // Forward declaration
+class TypeEnvironment;
 class TypeInference;
 
 } // namespace irtc_impl
@@ -247,6 +248,21 @@ class IRTypeChecker final {
                       "The type checker did not run on method %s.\n",
                       m_dex_method->get_deobfuscated_name().c_str());
   }
+
+  void assume_integer(irtc_impl::TypeEnvironment* state, register_t reg) const;
+  void assume_float(irtc_impl::TypeEnvironment* state, register_t reg) const;
+  void assume_long(irtc_impl::TypeEnvironment* state, register_t reg) const;
+  void assume_double(irtc_impl::TypeEnvironment* state, register_t reg) const;
+  void assume_wide_scalar(irtc_impl::TypeEnvironment* state,
+                          register_t reg) const;
+  void assume_scalar(irtc_impl::TypeEnvironment* state,
+                     register_t reg,
+                     bool in_move = false) const;
+  void assume_reference(irtc_impl::TypeEnvironment* state,
+                        register_t reg,
+                        bool in_move = false) const;
+  void check_instruction(IRInstruction* insn,
+                         irtc_impl::TypeEnvironment* current_state) const;
 
   DexMethod* m_dex_method;
   bool m_complete;
