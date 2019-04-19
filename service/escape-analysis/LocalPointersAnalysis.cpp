@@ -248,7 +248,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
 
 static void analyze_dest(const IRInstruction* insn,
                          reg_t dest,
-                         Environment* env) {
+                         EnvironmentWithStore* env) {
   // While the analysis would still work if we treated all non-pointer-values
   // as escaping pointers, it would bloat the size of our abstract domain and
   // incur a runtime performance tax.
@@ -293,7 +293,8 @@ void analyze_invoke_with_summary(const EscapeSummary& summary,
 /*
  * Analyze an invoke instruction in the absence of an available summary.
  */
-void analyze_generic_invoke(const IRInstruction* insn, Environment* env) {
+void analyze_generic_invoke(const IRInstruction* insn,
+                            EnvironmentWithStore* env) {
   size_t idx{0};
   if (insn->opcode() != OPCODE_INVOKE_STATIC) {
     env->set_may_escape(insn->src(0));
@@ -314,28 +315,27 @@ void analyze_generic_invoke(const IRInstruction* insn, Environment* env) {
 
 namespace local_pointers {
 
-void FixpointIterator::analyze_instruction(IRInstruction* insn,
-                                           Environment* env) const {
+void escape_heap_referenced_objects(const IRInstruction* insn,
+                                    EnvironmentWithStore* env) {
   auto op = insn->opcode();
-  if (may_alloc(op)) {
-    if (is_invoke(op)) {
-      if (m_invoke_to_summary_map.count(insn)) {
-        const auto& summary = m_invoke_to_summary_map.at(insn);
-        analyze_invoke_with_summary(summary, insn, env);
-      } else {
-        analyze_generic_invoke(insn, env);
-      }
-    } else {
-      if (op == OPCODE_FILLED_NEW_ARRAY &&
-          is_array(get_array_component_type(insn->get_type()))) {
-        for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          env->set_may_escape(insn->src(i));
-        }
-      }
-      env->set_fresh_pointer(RESULT_REGISTER, insn);
+  // Since we don't model instance fields / array elements, any pointers
+  // written to them must be treated as escaping.
+  if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
+      op == OPCODE_IPUT_OBJECT) {
+    env->set_may_escape(insn->src(0));
+  } else if (op == OPCODE_FILLED_NEW_ARRAY &&
+             is_array(get_array_component_type(insn->get_type()))) {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+      env->set_may_escape(insn->src(i));
     }
-  } else if (op == IOPCODE_LOAD_PARAM_OBJECT) {
-    env->set_fresh_pointer(insn->dest(), insn);
+  }
+}
+
+void default_instruction_handler(const IRInstruction* insn,
+                                 EnvironmentWithStore* env) {
+  auto op = insn->opcode();
+  if (is_invoke(op)) {
+    analyze_generic_invoke(insn, env);
   } else if (is_move(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
   } else if (op == OPCODE_CHECK_CAST) {
@@ -346,11 +346,27 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
     analyze_dest(insn, insn->dest(), env);
   } else if (insn->has_move_result()) {
     analyze_dest(insn, RESULT_REGISTER, env);
-  } else if (op == OPCODE_APUT_OBJECT || op == OPCODE_SPUT_OBJECT ||
-             op == OPCODE_IPUT_OBJECT) {
-    // Since we don't model instance fields / array elements, any pointers
-    // written to them must be treated as escaping.
-    env->set_may_escape(insn->src(0));
+  }
+}
+
+void FixpointIterator::analyze_instruction(IRInstruction* insn,
+                                           Environment* env) const {
+  escape_heap_referenced_objects(insn, env);
+
+  auto op = insn->opcode();
+  if (is_invoke(op)) {
+    if (m_invoke_to_summary_map.count(insn)) {
+      const auto& summary = m_invoke_to_summary_map.at(insn);
+      analyze_invoke_with_summary(summary, insn, env);
+    } else {
+      default_instruction_handler(insn, env);
+    }
+  } else if (may_alloc(op)) {
+    env->set_fresh_pointer(RESULT_REGISTER, insn);
+  } else if (op == IOPCODE_LOAD_PARAM_OBJECT) {
+    env->set_fresh_pointer(insn->dest(), insn);
+  } else {
+    default_instruction_handler(insn, env);
   }
 }
 

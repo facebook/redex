@@ -46,61 +46,106 @@ inline bool may_alloc(IROpcode op) {
          op == OPCODE_FILLED_NEW_ARRAY || is_invoke(op);
 }
 
-class Environment final : public sparta::ReducedProductAbstractDomain<
-                              Environment,
-                              PointerEnvironment,
-                              PointerSet /* may-escape pointers */> {
+/*
+ * A model of pointer values on the stack and the heap values they point to in
+ * the store. This acts as an interface over EnvironmentWithStoreImpl<Store>,
+ * allowing us to write generic algorithms that are indifferent to the specific
+ * type of Store used.
+ */
+class EnvironmentWithStore {
  public:
-  using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
+  virtual ~EnvironmentWithStore() {}
 
-  static void reduce_product(
-      const std::tuple<PointerEnvironment, PointerSet>&) {}
+  virtual const PointerEnvironment& get_pointer_environment() const = 0;
 
-  const PointerEnvironment& get_pointer_environment() const {
-    return ReducedProductAbstractDomain::get<0>();
-  }
-
-  bool may_have_escaped(const IRInstruction* ptr) const {
-    if (is_always_escaping(ptr)) {
-      return true;
-    }
-    return ReducedProductAbstractDomain::get<1>().contains(ptr);
-  }
+  virtual bool may_have_escaped(const IRInstruction* ptr) const = 0;
 
   PointerSet get_pointers(reg_t reg) const {
     return get_pointer_environment().get(reg);
   }
 
-  void set_pointers(reg_t reg, PointerSet pset) {
-    apply<0>([&](PointerEnvironment* penv) { penv->set(reg, pset); });
-  }
+  virtual void set_pointers(reg_t reg, PointerSet pset) = 0;
 
-  void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) {
-    set_pointers(reg, PointerSet(pointer));
-    apply<1>([&](PointerSet* may_escape) { may_escape->remove(pointer); });
-  }
+  virtual void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) = 0;
 
-  void set_may_escape_pointer(reg_t reg, const IRInstruction* pointer) {
-    set_pointers(reg, PointerSet(pointer));
-    if (!is_always_escaping(pointer)) {
-      apply<1>([&](PointerSet* may_escape) { may_escape->add(pointer); });
-    }
-  }
+  virtual void set_may_escape_pointer(reg_t reg,
+                                      const IRInstruction* pointer) = 0;
 
   /*
    * Consider all pointers that may be contained in this register to point to
    * escaping values.
    */
-  void set_may_escape(reg_t reg) {
+  virtual void set_may_escape(reg_t reg) = 0;
+};
+
+template <class Store>
+class EnvironmentWithStoreImpl final
+    : public sparta::ReducedProductAbstractDomain<
+          EnvironmentWithStoreImpl<Store>,
+          PointerEnvironment,
+          typename Store::Domain>,
+      public EnvironmentWithStore {
+ public:
+  using StoreDomain = typename Store::Domain;
+  using Base =
+      sparta::ReducedProductAbstractDomain<EnvironmentWithStoreImpl<Store>,
+                                           PointerEnvironment,
+                                           StoreDomain>;
+  using typename Base::ReducedProductAbstractDomain;
+
+  static void reduce_product(
+      const std::tuple<PointerEnvironment, StoreDomain>&) {}
+
+  const PointerEnvironment& get_pointer_environment() const override {
+    return Base::template get<0>();
+  }
+
+  const StoreDomain& get_store() const { return Base::template get<1>(); }
+
+  bool may_have_escaped(const IRInstruction* ptr) const override {
+    if (is_always_escaping(ptr)) {
+      return true;
+    }
+    return Store::may_have_escaped(Base::template get<1>(), ptr);
+  }
+
+  void set_pointers(reg_t reg, PointerSet pset) override {
+    Base::template apply<0>(
+        [&](PointerEnvironment* penv) { penv->set(reg, pset); });
+  }
+
+  void set_fresh_pointer(reg_t reg, const IRInstruction* pointer) override {
+    set_pointers(reg, PointerSet(pointer));
+    Base::template apply<1>(
+        [&](StoreDomain* store) { Store::set_fresh(pointer, store); });
+  }
+
+  void set_may_escape_pointer(reg_t reg,
+                              const IRInstruction* pointer) override {
+    set_pointers(reg, PointerSet(pointer));
+    if (!is_always_escaping(pointer)) {
+      Base::template apply<1>(
+          [&](StoreDomain* store) { Store::set_may_escape(pointer, store); });
+    }
+  }
+
+  template <class F>
+  void update_store(reg_t reg, F updater) {
     auto pointers = get_pointers(reg);
     if (!pointers.is_value()) {
       return;
     }
-    apply<1>([&](PointerSet* may_escape) {
+    Base::template apply<1>([&](StoreDomain* store) {
       for (const auto* pointer : pointers.elements()) {
-        if (!is_always_escaping(pointer)) {
-          may_escape->add(pointer);
-        }
+        updater(pointer, store);
+      }
+    });
+  }
+
+  void set_may_escape(reg_t reg) override {
+    update_store(reg, [](const IRInstruction* pointer, StoreDomain* store) {
+      if (!is_always_escaping(pointer)) {
+        Store::set_may_escape(pointer, store);
       }
     });
   }
@@ -159,6 +204,28 @@ sparta::s_expr to_s_expr(const EscapeSummary&);
 using InvokeToSummaryMap =
     std::unordered_map<const IRInstruction*, EscapeSummary>;
 
+/*
+ * A basic model of the heap, only tracking whether an object has escaped.
+ */
+class MayEscapeStore {
+ public:
+  using Domain = PointerSet;
+
+  static void set_may_escape(const IRInstruction* ptr, Domain* dom) {
+    dom->add(ptr);
+  }
+
+  static void set_fresh(const IRInstruction* ptr, Domain* dom) {
+    dom->remove(ptr);
+  }
+
+  static bool may_have_escaped(const Domain& dom, const IRInstruction* ptr) {
+    return dom.contains(ptr);
+  }
+};
+
+using Environment = EnvironmentWithStoreImpl<MayEscapeStore>;
+
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   FixpointIterator(
@@ -181,6 +248,12 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   // construction strategies.
   InvokeToSummaryMap m_invoke_to_summary_map;
 };
+
+void escape_heap_referenced_objects(const IRInstruction* insn,
+                                    EnvironmentWithStore* env);
+
+void default_instruction_handler(const IRInstruction* insn,
+                                 EnvironmentWithStore* env);
 
 using FixpointIteratorMap =
     ConcurrentMap<const DexMethodRef*, FixpointIterator*>;
