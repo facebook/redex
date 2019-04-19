@@ -40,6 +40,12 @@ constexpr const char* METRIC_REMOVED_SWITCHES = "num_removed_switches";
 constexpr const char* METRIC_REDUCED_SWITCHES = "num_reduced_switches";
 constexpr const char* METRIC_REMAINING_TRIVIAL_SWITCHES =
     "num_remaining_trivial_switches";
+constexpr const char* METRIC_REMAINING_RANGE_SWITCHES =
+    "num_remaining_range_switches";
+constexpr const char* METRIC_REMAINING_RANGE_SWITCH_CASES =
+    "num_remaining_range_switch_cases";
+constexpr const char* METRIC_REMAINING_TWO_CASE_SWITCHES =
+    "num_remaining_two_case_switches";
 constexpr const char* METRIC_REPLACED_TRIVIAL_SWITCHES =
     "num_replaced_trivial_switches";
 constexpr const char* METRIC_REMOVED_SPARSE_SWITCH_CASES =
@@ -258,6 +264,23 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     new_switch->set_src(0, insn->src(0));
     b->remove_insn(it);
     cfg.create_branch(b, new_switch, goto_target, cases);
+
+    if (cases.size() == 2) {
+      // If there's a significant amount of switches with just two cases, it
+      // might be worthwhile to turn those into two ifs.
+      stats.remaining_two_case_switches++;
+    } else if (new_opcode == OPCODE_PACKED_SWITCH &&
+               std::all_of(cases.begin(), cases.end(),
+                           [&cases](const std::pair<int32_t, cfg::Block*>& c) {
+                             return c.second == cases[0].second;
+                           })) {
+      // We found a switch with a contigious range where all cases point to the
+      // same block. If there's a significant amount of switches of this kind,
+      // it might be worthwhile to turn them into two ifs that check whether the
+      // selector is in the range.
+      stats.remaining_range_switches++;
+      stats.remaining_range_switch_cases += cases.size();
+    }
   }
 }
 
@@ -468,6 +491,12 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
             a.removed_trailing_moves + b.removed_trailing_moves;
         c.inverted_conditional_branches =
             a.inverted_conditional_branches + b.inverted_conditional_branches;
+        c.remaining_two_case_switches =
+            a.remaining_two_case_switches + b.remaining_two_case_switches;
+        c.remaining_range_switches =
+            a.remaining_range_switches + b.remaining_range_switches;
+        c.remaining_range_switch_cases =
+            a.remaining_range_switch_cases + b.remaining_range_switch_cases;
         return c;
       });
 
@@ -477,6 +506,12 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                   stats.remaining_trivial_switches);
   mgr.incr_metric(METRIC_REPLACED_TRIVIAL_SWITCHES,
                   stats.replaced_trivial_switches);
+  mgr.incr_metric(METRIC_REMAINING_RANGE_SWITCHES,
+                  stats.remaining_range_switches);
+  mgr.incr_metric(METRIC_REMAINING_RANGE_SWITCH_CASES,
+                  stats.remaining_range_switch_cases);
+  mgr.incr_metric(METRIC_REMAINING_TWO_CASE_SWITCHES,
+                  stats.remaining_two_case_switches);
   mgr.incr_metric(METRIC_REMOVED_SPARSE_SWITCH_CASES,
                   stats.removed_sparse_switch_cases);
   mgr.incr_metric(METRIC_REMOVED_PACKED_SWITCH_CASES,
