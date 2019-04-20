@@ -23,6 +23,7 @@ constexpr const char* METRIC_VAR_DROPPED = "num_var_dropped";
 constexpr const char* METRIC_PROLOGUE_DROPPED = "num_prologue_dropped";
 constexpr const char* METRIC_EPILOGUE_DROPPED = "num_epilogue_dropped";
 constexpr const char* METRIC_EMPTY_DROPPED = "num_empty_dropped";
+constexpr const char* METRIC_SKIPPED_INLINE = "num_skipped_due_to_inlining";
 
 bool pattern_matches(const char* str,
                      const std::vector<std::string>& patterns) {
@@ -50,6 +51,7 @@ Stats& Stats::operator+=(const Stats& other) {
   num_prologue_dropped += other.num_prologue_dropped;
   num_epilogue_dropped += other.num_epilogue_dropped;
   num_empty_dropped += other.num_empty_dropped;
+  num_skipped_due_to_inlining += other.num_skipped_due_to_inlining;
   return *this;
 }
 
@@ -161,12 +163,14 @@ Stats StripDebugInfo::run(IRCode& code, bool should_drop_synth) {
     // This option is only safe when preceeding all inline stages because it
     // will not handle parent positions properly.
     if (found_parent_position) {
-      fprintf(stderr,
-              "WARNING: Attempted to drop line number preceeding non-throwing"
-              " instructions after an inline pass occurred. Please move the"
-              " StripDebugInfoPass before any inlining passes in order for"
-              " drop_line_numbers_preceeding_safe to take affect. Skipping for"
-              " now");
+      // WARNING: Attempted to drop line number preceeding non-throwing
+      // instructions after an inline pass occurred. Please move the
+      // StripDebugInfoPass before any inlining passes in order for
+      // drop_line_numbers_preceeding_safe to take full affect. This also
+      // applies to Proguard inlining.
+      //
+      // Skipping for now.
+      ++stats.num_skipped_due_to_inlining;
     } else {
       // Algo as follows:
       //  Iterate through entries looking for a position, once one is found
@@ -244,15 +248,17 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   auto stats = impl.run(scope);
   TRACE(DBGSTRIP,
         1,
-        "matched on %d methods. Removed %d dbg line entries, %d dbg local var "
+        "Matched on %d methods. Removed %d dbg line entries, %d dbg local var "
         "entries, %d dbg prologue start entries, %d "
-        "epilogue end entries and %u empty dbg tables.\n",
+        "epilogue end entries, %u empty dbg tables, "
+        "%d skipped due to inlining\n",
         stats.num_matches,
         stats.num_pos_dropped,
         stats.num_var_dropped,
         stats.num_prologue_dropped,
         stats.num_epilogue_dropped,
-        stats.num_empty_dropped);
+        stats.num_empty_dropped,
+        stats.num_skipped_due_to_inlining);
 
   mgr.incr_metric(METRIC_NUM_MATCHES, stats.num_matches);
   mgr.incr_metric(METRIC_POS_DROPPED, stats.num_pos_dropped);
@@ -260,6 +266,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_PROLOGUE_DROPPED, stats.num_prologue_dropped);
   mgr.incr_metric(METRIC_EPILOGUE_DROPPED, stats.num_epilogue_dropped);
   mgr.incr_metric(METRIC_EMPTY_DROPPED, stats.num_empty_dropped);
+  mgr.incr_metric(METRIC_SKIPPED_INLINE, stats.num_skipped_due_to_inlining);
 
   if (m_config.drop_src_files) {
     TRACE(DBGSTRIP, 1, "dropping src file strings\n");

@@ -72,6 +72,7 @@ struct Stats {
   int num_prologue_dropped{0};
   int num_epilogue_dropped{0};
   int num_empty_dropped{0};
+  int num_skipped_due_to_inlining{0};
 
   Stats& operator+=(const Stats& other);
 };
