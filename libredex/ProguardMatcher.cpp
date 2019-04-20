@@ -306,6 +306,7 @@ class ProguardMatcher {
   }
 
   void process_proguard_rules(const ProguardConfiguration& pg_config);
+  void mark_all_annotation_classes_as_keep();
 
   void process_keep(const KeepSpecSet& keep_rules,
                     RuleType rule_type,
@@ -816,8 +817,9 @@ void ProguardMatcher::process_proguard_rules(
   process_keep(pg_config.assumenosideeffects_rules,
                RuleType::ASSUME_NO_SIDE_EFFECTS,
                /* process_external = */ true);
+}
 
-  // By default, keep all annotation classes.
+void ProguardMatcher::mark_all_annotation_classes_as_keep() {
   for (auto cls : m_classes) {
     if (is_annotation(cls)) {
       cls->rstate.set_has_keep(keep_reason::ANNO);
@@ -841,9 +843,13 @@ namespace redex {
 void process_proguard_rules(const ProguardMap& pg_map,
                             const Scope& classes,
                             const Scope& external_classes,
-                            const ProguardConfiguration& pg_config) {
+                            const ProguardConfiguration& pg_config,
+                            bool keep_all_annotation_classes) {
   ProguardMatcher pg_matcher(pg_map, classes, external_classes);
   pg_matcher.process_proguard_rules(pg_config);
+  if (keep_all_annotation_classes) {
+    pg_matcher.mark_all_annotation_classes_as_keep();
+  }
 }
 
 } // namespace redex
