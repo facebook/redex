@@ -809,16 +809,16 @@ void init_reachable_classes(
 
 std::string ReferencedState::str() const {
   std::ostringstream s;
-  s << m_by_type;
-  s << m_by_string;
-  s << m_by_resources;
-  s << m_is_serde;
-  s << m_keep;
+  s << inner_struct.m_by_type;
+  s << inner_struct.m_by_string;
+  s << inner_struct.m_by_resources;
+  s << inner_struct.m_is_serde;
+  s << inner_struct.m_keep;
   s << allowshrinking();
   s << allowobfuscation();
-  s << m_assumenosideeffects;
-  s << m_blanket_keepnames;
-  s << m_whyareyoukeeping;
+  s << inner_struct.m_assumenosideeffects;
+  s << inner_struct.m_blanket_keepnames;
+  s << inner_struct.m_whyareyoukeeping;
   s << ' ';
   s << m_keep_count;
   return s.str();

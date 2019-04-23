@@ -20,30 +20,8 @@ PACKED(struct ir_meta_header_t {
   uint32_t checksum; // reserved
   uint32_t file_size;
   uint32_t classes_size;
+  uint32_t rstate_size; // size of IRMetaIO::bit_rstate_t.
 });
-
-#define BIT_FIELDS                \
-  FIELD(m_by_type)                \
-  FIELD(m_by_string)              \
-  FIELD(m_by_resources)           \
-  FIELD(m_is_serde)               \
-  FIELD(m_mix_mode)               \
-  FIELD(m_keep)                   \
-  FIELD(m_assumenosideeffects)    \
-  FIELD(m_blanket_keepnames)      \
-  FIELD(m_whyareyoukeeping)       \
-  FIELD(m_set_allowshrinking)     \
-  FIELD(m_unset_allowshrinking)   \
-  FIELD(m_set_allowobfuscation)   \
-  FIELD(m_unset_allowobfuscation) \
-  FIELD(m_keep_name)
-
-#define FIELD(field_name) uint8_t field_name : 1;
-PACKED(struct bit_rstate_t {
-  BIT_FIELDS
-  uint16_t m_keep_count;
-});
-#undef FIELD
 
 void serialize_str(const std::string& str, std::ofstream& ostrm) {
   char data[5];
@@ -235,6 +213,7 @@ void dump(const Scope& classes, const std::string& output_dir) {
   meta_header.checksum = 0;
   meta_header.file_size = 0;
   meta_header.classes_size = 0;
+  meta_header.rstate_size = sizeof(IRMetaIO::bit_rstate_t);
   ostrm.write((char*)&meta_header, sizeof(meta_header));
 
   serialize_class_data(classes, ostrm);
@@ -249,7 +228,7 @@ void dump(const Scope& classes, const std::string& output_dir) {
 
 bool load(const std::string& input_dir) {
   std::string input_file = input_dir + IRMETA_FILE_NAME;
-  std::ifstream istrm(input_file, std::ios::binary|std::ios::in);
+  std::ifstream istrm(input_file, std::ios::binary | std::ios::in);
   if (!istrm.is_open()) {
     std::cerr << "Can not open " << input_file << std::endl;
     return false;
@@ -259,6 +238,10 @@ bool load(const std::string& input_dir) {
   istrm.read((char*)&meta_header, sizeof(meta_header));
   if (strcmp(meta_header.magic, IRMETA_MAGIC_NUMBER) != 0) {
     std::cerr << "May be not valid meta file\n";
+    return false;
+  }
+  if (meta_header.rstate_size != sizeof(IRMetaIO::bit_rstate_t)) {
+    std::cerr << "Could not load the outdated IR meta data\n";
     return false;
   }
   // file size
@@ -271,19 +254,15 @@ bool load(const std::string& input_dir) {
 void IRMetaIO::serialize_rstate(const ReferencedState& rstate,
                                 std::ofstream& ostrm) {
   bit_rstate_t bit_rstate;
-#define FIELD(field_name) bit_rstate.field_name = rstate.field_name;
-  BIT_FIELDS
-#undef FIELD
+  bit_rstate.inner_struct = rstate.inner_struct;
   bit_rstate.m_keep_count = rstate.m_keep_count.load();
   ostrm.write((char*)&bit_rstate, sizeof(bit_rstate));
 }
 
 void IRMetaIO::deserialize_rstate(const char** _ptr, ReferencedState& rstate) {
   bit_rstate_t* bit_rstate = (bit_rstate_t*)(*_ptr);
-#define FIELD(field_name) rstate.field_name = bit_rstate->field_name;
-  BIT_FIELDS
-#undef FIELD
   rstate.m_keep_count = bit_rstate->m_keep_count;
+  rstate.inner_struct = bit_rstate->inner_struct;
   (*_ptr) += sizeof(bit_rstate_t);
 }
 

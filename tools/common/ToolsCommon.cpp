@@ -233,7 +233,12 @@ void load_all_intermediate(const std::string& input_ir_dir,
 
   init_ir_meta(stores);
   if (!load_ir_meta(input_ir_dir)) {
-    std::cerr << "Load IR meta failed\n";
+    std::string error =
+        "Use default IR meta instead. The process result may be greatly "
+        "different from the result of running whole optimization passes with "
+        "redex-all\n";
+    std::cerr << error;
+    TRACE(MAIN, 1, "%s", error.c_str());
   }
 }
 } // namespace redex

@@ -21,53 +21,59 @@ class IRMetaIO;
 
 class ReferencedState {
  private:
-  // Whether this DexMember is referenced by one of the strings in the native
-  // libraries. Note that this doesn't allow us to distinguish
-  // native -> Java references from Java -> native refs.
-  bool m_by_string{false};
-  // This is a superset of m_by_string -- i.e. it's true if m_by_string is true.
-  // It also gets set ot true if this DexMember is referenced by one of the
-  // "keep_" settings in the Redex config.
-  bool m_by_type{false};
-  // Whether it is referenced from an XML layout.
-  bool m_by_resources{false};
-  // Whether it is a json serializer/deserializer class for a reachable class.
-  bool m_is_serde{false};
+  struct InnerStruct {
+    // Whether this DexMember is referenced by one of the strings in the native
+    // libraries. Note that this doesn't allow us to distinguish
+    // native -> Java references from Java -> native refs.
+    bool m_by_string{false};
+    // This is a superset of m_by_string -- i.e. it's true if m_by_string is
+    // true. It also gets set ot true if this DexMember is referenced by one of
+    // the "keep_" settings in the Redex config.
+    bool m_by_type{false};
+    // Whether it is referenced from an XML layout.
+    bool m_by_resources{false};
+    // Whether it is a json serializer/deserializer class for a reachable class.
+    bool m_is_serde{false};
 
-  // Flag that specifies if this member is used for mix-mode compilation.
-  bool m_mix_mode{false};
+    // Flag that specifies if this member is used for mix-mode compilation.
+    bool m_mix_mode{false};
 
-  // ProGuard keep settings
-  //
-  // Whether any keep rule has matched this. This applies for both `-keep` and
-  // `-keepnames`.
-  bool m_keep{false};
-  // assumenosideeffects allows certain methods to be removed.
-  bool m_assumenosideeffects{false};
-  // Does this class have a blanket "-keepnames class *" applied to it?
-  // "-keepnames" is synonym with "-keep,allowshrinking".
-  bool m_blanket_keepnames{false};
-  // If m_whyareyoukeeping is true then report debugging information
-  // about why this class or member is being kept.
-  bool m_whyareyoukeeping{false};
+    // ProGuard keep settings
+    //
+    // Whether any keep rule has matched this. This applies for both `-keep` and
+    // `-keepnames`.
+    bool m_keep{false};
+    // assumenosideeffects allows certain methods to be removed.
+    bool m_assumenosideeffects{false};
+    // Does this class have a blanket "-keepnames class *" applied to it?
+    // "-keepnames" is synonym with "-keep,allowshrinking".
+    bool m_blanket_keepnames{false};
+    // If m_whyareyoukeeping is true then report debugging information
+    // about why this class or member is being kept.
+    bool m_whyareyoukeeping{false};
 
-  // For keep modifiers: -keep,allowshrinking and -keep,allowobfuscation.
-  //
-  // Instead of m_allowshrinking and m_allowobfuscation, we need to have
-  // set/unset pairs for easier parallelization. The unset has a high priority.
-  // See the comments in apply_keep_modifiers.
-  bool m_set_allowshrinking{false};
-  bool m_unset_allowshrinking{false};
-  bool m_set_allowobfuscation{false};
-  bool m_unset_allowobfuscation{false};
+    // For keep modifiers: -keep,allowshrinking and -keep,allowobfuscation.
+    //
+    // Instead of m_allowshrinking and m_allowobfuscation, we need to have
+    // set/unset pairs for easier parallelization. The unset has a high
+    // priority. See the comments in apply_keep_modifiers.
+    bool m_set_allowshrinking{false};
+    bool m_unset_allowshrinking{false};
+    bool m_set_allowobfuscation{false};
+    bool m_unset_allowobfuscation{false};
 
-  bool m_keep_name{false};
+    bool m_keep_name{false};
 
-  bool m_no_optimizations{false};
+    bool m_no_optimizations{false};
 
-  bool m_generated{false};
+    bool m_generated{false};
 
-  int32_t m_api_level{-1};
+    // For inlining configurations.
+    bool m_dont_inline{false};
+    bool m_force_inline{false};
+
+    int32_t m_api_level{-1};
+  } inner_struct;
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
@@ -88,24 +94,7 @@ class ReferencedState {
   // std::atomic requires an explicitly user-defined assignment operator.
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
-      this->m_by_type = other.m_by_type;
-      this->m_by_string = other.m_by_string;
-      this->m_by_resources = other.m_by_resources;
-      this->m_is_serde = other.m_is_serde;
-      this->m_mix_mode = other.m_mix_mode;
-
-      this->m_keep = other.m_keep;
-      this->m_assumenosideeffects = other.m_assumenosideeffects;
-      this->m_blanket_keepnames = other.m_blanket_keepnames;
-      this->m_whyareyoukeeping = other.m_whyareyoukeeping;
-
-      this->m_set_allowshrinking = other.m_set_allowshrinking;
-      this->m_unset_allowshrinking = other.m_unset_allowshrinking;
-      this->m_set_allowobfuscation = other.m_set_allowobfuscation;
-      this->m_unset_allowobfuscation = other.m_unset_allowobfuscation;
-
-      this->m_keep_name = other.m_keep_name;
-
+      this->inner_struct = other.inner_struct;
       this->m_keep_count = other.m_keep_count.load();
     }
     return *this;
@@ -120,41 +109,51 @@ class ReferencedState {
   // probably don't want to use this method unless root() turns out to be
   // somehow insufficient.
   bool can_delete() const {
-    return !m_by_type && !m_by_resources && (!m_keep || allowshrinking());
+    return !inner_struct.m_by_type && !inner_struct.m_by_resources &&
+           (!inner_struct.m_keep || allowshrinking());
   }
 
   // Like can_delete(), this is also over-conservative. We don't yet have a
   // better alternative, but we should create one.
   bool can_rename() const {
-    return !m_keep_name && !m_by_string && (!m_keep || allowobfuscation()) &&
-           !allowshrinking();
+    return !inner_struct.m_keep_name && !inner_struct.m_by_string &&
+           (!inner_struct.m_keep || allowobfuscation()) && !allowshrinking();
   }
 
   // ProGuard keep options
 
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
-  bool has_keep() const { return m_keep || m_by_resources; }
+  bool has_keep() const {
+    return inner_struct.m_keep || inner_struct.m_by_resources;
+  }
 
   // ProGuard keep option modifiers
   bool allowshrinking() const {
-    return !m_unset_allowshrinking && m_set_allowshrinking && !m_by_resources;
+    return !inner_struct.m_unset_allowshrinking &&
+           inner_struct.m_set_allowshrinking && !inner_struct.m_by_resources;
   }
   bool allowobfuscation() const {
-    return !m_unset_allowobfuscation && m_set_allowobfuscation &&
-           !m_by_resources;
+    return !inner_struct.m_unset_allowobfuscation &&
+           inner_struct.m_set_allowobfuscation && !inner_struct.m_by_resources;
   }
-  bool assumenosideeffects() const { return m_assumenosideeffects; }
+  bool assumenosideeffects() const {
+    return inner_struct.m_assumenosideeffects;
+  }
 
   bool is_blanket_names_kept() const {
-    return m_blanket_keepnames && m_keep_count == 1;
+    return inner_struct.m_blanket_keepnames && m_keep_count == 1;
   }
 
-  bool report_whyareyoukeeping() const { return m_whyareyoukeeping; }
+  bool report_whyareyoukeeping() const {
+    return inner_struct.m_whyareyoukeeping;
+  }
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() { m_by_type = m_by_string = true; }
-  bool is_referenced_by_string() const { return m_by_string; }
+  void ref_by_string() {
+    inner_struct.m_by_type = inner_struct.m_by_string = true;
+  }
+  bool is_referenced_by_string() const { return inner_struct.m_by_string; }
 
   // A class referenced by resource XML can take the following forms in .xml
   // files under the res/ directory:
@@ -164,25 +163,27 @@ class ReferencedState {
   // This differs from "by_string" reference since it is possible to rename
   // these string references, and potentially eliminate dead resource .xml files
   void set_referenced_by_resource_xml() {
-    m_by_resources = true;
+    inner_struct.m_by_resources = true;
     if (RedexContext::record_keep_reasons()) {
       add_keep_reason(RedexContext::make_keep_reason(keep_reason::XML));
     }
   }
 
   void unset_referenced_by_resource_xml() {
-    m_by_resources = false;
+    inner_struct.m_by_resources = false;
     // TODO: Remove the XML-related keep reasons
   }
 
-  bool is_referenced_by_resource_xml() const { return m_by_resources; }
+  bool is_referenced_by_resource_xml() const {
+    return inner_struct.m_by_resources;
+  }
 
-  void set_is_serde() { m_is_serde = true; }
+  void set_is_serde() { inner_struct.m_is_serde = true; }
 
-  bool is_serde() const { return m_is_serde; }
+  bool is_serde() const { return inner_struct.m_is_serde; }
 
   // A direct reference from code (not reflection)
-  void ref_by_type() { m_by_type = true; }
+  void ref_by_type() { inner_struct.m_by_type = true; }
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 
@@ -200,7 +201,7 @@ class ReferencedState {
    */
   template <class... Args>
   void set_root(Args&&... args) {
-    m_keep = true;
+    inner_struct.m_keep = true;
     unset_allowshrinking();
     unset_allowobfuscation();
     if (RedexContext::record_keep_reasons()) {
@@ -215,7 +216,7 @@ class ReferencedState {
    */
   template <class... Args>
   void set_has_keep(Args&&... args) {
-    m_keep = true;
+    inner_struct.m_keep = true;
     if (RedexContext::record_keep_reasons()) {
       add_keep_reason(
           RedexContext::make_keep_reason(std::forward<Args>(args)...));
@@ -226,33 +227,35 @@ class ReferencedState {
     return m_keep_reasons;
   }
 
-  void set_keep_name() { m_keep_name = true; }
+  void set_keep_name() { inner_struct.m_keep_name = true; }
 
-  void set_allowshrinking() { m_set_allowshrinking = true; }
-  void unset_allowshrinking() { m_unset_allowshrinking = true; }
+  void set_allowshrinking() { inner_struct.m_set_allowshrinking = true; }
+  void unset_allowshrinking() { inner_struct.m_unset_allowshrinking = true; }
 
   // This one should only be used by UnmarkProguardKeepPass to unmark proguard
   // keep rule after proguard file processing is finished. Because
   // ProguardMatcher uses parallel processing, using this will result in race
   // condition.
   void force_unset_allowshrinking() {
-    m_set_allowshrinking = true;
-    m_unset_allowshrinking = false;
+    inner_struct.m_set_allowshrinking = true;
+    inner_struct.m_unset_allowshrinking = false;
   }
 
-  void set_allowobfuscation() { m_set_allowobfuscation = true; }
-  void unset_allowobfuscation() { m_unset_allowobfuscation = true; }
+  void set_allowobfuscation() { inner_struct.m_set_allowobfuscation = true; }
+  void unset_allowobfuscation() {
+    inner_struct.m_unset_allowobfuscation = true;
+  }
 
-  void set_assumenosideeffects() { m_assumenosideeffects = true; }
+  void set_assumenosideeffects() { inner_struct.m_assumenosideeffects = true; }
 
-  void set_blanket_keepnames() { m_blanket_keepnames = true; }
+  void set_blanket_keepnames() { inner_struct.m_blanket_keepnames = true; }
 
   void increment_keep_count() { m_keep_count++; }
 
-  void set_whyareyoukeeping() { m_whyareyoukeeping = true; }
+  void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 
-  bool has_mix_mode() const { return m_mix_mode; }
-  void set_mix_mode() { m_mix_mode = true; }
+  bool has_mix_mode() const { return inner_struct.m_mix_mode; }
+  void set_mix_mode() { inner_struct.m_mix_mode = true; }
 
   void set_interdex_subgroup(const boost::optional<size_t>& interdex_subgroup) {
     m_interdex_subgroup = interdex_subgroup;
@@ -263,16 +266,21 @@ class ReferencedState {
   }
 
   // -1 means unknown, e.g. for a method created by Redex
-  int32_t get_api_level() const { return m_api_level; }
-  void set_api_level(int api_level) { m_api_level = api_level; }
+  int32_t get_api_level() const { return inner_struct.m_api_level; }
+  void set_api_level(int api_level) { inner_struct.m_api_level = api_level; }
 
-  bool no_optimizations() const { return m_no_optimizations; }
-  void set_no_optimizations() { m_no_optimizations = true; }
+  bool no_optimizations() const { return inner_struct.m_no_optimizations; }
+  void set_no_optimizations() { inner_struct.m_no_optimizations = true; }
 
   // Methods and classes marked as "generated" tend to not have stable names,
   // and don't properly participate in coldstart tracking.
-  bool is_generated() const { return m_generated; }
-  void set_generated() { m_generated = true; }
+  bool is_generated() const { return inner_struct.m_generated; }
+  void set_generated() { inner_struct.m_generated = true; }
+
+  bool force_inline() const { return inner_struct.m_force_inline; }
+  void set_force_inline() { inner_struct.m_force_inline = true; }
+  bool dont_inline() const { return inner_struct.m_dont_inline; }
+  void set_dont_inline() { inner_struct.m_dont_inline = true; }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

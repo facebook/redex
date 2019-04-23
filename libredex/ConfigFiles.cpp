@@ -336,7 +336,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   for (const auto& type_s : no_inline_annos) {
     auto type = DexType::get_type(type_s.c_str());
     if (type != nullptr) {
-      inliner_config->no_inline.emplace(type);
+      inliner_config->m_no_inline_annos.emplace(type);
     } else {
       fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
               type_s.c_str());
@@ -348,7 +348,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   for (const auto& type_s : force_inline_annos) {
     auto type = DexType::get_type(type_s.c_str());
     if (type != nullptr) {
-      inliner_config->force_inline.emplace(type);
+      inliner_config->m_force_inline_annos.emplace(type);
     } else {
       fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
               type_s.c_str());
@@ -358,5 +358,5 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
 
 void ConfigFiles::load(const Scope& scope) {
   get_inliner_config();
-  m_inliner_config->populate_blacklist(scope);
+  m_inliner_config->populate(scope);
 }

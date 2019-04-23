@@ -23,30 +23,33 @@ struct InlinerConfig {
   bool inline_small_non_deletables{false};
   bool use_cfg_inliner{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;
-  std::unordered_set<DexType*> no_inline;
-  std::unordered_set<DexType*> force_inline;
+  // We will populate the information to rstate of classes and methods.
+  std::unordered_set<DexType*> m_no_inline_annos;
+  std::unordered_set<DexType*> m_force_inline_annos;
   // Prefixes of classes not to inline from / into
   std::vector<std::string> m_black_list;
   std::vector<std::string> m_caller_black_list;
 
   /**
-   * Populate m_black_list m_caller_black_list to black_list and
+   * 1. Populate m_black_list m_caller_black_list to black_list and
    * caller_black_list with the initial scope.
+   * 2. Set rstate of classes and methods if they are annotated by any
+   * m_no_inline_annos and m_force_inline_annos.
    */
-  void populate_blacklist(const Scope& scope);
+  void populate(const Scope& scope);
 
   const std::unordered_set<DexType*>& get_black_list() const {
-    always_assert_log(populated, "Should populate blacklist\n");
+    always_assert_log(m_populated, "Should populate blacklist\n");
     return black_list;
   }
 
   const std::unordered_set<DexType*>& get_caller_black_list() const {
-    always_assert_log(populated, "Should populate blacklist\n");
+    always_assert_log(m_populated, "Should populate blacklist\n");
     return caller_black_list;
   }
 
  private:
-  bool populated{false};
+  bool m_populated{false};
   // The populated black lists.
   std::unordered_set<DexType*> black_list;
   std::unordered_set<DexType*> caller_black_list;

@@ -7,7 +7,6 @@
 
 #include "Inliner.h"
 
-#include "AnnoUtils.h"
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ControlFlow.h"
@@ -428,7 +427,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
   if (cannot_inline_opcodes(caller, callee, insn)) {
     return false;
   }
-  if (has_any_annotation(callee, m_config.force_inline)) {
+  if (callee->rstate.force_inline()) {
     return true;
   }
   if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
@@ -452,9 +451,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     return false;
   }
 
-  DexClass* cls = type_class(callee->get_class());
-  if (has_any_annotation(cls, m_config.no_inline) ||
-      has_any_annotation(callee, m_config.no_inline)) {
+  if (callee->rstate.dont_inline()) {
     return false;
   }
 
@@ -524,7 +521,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 
 bool MultiMethodInliner::should_inline(const DexMethod* caller,
                                        const DexMethod* callee) const {
-  if (has_any_annotation(callee, m_config.force_inline)) {
+  if (callee->rstate.force_inline()) {
     return true;
   }
   if (too_many_callers(callee)) {

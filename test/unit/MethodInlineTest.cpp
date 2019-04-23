@@ -239,7 +239,7 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
   api::LevelChecker::init(0, scope);
 
   inliner::InlinerConfig inliner_config;
-  inliner_config.populate_blacklist(scope);
+  inliner_config.populate(scope);
   MultiMethodInliner inliner(
       scope, stores, canidates, resolver, inliner_config, intra_dex);
   inliner.inline_methods();
