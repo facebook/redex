@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/functional/hash.hpp>
 
 #include "Debug.h"
@@ -157,16 +158,25 @@ class BridgeRemover {
   const std::vector<DexClass*>* m_scope;
   ClassHierarchy m_ch;
   PassManager& m_mgr;
+  std::vector<std::string>& m_black_list;
   std::unordered_map<DexMethod*, DexMethod*> m_bridges_to_bridgees;
   std::unordered_multimap<MethodRef, DexMethod*, MethodRefHash>
       m_potential_bridgee_refs;
+
+  bool is_black_listed(DexMethod* m) {
+    auto str = m->get_class()->str();
+    for (auto& blacklisted : m_black_list) {
+      if (boost::starts_with(str, blacklisted)) return true;
+    }
+    return false;
+  }
 
   void find_bridges() {
     walk::methods(*m_scope,
                  [&](DexMethod* m) {
                    if (has_bridgelike_access(m)) {
                      auto bridgee = find_bridgee(m);
-                     if (!bridgee) return;
+                     if (!bridgee || is_black_listed(bridgee)) return;
                      m_bridges_to_bridgees.emplace(m, bridgee);
                      TRACE(BRIDGE,
                            5,
@@ -358,8 +368,10 @@ class BridgeRemover {
   }
 
  public:
-  BridgeRemover(const std::vector<DexClass*>& scope, PassManager& mgr)
-      : m_scope(&scope), m_mgr(mgr) {
+  BridgeRemover(const std::vector<DexClass*>& scope,
+                PassManager& mgr,
+                std::vector<std::string>& black_list)
+      : m_scope(&scope), m_mgr(mgr), m_black_list(black_list) {
     m_ch = build_type_hierarchy(scope);
   }
 
@@ -388,7 +400,7 @@ void BridgePass::run_pass(DexStoresVector& stores,
     return;
   }
   Scope scope = build_class_scope(stores);
-  BridgeRemover(scope, mgr).run();
+  BridgeRemover(scope, mgr, m_black_list).run();
 }
 
 static BridgePass s_pass;
