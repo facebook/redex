@@ -497,11 +497,15 @@ SECONDARY_DEX_MODES = [
 ]
 
 
+class UnknownSecondaryDexModeException(Exception):
+    pass
+
+
 def detect_secondary_dex_mode(extracted_apk_dir):
     for mode in SECONDARY_DEX_MODES:
         if mode.detect(extracted_apk_dir):
             return mode
-    raise Exception('Unknown secondary dex mode')
+    raise UnknownSecondaryDexModeException()
 
 
 def extract_dex_from_jar(jarpath, dexpath):
