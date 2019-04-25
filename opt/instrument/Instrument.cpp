@@ -756,12 +756,22 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   auto scope = build_class_scope(stores);
   TypeSystem ts(scope);
 
-  // We now have sharded method stats arrays. Say we instrument 11 methods and
-  // have three arrays. Each array will have ceil(11/3) = 3 methods, and the
-  // last array may have smaller number of methods.
-  //                    array1        array2       array3
-  //     method ids  [0, 1, 2, 3]  [4, 5, 6, 7]  [8, 9, 10]
-  //   array indices [0, 1, 2, 3]  [0, 1, 2, 3]  [0, 1,  2]
+  // We now have sharded method stats arrays. We interleave methods into
+  // multiple arrays. Say we instrument 11 methods and have 3 arrays. Each array
+  // may have up to floor(11/3) + 1 = 4 methods. Their distributions look like:
+  //
+  //                0                   1
+  //   method id    0 1 2 3 4 5 6 7 8 9 0
+  //   array id     0 1 2 0 1 2 0 1 2 0 1  <= i % 3
+  //   array index  0 0 0 1 1 1 2 2 2 3 3  <= i / 3
+  //
+  //                  arrays[0]     arrays[1]    arrays[2]
+  //   method id    [0, 3, 6, 9]  [1, 4, 7, 10]  [2, 5, 8]
+  //
+  // Be extremely careful when handling indexes. The Java-side uploader needs to
+  // untangle the arrays. The WWW endpoints do not need to know this complexity.
+  // So, only devices handle this sharding.
+  //
   // In order to do that, we need to know the total number of methods to be
   // instrumented. We don't know this number until iterating all methods while
   // processing exclusions. We take a two-pass approach:
@@ -814,16 +824,14 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Now we know the total number of methods to be instrumented. Do some
   // computations and actual instrumentation.
   const size_t kTotalSize = to_instrument.size();
-  const size_t kShardSize =
-      static_cast<size_t>(std::ceil(double(kTotalSize) / NUM_SHARDS));
-  TRACE(INSTRUMENT, 4, "%zu methods to be instrumented; shard size: %zu\n",
-        kTotalSize, kShardSize);
+  TRACE(INSTRUMENT, 4, "%zu methods to be instrumented; shard size: %zu (+1)\n",
+        kTotalSize, kTotalSize / NUM_SHARDS);
   for (size_t i = 0; i < kTotalSize; ++i) {
-    TRACE(INSTRUMENT, 7, "Sharded %zu => [%zu][%zu] %s\n", i, i / kShardSize,
-          i % kShardSize, SHOW(to_instrument[i]));
+    TRACE(INSTRUMENT, 7, "Sharded %zu => [%zu][%zu] %s\n", i, (i % NUM_SHARDS),
+          (i / NUM_SHARDS), SHOW(to_instrument[i]));
     instrument_onMethodBegin(to_instrument[i],
-                             (i % kShardSize) * options.num_stats_per_method,
-                             analysis_method_map.at((i / kShardSize) + 1));
+                             (i / NUM_SHARDS) * options.num_stats_per_method,
+                             analysis_method_map.at((i % NUM_SHARDS) + 1));
   }
 
   TRACE(INSTRUMENT,
@@ -832,13 +840,11 @@ void do_simple_method_tracing(DexClass* analysis_cls,
         method_id,
         excluded);
 
-  // Patch stat array size.
+  // Patch stat array sizes.
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
-    patch_array_size(
-        *analysis_cls, "sMethodStats" + std::to_string(i + 1),
-        (i == NUM_SHARDS - 1
-             ? options.num_stats_per_method * (kTotalSize - kShardSize * i)
-             : options.num_stats_per_method * kShardSize));
+    size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
+    patch_array_size(*analysis_cls, "sMethodStats" + std::to_string(i + 1),
+                     options.num_stats_per_method * n);
   }
 
   // Patch method count constant.
