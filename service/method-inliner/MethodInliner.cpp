@@ -26,6 +26,48 @@
 #include "Walkers.h"
 
 namespace {
+
+static bool can_inline_init(DexMethod* caller, IRCode& code) {
+  always_assert(is_init(caller));
+  // Check that there is no call to a super constructor, and no assignments to
+  // (non-inherited) instance fields before constructor call.
+  // (There not being such a super call implies that there must be a call to
+  // another constructor in the same class, unless the method doesn't return;
+  // calls to other constructors in the same class are inlinable.)
+  // The check doesn't take into account data-flow, i.e. whether the super
+  // constructor call and the field assignments are actually on the incoming
+  // receiver object. In that sense, this function is overly conservative, and
+  // there is room for futher improvement.
+  DexType* declaring_type = caller->get_class();
+  DexType* super_type = type_class(declaring_type)->get_super_class();
+  for (auto& mie : InstructionIterable(code)) {
+    IRInstruction* insn = mie.insn;
+    auto opcode = insn->opcode();
+
+    // give up if there's an assignment to a field of the declaring class
+    if (is_iput(opcode) && insn->get_field()->get_class() == declaring_type) {
+      return false;
+    }
+
+    // give up if there's a call to a constructor of the super class
+    if (opcode != OPCODE_INVOKE_DIRECT) {
+      continue;
+    }
+    DexMethod* callee =
+        resolve_method(insn->get_method(), MethodSearch::Direct);
+    if (callee == nullptr) {
+      return false;
+    }
+    if (!is_init(callee)) {
+      continue;
+    }
+    if (callee->get_class() == super_type) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
@@ -59,7 +101,9 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
     if (code == nullptr) direct_no_code++;
     if (is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
-      dont_inline = true;
+      if (is_clinit(method) || !can_inline_init(method, *code)) {
+        dont_inline = true;
+      }
     } else {
       (is_static(method)) ? static_methods++ : private_methods++;
     }
