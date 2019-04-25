@@ -752,8 +752,10 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
     auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
+      info.unresolved_methods++;
       // if it's not known to redex but it's a common java/android API method
       if (method_ok(method->get_class(), method)) {
+        info.method_oks++;
         return false;
       }
       auto type = method->get_class();
@@ -768,7 +770,10 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
         cls = type_class(type);
       }
       if (type_ok(type)) return false;
-      if (method_ok(type, method)) return false;
+      if (method_ok(type, method)) {
+        info.method_oks++;
+        return false;
+      }
       info.escaped_virtual++;
       return true;
     }

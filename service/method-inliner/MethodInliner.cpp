@@ -168,5 +168,8 @@ void run_inliner(DexStoresVector& stores,
 
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
+  mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
+  mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
+  mgr.incr_metric("method_oks", inliner.get_info().method_oks);
 }
 } // namespace inliner
