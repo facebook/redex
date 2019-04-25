@@ -20,6 +20,7 @@ enum RedexError {
   CACHE_INDEX_OUT_OF_BOUND = 3,
   DUPLICATE_CLASSES = 4,
   DUPLICATE_METHODS = 5,
+  BAD_ANNOTATION = 6,
 };
 
 class RedexException : public std::exception {

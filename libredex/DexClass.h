@@ -386,12 +386,14 @@ class DexField : public DexFieldRef {
   }
 
   void attach_annotation_set(DexAnnotationSet* aset) {
-    if (m_anno == nullptr && m_concrete == false) {
-      m_anno = aset;
-      return;
-    }
-    always_assert_log(false, "attach_annotation_set failed for field %s.%s\n",
-                      m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+    always_assert_type_log(
+        !m_concrete, RedexError::BAD_ANNOTATION, "field %s.%s is concrete\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+    always_assert_type_log(
+        !m_anno, RedexError::BAD_ANNOTATION, "field %s.%s annotation exists\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+
+    m_anno = aset;
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -993,20 +995,19 @@ class DexMethod : public DexMethodRef {
     m_anno = nullptr;
   }
   void attach_annotation_set(DexAnnotationSet* aset) {
-    if (m_anno == nullptr && m_concrete == false) {
-      m_anno = aset;
-      return;
-    }
-    always_assert_log(false, "attach_annotation_set failed for method %s\n", SHOW(this));
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", SHOW(this));
+    always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
+                           "method %s annotation exists\n", SHOW(this));
+    m_anno = aset;
   }
   void attach_param_annotation_set(int paramno, DexAnnotationSet* aset) {
-    if (m_param_anno.count(paramno) == 0 && m_concrete == false) {
-      m_param_anno[paramno] = aset;
-      return;
-    }
-    always_assert_log(false, "attach_param_annotation_set failed for param %d "
-                      "to method %s\n",
-                      paramno, SHOW(this));
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", SHOW(this));
+    always_assert_type_log(
+        m_param_anno.count(paramno) == 0, RedexError::BAD_ANNOTATION,
+        "param %d annotation to method %s exists\n", paramno, SHOW(this));
+    m_param_anno[paramno] = aset;
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
