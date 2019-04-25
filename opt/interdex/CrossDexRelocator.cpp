@@ -64,23 +64,23 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
 bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
     DexMethod* m,
     std::unordered_map<DexMethod*, DexClass*>& relocated_methods) {
-  std::unordered_set<DexMethodRef*> direct_methods_preventing_relocation;
-  if (gather_invoked_direct_methods_that_prevent_relocation(
-          m, &direct_methods_preventing_relocation)) {
-    always_assert(direct_methods_preventing_relocation.size() == 0);
+  std::unordered_set<DexMethodRef*> methods_preventing_relocation;
+  if (gather_invoked_methods_that_prevent_relocation(
+          m, &methods_preventing_relocation)) {
+    always_assert(methods_preventing_relocation.size() == 0);
     // No issues with direct methods.
     return true;
   }
 
-  always_assert(direct_methods_preventing_relocation.size() > 0);
-  if (std::any_of(direct_methods_preventing_relocation.begin(),
-                  direct_methods_preventing_relocation.end(),
+  always_assert(methods_preventing_relocation.size() > 0);
+  if (std::any_of(methods_preventing_relocation.begin(),
+                  methods_preventing_relocation.end(),
                   [&relocated_methods](DexMethodRef* mref) {
                     return !mref->is_def() ||
                            !relocated_methods.count(
                                static_cast<DexMethod*>(mref));
                   })) {
-    // If a direct method that gets invoked isn't getting relocated itself, then
+    // If a problematic method that gets invoked isn't getting relocated itself,
     // then we give up
     return false;
   }
@@ -91,7 +91,7 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   // TODO: Track dependencies at more fine-grained level, and use that
   // information to turn more eventually unrelocated static methods back into
   // non-static direct methods.
-  for (DexMethodRef* mref : direct_methods_preventing_relocation) {
+  for (DexMethodRef* mref : methods_preventing_relocation) {
     always_assert(mref->is_def());
     DexClass* relocated_cls =
         relocated_methods.at(static_cast<DexMethod*>(mref));

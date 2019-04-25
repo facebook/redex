@@ -299,13 +299,12 @@ void relocate_method(DexMethod* method, DexType* to_type);
 /**
  * Checks if a method can be relocated, i.e. if it doesn't require any changes
  * to invoked direct methods (none of the invoked direct methods would need to
- * change into a public virtual / static method). Any problematic invoked
- * direct methods are added to the optionally supplied set.
+ * change into a public virtual / static method) or framework protected methods.
+ * Any problematic invoked methods are added to the optionally supplied set.
  */
-bool gather_invoked_direct_methods_that_prevent_relocation(
+bool gather_invoked_methods_that_prevent_relocation(
     const DexMethod* method,
-    std::unordered_set<DexMethodRef*>* direct_methods_preventing_relocation =
-        nullptr);
+    std::unordered_set<DexMethodRef*>* methods_preventing_relocation = nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a
@@ -316,7 +315,7 @@ bool no_invoke_super(const DexMethod* method);
 
 /**
  * Relocates the method only if
- * gather_invoked_direct_methods_that_prevent_relocation returns true.
+ * gather_invoked_methods_that_prevent_relocation returns true.
  * It also updates the visibility of the accessed members.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
