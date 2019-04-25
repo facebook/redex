@@ -105,6 +105,17 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
     if (visited.count(cls) != 0 || scope_set.count(cls) == 0) {
       return;
     }
+    if (visiting.count(cls) != 0) {
+      TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):\n");
+      for (auto visiting_cls : visiting) {
+        TRACE(FINALINLINE, 1, "  %s\n", SHOW(visiting_cls));
+      }
+      TRACE(FINALINLINE, 1, "  %s\n", SHOW(cls));
+      fprintf(stderr,
+              "WARNING: Possible class init cycle found in FinalInlineV2. "
+              "To check re-run with TRACE=FINALINLINE:1.\n");
+      return;
+    }
     visiting.emplace(cls);
     const auto& ctors = cls->get_ctors();
     if (ctors.size() == 1) {
