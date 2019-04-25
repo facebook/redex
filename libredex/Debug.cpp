@@ -76,8 +76,5 @@ void assert_fail(const char* expr,
   msg += v_format2string(fmt, ap);
 
   va_end(ap);
-  // our signal handlers will call this too, but they won't print the full
-  // stack if the exception has been rethrown
-  crash_backtrace();
   throw RedexException(type, msg);
 }
