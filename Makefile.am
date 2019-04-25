@@ -122,6 +122,7 @@ libredex_la_SOURCES = \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
+	libredex/DexTypeDomain.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/EditableCfgAdapter.cpp \
@@ -173,6 +174,7 @@ libredex_la_SOURCES = \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/IRTypeChecker.cpp \
+	libredex/TypeInference.cpp \
 	libredex/TypeSystem.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \

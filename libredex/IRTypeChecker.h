@@ -7,126 +7,7 @@
 
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <ostream>
-#include <string>
-
-#include "Debug.h"
-#include "DexClass.h"
-#include "IRInstruction.h"
-
-/*
- * This is the implementation of a type checker for the IR that aims at
- * detecting errors such as fetching a reference from a register containing an
- * integer, or incorrectly accessing the pair of registers holding a wide value.
- * Our purpose is not to replicate the Android verifier, which performs
- * fine-grained compatibility checks on scalars of various bitwidths and tracks
- * the precise type of references. This type checker is intended to be used as a
- * sanity check at the end of an optimization pass and it has been designed for
- * high performance. For more information, please see the following link, which
- * points to the code of the Android verifier (there is no requirements
- * specification document):
- *
- *   androidxref.com/7.1.1_r6/xref/art/runtime/verifier/method_verifier.cc
- *
- * We first infer the type of all registers by performing a monotonic fixpoint
- * iteration sequence over the following type lattice:
- *
- *
- *                                   TOP
- *                                    |
- *         +-----------+--------------+---------------+
- *         |           |              |               |
- *         |         SCALAR        SCALAR1         SCALAR2
- *         |         /   \          /    \          /    \
- *         |        /     \        /      \        /      \
- *     REFERENCE  INT    FLOAT  LONG1  DOUBLE1  LONG2  DOUBLE2
- *         |        \     /        \      /        \      /
- *         |         \   /          \    /          \    /
- *         |         CONST          CONST1          CONST2
- *         |           |              |               |
- *         |           |              |               |
- *         +-----+-----+              |               |
- *               |                    |               |
- *             ZERO                   |               |
- *               |                    |               |
- *               +--------------------+---------------+
- *                                    |
- *                                  BOTTOM
- *
- *
- * The const-* operations of the Dalvik bytecode are not typed. Until the
- * context provides additional information, a constant (resp. wide constant) can
- * be either a long or a float (resp. a long or a double), hence the need for
- * the CONST types. The value of the constant doesn't matter unless it's a
- * 32-bit constant equal to 0. Zero needs to be treated specially because it's
- * also used to represent the null reference. Since a type is attached to a
- * 32-bit register, we need two mirror sets of distinct types for a pair of
- * registers holding a wide value.
- *
- * The SCALAR types are required to handle array access operations properly.
- * Although most aget-* operations are typed, this is not the case for aget (the
- * same holds for aput-* operations). This operation can retrieve either an
- * integer or a floating-point number, depending on the type of the array
- * (aget-wide has the same issue). The Android verifier tracks the precise type
- * of references and is able to resolve the type of the element statically. We
- * don't want to do that here for efficiency purposes, hence the need for the
- * SCALAR types, which encode the uncertainty about the actual type of the array
- * element. This means that the checker might not be able to detect type errors
- * in these situations. However, we can refine these types as soon as the
- * context provides enough information.
- *
- * Example:
- *   aget v0, v1, v2     --> v0 has SCALAR type
- *   add-int v3, v0, v4  --> we don't know whether v0 holds an integer value
- *   mul-int v5, v0, v4  --> if we reach this instruction, it means that v0 did
- *   ...                     hold an integer value (otherwise the code would
- *                           have been rejected by the Android verifier). This
- *                           operation is therefore well typed.
- *
- *   We don't know if the the first use of a register with SCALAR type in a
- *   typed context is correct. However, after that first use, the register's
- *   type is fully determined. If the first use of the register was erroneous it
- *   would be rejected by the Android verifier and hence, all subsequent uses
- *   would never be executed.
- *
- * As is standard in Abstract Interpretation, the BOTTOM type corresponds to
- * unreachable code. Note that any code that follows a type error is interpreted
- * as unreachable (because it can never be executed). The TOP type corresponds
- * to an undefined behavior, because the register either hasn't been initialized
- * or holds different types along the branches of a merge node in the
- * control-flow graph.
- */
-
-enum IRType {
-  BOTTOM,
-  ZERO,
-  CONST,
-  CONST1,
-  CONST2,
-  REFERENCE,
-  INT,
-  FLOAT,
-  LONG1,
-  LONG2,
-  DOUBLE1,
-  DOUBLE2,
-  SCALAR,
-  SCALAR1,
-  SCALAR2,
-  TOP
-};
-
-std::ostream& operator<<(std::ostream& output, const IRType& type);
-
-namespace irtc_impl {
-
-// Forward declaration
-class TypeEnvironment;
-class TypeInference;
-
-} // namespace irtc_impl
+#include "TypeInference.h"
 
 /*
  * This class takes a method, infers the type of all registers and checks that
@@ -141,6 +22,10 @@ class TypeInference;
  * can be used anywhere in Redex.
  */
 class IRTypeChecker final {
+
+  using register_t = ir_analyzer::register_t;
+  using TypeEnvironment = type_inference::TypeEnvironment;
+
  public:
   // If we don't declare a destructor for this class, a default destructor will
   // be generated by the compiler, which requires a complete definition of
@@ -249,20 +134,14 @@ class IRTypeChecker final {
                       m_dex_method->get_deobfuscated_name().c_str());
   }
 
-  void assume_integer(irtc_impl::TypeEnvironment* state, register_t reg) const;
-  void assume_float(irtc_impl::TypeEnvironment* state, register_t reg) const;
-  void assume_long(irtc_impl::TypeEnvironment* state, register_t reg) const;
-  void assume_double(irtc_impl::TypeEnvironment* state, register_t reg) const;
-  void assume_wide_scalar(irtc_impl::TypeEnvironment* state,
-                          register_t reg) const;
-  void assume_scalar(irtc_impl::TypeEnvironment* state,
+  void assume_scalar(TypeEnvironment* state,
                      register_t reg,
                      bool in_move = false) const;
-  void assume_reference(irtc_impl::TypeEnvironment* state,
+  void assume_reference(TypeEnvironment* state,
                         register_t reg,
                         bool in_move = false) const;
   void check_instruction(IRInstruction* insn,
-                         irtc_impl::TypeEnvironment* current_state) const;
+                         TypeEnvironment* current_state) const;
 
   DexMethod* m_dex_method;
   bool m_complete;
@@ -271,7 +150,7 @@ class IRTypeChecker final {
   bool m_check_no_overwrite_this;
   bool m_good;
   std::string m_what;
-  std::unique_ptr<irtc_impl::TypeInference> m_type_inference;
+  std::unique_ptr<type_inference::TypeInference> m_type_inference;
 
   friend std::ostream& operator<<(std::ostream&, const IRTypeChecker&);
 };
