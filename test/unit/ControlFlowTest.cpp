@@ -1280,6 +1280,115 @@ TEST(ControlFlow, insertion) {
             assembler::to_string(code.get()));
 }
 
+TEST(ControlFlow, insertion_after_may_throw) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_aput(insn->opcode())) {
+      auto new_insn = new IRInstruction(*insn);
+      cfg.insert_after(it, new_insn);
+      break;
+    }
+  }
+  code->clear_cfg();
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_aput(insn->opcode())) {
+      std::vector<IRInstruction*> new_insns;
+      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      new_insn->set_arg_word_count(2);
+      new_insn->set_src(0, 2);
+      new_insn->set_src(1, 2);
+      new_insns.push_back(new_insn);
+      new_insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      new_insn->set_dest(2);
+      new_insns.push_back(new_insn);
+      cfg.insert_after(it, new_insns);
+      break;
+    }
+  }
+  code->clear_cfg();
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (div-int v2 v2)
+      (move-result-pseudo v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
 TEST(ControlFlow, add_sget) {
   g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(

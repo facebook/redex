@@ -387,6 +387,9 @@ class ControlFlowGraph {
     e->target()->m_preds.emplace_back(e);
   }
 
+  // copies all edges of a certain type from one block to another
+  void copy_succ_edges(Block* from, Block* to, EdgeType type);
+
   using EdgeSet = std::unordered_set<Edge*>;
 
   // Make `e` point to a new target block.

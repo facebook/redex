@@ -1815,18 +1815,24 @@ Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
   // new_block will be the successor
   Block* new_block = create_block();
   const IRList::iterator& raw_it = it.unwrap();
-  always_assert(raw_it != old_block->get_last_insn());
 
-  // move the rest of the instructions after the callsite into the new block
+  // move the rest of the instructions after the split point into the new block
   new_block->m_entries.splice_selection(new_block->begin(),
                                         old_block->m_entries, std::next(raw_it),
                                         old_block->end());
-  // make the outgoing edges come from the new block
+
+  // make the outgoing edges come from the new block...
   std::vector<Edge*> to_move(old_block->succs().begin(),
                              old_block->succs().end());
   for (auto e : to_move) {
+    // ... except if we didn't move the branching/throwing instruction; in that
+    // case, just rewire the goto, as we are going to create a new one
+    if (new_block->empty() && e->type() != EDGE_GOTO) {
+      continue;
+    }
     set_edge_source(e, new_block);
   }
+
   // connect the halves of the block we just split up
   add_edge(old_block, new_block, EDGE_GOTO);
   return new_block;
@@ -2037,6 +2043,16 @@ void ControlFlowGraph::create_branch(
   }
 }
 
+void ControlFlowGraph::copy_succ_edges(Block* from, Block* to, EdgeType type) {
+  const auto& edges = get_succ_edges_of_type(from, type);
+
+  for (const Edge* e : edges) {
+    Edge* copy = new Edge(*e);
+    copy->m_src = to;
+    add_edge(copy);
+  }
+}
+
 bool ControlFlowGraph::insert(const InstructionIterator& position,
                               const std::vector<IRInstruction*>& insns,
                               bool before) {
@@ -2051,25 +2067,44 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
   bool invalidated_its = false;
   for (auto insn : insns) {
     const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
+    auto op = insn->opcode();
 
     // Certain types of blocks cannot have instructions added to the end.
     // Disallow that case here.
     if (pos == b->end()) {
       auto existing_last = b->get_last_insn();
       if (existing_last != b->end()) {
-        // TODO? Currently, this will abort if someone tries to insert after a
-        // may_throw that has a catch in this method. Maybe instead we should
-        // insert after the move-result in the goto successor block. That's
-        // probably what the user meant to do anyway.
-        auto last_op = existing_last->insn->opcode();
-        always_assert_log(!is_branch(last_op) && !is_throw(last_op) &&
-                              !is_return(last_op) && throws.empty(),
+        // This will abort if someone tries to insert after a returning or
+        // throwing instruction.
+        auto existing_last_op = existing_last->insn->opcode();
+        always_assert_log(!is_branch(existing_last_op) &&
+                              !is_throw(existing_last_op) &&
+                              !is_return(existing_last_op),
                           "Can't add instructions after %s in Block %d in %s",
                           SHOW(existing_last->insn), b->id(), SHOW(*this));
+
+        // When inserting after an instruction that may throw, we need to start
+        // a new block. We also copy over all throw-edges. See FIXME below for
+        // a discussion about try-regions in general.
+        if (!throws.empty()) {
+          always_assert_log(!existing_last->insn->has_move_result(),
+                            "Can't add instructions after throwing instruction "
+                            "%s with move-result in Block %d in %s",
+                            SHOW(existing_last->insn), b->id(), SHOW(*this));
+          Block* new_block = create_block();
+          if (opcode::may_throw(op)) {
+            copy_succ_edges(b, new_block, EDGE_THROW);
+          }
+          const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
+          set_edge_source(existing_goto_edge, new_block);
+          add_edge(b, new_block, EDGE_GOTO);
+          // Continue inserting in the new block.
+          b = new_block;
+          pos = new_block->begin();
+        }
       }
     }
 
-    auto op = insn->opcode();
     always_assert_log(!is_branch(op),
                       "insert() does not support branch opcodes. Use "
                       "create_branch() instead");
@@ -2115,13 +2150,12 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       Block* succ =
           split_block(b->to_cfg_instruction_iterator(new_inserted_it));
 
-      // Copy the outgoing throw edges of the original block into the block
-      // that now ends with the new instruction
-      for (const Edge* e : throws) {
-        Edge* copy = new Edge(*e);
-        copy->m_src = b;
-        add_edge(copy);
+      if (!succ->empty()) {
+        // Copy the outgoing throw edges of the new block back into the original
+        // block
+        copy_succ_edges(succ, b, EDGE_THROW);
       }
+
       // Continue inserting in the successor block.
       b = succ;
       pos = succ->begin();
