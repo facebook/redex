@@ -274,13 +274,20 @@ void TypeInference::refine_double(TypeEnvironment* state,
 }
 
 void TypeInference::run(DexMethod* dex_method) {
+  run(is_static(dex_method), dex_method->get_class(),
+      dex_method->get_proto()->get_args());
+}
+
+void TypeInference::run(bool is_static,
+                        DexType* declaring_type,
+                        DexTypeList* args) {
   // We need to compute the initial environment by assigning the parameter
   // registers their correct types derived from the method's signature. The
   // IOPCODE_LOAD_PARAM_* instructions are pseudo-operations that are used to
   // specify the formal parameters of the method. They must be interpreted
   // separately.
   auto init_state = TypeEnvironment::top();
-  const auto& signature = dex_method->get_proto()->get_args()->get_type_list();
+  const auto& signature = args->get_type_list();
   auto sig_it = signature.begin();
   bool first_param = true;
   // By construction, the IOPCODE_LOAD_PARAM_* instructions are located at the
@@ -289,11 +296,11 @@ void TypeInference::run(DexMethod* dex_method) {
     IRInstruction* insn = mie.insn;
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
-      if (first_param && !is_static(dex_method)) {
+      if (first_param && !is_static) {
         // If the method is not static, the first parameter corresponds to
         // `this`.
         first_param = false;
-        set_reference(&init_state, insn->dest(), dex_method->get_class());
+        set_reference(&init_state, insn->dest(), declaring_type);
       } else {
         // This is a regular parameter of the method.
         const DexType* type = *sig_it;

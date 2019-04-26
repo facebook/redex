@@ -184,6 +184,8 @@ class TypeInference final
 
   void run(DexMethod* dex_method);
 
+  void run(bool is_static, DexType* declaring_type, DexTypeList* args);
+
   void analyze_instruction(IRInstruction* insn,
                            TypeEnvironment* current_state) const override;
 
