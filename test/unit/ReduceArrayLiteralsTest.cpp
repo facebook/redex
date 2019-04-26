@@ -25,8 +25,8 @@ void test(const std::string& code_str,
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
-  ReduceArrayLiterals ral(code.get()->cfg());
-  ral.patch(code.get()->cfg(), max_filled_elements, min_sdk);
+  ReduceArrayLiterals ral(code.get()->cfg(), max_filled_elements, min_sdk);
+  ral.patch();
   code.get()->clear_cfg();
   auto stats = ral.get_stats();
 
@@ -167,20 +167,55 @@ TEST_F(ReduceArrayLiteralsTest, array_one_cyclic_element) {
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_more_than_max_elements) {
+  DexMethod::make_method(
+      "Ljava/lang/System;.arraycopy:"
+      "(Ljava/lang/Object;ILjava/lang/Object;II)V");
+
   auto code_str = R"(
     (
-      (const v0 1)
+      (const v0 2)
       (new-array v0 "[Ljava/lang/String;")
       (move-result-pseudo-object v1)
-      (const v0 0)
       (const-string "hello")
       (move-result-pseudo-object v2)
-      (aput v2 v1 v0)
+      (const v0 0)
+      (aput-object v2 v1 v0)
+      (const-string "hello2")
+      (move-result-pseudo-object v2)
+      (const v0 1)
+      (aput-object v2 v1 v0)
       (return-object v1)
     )
   )";
-  const auto& expected_str = code_str;
-  test(code_str, expected_str, 0, 0, 0);
+  const auto& expected_str = R"(
+    (
+      (const v0 2)
+      (new-array v0 "[Ljava/lang/String;")
+      (move-result-pseudo-object v1)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (const v0 0)
+      (move-object v7 v2)
+      (filled-new-array (v7) "[Ljava/lang/String;")
+      (move-result-object v3)
+      (const v4 0)
+      (const v5 0)
+      (const v6 1)
+      (invoke-static (v3 v4 v1 v5 v6) "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V")
+      (const-string "hello2")
+      (move-result-pseudo-object v2)
+      (const v0 1)
+      (move-object v7 v2)
+      (filled-new-array (v7) "[Ljava/lang/String;")
+      (move-result-object v3)
+      (const v4 0)
+      (const v5 1)
+      (const v6 1)
+      (invoke-static (v3 v4 v1 v5 v6) "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/Object;II)V")
+      (return-object v1)
+    )
+  )";
+  test(code_str, expected_str, 1, 2, 1);
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_two_same_elements) {
