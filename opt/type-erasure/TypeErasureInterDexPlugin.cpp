@@ -224,7 +224,9 @@ DexClasses TypeErasureInterDexPlugin::additional_classes(
       additional_classes.emplace_back(type_class(mergeable));
     }
 
-    auto model = Model::build_model(m_scope, model_spec, mergeables);
+    TypeSystem type_system(m_scope);
+    auto model =
+        Model::build_model(m_scope, model_spec, mergeables, type_system);
     model.update_redex_stats(m_mgr);
 
     ModelMerger mm;

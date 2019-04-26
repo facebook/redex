@@ -191,10 +191,12 @@ class Model {
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
+                           const TypeSystem& type_system,
                            ConfigFiles& conf);
   static Model build_model(const Scope& scope,
                            const ModelSpec& spec,
-                           const TypeSet& types);
+                           const TypeSet& types,
+                           const TypeSystem& type_system);
 
   static void update_model(Model& model);
 

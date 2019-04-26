@@ -311,7 +311,8 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));
   }
-  auto model = Model::build_model(scope, stores, spec, conf);
+  TypeSystem type_system(scope);
+  auto model = Model::build_model(scope, stores, spec, type_system, conf);
   model.update_redex_stats(mgr);
 
   auto mm = get_model_merger();

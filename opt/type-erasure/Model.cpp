@@ -1442,9 +1442,9 @@ void Model::update_model(Model& model) {
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
+                         const TypeSystem& type_system,
                          ConfigFiles& conf) {
   Timer t("build_model");
-  TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
   Model model(scope, stores, spec, type_system, conf);
@@ -1477,9 +1477,9 @@ void Model::update_redex_stats(PassManager& mgr) const {
 
 Model Model::build_model(const Scope& scope,
                          const ModelSpec& spec,
-                         const TypeSet& types) {
+                         const TypeSet& types,
+                         const TypeSystem& type_system) {
   Timer t("build_model");
-  TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
   Model model(scope, spec, type_system, types);
