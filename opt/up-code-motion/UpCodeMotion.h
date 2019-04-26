@@ -15,11 +15,15 @@ class UpCodeMotionPass : public Pass {
     size_t instructions_moved{0};
     size_t branches_moved_over{0};
     size_t inverted_conditional_branches{0};
+    size_t clobbered_registers{0};
   };
 
   UpCodeMotionPass() : Pass("UpCodeMotionPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static Stats process_code(IRCode*);
+  static Stats process_code(bool is_static,
+                            DexType* declaring_type,
+                            DexTypeList* args,
+                            IRCode*);
 };

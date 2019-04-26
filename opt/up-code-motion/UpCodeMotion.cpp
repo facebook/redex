@@ -36,6 +36,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "TypeInference.h"
 #include "Walkers.h"
 
 namespace {
@@ -44,10 +45,14 @@ constexpr const char* METRIC_INSTRUCTIONS_MOVED = "num_instructions_moved";
 constexpr const char* METRIC_BRANCHES_MOVED_OVER = "num_branches_moved_over";
 constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
     "num_inverted_conditional_branches";
+constexpr const char* METRIC_CLOBBERED_REGISTERS = "num_clobbered_registers";
 
 } // namespace
 
-UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
+UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
+                                                       DexType* declaring_type,
+                                                       DexTypeList* args,
+                                                       IRCode* code) {
   Stats stats;
 
   code->build_cfg(/* editable = true*/);
@@ -78,6 +83,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
         return true;
       };
 
+  std::unique_ptr<type_inference::TypeInference> type_inference;
   std::unordered_set<cfg::Block*> blocks_to_remove;
   for (cfg::Block* b : cfg.blocks()) {
     if (blocks_to_remove.count(b)) {
@@ -108,9 +114,9 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
     // matching (same register) leading const instruction in the goto edge
     // target block.
     auto gather_instructions_to_insert =
-        [gather_movable_instructions,
-         if_insn](cfg::Edge* branch_edge, cfg::Edge* goto_edge,
-                  std::vector<IRInstruction*>* instructions_to_insert) {
+        [gather_movable_instructions](
+            cfg::Edge* branch_edge, cfg::Edge* goto_edge,
+            std::vector<IRInstruction*>* instructions_to_insert) {
           cfg::Block* branch_block = branch_edge->target();
           // The branch edge target block must end in a goto, and
           // have a unique predecessor.
@@ -138,39 +144,25 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
 
           // In the following, we check if all the registers assigned to by
           // const instructions of the branch edge target block also
-          // get assigned by the goto edge target block, and are not used by the
-          // if-instruction.
+          // get assigned by the goto edge target block.
           if (goto_instructions.size() < branch_instructions.size()) {
             TRACE(UCM, 5, "[up code motion] giving up: instructions.size()\n");
             return false;
           }
 
-          bool missing_dest = false;
-          bool if_reg_clobber = false;
           std::vector<uint32_t> dests;
           for (auto& p : branch_instructions) {
             uint32_t dest = p.first;
             dests.push_back(dest);
             if (goto_instructions.count(dest) == 0) {
-              missing_dest = true;
+              TRACE(UCM, 5, "[up code motion] giving up: missing dest\n");
+              return false;
             }
-            for (auto reg : if_insn->srcs()) {
-              if (reg == dest) {
-                if_reg_clobber = true;
-              }
-            }
-          }
-          if (missing_dest) {
-            TRACE(UCM, 5, "[up code motion] giving up: missing dest\n");
-            return false;
-          }
-          if (if_reg_clobber) {
-            TRACE(UCM, 5, "[up code motion] giving up: if reg clobber`\n");
-            return false;
           }
 
           // We sort registers to make things determistic.
           std::sort(dests.begin(), dests.end());
+
           for (uint32_t dest : dests) {
             IRInstruction* insn = branch_instructions.at(dest);
             insn = new IRInstruction(*insn);
@@ -181,6 +173,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
         };
 
     std::vector<IRInstruction*> instructions_to_insert;
+    std::vector<uint32_t> clobbered_regs;
     // Can we do our code transformation directly?
     if (!gather_instructions_to_insert(branch_edge, goto_edge,
                                        &instructions_to_insert)) {
@@ -199,6 +192,47 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(IRCode* code) {
       cfg.set_edge_target(branch_edge, goto_target);
       cfg.set_edge_target(goto_edge, branch_target);
       stats.inverted_conditional_branches++;
+    }
+
+    // We want to insert the (cloned) const instructions of the branch edge
+    // target block just in front of the if-instruction. However, if the if-
+    // instruction reads from the same registers that the const instructions
+    // write to, then we have a problem. To work around that problem, we move
+    // the problematic registers used by the if-instruction to new temp
+    // registers, and then rewrite the if-instruction to use the new temp
+    // register. Even though the new move instructions increase code size here,
+    // this is largely undone later by register allocation + copy propagation.
+
+    for (auto instruction_to_insert : instructions_to_insert) {
+      auto dest = instruction_to_insert->dest();
+      const auto& srcs = if_insn->srcs();
+      for (size_t i = 0; i < srcs.size(); i++) {
+        if (srcs[i] == dest) {
+          if (!type_inference) {
+            // We run the type inference once, and reuse results within this
+            // method. This is okay, even though we mutate the cfg, because
+            // we don't change the set of if-instructions, and only do per-
+            // instructions lookups in the type environments.
+            type_inference.reset(new type_inference::TypeInference(
+                cfg, false /* enable_polymorphic_constants */));
+            type_inference->run(is_static, declaring_type, args);
+          }
+
+          auto& type_environments = type_inference->get_type_environments();
+          auto& type_environment = type_environments.at(if_insn);
+          auto type = type_environment.get_type(dest);
+          always_assert(!type.is_top() && !type.is_bottom());
+
+          auto temp = cfg.allocate_temp();
+          auto it = b->to_cfg_instruction_iterator(last_insn_it);
+          IRInstruction* move_insn = new IRInstruction(
+              type.element() == REFERENCE ? OPCODE_MOVE_OBJECT : OPCODE_MOVE);
+          move_insn->set_arg_word_count(1)->set_src(0, dest)->set_dest(temp);
+          cfg.insert_before(it, move_insn);
+          if_insn->set_src(i, temp);
+          stats.clobbered_registers++;
+        }
+      }
     }
 
     // Okay, we can apply our transformation:
@@ -242,13 +276,17 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
           return Stats{};
         }
 
-        Stats stats = UpCodeMotionPass::process_code(code);
+        Stats stats = UpCodeMotionPass::process_code(
+            is_static(method), method->get_class(),
+            method->get_proto()->get_args(), code);
         if (stats.instructions_moved || stats.branches_moved_over) {
           TRACE(UCM, 3,
                 "[up code motion] Moved %u instructions over %u conditional "
-                "branches while inverting %u conditional branches in {%s}\n",
+                "branches while inverting %u conditional branches and dealing "
+                "with %u clobbered registers in {%s}\n",
                 stats.instructions_moved, stats.branches_moved_over,
-                stats.inverted_conditional_branches, SHOW(method));
+                stats.inverted_conditional_branches, stats.clobbered_registers,
+                SHOW(method));
         }
         return stats;
       },
@@ -258,6 +296,7 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
         c.branches_moved_over = a.branches_moved_over + b.branches_moved_over;
         c.inverted_conditional_branches =
             a.inverted_conditional_branches + b.inverted_conditional_branches;
+        c.clobbered_registers = a.clobbered_registers + b.clobbered_registers;
         return c;
       });
 
@@ -265,12 +304,13 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_BRANCHES_MOVED_OVER, stats.branches_moved_over);
   mgr.incr_metric(METRIC_INVERTED_CONDITIONAL_BRANCHES,
                   stats.inverted_conditional_branches);
+  mgr.incr_metric(METRIC_CLOBBERED_REGISTERS, stats.clobbered_registers);
   TRACE(UCM, 1,
-        "[up code motion] Moved %u instructions over "
-        "%u conditional branches while inverting %u conditional branches in "
-        "total\n",
+        "[up code motion] Moved %u instructions over %u conditional branches "
+        "while inverting %u conditional branches and dealing with %u clobbered "
+        "registers in total\n",
         stats.instructions_moved, stats.branches_moved_over,
-        stats.inverted_conditional_branches);
+        stats.inverted_conditional_branches, stats.clobbered_registers);
 }
 
 static UpCodeMotionPass s_pass;
