@@ -72,6 +72,7 @@
   TM(PM)                 \
   TM(PTA)                \
   TM(QUICK)              \
+  TM(RAL)                \
   TM(REDEX)              \
   TM(REACH)              \
   TM(REACH_DUMP)         \

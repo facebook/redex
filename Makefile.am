@@ -57,6 +57,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
+	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
@@ -278,6 +279,7 @@ redex_all_SOURCES = \
 	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
