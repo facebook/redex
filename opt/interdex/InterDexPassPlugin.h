@@ -20,7 +20,7 @@ class InterDexPassPlugin {
  public:
   // Run plugin initialization here. InterDex pass should run this
   // before running its implementation.
-  virtual void configure(const Scope& original_scope, ConfigFiles& conf) = 0;
+  virtual void configure(const Scope& original_scope, ConfigFiles& conf) {}
 
   // The InterDex pass might create additional classes, e.g. to hold
   // methods it relocates. Such classes get announced with this callback.
@@ -29,7 +29,7 @@ class InterDexPassPlugin {
   virtual void add_to_scope(DexClass* cls) {}
 
   // Will prevent clazz from going into any output dex.
-  virtual bool should_skip_class(const DexClass* clazz) = 0;
+  virtual bool should_skip_class(const DexClass* clazz) { return false; }
 
   // Whether the InterDex pass logic is allowed to move around methods
   // of a particular class.
@@ -45,7 +45,7 @@ class InterDexPassPlugin {
                            std::vector<DexFieldRef*>& frefs,
                            std::vector<DexType*>& trefs,
                            std::vector<DexClass*>* erased_classes,
-                           bool should_not_relocate_methods_of_class) = 0;
+                           bool should_not_relocate_methods_of_class) {}
 
   // In each dex, reserve this many mrefs to be potentially added after the
   // inter-dex pass
@@ -53,7 +53,10 @@ class InterDexPassPlugin {
 
   // Return any new codegened classes that should be added to the current dex.
   virtual DexClasses additional_classes(const DexClassesVector& outdex,
-                                        const DexClasses& classes) = 0;
+                                        const DexClasses& classes) {
+    DexClasses empty;
+    return empty;
+  }
 
   // Return classes that should be added at the end. None, by default.
   virtual DexClasses leftover_classes() {
@@ -63,7 +66,7 @@ class InterDexPassPlugin {
 
   // Run plugin cleanup and finalization here. InterDex Pass should run
   // this after running its implementation
-  virtual void cleanup(const std::vector<DexClass*>& scope) = 0;
+  virtual void cleanup(const std::vector<DexClass*>& scope) {}
 
   virtual ~InterDexPassPlugin(){};
 };

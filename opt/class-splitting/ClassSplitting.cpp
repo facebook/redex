@@ -60,8 +60,6 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         &conf.get_method_sorting_whitelisted_substrings();
   };
 
-  bool should_skip_class(const DexClass* clazz) override { return false; }
-
   void gather_refs(const interdex::DexInfo& dex_info,
                    const DexClass* cls,
                    std::vector<DexMethodRef*>& mrefs,
