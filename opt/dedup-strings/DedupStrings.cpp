@@ -20,7 +20,6 @@
 
 namespace {
 
-constexpr const char* METRIC_STRINGS_WITHIN_TRY = "num_strings_within_try";
 constexpr const char* METRIC_PERF_SENSITIVE_STRINGS =
     "num_perf_sensitive_strings";
 constexpr const char* METRIC_NON_PERF_SENSITIVE_STRINGS =
@@ -62,11 +61,6 @@ void DedupStrings::run(DexStoresVector& stores) {
   for (size_t i = 0; i < dexen.size(); i++) {
     auto& strings = non_load_strings[i];
     gather_non_load_strings(dexen[i], &strings);
-    // We just add strings appearing in try-blocks here, as we won't bother
-    // deduplicating them.
-    // TODO: Consider generalizing the later code transformation to enable
-    // passing the verifier for string loads appearing in try-blocks.
-    gather_load_strings_within_try(dexen[i], &strings);
   }
 
   // For each string, figure out how many times it's loaded per dex
@@ -234,42 +228,6 @@ void DedupStrings::gather_non_load_strings(
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());
-}
-
-void DedupStrings::gather_load_strings_within_try(
-    DexClasses& classes, std::unordered_set<const DexString*>* strings) {
-  // The code transformation we do later, turning string-loads into
-  // static function calls, is not valid within try blocks.
-  // To work around this rare issue, we pick up all strings here that
-  // occur in such try blocks. They will be excluded from the optimization,
-  // similar to "non-load" strings.
-  ConcurrentSet<DexString*> load_strings_within_try;
-  walk::parallel::code(
-      classes, [&load_strings_within_try](DexMethod* method, IRCode& code) {
-        int in_try = 0;
-        for (auto& mie : code) {
-          if (mie.type == MFLOW_OPCODE) {
-            if (in_try && mie.insn->opcode() == OPCODE_CONST_STRING) {
-              load_strings_within_try.emplace(mie.insn->get_string());
-            }
-          } else if (mie.type == MFLOW_TRY) {
-            auto& tentry = mie.tentry;
-            if (tentry->type == TRY_START) {
-              always_assert(!in_try);
-              in_try = true;
-            } else if (tentry->type == TRY_END) {
-              always_assert(in_try);
-              in_try = false;
-            } else {
-              always_assert(false);
-            }
-          }
-        }
-      });
-
-  m_stats.load_strings_within_try += load_strings_within_try.size();
-  strings->insert(load_strings_within_try.begin(),
-                  load_strings_within_try.end());
 }
 
 ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>>
@@ -590,9 +548,16 @@ void DedupStrings::rewrite_const_string_instructions(
         // From
         //   const-string v0, "foo"
         // into
-        //   const v0, 123 // index of "foo" in some hosting dex
-        //   invoke-static {v0}, $const-string // of hosting dex
+        //   const v1, 123 // index of "foo" in some hosting dex
+        //   invoke-static {v1}, $const-string // of hosting dex
         //   move-result-object v0
+        // where v1 is a new temp register.
+
+        // Note that it's important to not just re-use the already present
+        // register v0, as that would change its type and cause type conflicts
+        // in catch blocks, if any.
+
+        boost::optional<uint32_t> temp_reg;
         for (const auto& p : const_strings) {
           const auto const_string = p.first;
           const auto reg = p.second;
@@ -606,18 +571,20 @@ void DedupStrings::rewrite_const_string_instructions(
             continue;
           }
 
+          if (!temp_reg) {
+            temp_reg = boost::optional<uint32_t>(code.allocate_temp());
+          }
           std::vector<IRInstruction*> replacements;
 
           IRInstruction* const_inst = new IRInstruction(OPCODE_CONST);
-          const_inst->set_literal(info.index);
-          const_inst->set_dest(reg);
+          const_inst->set_dest(*temp_reg)->set_literal(info.index);
           replacements.push_back(const_inst);
 
           IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
           always_assert(info.const_string_method != nullptr);
-          invoke_inst->set_method(info.const_string_method);
-          invoke_inst->set_arg_word_count(1);
-          invoke_inst->set_src(0, reg);
+          invoke_inst->set_method(info.const_string_method)
+              ->set_arg_word_count(1)
+              ->set_src(0, *temp_reg);
           replacements.push_back(invoke_inst);
 
           IRInstruction* move_result_inst =
@@ -685,9 +652,6 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
                   conf.get_method_to_weight());
   ds.run(stores);
   const auto stats = ds.get_stats();
-  mgr.incr_metric(METRIC_STRINGS_WITHIN_TRY, stats.load_strings_within_try);
-  TRACE(DS, 1, "[dedup strings] load strings within try: %u\n",
-        stats.load_strings_within_try);
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_STRINGS,
                   stats.non_perf_sensitive_strings);

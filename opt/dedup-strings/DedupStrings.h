@@ -14,7 +14,6 @@
 class DedupStrings {
  public:
   struct Stats {
-    size_t load_strings_within_try{0};
     size_t perf_sensitive_strings{0};
     size_t non_perf_sensitive_strings{0};
     size_t perf_sensitive_methods{0};
@@ -58,8 +57,6 @@ class DedupStrings {
       DexClass* host_cls, const std::vector<DexString*>& strings);
   void gather_non_load_strings(DexClasses& classes,
                                std::unordered_set<const DexString*>* strings);
-  void gather_load_strings_within_try(
-      DexClasses& classes, std::unordered_set<const DexString*>* strings);
   ConcurrentMap<DexString*, std::unordered_map<size_t, size_t>> get_occurrences(
       const Scope& scope,
       const std::unordered_map<const DexMethod*, size_t>& methods_to_dex,
