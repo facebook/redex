@@ -469,7 +469,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
-    const DexType* element_type = get_array_type(insn->get_type());
+    const DexType* element_type = get_array_component_type(insn->get_type());
     // We assume that structural constraints on the bytecode are satisfied,
     // i.e., the type is indeed an array type.
     always_assert(element_type != nullptr);
