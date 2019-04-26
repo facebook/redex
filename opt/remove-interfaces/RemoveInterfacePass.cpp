@@ -263,7 +263,10 @@ void remove_interface_references(
     auto new_type = get_replacement_type(type_system, intf, root);
     old_to_new[intf] = const_cast<DexType*>(new_type);
   }
-  update_method_signature_type_references(scope, old_to_new);
+  auto& parent_to_children =
+      type_system.get_class_scopes().get_parent_to_children();
+  update_method_signature_type_references(scope, old_to_new,
+                                          parent_to_children);
   update_field_type_references(scope, old_to_new);
 }
 

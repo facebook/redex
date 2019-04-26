@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ClassHierarchy.h"
 #include "Pass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;

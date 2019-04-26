@@ -251,6 +251,8 @@ class ClassScopes {
  public:
   explicit ClassScopes(const Scope& scope);
 
+  const ClassHierarchy& get_parent_to_children() const;
+
   /**
    * Return the vector of VirtualScope for the given type.
    * The vector lifetime is tied to that of the ClassScope as such it should

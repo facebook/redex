@@ -295,6 +295,8 @@ class Model {
    */
   std::string print() const;
 
+  const TypeSystem& get_type_system() const { return m_type_system; }
+
  private:
   static const TypeSet empty_set;
 

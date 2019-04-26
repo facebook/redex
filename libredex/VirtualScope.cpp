@@ -852,6 +852,10 @@ ClassScopes::ClassScopes(const Scope& scope) {
   build_interface_scopes();
 }
 
+const ClassHierarchy& ClassScopes::get_parent_to_children() const {
+  return m_hierarchy;
+}
+
 /**
  * Builds the ClassScope for type and children.
  * Calling with get_object_type() builds the ClassScope

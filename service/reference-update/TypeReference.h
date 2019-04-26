@@ -9,6 +9,7 @@
 
 #include <boost/optional.hpp>
 
+#include "ClassHierarchy.h"
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
@@ -75,10 +76,10 @@ std::string get_method_signature(const DexMethod* method);
 bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets);
 
 /**
- * Update the proto in-place using the old_to_new map. Here we update the type
- * references on the proto from an old type to the provided new type.
+ * Get a new proto by updating the type references on the proto from an old type
+ * to the provided new type.
  */
-DexProto* update_proto_reference(
+DexProto* get_new_proto(
     const DexProto* proto,
     const std::unordered_map<const DexType*, DexType*>& old_to_new);
 
@@ -107,6 +108,7 @@ DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop);
 void update_method_signature_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    const ClassHierarchy& ch,
     boost::optional<std::unordered_map<DexMethod*, std::string>&>
         method_debug_map = boost::none);
 

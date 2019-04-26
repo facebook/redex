@@ -14,7 +14,7 @@
 
 namespace {
 
-void fix_colliding_method(
+void fix_colliding_dmethods(
     const Scope& scope,
     const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
         colliding_methods) {
@@ -112,7 +112,7 @@ void assert_old_types_have_definitions(
 }
 
 DexString* gen_new_name(const std::string& org_name, size_t seed) {
-  constexpr const char* mangling_affix = "$RDX$";
+  constexpr const char* mangling_affix = "$REDEX$";
   auto end = org_name.find(mangling_affix);
   std::string new_name = org_name.substr(0, end);
   new_name.append(mangling_affix);
@@ -128,6 +128,155 @@ DexString* gen_new_name(const std::string& org_name, size_t seed) {
     seed /= 62;
   }
   return DexString::make_string(new_name);
+}
+
+/**
+ * Hash the string representation of the signature of the method.
+ */
+size_t hash_signature(const DexMethodRef* method) {
+  size_t seed = 0;
+  auto proto = method->get_proto();
+  boost::hash_combine(seed, method->str());
+  boost::hash_combine(seed, proto->get_rtype()->str());
+  for (DexType* arg : proto->get_args()->get_type_list()) {
+    boost::hash_combine(seed, arg->str());
+  }
+  return seed;
+}
+
+/**
+ * A collection of methods that have the same signatures and ready for type
+ * reference updating on their signatures.
+ * A method may be in multiple groups if its signature contains multiple old
+ * type references that require updating.
+ */
+struct VMethodGroup {
+  // The possible new name. We may not need it if the later updating would not
+  // lead any collision or shadowing.
+  DexString* possible_new_name{nullptr};
+  DexType* old_type_ref{nullptr};
+  DexType* new_type_ref{nullptr};
+  std::unordered_set<DexMethod*> methods;
+};
+
+/**
+ * We group the methods by the old type that their signatures contain and
+ * signature hash.
+ */
+using VMethodGroupKey = size_t;
+
+VMethodGroupKey cal_group_key(DexType* old_type_ref,
+                              size_t org_signature_hash) {
+  VMethodGroupKey key = org_signature_hash;
+  boost::hash_combine(key, old_type_ref->str());
+  return key;
+}
+
+using VMethodsGroups = std::map<VMethodGroupKey, VMethodGroup>;
+
+void add_vmethod_to_group(DexType* old_type_ref,
+                          DexType* new_type_ref,
+                          DexString* possible_new_name,
+                          DexMethod* method,
+                          VMethodGroup* group) {
+  if (group->possible_new_name) {
+    always_assert(possible_new_name == group->possible_new_name);
+    always_assert(old_type_ref == group->old_type_ref);
+    always_assert(new_type_ref == group->new_type_ref);
+  } else {
+    group->possible_new_name = possible_new_name;
+    group->old_type_ref = old_type_ref;
+    group->new_type_ref = new_type_ref;
+  }
+  group->methods.insert(method);
+}
+
+/**
+ * Key of groups is hash result of old type ref and original signature hash.
+ */
+void add_vmethod_to_groups(
+    const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    DexMethod* method,
+    VMethodsGroups* groups) {
+  size_t org_signature_hash = hash_signature(method);
+  auto possible_new_name = gen_new_name(method->str(), org_signature_hash);
+
+  auto proto = method->get_proto();
+  auto rtype = const_cast<DexType*>(get_array_type_or_self(proto->get_rtype()));
+  if (old_to_new.count(rtype)) {
+    VMethodGroupKey key = cal_group_key(rtype, org_signature_hash);
+    auto& group = (*groups)[key];
+    add_vmethod_to_group(
+        rtype, old_to_new.at(rtype), possible_new_name, method, &group);
+  }
+  for (const auto arg_type : proto->get_args()->get_type_list()) {
+    auto extracted_arg_type =
+        const_cast<DexType*>(get_array_type_or_self(arg_type));
+    if (old_to_new.count(extracted_arg_type)) {
+      VMethodGroupKey key =
+          cal_group_key(extracted_arg_type, org_signature_hash);
+      auto& group = (*groups)[key];
+      add_vmethod_to_group(extracted_arg_type,
+                           old_to_new.at(extracted_arg_type),
+                           possible_new_name,
+                           method,
+                           &group);
+    }
+  }
+}
+
+DexProto* get_new_proto(const DexProto* proto,
+                        const DexType* old_type_ref,
+                        DexType* new_type_ref) {
+  return type_reference::get_new_proto(proto, {{old_type_ref, new_type_ref}});
+}
+
+/**
+ * :group We collect methods with exactly the same signatures into a group.
+ * Only replace one old type reference with a new old type ref for the group,
+ * if the type reference updating would let any one of them collide with
+ * existing methods in its hierarchy, we simply rename all the methods by
+ * hashing their string representation of signature, so they would also be the
+ * same signatures after the updating and we will never break virtual scopes.
+ */
+void update_vmethods_group_one_type_ref(const VMethodGroup& group,
+                                        const ClassHierarchy& ch) {
+  auto proto = (*group.methods.begin())->get_proto();
+  auto new_proto = get_new_proto(proto, group.old_type_ref, group.new_type_ref);
+  bool need_rename = false;
+  for (auto method : group.methods) {
+    // if collision in the same container or in the hierarchy.
+    auto collision = DexMethod::get_method(
+                         method->get_class(), method->get_name(), new_proto) ||
+                     find_collision(ch,
+                                    method->get_name(),
+                                    new_proto,
+                                    type_class(method->get_class()),
+                                    method->is_virtual());
+    if (collision) {
+      need_rename = true;
+      break;
+    }
+  }
+  DexMethodSpec spec;
+  if (need_rename) {
+    for (auto method : group.methods) {
+      always_assert_log(
+          can_rename(method), "Can not rename %s\n", SHOW(method));
+    }
+    spec.name = group.possible_new_name;
+  }
+  spec.proto = new_proto;
+  for (auto method : group.methods) {
+    TRACE(REFU,
+          8,
+          "sig: updating virtual method %s to %s:%s\n",
+          SHOW(method),
+          SHOW(spec.name),
+          SHOW(spec.proto));
+    method->change(
+        spec, false /* rename on collision */, true /* update deob name */);
+  }
 }
 } // namespace
 
@@ -259,14 +408,7 @@ TypeRefUpdater::TypeRefUpdater(
 }
 
 DexString* new_name(const DexMethodRef* method) {
-  size_t seed = 0;
-  auto proto = method->get_proto();
-  boost::hash_combine(seed, method->str());
-  boost::hash_combine(seed, proto->get_rtype()->str());
-  for (DexType* arg : proto->get_args()->get_type_list()) {
-    boost::hash_combine(seed, arg->str());
-  }
-  return gen_new_name(method->str(), seed);
+  return gen_new_name(method->str(), hash_signature(method));
 }
 
 DexString* new_name(const DexFieldRef* field) {
@@ -297,20 +439,19 @@ std::string get_method_signature(const DexMethod* method) {
 
 bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
   auto rtype = get_array_type_or_self(proto->get_rtype());
-  if (targets.count(rtype) > 0) {
+  if (targets.count(rtype)) {
     return true;
   }
-  std::deque<DexType*> lst;
   for (const auto arg_type : proto->get_args()->get_type_list()) {
     auto extracted_arg_type = get_array_type_or_self(arg_type);
-    if (targets.count(extracted_arg_type) > 0) {
+    if (targets.count(extracted_arg_type)) {
       return true;
     }
   }
   return false;
 }
 
-DexProto* update_proto_reference(
+DexProto* get_new_proto(
     const DexProto* proto,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
   auto rtype = get_array_type_or_self(proto->get_rtype());
@@ -381,143 +522,83 @@ DexTypeList* drop_and_make(const DexTypeList* list, size_t num_types_to_drop) {
 void update_method_signature_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new,
+    const ClassHierarchy& ch,
     boost::optional<std::unordered_map<DexMethod*, std::string>&>
         method_debug_map) {
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_candidates;
-  TypeSet mergeables;
-  for (const auto& pair : old_to_new) {
-    mergeables.insert(pair.first);
+  // Virtual methods.
+  // The key is the hash of signature and an old type reference. Group the
+  // methods by key.
+  VMethodsGroups vmethods_groups;
+  // Direct methods.
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_directs;
+
+  // Callback for updating method debug map.
+  std::function<void(DexMethod*)> update_method_debug_map = [](DexMethod*) {};
+  if (method_debug_map != boost::none) {
+    update_method_debug_map = [&method_debug_map](DexMethod* method) {
+      method_debug_map.get()[method] = get_method_signature(method);
+    };
   }
 
-  // 1. Updating the signature for non-ctor dmethods. Renaming is sufficient to
-  // address method collision here. At the same time, we collect potentially
-  // colliding methods that are more complicated to handle.
-  const auto update_sig_simple = [&](DexMethod* meth) {
-    auto proto = meth->get_proto();
-    if (!proto_has_reference_to(proto, mergeables)) {
-      return;
-    }
-    if (method_debug_map != boost::none) {
-      method_debug_map.get()[meth] = get_method_signature(meth);
-    }
-    auto new_proto = update_proto_reference(proto, old_to_new);
-    DexMethodSpec spec;
-    spec.proto = new_proto;
-    if (!is_init(meth) && !meth->is_virtual()) {
-      TRACE(REFU, 9, "sig: updating non ctor/virt method %s\n", SHOW(meth));
-      meth->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
-      return;
-    }
+  TypeSet old_types;
+  for (auto& pair : old_to_new) {
+    old_types.insert(pair.first);
+  }
 
-    auto type = meth->get_class();
-    auto name = meth->get_name();
-    auto existing_meth = DexMethod::get_method(type, name, new_proto);
-    if (existing_meth == nullptr) {
-      // For ctors if no collision is found, we still perform the update.
-      // This is needed to detect a subsequent collision on the updated ctor
-      // proto.
-      if (is_init(meth)) {
-        TRACE(REFU, 9, "sig: updating ctor %s\n", SHOW(meth));
-        meth->change(spec,
-                     false /* rename on collision */,
-                     true /* update deobfuscated name */);
+  walk::methods(scope, [&](DexMethod* method) {
+    auto proto = method->get_proto();
+    if (!proto_has_reference_to(proto, old_types)) {
+      return;
+    }
+    update_method_debug_map(method);
+    if (!method->is_virtual()) {
+      auto new_proto = get_new_proto(proto, old_to_new);
+      /// A. For direct methods:
+      // If there is no collision, update spec directly.
+      // If it's not constructor and renamable, rename on collision.
+      // Otherwise, add it to colliding_directs.
+      auto collision = DexMethod::get_method(
+          method->get_class(), method->get_name(), new_proto);
+      if (!collision || (!is_init(method) && can_rename(method))) {
+        TRACE(REFU, 8, "sig: updating direct method %s\n", SHOW(method));
+        DexMethodSpec spec;
+        spec.proto = new_proto;
+        method->change(spec,
+                       true /* rename on collision */,
+                       true /* update deobfuscated name */);
+      } else {
+        colliding_directs[method] = new_proto;
       }
       return;
     }
+    // B. For virtual methods: Collect the methods that reference the old
+    // types to oldtype_to_vmethods. Calculate new proto for each method and
+    // store to method_to_new_proto.
+    add_vmethod_to_groups(old_to_new, method, &vmethods_groups);
+  });
 
-    TRACE(REFU,
-          9,
-          "sig: found colliding candidate %s with %s\n",
-          SHOW(existing_meth),
-          SHOW(meth));
-    colliding_candidates[meth] = new_proto;
-  };
-
-  walk::methods(scope, update_sig_simple);
-
-  // 2. Updating non-colliding virtuals and ctors.
-  // Updating them do not require handling of virtual scopes.
-  const auto update_sig_non_colliding = [&](DexMethod* meth) {
-    // Skip non-ctor dmethods since they are already updated.
-    if (!is_init(meth) && !meth->is_virtual()) {
-      return;
-    }
-    // Skip colliding candidates. We cannot simply update them. We need to
-    // go through more complicated steps below.
-    if (colliding_candidates.count(meth) > 0) {
-      return;
-    }
-    auto proto = meth->get_proto();
-    if (!proto_has_reference_to(proto, mergeables)) {
-      return;
-    }
-    if (method_debug_map != boost::none) {
-      method_debug_map.get()[meth] = get_method_signature(meth);
-    }
-    auto new_proto = update_proto_reference(proto, old_to_new);
-    DexMethodSpec spec;
-    spec.proto = new_proto;
-
-    auto type = meth->get_class();
-    auto name = meth->get_name();
-    TRACE(REFU, 9, "sig: updating method %s\n", SHOW(meth));
-    meth->change(spec,
-                 true /* rename on collision */,
-                 true /* update deobfuscated name */);
-  };
-
-  if (colliding_candidates.empty()) {
-    walk::parallel::methods(scope, update_sig_non_colliding);
-    return;
+  // Solve updating collision for direct methods by appending primitive
+  // arguments.
+  if (!colliding_directs.empty()) {
+    fix_colliding_dmethods(scope, colliding_directs);
   }
-
-  // If we found colliding candidates, we need to check their true virtualness
-  // by computing virtual scopes of the current type system. We need to do that
-  // before updating any virtual methods. Because updating virtual method will
-  // break the existing virtual scopes.
-  TRACE(REFU, 9, "sig: fixing colliding candidates\n");
-  auto non_virtuals = devirtualize(scope);
-  std::unordered_set<DexMethod*> non_virt_set(non_virtuals.begin(),
-                                              non_virtuals.end());
-
-  // 3. Updating non-ctor dmethods and non-colliding vmethods first.
-  walk::parallel::methods(scope, update_sig_non_colliding);
-
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_methods;
-  for (const auto& pair : colliding_candidates) {
-    auto meth = pair.first;
-    auto new_proto = pair.second;
-    if (non_virt_set.count(meth) > 0) {
-      DexMethodSpec spec;
-      spec.proto = new_proto;
-      TRACE(REFU, 9, "sig: updating non virt method %s\n", SHOW(meth));
-      meth->change(spec,
-                   true /* rename on collision */,
-                   true /* update deobfuscated name */);
-      continue;
-    }
-    // 4. Break the build if we have to handle the renaming of true virtuals.
-    always_assert_log(!meth->is_virtual(),
-                      "sig: found true virtual colliding method %s\n",
-                      SHOW(meth));
-    colliding_methods[meth] = new_proto;
+  // Update virtual methods group by group.
+  for (auto& key_and_group : vmethods_groups) {
+    auto& group = key_and_group.second;
+    update_vmethods_group_one_type_ref(group, ch);
   }
-
-  // 5. Last resort. Fix colliding methods for non-virtuals.
-  fix_colliding_method(scope, colliding_methods);
 
   // Ensure that no method references left that still refer old types.
-  walk::parallel::code(scope, [&mergeables](DexMethod*, IRCode& code) {
+  walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (insn->has_method()) {
         auto proto = insn->get_method()->get_proto();
+        auto new_proto = get_new_proto(proto, old_to_new);
         always_assert_log(
-            !proto_has_reference_to(proto, mergeables),
+            proto == new_proto,
             "Find old type in method reference %s, please make sure that "
-            "ReBindRefsPass is enabled before TypeErasurePass\n",
+            "ReBindRefsPass is enabled before the crashed pass.\n",
             SHOW(insn));
       }
     }
