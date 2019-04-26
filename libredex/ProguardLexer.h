@@ -331,6 +331,7 @@ class Command : public Token {
       : Token(token::command, line_number), command_name{cmd} {}
   string show() const override { return "-" + command_name; }
   bool is_command() const override { return true; }
+  const std::string& name() const { return command_name; }
 };
 
 class Identifier : public Token {
