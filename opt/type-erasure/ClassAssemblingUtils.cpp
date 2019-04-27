@@ -374,9 +374,10 @@ void handle_interface_as_root(ModelSpec& spec,
     if (empty_base != nullptr) {
       TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(interface_root),
             SHOW(empty_base));
-      spec.roots.erase(interface_root);
       spec.roots.insert(empty_base);
       add_class(type_class(empty_base), scope, stores);
     }
+    // Remove interface roots regardless of whether an empty base was added.
+    spec.roots.erase(interface_root);
   }
 }
