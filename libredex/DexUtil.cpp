@@ -18,6 +18,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Resolver.h"
+#include "UnknownVirtuals.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -611,6 +612,10 @@ bool gather_invoked_methods_that_prevent_relocation(
     auto opcode = insn->opcode();
     if (is_invoke(opcode)) {
       auto meth = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (!meth && opcode == OPCODE_INVOKE_VIRTUAL &&
+          unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
+        continue;
+      }
       if (meth) {
         always_assert(meth->is_def());
         if (meth->is_external() && !is_public(meth)) {

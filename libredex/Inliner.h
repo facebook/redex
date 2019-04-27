@@ -292,7 +292,7 @@ class MultiMethodInliner {
     size_t invoke_super{0};
     size_t write_over_ins{0};
     size_t escaped_virtual{0};
-    size_t method_oks{0};
+    size_t known_public_methods{0};
     size_t unresolved_methods{0};
     size_t non_pub_virtual{0};
     size_t escaped_field{0};
