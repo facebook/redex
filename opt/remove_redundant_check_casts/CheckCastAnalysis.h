@@ -43,6 +43,19 @@ class CheckCastAnalysis final
   const DexMethod* m_method;
 };
 
+using CheckCastReplacements =
+    std::vector<std::pair<MethodItemEntry*, boost::optional<IRInstruction*>>>;
+
+class CheckCastAnalysisV2 {
+
+ public:
+  explicit CheckCastAnalysisV2(DexMethod* method) : m_method(method){};
+  const CheckCastReplacements collect_redundant_checks_replacement();
+
+ private:
+  DexMethod* m_method;
+};
+
 } // namespace impl
 
 } // namespace check_casts

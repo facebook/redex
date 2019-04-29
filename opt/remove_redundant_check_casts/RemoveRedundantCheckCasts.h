@@ -22,6 +22,7 @@ class RemoveRedundantCheckCastsPass : public Pass {
 
  private:
   size_t remove_redundant_check_casts(DexMethod* method);
+  size_t remove_redundant_check_casts_v2(DexMethod* method);
 };
 
 } // namespace check_casts

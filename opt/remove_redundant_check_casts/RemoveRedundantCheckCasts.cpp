@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "TypeInference.h"
 #include "Walkers.h"
 
 namespace check_casts {
@@ -43,6 +44,31 @@ size_t RemoveRedundantCheckCastsPass::remove_redundant_check_casts(
   }
 
   return num_redundant_check_casts;
+}
+
+size_t RemoveRedundantCheckCastsPass::remove_redundant_check_casts_v2(
+    DexMethod* method) {
+  if (!method || !method->get_code()) {
+    return 0;
+  }
+
+  auto* code = method->get_code();
+  code->build_cfg(/* editable */ false);
+  impl::CheckCastAnalysisV2 analysis(method);
+  auto redundant_check_casts = analysis.collect_redundant_checks_replacement();
+
+  for (const auto& pair : redundant_check_casts) {
+    MethodItemEntry* to_replace = pair.first;
+    boost::optional<IRInstruction*> replacement_opt = pair.second;
+    if (replacement_opt) {
+      code->replace_opcode(to_replace->insn, *replacement_opt);
+    } else {
+      auto it = code->iterator_to(*to_replace);
+      code->remove_opcode(it);
+    }
+  }
+
+  return redundant_check_casts.size();
 }
 
 void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
