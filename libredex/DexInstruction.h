@@ -244,6 +244,14 @@ class DexOpcodeData : public DexInstruction {
     memcpy(m_data, opcodes, count * sizeof(uint16_t));
   }
 
+  DexOpcodeData(const std::vector<uint16_t>& opcodes)
+      : DexInstruction(&opcodes[0], 0),
+        m_data_count(opcodes.size() - 1),
+        m_data(new uint16_t[opcodes.size() - 1]) {
+    const uint16_t* data = opcodes.data() + 1;
+    memcpy(m_data, data, (opcodes.size() - 1) * sizeof(uint16_t));
+  }
+
   DexOpcodeData(const DexOpcodeData& op)
       : DexInstruction(op),
         m_data_count(op.m_data_count),
