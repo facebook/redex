@@ -79,7 +79,7 @@ void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
   size_t num_redundant_check_casts = walk::parallel::reduce_methods<size_t>(
       scope,
       [&](DexMethod* method) -> size_t {
-        return remove_redundant_check_casts(method);
+        return remove_redundant_check_casts_v2(method);
       },
       std::plus<size_t>());
 
