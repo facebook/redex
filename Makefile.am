@@ -130,6 +130,7 @@ libredex_la_SOURCES = \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
+	libredex/InitCollisionFinder.cpp \
 	libredex/Inliner.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
