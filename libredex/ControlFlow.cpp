@@ -2055,27 +2055,22 @@ void ControlFlowGraph::copy_succ_edges(Block* from, Block* to, EdgeType type) {
 
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,
                                      const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns.begin(), insns.end(), /* before */ true);
+  return insert_before(position, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::insert_after(const InstructionIterator& position,
                                     const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns.begin(), insns.end(), /* before */ false);
+  return insert_after(position, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::push_front(Block* b,
                                   const std::vector<IRInstruction*>& insns) {
-  const auto& begin = ir_list::InstructionIterable(b).begin();
-  return insert(b->to_cfg_instruction_iterator(begin), insns.begin(),
-                insns.end(),
-                /* before */ true);
+  return push_front(b, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::push_back(Block* b,
                                  const std::vector<IRInstruction*>& insns) {
-  const auto& end = ir_list::InstructionIterable(b).end();
-  return insert(b->to_cfg_instruction_iterator(end), insns.begin(), insns.end(),
-                /* before */ true);
+  return push_back(b, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,

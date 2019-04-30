@@ -269,14 +269,33 @@ class Block final {
   InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
 
   // These forward to implementations in ControlFlowGraph, See comment there
+  template <class ForwardIt>
+  bool insert_before(const InstructionIterator& position,
+                     const ForwardIt& begin,
+                     const ForwardIt& end);
+
   bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
+
   bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool insert_after(const InstructionIterator& position,
+                    const ForwardIt& begin,
+                    const ForwardIt& end);
+
   bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
+
   bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool push_front(const ForwardIt& begin, const ForwardIt& end);
   bool push_front(const std::vector<IRInstruction*>& insns);
   bool push_front(IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool push_back(const ForwardIt& begin, const ForwardIt& end);
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
@@ -527,13 +546,35 @@ class ControlFlowGraph {
   //   false means that iterators are still valid
   bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool insert_before(const InstructionIterator& position,
+                     const ForwardIt& begin,
+                     const ForwardIt& end) {
+    return insert(position, begin, end, /* before */ true);
+  }
   // insert insns after position
   bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool insert_after(const InstructionIterator& position,
+                    const ForwardIt& begin,
+                    const ForwardIt& end) {
+    return insert(position, begin, end, /* before */ false);
+  }
+
   // insert insns at the beginning of block b
   bool push_front(Block* b, const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool push_front(Block* b, const ForwardIt& begin, const ForwardIt& end);
+
   // insert insns at the end of block b
   bool push_back(Block* b, const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool push_back(Block* b, const ForwardIt& begin, const ForwardIt& end);
 
   // Convenience functions that add just one instruction.
   bool insert_before(const InstructionIterator& position, IRInstruction* insn);
@@ -1201,6 +1242,48 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
     }
   }
   return invalidated_its;
+}
+
+template <class ForwardIt>
+bool ControlFlowGraph::push_front(Block* b,
+                                  const ForwardIt& begin,
+                                  const ForwardIt& end) {
+  const auto& block_begin = ir_list::InstructionIterable(b).begin();
+  return insert(b->to_cfg_instruction_iterator(block_begin), begin, end,
+                /* before */ true);
+}
+
+template <class ForwardIt>
+bool ControlFlowGraph::push_back(Block* b,
+                                 const ForwardIt& begin,
+                                 const ForwardIt& end) {
+  const auto& block_end = ir_list::InstructionIterable(b).end();
+  return insert(b->to_cfg_instruction_iterator(block_end), begin, end,
+                /* before */ true);
+}
+
+template <class ForwardIt>
+bool Block::insert_before(const InstructionIterator& position,
+                          const ForwardIt& begin,
+                          const ForwardIt& end) {
+  return m_parent->insert_before(position, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::insert_after(const InstructionIterator& position,
+                         const ForwardIt& begin,
+                         const ForwardIt& end) {
+  return m_parent->insert_after(position, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::push_front(const ForwardIt& begin, const ForwardIt& end) {
+  return m_parent->push_front(this, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::push_back(const ForwardIt& begin, const ForwardIt& end) {
+  return m_parent->push_back(this, begin, end);
 }
 
 } // namespace cfg

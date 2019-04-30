@@ -1213,6 +1213,27 @@ TEST(ControlFlow, simple_push_back) {
   }
 }
 
+TEST(ControlFlow, simple_push_back_it) {
+  ControlFlowGraph cfg{};
+  Block* entry = cfg.create_block();
+  cfg.set_entry_block(entry);
+
+  std::deque<IRInstruction*> to_insert;
+  for (int i = 0; i < 5; i++) {
+    auto insn = new IRInstruction(OPCODE_CONST);
+    insn->set_literal(i);
+    insn->set_dest(cfg.allocate_temp());
+    to_insert.push_back(insn);
+  }
+  entry->push_back(to_insert.begin(), to_insert.end());
+  cfg.sanity_check();
+  for (Block* b : cfg.blocks()) {
+    for (const auto& mie : ir_list::InstructionIterable(*b)) {
+      always_assert(mie.insn->opcode() == OPCODE_CONST);
+    }
+  }
+}
+
 TEST(ControlFlow, simple_push_front) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
@@ -1222,6 +1243,27 @@ TEST(ControlFlow, simple_push_front) {
   for (Block* b : cfg.blocks()) {
     for (const auto& mie : ir_list::InstructionIterable(*b)) {
       always_assert(mie.insn->opcode() == OPCODE_RETURN_VOID);
+    }
+  }
+}
+
+TEST(ControlFlow, simple_push_front_it) {
+  ControlFlowGraph cfg{};
+  Block* entry = cfg.create_block();
+  cfg.set_entry_block(entry);
+
+  std::deque<IRInstruction*> to_insert;
+  for (int i = 0; i < 5; i++) {
+    auto insn = new IRInstruction(OPCODE_CONST);
+    insn->set_literal(i);
+    insn->set_dest(cfg.allocate_temp());
+    to_insert.push_back(insn);
+  }
+  entry->push_front(to_insert.begin(), to_insert.end());
+  cfg.sanity_check();
+  for (Block* b : cfg.blocks()) {
+    for (const auto& mie : ir_list::InstructionIterable(*b)) {
+      always_assert(mie.insn->opcode() == OPCODE_CONST);
     }
   }
 }
@@ -1272,6 +1314,67 @@ TEST(ControlFlow, insertion) {
 
       (:true)
       (const v2 2)
+      (add-int/lit8 v2 v2 1)
+      (goto :exit)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, insertion_it) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (goto :exit)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  add.set_literal(1);
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_const(insn->opcode())) {
+      auto new_insn = new IRInstruction(add);
+      new_insn->set_src(0, insn->dest());
+      new_insn->set_dest(insn->dest());
+
+      std::vector<IRInstruction*> to_add{new IRInstruction(*new_insn),
+                                         new IRInstruction(*new_insn)};
+
+      cfg.insert_after(it, to_add.begin(), to_add.end());
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (add-int/lit8 v0 v0 1)
+      (add-int/lit8 v0 v0 1)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+      (add-int/lit8 v1 v1 1)
+      (add-int/lit8 v1 v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (add-int/lit8 v2 v2 1)
       (add-int/lit8 v2 v2 1)
       (goto :exit)
     )
