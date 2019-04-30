@@ -29,6 +29,13 @@ class ObjectSensitiveDcePass final : public Pass {
     if (s != "") {
       m_external_escape_summaries_file = s;
     }
+
+    if (!m_external_escape_summaries_file ||
+        !m_external_side_effect_summaries_file) {
+      TRACE(OSDCE, 1,
+            "WARNING: External summary file missing; OSDCE will make "
+            "conservative assumptions about system & third-party code.\n");
+    }
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
