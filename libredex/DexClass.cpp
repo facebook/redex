@@ -36,7 +36,7 @@ uint32_t DexString::length() const {
   return length_of_utf8_string(c_str());
 }
 
-int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
+int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   uint16_t* typep = (uint16_t*)(output + 1);
   *output = (uint32_t)m_list.size();
   for (auto const& type : m_list) {
@@ -1051,7 +1051,7 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
+static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
   std::ostringstream ss;
   ss << type_shorty(rtype);
   if (args != nullptr) {
@@ -1063,7 +1063,7 @@ static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
   return DexString::make_string(type_string);
 }
 
-DexProto* DexProto::make_proto(DexType* rtype, DexTypeList* args) {
+DexProto* DexProto::make_proto(const DexType* rtype, const DexTypeList* args) {
   auto shorty = make_shorty(rtype, args);
   return DexProto::make_proto(rtype, args, shorty);
 }

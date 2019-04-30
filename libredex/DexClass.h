@@ -120,7 +120,7 @@ class DexString {
     return len;
   }
 
-  void encode(uint8_t* output) {
+  void encode(uint8_t* output) const {
     output = write_uleb128(output, m_utfsize);
     strcpy((char*)output, c_str());
   }
@@ -205,7 +205,7 @@ class DexType {
     return get_type(DexString::get_string(type_string));
   }
 
-  static DexType* get_type(const std::string &str) {
+  static DexType* get_type(const std::string& str) {
     return get_type(DexString::get_string(str));
   }
 
@@ -452,15 +452,13 @@ class DexTypeList {
  public:
   const std::deque<DexType*>& get_type_list() const { return m_list; }
 
-  size_t size() const {
-    return get_type_list().size();
-  }
+  size_t size() const { return get_type_list().size(); }
 
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
    */
-  int encode(DexOutputIdx* dodx, uint32_t* output);
+  int encode(DexOutputIdx* dodx, uint32_t* output) const;
 
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
     auto ita = a.m_list.begin();
@@ -515,16 +513,16 @@ class DexProto {
 
   // If the DexProto exists, return it, otherwise create it and return it.
   // See also get_proto()
-  static DexProto* make_proto(DexType* rtype,
-                              DexTypeList* args,
-                              DexString* shorty) {
+  static DexProto* make_proto(const DexType* rtype,
+                              const DexTypeList* args,
+                              const DexString* shorty) {
     return g_redex->make_proto(rtype, args, shorty);
   }
 
-  static DexProto* make_proto(DexType* rtype, DexTypeList* args);
+  static DexProto* make_proto(const DexType* rtype, const DexTypeList* args);
 
   // Return an existing DexProto or nullptr if one does not exist.
-  static DexProto* get_proto(DexType* rtype, DexTypeList* args) {
+  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args) {
     return g_redex->get_proto(rtype, args);
   }
 

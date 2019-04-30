@@ -105,16 +105,17 @@ DexString* RedexContext::get_string(const char* nstr, uint32_t utfsize) {
   return s_string_map.get(nstr, nullptr);
 }
 
-DexType* RedexContext::make_type(DexString* dstring) {
+DexType* RedexContext::make_type(const DexString* dstring) {
   always_assert(dstring != nullptr);
   auto rv = s_type_map.get(dstring, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert(dstring, new DexType(dstring), &s_type_map);
+  return try_insert(dstring, new DexType(const_cast<DexString*>(dstring)),
+                    &s_type_map);
 }
 
-DexType* RedexContext::get_type(DexString* dstring) {
+DexType* RedexContext::get_type(const DexString* dstring) {
   if (dstring == nullptr) {
     return nullptr;
   }
@@ -213,28 +214,39 @@ DexTypeList* RedexContext::get_type_list(std::deque<DexType*>&& p) {
   return s_typelist_map.get(p, nullptr);
 }
 
-DexProto* RedexContext::make_proto(DexType* rtype,
-                                   DexTypeList* args,
-                                   DexString* shorty) {
+DexProto* RedexContext::make_proto(const DexType* rtype,
+                                   const DexTypeList* args,
+                                   const DexString* shorty) {
   always_assert(rtype != nullptr && args != nullptr && shorty != nullptr);
   ProtoKey key(rtype, args);
   auto rv = s_proto_map.get(key, nullptr);
   if (rv != nullptr) {
     return rv;
   }
-  return try_insert(key, new DexProto(rtype, args, shorty), &s_proto_map);
+  return try_insert(key,
+                    new DexProto(const_cast<DexType*>(rtype),
+                                 const_cast<DexTypeList*>(args),
+                                 const_cast<DexString*>(shorty)),
+                    &s_proto_map);
 }
 
-DexProto* RedexContext::get_proto(DexType* rtype, DexTypeList* args) {
+DexProto* RedexContext::get_proto(const DexType* rtype,
+                                  const DexTypeList* args) {
   if (rtype == nullptr || args == nullptr) {
     return nullptr;
   }
   return s_proto_map.get(ProtoKey(rtype, args), nullptr);
 }
 
-DexMethodRef* RedexContext::make_method(DexType* type,
-                                        DexString* name,
-                                        DexProto* proto) {
+DexMethodRef* RedexContext::make_method(const DexType* type_,
+                                        const DexString* name_,
+                                        const DexProto* proto_) {
+  // Ideally, DexMethodSpec would store const types, then these casts wouldn't
+  // be necessary, but that would involve cleaning up quite a bit of existing
+  // code.
+  auto type = const_cast<DexType*>(type_);
+  auto name = const_cast<DexString*>(name_);
+  auto proto = const_cast<DexProto*>(proto_);
   always_assert(type != nullptr && name != nullptr && proto != nullptr);
   DexMethodSpec r(type, name, proto);
   auto rv = s_method_map.get(r, nullptr);
@@ -245,13 +257,14 @@ DexMethodRef* RedexContext::make_method(DexType* type,
       r, new DexMethod(type, name, proto), &s_method_map);
 }
 
-DexMethodRef* RedexContext::get_method(DexType* type,
-                                       DexString* name,
-                                       DexProto* proto) {
+DexMethodRef* RedexContext::get_method(const DexType* type,
+                                       const DexString* name,
+                                       const DexProto* proto) {
   if (type == nullptr || name == nullptr || proto == nullptr) {
     return nullptr;
   }
-  DexMethodSpec r(type, name, proto);
+  DexMethodSpec r(const_cast<DexType*>(type), const_cast<DexString*>(name),
+                  const_cast<DexProto*>(proto));
   return s_method_map.get(r, nullptr);
 }
 
