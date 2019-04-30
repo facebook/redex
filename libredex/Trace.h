@@ -53,6 +53,7 @@
   TM(INSTRUMENT)         \
   TM(INTF)               \
   TM(BLD_PATTERN)        \
+  TM(LIB)                \
   TM(LOC)                \
   TM(MAGIC_FIELDS)       \
   TM(MAIN)               \
