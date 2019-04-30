@@ -35,9 +35,6 @@ namespace {
 
 static bool debug = false;
 
-// sMethodStats is sharded to sMethodStats1 to sMethodStatsN.
-static constexpr size_t NUM_SHARDS = 8;
-
 class InstrumentInterDexPlugin : public interdex::InterDexPassPlugin {
  public:
   InstrumentInterDexPlugin(size_t max_analysis_methods)
@@ -641,31 +638,197 @@ void write_basic_block_index_file(
   TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
 } // namespace
 
-auto find_sharded_analysis_methods(const DexClass& cls,
-                                   const std::string& method_name) -> auto {
-  std::unordered_map<std::string, int> names;
-  for (size_t i = 1; i <= NUM_SHARDS; ++i) {
-    names[method_name + std::to_string(i)] = i;
+auto generate_sharded_analysis_methods(DexClass& cls,
+                                       const std::string& method_name,
+                                       const std::vector<DexFieldRef*> fields,
+                                       const size_t num_shards) -> auto {
+  if (method_name.back() != '1') {
+    std::cerr << "[InstrumentPass] error: \'analysis_method_name\' must end "
+                 "with 1, but the name was\'"
+              << method_name << "\'" << show(cls) << std::endl;
+    exit(1);
   }
 
-  std::unordered_map<int, DexMethod*> methods;
+  DexMethod* template_method = nullptr;
   for (const auto& m : cls.get_dmethods()) {
-    auto found = names.find(m->get_name()->str());
-    if (found != names.end()) {
-      methods[found->second] = m;
+    if (m->get_name()->str() == method_name) {
+      template_method = m;
+      break;
     }
   }
 
-  if (methods.size() != NUM_SHARDS) {
-    std::cerr << "[InstrumentPass] error: failed to find all " << method_name
-              << "[1-" << NUM_SHARDS << "] in " << show(cls) << std::endl;
+  if (template_method == nullptr) {
+    std::cerr << "[InstrumentPass] error: failed to find template method \'"
+              << method_name << "\' in " << show(cls) << std::endl;
     for (const auto& m : cls.get_dmethods()) {
       std::cerr << " " << show(m) << std::endl;
     }
     exit(1);
   }
 
+  std::unordered_map<int /*shard index*/, DexMethod*> methods = {
+      {1, template_method}};
+  std::unordered_map<std::string, int> names = {{method_name, 1}};
+  const auto method_name_prefix =
+      method_name.substr(0, method_name.length() - 1);
+  for (size_t i = 2; i <= num_shards; ++i) {
+    const auto new_name = method_name_prefix + std::to_string(i);
+    DexMethod* new_method =
+        DexMethod::make_method_from(template_method,
+                                    template_method->get_class(),
+                                    DexString::make_string(new_name));
+    new_method->set_deobfuscated_name(new_name);
+    cls.add_method(new_method);
+
+    // Patch array name.
+    bool patched = false;
+    walk::matching_opcodes_in_block(
+        *new_method,
+        std::make_tuple(m::is_opcode(OPCODE_SGET_OBJECT)),
+        [&](DexMethod* method,
+            cfg::Block*,
+            const std::vector<IRInstruction*>& insts) {
+          if (insts[0]->get_field()->get_name()->str() == "sMethodStats1") {
+            insts[0]->set_field(fields[i - 1]);
+            patched = true;
+            return;
+          }
+        });
+
+    always_assert_log(patched, "Failed to patch sMethodStats1 in %s\n",
+                      new_name.c_str());
+    names[new_name] = i;
+    methods[i] = new_method;
+    TRACE(INSTRUMENT, 4, "Cloned %s and patched the stat array successfully\n",
+          new_name.c_str());
+  }
+
   return std::make_pair(methods, names);
+}
+
+std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
+                                               const size_t num_shards) {
+  // Insert additional sMethodStatsN into the clinit
+  //
+  // private static short[] sMethodStats1 = new short[0];
+  // private static short[] sMethodStats2 = new short[0]; <= Add
+  // ...
+  // private static short[] sMethodStatsN = new short[0]; <= Add
+  //
+  //        OPCODE: CONST v0, 0
+  //        OPCODE: NEW_ARRAY v0, [S
+  //        OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1
+  //        OPCODE: SPUT_OBJECT v1, Lcom/foo/Bar;.sMethodStats1:[S
+  // Add => OPCODE: NEW_ARRAY v0, [S
+  // Add => OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v1
+  // Add => OPCODE: SPUT_OBJECT v1, Lcom/foo/Bar;.sMethodStats2:[S
+  always_assert(num_shards > 0);
+  DexMethod* clinit = cls->get_clinit();
+  IRCode* code = clinit->get_code();
+  std::vector<DexFieldRef*> fields;
+  bool patched = false;
+  walk::matching_opcodes_in_block(
+      *clinit,
+      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
+                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
+                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      [&](DexMethod* method,
+          cfg::Block*,
+          const std::vector<IRInstruction*>& insts) {
+        if (insts[2]->get_field()->get_name()->str() != "sMethodStats1") {
+          return;
+        }
+
+        // Create new sMethodStatsN fields.
+        DexField* field = static_cast<DexField*>(insts[2]->get_field());
+        fields.push_back(field);
+        for (size_t i = 2; i <= num_shards; i++) {
+          const auto new_name = "sMethodStats" + std::to_string(i);
+          DexField* new_field = static_cast<DexField*>(
+              DexField::make_field(field->get_class(),
+                                   DexString::make_string(new_name),
+                                   field->get_type()));
+          new_field->set_deobfuscated_name(new_name);
+          new_field->make_concrete(field->get_access(),
+                                   field->get_static_value());
+          fields.push_back(new_field);
+          cls->add_field(new_field);
+        }
+
+        // Clone the matched three instructions, but with new field names.
+        for (size_t i = num_shards; i >= 2; --i) {
+          code->insert_after(
+              insts[2], {(new IRInstruction(OPCODE_NEW_ARRAY))
+                             ->set_type(insts[0]->get_type())
+                             ->set_src(0, insts[0]->src(0)),
+                         (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                             ->set_dest(insts[1]->dest()),
+                         (new IRInstruction(OPCODE_SPUT_OBJECT))
+                             ->set_src(0, insts[2]->src(0))
+                             ->set_field(fields[i - 1])});
+        }
+        patched = true;
+      });
+
+  always_assert_log(patched, "Failed to insert sMethodStatsN:\n%s",
+                    SHOW(clinit->get_code()));
+
+  // static short[][] sMethodStatsArray = new short[][] {
+  //   sMethodStats1, <== Add
+  //   sMethodStats2, <== Add
+  //   ...
+  // }
+  //
+  //        OPCODE: NEW_ARRAY v0, [[S  <== Patch
+  //        OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT vX
+  //        OPCODE: SPUT_OBJECT vX, Lcom/foo;.sMethodStatsArray:[[S
+  // Add => OPCODE: SGET_OBJECT Lcom/foo;.sMethodStats1:[S
+  // Add => OPCODE: IOPCODE_MOVE_RESULT_PSEUDO_OBJECT vY
+  // Add => OPCODE: CONST vN, index
+  // Add => OPCODE: APUT_OBJECT vY, vX, vN
+  //        ...
+  // Add => OPCODE: APUT_OBJECT vY, vX, vN
+  patch_array_size(*cls, "sMethodStatsArray", num_shards);
+  patched = false;
+  walk::matching_opcodes_in_block(
+      *clinit,
+      std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
+                      m::is_opcode(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT),
+                      m::is_opcode(OPCODE_SPUT_OBJECT)),
+      [&](DexMethod* method,
+          cfg::Block*,
+          const std::vector<IRInstruction*>& insts) {
+        if (insts[2]->get_field()->get_name()->str() != "sMethodStatsArray") {
+          return;
+        }
+
+        const uint16_t vX = insts[1]->dest();
+        const uint16_t vY = code->allocate_temp();
+        const uint16_t vN = code->allocate_temp();
+        for (size_t i = num_shards; i >= 1; --i) {
+          code->insert_after(
+              insts[2],
+              {(new IRInstruction(OPCODE_SGET_OBJECT))
+                   ->set_field(fields[i - 1]),
+               (new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
+                   ->set_dest(vY),
+               (new IRInstruction(OPCODE_CONST))
+                   ->set_literal(i - 1)
+                   ->set_dest(vN),
+               (new IRInstruction(OPCODE_APUT_OBJECT))
+                   ->set_arg_word_count(3)
+                   ->set_src(0, vY)
+                   ->set_src(1, vX)
+                   ->set_src(2, vN)});
+        }
+        patched = true;
+      });
+
+  always_assert_log(patched,
+                    "Failed to insert sMethodStatsN to sMethodStatsArray:\n%s",
+                    SHOW(clinit->get_code()));
+
+  return fields;
 }
 
 void do_simple_method_tracing(DexClass* analysis_cls,
@@ -673,8 +836,11 @@ void do_simple_method_tracing(DexClass* analysis_cls,
                               ConfigFiles& cfg,
                               PassManager& pm,
                               const InstrumentPass::Options& options) {
-  const auto& analysis_methods = find_sharded_analysis_methods(
-      *analysis_cls, options.analysis_method_name);
+  const size_t NUM_SHARDS = options.num_shards;
+  const auto& array_fields = patch_sharded_arrays(analysis_cls, NUM_SHARDS);
+  always_assert(array_fields.size() == NUM_SHARDS);
+  const auto& analysis_methods = generate_sharded_analysis_methods(
+      *analysis_cls, options.analysis_method_name, array_fields, NUM_SHARDS);
   const auto& analysis_method_map = analysis_methods.first;
   const auto& analysis_method_names = analysis_methods.second;
 
@@ -723,10 +889,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     const auto& method_name = method->get_name()->str();
     if (!options.whitelist.empty()) {
       if (is_included(method_name, cls_name, options.whitelist)) {
-        TRACE(INSTRUMENT, 7, "Whitelist: included: %s\n", SHOW(method));
+        TRACE(INSTRUMENT, 8, "Whitelist: included: %s\n", SHOW(method));
       } else {
         ++excluded;
-        TRACE(INSTRUMENT, 8, "Whitelist: excluded: %s\n", SHOW(method));
+        TRACE(INSTRUMENT, 9, "Whitelist: excluded: %s\n", SHOW(method));
         return 0;
       }
     }
@@ -736,13 +902,13 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // is not instrumented.
     if (is_included(method_name, cls_name, options.blacklist)) {
       ++excluded;
-      TRACE(INSTRUMENT, 7, "Blacklist: excluded: %s\n", SHOW(method));
+      TRACE(INSTRUMENT, 8, "Blacklist: excluded: %s\n", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
           << "BLACKLIST " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 
-    TRACE(INSTRUMENT, 5, "%zu: %s\n", method_id, SHOW(method));
+    TRACE(INSTRUMENT, 8, "%zu: %s\n", method_id, SHOW(method));
     assert(to_instrument.size() == method_id);
     to_instrument.push_back(method);
 
@@ -824,10 +990,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Now we know the total number of methods to be instrumented. Do some
   // computations and actual instrumentation.
   const size_t kTotalSize = to_instrument.size();
-  TRACE(INSTRUMENT, 4, "%zu methods to be instrumented; shard size: %zu (+1)\n",
+  TRACE(INSTRUMENT, 2, "%zu methods to be instrumented; shard size: %zu (+1)\n",
         kTotalSize, kTotalSize / NUM_SHARDS);
   for (size_t i = 0; i < kTotalSize; ++i) {
-    TRACE(INSTRUMENT, 7, "Sharded %zu => [%zu][%zu] %s\n", i, (i % NUM_SHARDS),
+    TRACE(INSTRUMENT, 6, "Sharded %zu => [%zu][%zu] %s\n", i, (i % NUM_SHARDS),
           (i / NUM_SHARDS), SHOW(to_instrument[i]));
     instrument_onMethodBegin(to_instrument[i],
                              (i / NUM_SHARDS) * options.num_stats_per_method,
@@ -843,7 +1009,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Patch stat array sizes.
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
-    patch_array_size(*analysis_cls, "sMethodStats" + std::to_string(i + 1),
+    patch_array_size(*analysis_cls,
+                     "sMethodStats" + std::to_string(i + 1),
                      options.num_stats_per_method * n);
   }
 
@@ -885,7 +1052,6 @@ void do_basic_block_tracing(DexClass* analysis_cls,
                             ConfigFiles& cfg,
                             PassManager& pm,
                             const InstrumentPass::Options& options) {
-
   const auto& method_onMethodExit_map = find_and_verify_analysis_method(
       *analysis_cls, options.analysis_method_name);
 
@@ -999,15 +1165,17 @@ void InstrumentPass::configure_pass(const JsonWrapper& jw) {
   jw.get("metadata_file_name", "instrument-mapping.txt",
          m_options.metadata_file_name);
   jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
+  jw.get("num_shards", 1, m_options.num_shards);
   jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
 
   // Make a small room for additional method refs during InterDex.
   interdex::InterDexRegistry* registry =
       static_cast<interdex::InterDexRegistry*>(
           PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-  registry->register_plugin("INSTRUMENT_PASS_PLUGIN", []() {
-    return new InstrumentInterDexPlugin(NUM_SHARDS);
-  });
+  registry->register_plugin("INSTRUMENT_PASS_PLUGIN",
+                            [num_shards = m_options.num_shards]() {
+                              return new InstrumentInterDexPlugin(num_shards);
+                            });
 }
 
 void InstrumentPass::run_pass(DexStoresVector& stores,

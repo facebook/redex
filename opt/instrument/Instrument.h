@@ -27,6 +27,7 @@ class InstrumentPass : public Pass {
     std::string blacklist_file_name;
     std::string metadata_file_name;
     int64_t num_stats_per_method;
+    int64_t num_shards;
     bool only_cold_start_class;
   };
 
