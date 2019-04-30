@@ -55,6 +55,19 @@ size_t read(std::istream& input,
     if (dex_method == nullptr) {
       continue;
     }
+    // Check that we are indeed specifying the behavior of an external method.
+    // I'm not really sure what happens when a dex re-defines a system class --
+    // I suspect it just gets ignored -- but I'm going to be conservative. Note
+    // also that we are checking is_external on the class rather than the method
+    // because not every external method has a defined stub (e.g. if it is
+    // implicitly defined due to inheriting from another method, like how
+    // ArrayList.equals() inherits from Object.equals()).
+    auto cls = type_class(dex_method->get_class());
+    if (cls == nullptr || !cls->is_external()) {
+      TRACE(LIB, 1, "Found a summary for non-external method '%s', ignoring\n",
+            SHOW(dex_method));
+      continue;
+    }
     auto v = V::from_s_expr(expr[1]);
     auto it = map->find(dex_method);
     if (it == map->end()) {
