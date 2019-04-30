@@ -2053,138 +2053,29 @@ void ControlFlowGraph::copy_succ_edges(Block* from, Block* to, EdgeType type) {
   }
 }
 
-bool ControlFlowGraph::insert(const InstructionIterator& position,
-                              const std::vector<IRInstruction*>& insns,
-                              bool before) {
-  // Convert to the before case by moving the position forward one.
-  Block* b = position.block();
-  if (position.unwrap() == b->end()) {
-    always_assert_log(before, "can't insert after the end");
-  }
-  IRList::iterator pos =
-      before ? position.unwrap() : std::next(position.unwrap());
-
-  bool invalidated_its = false;
-  for (auto insn : insns) {
-    const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
-    auto op = insn->opcode();
-
-    // Certain types of blocks cannot have instructions added to the end.
-    // Disallow that case here.
-    if (pos == b->end()) {
-      auto existing_last = b->get_last_insn();
-      if (existing_last != b->end()) {
-        // This will abort if someone tries to insert after a returning or
-        // throwing instruction.
-        auto existing_last_op = existing_last->insn->opcode();
-        always_assert_log(!is_branch(existing_last_op) &&
-                              !is_throw(existing_last_op) &&
-                              !is_return(existing_last_op),
-                          "Can't add instructions after %s in Block %d in %s",
-                          SHOW(existing_last->insn), b->id(), SHOW(*this));
-
-        // When inserting after an instruction that may throw, we need to start
-        // a new block. We also copy over all throw-edges. See FIXME below for
-        // a discussion about try-regions in general.
-        if (!throws.empty()) {
-          always_assert_log(!existing_last->insn->has_move_result(),
-                            "Can't add instructions after throwing instruction "
-                            "%s with move-result in Block %d in %s",
-                            SHOW(existing_last->insn), b->id(), SHOW(*this));
-          Block* new_block = create_block();
-          if (opcode::may_throw(op)) {
-            copy_succ_edges(b, new_block, EDGE_THROW);
-          }
-          const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
-          set_edge_source(existing_goto_edge, new_block);
-          add_edge(b, new_block, EDGE_GOTO);
-          // Continue inserting in the new block.
-          b = new_block;
-          pos = new_block->begin();
-        }
-      }
-    }
-
-    always_assert_log(!is_branch(op),
-                      "insert() does not support branch opcodes. Use "
-                      "create_branch() instead");
-
-    IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-
-    if (is_throw(op) || is_return(op)) {
-      // Throw and return end the block, we must remove all code after them.
-      always_assert(insn == insns.back());
-      for (auto it = pos; it != b->m_entries.end();) {
-        it = b->m_entries.erase_and_dispose(it);
-        invalidated_its = true;
-      }
-      if (is_return(op)) {
-        // This block now ends in a return, it must have no successors.
-        delete_succ_edge_if(
-            b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
-      } else {
-        always_assert(is_throw(op));
-        // The only valid way to leave this block is via a throw edge.
-        delete_succ_edge_if(b, [](const Edge* e) {
-          return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
-        });
-      }
-      // If this created unreachable blocks, they will be removed by simplify.
-    } else if (opcode::may_throw(op) && !throws.empty()) {
-      invalidated_its = true;
-      // FIXME: Copying the outgoing throw edges isn't enough.
-      // When the editable CFG is constructed, we transform the try regions
-      // into throw edges. We only add these edges to blocks that may throw,
-      // thus losing the knowledge of which blocks were originally inside a
-      // try region. If we add a new throwing instruction here. It may be
-      // added to a block that was originally inside a try region, but we lost
-      // that information already.
-      //
-      // Possible Solutions:
-      // * Rework throw representation to regions instead of duplicated edges?
-      // * User gives a block that we want to copy the throw edges from?
-      // * User specifies which throw edges they want and to which blocks?
-
-      // Split the block after the new instruction.
-      // b has become the predecessor of the new split pair
-      Block* succ =
-          split_block(b->to_cfg_instruction_iterator(new_inserted_it));
-
-      if (!succ->empty()) {
-        // Copy the outgoing throw edges of the new block back into the original
-        // block
-        copy_succ_edges(succ, b, EDGE_THROW);
-      }
-
-      // Continue inserting in the successor block.
-      b = succ;
-      pos = succ->begin();
-    }
-  }
-  return invalidated_its;
-}
-
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,
                                      const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns, /* before */ true);
+  return insert(position, insns.begin(), insns.end(), /* before */ true);
 }
 
 bool ControlFlowGraph::insert_after(const InstructionIterator& position,
                                     const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns, /* before */ false);
+  return insert(position, insns.begin(), insns.end(), /* before */ false);
 }
 
 bool ControlFlowGraph::push_front(Block* b,
                                   const std::vector<IRInstruction*>& insns) {
   const auto& begin = ir_list::InstructionIterable(b).begin();
-  return insert(b->to_cfg_instruction_iterator(begin), insns,
+  return insert(b->to_cfg_instruction_iterator(begin), insns.begin(),
+                insns.end(),
                 /* before */ true);
 }
 
 bool ControlFlowGraph::push_back(Block* b,
                                  const std::vector<IRInstruction*>& insns) {
   const auto& end = ir_list::InstructionIterable(b).end();
-  return insert(b->to_cfg_instruction_iterator(end), insns, /* before */ true);
+  return insert(b->to_cfg_instruction_iterator(end), insns.begin(), insns.end(),
+                /* before */ true);
 }
 
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,
