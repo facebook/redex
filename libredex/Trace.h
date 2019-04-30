@@ -94,6 +94,7 @@
   TM(SINK)               \
   TM(SPLIT_RES)          \
   TM(STATIC_RELO)        \
+  TM(STRBUILD)           \
   TM(STR_CAT)            \
   TM(STR_SIMPLE)         \
   TM(SUPER)              \

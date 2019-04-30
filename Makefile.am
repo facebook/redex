@@ -60,6 +60,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/result-propagation \
+	-I$(top_srcdir)/opt/stringbuilder-outliner \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
@@ -297,6 +298,7 @@ redex_all_SOURCES = \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/string_simplification/StringIterator.cpp \
 	opt/string_simplification/StringSimplification.cpp \
+	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \

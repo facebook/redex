@@ -454,6 +454,8 @@ class DexTypeList {
 
   size_t size() const { return get_type_list().size(); }
 
+  DexType* at(size_t i) const { return get_type_list().at(i); }
+
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
