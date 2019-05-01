@@ -213,8 +213,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
             // method. This is okay, even though we mutate the cfg, because
             // we don't change the set of if-instructions, and only do per-
             // instructions lookups in the type environments.
-            type_inference.reset(new type_inference::TypeInference(
-                cfg, false /* enable_polymorphic_constants */));
+            type_inference.reset(new type_inference::TypeInference(cfg));
             type_inference->run(is_static, declaring_type, args);
           }
 

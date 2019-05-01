@@ -11,7 +11,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
-#include "TypeInference.h"
 #include "Walkers.h"
 
 namespace check_casts {

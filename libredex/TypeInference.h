@@ -177,7 +177,7 @@ class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
   TypeInference(const cfg::ControlFlowGraph& cfg,
-                bool enable_polymorphic_constants)
+                bool enable_polymorphic_constants = false)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
         m_cfg(cfg),
         m_enable_polymorphic_constants(enable_polymorphic_constants) {}

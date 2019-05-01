@@ -134,8 +134,7 @@ CheckCastAnalysisV2::collect_redundant_checks_replacement() {
   auto* code = m_method->get_code();
   code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
-  type_inference::TypeInference inference(
-      cfg, /* enable_polymorphic_constants */ false);
+  type_inference::TypeInference inference(cfg);
   inference.run(m_method);
   auto& envs = inference.get_type_environments();
 
