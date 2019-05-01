@@ -479,17 +479,10 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
 }
 
 Json::Value get_times() {
-  using ms = std::chrono::milliseconds;
-  using std::chrono::duration_cast;
   Json::Value list(Json::arrayValue);
-  for (const auto& event : Timer::get_times()) {
+  for (auto t : Timer::get_times()) {
     Json::Value element;
-    element["event"] = event.name;
-    element["depth"] = event.depth;
-    element["start"] = static_cast<Json::Int64>(
-        duration_cast<ms>(event.start.time_since_epoch()).count());
-    element["end"] = static_cast<Json::Int64>(
-        duration_cast<ms>(event.end.time_since_epoch()).count());
+    element[t.first] = std::round(t.second * 10) / 10.0;
     list.append(element);
   }
   return list;
@@ -980,7 +973,7 @@ int main(int argc, char* argv[]) {
   signal(SIGBUS, crash_backtrace_handler);
 #endif
 
-  std::string timings_output_path;
+  std::string stats_output_path;
   Json::Value stats;
   {
     Timer redex_all_main_timer("redex-all main()");
@@ -1039,27 +1032,19 @@ int main(int argc, char* argv[]) {
                                     args.entry_data);
     }
 
-    std::string stats_output_path =
+    stats_output_path =
         conf.metafile(args.config.get("stats_output", "").asString());
-    {
-      std::ofstream out(stats_output_path);
-      Json::StyledStreamWriter writer;
-      writer.write(out, stats);
-    }
-
-    timings_output_path =
-        conf.metafile(args.config.get("timings_output", "").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;
     }
   }
-
   // now that all the timers are done running, we can collect the data
+  stats["output_stats"]["time_stats"] = get_times();
+  Json::StyledStreamWriter writer;
   {
-    std::ofstream out(timings_output_path);
-    Json::StyledStreamWriter writer;
-    writer.write(out, get_times());
+    std::ofstream out(stats_output_path);
+    writer.write(out, stats);
   }
 
   TRACE(MAIN, 1, "Done.\n");
