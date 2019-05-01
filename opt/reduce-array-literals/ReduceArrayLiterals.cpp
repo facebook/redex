@@ -348,10 +348,12 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
 
 ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
                                          size_t max_filled_elements,
-                                         int32_t min_sdk)
+                                         int32_t min_sdk,
+                                         Architecture arch)
     : m_cfg(cfg),
       m_max_filled_elements(max_filled_elements),
-      m_min_sdk(min_sdk) {
+      m_min_sdk(min_sdk),
+      m_arch(arch) {
 
   bool any_new_array_insns = false;
   for (auto* block : cfg.blocks()) {
@@ -389,7 +391,9 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (m_min_sdk < 19 && !is_primitive(element_type)) {
+    if (m_min_sdk < 19 &&
+        (m_arch == Architecture::UNKNOWN || m_arch == Architecture::X86) &&
+        !is_primitive(element_type)) {
       // Before Kitkat, the Dalvik x86-atom backend had a bug for this case.
       // https://android.googlesource.com/platform/dalvik/+/ics-mr0/vm/mterp/out/InterpAsm-x86-atom.S#25106
       m_stats.remaining_buggy_arrays++;
@@ -603,7 +607,9 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles& /* conf */,
                                        PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
-  TRACE(RAL, 1, "[RAL] min_sdk=%d\n", mgr.get_redex_options().min_sdk);
+  Architecture arch = mgr.get_redex_options().arch;
+  TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s\n", min_sdk,
+        architecture_to_string(arch));
 
   const auto scope = build_class_scope(stores);
 
@@ -616,7 +622,8 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         }
 
         code->build_cfg(/* editable */ true);
-        ReduceArrayLiterals ral(code->cfg(), m_max_filled_elements, min_sdk);
+        ReduceArrayLiterals ral(code->cfg(), m_max_filled_elements, min_sdk,
+                                arch);
         ral.patch();
         code->clear_cfg();
         return ral.get_stats();

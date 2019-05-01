@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Pass.h"
+#include "PassManager.h"
 
 class ReduceArrayLiterals {
  public:
@@ -25,7 +26,8 @@ class ReduceArrayLiterals {
 
   ReduceArrayLiterals(cfg::ControlFlowGraph&,
                       size_t max_filled_elements,
-                      int32_t min_sdk);
+                      int32_t min_sdk,
+                      Architecture arch);
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -49,6 +51,7 @@ class ReduceArrayLiterals {
   Stats m_stats;
   std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
       m_array_literals;
+  Architecture m_arch;
 };
 
 class ReduceArrayLiteralsPass : public Pass {

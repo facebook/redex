@@ -20,12 +20,14 @@ void test(const std::string& code_str,
           size_t expected_filled_arrays,
           size_t expected_filled_array_elements,
           size_t max_filled_elements = 222,
-          int32_t min_sdk = 19) {
+          int32_t min_sdk = 19,
+          Architecture arch = Architecture::UNKNOWN) {
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
-  ReduceArrayLiterals ral(code.get()->cfg(), max_filled_elements, min_sdk);
+  ReduceArrayLiterals ral(
+      code.get()->cfg(), max_filled_elements, min_sdk, arch);
   ral.patch();
   code.get()->clear_cfg();
   auto stats = ral.get_stats();
@@ -98,8 +100,8 @@ TEST_F(ReduceArrayLiteralsTest, array_one_element) {
   test(code_str, expected_str, 1, 1);
 }
 
-TEST_F(ReduceArrayLiteralsTest, jelly_bean) {
-  // non-primitive elements before KitKat were buggy, and we bail
+TEST_F(ReduceArrayLiteralsTest, jelly_bean_x86) {
+  // non-primitive elements before KitKat on x86 were buggy, and we bail
   auto code_str = R"(
     (
       (const v0 1)
@@ -113,7 +115,36 @@ TEST_F(ReduceArrayLiteralsTest, jelly_bean) {
     )
   )";
   const auto expected_str = code_str;
-  test(code_str, expected_str, 0, 0, 222, 18);
+  test(code_str, expected_str, 0, 0, 222, 18, Architecture::X86);
+}
+
+TEST_F(ReduceArrayLiteralsTest, jelly_bean_armv7) {
+  // non-primitive elements on non-x86 architectures always worked
+  auto code_str = R"(
+    (
+      (const v0 1)
+      (new-array v0 "[Ljava/lang/String;")
+      (move-result-pseudo-object v1)
+      (const v0 0)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (aput v2 v1 v0)
+      (return-object v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v0 1)
+      (const v0 0)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (move-object v3 v2)
+      (filled-new-array (v3) "[Ljava/lang/String;")
+      (move-result-object v1)
+      (return-object v1)
+    )
+  )";
+  test(code_str, expected_str, 1, 1, 222, 18, Architecture::ARMV7);
 }
 
 TEST_F(ReduceArrayLiteralsTest, array_one_wide_element) {

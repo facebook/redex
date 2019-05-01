@@ -44,6 +44,38 @@ std::string get_apk_dir(const Json::Value& config) {
 
 } // namespace
 
+Architecture parse_architecture(const std::string& s) {
+  if (s == "arm")
+    return Architecture::ARM;
+  else if (s == "armv7")
+    return Architecture::ARMV7;
+  else if (s == "arm64")
+    return Architecture::ARM64;
+  else if (s == "x86_64")
+    return Architecture::X86_64;
+  else if (s == "x86")
+    return Architecture::X86;
+  else
+    return Architecture::UNKNOWN;
+}
+
+const char* architecture_to_string(Architecture arch) {
+  switch (arch) {
+  case Architecture::ARM:
+    return "arm";
+  case Architecture::ARMV7:
+    return "armv7";
+  case Architecture::ARM64:
+    return "arm64";
+  case Architecture::X86_64:
+    return "x86_64";
+  case Architecture::X86:
+    return "x86";
+  default:
+    return "UNKNOWN";
+  }
+}
+
 void RedexOptions::serialize(Json::Value& entry_data) const {
   auto& options = entry_data["redex_options"];
   options["verify_none_enabled"] = verify_none_enabled;

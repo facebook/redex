@@ -94,6 +94,8 @@ UNUSED void dump_args(const Arguments& args) {
   }
   std::cout << "config: " << std::endl;
   std::cout << args.config << std::endl;
+  std::cout << "arch: " << std::endl;
+  std::cout << args.redex_options.arch << std::endl;
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
@@ -201,6 +203,10 @@ Arguments parse_args(int argc, char* argv[]) {
       "is-art-build",
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
+  od.add_options()(
+      "arch,A",
+      po::value<std::vector<std::string>>(),
+      "Architecture; one of arm/arm64/thumb2/x86_64/x86/mips/mips64");
   od.add_options()("enable-instrument-pass",
                    po::bool_switch(&args.redex_options.instrument_pass_enabled)
                        ->default_value(false),
@@ -341,6 +347,14 @@ Arguments parse_args(int argc, char* argv[]) {
       array.append(list);
     }
     args.config["used-js-assets"] = array;
+  }
+
+  if (vm.count("arch")) {
+    std::string arch = take_last(vm["arch"]);
+    args.redex_options.arch = parse_architecture(arch);
+    if (args.redex_options.arch == Architecture::UNKNOWN) {
+      std::cerr << "warning: cannot architecture " << arch << std::endl;
+    }
   }
 
   if (vm.count("-S")) {

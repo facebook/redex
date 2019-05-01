@@ -18,11 +18,24 @@
 #include <utility>
 #include <vector>
 
+enum Architecture {
+  UNKNOWN,
+  ARM,
+  ARMV7,
+  ARM64,
+  X86_64,
+  X86,
+};
+
+Architecture parse_architecture(const std::string& s);
+const char* architecture_to_string(Architecture arch);
+
 struct RedexOptions {
   bool verify_none_enabled{false};
   bool is_art_build{false};
   bool instrument_pass_enabled{false};
   int32_t min_sdk{0};
+  Architecture arch{Architecture::UNKNOWN};
 
   // Encode the struct to entry_data for redex-opt tool.
   void serialize(Json::Value& entry_data) const;

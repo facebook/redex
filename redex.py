@@ -175,6 +175,8 @@ def run_redex_binary(state):
         args += ['--printseeds=' + state.args.printseeds]
     if state.args.used_js_assets:
         args += ['--used-js-assets=' + x for x in state.args.used_js_assets]
+    if state.args.arch:
+        args += ['--arch=' + state.args.arch]
     args += ['-S' + x for x in state.args.passthru]
     args += ['-J' + x for x in state.args.passthru_json]
 
@@ -516,6 +518,9 @@ Given an APK, produce a better APK!
 
     parser.add_argument('-k', '--keep', nargs='?',
                         help='[deprecated] Path to file containing classes to keep')
+
+    parser.add_argument('-A', '--arch', nargs='?',
+                        help='Architecture; one of arm/armv7/arm64/x86_64/x86"')
 
     parser.add_argument('-S', dest='passthru', action='append', default=[],
                         help='Arguments passed through to redex')
