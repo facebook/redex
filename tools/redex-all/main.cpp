@@ -201,6 +201,10 @@ Arguments parse_args(int argc, char* argv[]) {
       "is-art-build",
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
+  od.add_options()(
+      "arch,A",
+      po::value<std::vector<std::string>>(),
+      "Ignored");
   od.add_options()("enable-instrument-pass",
                    po::bool_switch(&args.redex_options.instrument_pass_enabled)
                        ->default_value(false),
@@ -341,6 +345,10 @@ Arguments parse_args(int argc, char* argv[]) {
       array.append(list);
     }
     args.config["used-js-assets"] = array;
+  }
+
+  if (vm.count("arch")) {
+    take_last(vm["arch"]);
   }
 
   if (vm.count("-S")) {
