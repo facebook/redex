@@ -11,7 +11,6 @@ import static org.fest.assertions.api.Assertions.*;
 import com.facebook.redexinline.otherpackage.MethodInlineOtherPackage;
 import android.util.Log;
 import android.os.Build;
-import android.support.annotation.RequiresApi;
 import android.annotation.TargetApi;
 
 import org.junit.Test;
@@ -381,12 +380,12 @@ public class MethodInlineTest {
   }
 
   private static class NeedsAndroidN {
-    @RequiresApi(api = Build.VERSION_CODES.N)
+    @androidx.annotation.RequiresApi(api = Build.VERSION_CODES.N)
     public static int useApi() {
       return 1;
     }
 
-    @RequiresApi(Build.VERSION_CODES.N)
+    @android.support.annotation.RequiresApi(Build.VERSION_CODES.N)
     public static int shouldNotInlineOintoN() {
       return NeedsAndroidO.useApiO();
     }

@@ -462,20 +462,15 @@ TEST_F(PostVerify, inlineAcrossCallerNoApi) {
   ASSERT_NE(nullptr, cls);
   auto m = find_vmethod_named(*cls, "callSpecificApi");
   ASSERT_NE(nullptr, m);
-  EXPECT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "useApi"))
-      << SHOW(m->get_dex_code());
+  EXPECT_NE(nullptr, find_invoke(m, DOPCODE_INVOKE_STATIC, "useApi"));
   EXPECT_NE(nullptr,
-            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOutOfClass"))
-      << SHOW(m->get_dex_code());
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOutOfClass"));
   EXPECT_NE(nullptr,
-            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldInlineNintoO"))
-      << SHOW(m->get_dex_code());
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldInlineNintoO"));
   EXPECT_NE(nullptr,
-            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOintoN"))
-      << SHOW(m->get_dex_code());
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "shouldNotInlineOintoN"));
   EXPECT_EQ(nullptr,
-            find_invoke(m, DOPCODE_INVOKE_STATIC, "doesntActuallyNeedN"))
-      << SHOW(m->get_dex_code());
+            find_invoke(m, DOPCODE_INVOKE_STATIC, "doesntActuallyNeedN"));
 }
 
 TEST_F(PostVerify, inlineAcrossCallerAndroidN) {
@@ -489,8 +484,7 @@ TEST_F(PostVerify, inlineAcrossCallerAndroidN) {
   auto shouldNotInlineOintoN = find_dmethod_named(*n, "shouldNotInlineOintoN");
   ASSERT_NE(nullptr, shouldNotInlineOintoN);
   EXPECT_NE(nullptr, find_invoke(shouldNotInlineOintoN, DOPCODE_INVOKE_STATIC,
-                                 "useApiO"))
-      << SHOW(shouldNotInlineOintoN->get_dex_code());
+                                 "useApiO"));
 }
 
 TEST_F(PostVerify, inlineAcrossCallerAndroidO) {
@@ -507,6 +501,5 @@ TEST_F(PostVerify, inlineAcrossCallerAndroidO) {
   ASSERT_NE(nullptr, shouldInlineNintoO);
   // Should be inlined. No callsite.
   EXPECT_EQ(nullptr,
-            find_invoke(shouldInlineNintoO, DOPCODE_INVOKE_STATIC, "useApi"))
-      << SHOW(shouldInlineNintoO->get_dex_code());
+            find_invoke(shouldInlineNintoO, DOPCODE_INVOKE_STATIC, "useApi"));
 }
