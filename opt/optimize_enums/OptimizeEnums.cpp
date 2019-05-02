@@ -316,13 +316,16 @@ class OptimizeEnums {
   }
 
   void stats(PassManager& mgr) {
-    mgr.set_metric(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
-    mgr.set_metric(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
-    mgr.set_metric(METRIC_NUM_LOOKUP_TABLES_REMOVED,
-                   m_lookup_tables_replaced.size());
-    mgr.set_metric(METRIC_NUM_ENUM_CLASSES, m_stats.num_enum_classes);
-    mgr.set_metric(METRIC_NUM_ENUM_OBJS, m_stats.num_enum_objs);
-    mgr.set_metric(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
+    const auto& report = [&mgr](const char* name, size_t stat) {
+      mgr.set_metric(name, stat);
+      TRACE(ENUM, 1, "\t%s : %u\n", name, stat);
+    };
+    report(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
+    report(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
+    report(METRIC_NUM_LOOKUP_TABLES_REMOVED, m_lookup_tables_replaced.size());
+    report(METRIC_NUM_ENUM_CLASSES, m_stats.num_enum_classes);
+    report(METRIC_NUM_ENUM_OBJS, m_stats.num_enum_objs);
+    report(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
   }
 
   /**
@@ -330,11 +333,8 @@ class OptimizeEnums {
    */
   void replace_enum_with_int() {
     const ConcurrentSet<DexType*>& candidate_enums = collect_simple_enums();
-    TRACE(ENUM, 1, "\tCandidate enum classes : %d\n", candidate_enums.size());
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         candidate_enums, &m_stores, &m_stats.num_int_objs);
-    TRACE(ENUM, 1, "\tTransformed enum objects : %d\n", m_stats.num_enum_objs);
-    TRACE(ENUM, 1, "\tGenerated integer object : %d\n", m_stats.num_int_objs);
     m_stats.num_enum_classes = candidate_enums.size();
   }
 
