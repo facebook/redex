@@ -10,6 +10,7 @@
 #include "ApkManager.h"
 #include "Pass.h"
 #include "ProguardConfiguration.h"
+#include "RedexOptions.h"
 
 #include <boost/optional.hpp>
 #include <json/json.h>
@@ -17,31 +18,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-enum Architecture {
-  UNKNOWN,
-  ARM,
-  ARMV7,
-  ARM64,
-  X86_64,
-  X86,
-};
-
-Architecture parse_architecture(const std::string& s);
-const char* architecture_to_string(Architecture arch);
-
-struct RedexOptions {
-  bool verify_none_enabled{false};
-  bool is_art_build{false};
-  bool instrument_pass_enabled{false};
-  int32_t min_sdk{0};
-  Architecture arch{Architecture::UNKNOWN};
-
-  // Encode the struct to entry_data for redex-opt tool.
-  void serialize(Json::Value& entry_data) const;
-  // Decode the entry_data and update the struct.
-  void deserialize(const Json::Value& entry_data);
-};
 
 class PassManager {
  public:
@@ -61,6 +37,7 @@ class PassManager {
     size_t total_repeat;
     std::string name;
     std::unordered_map<std::string, int> metrics;
+    JsonWrapper config;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);

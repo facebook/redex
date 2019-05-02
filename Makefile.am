@@ -169,6 +169,7 @@ libredex_la_SOURCES = \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
 	libredex/RedexException.cpp \
+	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \

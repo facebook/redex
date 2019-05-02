@@ -264,7 +264,7 @@ TEST_F(PostVerify, RemoveCarBuilder_uninitializedModel) {
   auto initialize_null_model =
       find_vmethod_named(*using_no_escape_builders, "initializeNullCarModel");
 
-  EXPECT_EQ(3, initialize_null_model->get_dex_code()->get_registers_size());
+  EXPECT_EQ(4, initialize_null_model->get_dex_code()->get_registers_size());
 
   // Check there is a register that holds NULL and is passed to
   // the car's model field.

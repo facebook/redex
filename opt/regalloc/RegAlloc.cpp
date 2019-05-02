@@ -25,11 +25,18 @@ using namespace regalloc;
 void RegAllocPass::run_pass(DexStoresVector& stores,
                             ConfigFiles&,
                             PassManager& mgr) {
+  regalloc::graph_coloring::Allocator::Config allocator_config;
+  const auto& jw = mgr.get_current_pass_info()->config;
+  jw.get("live_range_splitting", false, allocator_config.use_splitting);
+  jw.get("use_spill_costs", false, allocator_config.use_spill_costs);
+  allocator_config.no_overwrite_this =
+      mgr.get_redex_options().no_overwrite_this();
+
   using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
   auto stats = walk::parallel::reduce_methods<Output>(
       scope,
-      [this](DexMethod* m) { // mapper
+      [&](DexMethod* m) { // mapper
         graph_coloring::Allocator::Stats stats;
         if (m->get_code() == nullptr) {
           return stats;
@@ -47,7 +54,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
           // The transformations below all require a CFG. Build it once
           // here instead of requiring each transform to build it.
           code.build_cfg(/* editable */ false);
-          graph_coloring::Allocator allocator(m_allocator_config);
+          graph_coloring::Allocator allocator(allocator_config);
           allocator.allocate(m);
           stats.accumulate(allocator.get_stats());
 

@@ -44,54 +44,6 @@ std::string get_apk_dir(const Json::Value& config) {
 
 } // namespace
 
-Architecture parse_architecture(const std::string& s) {
-  if (s == "arm")
-    return Architecture::ARM;
-  else if (s == "armv7")
-    return Architecture::ARMV7;
-  else if (s == "arm64")
-    return Architecture::ARM64;
-  else if (s == "x86_64")
-    return Architecture::X86_64;
-  else if (s == "x86")
-    return Architecture::X86;
-  else
-    return Architecture::UNKNOWN;
-}
-
-const char* architecture_to_string(Architecture arch) {
-  switch (arch) {
-  case Architecture::ARM:
-    return "arm";
-  case Architecture::ARMV7:
-    return "armv7";
-  case Architecture::ARM64:
-    return "arm64";
-  case Architecture::X86_64:
-    return "x86_64";
-  case Architecture::X86:
-    return "x86";
-  default:
-    return "UNKNOWN";
-  }
-}
-
-void RedexOptions::serialize(Json::Value& entry_data) const {
-  auto& options = entry_data["redex_options"];
-  options["verify_none_enabled"] = verify_none_enabled;
-  options["is_art_build"] = is_art_build;
-  options["instrument_pass_enabled"] = instrument_pass_enabled;
-  options["min_sdk"] = min_sdk;
-}
-
-void RedexOptions::deserialize(const Json::Value& entry_data) {
-  const auto& options_data = entry_data["redex_options"];
-  verify_none_enabled = options_data["verify_none_enabled"].asBool();
-  is_art_build = options_data["is_art_build"].asBool();
-  instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
-  min_sdk = options_data["min_sdk"].asInt();
-}
-
 std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<redex::ProguardConfiguration>();
 }
@@ -158,6 +110,7 @@ void PassManager::init(const Json::Value& config) {
     m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
     m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+    m_pass_info[i].config = JsonWrapper(config[pass->name()]);
   }
 }
 
@@ -279,7 +232,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, verify_moves, check_no_overwrite_this);
+  run_type_checker(scope, verify_moves,
+                   get_redex_options().no_overwrite_this());
 
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + conf.get_printseeds() +

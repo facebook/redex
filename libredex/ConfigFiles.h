@@ -24,7 +24,9 @@ using MethodMap = std::map<MethodTuple, DexClass*>;
 
 class JsonWrapper {
  public:
-  explicit JsonWrapper(const Json::Value& cfg) : m_config(cfg) {}
+  JsonWrapper() = default;
+
+  explicit JsonWrapper(const Json::Value& config) : m_config(config) {}
 
   void get(const char* name, int64_t dflt, int64_t& param) const;
 
@@ -58,7 +60,7 @@ class JsonWrapper {
   const Json::Value& operator[](const char* name) const;
 
  private:
-  const Json::Value m_config;
+  Json::Value m_config;
 };
 
 /**
