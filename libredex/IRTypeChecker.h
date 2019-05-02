@@ -40,26 +40,6 @@ class IRTypeChecker final {
   IRTypeChecker& operator=(const IRTypeChecker&) = delete;
 
   /*
-   * The Android verifier doesn't consider constants to be polymorphic. For
-   * example, the following piece of code doesn't pass verification:
-   *
-   *   const v0, 0
-   *   check-cast v0, Ljava/lang/String;
-   *   add-int-2addr v1, v0
-   *
-   * After the check-cast instruction, v0 is assumed to contain a reference and
-   * cannot be used in an arithmetic operation. By default, the type checker
-   * complies with the Android verifier. Calling this method mutes the check.
-   * This is useful when the verify_none mode is enabled, for example.
-   */
-  void enable_polymorphic_constants() {
-    if (!m_complete) {
-      // We can only set this parameter before running the type checker.
-      m_enable_polymorphic_constants = true;
-    }
-  }
-
-  /*
    * TOP represents an undefined value and hence, should never occur as the type
    * of a register. However, the Android verifier allows one exception, when an
    * undefined value is used as the operand of a move-* instruction (TOP is
@@ -145,7 +125,6 @@ class IRTypeChecker final {
 
   DexMethod* m_dex_method;
   bool m_complete;
-  bool m_enable_polymorphic_constants;
   bool m_verify_moves;
   bool m_check_no_overwrite_this;
   bool m_good;

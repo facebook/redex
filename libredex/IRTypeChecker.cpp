@@ -294,7 +294,6 @@ IRTypeChecker::~IRTypeChecker() {}
 IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
     : m_dex_method(dex_method),
       m_complete(false),
-      m_enable_polymorphic_constants(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
       m_good(true),
@@ -325,8 +324,7 @@ void IRTypeChecker::run() {
   // We then infer types for all the registers used in the method.
   code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
-  m_type_inference =
-      std::make_unique<TypeInference>(cfg, m_enable_polymorphic_constants);
+  m_type_inference = std::make_unique<TypeInference>(cfg);
   m_type_inference->run(m_dex_method);
 
   // Finally, we use the inferred types to type-check each instruction in the

@@ -162,16 +162,12 @@ void PassManager::init(const Json::Value& config) {
 }
 
 void PassManager::run_type_checker(const Scope& scope,
-                                   bool polymorphic_constants,
                                    bool verify_moves,
                                    bool check_no_overwrite_this) {
   TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method);
-    if (polymorphic_constants) {
-      checker.enable_polymorphic_constants();
-    }
     if (verify_moves) {
       checker.verify_moves();
     }
@@ -247,10 +243,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       conf.get_json_config()["ir_type_checker"];
   bool run_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
-  // When verify_none is enabled, it's OK to have polymorphic constants.
-  bool polymorphic_constants =
-      type_checker_args.get("polymorphic_constants", false).asBool() ||
-      get_redex_options().verify_none_enabled;
   bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
   bool check_no_overwrite_this =
       type_checker_args.get("check_no_overwrite_this", false).asBool();
@@ -279,7 +271,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       scope = build_class_scope(it);
       // It's OK to overwrite the `this` register if we are not yet at the
       // output phase -- the register allocator can fix it up later.
-      run_type_checker(scope, polymorphic_constants, verify_moves,
+      run_type_checker(scope, verify_moves,
                        /* check_no_overwrite_this */ false);
     }
     m_current_pass_info = nullptr;
@@ -287,8 +279,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, polymorphic_constants, verify_moves,
-                   check_no_overwrite_this);
+  run_type_checker(scope, verify_moves, check_no_overwrite_this);
 
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + conf.get_printseeds() +

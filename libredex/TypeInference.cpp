@@ -200,9 +200,7 @@ TypeDomain TypeInference::refine_type(const TypeDomain& type,
   // context. This only makes sense if the expected type is fully determined
   // by the context, i.e., is not a scalar type (SCALAR/SCALAR1/SCALAR2).
   if (type.leq(TypeDomain(const_type)) && expected != scalar_type) {
-    return (m_enable_polymorphic_constants || refined_type.is_bottom())
-               ? refined_type
-               : TypeDomain(expected);
+    return refined_type.is_bottom() ? refined_type : TypeDomain(expected);
   }
   return refined_type;
 }

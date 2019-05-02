@@ -176,11 +176,8 @@ class TypeEnvironment final
 class TypeInference final
     : public ir_analyzer::BaseIRAnalyzer<TypeEnvironment> {
  public:
-  TypeInference(const cfg::ControlFlowGraph& cfg,
-                bool enable_polymorphic_constants = false)
-      : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg),
-        m_cfg(cfg),
-        m_enable_polymorphic_constants(enable_polymorphic_constants) {}
+  TypeInference(const cfg::ControlFlowGraph& cfg)
+      : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
 
   void run(DexMethod* dex_method);
 
@@ -201,7 +198,6 @@ class TypeInference final
   void populate_type_environments();
 
   const cfg::ControlFlowGraph& m_cfg;
-  bool m_enable_polymorphic_constants;
   std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
 
   TypeDomain refine_type(const TypeDomain& type,
