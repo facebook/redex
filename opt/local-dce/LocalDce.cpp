@@ -177,7 +177,7 @@ void LocalDce::dce(IRCode* code) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = is_required(it->insn, bliveness);
+        bool required = is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -227,7 +227,9 @@ void LocalDce::dce(IRCode* code) {
  * An instruction is required (i.e., live) if it has side effects or if its
  * destination register is live.
  */
-bool LocalDce::is_required(IRInstruction* inst,
+bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
+                           cfg::Block* b,
+                           IRInstruction* inst,
                            const boost::dynamic_bitset<>& bliveness) {
   if (has_side_effects(inst->opcode())) {
     if (is_invoke(inst->opcode())) {
@@ -240,6 +242,22 @@ bool LocalDce::is_required(IRInstruction* inst,
         return true;
       }
       return bliveness.test(bliveness.size() - 1);
+    } else if (is_conditional_branch(inst->opcode())) {
+      cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+      cfg::Edge* branch_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_BRANCH);
+      always_assert(goto_edge != nullptr);
+      always_assert(branch_edge != nullptr);
+      return goto_edge->target() != branch_edge->target();
+    } else if (is_switch(inst->opcode())) {
+      cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+      always_assert(goto_edge != nullptr);
+      auto branch_edges = cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH);
+      for (cfg::Edge* branch_edge : branch_edges) {
+        if (goto_edge->target() != branch_edge->target()) {
+          return true;
+        }
+      }
+      return false;
     }
     return true;
   } else if (inst->dests_size()) {

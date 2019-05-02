@@ -55,7 +55,9 @@ class LocalDce {
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
   Stats m_stats;
 
-  bool is_required(IRInstruction* inst,
+  bool is_required(cfg::ControlFlowGraph& cfg,
+                   cfg::Block* b,
+                   IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
   bool is_pure(DexMethodRef* ref, DexMethod* meth);
 };

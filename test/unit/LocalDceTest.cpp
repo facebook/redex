@@ -166,3 +166,26 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   EXPECT_EQ(m_method->get_dex_code()->get_instructions().size(), 3);
   EXPECT_EQ(m_method->get_dex_code()->get_tries().size(), 1);
 }
+
+TEST_F(LocalDceTryTest, deadIf) {
+  // setup
+  using namespace dex_asm;
+
+  auto if_mie = new MethodItemEntry(dasm(OPCODE_IF_EQZ, {0_v}));
+  auto target1 = new BranchTarget(if_mie);
+  IRCode* code = m_method->get_code();
+  code->push_back(*if_mie); // branch to target1
+  code->push_back(target1);
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(1);
+
+  fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
+  LocalDcePass().run(code);
+  auto has_if =
+      std::find_if(code->begin(), code->end(), [if_mie](MethodItemEntry& mie) {
+        return &mie == if_mie;
+      }) != code->end();
+
+  // the if should be gone
+  EXPECT_FALSE(has_if);
+}
