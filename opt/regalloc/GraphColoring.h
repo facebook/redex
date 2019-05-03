@@ -83,7 +83,6 @@ class Allocator {
   struct Config {
     bool no_overwrite_this{false};
     bool use_splitting{false};
-    bool use_spill_costs{false};
   };
 
   struct Stats {

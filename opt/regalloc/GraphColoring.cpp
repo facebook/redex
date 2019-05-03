@@ -493,17 +493,14 @@ void Allocator::simplify(interference::Graph* ig,
     // uses (high spill cost), and interfere with fewer live ranges (have lower
     // weight) compared to v2 and v3 (tying with v4, but v4 still has a lower
     // spill cost).
-    auto spill_candidate_it = std::min_element(
-        high.begin(), high.end(), [ig, this](reg_t a, reg_t b) {
+    auto spill_candidate_it =
+        std::min_element(high.begin(), high.end(), [ig](reg_t a, reg_t b) {
           auto& node_a = ig->get_node(a);
           auto& node_b = ig->get_node(b);
           if (node_a.is_spilt() == node_b.is_spilt()) {
-            if (this->m_config.use_spill_costs) {
-              // Note that a / b < c / d <=> a * d < c * b.
-              return node_a.spill_cost() * node_b.weight() <
-                     node_b.spill_cost() * node_a.weight();
-            }
-            return false;
+            // Note that a / b < c / d <=> a * d < c * b.
+            return node_a.spill_cost() * node_b.weight() <
+                   node_b.spill_cost() * node_a.weight();
           }
           return !node_a.is_spilt() && node_b.is_spilt();
         });

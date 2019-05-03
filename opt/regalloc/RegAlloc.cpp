@@ -28,7 +28,6 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   regalloc::graph_coloring::Allocator::Config allocator_config;
   const auto& jw = mgr.get_current_pass_info()->config;
   jw.get("live_range_splitting", false, allocator_config.use_splitting);
-  jw.get("use_spill_costs", false, allocator_config.use_spill_costs);
   allocator_config.no_overwrite_this =
       mgr.get_redex_options().no_overwrite_this();
 
