@@ -27,3 +27,6 @@
 -dontwarn android.support.test.**
 -dontwarn androidx.test.**
 -dontwarn com.facebook.ultralight.**
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**

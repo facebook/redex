@@ -23,3 +23,7 @@
 -keep,allowobfuscation class com.facebook.redex.test.proguard.SubSub {
   *;
 }
+
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**

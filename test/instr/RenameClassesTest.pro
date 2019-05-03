@@ -27,3 +27,6 @@
 -keepattributes SourceFile,LineNumberTable,Signature
 
 -printmapping
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**
