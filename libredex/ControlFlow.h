@@ -353,15 +353,16 @@ class ControlFlowGraph {
    */
   IRList* linearize();
 
-  // TODO: this copies blocks, but it should probably offer a read-only view
-  // into the blocks map instead.
+  // NOTE: this function copies pointers to blocks from m_blocks
   //
   // If a block is created or destroyed while we're iterating on a copy, the
   // copy is now stale. That stale copy may have a pointer to a deleted block or
   // it may be incomplete (not iterating over the newly creating block).
   //
-  // A read-only view would be better because block creation and destruction
-  // operations don't invalidate std::map iterators.
+  // TODO: We should probably have an API to offer iterators into the blocks map
+  // instead for reads or some mutations since insertion and erasure of elements
+  // stored in std::map will not invalidate the iterators referencing other
+  // elements.
   std::vector<Block*> blocks() const;
 
   Block* create_block();
