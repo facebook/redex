@@ -540,11 +540,11 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
-void change_visibility(DexMethod* method) {
+void change_visibility(DexMethod* method, DexType* scope) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  editable_cfg_adapter::iterate(code, [](MethodItemEntry& mie) {
+  editable_cfg_adapter::iterate(code, [scope](MethodItemEntry& mie) {
     auto insn = mie.insn;
 
     if (insn->has_field()) {
@@ -568,7 +568,8 @@ void change_visibility(DexMethod* method) {
       }
       auto current_method = resolve_method(
           insn->get_method(), opcode_to_search(insn));
-      if (current_method != nullptr && current_method->is_concrete()) {
+      if (current_method != nullptr && current_method->is_concrete() &&
+          (scope == nullptr || current_method->get_class() != scope)) {
         set_public(current_method);
         set_public(type_class(current_method->get_class()));
         // FIXME no point in rewriting opcodes in the method

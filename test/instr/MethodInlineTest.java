@@ -217,26 +217,6 @@ public class MethodInlineTest {
     }
   }
 
-  /*
-   * This method exists to test that we rename the instance method
-   * noninlinable() above when we change it to a static method. (Otherwise
-   * we would have a clash in method signatures.)
-   */
-  public static void noninlinable(MethodInlineTest foo) {
-    if (foo != null && foo.getHello() != null) {
-      noninlinable(foo);
-    }
-  }
-
-  /*
-   * The @Test annotation here is just to ensure that the compiler doesn't
-   * think the static noninlinable() method is unused and optimize it out.
-   */
-  @Test
-  public void callsStaticNoninlinable() {
-    noninlinable(null);
-  }
-
   private void hasNoninlinableInvokeDirect() {
     if (mHello != null) {
       noninlinable();
@@ -246,6 +226,49 @@ public class MethodInlineTest {
   @Test
   public void testInlineInvokeDirect() {
     hasNoninlinableInvokeDirect();
+  }
+
+  private static class OtherClass {
+    MethodInlineTest outer;
+    OtherClass(MethodInlineTest outer) { this.outer = outer; }
+    private void noninlinable() {
+      if (outer.mHello != null) {
+        noninlinable();
+      }
+    }
+
+    /*
+     * This method exists to test that we rename the instance method
+     * noninlinable() above when we change it to a static method. (Otherwise
+     * we would have a clash in method signatures.)
+     */
+    public static void noninlinable(OtherClass foo) {
+      if (foo != null && foo.outer != null && foo.outer.getHello() != null) {
+        noninlinable(foo);
+      }
+    }
+
+    public void hasNoninlinableInvokeDirect() {
+      if (outer.mHello != null) {
+        noninlinable();
+      }
+    }
+  }
+
+  /*
+   * The @Test annotation here is just to ensure that the compiler doesn't
+   * think the static noninlinable() method is unused and optimize it out.
+   */
+  @Test
+  public void callsStaticNoninlinableAcrossClasses() {
+    OtherClass oc = new OtherClass(this);
+    oc.noninlinable(null);
+  }
+
+  @Test
+  public void testInlineInvokeDirectAcrossClasses() {
+    OtherClass oc = new OtherClass(this);
+    oc.hasNoninlinableInvokeDirect();
   }
 
   private void throwsWithNoReturn() throws Exception {

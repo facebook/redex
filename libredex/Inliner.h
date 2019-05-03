@@ -162,16 +162,16 @@ class MultiMethodInliner {
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
    */
-  bool create_vmethod(IRInstruction* insn);
+  bool create_vmethod(IRInstruction* insn,
+                      const DexMethod* callee,
+                      const DexMethod* caller);
 
   /**
    * Return true if a callee contains an invoke super to a different method
-   * in the hierarchy, and the callee and caller are in different classes.
+   * in the hierarchy.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool nonrelocatable_invoke_super(IRInstruction* insn,
-                                   const DexMethod* callee,
-                                   const DexMethod* caller);
+  bool nonrelocatable_invoke_super(IRInstruction* insn);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.

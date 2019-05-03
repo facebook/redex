@@ -284,10 +284,11 @@ bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
  * Change the visibility of members accessed in a method.
- * We make everything public but we could be more precise and only
- * relax visibility as needed.
+ * We make everything public, except if a scope argument is given; then accessed
+ * members in the same scope will not be made public (We could be more precise
+ * and walks the inheritance hierarchy as needed.)
  */
-void change_visibility(DexMethod* method);
+void change_visibility(DexMethod* method, DexType* scope = nullptr);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,

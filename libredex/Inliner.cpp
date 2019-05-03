@@ -291,7 +291,7 @@ void MultiMethodInliner::inline_inlinables(
 
     TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
           SHOW(callee));
-    change_visibility(callee_method);
+    change_visibility(callee_method, caller_method->get_class());
     info.calls_inlined++;
     inlined.insert(callee_method);
   }
@@ -535,20 +535,20 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
-        if (create_vmethod(insn)) {
+        if (create_vmethod(insn, callee, caller)) {
           log_nopt(INL_CREATE_VMETH, caller, invk_insn);
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
-        if (nonrelocatable_invoke_super(insn, callee, caller)) {
-          log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
-          can_inline = false;
-          return editable_cfg_adapter::LOOP_BREAK;
-        }
         // if the caller and callee are in the same class, we don't have to
-        // worry about unknown virtuals -- private / protected methods will
-        // remain accessible
+        // worry about invoke supers, or unknown virtuals -- private / protected
+        // methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
+          if (nonrelocatable_invoke_super(insn)) {
+            log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+            can_inline = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
           if (unknown_virtual(insn)) {
             log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
             can_inline = false;
@@ -596,7 +596,9 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
  * referenced by a callee is visible and accessible in the caller context.
  * This step would not be needed if we changed all private instance to static.
  */
-bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
+bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
+                                        const DexMethod* callee,
+                                        const DexMethod* caller) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method = resolver(insn->get_method(), MethodSearch::Direct);
@@ -605,6 +607,10 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       return true;
     }
     always_assert(method->is_def());
+    if (caller->get_class() == callee->get_class()) {
+      // No need to give up here, or make it static. Visibility is just fine.
+      return false;
+    }
     if (is_init(method)) {
       if (!method->is_concrete() && !is_public(method)) {
         info.non_pub_ctor++;
@@ -625,16 +631,11 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
 
 /**
  * Return true if a callee contains an invoke super to a different method
- * in the hierarchy, and the callee and caller are in different classes.
+ * in the hierarchy.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
-                                                     const DexMethod* callee,
-                                                     const DexMethod* caller) {
+bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-    if (callee->get_class() == caller->get_class()) {
-      return false;
-    }
     info.invoke_super++;
     return true;
   }
