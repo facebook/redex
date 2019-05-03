@@ -11,3 +11,7 @@
 -dontwarn com.facebook.ultralight.**
 -dontwarn com.facebook.graphservice.**
 -dontwarn androidx.test.**
+
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**

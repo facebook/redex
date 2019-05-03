@@ -64,3 +64,7 @@
 -keep,allowobfuscation class com.facebook.redex.test.proguard.All {
   *;
 }
+
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**

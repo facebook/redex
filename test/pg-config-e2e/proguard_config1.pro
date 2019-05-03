@@ -147,3 +147,6 @@
 -keep class com.facebook.redex.test.proguard.ProguardTest {
     <init>(...);
 }
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**
