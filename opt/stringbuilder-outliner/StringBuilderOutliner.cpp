@@ -121,13 +121,6 @@ Outliner::Outliner(Config config)
   always_assert(m_stringbuilder_default_ctor);
   always_assert(m_stringbuilder_capacity_ctor);
   always_assert(m_stringbuilder_tostring);
-
-  auto string_ty = DexType::make_type("Ljava/lang/String;");
-  auto string_pair = DexTypeList::make_type_list({string_ty, string_ty});
-  auto string_concat = static_cast<DexMethod*>(DexMethod::get_method(
-      "Ljava/lang/String;.concat:(Ljava/lang/String;)Ljava/lang/String;"));
-  always_assert(string_concat->is_def());
-  m_outline_helpers.emplace(string_pair, string_concat);
 }
 
 InstructionSet Outliner::find_tostring_instructions(
@@ -257,7 +250,6 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
     m_stats.stringbuilders_removed += count;
     m_stats.operations_removed += count * typelist->size();
 
-    // Don't overwrite existing outline helpers like String.concat()
     if (m_outline_helpers.count(typelist) != 0) {
       continue;
     }
