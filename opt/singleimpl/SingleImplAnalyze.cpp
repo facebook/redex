@@ -311,9 +311,6 @@ void AnalysisImpl::collect_method_defs() {
     if (native) {
       escape_interface(intf, NATIVE_METHOD);
     }
-    if (method->get_class() == intf) {
-      escape_interface(intf, SELF_REFERENCE);
-    }
     single_impls[intf].methoddefs.insert(method);
   };
 

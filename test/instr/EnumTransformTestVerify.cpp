@@ -19,7 +19,7 @@ struct EnumUtil {
       "Lcom/facebook/redextest/PURE_SCORE;";
   const char* array_name = "array";
   const char* class_name = "Lcom/facebook/redextest/C;";
-  const char* substitute_array_name = "array$OE$L8jsC3EQxs3";
+  const char* substitute_array_name = "array$RDX$uCTBV1V51xg";
 };
 
 void expect_other_enums(const DexClasses& classes) {
