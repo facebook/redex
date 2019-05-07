@@ -277,6 +277,9 @@ class MultiMethodInliner {
   // have been inlined.
   mutable std::unordered_map<const DexMethod*, size_t> m_opcode_counts;
 
+  // Cache of whether all callers of a callee are in the same class.
+  mutable std::unordered_map<const DexMethod*, bool> m_callers_in_same_class;
+
  private:
   /**
    * Info about inlining.

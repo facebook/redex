@@ -454,10 +454,14 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
-  if (!m_opcode_counts.count(callee)) {
-    m_opcode_counts[callee] = count_important_opcodes(callee->get_code());
+  auto opcode_counts_it = m_opcode_counts.find(callee);
+  size_t code_size;
+  if (opcode_counts_it != m_opcode_counts.end()) {
+    code_size = opcode_counts_it->second;
+  } else {
+    m_opcode_counts[callee] = code_size =
+        count_important_opcodes(callee->get_code());
   }
-  auto code_size = m_opcode_counts.at(callee);
 
   if (!can_delete(callee)) {
     if (m_config.inline_small_non_deletables) {
@@ -471,13 +475,20 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
     return false;
   }
 
-  auto callee_class = callee->get_class();
-  bool have_all_callers_same_class = true;
-  for (auto caller : callers) {
-    if (caller->get_class() != callee_class) {
-      have_all_callers_same_class = false;
-      break;
+  auto callers_in_same_class_it = m_callers_in_same_class.find(callee);
+  bool have_all_callers_same_class;
+  if (callers_in_same_class_it != m_callers_in_same_class.end()) {
+    have_all_callers_same_class = callers_in_same_class_it->second;
+  } else {
+    auto callee_class = callee->get_class();
+    have_all_callers_same_class = true;
+    for (auto caller : callers) {
+      if (caller->get_class() != callee_class) {
+        have_all_callers_same_class = false;
+        break;
+      }
     }
+    m_callers_in_same_class.emplace(callee, have_all_callers_same_class);
   }
 
   unsigned long locality_advantage = have_all_callers_same_class ? 2 : 0;
