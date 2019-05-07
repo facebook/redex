@@ -401,11 +401,15 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
   for (auto method : data.methoddefs) {
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     redex_assert(proto != method->get_proto());
-    DexMethod* collision = find_collision(ch,
-                                          method->get_name(),
-                                          proto,
-                                          type_class(method->get_class()),
-                                          method->is_virtual());
+    DexMethodRef* collision =
+        DexMethod::get_method(method->get_class(), method->get_name(), proto);
+    if (!collision) {
+      collision = find_collision(ch,
+                                 method->get_name(),
+                                 proto,
+                                 type_class(method->get_class()),
+                                 method->is_virtual());
+    }
     if (collision) {
       TRACE(INTF, 9, "Found collision %s\n", SHOW(method));
       TRACE(INTF, 9, "\t to %s\n", SHOW(collision));
