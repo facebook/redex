@@ -88,8 +88,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     return;
   }
 
-  LivenessFixpointIterator liveness_iter(cfg);
-  liveness_iter.run(LivenessDomain(cfg.get_registers_size()));
+  std::unique_ptr<LivenessFixpointIterator> liveness_iter;
 
   boost::optional<uint16_t> const_reg;
 
@@ -140,7 +139,11 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
     if (fallthrough_edges.size() + 1 == branch_edges.size()) {
       // We have exactly one relevant branch (that isn't effectively falling
       // through)
-      auto live_out_vars = liveness_iter.get_live_out_vars_at(b);
+      if (!liveness_iter) {
+        liveness_iter.reset(new LivenessFixpointIterator(cfg));
+        liveness_iter->run(LivenessDomain(cfg.get_registers_size()));
+      }
+      auto live_out_vars = liveness_iter->get_live_out_vars_at(b);
       auto single_non_fallthrough_edge_it = std::find_if(
           branch_edges.begin(), branch_edges.end(),
           [goto_target](cfg::Edge* e) { return e->target() != goto_target; });
@@ -208,6 +211,9 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
           // requirements will still be met.
           cfg.allocate_temp();
           shift_registers(&cfg, &reg);
+          // Reset liveness, so that it gets re-computed if needed with
+          // shifted register numberss
+          liveness_iter.reset();
           const_reg = 0;
         }
         if (const_reg) {
