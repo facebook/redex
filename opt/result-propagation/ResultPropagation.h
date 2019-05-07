@@ -31,7 +31,19 @@ class ReturnParamResolver {
  public:
   ReturnParamResolver(const method_override_graph::Graph& graph)
       : m_graph(graph),
+        m_byte_buffer_type(DexType::make_type("Ljava/nio/ByteBuffer;")),
+        m_char_buffer_type(DexType::make_type("Ljava/nio/CharBuffer;")),
+        m_double_buffer_type(DexType::make_type("Ljava/nio/DoubleBuffer;")),
+        m_float_buffer_type(DexType::make_type("Ljava/nio/FloatBuffer;")),
+        m_int_buffer_type(DexType::make_type("Ljava/nio/IntBuffer;")),
+        m_long_buffer_type(DexType::make_type("Ljava/nio/LongBuffer;")),
+        m_short_buffer_type(DexType::make_type("Ljava/nio/ShortBuffer;")),
+        m_print_stream_type(DexType::make_type("Ljava/lang/PrintStream;")),
+        m_print_writer_type(DexType::make_type("Ljava/lang/PrintWriter;")),
+        m_string_buffer_type(DexType::make_type("Ljava/lang/StringBuffer;")),
         m_string_builder_type(DexType::make_type("Ljava/lang/StringBuilder;")),
+        m_string_writer_type(DexType::make_type("Ljava/lang/StringWriter;")),
+        m_writer_type(DexType::make_type("Ljava/lang/Writer;")),
         m_string_to_string_method(DexMethod::make_method(
             "Ljava/lang/String;.toString:()Ljava/lang/String;")) {}
 
@@ -58,7 +70,19 @@ class ReturnParamResolver {
   bool returns_receiver(const DexMethodRef* method) const;
 
   const method_override_graph::Graph& m_graph;
+  const DexType* m_byte_buffer_type;
+  const DexType* m_char_buffer_type;
+  const DexType* m_double_buffer_type;
+  const DexType* m_float_buffer_type;
+  const DexType* m_int_buffer_type;
+  const DexType* m_long_buffer_type;
+  const DexType* m_short_buffer_type;
+  const DexType* m_print_stream_type;
+  const DexType* m_print_writer_type;
+  const DexType* m_string_buffer_type;
   const DexType* m_string_builder_type;
+  const DexType* m_string_writer_type;
+  const DexType* m_writer_type;
   const DexMethodRef* m_string_to_string_method;
 };
 
