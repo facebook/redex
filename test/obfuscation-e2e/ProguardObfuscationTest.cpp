@@ -29,7 +29,8 @@ bool ProguardObfuscationTest::configure_proguard(
   // empty
   Scope external_classes;
   apply_deobfuscated_names(dexen, proguard_map);
-  process_proguard_rules(proguard_map, scope, external_classes, pg_config);
+  process_proguard_rules(
+      proguard_map, scope, external_classes, pg_config, true);
   return true;
 }
 

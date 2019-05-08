@@ -704,8 +704,12 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   Scope scope = build_class_scope(it);
   {
     Timer t("Processing proguard rules");
+
+    bool keep_all_annotation_classes;
+    cfg.get_json_config().get("keep_all_annotation_classes", true,
+                              keep_all_annotation_classes);
     process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
-                           pg_config);
+                           pg_config, keep_all_annotation_classes);
   }
   {
     Timer t("No Optimizations Rules");

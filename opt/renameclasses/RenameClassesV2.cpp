@@ -782,20 +782,23 @@ void RenameClassesPassV2::rename_classes(
                       descriptor, sequence,
                       facebook::Locator::decodeGlobalClassIndex(descriptor));
 
-    TRACE(RENAME, 2, "'%s' ->  %s (%u)'\n", oldname->c_str(), descriptor,
-          sequence);
     sequence++;
 
-    auto exists = DexString::get_string(descriptor);
-    always_assert_log(!exists, "Collision on class %s (%s)", oldname->c_str(),
-                      descriptor);
+    std::string prefixed_descriptor = prepend_package_prefix(descriptor);
 
-    auto dstring = DexString::make_string(descriptor);
+    TRACE(RENAME, 2, "'%s' ->  %s (%u)'\n", oldname->c_str(),
+          prefixed_descriptor.c_str(), sequence);
+
+    auto exists = DexString::get_string(prefixed_descriptor);
+    always_assert_log(!exists, "Collision on class %s (%s)", oldname->c_str(),
+                      prefixed_descriptor.c_str());
+
+    auto dstring = DexString::make_string(prefixed_descriptor);
     aliases.add_class_alias(clazz, dstring);
     dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
-    std::string new_str(descriptor);
-    //    proguard_map.update_class_mapping(old_str, new_str);
+    // std::string new_str(descriptor);
+    // proguard_map.update_class_mapping(old_str, new_str);
     m_base_strings_size += strlen(oldname->c_str());
     m_ren_strings_size += strlen(dstring->c_str());
 
@@ -934,6 +937,18 @@ void RenameClassesPassV2::rename_classes_in_layouts(
     layout_bytes_delta);
 }
 
+std::string RenameClassesPassV2::prepend_package_prefix(
+    const char* descriptor) {
+  always_assert_log(*descriptor == 'L',
+                    "Class descriptor \"%s\" did not start with L!\n",
+                    descriptor);
+  descriptor++; // drop letter 'L'
+
+  std::stringstream ss;
+  ss << "L" << m_package_prefix << descriptor;
+  return ss.str();
+}
+
 void RenameClassesPassV2::run_pass(DexStoresVector& stores,
                                    ConfigFiles& cfg,
                                    PassManager& mgr) {
@@ -943,6 +958,14 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
           "provided.");
     return;
   }
+
+  if (m_package_prefix != "") {
+    always_assert_log(
+        !(cfg.get_json_config().get("emit_locator_strings", false)),
+        "Rename classes package_prefix doesn't work together with "
+        "emit_locator_strings.\n");
+  }
+
   auto scope = build_class_scope(stores);
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   eval_classes_post(scope, class_hierarchy, mgr);
