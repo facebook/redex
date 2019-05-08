@@ -107,7 +107,11 @@ bool Use::operator==(const Use& that) const {
 }
 
 void renumber_registers(IRCode* code, bool width_aware) {
-  code->build_cfg(/* editable */ true);
+  bool should_clear_cfg = false;
+  if (!code->editable_cfg_built()) {
+    code->build_cfg(/* editable */ true);
+    should_clear_cfg = true;
+  }
   auto& cfg = code->cfg();
   auto chains = calculate_ud_chains(cfg);
 
@@ -136,7 +140,10 @@ void renumber_registers(IRCode* code, bool width_aware) {
     }
   }
   cfg.set_registers_size(sym_reg_mapper.regs_size());
-  code->clear_cfg();
+
+  if (should_clear_cfg) {
+    code->clear_cfg();
+  }
 }
 
 } // namespace live_range
