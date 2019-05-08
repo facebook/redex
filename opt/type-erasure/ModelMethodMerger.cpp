@@ -822,7 +822,6 @@ void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {
       TRACE(TERA, 8, "dedup: moving static|non_virt method %s\n", SHOW(m));
       relocate_method(m, merger_type);
     }
-    update_to_static(to_relocate);
 
     // Update method dedup map
     for (auto& pair : new_to_old) {
@@ -971,37 +970,4 @@ void ModelMethodMerger::merge_methods_within_shape() {
   m_stats.m_num_merged_nonvirt_methods += stats.num_merged_nonvirt_methods;
   m_stats.m_num_merged_static_methods += stats.num_merged_static_methods;
   m_stats.m_num_merged_direct_methods += stats.num_merged_direct_methods;
-}
-
-void ModelMethodMerger::update_to_static(
-    const std::set<DexMethod*, dexmethods_comparator>& methods) {
-
-  if (!m_model_spec.devirtualize_non_virtuals) {
-    return;
-  }
-
-  std::unordered_set<DexMethod*> staticized;
-  for (DexMethod* method : methods) {
-    if (!is_static(method)) {
-      mutators::make_static(method, mutators::KeepThis::Yes);
-      staticized.emplace(method);
-    }
-  }
-
-  const std::unordered_set<DexMethod*>& const_staticized = staticized;
-  walk::parallel::code(
-      m_scope, [&const_staticized](DexMethod* method, IRCode& code) {
-        for (const auto& mie : InstructionIterable(code)) {
-          auto insn = mie.insn;
-          if (!insn->has_method()) {
-            continue;
-          }
-
-          DexMethod* current_method =
-              resolve_method(insn->get_method(), MethodSearch::Any);
-          if (const_staticized.count(current_method) > 0) {
-            insn->set_opcode(OPCODE_INVOKE_STATIC);
-          }
-        }
-      });
 }

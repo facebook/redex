@@ -118,8 +118,6 @@ struct ModelSpec {
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
   // whether to perform type erasure on the primary dex.
   bool include_primary_dex{false};
-  // Devirtualize/staticize non-virtual methods
-  bool devirtualize_non_virtuals{false};
   // Merge static methods within shape.
   bool merge_static_methods_within_shape{false};
   // Merge direct methods within shape.
@@ -244,9 +242,6 @@ class Model {
 
   const ModelSpec get_model_spec() const { return m_spec; }
 
-  bool devirtualize_non_virtuals() const {
-    return m_spec.devirtualize_non_virtuals;
-  }
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
 

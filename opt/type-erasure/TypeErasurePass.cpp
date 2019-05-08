@@ -135,8 +135,6 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 
 void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
   jw.get("merged_type_mappings", "", m_merged_type_mapping_file);
-  bool devirtualize_non_virtuals;
-  jw.get("devirtualize", false, devirtualize_non_virtuals);
   bool process_method_meta;
   jw.get("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
@@ -237,7 +235,6 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     if (max_count > 0) {
       model.max_count = boost::optional<size_t>(max_count);
     }
-    model.devirtualize_non_virtuals = devirtualize_non_virtuals;
     model.process_method_meta = process_method_meta;
     model.merge_static_methods_within_shape = merge_static_methods_within_shape;
     model.merge_direct_methods_within_shape = merge_direct_methods_within_shape;
