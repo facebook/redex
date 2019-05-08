@@ -192,7 +192,7 @@ namespace fad_impl {
  * lattice. The technique consists of computing the reflexive and transitive
  * closure of that relation. Then, an element can be encoded by its
  * corresponding row (i.e., a bit vector) in the resulting matrix. Computing the
- * Meet simply amounts to performing the bitwise And opweration on the bit
+ * Meet simply amounts to performing the bitwise And operation on the bit
  * vector representation. For the example above that gives:
  *
  * Reflexive-transitive closure:
