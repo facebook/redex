@@ -430,9 +430,9 @@ class CodeTransformer final {
     } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
-      if (maybe_enum_values(method)) {
+      if (is_enum_values(method)) {
         update_invoke_values(env, block, it);
-      } else if (maybe_enum_valueof(method)) {
+      } else if (is_enum_valueof(method)) {
         update_invoke_valueof(env, insn);
       }
     } break;
@@ -588,32 +588,6 @@ class CodeTransformer final {
       return;
     }
     insn->set_method(integer_meth);
-  }
-
-  /**
-   * Return whether the method is
-   * LSomeType;.valueOf:(Ljava/lang/String;)LSomeType;
-   */
-  bool maybe_enum_valueof(const DexMethodRef* method) const {
-    if (method->get_name() != m_enum_util->VALUEOF_METHOD_STR ||
-        method->get_class() != method->get_proto()->get_rtype()) {
-      return false;
-    }
-    auto& args = method->get_proto()->get_args()->get_type_list();
-    return args.size() == 1 && args.front() == m_enum_util->STRING_TYPE;
-  }
-
-  /**
-   * Return whether the method is LSomeType;.values:()[LSomeType;
-   */
-  bool maybe_enum_values(const DexMethodRef* method) const {
-    if (method->get_name() != m_enum_util->VALUES_METHOD_STR ||
-        method->get_proto()->get_args()->size() != 0) {
-      return false;
-    }
-    auto container = method->get_class();
-    auto array_type = make_array_type(container);
-    return array_type == method->get_proto()->get_rtype();
   }
 
   /**

@@ -16,6 +16,17 @@
 
 namespace optimize_enums {
 
+/**
+ * Return whether the method is
+ * LEnumSubtype;.valueOf:(Ljava/lang/String;)LEnumSubtype;
+ */
+bool is_enum_valueof(const DexMethodRef* method);
+
+/**
+ * Return whether the method is LEnumSubtype;.values:()[LEnumSubtype;
+ */
+bool is_enum_values(const DexMethodRef* method);
+
 using Register = ir_analyzer::register_t;
 
 // Store possible types for a register although we only care about Object, Enum

@@ -334,6 +334,15 @@ class EnumUpcastDetector {
   const DexMethod* m_method;
   const ConcurrentSet<DexType*>* m_candidate_enums;
 };
+
+bool is_static_method_on_enum_class(const DexMethodRef* ref) {
+  auto method = static_cast<const DexMethod*>(ref);
+  if (!method || !method->is_def() || !is_static(method)) {
+    return false;
+  }
+  auto container = type_class(method->get_class());
+  return container && is_enum(container);
+}
 } // namespace
 
 namespace optimize_enums {
@@ -443,10 +452,6 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
 
   ConcurrentSet<DexType*> rejected_enums;
 
-  const DexString* values_method = DexString::get_string("values");
-  const DexString* valueof_method = DexString::get_string("valueOf");
-  const DexType* string_type = get_string_type();
-
   // When do static analysis, simply skip javac-generated methods for enum
   // types : <clinit>, <init>, values(), valueOf(String)
   auto is_generated_enum_method = [&](const DexMethod* method) -> bool {
@@ -455,10 +460,9 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
            !rejected_enums.count(method->get_class()) &&
            (is_clinit(method) || is_init(method) ||
             // values()
-            (method->get_name() == values_method && args.size() == 0) ||
+            is_enum_values(method) ||
             // valueOf(String)
-            (method->get_name() == valueof_method && args.size() == 1 &&
-             args.front() == string_type));
+            is_enum_valueof(method));
   };
 
   walk::parallel::fields(classes, [&](DexField* field) {
@@ -518,4 +522,28 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
     candidate_enums->erase(type);
   }
 }
+
+bool is_enum_valueof(const DexMethodRef* method) {
+  if (!is_static_method_on_enum_class(method) || method->str() != "valueOf") {
+    return false;
+  }
+  auto proto = method->get_proto();
+  if (method->get_class() != proto->get_rtype()) {
+    return false;
+  }
+  auto& args = proto->get_args()->get_type_list();
+  return args.size() == 1 && args.front() == get_string_type();
+}
+
+bool is_enum_values(const DexMethodRef* method) {
+  if (!is_static_method_on_enum_class(method) || method->str() != "values") {
+    return false;
+  }
+  auto proto = method->get_proto();
+  if (proto->get_args()->size() != 0) {
+    return false;
+  }
+  return get_array_component_type(proto->get_rtype()) == method->get_class();
+}
+
 } // namespace optimize_enums
