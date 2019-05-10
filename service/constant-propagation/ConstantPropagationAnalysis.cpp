@@ -195,6 +195,16 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
   if (opcode::is_load_param(insn->opcode())) {
     return true;
   }
+  switch (insn->opcode()) {
+  case OPCODE_NEW_ARRAY:
+  case OPCODE_FILLED_NEW_ARRAY:
+  case OPCODE_NEW_INSTANCE: {
+    env->set(RESULT_REGISTER, SignedConstantDomain(sign_domain::Interval::NEZ));
+    return true;
+  }
+  default:
+    break;
+  }
   if (insn->dests_size()) {
     TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
@@ -631,6 +641,11 @@ static void analyze_if(const IRInstruction* insn,
     break;
   }
   case OPCODE_IF_EQZ: {
+    auto value = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
+    if (value && value->interval() == sign_domain::Interval::NEZ) {
+      env->set_to_bottom();
+      break;
+    }
     env->set(insn->src(0), left.meet(SignedConstantDomain(0)));
     break;
   }

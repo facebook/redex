@@ -22,6 +22,7 @@ enum class Interval {
   LTZ, // (-∞, 0)
   GTZ, // (0, ∞)
   EQZ, // {0}
+  NEZ, // Anything but 0
   GEZ, // [0, ∞)
   LEZ, // (-∞, 0]
   ALL, // (-∞, +∞) -- Top type

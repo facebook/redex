@@ -22,6 +22,7 @@ int64_t SignedConstantDomain::max_element() const {
   case sign_domain::Interval::GEZ:
   case sign_domain::Interval::GTZ:
   case sign_domain::Interval::ALL:
+  case sign_domain::Interval::NEZ:
     return std::numeric_limits<int64_t>::max();
   case sign_domain::Interval::SIZE:
     not_reached();
@@ -43,6 +44,7 @@ int64_t SignedConstantDomain::min_element() const {
   case sign_domain::Interval::LEZ:
   case sign_domain::Interval::LTZ:
   case sign_domain::Interval::ALL:
+  case sign_domain::Interval::NEZ:
     return std::numeric_limits<int64_t>::min();
   case sign_domain::Interval::SIZE:
     not_reached();

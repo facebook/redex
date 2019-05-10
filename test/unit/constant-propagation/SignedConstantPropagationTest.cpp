@@ -12,6 +12,7 @@
 #include "AbstractDomainPropertyTest.h"
 #include "ConstantPropagationTestUtil.h"
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
 struct Constants {
   SignedConstantDomain one{SignedConstantDomain(1)};
@@ -31,6 +32,9 @@ struct Constants {
 
   SignedConstantDomain negative{
       SignedConstantDomain(sign_domain::Interval::LTZ)};
+
+  SignedConstantDomain not_zero{
+      SignedConstantDomain(sign_domain::Interval::NEZ)};
 };
 
 INSTANTIATE_TYPED_TEST_CASE_P(SignedConstantDomain,
@@ -41,9 +45,9 @@ template <>
 std::vector<SignedConstantDomain>
 AbstractDomainPropertyTest<SignedConstantDomain>::non_extremal_values() {
   Constants constants;
-  return {constants.one,     constants.minus_one, constants.zero,
-          constants.max_val, constants.min_val,   constants.positive,
-          constants.negative};
+  return {constants.one,      constants.minus_one, constants.zero,
+          constants.max_val,  constants.min_val,   constants.positive,
+          constants.negative, constants.not_zero};
 }
 
 class SignedConstantDomainOperationsTest : public testing::Test,
@@ -58,27 +62,26 @@ TEST_F(SignedConstantDomainOperationsTest, intervals) {
   EXPECT_EQ(SignedConstantDomain(Interval::EQZ), zero);
   EXPECT_EQ(max_val.interval(), Interval::GTZ);
   EXPECT_EQ(min_val.interval(), Interval::LTZ);
+  EXPECT_EQ(not_zero.interval(), Interval::NEZ);
 
-  EXPECT_EQ(one.join(minus_one).interval(), Interval::ALL);
+  EXPECT_EQ(one.join(minus_one).interval(), Interval::NEZ);
   EXPECT_EQ(one.join(zero).interval(), Interval::GEZ);
   EXPECT_EQ(minus_one.join(zero).interval(), Interval::LEZ);
   EXPECT_EQ(max_val.join(zero).interval(), Interval::GEZ);
   EXPECT_EQ(min_val.join(zero).interval(), Interval::LEZ);
+  EXPECT_EQ(min_val.join(max_val).interval(), Interval::NEZ);
 }
 
 TEST_F(SignedConstantDomainOperationsTest, binaryOperations) {
   using namespace sign_domain;
 
   EXPECT_EQ(one.join(positive), positive);
-  EXPECT_TRUE(one.join(negative).is_top());
   EXPECT_EQ(max_val.join(positive), positive);
-  EXPECT_TRUE(max_val.join(negative).is_top());
   EXPECT_EQ(minus_one.join(negative), negative);
-  EXPECT_TRUE(minus_one.join(positive).is_top());
   EXPECT_EQ(min_val.join(negative), negative);
-  EXPECT_TRUE(min_val.join(positive).is_top());
   EXPECT_EQ(zero.join(positive).interval(), Interval::GEZ);
   EXPECT_EQ(zero.join(negative).interval(), Interval::LEZ);
+  EXPECT_EQ(zero.join(not_zero).interval(), Interval::ALL);
 
   EXPECT_EQ(one.meet(positive), one);
   EXPECT_TRUE(one.meet(negative).is_bottom());
@@ -88,6 +91,147 @@ TEST_F(SignedConstantDomainOperationsTest, binaryOperations) {
   EXPECT_TRUE(minus_one.meet(positive).is_bottom());
   EXPECT_EQ(min_val.meet(negative), min_val);
   EXPECT_TRUE(min_val.meet(positive).is_bottom());
+  EXPECT_TRUE(zero.meet(not_zero).is_bottom());
+  EXPECT_EQ(not_zero.meet(positive), positive);
+  EXPECT_EQ(not_zero.meet(max_val), max_val);
+  EXPECT_EQ(not_zero.meet(min_val), min_val);
+}
+
+class ConstantNezTest : public RedexTest {};
+
+TEST_F(ConstantNezTest, DeterminableNezTrue) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
+
+     (if-nez v0 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
+
+     (goto :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(ConstantNezTest, DeterminableNezFalse) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (const v0 0)
+
+     (if-nez v0 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (const v0 0)
+
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(ConstantNezTest, DeterminableEZFalse) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+
+     (if-eqz v0 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+
+     (const v0 1)
+
+     (const v0 2)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(ConstantNezTest, NonDeterminableNEZ) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
+     (iget v0 "LBoo;.a:I")
+     (move-result-pseudo v0)
+
+     (if-nez v0 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
+     (iget v0 "LBoo;.a:I")
+     (move-result-pseudo v0)
+
+     (if-nez v0 :if-true-label)
+     (const v0 1)
+
+     (:if-true-label)
+     (const v0 2)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, IfToGoto) {

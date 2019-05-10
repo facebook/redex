@@ -190,8 +190,11 @@ std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
     if (field->get_class() != cls->get_type()) {
       continue;
     }
-    auto ptr = return_env.get_pointee<ConstantObjectDomain>(
-        pair.second.get<AbstractHeapPointer>());
+    auto heap_ptr = pair.second.maybe_get<AbstractHeapPointer>();
+    if (!heap_ptr) {
+      continue;
+    }
+    auto ptr = return_env.get_pointee<ConstantObjectDomain>(*heap_ptr);
     auto ordinal = ptr.get<SignedConstantDomain>(ordinal_field);
     auto ordinal_value = ordinal.get_constant();
     if (!ordinal_value) {

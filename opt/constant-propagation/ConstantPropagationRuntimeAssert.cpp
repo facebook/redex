@@ -37,6 +37,8 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
     not_reached();
   case Interval::LTZ:
     return OPCODE_IF_LTZ;
+  case Interval::NEZ:
+    return OPCODE_IF_NEZ;
   case Interval::GTZ:
     return OPCODE_IF_GTZ;
   case Interval::EQZ:
