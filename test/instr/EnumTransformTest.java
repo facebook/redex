@@ -7,6 +7,7 @@
 
 package com.facebook.redextest;
 
+import java.util.Random;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -32,8 +33,6 @@ enum SCORE {
     }
     return null;
   }
-
-  public static int my_ordinal(SCORE score) { return score.ordinal(); }
 }
 
 interface Intf {
@@ -82,7 +81,12 @@ enum CAST_WHEN_RETURN {
   ONE;
   public static Enum method() { return ONE; }
 }
-enum CAST_THIS_POINTER { ONE; }
+enum CAST_THIS_POINTER {
+  ONE;
+  public static void cast_this_method() {
+    EnumHelper.inlined_method(CAST_THIS_POINTER.ONE);
+  }
+}
 enum CAST_PARAMETER {
   ONE;
   public static void method(Object o) {}
@@ -96,11 +100,32 @@ enum USED_AS_CLASS_OBJECT {
 enum CAST_CHECK_CAST { ONE; }
 enum CAST_ISPUT_OBJECT { ONE; }
 enum CAST_APUT_OBJECT { ONE; }
-class EnumHelper {
-  static void inlined_method(Enum e) { int a = e.ordinal(); }
-  public static void cast_this_method() {
-    inlined_method(CAST_THIS_POINTER.ONE);
+
+enum ENUM_TYPE_1 { ONE; }
+enum ENUM_TYPE_2 {
+  ONE,
+  TWO;
+  public static void test_join() {
+    Enum obj = null;
+    Random random = new Random();
+    int selector = random.nextInt() % 2;
+    if (selector == 0) {
+      obj = ENUM_TYPE_1.ONE;
+    } else {
+      obj = ENUM_TYPE_2.TWO;
+    }
+    // obj may be ENUM_TYPE_1 or ENUM_TYPE_2.
+    int res = obj.ordinal();
+    if (selector == 0) {
+      assertThat(res).isEqualTo(0);
+    } else {
+      assertThat(res).isEqualTo(1);
+    }
   }
+}
+
+class EnumHelper {
+  static void inlined_method(Enum e) { int a = e.hashCode(); }
 
   class Cache<T> {
     @Nullable T e = (T) null;
@@ -120,12 +145,14 @@ class EnumHelper {
     Object[] array = new Object[10];
     array[0] = CAST_APUT_OBJECT.ONE;
   }
+
+  public static int my_ordinal(SCORE score) { return score.ordinal(); }
 }
 
 /* Test cases */
 public class EnumTransformTest {
   @Test
-  public void test_intface() {
+  public void test_interface() {
     C c = new C();
     // Method with the same name but different type of argument.
     assertThat(c.make(SCORE.TWO)).isEqualTo(5);
@@ -181,7 +208,7 @@ public class EnumTransformTest {
   // NullPointerException.
   @Test(expected = NullPointerException.class)
   public void test_npe() {
-    int a = SCORE.my_ordinal(null);
+    int a = EnumHelper.my_ordinal(null);
   }
 
   // [isa]get_object, [isa]put_object and new_array instructions are
@@ -250,4 +277,6 @@ public class EnumTransformTest {
   public void test_valueOf_exception() {
     SCORE.valueOf("ZERO");
   }
+
+  public void test_join_with_multitypes() { ENUM_TYPE_2.test_join(); }
 }

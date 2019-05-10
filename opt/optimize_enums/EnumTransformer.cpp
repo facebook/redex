@@ -532,7 +532,9 @@ class CodeTransformer final {
     }
     DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(0)));
-    if (!candidate_type) {
+    if (m_enum_attrs.count(container)) {
+      always_assert(candidate_type == nullptr || candidate_type == container);
+    } else if (!candidate_type) {
       return;
     }
     insn->set_opcode(OPCODE_INVOKE_STATIC);
@@ -582,12 +584,18 @@ class CodeTransformer final {
                              IRInstruction* insn,
                              DexMethodRef* integer_meth) {
     auto container = insn->get_method()->get_class();
-    auto this_types = env.get(insn->src(0));
-    DexType* candidate_type = extract_candidate_enum_type(this_types);
-    if (!candidate_type) {
+    if (container != m_enum_util->OBJECT_TYPE &&
+        container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
       return;
     }
-    insn->set_method(integer_meth);
+    auto this_types = env.get(insn->src(0));
+    DexType* candidate_type = extract_candidate_enum_type(this_types);
+    if (m_enum_attrs.count(container)) {
+      always_assert(candidate_type == nullptr || candidate_type == container);
+      insn->set_method(integer_meth);
+    } else if (candidate_type) {
+      insn->set_method(integer_meth);
+    }
   }
 
   /**
@@ -704,12 +712,44 @@ class EnumTransformer final {
     }
     type_reference::TypeRefUpdater updater(type_mapping);
     updater.update_methods_fields(scope);
+    sanity_check(scope);
   }
 
   uint32_t get_int_objs_count() { return m_int_objs; }
   uint32_t get_enum_objs_count() { return m_enum_objs; }
 
  private:
+  void sanity_check(Scope& scope) {
+    // Only when trace level is 9.
+    if (traceEnabled(ENUM, 9)) {
+      walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
+        for (auto& mie : InstructionIterable(code)) {
+          auto insn = mie.insn;
+          if (insn->has_method()) {
+            auto method_ref = insn->get_method();
+            auto container = method_ref->get_class();
+            if (m_enum_attrs.count(container)) {
+              always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
+                                SHOW(insn), SHOW(method));
+            }
+          } else if (insn->has_field()) {
+            auto field_ref = insn->get_field();
+            auto container = field_ref->get_class();
+            if (m_enum_attrs.count(container)) {
+              always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
+                                SHOW(insn), SHOW(method));
+            }
+          } else if (insn->has_type()) {
+            auto type_ref = insn->get_type();
+            always_assert_log(!m_enum_attrs.count(type_ref),
+                              "Invalid insn %s in %s\n", SHOW(insn),
+                              SHOW(method));
+          }
+        }
+      });
+    }
+  }
+
   void create_substitute_methods(const ConcurrentSet<DexMethodRef*>& methods) {
     for (auto ref : methods) {
       if (ref->get_name() == m_enum_util->REDEX_TOSTRING) {

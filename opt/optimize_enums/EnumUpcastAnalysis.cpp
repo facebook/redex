@@ -60,7 +60,9 @@ enum Reason {
   USED_AS_CLASS_OBJECT,
   CAST_CHECK_CAST,
   CAST_ISPUT_OBJECT,
-  CAST_APUT_OBJECT
+  CAST_APUT_OBJECT,
+  MULTI_ENUM_TYPES,
+  UNSAFE_INVOCATION_ON_CANDIDATE_ENUM,
 };
 
 /**
@@ -102,12 +104,18 @@ class EnumUpcastDetector {
     case OPCODE_CONST_CLASS:
       reject(insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
       break;
-    case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE:
+    case OPCODE_INVOKE_SUPER:
+      process_general_invocation(insn, env, rejected_enums);
+      break;
+    case OPCODE_INVOKE_DIRECT:
+      process_direct_invocation(insn, env, rejected_enums);
+      break;
+    case OPCODE_INVOKE_STATIC:
+      process_static_invocation(insn, env, rejected_enums);
+      break;
     case OPCODE_INVOKE_VIRTUAL:
-      process_invoke(insn, env, rejected_enums);
+      process_virtual_invocation(insn, env, rejected_enums);
       break;
     case OPCODE_RETURN_OBJECT:
       process_return_object(insn, env, rejected_enums);
@@ -190,9 +198,43 @@ class EnumUpcastDetector {
   }
 
   /**
-   * Process invoke-kind instructions after we reach the fixpoint.
-   * Analyze invoke instruction's arguments, if the type of arguments are not
-   * consistent with the method signature, reject these types.
+   * No direct invocation allowed on candidate enums.
+   * Candidate enum constructor invocations should be in the enum classes'
+   * <clinit> which we should already exclude in previous step.
+   */
+  void process_direct_invocation(
+      const IRInstruction* insn,
+      const EnumTypeEnvironment* env,
+      ConcurrentSet<DexType*>* rejected_enums) const {
+    always_assert(insn->opcode() == OPCODE_INVOKE_DIRECT);
+    auto container = insn->get_method()->get_class();
+    always_assert_log(!m_candidate_enums->count_unsafe(container), "%s\n",
+                      SHOW(insn));
+    process_general_invocation(insn, env, rejected_enums);
+  }
+
+  /**
+   * Analyze static method invocations if the invoked method is not
+   * LCandidateEnum;.valueOf:(String)LCandidateEnum; or
+   * LCandidateEnum;.values:()[LCandidateEnum;
+   */
+  void process_static_invocation(
+      const IRInstruction* insn,
+      const EnumTypeEnvironment* env,
+      ConcurrentSet<DexType*>* rejected_enums) const {
+    always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
+    auto method = insn->get_method();
+    auto container = method->get_class();
+    if (m_candidate_enums->count_unsafe(container)) {
+      if (is_enum_values(method) || is_enum_valueof(method)) {
+        return;
+      }
+    }
+    process_general_invocation(insn, env, rejected_enums);
+  }
+
+  /**
+   * Process invoke-virtual instructions after we reach the fixpoint.
    *
    * But we can make assumptions for some methods although the invocations
    * seem to involve some cast operations.
@@ -210,24 +252,29 @@ class EnumUpcastDetector {
    *  # When the Object param is a candidate enum object, the invocation can be
    *  * modeled.
    *  INVOKE_VIRTUAL StringBuilder.append:(Object)StringBuilder
+   *
+   *  # Other virtual invocations on candidate enum object that are considered
+   *    safe.
+   *  INVOKE_VIRTUAL ordinal:()I
+   *  TODO(fengliu): hashCode ?
    */
-  void process_invoke(const IRInstruction* insn,
-                      const EnumTypeEnvironment* env,
-                      ConcurrentSet<DexType*>* rejected_enums) const {
+  void process_virtual_invocation(
+      const IRInstruction* insn,
+      const EnumTypeEnvironment* env,
+      ConcurrentSet<DexType*>* rejected_enums) const {
+    always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL);
     const DexMethodRef* method = insn->get_method();
     const DexProto* proto = method->get_proto();
     DexType* container = method->get_class();
 
-    // Method is equals or compareTo.
-    if (signatures_match(method, ENUM_EQUALS_METHOD) ||
-        signatures_match(method, ENUM_COMPARETO_METHOD)) {
-      // Class is Enum or a candidate enum class.
-      if (container == ENUM_TYPE ||
-          (m_candidate_enums->count_unsafe(container) &&
-           !rejected_enums->count(container))) {
-        EnumTypes a_types = env->get(insn->src(0));
+    // Class is Enum or a candidate enum class.
+    if (container == ENUM_TYPE || m_candidate_enums->count_unsafe(container)) {
+      EnumTypes a_types = env->get(insn->src(0));
+      auto this_types = discard_primitives(a_types);
+      // Method is equals or compareTo.
+      if (signatures_match(method, ENUM_EQUALS_METHOD) ||
+          signatures_match(method, ENUM_COMPARETO_METHOD)) {
         EnumTypes b_types = env->get(insn->src(1));
-        auto this_types = discard_primitives(a_types);
         auto that_types = discard_primitives(b_types);
         DexType* this_type = this_types.empty() ? nullptr : *this_types.begin();
         DexType* that_type = that_types.empty() ? nullptr : *that_types.begin();
@@ -238,13 +285,45 @@ class EnumUpcastDetector {
           reject(that_types, rejected_enums, CAST_PARAMETER);
         }
         return;
+      } else if (signatures_match(method, ENUM_TOSTRING_METHOD) ||
+                 signatures_match(method, ENUM_NAME_METHOD) ||
+                 signatures_match(method, ENUM_ORDINAL_METHOD)) {
+        if (this_types.size() > 1) {
+          reject(this_types, rejected_enums, MULTI_ENUM_TYPES);
+        }
+        return;
       }
-    } else if (signatures_match(method, STRINGBUILDER_APPEND_METHOD) ||
-               signatures_match(method, ENUM_TOSTRING_METHOD) ||
-               signatures_match(method, ENUM_NAME_METHOD)) {
+    } else if (method == STRINGBUILDER_APPEND_METHOD) {
+      EnumTypes b_types = env->get(insn->src(1));
+      auto that_types = discard_primitives(b_types);
+      if (that_types.size() > 1) {
+        reject(that_types, rejected_enums, MULTI_ENUM_TYPES);
+      }
       return;
     }
+    // If not special cases, do the general processing.
+    process_general_invocation(insn, env, rejected_enums);
+  }
 
+  /**
+   * Analyze invoke instruction's arguments, if the type of arguments are not
+   * consistent with the method signature, reject these types.
+   */
+  void process_general_invocation(
+      const IRInstruction* insn,
+      const EnumTypeEnvironment* env,
+      ConcurrentSet<DexType*>* rejected_enums) const {
+    always_assert(insn->has_method());
+    auto method = insn->get_method();
+    auto proto = method->get_proto();
+    auto container = method->get_class();
+    // Other non-static invocations on candidate enum classes are considered
+    // unsafe to optimize.
+    if (insn->opcode() != OPCODE_INVOKE_STATIC &&
+        m_candidate_enums->count_unsafe(container)) {
+      TRACE(ENUM, 9, "unsafe_invocation %s\n", SHOW(insn));
+      reject(container, rejected_enums, UNSAFE_INVOCATION_ON_CANDIDATE_ENUM);
+    }
     // Check the type of arguments.
     const std::deque<DexType*>& args = proto->get_args()->get_type_list();
     always_assert(args.size() == insn->srcs_size() ||
@@ -252,9 +331,8 @@ class EnumUpcastDetector {
     size_t arg_id = 0;
     if (insn->srcs_size() == args.size() + 1) {
       // this pointer
-      reject_if_inconsistent(env->get(insn->src(arg_id)),
-                             insn->get_method()->get_class(), rejected_enums,
-                             CAST_THIS_POINTER);
+      reject_if_inconsistent(env->get(insn->src(arg_id)), container,
+                             rejected_enums, CAST_THIS_POINTER);
       arg_id++;
     }
     // Arguments
@@ -324,10 +402,11 @@ class EnumUpcastDetector {
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
   const DexMethodRef* ENUM_NAME_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
+  const DexMethodRef* ENUM_ORDINAL_METHOD =
+      DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I");
   const DexMethodRef* STRINGBUILDER_APPEND_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
-  const DexString* VALUEOF_METHOD_STR = DexString::make_string("valueOf");
   const DexType* ENUM_TYPE = get_enum_type();
   const DexType* STRING_TYPE = get_string_type();
 

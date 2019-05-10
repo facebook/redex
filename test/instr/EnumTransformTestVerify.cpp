@@ -23,27 +23,19 @@ struct EnumUtil {
 };
 
 void expect_other_enums(const DexClasses& classes) {
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_WHEN_RETURN;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_THIS_POINTER;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_PARAMETER;"),
-      nullptr);
-  EXPECT_NE(find_class_named(classes,
-                             "Lcom/facebook/redextest/USED_AS_CLASS_OBJECT;"),
-            nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_CHECK_CAST;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_ISPUT_OBJECT;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_APUT_OBJECT;"),
-      nullptr);
+  std::vector<std::string> class_names{
+      "Lcom/facebook/redextest/CAST_WHEN_RETURN;",
+      "Lcom/facebook/redextest/CAST_THIS_POINTER;",
+      "Lcom/facebook/redextest/CAST_PARAMETER;",
+      "Lcom/facebook/redextest/USED_AS_CLASS_OBJECT;",
+      "Lcom/facebook/redextest/CAST_CHECK_CAST;",
+      "Lcom/facebook/redextest/CAST_ISPUT_OBJECT;",
+      "Lcom/facebook/redextest/CAST_APUT_OBJECT;",
+      "Lcom/facebook/redextest/ENUM_TYPE_1;",
+      "Lcom/facebook/redextest/ENUM_TYPE_2;"};
+  for (auto& name : class_names) {
+    EXPECT_NE(find_class_named(classes, name.c_str()), nullptr);
+  }
 }
 } // namespace
 

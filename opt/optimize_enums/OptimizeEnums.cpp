@@ -235,43 +235,6 @@ DexMethod* get_java_enum_ctor() {
   return java_enum_ctors.at(0);
 }
 
-/**
- * Based on https://docs.oracle.com/javase/7/docs/api/java/lang/Enum.html,
- * when we replace enums with Integer object, we consider the enums that
- * only have following method invocations are safe.
- *
- *   INVOKE_DIRECT <init>:(Ljava/lang/String;I)V // <init> may be override
- *   INVOKE_VIRTUAL equals:(Ljava/lang/Object;)Z
- *   INVOKE_VIRTUAL compareTo:(Ljava/lang/Enum;)I
- *   INVOKE_VIRTUAL ordinal:()I
- *   INVOKE_VIRTUAL toString:()Ljava/lang/String;
- *   INVOKE_VIRTUAL name:()Ljava/lang/String;
- *   INVOKE_STATIC values:()[LE;
- *   INVOKE_STATIC valueOf:(Ljava/lang/String;)LE;
- *   TODO(fengliu): hashCode ?
- * Unsafe methods :
- *   user defined constructors
- */
-std::unordered_map<DexString*, DexProto*> get_safe_enum_methods() {
-  std::unordered_map<DexString*, DexProto*> methods;
-  // It's Okay if keys and values are nullptr
-  methods[DexString::get_string("<init>")] = DexProto::make_proto(
-      get_void_type(),
-      DexTypeList::make_type_list({get_string_type(), get_int_type()}));
-  methods[DexString::get_string("equals")] = DexProto::make_proto(
-      get_boolean_type(), DexTypeList::make_type_list({get_object_type()}));
-  methods[DexString::get_string("compareTo")] = DexProto::make_proto(
-      get_int_type(), DexTypeList::make_type_list({get_enum_type()}));
-  methods[DexString::get_string("ordinal")] =
-      DexProto::make_proto(get_int_type(), DexTypeList::make_type_list({}));
-  methods[DexString::get_string("toString")] =
-      DexProto::make_proto(get_string_type(), DexTypeList::make_type_list({}));
-  methods[DexString::get_string("name")] =
-      DexProto::make_proto(get_string_type(), DexTypeList::make_type_list({}));
-  // values() and valueOf(String) are considered separately.
-  return methods;
-}
-
 class OptimizeEnums {
  public:
   OptimizeEnums(DexStoresVector& stores, ConfigFiles& conf)
@@ -339,54 +302,6 @@ class OptimizeEnums {
   }
 
  private:
-  /**
-   * Reject enums which are invoked through unsupported method.
-   */
-  void reject_unsafe_invocation(ConcurrentSet<DexType*>* enum_set) {
-    const std::unordered_map<DexString*, DexProto*> safe_methods =
-        get_safe_enum_methods();
-    // invoke-static LE;.values:()[LE; is not allowed in the first version
-    const DexString* values_method = DexString::get_string("values");
-    // invoke-static LE;.valueOf(Ljava / lang / String;) LE; is not allowed
-    const DexString* valueof_method = DexString::get_string("valueOf");
-
-    ConcurrentSet<DexType*> rejected_enums;
-
-    walk::parallel::methods(m_scope, [&](DexMethod* method) {
-      if (!method->get_code()) {
-        return;
-      }
-      for (const auto& mie : InstructionIterable(method->get_code())) {
-        if (mie.insn->has_method()) {
-          DexMethodRef* called_method_ref = mie.insn->get_method();
-          DexType* clazz = called_method_ref->get_class();
-          DexProto* proto = called_method_ref->get_proto();
-          // If the invoked method is from candidate enums, detect if the
-          // invocation is allowed or not
-          if (clazz != nullptr && enum_set->count(clazz) &&
-              !rejected_enums.count(clazz)) {
-            if (safe_methods.count(called_method_ref->get_name())) {
-              if (proto != safe_methods.at(called_method_ref->get_name())) {
-                rejected_enums.insert(clazz);
-              }
-            } else if (called_method_ref->get_name() == values_method) {
-              // Only values:()[LE; is acceptable.
-              if (proto->get_args()->size()) {
-                rejected_enums.insert(clazz);
-              }
-            } else if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
-              // None static invocation on enums are not allowed.
-              rejected_enums.insert(clazz);
-            }
-            // Invocation on static methods are allowed.
-          }
-        }
-      }
-    });
-    for (DexType* type : rejected_enums) {
-      enum_set->erase(type);
-    }
-  }
 
   ConcurrentSet<DexType*> collect_simple_enums() {
     ConcurrentSet<DexType*> enum_set;
@@ -395,7 +310,6 @@ class OptimizeEnums {
         enum_set.insert(cls->get_type());
       }
     });
-    reject_unsafe_invocation(&enum_set);
     optimize_enums::reject_unsafe_enums(m_scope, &enum_set);
     return enum_set;
   }
@@ -441,11 +355,14 @@ class OptimizeEnums {
    *  return-void
    */
   static bool is_simple_enum_constructor(const DexMethod* method) {
-    const auto& args = method->get_proto()->get_args()->get_type_list();
-    if (args.size() < 2) {
+    if (!is_private(method)) {
       return false;
     }
-    // First two arguments should always be string and int.
+    const auto& args = method->get_proto()->get_args()->get_type_list();
+    if (args.size() != 2) {
+      return false;
+    }
+    // The two arguments should always be string and int.
     {
       auto it = args.begin();
       if (*it != get_string_type()) {
