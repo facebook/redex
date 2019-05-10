@@ -303,3 +303,27 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
   )";
   test(code_str, expected_str, 1);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
+  auto code_str = R"(
+    (
+      (move-object v1 v0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v3)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (move-object v1 v0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v4 v2)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v3)
+      (move v3 v4)
+    )
+  )";
+  test(code_str, expected_str, 1);
+}

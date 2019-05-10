@@ -254,6 +254,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       });
     };
 
+    init_pre_state(insn, current_state);
     auto opcode = insn->opcode();
     switch (opcode) {
     case OPCODE_MOVE:
@@ -421,30 +422,20 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return value;
   }
 
-  IRValue get_value(const IRInstruction* insn,
-                    CseEnvironment* current_state) const {
-    IRValue value;
-    auto opcode = insn->opcode();
-    always_assert(opcode != IOPCODE_PRE_STATE_SRC);
-    value.opcode = opcode;
+  void init_pre_state(const IRInstruction* insn,
+                      CseEnvironment* current_state) const {
     auto ref_env = current_state->get_ref_env();
     std::unordered_map<uint32_t, value_id_t> new_pre_state_src_values;
     for (size_t i = 0; i < insn->srcs_size(); i++) {
       auto reg = insn->src(i);
       auto c = ref_env.get(reg).get_constant();
-      value_id_t value_id;
-      if (c) {
-        value_id = *c;
-      } else {
+      if (!c) {
         auto it = new_pre_state_src_values.find(reg);
-        if (it != new_pre_state_src_values.end()) {
-          value_id = it->second;
-        } else {
-          value_id = get_pre_state_src_value_id(reg, insn);
+        if (it == new_pre_state_src_values.end()) {
+          auto value_id = get_pre_state_src_value_id(reg, insn);
           new_pre_state_src_values.emplace(reg, value_id);
         }
       }
-      value.srcs.push_back(value_id);
     }
     if (new_pre_state_src_values.size()) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
@@ -452,6 +443,22 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
           env->set(p.first, ValueIdDomain(p.second));
         }
       });
+    }
+  }
+
+  IRValue get_value(const IRInstruction* insn,
+                    CseEnvironment* current_state) const {
+    IRValue value;
+    auto opcode = insn->opcode();
+    always_assert(opcode != IOPCODE_PRE_STATE_SRC);
+    value.opcode = opcode;
+    auto ref_env = current_state->get_ref_env();
+    for (size_t i = 0; i < insn->srcs_size(); i++) {
+      auto reg = insn->src(i);
+      auto c = ref_env.get(reg).get_constant();
+      always_assert(c);
+      value_id_t value_id = *c;
+      value.srcs.push_back(value_id);
     }
     if (opcode::is_commutative(opcode)) {
       std::sort(value.srcs.begin(), value.srcs.end());
