@@ -1017,6 +1017,28 @@ bool is_move_result_or_move_result_pseudo(IROpcode op) {
   return is_move_result(op) || is_move_result_pseudo(op);
 }
 
+bool is_commutative(IROpcode opcode) {
+  switch (opcode) {
+  case OPCODE_AND_INT:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_INT:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_INT:
+  case OPCODE_XOR_LONG:
+  case OPCODE_ADD_INT:
+  case OPCODE_ADD_LONG:
+  case OPCODE_ADD_FLOAT:
+  case OPCODE_ADD_DOUBLE:
+  case OPCODE_MUL_INT:
+  case OPCODE_MUL_LONG:
+  case OPCODE_MUL_FLOAT:
+  case OPCODE_MUL_DOUBLE:
+    return true;
+  default:
+    return false;
+  }
+}
+
 IROpcode load_param_to_move(IROpcode op) {
   switch (op) {
   case IOPCODE_LOAD_PARAM:

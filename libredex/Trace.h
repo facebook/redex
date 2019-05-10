@@ -30,6 +30,7 @@
   TM(CONSTP)             \
   TM(CPG)                \
   TM(CS)                 \
+  TM(CSE)                \
   TM(CUSTOMSORT)         \
   TM(DBGSTRIP)           \
   TM(DC)                 \
