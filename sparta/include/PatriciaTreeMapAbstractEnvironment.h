@@ -109,6 +109,15 @@ class PatriciaTreeMapAbstractEnvironment final
     return *this;
   }
 
+  PatriciaTreeMapAbstractEnvironment& clear() {
+    if (this->is_bottom()) {
+      return *this;
+    }
+    this->get_value()->clear();
+    this->normalize();
+    return *this;
+  }
+
   PatriciaTreeMapAbstractEnvironment& update(
       const Variable& variable,
       std::function<Domain(const Domain&)> operation) {
