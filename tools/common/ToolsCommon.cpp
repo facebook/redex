@@ -91,7 +91,7 @@ void write_intermediate_dex(const ConfigFiles& conf,
     Timer t("Instruction lowering");
     instruction_lowering::run(stores);
   }
-  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing intermediate dexes");

@@ -794,8 +794,6 @@ void redex_backend(const PassManager& manager,
   dex_stats_t output_totals;
   std::vector<dex_stats_t> output_dexes_stats;
 
-  auto pos_output =
-      conf.metafile(json_cfg.get("line_number_map", std::string()));
   auto pos_output_v2 =
       conf.metafile(json_cfg.get("line_number_map_v2", std::string()));
   auto debug_line_mapping_filename_v2 =
@@ -817,7 +815,7 @@ void redex_backend(const PassManager& manager,
   }
 
   std::unique_ptr<PositionMapper> pos_mapper(
-      PositionMapper::make(pos_output, pos_output_v2));
+      PositionMapper::make(pos_output_v2));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);

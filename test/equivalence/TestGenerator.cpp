@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
 
   Json::Value json(Json::objectValue);
   ConfigFiles conf(json);
-  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
   DexStore store("classes");
   store.set_dex_magic(load_dex_magic_from_dex(dex));
