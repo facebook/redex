@@ -39,7 +39,7 @@ class CopyPropagationPass : public Pass {
     jw.get("replace_with_representative",
            true,
            m_config.replace_with_representative);
-    jw.get("wide_registers", false, m_config.wide_registers);
+    jw.get("wide_registers", true, m_config.wide_registers);
     jw.get("static_finals", false, m_config.static_finals);
     jw.get("debug", false, m_config.debug);
     jw.get("max_estimated_registers", 3000, m_config.max_estimated_registers);
@@ -50,7 +50,7 @@ class CopyPropagationPass : public Pass {
     bool eliminate_const_strings{true};
     bool eliminate_const_classes{true};
     bool replace_with_representative{true};
-    bool wide_registers{false};
+    bool wide_registers{true};
     bool static_finals{false};
     bool debug{false};
 
