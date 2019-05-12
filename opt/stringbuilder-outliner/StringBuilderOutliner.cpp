@@ -260,6 +260,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
                                DexProto::make_proto(string_ty, typelist)));
     helper->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     helper->set_code(create_outline_helper_code(helper));
+    helper->set_deobfuscated_name(show(helper));
     cc.add_method(helper);
     did_create_helper = true;
     m_outline_helpers.emplace(typelist, helper);
