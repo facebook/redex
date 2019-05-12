@@ -859,8 +859,15 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   auto worker = [&](DexMethod* method, size_t& total_size) -> int {
     const auto& name = method->get_deobfuscated_name();
     always_assert_log(
+        !name.empty(),
+        "Deobfuscated method name can't be empty: obfuscated "
+        "name: %s, class: \'%s\'(%s)",
+        SHOW(method->get_name()),
+        SHOW(type_class(method->get_class())->get_deobfuscated_name()),
+        SHOW(method->get_class()->get_name()));
+    always_assert_log(
         !method_names.count(name),
-        "Deobfuscated method names must be unique, but found duplicate: %s",
+        "Deobfuscated method names must be unique, but found duplicate: \'%s\'",
         SHOW(name));
     method_names.insert(name);
 
