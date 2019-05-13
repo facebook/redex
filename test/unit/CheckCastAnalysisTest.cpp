@@ -24,7 +24,7 @@ TEST_F(CheckCastAnalysisTest, simple_string) {
       )
     )
   )");
-  check_casts::impl::CheckCastAnalysisV2 analysis(method);
+  check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -46,7 +46,7 @@ TEST_F(CheckCastAnalysisTest, new_instance) {
       )
     )
   )");
-  check_casts::impl::CheckCastAnalysisV2 analysis(method);
+  check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -68,7 +68,7 @@ TEST_F(CheckCastAnalysisTest, parameter) {
       )
     )
   )");
-  check_casts::impl::CheckCastAnalysisV2 analysis(method);
+  check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -90,7 +90,7 @@ TEST_F(CheckCastAnalysisTest, this_parameter) {
       )
     )
   )");
-  check_casts::impl::CheckCastAnalysisV2 analysis(method);
+  check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
@@ -112,7 +112,7 @@ TEST_F(CheckCastAnalysisTest, get_field) {
       )
     )
   )");
-  check_casts::impl::CheckCastAnalysisV2 analysis(method);
+  check_casts::impl::CheckCastAnalysis analysis(method);
   auto replacements = analysis.collect_redundant_checks_replacement();
 
   EXPECT_EQ(replacements.size(), 1);
