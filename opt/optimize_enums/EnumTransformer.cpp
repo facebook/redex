@@ -340,12 +340,14 @@ struct EnumUtil {
   }
 };
 
-struct StringBuilderInfo {
-  DexType* candidate_type;
-  IRInstruction* insn;
+struct InsnReplacement {
+  MethodItemEntry* original_mie;
+  std::vector<IRInstruction*> replacements;
 
-  StringBuilderInfo(DexType* t, IRInstruction* i)
-      : candidate_type(t), insn(i) {}
+  InsnReplacement(MethodItemEntry* mie, IRInstruction* new_insn)
+      : original_mie(mie), replacements{new_insn} {}
+  InsnReplacement(MethodItemEntry* mie, std::vector<IRInstruction*>& insns)
+      : original_mie(mie), replacements(std::move(insns)) {}
 };
 
 /**
@@ -367,73 +369,69 @@ class CodeTransformer final {
     optimize_enums::EnumFixpointIterator engine(cfg);
     engine.run(start_env);
 
-    std::vector<StringBuilderInfo> string_builder_infos;
     for (auto& block : cfg.blocks()) {
       optimize_enums::EnumTypeEnvironment env =
           engine.get_entry_state_at(block);
       for (auto it = block->begin(); it != block->end(); ++it) {
         if (it->type == MFLOW_OPCODE) {
           engine.analyze_instruction(it->insn, &env);
-          update_instructions(env, block, it, &string_builder_infos);
+          update_instructions(env, block, &(*it));
         }
       }
     }
 
-    // We defer editing of the stringbuilder append calls because they require
-    // splitting of blocks, which invalidates CFG iterators and cannot be done
-    // while iterating through the blocks.
-    for (const auto& info : string_builder_infos) {
-      // We must use `find_insn` (even though it's linear) because all iterators
-      // are invalidated when `update_invoke_stringbuilder_append` makes edits
-      // to the CFG.
-      // TODO: We could probably be faster than `find_insn` on average if we
-      // start by looking where the instruction was before and following gotos.
-      const cfg::InstructionIterator& insn_it = cfg.find_insn(info.insn);
-      always_assert_log(!insn_it.is_end(),
-                        "Can't find stringbuilder append in %s", SHOW(cfg));
-      update_invoke_stringbuilder_append(info.candidate_type, insn_it);
-    }
     code->clear_cfg();
+    // We could not insert invoke-kind instructions to editable cfg when we
+    // iterate the cfg. If we're inside a try region, inserting invoke-kind will
+    // split the block and insert a move-result in the new goto successor block,
+    // thus invalidating iterators into the CFG. See the comment on the
+    // insertion methods in ControlFlow.h for more details.
+    // TODO: We can use editable cfg API to upate the code when the APIs are
+    // ready, see T42743620.
+    for (const auto& info : m_replacements) {
+      auto mie = info.original_mie;
+      auto iterator = code->iterator_to(*mie);
+      always_assert(iterator != code->end());
+      for (auto new_insn : info.replacements) {
+        code->insert_before(iterator, new_insn);
+      }
+      delete mie->insn;
+      mie->type = MFLOW_FALLTHROUGH;
+      mie->insn = nullptr;
+      code->erase(iterator);
+    }
   }
 
  private:
-  void update_instructions(
-      const optimize_enums::EnumTypeEnvironment& env,
-      cfg::Block* block,
-      IRList::iterator& it,
-      std::vector<StringBuilderInfo>* string_builder_infos) {
-    auto insn = it->insn;
+  void update_instructions(const optimize_enums::EnumTypeEnvironment& env,
+                           cfg::Block* block,
+                           MethodItemEntry* mie) {
+    auto insn = mie->insn;
     switch (insn->opcode()) {
     case OPCODE_SGET_OBJECT:
-      update_sget_object(env, insn);
+      update_sget_object(env, mie);
       break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
       if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
-        update_invoke_virtual(env, insn, m_enum_util->INTEGER_INTVALUE_METHOD);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_INTVALUE_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_EQUALS_METHOD)) {
-        update_invoke_virtual(env, insn, m_enum_util->INTEGER_EQUALS_METHOD);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_EQUALS_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
-        update_invoke_virtual(env, insn, m_enum_util->INTEGER_COMPARETO_METHOD);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_COMPARETO_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD) ||
                  signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
-        update_invoke_tostring(env, insn);
-      } else if (signatures_match(
-                     method, m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD)) {
-        // Defer editing of stringbuilder. Save the information for later.
-        DexType* candidate_type =
-            extract_candidate_enum_type(env.get(insn->src(1)));
-        if (candidate_type != nullptr) {
-          string_builder_infos->emplace_back(candidate_type, insn);
-        }
+        update_invoke_tostring(env, mie);
+      } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
+        update_invoke_stringbuilder_append(env, mie);
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
       if (is_enum_values(method)) {
-        update_invoke_values(env, block, it);
+        update_invoke_values(env, block, mie);
       } else if (is_enum_valueof(method)) {
-        update_invoke_valueof(env, insn);
+        update_invoke_valueof(env, mie);
       }
     } break;
     case OPCODE_NEW_ARRAY: {
@@ -458,7 +456,8 @@ class CodeTransformer final {
    *   sget-object LEnumUtils;.f?:Integer
    */
   void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
-                          IRInstruction* insn) {
+                          MethodItemEntry* mie) {
+    auto insn = mie->insn;
     auto field = static_cast<DexField*>(insn->get_field());
     if (!m_enum_attrs.count(field->get_type())) {
       return;
@@ -469,7 +468,8 @@ class CodeTransformer final {
     }
     auto ord = enum_attrs.at(field).ordinal;
     auto new_field = m_enum_util->m_fields[ord];
-    insn->set_field(new_field);
+    auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
+    m_replacements.push_back(InsnReplacement(mie, new_insn));
   }
 
   /**
@@ -480,8 +480,8 @@ class CodeTransformer final {
    */
   void update_invoke_values(const optimize_enums::EnumTypeEnvironment&,
                             cfg::Block* block,
-                            IRList::iterator& it) {
-    auto insn = it->insn;
+                            MethodItemEntry* mie) {
+    auto insn = mie->insn;
     auto method = insn->get_method();
     auto container = method->get_class();
     if (m_enum_attrs.count(container)) {
@@ -489,13 +489,13 @@ class CodeTransformer final {
       auto cls = type_class(container);
       uint64_t enum_size = cls->get_sfields().size() - 1;
       always_assert(enum_size);
-      block->insert_before(
-          block->to_cfg_instruction_iterator(it),
+      std::vector<IRInstruction*> new_insns;
+      new_insns.push_back(
           dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL, enum_size}}));
-      insn->set_opcode(OPCODE_INVOKE_STATIC);
-      insn->set_method(m_enum_util->m_values_method_ref);
-      insn->set_arg_word_count(1);
-      insn->set_src(0, reg);
+      new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
+                               m_enum_util->m_values_method_ref,
+                               {{VREG, reg}}));
+      m_replacements.push_back(InsnReplacement(mie, new_insns));
     }
   }
 
@@ -505,13 +505,16 @@ class CodeTransformer final {
    *   invoke-static v0 LCandidateEnum;.redex$OE$valueOf:(String)Integer
    */
   void update_invoke_valueof(const optimize_enums::EnumTypeEnvironment&,
-                             IRInstruction* insn) {
+                             MethodItemEntry* mie) {
+    auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (!m_enum_attrs.count(container)) {
       return;
     }
     auto valueof_method = m_enum_util->add_substitute_of_valueof(container);
-    insn->set_method(valueof_method);
+    auto reg = insn->src(0);
+    m_replacements.push_back(InsnReplacement(
+        mie, dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
   }
 
   /**
@@ -524,7 +527,8 @@ class CodeTransformer final {
    * same when LCandidateEnum; is a candidate enum.
    */
   void update_invoke_tostring(const optimize_enums::EnumTypeEnvironment& env,
-                              IRInstruction* insn) {
+                              MethodItemEntry* mie) {
+    auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
         container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
@@ -537,10 +541,11 @@ class CodeTransformer final {
     } else if (!candidate_type) {
       return;
     }
-    insn->set_opcode(OPCODE_INVOKE_STATIC);
     auto helper_method =
         m_enum_util->add_substitute_of_tostring(candidate_type);
-    insn->set_method(helper_method);
+    auto reg = insn->src(0);
+    m_replacements.push_back(InsnReplacement(
+        mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
   }
 
   /**
@@ -551,22 +556,26 @@ class CodeTransformer final {
    *   move-result-object vn
    *   invoke-virtual v0 vn LStringBuilder;.append:(String)LStringBuilder;
    */
-  void update_invoke_stringbuilder_append(DexType* candidate_type,
-                                          const cfg::InstructionIterator& it) {
-    auto reg = it->insn->src(1);
+  void update_invoke_stringbuilder_append(
+      const optimize_enums::EnumTypeEnvironment& env, MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    DexType* candidate_type =
+        extract_candidate_enum_type(env.get(insn->src(1)));
+    if (candidate_type == nullptr) {
+      return;
+    }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
+    auto reg0 = mie->insn->src(0);
+    auto reg1 = mie->insn->src(1);
     auto str_reg = allocate_temp();
-    // If we're inside a try region, inserting this invoke-static will split the
-    // block and insert the move-result in the new goto successor block, thus
-    // invalidating iterators into the CFG. See the comment on the insertion
-    // methods in ControlFlow.h for more details.
-    it.cfg().insert_before(
-        it,
-        {dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg}}),
-         dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, str_reg}})});
-    it->insn->set_method(m_enum_util->STRINGBUILDER_APPEND_STR_METHOD);
-    it->insn->set_src(1, str_reg);
+    std::vector<IRInstruction*> new_insns{
+        dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg1}}),
+        dasm(OPCODE_MOVE_RESULT_OBJECT, {{VREG, str_reg}}),
+        dasm(OPCODE_INVOKE_VIRTUAL,
+             m_enum_util->STRINGBUILDER_APPEND_STR_METHOD,
+             {{VREG, reg0}, {VREG, str_reg}})};
+    m_replacements.push_back(InsnReplacement(mie, new_insns));
   }
 
   /**
@@ -581,8 +590,9 @@ class CodeTransformer final {
    * invoke-virtual v0, v1 Integer.compareTo(Ljava/lang/Integer;)I
    */
   void update_invoke_virtual(const optimize_enums::EnumTypeEnvironment& env,
-                             IRInstruction* insn,
+                             MethodItemEntry* mie,
                              DexMethodRef* integer_meth) {
+    auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
         container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
@@ -592,10 +602,15 @@ class CodeTransformer final {
     DexType* candidate_type = extract_candidate_enum_type(this_types);
     if (m_enum_attrs.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
-      insn->set_method(integer_meth);
-    } else if (candidate_type) {
-      insn->set_method(integer_meth);
+    } else if (!candidate_type) {
+      return;
     }
+    auto new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
+    new_insn->set_method(integer_meth)->set_arg_word_count(insn->srcs_size());
+    for (size_t id = 0; id < insn->srcs_size(); ++id) {
+      new_insn->set_src(id, insn->src(id));
+    }
+    m_replacements.push_back(InsnReplacement(mie, new_insn));
   }
 
   /**
@@ -634,6 +649,7 @@ class CodeTransformer final {
   const EnumAttrMap& m_enum_attrs;
   EnumUtil* m_enum_util;
   DexMethod* m_method;
+  std::vector<InsnReplacement> m_replacements;
 };
 
 /**
@@ -925,10 +941,8 @@ class EnumTransformer final {
     auto name = method->get_name();
     auto args = method->get_proto()->get_args();
     return name == m_enum_util->CLINIT_METHOD_STR ||
-           name == m_enum_util->INIT_METHOD_STR ||
-           (name == m_enum_util->VALUES_METHOD_STR && args->size() == 0) ||
-           (name == m_enum_util->VALUEOF_METHOD_STR && args->size() == 1 &&
-            args->get_type_list().front() == m_enum_util->STRING_TYPE);
+           name == m_enum_util->INIT_METHOD_STR || is_enum_values(method) ||
+           is_enum_valueof(method);
   }
 
   /**
