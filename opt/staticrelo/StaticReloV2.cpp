@@ -83,7 +83,7 @@ struct StaticCallGraph {
 /**
  * Build call graph for all static methods in candidate classes
  */
-void build_call_graph(const std::unordered_set<DexClass*>& candidate_classes,
+void build_call_graph(const std::vector<DexClass*>& candidate_classes,
                       StaticCallGraph& graph) {
   walk::classes(candidate_classes, [&](DexClass* cls) {
     // The candidate class set only contains classes with only static methods
@@ -218,9 +218,8 @@ namespace static_relo_v2 {
  * Find out leaf classes that only contain static methods that can be renamed
  * and deleted.
  */
-std::unordered_set<DexClass*> StaticReloPassV2::gen_candidates(
-    const Scope& scope) {
-  std::unordered_set<DexClass*> candidate_classes;
+std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
+  std::vector<DexClass*> candidate_classes;
   TypeSystem typesystem(scope);
   walk::classes(scope, [&](DexClass* cls) {
     if (!cls->is_external() &&
@@ -235,18 +234,20 @@ std::unordered_set<DexClass*> StaticReloPassV2::gen_candidates(
           return;
         }
       }
-      candidate_classes.insert(cls);
+      candidate_classes.push_back(cls);
     }
   });
   return candidate_classes;
 }
 
 int StaticReloPassV2::run_relocation(
-    const Scope& scope, std::unordered_set<DexClass*>& candidate_classes) {
+    const Scope& scope, std::vector<DexClass*>& candidate_classes) {
   StaticCallGraph graph;
   build_call_graph(candidate_classes, graph);
+  std::unordered_set<DexClass*> set(candidate_classes.begin(),
+                                    candidate_classes.end());
   for (size_t color = 0; color < scope.size(); color++) {
-    if (candidate_classes.find(scope[color]) != candidate_classes.end()) {
+    if (set.find(scope[color]) != set.end()) {
       continue;
     }
     color_from_a_class(graph, scope[color], color);
@@ -259,7 +260,7 @@ void StaticReloPassV2::run_pass(DexStoresVector& stores,
                                 ConfigFiles& /* unused */,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  std::unordered_set<DexClass*> candidate_classes = gen_candidates(scope);
+  std::vector<DexClass*> candidate_classes = gen_candidates(scope);
   TRACE(STATIC_RELO, 2, "candidate_classes %d\n", candidate_classes.size());
 
   int relocated_methods = run_relocation(scope, candidate_classes);

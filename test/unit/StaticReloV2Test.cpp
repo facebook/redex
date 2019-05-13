@@ -94,11 +94,15 @@ TEST_F(StaticReloV2Test, staticMethodsOnlyRefedOnce) {
   call(method_c, method_b);
 
   Scope scope({classA, classB, classOther});
-  std::unordered_set<DexClass*> candidate_classes =
+  std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 2);
-  EXPECT_NE(candidate_classes.find(classA), candidate_classes.end());
-  EXPECT_NE(candidate_classes.find(classB), candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classA),
+      candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classB),
+      candidate_classes.end());
   int relocated_methods =
       StaticReloPassV2::run_relocation(scope, candidate_classes);
   EXPECT_EQ(relocated_methods, 2);
@@ -163,11 +167,15 @@ TEST_F(StaticReloV2Test, clusterRefedByOneClass) {
   call(method_c, method_a);
 
   Scope scope({classA, classB, classOther});
-  std::unordered_set<DexClass*> candidate_classes =
+  std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 2);
-  EXPECT_NE(candidate_classes.find(classA), candidate_classes.end());
-  EXPECT_NE(candidate_classes.find(classB), candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classA),
+      candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classB),
+      candidate_classes.end());
   int relocated_methods =
       StaticReloPassV2::run_relocation(scope, candidate_classes);
   EXPECT_EQ(relocated_methods, 2);
@@ -209,10 +217,12 @@ TEST_F(StaticReloV2Test, staticMethodRefedByMany) {
   call(method_c, method_a);
 
   Scope scope({classA, classOther1, classOther2});
-  std::unordered_set<DexClass*> candidate_classes =
+  std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 1);
-  EXPECT_NE(candidate_classes.find(classA), candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classA),
+      candidate_classes.end());
   int relocated_methods =
       StaticReloPassV2::run_relocation(scope, candidate_classes);
   EXPECT_EQ(relocated_methods, 0);
@@ -253,10 +263,12 @@ TEST_F(StaticReloV2Test, relocatePrivateStaticMethod) {
   call(method_d, method_private_a);
 
   Scope scope({classInner, classOuter});
-  std::unordered_set<DexClass*> candidate_classes =
+  std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 1);
-  EXPECT_NE(candidate_classes.find(classInner), candidate_classes.end());
+  EXPECT_NE(
+      std::find(candidate_classes.begin(), candidate_classes.end(), classInner),
+      candidate_classes.end());
   int relocated_methods =
       StaticReloPassV2::run_relocation(scope, candidate_classes);
 
