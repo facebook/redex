@@ -669,12 +669,10 @@ class EnumTransformer final {
       auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
       if (enum_attrs.empty() ||
           enum_cls->get_sfields().size() - 1 != enum_attrs.size()) {
-        // TODO: Will investigate why optimize_enums::analyze_enum_clinit may
-        // return empty for some enum <clinit> with less redundant
-        // `sget-object` instructions. And simply ignore enum classes that may
-        // contain multiple static fields that refer to the same enum object,
-        // for instance:
-        // enum CandidateEnum {
+        // Simply ignore enum classes that may contain multiple static fields
+        // that refer to the same enum object, for instance:
+        // enum CandidateEnum
+        // {
         //   ONE, TWO;
         //   static final CandidateEnum THREE = ONE;
         // }

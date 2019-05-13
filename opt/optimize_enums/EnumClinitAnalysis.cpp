@@ -122,6 +122,17 @@ class EnumOrdinalAnalyzer
     return false;
   }
 
+  static bool analyze_aput(const EnumOrdinalAnalyzerState& state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env) {
+    if (insn->opcode() == OPCODE_APUT_OBJECT) {
+      // Simply not do further analysis for the aput-object instructions. Maybe
+      // we can improve the analysis in the future.
+      return true;
+    }
+    return false;
+  }
+
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env) {
