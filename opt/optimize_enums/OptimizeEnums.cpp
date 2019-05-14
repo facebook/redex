@@ -46,6 +46,8 @@ constexpr const char* METRIC_NUM_LOOKUP_TABLES_REMOVED =
 constexpr const char* METRIC_NUM_ENUM_CLASSES = "num_candidate_enum_classes";
 constexpr const char* METRIC_NUM_ENUM_OBJS = "num_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
+constexpr const char* METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES =
+    "num_switch_equiv_finder_failures";
 
 /**
  * Get the instruction containing the constructor call. It can either
@@ -289,6 +291,8 @@ class OptimizeEnums {
     report(METRIC_NUM_ENUM_CLASSES, m_stats.num_enum_classes);
     report(METRIC_NUM_ENUM_OBJS, m_stats.num_enum_objs);
     report(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
+    report(METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES,
+           m_stats.num_switch_equiv_finder_failures);
   }
 
   /**
@@ -619,8 +623,10 @@ class OptimizeEnums {
 
     // Use the SwitchEquivFinder to handle not just switch statements but also
     // trees of if and switch statements
-    SwitchEquivFinder finder(&cfg, *info.branch, *info.reg);
+    SwitchEquivFinder finder(&cfg, *info.branch, *info.reg,
+                             50 /* leaf_duplication_threshold */);
     if (!finder.success()) {
+      ++m_stats.num_switch_equiv_finder_failures;
       return;
     }
 
@@ -799,6 +805,7 @@ class OptimizeEnums {
     size_t num_enum_classes{0};
     size_t num_enum_objs{0};
     size_t num_int_objs{0};
+    size_t num_switch_equiv_finder_failures{0};
   };
   Stats m_stats;
 
