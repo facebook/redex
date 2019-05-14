@@ -99,6 +99,8 @@ struct ModelSpec {
   TypeSet roots;
   // types to exclude from the model
   std::unordered_set<DexType*> exclude_types;
+  // prefixes of types to exclude from the model
+  std::unordered_set<std::string> exclude_prefixes;
   // prefix for class generation
   std::string class_name_prefix;
   // type tag config
@@ -363,6 +365,7 @@ class Model {
   void build_interface_map(const DexType* type, TypeSet implemented);
   MergerType* build_mergers(const DexType* root);
   void exclude_types(const std::unordered_set<DexType*>& exclude_types);
+  bool is_excluded(const DexType* type) const;
   void find_non_mergeables(const Scope& scope, const TypeSet& generated);
   void find_non_root_store_mergeables(const DexStoresVector& stores,
                                       bool include_primary_dex);
