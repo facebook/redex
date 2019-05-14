@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ConcurrentContainers.h"
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -17,14 +18,32 @@ class CommonSubexpressionElimination {
     size_t instructions_eliminated{0};
   };
 
+  struct Barrier {
+    IROpcode opcode;
+    union {
+      DexType* type{nullptr};
+      DexFieldRef* field;
+      DexMethodRef* method;
+    };
+  };
+
+  struct BarrierHasher {
+    size_t operator()(const Barrier& b) const {
+      return b.opcode ^ (size_t)b.type;
+    }
+  };
+
   class SharedState {
    public:
     SharedState();
     bool is_invoke_a_barrier(const IRInstruction* insn);
+    void log_barrier(const Barrier& barrier);
+    void cleanup();
 
    private:
     std::unordered_set<DexMethodRef*> m_safe_methods;
     std::unordered_set<DexType*> m_safe_types;
+    std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   };
 
   CommonSubexpressionElimination(SharedState* shared_state,
@@ -50,6 +69,11 @@ class CommonSubexpressionElimination {
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
 };
+
+inline bool operator==(const CommonSubexpressionElimination::Barrier& a,
+                       const CommonSubexpressionElimination::Barrier& b) {
+  return a.opcode == b.opcode && a.type == b.type;
+}
 
 class CommonSubexpressionEliminationPass : public Pass {
  public:

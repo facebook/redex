@@ -190,6 +190,20 @@ class CseEnvironment final
   }
 };
 
+static CommonSubexpressionElimination::Barrier make_barrier(
+    IRInstruction* insn) {
+  CommonSubexpressionElimination::Barrier b;
+  b.opcode = insn->opcode();
+  if (insn->has_type()) {
+    b.type = insn->get_type();
+  } else if (insn->has_field()) {
+    b.field = insn->get_field();
+  } else if (insn->has_method()) {
+    b.method = insn->get_method();
+  }
+  return b;
+}
+
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
  public:
@@ -268,6 +282,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
 
     if (induces_barrier(insn)) {
+      auto b = make_barrier(insn);
+      m_shared_state->log_barrier(b);
+
       // TODO: This is quite conservative and can be relaxed:
       // - the only real barriers are volatile field accesses, monitor
       //   instructions, and invocations of un-analyzable methods
@@ -644,6 +661,9 @@ CommonSubexpressionElimination::SharedState::SharedState() {
   }
 
   m_safe_types.insert(DexType::make_type("Ljava/lang/Math;"));
+  if (traceEnabled(CSE, 2)) {
+    m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
+  }
 }
 
 bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
@@ -661,6 +681,40 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
     return false;
   }
   return true;
+}
+
+void CommonSubexpressionElimination::SharedState::log_barrier(
+    const Barrier& barrier) {
+  if (m_barriers) {
+    m_barriers->update(
+        barrier, [](const Barrier, size_t& v, bool /* exists */) { v++; });
+  }
+}
+
+void CommonSubexpressionElimination::SharedState::cleanup() {
+  if (!m_barriers) {
+    return;
+  }
+
+  std::vector<std::pair<Barrier, size_t>> ordered_barriers(m_barriers->begin(),
+                                                           m_barriers->end());
+  std::sort(
+      ordered_barriers.begin(), ordered_barriers.end(),
+      [](const std::pair<Barrier, size_t>& a,
+         const std::pair<Barrier, size_t>& b) { return b.second < a.second; });
+
+  TRACE(CSE, 2, "most common barriers:\n");
+  for (auto& p : ordered_barriers) {
+    auto& b = p.first;
+    auto c = p.second;
+    if (is_invoke(b.opcode)) {
+      TRACE(CSE, 2, "%s %s x %u\n", SHOW(b.opcode), SHOW(b.method), c);
+    } else if (is_ifield_op(b.opcode) || is_sfield_op(b.opcode)) {
+      TRACE(CSE, 2, "%s %s x %u\n", SHOW(b.opcode), SHOW(b.field), c);
+    } else {
+      TRACE(CSE, 2, "%s x %u\n", SHOW(b.opcode), c);
+    }
+  }
 }
 
 CommonSubexpressionElimination::CommonSubexpressionElimination(
@@ -849,6 +903,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
+
+  shared_state.cleanup();
 }
 
 static CommonSubexpressionEliminationPass s_pass;
