@@ -1592,6 +1592,15 @@ Block* ControlFlowGraph::create_block() {
   return b;
 }
 
+Block* ControlFlowGraph::duplicate_block(Block* original) {
+  Block* copy = create_block();
+  MethodItemEntryCloner cloner;
+  for (const auto& mie : *original) {
+    copy->m_entries.push_back(*cloner.clone(&mie));
+  }
+  return copy;
+}
+
 // We create a small class here (instead of a recursive lambda) so we can
 // label visit with NO_SANITIZE_ADDRESS
 class ExitBlocks {

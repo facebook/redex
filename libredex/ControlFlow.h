@@ -345,6 +345,12 @@ class ControlFlowGraph {
   std::vector<Block*> blocks() const;
 
   Block* create_block();
+
+  // Create a new block (with a unique ID) that has a copy of the code inside
+  // `original` The edges are not copied. The new block has no incoming or
+  // outgoing edges
+  Block* duplicate_block(Block* original);
+
   const Block* entry_block() const { return m_entry_block; }
   const Block* exit_block() const { return m_exit_block; }
   Block* entry_block() { return m_entry_block; }
@@ -394,7 +400,7 @@ class ControlFlowGraph {
 
   // Make `e` come from a new source block
   // The target block is unchanged.
-  void set_edge_source(Edge* e, Block* source_target);
+  void set_edge_source(Edge* e, Block* new_source);
 
   // return the first edge for which predicate returns true
   // or nullptr if no such edge exists

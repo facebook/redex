@@ -29,7 +29,8 @@ class SwitchEquivFinder final {
 
   SwitchEquivFinder(cfg::ControlFlowGraph* cfg,
                     const cfg::InstructionIterator& root_branch,
-                    uint16_t switching_reg);
+                    uint16_t switching_reg,
+                    uint32_t leaf_duplication_threshold = 0);
 
   SwitchEquivFinder() = delete;
   SwitchEquivFinder(const SwitchEquivFinder&) = delete;
@@ -43,6 +44,8 @@ class SwitchEquivFinder final {
  private:
   std::vector<cfg::Edge*> find_leaves();
   void normalize_extra_loads(std::unordered_set<cfg::Block*> non_leaves);
+  bool move_edges(
+      const std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
 
   cfg::ControlFlowGraph* m_cfg;
@@ -51,6 +54,21 @@ class SwitchEquivFinder final {
   // The register that holds the value that we're "switching" on, even if this
   // is an if-else chain and not a switch statement
   uint16_t m_switching_reg;
+  // When D8 converts a switch statement into an if-else chain (and constant
+  // loads are lifted), then a case block may be deduplicated. The deduplicated
+  // case block can have multiple incoming edges with different program states
+  // on each edge. This situation is impossible to represent with a switch
+  // statement because there is no place to change the state of the program
+  // between a switch statment and its case blocks (where there is for an
+  // if-else chain).
+  //
+  // The SwitchEquivFinder could represent this situation as aswitch if case
+  // blocks like this are duplicated. Each different program state is directed
+  // to a different copy of the block. This way, each block has a separate set
+  // of extra_loads. If a block has fewer than `m_leaf_duplication_threshold`
+  // opcodes the SwitchEquivFinder may duplicate that block. If this flag is
+  // zero, the SwitchEquivFinder will not edit the CFG.
+  uint32_t m_leaf_duplication_threshold{0};
   // If a switch equivalent cannot be found starting from `m_root_branch` this
   // flag will be false, otherwise true.
   bool m_success{false};

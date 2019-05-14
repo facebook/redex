@@ -106,8 +106,12 @@ bool SwitchEquivFinder::has_src(IRInstruction* insn, uint16_t reg) {
 SwitchEquivFinder::SwitchEquivFinder(
     cfg::ControlFlowGraph* cfg,
     const cfg::InstructionIterator& root_branch,
-    uint16_t switching_reg)
-    : m_cfg(cfg), m_root_branch(root_branch), m_switching_reg(switching_reg) {
+    uint16_t switching_reg,
+    uint32_t leaf_duplication_threshold)
+    : m_cfg(cfg),
+      m_root_branch(root_branch),
+      m_switching_reg(switching_reg),
+      m_leaf_duplication_threshold(leaf_duplication_threshold) {
 
   {
     // make sure the input is well-formed
@@ -141,6 +145,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   std::unordered_map<cfg::Block*, uint16_t> visit_count;
   std::unordered_set<cfg::Block*> non_leaves;
   std::function<bool(cfg::Block*, InstructionSet)> recurse;
+  std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move;
   recurse = [&](cfg::Block* b, const InstructionSet& loads) {
     // `loads` represents the state of the registers after evaluating `b`.
     for (cfg::Edge* succ : b->succs()) {
@@ -164,9 +169,20 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
           const auto& it = pair.first;
           const InstructionSet& existing_loads = it->second;
           if (!::equals(existing_loads, loads)) {
-            TRACE(SWITCH_EQUIV, 2, "Failure Reason: divergent entry states\n");
-            TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
-            return false;
+            if (next->num_opcodes() < m_leaf_duplication_threshold) {
+              // A switch cannot represent this control flow graph unless we
+              // duplicate this leaf. See the comment on
+              // m_leaf_duplication_theshold for more details.
+              always_assert(m_cfg->editable());
+              cfg::Block* copy = m_cfg->duplicate_block(next);
+              edges_to_move.emplace_back(succ, copy);
+              m_extra_loads.emplace(copy, loads);
+            } else {
+              TRACE(SWITCH_EQUIV, 2,
+                    "Failure Reason: divergent entry states\n");
+              TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
+              return false;
+            }
           }
         }
       } else {
@@ -207,10 +223,22 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     return true;
   };
 
-  bool success = recurse(m_root_branch.block(), {});
-  if (!success) {
+  const auto& bail = [&leaves, this, &edges_to_move]() {
+    // While traversing the CFG, we may have duplicated case blocks (see the
+    // comment on m_leaf_duplication_threshold for more details). If we did not
+    // successfully find a switch equivalent here, we need to remove those
+    // blocks.
+    for (const auto& pair : edges_to_move) {
+      cfg::Block* copy = pair.second;
+      m_cfg->remove_block(copy);
+    }
     leaves.clear();
     return leaves;
+  };
+
+  bool success = recurse(m_root_branch.block(), {});
+  if (!success) {
+    return bail();
   }
 
   normalize_extra_loads(non_leaves);
@@ -221,24 +249,21 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     for (const auto& block_and_count : visit_count) {
       cfg::Block* b = block_and_count.first;
       uint16_t count = block_and_count.second;
-      if (b->preds().size() != count) {
+      if (b->preds().size() > count) {
         TRACE(SWITCH_EQUIV,
               2,
-              "Failure Reason: Additional ways to reach blocks\n"
-              "  B%d has %d preds but was hit %d times\n",
-              b->id(),
-              b->preds().size(),
-              count);
-        TRACE(SWITCH_EQUIV,
-              3,
-              "B%d -> [] size %d ",
-              m_extra_loads.begin()->first->id(),
-              m_extra_loads.begin()->second.size());
-        TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
-        leaves.clear();
-        return leaves;
+              "Failure Reason: Additional ways to reach blocks\n");
+        TRACE(SWITCH_EQUIV, 3,
+              "  B%d has %d preds but was hit %d times in \n%s", b->id(),
+              b->preds().size(), count, SHOW(*m_cfg));
+        return bail();
       }
     }
+  }
+
+  success = move_edges(edges_to_move);
+  if (!success) {
+    return bail();
   }
 
   if (leaves.empty()) {
@@ -246,6 +271,54 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
   }
   return leaves;
+}
+
+bool SwitchEquivFinder::move_edges(
+    const std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move) {
+  for (const auto& pair : edges_to_move) {
+    cfg::Edge* edge = pair.first;
+    cfg::Block* orig = edge->target();
+    for (cfg::Edge* orig_succ : orig->succs()) {
+      always_assert_log(orig_succ != nullptr, "B%d in %s", orig->id(),
+                        SHOW(*m_cfg));
+      if (orig_succ->type() == cfg::EDGE_GOTO &&
+          orig_succ->target()->starts_with_move_result()) {
+        // Two blocks can't share a single move-result-psuedo
+        TRACE(SWITCH_EQUIV, 2,
+              "Failure Reason: Can't share move-result-pseudo\n");
+        TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
+        return false;
+      }
+    }
+  }
+  for (const auto& pair : edges_to_move) {
+    cfg::Edge* edge = pair.first;
+    cfg::Block* orig = edge->target();
+    cfg::Block* copy = pair.second;
+    const auto& copy_loads = m_extra_loads.find(copy);
+    const auto& orig_loads = m_extra_loads.find(orig);
+    const auto& have_copy_loads = copy_loads != m_extra_loads.end();
+    const auto& have_orig_loads = orig_loads != m_extra_loads.end();
+    bool just_one_null = have_copy_loads != have_orig_loads;
+    bool both_null = !have_copy_loads && !have_orig_loads;
+    if (!just_one_null &&
+        (both_null || ::equals(copy_loads->second, orig_loads->second))) {
+      // When we normalized the extra loads, the copy and original may have
+      // converged to the same state. We don't need the duplicate block anymore
+      // in this case.
+      m_cfg->remove_block(copy);
+      continue;
+    }
+    // copy on purpose so we can alter in the loop
+    const auto orig_succs = orig->succs();
+    for (cfg::Edge* orig_succ : orig_succs) {
+      cfg::Edge* copy_succ = new cfg::Edge(*orig_succ);
+      m_cfg->add_edge(copy_succ);
+      m_cfg->set_edge_source(copy_succ, copy);
+    }
+    m_cfg->set_edge_target(edge, copy);
+  }
+  return true;
 }
 
 // Before this function, m_extra_loads is overly broad
