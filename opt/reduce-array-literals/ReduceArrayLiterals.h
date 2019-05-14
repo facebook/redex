@@ -37,7 +37,8 @@ class ReduceArrayLiterals {
   void patch();
 
  private:
-  void patch_new_array(IRInstruction* new_array_insn);
+  void patch_new_array(IRInstruction* new_array_insn,
+                       const std::vector<IRInstruction*>& aput_insns);
   size_t patch_new_array_chunk(DexType* type,
                                size_t chunk_start,
                                const std::vector<IRInstruction*>& aput_insns,
@@ -49,7 +50,7 @@ class ReduceArrayLiterals {
   int32_t m_min_sdk;
   std::vector<uint16_t> m_local_temp_regs;
   Stats m_stats;
-  std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
+  std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
       m_array_literals;
   Architecture m_arch;
 };

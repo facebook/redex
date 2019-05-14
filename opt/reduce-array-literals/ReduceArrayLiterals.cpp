@@ -355,21 +355,28 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
       m_min_sdk(min_sdk),
       m_arch(arch) {
 
-  bool any_new_array_insns = false;
-  for (auto* block : cfg.blocks()) {
-    for (auto& mie : InstructionIterable(block)) {
-      auto* insn = mie.insn;
-      if (insn->opcode() == OPCODE_NEW_ARRAY) {
-        any_new_array_insns = true;
-        break;
-      }
+  std::vector<IRInstruction*> new_array_insns;
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
+    if (insn->opcode() == OPCODE_NEW_ARRAY) {
+      new_array_insns.push_back(insn);
     }
   }
 
-  if (any_new_array_insns) {
-    Analyzer analyzer(cfg);
-    m_array_literals = analyzer.get_array_literals();
+  if (!new_array_insns.size()) {
+    return;
   }
+
+  Analyzer analyzer(cfg);
+  auto array_literals = analyzer.get_array_literals();
+  // sort array literals by order of occurrence for determinism
+  for (IRInstruction* new_array_insn : new_array_insns) {
+    auto it = array_literals.find(new_array_insn);
+    if (it != array_literals.end()) {
+      m_array_literals.push_back(*it);
+    }
+  }
+  always_assert(array_literals.size() == m_array_literals.size());
 }
 
 void ReduceArrayLiterals::patch() {
@@ -426,14 +433,13 @@ void ReduceArrayLiterals::patch() {
     m_stats.filled_arrays++;
     m_stats.filled_array_elements += aput_insns.size();
 
-    patch_new_array(new_array_insn);
+    patch_new_array(new_array_insn, aput_insns);
   }
 }
 
-
-void ReduceArrayLiterals::patch_new_array(IRInstruction* new_array_insn) {
-  std::vector<IRInstruction*>& aput_insns = m_array_literals.at(new_array_insn);
-
+void ReduceArrayLiterals::patch_new_array(
+    IRInstruction* new_array_insn,
+    const std::vector<IRInstruction*>& aput_insns) {
   auto type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
@@ -554,12 +560,11 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
                                                     aput_insns.end());
   std::unordered_map<IRInstruction*, cfg::InstructionIterator>
       aput_insns_iterators;
-  for (auto* block : m_cfg.blocks()) {
-    for (auto& mie : InstructionIterable(block)) {
-      if (aput_insns_set.count(mie.insn)) {
-        aput_insns_iterators.emplace(mie.insn,
-                                     block->to_cfg_instruction_iterator(mie));
-      }
+  auto iterable = cfg::InstructionIterable(m_cfg);
+  for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
+    auto* insn = insn_it->insn;
+    if (aput_insns_set.count(insn)) {
+      aput_insns_iterators.emplace(insn, insn_it);
     }
   }
 
