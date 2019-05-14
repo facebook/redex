@@ -51,6 +51,19 @@ void load_types(const std::vector<std::string>& type_names,
   }
 };
 
+void load_types_and_prefixes(const std::vector<std::string>& type_names,
+                             std::unordered_set<DexType*>& types,
+                             std::unordered_set<std::string>& prefixes) {
+  for (const auto& type_s : type_names) {
+    auto target_type = get_type(type_s);
+    if (target_type == nullptr) {
+      prefixes.insert(type_s);
+    } else {
+      types.insert(target_type);
+    }
+  }
+}
+
 void load_types(const std::vector<std::string>& type_names, TypeSet& types) {
   std::vector<DexType*> ts = get_types(type_names);
   for (const auto& t : ts) {
@@ -188,7 +201,8 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     load_types(root_names, model.roots);
     std::vector<std::string> excl_names;
     model_spec.get("exclude", {}, excl_names);
-    load_types(excl_names, model.exclude_types);
+    load_types_and_prefixes(excl_names, model.exclude_types,
+                            model.exclude_prefixes);
     model_spec.get("class_name_prefix", "", model.class_name_prefix);
     Json::Value generated;
     model_spec.get("generated", Json::Value(), generated);

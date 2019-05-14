@@ -390,7 +390,8 @@ MergerType& Model::create_dummy_merger(const DexType* type) {
 }
 
 void Model::create_dummy_mergers_if_children(const DexType* type) {
-  if (m_excluded.count(type) > 0) {
+  if (is_excluded(type)) {
+    m_excluded.insert(type);
     return;
   }
   if (m_non_mergeables.count(type) > 0) {
@@ -530,8 +531,19 @@ void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
       m_type_system.get_all_children(type, m_excluded);
     }
   }
-  m_metric.excluded = m_excluded.size();
-  TRACE(TERA, 4, "Excluded %ld\n", m_excluded.size());
+  TRACE(TERA, 4, "Excluding types %ld\n", m_excluded.size());
+}
+
+bool Model::is_excluded(const DexType* type) const {
+  if (m_excluded.count(type)) {
+    return true;
+  }
+  for (const auto& prefix : m_spec.exclude_prefixes) {
+    if (boost::starts_with(type->get_name()->str(), prefix)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -691,26 +703,36 @@ void Model::shape_model() {
 
     flatten_shapes(*merger, shapes);
   }
+
+  // Update excluded metrics
+  m_metric.excluded = m_excluded.size();
+  TRACE(TERA, 4, "Excluded types total %ld\n", m_excluded.size());
 }
 
 void Model::shape_merger(const MergerType& merger,
                          MergerType::ShapeCollector& shapes) {
   // if the root has got no children there is nothing to "shape"
   const auto& children = m_hierarchy.find(merger.type);
-  if (children == m_hierarchy.end()) return;
+  if (children == m_hierarchy.end()) {
+    return;
+  }
 
   // build a map from shape to types with that shape
   for (const auto& child : children->second) {
-    if (m_hierarchy.find(child) != m_hierarchy.end()) continue;
-    if (m_excluded.count(child)) {
+    if (m_hierarchy.find(child) != m_hierarchy.end()) {
+      continue;
+    }
+    if (is_excluded(child)) {
+      m_excluded.insert(child);
       continue;
     }
     if (m_non_mergeables.count(child)) {
       continue;
     }
-
     const auto& cls = type_class(child);
-    if (cls == nullptr) continue;
+    if (cls == nullptr) {
+      continue;
+    }
 
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
