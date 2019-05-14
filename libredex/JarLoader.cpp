@@ -838,8 +838,9 @@ bool load_jar_file(const char* location,
                    Scope* classes,
                    attribute_hook_t attr_hook) {
   boost::iostreams::mapped_file file;
-  file.open(location, boost::iostreams::mapped_file::readonly);
-  if (!file.is_open()) {
+  try {
+    file.open(location, boost::iostreams::mapped_file::readonly);
+  } catch (const std::exception& e) {
     fprintf(stderr, "error: cannot open jar file: %s\n", location);
     return false;
   }
