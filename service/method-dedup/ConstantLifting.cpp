@@ -101,6 +101,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
           "constant lifting: const value %s\n",
           const_vals.to_str().c_str());
     TRACE(METH_DEDUP, 9, "    in %s\n", SHOW(method));
+    TRACE(METH_DEDUP, 9, "%s\n", SHOW(method->get_code()));
 
     // Add constant to arg list.
     auto old_proto = method->get_proto();
@@ -156,6 +157,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       move_const_arg->set_src(0, const_val.get_param_reg());
       code->replace_opcode(insn, move_const_arg);
     }
+
+    TRACE(METH_DEDUP, 9, "const value lifted in \n%s", SHOW(code));
   }
   TRACE(METH_DEDUP,
         5,
