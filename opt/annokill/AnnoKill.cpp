@@ -434,31 +434,39 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
     auto const& evs = arrayev->evalues();
     for (auto strev : *evs) {
       if (strev->evtype() != DEVT_STRING) continue;
-      auto sigstr = static_cast<DexEncodedValueString*>(strev)->string()->str();
+      const auto& sigstr =
+          static_cast<DexEncodedValueString*>(strev)->string()->str();
       always_assert(sigstr.length() > 0);
-      auto* sigcstr = sigstr.c_str();
-      // @Signature grammar is non-trivial[1], nevermind the fact that Signatures
-      // are broken up into arbitrary arrays of strings concatenated at runtime.
-      // It seems like types are reliably never broken apart, so we can usually
-      // find an entire type name in each DexEncodedValueString.
+      const auto* sigcstr = sigstr.c_str();
+      // @Signature grammar is non-trivial[1], nevermind the fact that
+      // Signatures are broken up into arbitrary arrays of strings concatenated
+      // at runtime. It seems like types are reliably never broken apart, so we
+      // can usually find an entire type name in each DexEncodedValueString.
       //
       // We also crudely approximate that something looks like a typename in the
       // first place since there's a lot of mark up in the @Signature grammar,
-      // e.g. formal type parameter names. We look for things that look like "L*/*",
-      // don't include ":" (formal type parameter separator), and may or may not
-      // end with a semicolon.
+      // e.g. formal type parameter names. We look for things that look like
+      // "L*/*", don't include ":" (formal type parameter separator), and may or
+      // may not end with a semicolon or angle bracket.
       //
-      // I'm working on a C++ port of the AOSP generic signature parser so we can
-      // make this more robust in the future.
+      // I'm working on a C++ port of the AOSP generic signature parser so we
+      // can make this more robust in the future.
       //
-      // [1] http://androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/reflect/GenericSignatureParser.java
+      // [1] androidxref.com/8.0.0_r4/xref/libcore/luni/src/main/java/libcore/
+      //     reflect/GenericSignatureParser.java
       if (sigstr[0] == 'L' && strchr(sigcstr, '/') && !strchr(sigcstr, ':')) {
         auto* sigtype = DexType::get_type(sigstr.c_str());
         if (!sigtype) {
           // Try with semicolon.
-          // TOOD: avoid wasting memory by needing to create a DexString here
-          auto sigstrsemi = sigstr+";";
-          sigtype = DexType::get_type(sigstrsemi.c_str());
+          sigtype = DexType::get_type(sigstr + ';');
+        }
+        if (!sigtype && sigstr.back() == '<') {
+          // Try replacing angle bracket with semicolon
+          // d8 often encodes signature annotations this way
+          std::string copy = sigstr;
+          copy.pop_back();
+          copy.push_back(';');
+          sigtype = DexType::get_type(copy);
         }
         if (sigtype) {
           auto* sigcls = type_class(sigtype);
@@ -473,14 +481,15 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
                 continue;
               }
             }
-            // Could not find the (non-external) class in Scope, so set signal to kill
+            // Could not find the (non-external) class in Scope, so set signal
+            // to kill
             if (!found) {
               sigtype = nullptr;
             }
           }
         }
         if (!sigtype) {
-          TRACE(ANNO, 3, "Killing bad @Signature: %s\n", sigstr.c_str());
+          TRACE(ANNO, 3, "Killing bad @Signature: %s\n", sigcstr);
           return true;
         }
       }
