@@ -190,54 +190,12 @@ class CseEnvironment final
   }
 };
 
-static bool induces_barrier(const IRInstruction* insn) {
-  switch (insn->opcode()) {
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_APUT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_INTERFACE:
-    return true;
-  default:
-    if (insn->has_field()) {
-      auto field_ref = insn->get_field();
-      DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
-                                                     ? FieldSearch::Static
-                                                     : FieldSearch::Instance);
-      return field == nullptr || is_volatile(field);
-    }
-    return false;
-  }
-}
-
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
  public:
-  Analyzer(cfg::ControlFlowGraph& cfg) : BaseIRAnalyzer(cfg) {
+  Analyzer(CommonSubexpressionElimination::SharedState* shared_state,
+           cfg::ControlFlowGraph& cfg)
+      : BaseIRAnalyzer(cfg), m_shared_state(shared_state) {
     MonotonicFixpointIterator::run(CseEnvironment::top());
   }
 
@@ -474,6 +432,14 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     case OPCODE_FILLED_NEW_ARRAY:
       is_positional = true;
       break;
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_INTERFACE:
+      // TODO: Identify pure methods; they do not need to be positional.
+      is_positional = true;
+      break;
     default:
       is_positional = induces_barrier(insn);
       break;
@@ -496,6 +462,52 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return value;
   }
 
+  bool induces_barrier(const IRInstruction* insn) const {
+    switch (insn->opcode()) {
+    case OPCODE_MONITOR_ENTER:
+    case OPCODE_MONITOR_EXIT:
+    case OPCODE_FILL_ARRAY_DATA:
+    case OPCODE_APUT:
+    case OPCODE_APUT_WIDE:
+    case OPCODE_APUT_OBJECT:
+    case OPCODE_APUT_BOOLEAN:
+    case OPCODE_APUT_BYTE:
+    case OPCODE_APUT_CHAR:
+    case OPCODE_APUT_SHORT:
+    case OPCODE_IPUT:
+    case OPCODE_IPUT_WIDE:
+    case OPCODE_IPUT_OBJECT:
+    case OPCODE_IPUT_BOOLEAN:
+    case OPCODE_IPUT_BYTE:
+    case OPCODE_IPUT_CHAR:
+    case OPCODE_IPUT_SHORT:
+    case OPCODE_SPUT:
+    case OPCODE_SPUT_WIDE:
+    case OPCODE_SPUT_OBJECT:
+    case OPCODE_SPUT_BOOLEAN:
+    case OPCODE_SPUT_BYTE:
+    case OPCODE_SPUT_CHAR:
+    case OPCODE_SPUT_SHORT:
+      return true;
+    case OPCODE_INVOKE_VIRTUAL:
+    case OPCODE_INVOKE_SUPER:
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_INTERFACE:
+      return m_shared_state->is_invoke_a_barrier(insn);
+    default:
+      if (insn->has_field()) {
+        auto field_ref = insn->get_field();
+        DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
+                                                       ? FieldSearch::Static
+                                                       : FieldSearch::Instance);
+        return field == nullptr || is_volatile(field);
+      }
+      return false;
+    }
+  }
+
+  CommonSubexpressionElimination::SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
 };
 
@@ -503,10 +515,158 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+CommonSubexpressionElimination::SharedState::SharedState() {
+  // The following methods are...
+  // - static, or
+  // - direct (constructors), or
+  // - virtual methods defined in final classes
+  // that do not mutate any fields or array elements that could be directly
+  // accessed (read or written) by user code, and they will not invoke user
+  // code.
+  //
+  // The list of methods is not exhaustive; it was derived by observing the most
+  // common barriers encountered in real-life code, and then studying their spec
+  // to check whether they are "safe" in the context of CSE barriers.
+  //
+  // (Some items are commented out; that's because they are virtual methods in
+  // non-final classes. They could be re-enabled once we can track the exact
+  // receiver type.3)
+  static const char* safe_method_names[] = {
+      "Landroid/os/SystemClock;.elapsedRealtime:()J",
+      "Landroid/os/SystemClock;.uptimeMillis:()J",
+      "Landroid/util/Pair;.<init>:(Ljava/lang/Object;Ljava/lang/Object;)V",
+      "Landroid/util/SparseArray;.<init>:()V",
+      // "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
+      // "Landroid/util/SparseArray;.get:(I)Ljava/lang/Object;",
+      // "Landroid/util/SparseArray;.put:(ILjava/lang/Object;)V",
+      // "Landroid/util/SparseArray;.size:()I",
+      // "Landroid/util/SparseArray;.valueAt:(I)Ljava/lang/Object;",
+      // "Landroid/util/SparseIntArray;.put:(II)V",
+      "Ljava/io/IOException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Boolean;.booleanValue:()Z",
+      "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
+      "Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;",
+      "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;",
+      "Ljava/lang/Class;.getName:()Ljava/lang/String;",
+      "Ljava/lang/Class;.getSimpleName:()Ljava/lang/String;",
+      "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V",
+      "Ljava/lang/Enum;.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/"
+      "lang/Enum;",
+      "Ljava/lang/Exception;.<init>:()V", "Ljava/lang/Float;.floatValue:()F",
+      "Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;",
+      "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/IllegalStateException;.<init>:()V",
+      "Ljava/lang/IllegalStateException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Integer;.intValue:()I",
+      "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I",
+      "Ljava/lang/Integer;.toHexString:(I)Ljava/lang/String;",
+      "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;",
+      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
+      "Ljava/lang/Long;.longValue:()J",
+      "Ljava/lang/Long;.parseLong:(Ljava/lang/String;)J",
+      "Ljava/lang/Long;.toString:(J)Ljava/lang/String;",
+      "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;",
+      "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Object;.<init>:()V",
+      "Ljava/lang/Object;.getClass:()Ljava/lang/Class;",
+      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Short;.valueOf:(S)Ljava/lang/Short;",
+      "Ljava/lang/String;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/String;.charAt:(I)C",
+      "Ljava/lang/String;.concat:(Ljava/lang/String;)Ljava/lang/String;",
+      "Ljava/lang/String;.equalsIgnoreCase:(Ljava/lang/String;)Z",
+      "Ljava/lang/String;.getBytes:()[B", "Ljava/lang/String;.hashCode:()I",
+      "Ljava/lang/String;.indexOf:(I)I", "Ljava/lang/String;.isEmpty:()Z",
+      "Ljava/lang/String;.lastIndexOf:(I)I",
+      "Ljava/lang/String;.lastIndexOf:(I)I", "Ljava/lang/String;.length:()I",
+      "Ljava/lang/String;.split:(Ljava/lang/String;)[Ljava/lang/String;",
+      "Ljava/lang/String;.startsWith:(Ljava/lang/String;)Z",
+      "Ljava/lang/String;.substring:(I)Ljava/lang/String;",
+      "Ljava/lang/String;.substring:(II)Ljava/lang/String;",
+      "Ljava/lang/String;.trim:()Ljava/lang/String;",
+      "Ljava/lang/String;.valueOf:(I)Ljava/lang/String;",
+      "Ljava/lang/String;.valueOf:(J)Ljava/lang/String;",
+      "Ljava/lang/String;.valueOf:(Z)Ljava/lang/String;",
+      "Ljava/lang/StringBuilder;.<init>:()V",
+      "Ljava/lang/StringBuilder;.<init>:(I)V",
+      "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/StringBuilder;.append:(C)Ljava/lang/StringBuilder;",
+      "Ljava/lang/StringBuilder;.append:(I)Ljava/lang/StringBuilder;",
+      "Ljava/lang/StringBuilder;.append:(J)Ljava/lang/StringBuilder;",
+      "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
+      "StringBuilder;",
+      "Ljava/lang/StringBuilder;.append:(Z)Ljava/lang/StringBuilder;",
+      "Ljava/lang/StringBuilder;.length:()I",
+      "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;",
+      "Ljava/lang/System;.currentTimeMillis:()J",
+      "Ljava/lang/System;.identityHashCode:(Ljava/lang/Object;)I",
+      "Ljava/lang/System;.nanoTime:()J",
+      "Ljava/lang/Thread;.currentThread:()Ljava/lang/Thread;",
+      "Ljava/lang/UnsupportedOperationException;.<init>:(Ljava/lang/"
+      "String;)V",
+      "Ljava/util/ArrayList;.<init>:()V", "Ljava/util/ArrayList;.<init>:(I)V",
+      // "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z",
+      // "Ljava/util/ArrayList;.clear:()V",
+      // "Ljava/util/ArrayList;.get:(I)Ljava/lang/Object;",
+      // "Ljava/util/ArrayList;.isEmpty:()Z",
+      // "Ljava/util/ArrayList;.remove:(I)Ljava/lang/Object;",
+      // "Ljava/util/ArrayList;.size:()I",
+      "Ljava/util/BitSet;.<init>:(I)V",
+      // "Ljava/util/BitSet;.set:(I)V",
+      "Ljava/util/HashMap;.<init>:()V", "Ljava/util/HashSet;.<init>:()V",
+      "Ljava/util/LinkedHashMap;.<init>:()V",
+      "Ljava/util/LinkedList;.<init>:()V",
+      // "Ljava/util/LinkedList;.size:()I",
+      // "Ljava/util/List;.add:(Ljava/lang/Object;)Z",
+      // "Ljava/util/List;.clear:()V",
+      // "Ljava/util/List;.get:(I)Ljava/lang/Object;",
+      // "Ljava/util/List;.isEmpty:()Z",
+      // "Ljava/util/List;.iterator:()Ljava/util/Iterator;",
+      // "Ljava/util/List;.remove:(I)Ljava/lang/Object;",
+      // "Ljava/util/List;.size:()I",
+      // "Ljava/util/Map;.clear:()V",
+      // "Ljava/util/Map;.size:()I",
+      // "Ljava/util/Map$Entry;.getKey:()Ljava/lang/Object;",
+      // "Ljava/util/Map$Entry;.getValue:()Ljava/lang/Object;",
+      // "Ljava/util/Set;.isEmpty:()Z",
+      // "Ljava/util/Set;.iterator:()Ljava/util/Iterator;",
+      // "Ljava/util/Set;.size:()I"
+  };
+
+  for (auto const safe_method_name : safe_method_names) {
+    const std::string& s(safe_method_name);
+    auto method = DexMethod::get_method(s);
+    if (method == nullptr) {
+      fprintf(stderr, "[CSE]: Could not find safe method %s\n", s.c_str());
+    } else {
+      m_safe_methods.insert(method);
+    }
+  }
+
+  m_safe_types.insert(DexType::make_type("Ljava/lang/Math;"));
+}
+
+bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
+    const IRInstruction* insn) {
+  always_assert(is_invoke(insn->opcode()));
+  auto method_ref = insn->get_method();
+  auto opcode = insn->opcode();
+  if (opcode == OPCODE_INVOKE_STATIC &&
+      m_safe_types.count(method_ref->get_class())) {
+    return false;
+  }
+  if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT ||
+       opcode == OPCODE_INVOKE_VIRTUAL) &&
+      m_safe_methods.count(method_ref)) {
+    return false;
+  }
+  return true;
+}
+
 CommonSubexpressionElimination::CommonSubexpressionElimination(
-    cfg::ControlFlowGraph& cfg)
-    : m_cfg(cfg) {
-  Analyzer analyzer(cfg);
+    SharedState* shared_state, cfg::ControlFlowGraph& cfg)
+    : m_shared_state(shared_state), m_cfg(cfg) {
+  Analyzer analyzer(shared_state, cfg);
 
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
@@ -642,6 +802,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   ConfigFiles& /* conf */,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
+  auto shared_state = CommonSubexpressionElimination::SharedState();
 
   const auto stats =
       walk::parallel::reduce_methods<CommonSubexpressionElimination::Stats>(
@@ -654,7 +815,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
             TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
             code->build_cfg(/* editable */ true);
-            CommonSubexpressionElimination cse(code->cfg());
+            CommonSubexpressionElimination cse(&shared_state, code->cfg());
             bool any_changes = cse.patch(is_static(method), method->get_class(),
                                          method->get_proto()->get_args());
             code->clear_cfg();

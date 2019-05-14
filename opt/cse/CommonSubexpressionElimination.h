@@ -17,7 +17,18 @@ class CommonSubexpressionElimination {
     size_t instructions_eliminated{0};
   };
 
-  CommonSubexpressionElimination(cfg::ControlFlowGraph&);
+  class SharedState {
+   public:
+    SharedState();
+    bool is_invoke_a_barrier(const IRInstruction* insn);
+
+   private:
+    std::unordered_set<DexMethodRef*> m_safe_methods;
+    std::unordered_set<DexType*> m_safe_types;
+  };
+
+  CommonSubexpressionElimination(SharedState* shared_state,
+                                 cfg::ControlFlowGraph&);
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -35,6 +46,7 @@ class CommonSubexpressionElimination {
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
+  SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
 };

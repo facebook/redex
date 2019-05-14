@@ -29,7 +29,8 @@ void test(const std::string& code_str,
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
-  CommonSubexpressionElimination cse(code.get()->cfg());
+  CommonSubexpressionElimination::SharedState shared_state;
+  CommonSubexpressionElimination cse(&shared_state, code.get()->cfg());
   bool is_static = true;
   DexType* declaring_type = nullptr;
   DexTypeList* args = DexTypeList::make_type_list({});
@@ -246,6 +247,32 @@ TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
   )";
   auto expected_str = code_str;
   test(code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static (v1) "Ljava/lang/Math;.abs:(I)I")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static (v1) "Ljava/lang/Math;.abs:(I)I")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+  test(code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
