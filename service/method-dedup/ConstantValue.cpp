@@ -43,6 +43,10 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
     if (type_val != nullptr && type_tags->has_type_tag(type_val)) {
       m_kind = ConstantKind::TYPE;
       m_int_val = type_tags->get_type_tag(type_val);
+      if (m_int_val == 0) {
+        TRACE(METH_DEDUP, 9, "const value: skipping type tag value of 0\n");
+        m_kind = ConstantKind::INVALID;
+      }
       return;
     } else if (type_val == nullptr) {
       TRACE(METH_DEDUP,
