@@ -44,6 +44,7 @@
   TM(EMPTY)              \
   TM(ENUM)               \
   TM(FINALINLINE)        \
+  TM(HASHER)             \
   TM(HOTNESS)            \
   TM(ICONSTP)            \
   TM(IDEX)               \

@@ -317,7 +317,7 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
 
   DexType* type() const { return m_type; }
   void set_type(DexType* type) { m_type = type; }
-  const EncodedAnnotations* annotations() { return m_annotations; }
+  const EncodedAnnotations* annotations() const { return m_annotations; }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;

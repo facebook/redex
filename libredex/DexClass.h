@@ -340,7 +340,7 @@ class DexField : public DexFieldRef {
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno; }
-  DexEncodedValue* get_static_value() { return m_value; }
+  DexEncodedValue* get_static_value() const { return m_value; }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;

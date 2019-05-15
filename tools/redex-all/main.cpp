@@ -32,6 +32,7 @@
 #include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "IODIMetadata.h"
@@ -462,6 +463,21 @@ Json::Value get_pass_stats(const PassManager& mgr) {
   return all;
 }
 
+Json::Value get_pass_hashes(const PassManager& mgr) {
+  Json::Value all(Json::ValueType::objectValue);
+  auto initial_hash = mgr.get_initial_hash();
+  if (initial_hash) {
+    all["(initial)"] = hashing::hash_to_string(*initial_hash);
+  }
+  for (const auto& pass_info : mgr.get_pass_info()) {
+    auto hash = pass_info.hash;
+    if (hash) {
+      all[pass_info.name] = hashing::hash_to_string(*hash);
+    }
+  }
+  return all;
+}
+
 Json::Value get_lowering_stats(const instruction_lowering::Stats& stats) {
   Json::Value obj(Json::ValueType::objectValue);
   obj["num_2addr_instructions"] = Json::UInt(stats.to_2addr);
@@ -505,6 +521,7 @@ Json::Value get_output_stats(
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
+  d["pass_hashes"] = get_pass_hashes(mgr);
   d["lowering_stats"] = get_lowering_stats(instruction_lowering_stats);
   return d;
 }

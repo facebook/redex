@@ -17,6 +17,7 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -114,6 +115,21 @@ void PassManager::init(const Json::Value& config) {
   }
 }
 
+size_t PassManager::run_hasher(const char* pass_name, const Scope& scope) {
+  TRACE(PM, 2, "Running hasher...\n");
+  Timer t("Hasher");
+  hashing::DexScopeHasher hasher(scope);
+  auto hash = hasher.run();
+  if (pass_name) {
+    // log metric value in a way that fits into JSON number value
+    set_metric("~result~hash~", hash & ((((size_t)1) << 52) - 1));
+  }
+  auto hash_string = hashing::hash_to_string(hash);
+  TRACE(PM, 3, "[scope hash] %s: %s\n", pass_name ? pass_name : "(initial)",
+        hash_string.c_str());
+  return hash;
+}
+
 void PassManager::run_type_checker(const Scope& scope,
                                    bool verify_moves,
                                    bool check_no_overwrite_this) {
@@ -191,18 +207,27 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     m_current_pass_info = nullptr;
   }
 
+  // Retrieve the hasher's settings.
+  const Json::Value& hasher_args = conf.get_json_config()["hasher"];
+  bool run_hasher_after_each_pass =
+      hasher_args.get("run_after_each_pass", true).asBool();
+
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
       conf.get_json_config()["ir_type_checker"];
-  bool run_after_each_pass =
+  bool run_type_checker_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
   bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
   bool check_no_overwrite_this =
       type_checker_args.get("check_no_overwrite_this", false).asBool();
-  std::unordered_set<std::string> trigger_passes;
+  std::unordered_set<std::string> type_checker_trigger_passes;
 
   for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-    trigger_passes.insert(trigger_pass.asString());
+    type_checker_trigger_passes.insert(trigger_pass.asString());
+  }
+
+  if (run_hasher_after_each_pass) {
+    m_initial_hash = boost::optional<size_t>(this->run_hasher(nullptr, scope));
   }
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
@@ -220,12 +245,22 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       pass->run_pass(stores, conf, *this);
     }
 
-    if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
+    bool run_hasher = run_hasher_after_each_pass;
+    bool run_type_checker = run_type_checker_after_each_pass ||
+                            type_checker_trigger_passes.count(pass->name()) > 0;
+
+    if (run_hasher || run_type_checker) {
       scope = build_class_scope(it);
-      // It's OK to overwrite the `this` register if we are not yet at the
-      // output phase -- the register allocator can fix it up later.
-      run_type_checker(scope, verify_moves,
-                       /* check_no_overwrite_this */ false);
+      if (run_hasher) {
+        m_current_pass_info->hash = boost::optional<size_t>(
+            this->run_hasher(pass->name().c_str(), scope));
+      }
+      if (run_type_checker) {
+        // It's OK to overwrite the `this` register if we are not yet at the
+        // output phase -- the register allocator can fix it up later.
+        this->run_type_checker(scope, verify_moves,
+                               /* check_no_overwrite_this */ false);
+      }
     }
     m_current_pass_info = nullptr;
   }

@@ -118,6 +118,7 @@ libredex_la_SOURCES = \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
 	libredex/DexEncoding.cpp \
+	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
