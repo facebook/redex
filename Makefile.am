@@ -80,6 +80,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/unterface \
 	-I$(top_srcdir)/opt/up-code-motion \
 	-I$(top_srcdir)/opt/verifier \
+	-I$(top_srcdir)/opt/vertical_merging \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
@@ -322,6 +323,7 @@ redex_all_SOURCES = \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
 	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/verifier/Verifier.cpp \
+	opt/vertical_merging/VerticalMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
