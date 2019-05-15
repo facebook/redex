@@ -8,6 +8,7 @@
 #pragma once
 
 #include "DexClass.h"
+#include "Inliner.h"
 #include "PassManager.h"
 
 /**
@@ -24,6 +25,21 @@
 class VerticalMergingPass : public Pass {
  public:
   VerticalMergingPass() : Pass("VerticalMergingPass") {}
-
+  virtual void configure_pass(const JsonWrapper& jw) override {
+    jw.get("blacklist", {}, m_blacklist);
+  }
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  void merge_classes(const Scope&,
+                     const std::unordered_map<DexClass*, DexClass*>&,
+                     const std::unordered_set<DexMethod*>&);
+
+  void move_methods(DexClass*,
+                    DexClass*,
+                    bool,
+                    const std::unordered_set<DexMethod*>&,
+                    std::unordered_map<DexMethodRef*, DexMethodRef*>*);
+  void change_super_calls(std::unordered_map<DexClass*, DexClass*>*);
+  std::vector<std::string> m_blacklist;
 };

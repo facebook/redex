@@ -100,6 +100,59 @@ class ReferencedState {
     return *this;
   }
 
+  void join_with(const ReferencedState& other) {
+    if (this != &other) {
+      this->inner_struct.m_by_type =
+          this->inner_struct.m_by_type | other.inner_struct.m_by_type;
+      this->inner_struct.m_by_string =
+          this->inner_struct.m_by_string | other.inner_struct.m_by_string;
+      this->inner_struct.m_by_resources =
+          this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
+      this->inner_struct.m_is_serde =
+          this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
+      this->inner_struct.m_mix_mode =
+          this->inner_struct.m_mix_mode | other.inner_struct.m_mix_mode;
+
+      this->inner_struct.m_keep =
+          this->inner_struct.m_keep | other.inner_struct.m_keep;
+      this->inner_struct.m_assumenosideeffects =
+          this->inner_struct.m_assumenosideeffects &
+          other.inner_struct.m_assumenosideeffects;
+      this->inner_struct.m_blanket_keepnames =
+          this->inner_struct.m_blanket_keepnames |
+          other.inner_struct.m_blanket_keepnames;
+      this->inner_struct.m_whyareyoukeeping =
+          this->inner_struct.m_whyareyoukeeping |
+          other.inner_struct.m_whyareyoukeeping;
+
+      this->inner_struct.m_set_allowshrinking =
+          this->inner_struct.m_set_allowshrinking &
+          other.inner_struct.m_set_allowshrinking;
+      this->inner_struct.m_unset_allowshrinking =
+          this->inner_struct.m_unset_allowshrinking |
+          other.inner_struct.m_unset_allowshrinking;
+      this->inner_struct.m_set_allowobfuscation =
+          this->inner_struct.m_set_allowobfuscation &
+          other.inner_struct.m_set_allowobfuscation;
+      this->inner_struct.m_unset_allowobfuscation =
+          this->inner_struct.m_unset_allowobfuscation |
+          other.inner_struct.m_unset_allowobfuscation;
+
+      this->inner_struct.m_keep_name =
+          this->inner_struct.m_keep_name | other.inner_struct.m_keep_name;
+      this->inner_struct.m_no_optimizations =
+          this->inner_struct.m_no_optimizations |
+          other.inner_struct.m_no_optimizations;
+      this->inner_struct.m_dont_inline =
+          this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
+      this->inner_struct.m_force_inline =
+          this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
+
+      this->m_keep_count =
+          this->m_keep_count.load() + other.m_keep_count.load();
+    }
+  }
+
   std::string str() const;
 
   /*** YOU PROBABLY SHOULDN'T USE THIS ***/

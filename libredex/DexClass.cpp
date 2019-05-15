@@ -1262,6 +1262,47 @@ uint32_t DexCode::size() const {
   return size;
 }
 
+DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
+                                             DexProto* orig_proto) {
+  auto methodref_in_context =
+      DexMethod::get_method(this, method_name, orig_proto);
+  if (!methodref_in_context) {
+    return orig_proto;
+  }
+  std::deque<DexType*> new_arg_list;
+  const auto& type_list = orig_proto->get_args()->get_type_list();
+  auto rtype = orig_proto->get_rtype();
+  for (auto t : type_list) {
+    new_arg_list.push_back(t);
+  }
+  new_arg_list.push_back(get_int_type());
+  DexTypeList* new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+  DexProto* new_proto = DexProto::make_proto(rtype, new_args);
+  methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
+  while (methodref_in_context) {
+    new_arg_list.push_back(get_int_type());
+    new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+    new_proto = DexProto::make_proto(rtype, new_args);
+    methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
+  }
+  return new_proto;
+}
+
+void DexMethod::add_load_params(size_t num_add_loads) {
+  IRCode* code = this->get_code();
+  always_assert_log(code, "Method don't have IRCode\n");
+  auto callee_params = code->get_param_instructions();
+  auto param_ops = InstructionIterable(callee_params);
+  size_t added_params = 0;
+  while (added_params < num_add_loads) {
+    ++added_params;
+    auto temp = code->allocate_temp();
+    IRInstruction* new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+    new_param_load->set_dest(temp);
+    code->insert_before(callee_params.end(), new_param_load);
+  }
+}
+
 void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
   switch (opcode::ref(opcode())) {
   case opcode::Ref::None:

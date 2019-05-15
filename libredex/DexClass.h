@@ -219,6 +219,7 @@ class DexType {
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
+  DexProto* get_non_overlapping_proto(DexString*, DexProto*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -994,6 +995,33 @@ class DexMethod : public DexMethodRef {
     delete m_anno;
     m_anno = nullptr;
   }
+
+  /**
+   * Note that this is to combine annotation for two methods that should
+   * have same set of parameters. This is used in vertical merging when
+   * merging parent and child's inherited method. If you want to use this
+   * method you should check if their protos are the same before using this.
+   */
+  void combine_annotations_with(DexMethod* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = new DexAnnotationSet(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
+    }
+    for (auto& pair : other->m_param_anno) {
+      if (m_param_anno.count(pair.first) == 0 ||
+          m_param_anno[pair.first] == nullptr) {
+        m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
+      } else {
+        m_param_anno[pair.first]->combine_with(*pair.second);
+      }
+    }
+  }
+
+  void add_load_params(size_t num_add_loads);
   void attach_annotation_set(DexAnnotationSet* aset) {
     always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
                            "method %s is concrete\n", SHOW(this));
@@ -1156,6 +1184,17 @@ class DexClass {
     always_assert_log(
         !m_external, "Unexpected external class %s\n", SHOW(m_self));
     m_super_class = super_class;
+  }
+
+  void combine_annotations_with(DexClass* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = new DexAnnotationSet(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
+    }
   }
 
   void set_interfaces(DexTypeList* intfs) {
