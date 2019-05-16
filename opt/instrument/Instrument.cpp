@@ -90,14 +90,13 @@ bool match_class_name(std::string cls_name,
 }
 
 // Check for inclusion in whitelist or blacklist of methods/classes.
-bool is_included(const std::string& method_name,
-                 const std::string& cls_name,
+bool is_included(const DexMethod* method,
                  const std::unordered_set<std::string>& set) {
-  if (match_class_name(cls_name, set)) {
+  if (match_class_name(show_deobfuscated(method->get_class()), set)) {
     return true;
   }
-  // Check for method by its full name(Class_Name;Method_Name).
-  return set.count(cls_name + method_name);
+  // Check for method by its full name.
+  return set.count(method->get_deobfuscated_name());
 }
 
 std::unordered_map<int /* Number of arguments*/, DexMethod*>
@@ -892,10 +891,8 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     }
 
     // Handle whitelist and blacklist.
-    const auto& cls_name = show(method->get_class());
-    const auto& method_name = method->get_name()->str();
     if (!options.whitelist.empty()) {
-      if (is_included(method_name, cls_name, options.whitelist)) {
+      if (is_included(method, options.whitelist)) {
         TRACE(INSTRUMENT, 8, "Whitelist: included: %s\n", SHOW(method));
       } else {
         ++excluded;
@@ -907,7 +904,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // In case of a conflict, when an entry is present in both blacklist
     // and whitelist, the blacklist is given priority and the entry
     // is not instrumented.
-    if (is_included(method_name, cls_name, options.blacklist)) {
+    if (is_included(method, options.blacklist)) {
       ++excluded;
       TRACE(INSTRUMENT, 8, "Blacklist: excluded: %s\n", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
@@ -1096,17 +1093,14 @@ void do_basic_block_tracing(DexClass* analysis_cls,
 
     // Basic block tracing assumes whitelist or set of cold start classes.
     if ((!options.whitelist.empty() &&
-         !is_included(method->get_name()->str(), method->get_class()->c_str(),
-                      options.whitelist)) ||
+         !is_included(method, options.whitelist)) ||
         (options.only_cold_start_class &&
-         !is_included(method->get_name()->str(), method->get_class()->c_str(),
-                      cold_start_classes))) {
+         !is_included(method, cold_start_classes))) {
       return;
     }
 
     // Blacklist has priority over whitelist or cold start list.
-    if (is_included(method->get_name()->str(), method->get_class()->c_str(),
-                    options.blacklist)) {
+    if (is_included(method, options.blacklist)) {
       TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s\n", SHOW(method));
       return;
     }
