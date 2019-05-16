@@ -191,7 +191,7 @@ void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
     model_spec.get("type_tag_config", "generate", type_tag_config);
     model.type_tag_config = get_type_tag_config(type_tag_config);
     size_t min_count;
-    model_spec.get("min_count", 1, min_count);
+    model_spec.get("min_count", 2, min_count);
     model.min_count = min_count > 0 ? min_count : 0;
     model_spec.get("name", "", model.name);
     std::vector<std::string> root_names;

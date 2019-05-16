@@ -107,7 +107,7 @@ struct ModelSpec {
   TypeTagConfig type_tag_config{TypeTagConfig::GENERATE};
   // minimum nuber of mergeables to make it into a MergerType
   // (no optimization otherwise)
-  size_t min_count{1};
+  size_t min_count{2};
   // set of generated types
   std::unordered_set<DexType*> gen_types;
   // set of annotations marking generated code
@@ -393,7 +393,8 @@ class Model {
       const TypeSet& group_values,
       const boost::optional<size_t>& dex_num,
       const boost::optional<size_t>& interdex_subgroup_idx,
-      const boost::optional<size_t>& max_mergeables_count);
+      const boost::optional<size_t>& max_mergeables_count,
+      size_t min_mergeables_count);
 
   // make shapes out of the model classes
   void shape_model();

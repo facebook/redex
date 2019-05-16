@@ -102,14 +102,13 @@ void print_interface_maps(const TypeToTypeSet& intf_to_classes,
 }
 
 /**
- * trim shapes that have the mergeable type count less or
- * equal to ModelSpec.min_count
+ * trim shapes that have the mergeable type count less than ModelSpec.min_count
  */
 size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
-    if (shape_it.second.types.size() > min_count) {
+    if (shape_it.second.types.size() >= min_count) {
       TRACE(TERA, 7, "Keep shape %s (%ld)\n",
             shape_it.first.to_string().c_str(), shape_it.second.types.size());
       continue;
@@ -126,8 +125,7 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
 }
 
 /**
- * trim groups that have the mergeable types count less or
- * equal to ModelSpec.min_count.
+ * trim groups that have the mergeable types count less than ModelSpec.min_count
  */
 size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
@@ -135,7 +133,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   for (auto& shape_it : shapes) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
-      if (group_it.second.size() > min_count) {
+      if (group_it.second.size() >= min_count) {
         TRACE(TERA, 7, "Keep group (%ld) on %s\n", group_it.second.size(),
               shape_it.first.to_string().c_str());
         continue;
@@ -480,7 +478,8 @@ void Model::create_mergers_helper(
     const TypeSet& group_values,
     const boost::optional<size_t>& dex_num,
     const boost::optional<size_t>& interdex_subgroup_idx,
-    const boost::optional<size_t>& max_mergeables_count) {
+    const boost::optional<size_t>& max_mergeables_count,
+    size_t min_mergeables_count) {
   size_t group_size = group_values.size();
 
   if (max_mergeables_count && group_size > *max_mergeables_count) {
@@ -490,9 +489,10 @@ void Model::create_mergers_helper(
     for (auto it = group_values.begin(); it != group_values.end(); ++it) {
       auto mergeable = *it;
       curr_group.insert(mergeable);
-      if ((curr_group.size() == *max_mergeables_count &&
-           remaining_mergeable_cnt - *max_mergeables_count > 1) ||
-          std::next(it) == group_values.end()) {
+      if (((curr_group.size() == *max_mergeables_count &&
+            remaining_mergeable_cnt - *max_mergeables_count > 1) ||
+           std::next(it) == group_values.end()) &&
+          curr_group.size() >= min_mergeables_count) {
         create_merger_helper(merger_type, shape, group_key, curr_group, dex_num,
                              interdex_subgroup_idx,
                              boost::optional<size_t>(subgroup_cnt++));
@@ -501,7 +501,7 @@ void Model::create_mergers_helper(
       }
     }
     always_assert(curr_group.empty());
-  } else {
+  } else if (group_size >= min_mergeables_count) {
     create_merger_helper(merger_type, shape, group_key, group_values, dex_num,
                          interdex_subgroup_idx, boost::none);
   }
@@ -1004,11 +1004,12 @@ void Model::flatten_shapes(const MergerType& merger,
 
           create_mergers_helper(merger.type, *shape, *group_key,
                                 new_groups[gindex], boost::none, gindex,
-                                m_spec.max_count);
+                                m_spec.max_count, m_spec.min_count);
         }
       } else {
         create_mergers_helper(merger.type, *shape, *group_key, group_values,
-                              dex_num, boost::none, m_spec.max_count);
+                              dex_num, boost::none, m_spec.max_count,
+                              m_spec.min_count);
       }
     }
   }
