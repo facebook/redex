@@ -1876,3 +1876,234 @@ TEST(ControlFlow, add_switch) {
   EXPECT_EQ(assembler::to_string(expected.get()),
             assembler::to_string(code.get()));
 }
+
+TEST(ControlFlow, replace_insn_basic) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 0)
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto new_const = new IRInstruction(OPCODE_CONST);
+      new_const->set_literal(1);
+      new_const->set_dest(0);
+      auto new_const2 = new IRInstruction(OPCODE_CONST);
+      new_const2->set_literal(2);
+      new_const2->set_dest(0);
+      cfg.replace_insns(it, {new_const, new_const2});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 1)
+      (const v0 2)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, replace_insn_may_throw) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (const v0 0)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.b:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      move_res->set_dest(0);
+      cfg.replace_insns(it, {sget, move_res});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (move-result-pseudo v0)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_insn_may_throw2) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sput v0 "LFoo;.a:I")
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_SPUT) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.a:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      move_res->set_dest(0);
+      cfg.replace_insns(it, {sget, move_res});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_insn_may_throw3) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_SGET) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.b:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      auto temp = cfg.allocate_temp();
+      move_res->set_dest(temp);
+
+      auto sput = new IRInstruction(OPCODE_SPUT);
+      sput->set_field(DexField::make_field("LFoo;.a:I"));
+      sput->set_src(0, temp);
+      cfg.replace_insns(it, {sget, move_res, sput});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (move-result-pseudo v1)
+      (sput v1 "LFoo;.a:I")
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_if_with_return) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-gtz v0 :tru)
+
+      (const v1 1)
+      (return v1)
+
+      (:tru)
+      (const v2 2)
+      (return v2)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (is_conditional_branch(it->insn->opcode())) {
+      auto ret = new IRInstruction(OPCODE_RETURN);
+      ret->set_src(0, 0);
+      cfg.replace_insn(it, ret);
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}

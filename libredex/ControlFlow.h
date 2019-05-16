@@ -589,6 +589,23 @@ class ControlFlowGraph {
   bool push_front(Block* b, IRInstruction* insn);
   bool push_back(Block* b, IRInstruction* insn);
 
+  // Replace one IRInstruction with some number of new instructions
+  // * None of the new instructions can be an if or goto
+  // * Returns a boolean indicating whether or not InstructionIterators were
+  //   invalidated (see insertion methods for more details)
+  // * The throw edges of the block that contains `it` are copied and used as
+  //   the throw edges of any new `may_throw` instructions
+  // * If the old instruction has a move-result(-pseudo) it will also be
+  //   removed. When adding instructions that may-throw, you should include
+  //   move-result(-pseudo)s for them.
+  bool replace_insn(const InstructionIterator& it, IRInstruction* insn);
+  template <class ForwardIt>
+  bool replace_insns(const InstructionIterator& it,
+                     const ForwardIt& begin,
+                     const ForwardIt& end);
+  bool replace_insns(const InstructionIterator& it,
+                     const std::vector<IRInstruction*>& insns);
+
   // Create a conditional branch, which consists of:
   // * inserting an `if` instruction at the end of b
   // * Possibly add an EDGE_GOTO to the false block (`fls` may be null if b
@@ -696,7 +713,7 @@ class ControlFlowGraph {
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
-  InstructionIterator find_insn(IRInstruction* insn);
+  InstructionIterator find_insn(IRInstruction* insn, Block* hint = nullptr);
 
   // choose an order of blocks for output
   std::vector<Block*> order();
@@ -1136,6 +1153,32 @@ class InstructionIterableImpl {
  * standard depth-first search with a side table of already-visited nodes.
  */
 std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
+
+template <class ForwardIt>
+bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
+                                     const ForwardIt& begin,
+                                     const ForwardIt& end) {
+  always_assert(m_editable);
+
+  // Save these values before we insert in case the insertion causes iterator
+  // invalidation.
+  auto orig_block = it.block();
+  auto insn_to_del = it->insn;
+
+  bool invalidated = insert(it, begin, end, true /* before */);
+  if (invalidated) {
+    const auto& found = find_insn(insn_to_del);
+    if (!found.is_end()) {
+      remove_insn(found);
+    }
+    // If find_insn can't find `insn_to_del` it was most likely removed by
+    // `insert`. This happens when a throw or return is added to the block
+    // because the remaining code in the block is removed.
+  } else {
+    remove_insn(it);
+  }
+  return invalidated;
+}
 
 template <class ForwardIt>
 bool ControlFlowGraph::insert(const InstructionIterator& position,

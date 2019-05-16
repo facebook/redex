@@ -1185,7 +1185,17 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
 }
 
-InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle) {
+InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle,
+                                                Block* hint) {
+  if (hint != nullptr) {
+    auto ii = ir_list::InstructionIterable(hint);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      if (it->insn == needle) {
+        return hint->to_cfg_instruction_iterator(it);
+      }
+    }
+  }
+
   auto iterable = InstructionIterable(*this);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     if (it->insn == needle) {
@@ -1928,6 +1938,15 @@ bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
     }
   }
   return true;
+}
+
+bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
+                                     const std::vector<IRInstruction*>& insns) {
+  return replace_insns(it, insns.begin(), insns.end());
+}
+bool ControlFlowGraph::replace_insn(const InstructionIterator& it,
+                                    IRInstruction* insn) {
+  return replace_insns(it, {insn});
 }
 
 void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
