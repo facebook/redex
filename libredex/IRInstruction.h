@@ -177,6 +177,10 @@ class IRInstruction final {
     always_assert(dests_size());
     return opcode_impl::dest_is_wide(m_opcode);
   }
+  bool dest_is_object() const {
+    always_assert(dests_size());
+    return opcode_impl::dest_is_object(m_opcode);
+  }
   bool is_wide() const {
     for (size_t i = 0; i < srcs_size(); i++) {
       if (src_is_wide(i)) {

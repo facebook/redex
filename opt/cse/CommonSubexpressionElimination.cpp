@@ -77,7 +77,6 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
-#include "TypeInference.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -817,9 +816,6 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
   TRACE(CSE, 5, "[CSE] before:\n%s\n", SHOW(m_cfg));
 
-  type_inference::TypeInference ti(m_cfg);
-  ti.run(is_static, declaring_type, args);
-
   // gather relevant instructions, and allocate temp registers
 
   std::unordered_map<IRInstruction*, std::pair<IROpcode, uint32_t>> temps;
@@ -827,15 +823,10 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
     if (!temps.count(earlier_insn)) {
-      auto& type_environments = ti.get_type_environments();
-      auto type_environment = type_environments.at(earlier_insn);
-      ti.analyze_instruction(earlier_insn, &type_environment);
       auto src_reg = earlier_insn->dest();
-      auto type = type_environment.get_type(src_reg);
-      always_assert(!type.is_top() && !type.is_bottom());
       uint32_t temp_reg;
       IROpcode move_opcode;
-      if (type.element() == REFERENCE) {
+      if (earlier_insn->dest_is_object()) {
         move_opcode = OPCODE_MOVE_OBJECT;
         temp_reg = m_cfg.allocate_temp();
       } else if (earlier_insn->dest_is_wide()) {
