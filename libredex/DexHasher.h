@@ -69,21 +69,21 @@ class DexClassHasher final {
   void hash(const DexString* s);
   template <class T>
   void hash(const std::vector<T>& l) {
-    hash(l.size());
+    hash((uint64_t)l.size());
     for (const auto& elem : l) {
       hash(elem);
     }
   }
   template <class T>
   void hash(const std::deque<T>& l) {
-    hash(l.size());
+    hash((uint64_t)l.size());
     for (const auto& elem : l) {
       hash(elem);
     }
   }
   template <class K, class V>
   void hash(const std::map<K, V>& l) {
-    hash(l.size());
+    hash((uint64_t)l.size());
     for (const auto& p : l) {
       hash(p.first);
       hash(p.second);
