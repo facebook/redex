@@ -483,6 +483,7 @@ struct MethodCreator {
   std::vector<Location> locals;
   std::vector<MethodBlock*> blocks;
   MethodBlock* main_block;
+  bool m_with_debug_item;
 
   friend std::string show(const MethodCreator*);
   friend struct MethodBlock;

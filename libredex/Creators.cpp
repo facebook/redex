@@ -640,8 +640,8 @@ MethodCreator::MethodCreator(DexType* cls,
                              DexAccessFlags access,
                              DexAnnotationSet* anno,
                              bool with_debug_item)
-    : method(
-          static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))) {
+    : method(static_cast<DexMethod*>(DexMethod::make_method(cls, name, proto))),
+      m_with_debug_item(with_debug_item) {
   always_assert_log(!method->is_concrete(), "Method already defined");
   if (anno) {
     method->attach_annotation_set(anno);
@@ -681,6 +681,16 @@ DexMethod* MethodCreator::create() {
   }
   always_assert(temp_reg == param_reg);
   transform::remap_registers(meth_code, reg_map);
+
+  if (m_with_debug_item) {
+    // Insert a fake position entry for redex generated method when we
+    // add debug item.
+    auto main_block_it = meth_code->get_param_instructions().end();
+    auto position = std::make_unique<DexPosition>(0);
+    position->bind(DexString::make_string(show(method)),
+                   DexString::make_string("RedexGenerated"));
+    meth_code->insert_before(main_block_it, std::move(position));
+  }
   return method;
 }
 
