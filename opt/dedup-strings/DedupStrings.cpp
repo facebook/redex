@@ -481,8 +481,12 @@ DedupStrings::get_strings_to_dedup(
     }
     std::sort(strings.begin(), strings.end(),
               [&strings_to_dedup](DexString* a, DexString* b) -> bool {
-                return strings_to_dedup[a].duplicate_string_loads >
-                       strings_to_dedup[b].duplicate_string_loads;
+                auto a_loads = strings_to_dedup[a].duplicate_string_loads;
+                auto b_loads = strings_to_dedup[b].duplicate_string_loads;
+                if (a_loads != b_loads) {
+                  return a_loads > b_loads;
+                }
+                return dexstrings_comparator()(a, b);
               });
     const auto const_string_method =
         make_const_string_loader_method(host_classes[dexnr], strings);
