@@ -16,7 +16,6 @@ class OptimizeEnumsPass : public Pass {
  public:
   OptimizeEnumsPass() : Pass("OptimizeEnumsPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {}
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
 

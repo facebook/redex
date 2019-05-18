@@ -22,8 +22,8 @@
 class MergeInterfacePass : public Pass {
  public:
   MergeInterfacePass() : Pass("MergeInterfacePass") {}
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("merged_interface_mappings", "", m_merged_interface_mapping_file);
+  void bind_config() override {
+    bind("merged_interface_mappings", "", m_merged_interface_mapping_file);
   }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 

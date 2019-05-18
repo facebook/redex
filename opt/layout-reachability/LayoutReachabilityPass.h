@@ -14,7 +14,5 @@ class LayoutReachabilityPass : Pass {
 public:
   LayoutReachabilityPass() : Pass("LayoutReachabilityPass") {}
 
-  void configure_pass(const JsonWrapper&) override {}
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
