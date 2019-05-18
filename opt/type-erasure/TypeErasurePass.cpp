@@ -146,131 +146,138 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 
 } // namespace
 
-void TypeErasurePass::configure_pass(const JsonWrapper& jw) {
-  jw.get("merged_type_mappings", "", m_merged_type_mapping_file);
+void TypeErasurePass::bind_config() {
+  bind("merged_type_mappings", "", m_merged_type_mapping_file);
   bool process_method_meta;
-  jw.get("process_method_meta", false, process_method_meta);
+  bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;
-  jw.get("max_num_dispatch_target", 0, max_num_dispatch_target);
-  if (max_num_dispatch_target > 0) {
-    m_max_num_dispatch_target =
-        boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
-  }
+  bind("max_num_dispatch_target", {0}, max_num_dispatch_target);
   bool merge_static_methods_within_shape;
-  jw.get("merge_static_methods_within_shape", false,
-         merge_static_methods_within_shape);
+  bind("merge_static_methods_within_shape", false,
+       merge_static_methods_within_shape);
   bool merge_direct_methods_within_shape;
-  jw.get("merge_direct_methods_within_shape", false,
-         merge_direct_methods_within_shape);
+  bind("merge_direct_methods_within_shape", false,
+       merge_direct_methods_within_shape);
   bool merge_nonvirt_methods_within_shape;
-  jw.get("merge_nonvirt_methods_within_shape", false,
-         merge_nonvirt_methods_within_shape);
+  bind("merge_nonvirt_methods_within_shape", false,
+       merge_nonvirt_methods_within_shape);
 
   // load model specifications
   Json::Value models;
-  jw.get("models", Json::Value(), models);
-  if (models.isNull()) return;
-  if (!models.isArray()) {
-    fprintf(stderr, "[TERA] Wrong specification: \"models\" is not an array\n");
-    return;
-  }
+  bind("models", Json::Value(), models);
 
-  // load each model spec for erasure
-  for (auto it = models.begin(); it != models.end(); ++it) {
-    const auto& value = *it;
-    if (!value.isObject()) {
+  after_configuration([=] {
+    if (max_num_dispatch_target > 0) {
+      m_max_num_dispatch_target =
+          boost::optional<size_t>(static_cast<size_t>(max_num_dispatch_target));
+    }
+
+    if (models.isNull()) return;
+    if (!models.isArray()) {
       fprintf(stderr,
-              "[TERA] Wrong specification: model in array not an object\n");
-      m_model_specs.clear();
+              "[TERA] Wrong specification: \"models\" is not an array\n");
       return;
     }
-    JsonWrapper model_spec = JsonWrapper(value);
-    ModelSpec model;
-    model_spec.get("enabled", true, model.enabled);
-    std::string type_tag_config;
-    model_spec.get("type_tag_config", "generate", type_tag_config);
-    model.type_tag_config = get_type_tag_config(type_tag_config);
-    size_t min_count;
-    model_spec.get("min_count", 2, min_count);
-    model.min_count = min_count > 0 ? min_count : 0;
-    model_spec.get("name", "", model.name);
-    std::vector<std::string> root_names;
-    model_spec.get("roots", {}, root_names);
-    load_types(root_names, model.roots);
-    std::vector<std::string> excl_names;
-    model_spec.get("exclude", {}, excl_names);
-    load_types_and_prefixes(excl_names, model.exclude_types,
-                            model.exclude_prefixes);
-    model_spec.get("class_name_prefix", "", model.class_name_prefix);
-    Json::Value generated;
-    model_spec.get("generated", Json::Value(), generated);
-    if (!generated.isNull()) {
-      if (!generated.isObject()) {
+
+    // load each model spec for erasure
+    for (auto it = models.begin(); it != models.end(); ++it) {
+      const auto& value = *it;
+      if (!value.isObject()) {
         fprintf(stderr,
                 "[TERA] Wrong specification: model in array not an object\n");
         m_model_specs.clear();
         return;
       }
-      JsonWrapper gen_spec = JsonWrapper(generated);
-      std::vector<std::string> gen_names;
-      gen_spec.get("other_roots", {}, gen_names);
-      load_types(gen_names, model.gen_types);
+      JsonWrapper model_spec = JsonWrapper(value);
+      ModelSpec model;
+      model_spec.get("enabled", true, model.enabled);
+      std::string type_tag_config;
+      model_spec.get("type_tag_config", "generate", type_tag_config);
+      model.type_tag_config = get_type_tag_config(type_tag_config);
+      size_t min_count;
+      model_spec.get("min_count", 2, min_count);
+      model.min_count = min_count > 0 ? min_count : 0;
+      model_spec.get("name", "", model.name);
+      std::vector<std::string> root_names;
+      model_spec.get("roots", {}, root_names);
+      load_types(root_names, model.roots);
+      std::vector<std::string> excl_names;
+      model_spec.get("exclude", {}, excl_names);
+      load_types_and_prefixes(excl_names, model.exclude_types,
+                              model.exclude_prefixes);
+      model_spec.get("class_name_prefix", "", model.class_name_prefix);
+      Json::Value generated;
+      model_spec.get("generated", Json::Value(), generated);
+      if (!generated.isNull()) {
+        if (!generated.isObject()) {
+          fprintf(stderr,
+                  "[TERA] Wrong specification: model in array not an object\n");
+          m_model_specs.clear();
+          return;
+        }
+        JsonWrapper gen_spec = JsonWrapper(generated);
+        std::vector<std::string> gen_names;
+        gen_spec.get("other_roots", {}, gen_names);
+        load_types(gen_names, model.gen_types);
 
-      std::vector<std::string> gen_anno_names;
-      gen_spec.get("annos", {}, gen_anno_names);
-      load_types(gen_anno_names, model.gen_annos);
-    }
-    model_spec.get("include_primary_dex", false, model.include_primary_dex);
-    model_spec.get("dex_sharding", false, model.dex_sharding);
-
-    std::string merge_per_interdex_set;
-    model_spec.get("merge_per_interdex_set", "disabled",
-                   merge_per_interdex_set);
-    model.merge_per_interdex_set =
-        get_merge_per_interdex_type(merge_per_interdex_set);
-
-    always_assert_log(!model.merge_per_interdex_set ||
-                          (model.type_tag_config != TypeTagConfig::NONE),
-                      "Cannot group when type tag is not needed.");
-    always_assert_log(!model.dex_sharding || !model.merge_per_interdex_set,
-                      "Cannot have both dex sharding and group sharding "
-                      "enabled!");
-
-    size_t max_count;
-    model_spec.get("max_count", 0, max_count);
-    Json::Value approximate_shaping;
-    model_spec.get("approximate_shape_merging", Json::Value(),
-                   model.approximate_shape_merging);
-    model_spec.get("merge_types_with_static_fields", false,
-                   model.merge_types_with_static_fields);
-    model_spec.get("keep_debug_info", false, model.keep_debug_info);
-    model_spec.get("exclude_reference_to_android_sdk", Json::Value(),
-                   model.exclude_reference_to_android_sdk);
-    if (max_count > 0) {
-      model.max_count = boost::optional<size_t>(max_count);
-    }
-    model.process_method_meta = process_method_meta;
-    model.merge_static_methods_within_shape = merge_static_methods_within_shape;
-    model.merge_direct_methods_within_shape = merge_direct_methods_within_shape;
-    model.merge_nonvirt_methods_within_shape =
-        merge_nonvirt_methods_within_shape;
-    if (!verify_model_spec(model)) {
-      continue;
-    }
-
-    if (model.dex_sharding) {
-      if (!model.enabled) {
-        TRACE(TERA, 3, "Per dex Type Erased model not enabled. Skipping %s\n",
-              model.name.c_str());
-      } else {
-        m_dex_sharding_model_specs.emplace_back(std::move(model));
+        std::vector<std::string> gen_anno_names;
+        gen_spec.get("annos", {}, gen_anno_names);
+        load_types(gen_anno_names, model.gen_annos);
       }
-    } else {
-      m_model_specs.emplace_back(std::move(model));
-    }
-  }
+      model_spec.get("include_primary_dex", false, model.include_primary_dex);
+      model_spec.get("dex_sharding", false, model.dex_sharding);
 
-  TRACE(TERA, 1, "[TERA] valid model specs %ld\n", m_model_specs.size());
+      std::string merge_per_interdex_set;
+      model_spec.get("merge_per_interdex_set", "disabled",
+                     merge_per_interdex_set);
+      model.merge_per_interdex_set =
+          get_merge_per_interdex_type(merge_per_interdex_set);
+
+      always_assert_log(!model.merge_per_interdex_set ||
+                            (model.type_tag_config != TypeTagConfig::NONE),
+                        "Cannot group when type tag is not needed.");
+      always_assert_log(!model.dex_sharding || !model.merge_per_interdex_set,
+                        "Cannot have both dex sharding and group sharding "
+                        "enabled!");
+
+      size_t max_count;
+      model_spec.get("max_count", 0, max_count);
+      Json::Value approximate_shaping;
+      model_spec.get("approximate_shape_merging", Json::Value(),
+                     model.approximate_shape_merging);
+      model_spec.get("merge_types_with_static_fields", false,
+                     model.merge_types_with_static_fields);
+      model_spec.get("keep_debug_info", false, model.keep_debug_info);
+      model_spec.get("exclude_reference_to_android_sdk", Json::Value(),
+                     model.exclude_reference_to_android_sdk);
+      if (max_count > 0) {
+        model.max_count = boost::optional<size_t>(max_count);
+      }
+      model.process_method_meta = process_method_meta;
+      model.merge_static_methods_within_shape =
+          merge_static_methods_within_shape;
+      model.merge_direct_methods_within_shape =
+          merge_direct_methods_within_shape;
+      model.merge_nonvirt_methods_within_shape =
+          merge_nonvirt_methods_within_shape;
+      if (!verify_model_spec(model)) {
+        continue;
+      }
+
+      if (model.dex_sharding) {
+        if (!model.enabled) {
+          TRACE(TERA, 3, "Per dex Type Erased model not enabled. Skipping %s\n",
+                model.name.c_str());
+        } else {
+          m_dex_sharding_model_specs.emplace_back(std::move(model));
+        }
+      } else {
+        m_model_specs.emplace_back(std::move(model));
+      }
+    }
+
+    TRACE(TERA, 1, "[TERA] valid model specs %ld\n", m_model_specs.size());
+  });
 }
 
 std::string ModelMerger::s_mapping_file;
