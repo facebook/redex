@@ -296,3 +296,16 @@ TEST_F(PatriciaTreeSetTest, setsOfPointers) {
   out << t;
   EXPECT_EQ("{a}", out.str());
 }
+
+TEST_F(PatriciaTreeSetTest, setOfUnsignedInt64) {
+  PatriciaTreeSet<uint64_t> s;
+  std::set<uint64_t> values = {0, 1, 2, 10, 4000000000};
+
+  for (auto v : values) {
+    s.insert(v);
+  }
+  EXPECT_EQ(values.size(), s.size());
+  for (auto x : s) {
+    EXPECT_EQ(1, values.count(x));
+  }
+}
