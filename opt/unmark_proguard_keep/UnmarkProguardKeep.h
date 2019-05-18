@@ -23,9 +23,9 @@ class UnmarkProguardKeepPass : Pass {
  public:
   UnmarkProguardKeepPass() : Pass("UnmarkProguardKeepPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("supercls_list", {}, m_supercls_list);
-    jw.get("package_list", {}, m_package_list);
+  void bind_config() override {
+    bind("supercls_list", {}, m_supercls_list);
+    bind("package_list", {}, m_package_list);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

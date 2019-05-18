@@ -14,6 +14,4 @@ class TestCFGPass : public Pass {
   TestCFGPass() : Pass("TestCFGPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  void configure_pass(const JsonWrapper& jw) override {}
 };
