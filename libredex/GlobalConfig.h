@@ -9,6 +9,19 @@
 
 #include "Configurable.h"
 
+struct OptDecisionsConfig : public Configurable {
+ public:
+  void bind_config() override;
+  std::string get_config_name() override { return "OptDecisionsConfig"; };
+  std::string get_config_doc() override {
+    return "This configuration is used to direct Redex if it should leave a "
+           "log that explains the optimizations it has performed.";
+  }
+
+  bool enable_logs;
+  std::string output_file_name;
+};
+
 class GlobalConfig : public Configurable {
 
  public:
@@ -19,4 +32,5 @@ class GlobalConfig : public Configurable {
   }
 
  private:
+  OptDecisionsConfig m_opt_decisions_config;
 };
