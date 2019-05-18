@@ -258,11 +258,11 @@ class StringBuilderOutlinerPass : public Pass {
  public:
   StringBuilderOutlinerPass() : Pass("StringBuilderOutlinerPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("max_outline_length", m_config.max_outline_length,
-           m_config.max_outline_length);
-    jw.get("min_outline_count", m_config.min_outline_count,
-           m_config.min_outline_count);
+  void bind_config() override {
+    bind("max_outline_length", m_config.max_outline_length,
+         m_config.max_outline_length);
+    bind("min_outline_count", m_config.min_outline_count,
+         m_config.min_outline_count);
   }
 
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

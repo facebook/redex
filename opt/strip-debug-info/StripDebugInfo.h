@@ -15,24 +15,24 @@ class StripDebugInfoPass : public Pass {
  public:
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("cls_whitelist", {}, m_config.cls_patterns);
-    jw.get("method_whitelist", {}, m_config.meth_patterns);
-    jw.get("use_whitelist", false, m_config.use_whitelist);
-    jw.get("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
-    jw.get("drop_local_variables", false, m_config.drop_local_variables);
-    jw.get("drop_line_numbers", false, m_config.drop_line_nrs);
-    jw.get("drop_src_files", false, m_config.drop_src_files);
-    jw.get("drop_prologue_end", false, m_config.drop_prologue_end);
-    jw.get("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
-    jw.get("drop_all_dbg_info_if_empty",
-           false,
-           m_config.drop_all_dbg_info_if_empty);
-    jw.get("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
-    jw.get("drop_synth_conservative", false, m_config.drop_synth_conservative);
-    jw.get("drop_line_numbers_preceeding_safe",
-           false,
-           m_config.drop_line_nrs_preceeding_safe);
+  void bind_config() override {
+    bind("cls_whitelist", {}, m_config.cls_patterns);
+    bind("method_whitelist", {}, m_config.meth_patterns);
+    bind("use_whitelist", false, m_config.use_whitelist);
+    bind("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
+    bind("drop_local_variables", false, m_config.drop_local_variables);
+    bind("drop_line_numbers", false, m_config.drop_line_nrs);
+    bind("drop_src_files", false, m_config.drop_src_files);
+    bind("drop_prologue_end", false, m_config.drop_prologue_end);
+    bind("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
+    bind("drop_all_dbg_info_if_empty",
+         false,
+         m_config.drop_all_dbg_info_if_empty);
+    bind("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
+    bind("drop_synth_conservative", false, m_config.drop_synth_conservative);
+    bind("drop_line_numbers_preceeding_safe",
+         false,
+         m_config.drop_line_nrs_preceeding_safe);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
