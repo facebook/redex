@@ -291,11 +291,6 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
 } // namespace
 
-void ClassSplittingPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("relocated_methods_per_target_class", 64,
-         m_relocated_methods_per_target_class);
-}
-
 void ClassSplittingPass::run_pass(DexStoresVector&,
                                   ConfigFiles&,
                                   PassManager& mgr) {
