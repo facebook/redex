@@ -24,26 +24,26 @@ namespace interdex {
 // other classes left that also have those *refs.
 // Generally, a higher count increases the effectiveness of cross-dex-reference
 // minimization, but also causes it to use more memory and run slower.
-constexpr size_t INFREQUENT_REFS_COUNT = 6;
+constexpr uint64_t INFREQUENT_REFS_COUNT = 6;
 
 using PrioritizedDexClasses = MutablePriorityQueue<DexClass*, uint64_t>;
 struct CrossDexRefMinimizerStats {
-  size_t classes{0};
-  size_t resets{0};
-  size_t reprioritizations{0};
+  uint64_t classes{0};
+  uint64_t resets{0};
+  uint64_t reprioritizations{0};
   std::vector<std::pair<DexClass*, uint64_t>> worst_classes;
 };
 
 struct CrossDexRefMinimizerConfig {
-  size_t method_ref_weight;
-  size_t field_ref_weight;
-  size_t type_ref_weight;
-  size_t string_ref_weight;
+  uint64_t method_ref_weight;
+  uint64_t field_ref_weight;
+  uint64_t type_ref_weight;
+  uint64_t string_ref_weight;
 
-  size_t method_seed_weight;
-  size_t field_seed_weight;
-  size_t type_seed_weight;
-  size_t string_seed_weight;
+  uint64_t method_seed_weight;
+  uint64_t field_seed_weight;
+  uint64_t type_seed_weight;
+  uint64_t string_seed_weight;
 };
 
 // Helper class that maintains a set of dex classes with associated priorities

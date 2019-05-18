@@ -18,20 +18,20 @@
 namespace interdex {
 
 struct CrossDexRelocatorStats {
-  size_t classes_added_for_relocated_methods{0};
-  size_t relocatable_static_methods{0};
-  size_t relocatable_non_static_direct_methods{0};
-  size_t relocatable_virtual_methods{0};
-  size_t relocated_static_methods{0};
-  size_t relocated_non_static_direct_methods{0};
-  size_t relocated_virtual_methods{0};
+  uint64_t classes_added_for_relocated_methods{0};
+  uint64_t relocatable_static_methods{0};
+  uint64_t relocatable_non_static_direct_methods{0};
+  uint64_t relocatable_virtual_methods{0};
+  uint64_t relocated_static_methods{0};
+  uint64_t relocated_non_static_direct_methods{0};
+  uint64_t relocated_virtual_methods{0};
 };
 
 struct CrossDexRelocatorConfig {
   bool relocate_static_methods{false};
   bool relocate_non_static_direct_methods{false};
   bool relocate_virtual_methods{false};
-  size_t max_relocated_methods_per_class{200};
+  uint64_t max_relocated_methods_per_class{200};
 };
 
 class CrossDexRelocator {
