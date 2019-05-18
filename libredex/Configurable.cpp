@@ -71,35 +71,50 @@ ConfigurableReflection Configurable::reflect() {
   always_assert_log(!bindflags, "No bindflags may be specified for a " #type);
 
 template <>
-int Configurable::as<int>(const Json::Value& value, bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(int);
-  return value.asInt();
-}
-
-template <>
 float Configurable::as<float>(const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(float);
   return value.asFloat();
 }
 
 template <>
+int Configurable::as<int>(const Json::Value& value,
+                                  bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(int);
+  return value.asInt();
+}
+
+template <>
 unsigned int Configurable::as<unsigned int>(const Json::Value& value,
-                                            bindflags_t bindflags) {
+                                    bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned int);
   return value.asUInt();
 }
 
 template <>
-int64_t Configurable::as<int64_t>(const Json::Value& value,
+long Configurable::as<long>(const Json::Value& value,
                                   bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(int64_t);
+  ASSERT_NO_BINDFLAGS(long);
   return value.asInt64();
 }
 
 template <>
-uint64_t Configurable::as<uint64_t>(const Json::Value& value,
+unsigned long Configurable::as<unsigned long>(const Json::Value& value,
                                     bindflags_t bindflags) {
-  ASSERT_NO_BINDFLAGS(uint64_t);
+  ASSERT_NO_BINDFLAGS(unsigned long);
+  return value.asUInt64();
+}
+
+template <>
+long long Configurable::as<long long>(const Json::Value& value,
+                                  bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(long long);
+  return value.asInt64();
+}
+
+template <>
+unsigned long long Configurable::as<unsigned long long>(const Json::Value& value,
+                                    bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned long long);
   return value.asUInt64();
 }
 
@@ -338,12 +353,14 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
                               ConfigurableReflection::Type::PRIMITIVE));      \
   }
 
-IMPLEMENT_REFLECTOR(int)
 IMPLEMENT_REFLECTOR(float)
 IMPLEMENT_REFLECTOR(bool)
+IMPLEMENT_REFLECTOR_EX(int, "int")
 IMPLEMENT_REFLECTOR_EX(unsigned int, "int")
-IMPLEMENT_REFLECTOR_EX(int64_t, "long")
-IMPLEMENT_REFLECTOR_EX(uint64_t, "long")
+IMPLEMENT_REFLECTOR_EX(long, "long")
+IMPLEMENT_REFLECTOR_EX(unsigned long, "long")
+IMPLEMENT_REFLECTOR_EX(long long, "long")
+IMPLEMENT_REFLECTOR_EX(unsigned long long, "long")
 IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
 IMPLEMENT_REFLECTOR_EX(boost::optional<std::string>, "string")

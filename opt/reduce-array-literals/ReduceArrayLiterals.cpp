@@ -601,24 +601,25 @@ class ReduceArrayLiteralsInterDexPlugin : public interdex::InterDexPassPlugin {
   size_t reserve_mrefs() override { return 1; }
 };
 
-void ReduceArrayLiteralsPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("debug", false, m_debug);
+void ReduceArrayLiteralsPass::bind_config() {
+  bind("debug", false, m_debug);
   // The default value 77 is somewhat arbitrary and could be tweaked.
   // Intention is to be reasonably small as to not cause excessive pressure on
   // the register allocator, and use an excessive number of stack space at
   // runtime, while also being reasonably large so that this optimization still
   // results in a significant win in terms of instructions count.
-  jw.get("max_filled_elements", 77, m_max_filled_elements);
-  always_assert(m_max_filled_elements < 0xff);
-
-  interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
-          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-  std::function<interdex::InterDexPassPlugin*()> fn =
-      []() -> interdex::InterDexPassPlugin* {
-    return new ReduceArrayLiteralsInterDexPlugin();
-  };
-  registry->register_plugin("REDUCE_ARRAY_LITERALS_PLUGIN", std::move(fn));
+  bind("max_filled_elements", {77}, m_max_filled_elements);
+  after_configuration([this] {
+    always_assert(m_max_filled_elements < 0xff);
+    interdex::InterDexRegistry* registry =
+        static_cast<interdex::InterDexRegistry*>(
+            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+    std::function<interdex::InterDexPassPlugin*()> fn =
+        []() -> interdex::InterDexPassPlugin* {
+      return new ReduceArrayLiteralsInterDexPlugin();
+    };
+    registry->register_plugin("REDUCE_ARRAY_LITERALS_PLUGIN", std::move(fn));
+  });
 }
 
 void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
