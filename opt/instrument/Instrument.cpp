@@ -1149,34 +1149,29 @@ std::unordered_set<std::string> load_blacklist_file(
 }
 } // namespace
 
-void InstrumentPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("instrumentation_strategy", "", m_options.instrumentation_strategy);
-  jw.get("analysis_class_name", "", m_options.analysis_class_name);
-  jw.get("analysis_method_name", "", m_options.analysis_method_name);
-  std::vector<std::string> list;
-  jw.get("blacklist", {}, list);
-  for (const auto& e : list) {
-    m_options.blacklist.insert(e);
-  }
-  jw.get("whitelist", {}, list);
-  for (const auto& e : list) {
-    m_options.whitelist.insert(e);
-  }
-  jw.get("blacklist_file_name", "", m_options.blacklist_file_name);
-  jw.get("metadata_file_name", "instrument-mapping.txt",
-         m_options.metadata_file_name);
-  jw.get("num_stats_per_method", 1, m_options.num_stats_per_method);
-  jw.get("num_shards", 1, m_options.num_shards);
-  jw.get("only_cold_start_class", true, m_options.only_cold_start_class);
+void InstrumentPass::bind_config() {
+  bind("instrumentation_strategy", "", m_options.instrumentation_strategy);
+  bind("analysis_class_name", "", m_options.analysis_class_name);
+  bind("analysis_method_name", "", m_options.analysis_method_name);
+  bind("blacklist", {}, m_options.blacklist);
+  bind("whitelist", {}, m_options.whitelist);
+  bind("blacklist_file_name", "", m_options.blacklist_file_name);
+  bind("metadata_file_name", "instrument-mapping.txt",
+       m_options.metadata_file_name);
+  bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
+  bind("num_shards", {1}, m_options.num_shards);
+  bind("only_cold_start_class", true, m_options.only_cold_start_class);
 
-  // Make a small room for additional method refs during InterDex.
-  interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
-          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-  registry->register_plugin("INSTRUMENT_PASS_PLUGIN",
-                            [num_shards = m_options.num_shards]() {
-                              return new InstrumentInterDexPlugin(num_shards);
-                            });
+  after_configuration([this] {
+    // Make a small room for additional method refs during InterDex.
+    interdex::InterDexRegistry* registry =
+        static_cast<interdex::InterDexRegistry*>(
+            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+    registry->register_plugin("INSTRUMENT_PASS_PLUGIN",
+                              [num_shards = m_options.num_shards]() {
+                                return new InstrumentInterDexPlugin(num_shards);
+                              });
+  });
 }
 
 void InstrumentPass::run_pass(DexStoresVector& stores,

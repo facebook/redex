@@ -15,7 +15,7 @@ class InstrumentPass : public Pass {
  public:
   InstrumentPass() : Pass("InstrumentPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override;
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Options {
