@@ -123,6 +123,32 @@ std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
 }
 
 template <>
+Configurable::MapOfVectorOfStrings
+Configurable::as<Configurable::MapOfVectorOfStrings>(const Json::Value& value) {
+  if (!value.isObject()) {
+    throw std::runtime_error("expected object, got:" + value.asString());
+  }
+  Configurable::MapOfVectorOfStrings result;
+  for (auto it = value.begin(); it != value.end(); ++it) {
+    auto k = it.key();
+    auto v = *it;
+    if (!k.isString()) {
+      throw std::runtime_error("expected string, got:" + k.asString());
+    }
+    if (!v.isArray()) {
+      throw std::runtime_error("expected array, got:" + v.asString());
+    }
+    for (auto el : v) {
+      if (!el.isString()) {
+        throw std::runtime_error("expected string, got:" + el.asString());
+      }
+      result[k.asString()].emplace_back(el.asString());
+    }
+  }
+  return result;
+}
+
+template <>
 std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
     const Json::Value& value) {
   std::unordered_set<DexType*> result;
@@ -185,3 +211,4 @@ IMPLEMENT_REFLECTOR_EX(std::vector<DexType*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexType*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexMethod*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexMethod*>, "set")
+IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")

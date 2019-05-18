@@ -122,6 +122,10 @@ class Configurable {
    * time. */
   void parse_config(const JsonWrapper& json);
 
+  // Type aliases for convience
+  using MapOfVectorOfStrings =
+      std::unordered_map<std::string, std::vector<std::string>>;
+
  protected:
   /**
    * The provided function will be called immediately after bind_config() is
@@ -252,6 +256,6 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(Json::Value)
+DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE
