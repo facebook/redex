@@ -149,10 +149,10 @@ class DedupStringsPass : public Pass {
  public:
   DedupStringsPass() : Pass("DedupStringsPass") {}
 
-  virtual void configure_pass(const JsonWrapper& jw) override;
+  virtual void bind_config() override;
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  size_t m_max_factory_methods;
+  int64_t m_max_factory_methods;
   bool m_use_method_to_weight;
 };

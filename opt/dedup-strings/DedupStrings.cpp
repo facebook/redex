@@ -613,7 +613,7 @@ class DedupStringsInterDexPlugin : public interdex::InterDexPassPlugin {
   size_t m_max_factory_methods;
 };
 
-void DedupStringsPass::configure_pass(const JsonWrapper& jw) {
+void DedupStringsPass::bind_config() {
   // The dedup-strings transformation introduces new method refs to refer
   // to factory methods. Factory methods are currently only placed into
   // dexes in the first store.
@@ -625,24 +625,21 @@ void DedupStringsPass::configure_pass(const JsonWrapper& jw) {
   // use that number here.
   int64_t default_max_factory_methods =
       (1 << facebook::Locator::dexnr_bits) - 1;
-  int64_t max_factory_methods;
-  jw.get("max_factory_methods", default_max_factory_methods,
-         max_factory_methods);
-  always_assert(max_factory_methods > 0);
-  m_max_factory_methods = max_factory_methods;
+  bind("max_factory_methods", default_max_factory_methods,
+       m_max_factory_methods);
+  bind("use_method_to_weight", false, m_use_method_to_weight);
 
-  bool use_method_to_weight;
-  jw.get("use_method_to_weight", false, use_method_to_weight);
-  m_use_method_to_weight = use_method_to_weight;
-
-  interdex::InterDexRegistry* registry =
-      static_cast<interdex::InterDexRegistry*>(
-          PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
-  std::function<interdex::InterDexPassPlugin*()> fn =
-      [max_factory_methods]() -> interdex::InterDexPassPlugin* {
-    return new DedupStringsInterDexPlugin(max_factory_methods);
-  };
-  registry->register_plugin("DEDUP_STRINGS_PLUGIN", std::move(fn));
+  after_configuration([this] {
+    always_assert(m_max_factory_methods > 0);
+    interdex::InterDexRegistry* registry =
+        static_cast<interdex::InterDexRegistry*>(
+            PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));
+    std::function<interdex::InterDexPassPlugin*()> fn =
+        [this]() -> interdex::InterDexPassPlugin* {
+      return new DedupStringsInterDexPlugin(m_max_factory_methods);
+    };
+    registry->register_plugin("DEDUP_STRINGS_PLUGIN", std::move(fn));
+  });
 }
 
 void DedupStringsPass::run_pass(DexStoresVector& stores,
