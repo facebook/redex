@@ -15,8 +15,7 @@ class CopyPropagationPass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  void configure_pass(const JsonWrapper& jw) override {
-
+  void bind_config() override {
     // This option can only be safely enabled in verify-none. `run_pass` will
     // override this value to false if we aren't in verify-none. Here's why:
     //
@@ -31,18 +30,15 @@ class CopyPropagationPass : public Pass {
     // second const load
     //
     // TODO: detect the type of constant for each alias group
-    jw.get(
-        "eliminate_const_literals", false, m_config.eliminate_const_literals);
-
-    jw.get("eliminate_const_strings", true, m_config.eliminate_const_strings);
-    jw.get("eliminate_const_classes", true, m_config.eliminate_const_classes);
-    jw.get("replace_with_representative",
-           true,
-           m_config.replace_with_representative);
-    jw.get("wide_registers", true, m_config.wide_registers);
-    jw.get("static_finals", false, m_config.static_finals);
-    jw.get("debug", false, m_config.debug);
-    jw.get("max_estimated_registers", 3000, m_config.max_estimated_registers);
+    bind("eliminate_const_literals", false, m_config.eliminate_const_literals);
+    bind("eliminate_const_strings", true, m_config.eliminate_const_strings);
+    bind("eliminate_const_classes", true, m_config.eliminate_const_classes);
+    bind("replace_with_representative", true,
+         m_config.replace_with_representative);
+    bind("wide_registers", true, m_config.wide_registers);
+    bind("static_finals", false, m_config.static_finals);
+    bind("debug", false, m_config.debug);
+    bind("max_estimated_registers", {3000}, m_config.max_estimated_registers);
   }
 
   struct Config {
@@ -56,7 +52,7 @@ class CopyPropagationPass : public Pass {
 
     // this is set by PassManager, not by JsonWrapper
     bool regalloc_has_run{false};
-    size_t max_estimated_registers{3000};
+    unsigned int max_estimated_registers{3000};
   } m_config;
 };
 

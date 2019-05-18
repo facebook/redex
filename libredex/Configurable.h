@@ -20,6 +20,7 @@
 #include "Debug.h"
 #include "JsonWrapper.h"
 
+class DexClass;
 class DexMethod;
 class DexType;
 
@@ -122,6 +123,45 @@ class Configurable {
    * time. */
   void parse_config(const JsonWrapper& json);
 
+  // Binding flags
+  using bindflags_t = unsigned long;
+  struct bindflags {
+    struct types {
+      static constexpr int shift = 0;
+      // mask for type bindflags
+      static constexpr bindflags_t mask = {0xffL << shift};
+      // error or warn on unsresolvable types
+      static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+    };
+    struct classes {
+      static constexpr int shift = 2;
+      // mask for class bindflags
+      static constexpr bindflags_t mask = {0xffL << shift};
+      // error or warn on unsresolvable classes
+      static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+    };
+    struct methods {
+      static constexpr int shift = 4;
+      // mask for method bindflags
+      static constexpr bindflags_t mask = {0xffL << shift};
+      // error or warn on unsresolvable methods
+      static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      // error or warn if method is not a def
+      static constexpr bindflags_t error_if_not_def = {0x04L << shift};
+      static constexpr bindflags_t warn_if_not_def = {0x08L << shift};      
+    };
+    struct optionals {
+      static constexpr int shift = 6;
+      // mask for optional<> bindflags
+      static constexpr bindflags_t mask = {0xffL << shift};
+      // any empty string will not be bound
+      static constexpr bindflags_t skip_empty_string = {0x01L << shift};
+    };
+  };
+
   // Type aliases for convience
   using MapOfVectorOfStrings =
       std::unordered_map<std::string, std::vector<std::string>>;
@@ -148,7 +188,7 @@ class Configurable {
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  static T as(const Json::Value& value) {
+  static T as(const Json::Value& value, bindflags_t bindflags) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");
@@ -188,24 +228,29 @@ class Configurable {
   void bind(const std::string& name,
             T defaultValue,
             T& dest,
-            const std::string& doc = default_doc()) {
+            const std::string& doc = default_doc(),
+            bindflags_t bindflags = 0) {
     reflect(m_reflector, name, doc, dest);
-    parse(name, defaultValue, dest);
+    parse(name, defaultValue, dest, bindflags);
   }
 
   void bind(const std::string& name,
             const char* defaultValue,
             std::string& dest,
-            const std::string& doc = default_doc()) {
+            const std::string& doc = default_doc(),
+            bindflags_t bindflags = 0) {
     bind(name, std::string(defaultValue), dest, doc);
   }
 
  private:
   template <typename T>
-  void parse(const std::string& name, T defaultValue, T& dest) {
+  void parse(const std::string& name,
+             T defaultValue,
+             T& dest,
+             bindflags_t bindflags) {
     boost::optional<const Json::Value&> value = m_parser(name);
     if (value) {
-      dest = Configurable::as<T>(*value);
+      dest = Configurable::as<T>(*value, bindflags);
     } else {
       dest = defaultValue;
     }
@@ -229,7 +274,8 @@ class Configurable {
 
 #define DEFINE_CONFIGURABLE_PRIMITIVE(type)                                   \
   template <>                                                                 \
-  type Configurable::as<type>(const Json::Value& value);                      \
+  type Configurable::as<type>(const Json::Value& value,                       \
+                              bindflags_t bindflags);                         \
   template <>                                                                 \
   void Configurable::reflect(                                                 \
       std::function<void(                                                     \
@@ -250,11 +296,13 @@ DEFINE_CONFIGURABLE_PRIMITIVE(int64_t)
 DEFINE_CONFIGURABLE_PRIMITIVE(uint64_t)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::string)
 DEFINE_CONFIGURABLE_PRIMITIVE(Json::Value)
+DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<std::string>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
-DEFINE_CONFIGURABLE_PRIMITIVE(std::vector<DexMethod*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<const DexType*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 
