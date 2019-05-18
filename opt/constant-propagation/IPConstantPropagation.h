@@ -24,7 +24,7 @@ class PassImpl : public Pass {
     // The maximum number of times we will try to refine the WholeProgramState.
     // Setting this to zero means that all field values and return values will
     // be treated as Top.
-    size_t max_heap_analysis_iterations{0};
+    uint64_t max_heap_analysis_iterations{0};
 
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
@@ -35,17 +35,15 @@ class PassImpl : public Pass {
 
   PassImpl() : PassImpl(Config()) {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("replace_moves_with_consts",
-           false,
-           m_config.transform.replace_moves_with_consts);
-    jw.get("include_virtuals", false, m_config.include_virtuals);
-    jw.get("create_runtime_asserts", false, m_config.create_runtime_asserts);
-    int64_t max_heap_analysis_iterations;
-    jw.get("max_heap_analysis_iterations", 0, max_heap_analysis_iterations);
-    always_assert(max_heap_analysis_iterations >= 0);
-    m_config.max_heap_analysis_iterations =
-        static_cast<size_t>(max_heap_analysis_iterations);
+  void bind_config() override {
+    bind("replace_moves_with_consts",
+         false,
+         m_config.transform.replace_moves_with_consts);
+    bind("include_virtuals", false, m_config.include_virtuals);
+    bind("create_runtime_asserts", false, m_config.create_runtime_asserts);
+    bind("max_heap_analysis_iterations",
+         UINT64_C(0),
+         m_config.max_heap_analysis_iterations);
   }
 
   void run_pass(DexStoresVector& stores,
