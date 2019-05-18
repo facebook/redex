@@ -292,7 +292,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& conf) {
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->configure_pass(JsonWrapper(conf[name_str]));
+      pass->parse_config(JsonWrapper(conf[name_str]));
       return;
     }
   }

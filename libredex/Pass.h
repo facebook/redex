@@ -33,8 +33,6 @@ class Pass : public Configurable {
 
   std::string name() const { return m_name; }
 
-  virtual void configure_pass(const JsonWrapper& jw) { parse_config(jw); }
-
   std::string get_config_name() override { return name(); };
 
   /**
