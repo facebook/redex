@@ -377,3 +377,57 @@ TEST(Configurable, AfterConfiguration) {
     EXPECT_EQ(false, c.m_after_config_called);
   }
 }
+
+struct RequiredBinds : public Base {
+  RequiredBinds() {}
+  void bind_config() override {
+    bind_required("int_param", m_int_param);
+    bind_required("type_param", m_type_param, "",
+                  Configurable::bindflags::types::error_if_unresolvable);
+  }
+};
+
+TEST(Configurable, RequiredBinds) {
+  const char* type1 = "Ltype1;";
+  const char* type2 = "Ltype2;";
+  g_redex = new RedexContext();
+  DexType::make_type(type1);
+
+  {
+    // Throws because missing int_param and type_param
+    Json::Value json;
+    RequiredBinds c;
+    EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
+  }
+  {
+    // Throws because missing type_param
+    Json::Value json;
+    json["int_param"] = 1;
+    RequiredBinds c;
+    EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
+  }
+  {
+    // Throws because missing int_param
+    Json::Value json;
+    json["type_param"] = std::string(type1);
+    RequiredBinds c;
+    EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
+  }
+  {
+    // Throws because type_param doesn't resolve
+    Json::Value json;
+    json["int_param"] = 1;
+    json["type_param"] = std::string(type2);
+    RequiredBinds c;
+    EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
+  }
+  {
+    Json::Value json;
+    json["int_param"] = 1;
+    json["type_param"] = std::string(type1);
+    RequiredBinds c;
+    c.parse_config(JsonWrapper(json));
+    EXPECT_EQ(1, c.m_int_param);
+    EXPECT_EQ(DexType::get_type(type1), c.m_type_param);
+  }
+}

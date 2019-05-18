@@ -539,25 +539,14 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   }
 }
 
-void RemoveInterfacePass::configure_pass(const JsonWrapper& jw) {
-  std::vector<std::string> interface_roots;
-  jw.get("interface_roots", {}, interface_roots);
-  for (const auto& type_str : interface_roots) {
-    auto type = DexType::get_type(type_str.c_str());
-    if (type == nullptr) {
-      fprintf(stderr, "No type found for root %s\n", type_str.c_str());
-      continue;
-    }
-    m_interface_roots.emplace(type);
-  }
-  jw.get("include_primary_dex", false, m_include_primary_dex);
-  jw.get("keep_debug_info", false, m_keep_debug_info);
-  // Interface dispatch annotation.
-  std::string interface_dispatch_anno_type;
-  jw.get("interface_dispatch_anno", "", interface_dispatch_anno_type);
-  m_interface_dispatch_anno =
-      DexType::get_type(interface_dispatch_anno_type.c_str());
-  always_assert(m_interface_dispatch_anno != nullptr);
+void RemoveInterfacePass::bind_config() {
+  bind("interface_roots", {}, m_interface_roots, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("include_primary_dex", false, m_include_primary_dex);
+  bind("keep_debug_info", false, m_keep_debug_info);
+  bind_required("interface_dispatch_anno", m_interface_dispatch_anno,
+                Configurable::default_doc(),
+                Configurable::bindflags::types::error_if_unresolvable);
 }
 
 void RemoveInterfacePass::run_pass(DexStoresVector& stores,

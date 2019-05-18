@@ -160,9 +160,6 @@ class Configurable {
       // any empty string will not be bound
       static constexpr bindflags_t skip_empty_string = {0x01L << shift};
     };
-    // Not implemented yet
-    static constexpr int shift = 8;
-    static constexpr bindflags_t required = {0x00L << shift};
   };
 
   // Type aliases for convience
@@ -235,8 +232,24 @@ class Configurable {
             T& dest,
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
-    reflect(m_reflector, name, doc, dest);
-    parse(name, defaultValue, dest, bindflags);
+    if (m_reflecting) {
+      reflect(m_reflector, name, doc, dest);
+    } else {
+      parse(name, defaultValue, dest, bindflags);
+    }
+  }
+
+  template <typename T>
+  void bind_required(const std::string& name,
+                     T& dest,
+                     const std::string& doc = default_doc(),
+                     bindflags_t bindflags = 0) {
+    // TODO(T44504176): we could reflect the requiredness here
+    if (m_reflecting) {
+      reflect(m_reflector, name, doc, dest);
+    } else {
+      parse_required(name, dest, bindflags);
+    }
   }
 
   void bind(const std::string& name,
@@ -244,7 +257,7 @@ class Configurable {
             std::string& dest,
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
-    bind(name, std::string(defaultValue), dest, doc);
+    bind(name, std::string(defaultValue), dest, doc, bindflags);
   }
 
  private:
@@ -261,6 +274,19 @@ class Configurable {
     }
   }
 
+  template <typename T>
+  void parse_required(const std::string& name, T& dest, bindflags_t bindflags) {
+    boost::optional<const Json::Value&> value = m_parser(name);
+    if (value) {
+      dest = Configurable::as<T>(*value, bindflags);
+    } else {
+      always_assert_log(false,
+                        "Missing required parameter: %s.%s",
+                        get_config_name().c_str(),
+                        name.c_str());
+    }
+  }
+
  private:
   std::function<void()> m_after_configuration;
   std::function<boost::optional<const Json::Value&>(const std::string& name)>
@@ -271,6 +297,7 @@ class Configurable {
                                  ConfigurableReflection,
                                  ConfigurableReflection::Type> param_type))>
       m_reflector;
+  bool m_reflecting;
 };
 
 // Specializations for primitives

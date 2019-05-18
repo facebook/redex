@@ -35,7 +35,7 @@ class RemoveInterfacePass : public Pass {
  public:
   RemoveInterfacePass() : Pass("RemoveInterfacePass") {}
 
-  void configure_pass(const JsonWrapper& jw) override;
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

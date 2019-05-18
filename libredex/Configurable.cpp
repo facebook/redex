@@ -15,6 +15,7 @@
 
 void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
+  m_reflecting = false;
   m_reflector = [](const std::string& param_name, const std::string& param_doc,
                    std::tuple<std::string, ConfigurableReflection,
                               ConfigurableReflection::Type> param_type) {};
@@ -42,6 +43,7 @@ ConfigurableReflection Configurable::reflect() {
     return boost::optional<const Json::Value&>{};
   };
   // N.B. using std::tuple here, meant to evolve to use of std::variant w/ c++17
+  m_reflecting = true;
   m_reflector = [&cr](const std::string& param_name,
                       const std::string& param_doc,
                       std::tuple<std::string, ConfigurableReflection,
