@@ -37,20 +37,17 @@ class RenameClassesPassV2 : public Pass {
  public:
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("rename_annotations", false, m_rename_annotations);
-    jw.get("force_rename_hierarchies", {}, m_force_rename_hierarchies);
-    jw.get("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
-    jw.get("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
-    jw.get("dont_rename_annotated", {}, m_dont_rename_annotated);
-    std::vector<std::string> dont_rename_specific;
-    jw.get("dont_rename_specific", {}, dont_rename_specific);
-    m_dont_rename_specific.insert(dont_rename_specific.begin(),
-                                  dont_rename_specific.end());
-    jw.get("dont_rename_packages", {}, m_dont_rename_packages);
-    jw.get("dont_rename_types_with_reflection", {},
-           m_dont_rename_types_with_reflection);
-    jw.get("package_prefix", "", m_package_prefix);
+  void bind_config() override {
+    bind("rename_annotations", false, m_rename_annotations);
+    bind("force_rename_hierarchies", {}, m_force_rename_hierarchies);
+    bind("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
+    bind("dont_rename_hierarchies", {}, m_dont_rename_hierarchies);
+    bind("dont_rename_annotated", {}, m_dont_rename_annotated);
+    bind("dont_rename_specific", {}, m_dont_rename_specific);
+    bind("dont_rename_packages", {}, m_dont_rename_packages);
+    bind("dont_rename_types_with_reflection", {},
+         m_dont_rename_types_with_reflection);
+    bind("package_prefix", "", m_package_prefix);
   }
 
   void eval_pass(DexStoresVector& stores,

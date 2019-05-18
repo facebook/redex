@@ -13,8 +13,8 @@ class ShortenSrcStringsPass : public Pass {
  public:
   ShortenSrcStringsPass() : Pass("ShortenSrcStringsPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("filename_mappings", "filename_mappings.txt", m_filename_mappings);
+  void bind_config() override {
+    bind("filename_mappings", "filename_mappings.txt", m_filename_mappings);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
