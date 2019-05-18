@@ -70,7 +70,7 @@ class RemoveUnusedArgsPass : public Pass {
  public:
   RemoveUnusedArgsPass() : Pass("RemoveUnusedArgsPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override;
+  void bind_config() override { bind("black_list", {}, m_black_list); }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager& mgr) override;
 
  private:

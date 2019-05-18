@@ -21,6 +21,8 @@ struct Base : public Configurable {
   uint64_t m_uint64_param;
   std::string m_string_param;
   Json::Value m_json_param;
+  DexType* m_type_param;
+  DexType* m_unresolvable_type_param;
   std::vector<std::string> m_vector_of_string_param;
 };
 
@@ -74,6 +76,10 @@ struct PrimitiveBindings : public Base {
     bind("string_param", "", m_string_param);
     bind("json_param", {}, m_json_param);
     bind("vector_of_string_param", {}, m_vector_of_string_param);
+    bind("type_param", {}, m_type_param);
+    bind("unresolvable_type_param", {}, m_unresolvable_type_param,
+         Configurable::default_doc(),
+         Configurable::bindflags::types::warn_if_unresolvable);
   }
 };
 
@@ -97,6 +103,9 @@ Json::Value getFooBarObject() {
 }
 
 TEST(Configurable, PrimitiveBindings) {
+  g_redex = new RedexContext();
+  DexType::make_type("Ltype1;");
+
   Json::Value json;
   json["int_param"] = 10;
   json["float_param"] = 11.0f;
@@ -107,6 +116,8 @@ TEST(Configurable, PrimitiveBindings) {
   json["string_param"] = "a string";
   json["json_param"] = getFooBarObject();
   json["vector_of_string_param"] = getFooBarBazArray();
+  json["type_param"] = "Ltype1;";
+  json["unresolvable_type_param"] = "Ltype2;";
 
   PrimitiveBindings c;
   c.parse_config(JsonWrapper(json));
@@ -119,6 +130,8 @@ TEST(Configurable, PrimitiveBindings) {
   EXPECT_EQ("a string", c.m_string_param);
   EXPECT_EQ(getFooBarObject(), c.m_json_param);
   EXPECT_EQ(getFooBarBazVector(), c.m_vector_of_string_param);
+  EXPECT_EQ(DexType::get_type("Ltype1;"), c.m_type_param);
+  EXPECT_EQ(nullptr, c.m_unresolvable_type_param);
 }
 
 struct DefaultBindings : public Base {

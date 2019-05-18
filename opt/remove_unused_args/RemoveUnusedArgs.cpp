@@ -450,10 +450,6 @@ size_t RemoveArgs::update_callsites() {
       [](size_t a, size_t b) { return a + b; });
 }
 
-void RemoveUnusedArgsPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("black_list", {}, m_black_list);
-}
-
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
                                     ConfigFiles& /* conf */,
                                     PassManager& mgr) {

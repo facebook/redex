@@ -160,11 +160,16 @@ class Configurable {
       // any empty string will not be bound
       static constexpr bindflags_t skip_empty_string = {0x01L << shift};
     };
+    // Not implemented yet
+    static constexpr int shift = 8;
+    static constexpr bindflags_t required = {0x00L << shift};
   };
 
   // Type aliases for convience
   using MapOfVectorOfStrings =
       std::unordered_map<std::string, std::vector<std::string>>;
+
+  static constexpr const char* default_doc() { return "TODO: Document this"; }
 
  protected:
   /**
@@ -266,8 +271,6 @@ class Configurable {
                                  ConfigurableReflection,
                                  ConfigurableReflection::Type> param_type))>
       m_reflector;
-
-  static constexpr const char* default_doc() { return "TODO: Document this"; }
 };
 
 // Specializations for primitives
@@ -296,6 +299,7 @@ DEFINE_CONFIGURABLE_PRIMITIVE(long)
 DEFINE_CONFIGURABLE_PRIMITIVE(unsigned long)
 DEFINE_CONFIGURABLE_PRIMITIVE(long long)
 DEFINE_CONFIGURABLE_PRIMITIVE(unsigned long long)
+DEFINE_CONFIGURABLE_PRIMITIVE(DexType*)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::string)
 DEFINE_CONFIGURABLE_PRIMITIVE(Json::Value)
 DEFINE_CONFIGURABLE_PRIMITIVE(boost::optional<std::string>)

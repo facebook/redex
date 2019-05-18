@@ -171,6 +171,22 @@ Configurable::as<std::unordered_set<std::string>>(const Json::Value& value,
 }
 
 template <>
+DexType* Configurable::as<DexType*>(const Json::Value& value,
+                                    bindflags_t bindflags) {
+  assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
+             "Only type bindflags may be specified for a DexType*");
+  auto type = DexType::get_type(value.asString());
+  if (type == nullptr) {
+      error_or_warn(
+        bindflags & Configurable::bindflags::types::error_if_unresolvable,
+        bindflags & Configurable::bindflags::types::warn_if_unresolvable,
+        "\"%s\" failed to resolve to a known type", value.asString().c_str()
+      );
+  }
+  return type;
+}
+
+template <>
 std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
@@ -361,6 +377,7 @@ IMPLEMENT_REFLECTOR_EX(long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long, "long")
 IMPLEMENT_REFLECTOR_EX(long long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long long, "long")
+IMPLEMENT_REFLECTOR_EX(DexType*, "string")
 IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
 IMPLEMENT_REFLECTOR_EX(boost::optional<std::string>, "string")

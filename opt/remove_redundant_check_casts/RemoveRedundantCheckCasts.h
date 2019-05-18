@@ -15,7 +15,6 @@ class RemoveRedundantCheckCastsPass : public Pass {
  public:
   RemoveRedundantCheckCastsPass() : Pass("RemoveRedundantCheckCastsPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override{};
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
 
