@@ -11,6 +11,7 @@
 #include <boost/concept_check.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <unordered_map>
 
 using namespace sparta;
 
@@ -43,4 +44,20 @@ TEST(PatriciaTreeMapTest, basicOperations) {
   EXPECT_EQ(m1.at(17), default_value);
 
   EXPECT_EQ(m1.at(1000000), default_value);
+}
+
+TEST(PatriciaTreeMapTest, mapOfUnsignedInt64) {
+  PatriciaTreeMap<uint64_t, std::string> m;
+  std::unordered_map<uint64_t, std::string> entries = {
+      {0, "zero"}, {1, "one"}, {2, "two"}, {10, "ten"}, {4000000000, "many"}};
+
+  for (auto e : entries) {
+    m.insert_or_assign(e.first, e.second);
+  }
+  EXPECT_EQ(entries.size(), m.size());
+  for (auto e : m) {
+    auto it = entries.find(e.first);
+    EXPECT_NE(entries.end(), it);
+    EXPECT_EQ(it->second, e.second);
+  }
 }

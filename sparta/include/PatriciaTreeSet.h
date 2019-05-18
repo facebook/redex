@@ -274,37 +274,37 @@ class PatriciaTreeSet final {
   // manipulating sets of pointers. The first parameter is necessary to make
   // template deduction work.
   template <typename T = Element,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static uintptr_t encode(Element x) {
     return reinterpret_cast<uintptr_t>(x);
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Element encode(Element x) {
     return x;
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static Element decode(uintptr_t x) {
     return reinterpret_cast<Element>(x);
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Element decode(Element x) {
     return x;
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static const typename std::remove_pointer<T>::type& deref(Element x) {
     return *x;
   }
 
   template <typename T = Element,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Element deref(Element x) {
     return x;
   }

@@ -315,37 +315,37 @@ class PatriciaTreeMap final {
   // manipulating maps with pointer keys. The first parameter is necessary to
   // make template deduction work.
   template <typename T = Key,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static uintptr_t encode(Key x) {
     return reinterpret_cast<uintptr_t>(x);
   }
 
   template <typename T = Key,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Key encode(Key x) {
     return x;
   }
 
   template <typename T = Key,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static Key decode(uintptr_t x) {
     return reinterpret_cast<Key>(x);
   }
 
   template <typename T = Key,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Key decode(Key x) {
     return x;
   }
 
   template <typename T = Key,
-            typename = typename std::enable_if_t<std::is_pointer<T>::value>>
+            typename std::enable_if_t<std::is_pointer<T>::value, int> = 0>
   static const typename std::remove_pointer<T>::type& deref(Key x) {
     return *x;
   }
 
   template <typename T = Key,
-            typename = typename std::enable_if_t<!std::is_pointer<T>::value>>
+            typename std::enable_if_t<!std::is_pointer<T>::value, int> = 0>
   static Key deref(Key x) {
     return x;
   }
