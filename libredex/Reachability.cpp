@@ -469,27 +469,6 @@ void TransitiveClosureMarker::record_reachability(Parent* parent,
   }
 }
 
-IgnoreSets::IgnoreSets(const JsonWrapper& jw) {
-  auto parse_type_list = [&jw](const char* key,
-                               std::unordered_set<const DexType*>* type_list) {
-    std::vector<std::string> strs;
-    jw.get(key, {}, strs);
-    for (auto s : strs) {
-      auto type = DexType::get_type(s);
-      if (type != nullptr) {
-        type_list->insert(type);
-      }
-    }
-  };
-  parse_type_list("ignore_string_literals", &string_literals);
-  parse_type_list("ignore_string_literal_annos", &string_literal_annos);
-  parse_type_list("ignore_system_annos", &system_annos);
-
-  // To keep the backward compatability of this code, ensure that the
-  // "MemberClasses" annotation is always in system_annos.
-  system_annos.emplace(DexType::get_type("Ldalvik/annotation/MemberClasses;"));
-}
-
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
     const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,

@@ -91,6 +91,20 @@ unsigned int Configurable::as<unsigned int>(const Json::Value& value,
 }
 
 template <>
+boost::optional<int> Configurable::as<boost::optional<int>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned int);
+  return value.asInt();
+}
+
+template <>
+boost::optional<unsigned int> Configurable::as<boost::optional<unsigned int>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned int);
+  return value.asUInt();
+}
+
+template <>
 long Configurable::as<long>(const Json::Value& value,
                                   bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(long);
@@ -100,6 +114,20 @@ long Configurable::as<long>(const Json::Value& value,
 template <>
 unsigned long Configurable::as<unsigned long>(const Json::Value& value,
                                     bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned long);
+  return value.asUInt64();
+}
+
+template <>
+boost::optional<long> Configurable::as<boost::optional<long>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(unsigned long);
+  return value.asInt64();
+}
+
+template <>
+boost::optional<unsigned long> Configurable::as<boost::optional<unsigned long>>(
+    const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned long);
   return value.asUInt64();
 }
@@ -373,6 +401,8 @@ IMPLEMENT_REFLECTOR(float)
 IMPLEMENT_REFLECTOR(bool)
 IMPLEMENT_REFLECTOR_EX(int, "int")
 IMPLEMENT_REFLECTOR_EX(unsigned int, "int")
+IMPLEMENT_REFLECTOR_EX(boost::optional<int>, "int")
+IMPLEMENT_REFLECTOR_EX(boost::optional<unsigned int>, "int")
 IMPLEMENT_REFLECTOR_EX(long, "long")
 IMPLEMENT_REFLECTOR_EX(unsigned long, "long")
 IMPLEMENT_REFLECTOR_EX(long long, "long")

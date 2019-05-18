@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <boost/optional.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -24,6 +25,8 @@ struct Base : public Configurable {
   DexType* m_type_param;
   DexType* m_unresolvable_type_param;
   std::vector<std::string> m_vector_of_string_param;
+  boost::optional<uint32_t> m_optional_uint32;
+  boost::optional<std::string> m_optional_string;
 };
 
 struct BadBindFlags : public Base {
@@ -62,6 +65,45 @@ TEST(Configurable, BadBindFlags) {
     BadBindFlags bbf;
     bbf.parse_config(JsonWrapper(json));
     EXPECT_EQ(10, bbf.m_int_param);
+  }
+}
+
+struct OptionalBindings : public Base {
+  OptionalBindings(bindflags_t optional_string_bindflags) {
+    m_optional_string_bindflags = optional_string_bindflags;
+  }
+  void bind_config() override {
+    bind("optional_uint32_param", {}, m_optional_uint32);
+    bind("optional_string_param", {}, m_optional_string, "",
+         m_optional_string_bindflags);
+  }
+  bindflags_t m_optional_string_bindflags;
+};
+
+TEST(Configurable, OptionalBindings) {
+  {
+    Json::Value json;
+    OptionalBindings c(0);
+    c.parse_config(JsonWrapper(json));
+    EXPECT_EQ(false, (bool)c.m_optional_uint32);
+    EXPECT_EQ(false, (bool)c.m_optional_string);
+  }
+  {
+    Json::Value json;
+    json["optional_string_param"] = "";
+    OptionalBindings c(0);
+    c.parse_config(JsonWrapper(json));
+    EXPECT_EQ(false, (bool)c.m_optional_uint32);
+    EXPECT_EQ(true, (bool)c.m_optional_string);
+    EXPECT_EQ("", *(c.m_optional_string));
+  }
+  {
+    Json::Value json;
+    json["optional_string_param"] = "";
+    OptionalBindings c(Configurable::bindflags::optionals::skip_empty_string);
+    c.parse_config(JsonWrapper(json));
+    EXPECT_EQ(false, (bool)c.m_optional_uint32);
+    EXPECT_EQ(false, (bool)c.m_optional_string);
   }
 }
 

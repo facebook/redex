@@ -73,7 +73,6 @@ struct ReachableObjectHash {
 
 struct IgnoreSets {
   IgnoreSets() = default;
-  IgnoreSets(const JsonWrapper&);
   std::unordered_set<const DexType*> string_literals;
   std::unordered_set<const DexType*> string_literal_annos;
   std::unordered_set<const DexType*> system_annos;
