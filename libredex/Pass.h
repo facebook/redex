@@ -7,19 +7,21 @@
 
 #pragma once
 
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <json/json.h>
 #include <string>
 #include <vector>
-#include <json/json.h>
-#include <iostream>
-#include <algorithm>
 
-#include "DexStore.h"
 #include "ConfigFiles.h"
+#include "Configurable.h"
+#include "DexStore.h"
 #include "PassRegistry.h"
 
 class PassManager;
 
-class Pass {
+class Pass : public Configurable {
  public:
 
   Pass(const std::string& name)
@@ -31,7 +33,9 @@ class Pass {
 
   std::string name() const { return m_name; }
 
-  virtual void configure_pass(const JsonWrapper&) {}
+  virtual void configure_pass(const JsonWrapper& jw) { parse_config(jw); }
+
+  std::string get_config_name() override { return name(); };
 
   /**
    * All passes' eval_pass are run, and then all passes' run_pass are run. This allows each

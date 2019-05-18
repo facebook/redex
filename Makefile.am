@@ -112,6 +112,7 @@ libredex_la_SOURCES = \
 	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
+	libredex/Configurable.cpp \
 	libredex/Creators.cpp \
 	libredex/ControlFlow.cpp \
 	libredex/Debug.cpp \
@@ -133,6 +134,7 @@ libredex_la_SOURCES = \
 	libredex/DexStoreUtil.cpp \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
+	libredex/GlobalConfig.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
 	libredex/Inliner.cpp \
@@ -147,6 +149,7 @@ libredex_la_SOURCES = \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
+	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \

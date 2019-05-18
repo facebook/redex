@@ -35,6 +35,7 @@
 #include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "GlobalConfig.h"
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
@@ -154,6 +155,34 @@ Json::Value default_config() {
   return cfg;
 }
 
+Json::Value reflect_config(const ConfigurableReflection& cr) {
+  Json::Value params = Json::arrayValue;
+  int params_idx = 0;
+  for (auto& entry : cr.params) {
+    Json::Value param;
+    param["name"] = entry.first;
+    switch (std::get<2>(entry.second)) {
+    case ConfigurableReflection::Type::PRIMITIVE:
+      param["type"] = std::get<0>(entry.second);
+      break;
+    case ConfigurableReflection::Type::COMPOSITE:
+      param["type"] = reflect_config(std::get<1>(entry.second));
+      break;
+    default:
+      always_assert_log(false, "Invalid ConfigurableReflection::Type: %d",
+                        std::get<2>(entry.second));
+      break;
+    }
+    param["doc"] = std::get<3>(entry.second);
+    params[params_idx++] = param;
+  }
+  Json::Value reflected_config;
+  reflected_config["name"] = cr.name;
+  reflected_config["doc"] = cr.doc;
+  reflected_config["params"] = params;
+  return reflected_config;
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -162,6 +191,8 @@ Arguments parse_args(int argc, char* argv[]) {
   namespace po = boost::program_options;
   po::options_description od(k_usage_header);
   od.add_options()("help,h", "print this help message");
+  od.add_options()("reflect-config",
+                   "print a reflection of the config and exit");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
@@ -264,6 +295,25 @@ Arguments parse_args(int argc, char* argv[]) {
   // -h, --help handling must be the first.
   if (vm.count("help")) {
     od.print(std::cout);
+    exit(EXIT_SUCCESS);
+  }
+
+  // --reflect-config handling must be next
+  if (vm.count("reflect-config")) {
+    Json::Value reflected_config;
+
+    GlobalConfig gc;
+    reflected_config["global"] = reflect_config(gc.reflect());
+
+    Json::Value pass_configs = Json::arrayValue;
+    const auto& passes = PassRegistry::get().get_passes();
+    for (size_t i = 0; i < passes.size(); ++i) {
+      auto& pass = passes[i];
+      pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
+    }
+    reflected_config["passes"] = pass_configs;
+    Json::StyledStreamWriter writer;
+    writer.write(std::cout, reflected_config);
     exit(EXIT_SUCCESS);
   }
 
