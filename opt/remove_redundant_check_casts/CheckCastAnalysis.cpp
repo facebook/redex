@@ -34,8 +34,12 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
     if (insn->opcode() != OPCODE_CHECK_CAST) {
       continue;
     }
-    auto dex_type = envs.at(insn).get_dex_type(insn->src(0));
-    if (dex_type && check_cast(*dex_type, insn->get_type())) {
+    auto reg = insn->src(0);
+    auto& env = envs.at(insn);
+    auto type = env.get_type(reg);
+    auto dex_type = env.get_dex_type(reg);
+    if (type.equals(type_inference::TypeDomain(ZERO)) ||
+        (dex_type && check_cast(*dex_type, insn->get_type()))) {
       auto src = insn->src(0);
       auto it = code->iterator_to(mie);
       auto dst = ir_list::move_result_pseudo_of(it)->dest();
