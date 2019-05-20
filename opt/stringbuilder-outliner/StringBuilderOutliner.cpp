@@ -164,7 +164,7 @@ BuilderStateMap Outliner::gather_builder_states(
         if (!state_opt) {
           TRACE(STRBUILD, 5, "Did not get state for %s\n", SHOW(insn));
         } else {
-          tostring_instruction_to_state.emplace(insn, *state_opt);
+          tostring_instruction_to_state.emplace_back(insn, *state_opt);
         }
       }
       fp_iter.analyze_instruction(insn, &env);

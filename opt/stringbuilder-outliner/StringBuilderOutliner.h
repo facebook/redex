@@ -186,7 +186,8 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
 
 using InstructionSet = std::unordered_set<const IRInstruction*>;
 
-using BuilderStateMap = std::unordered_map<const IRInstruction*, BuilderState>;
+using BuilderStateMap =
+    std::vector<std::pair<const IRInstruction*, BuilderState>>;
 
 struct Config {
   size_t max_outline_length{9};
