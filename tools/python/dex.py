@@ -626,7 +626,7 @@ class debug_info_item(AutoParser):
     class row(object):
         def __init__(self):
             self.address = 0
-            self.line = 1
+            self.line = 0
             self.source_file = -1
             self.prologue_end = False
             self.epilogue_begin = False
