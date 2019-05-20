@@ -538,6 +538,7 @@ class CodeTransformer final {
         extract_candidate_enum_type(env.get(insn->src(0)));
     if (m_enum_attrs.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
+      candidate_type = container;
     } else if (!candidate_type) {
       return;
     }
