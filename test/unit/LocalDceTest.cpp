@@ -189,3 +189,27 @@ TEST_F(LocalDceTryTest, deadIf) {
   // the if should be gone
   EXPECT_FALSE(has_if);
 }
+
+TEST_F(LocalDceTryTest, deadCast) {
+  // setup
+  using namespace dex_asm;
+
+  auto check_cast_mie = new MethodItemEntry(
+      dasm(OPCODE_CHECK_CAST, DexType::make_type("Ljava/lang/Void;"), {0_v}));
+  IRCode* code = m_method->get_code();
+  code->push_back(dasm(OPCODE_CONST, {0_v, 0_L}));
+  code->push_back(*check_cast_mie); // branch to target1
+  code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
+  code->push_back(dasm(OPCODE_RETURN_VOID));
+  code->set_registers_size(1);
+
+  fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
+  LocalDcePass().run(code);
+  auto has_check_cast = std::find_if(code->begin(), code->end(),
+                                     [check_cast_mie](MethodItemEntry& mie) {
+                                       return &mie == check_cast_mie;
+                                     }) != code->end();
+
+  // the if should be gone
+  EXPECT_FALSE(has_check_cast);
+}

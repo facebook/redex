@@ -42,7 +42,6 @@ static bool has_side_effects(IROpcode opc) {
   case OPCODE_RETURN_OBJECT:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
-  case OPCODE_CHECK_CAST:
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_THROW:
   case OPCODE_GOTO:
