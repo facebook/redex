@@ -562,7 +562,7 @@ class debug_info_op(AutoParser):
         if self.op >= DBG_FIRST_SPECIAL:
             adjusted_opcode = int(self.op) - DBG_FIRST_SPECIAL
             line_offset = DBG_LINE_BASE + (adjusted_opcode % DBG_LINE_RANGE)
-            addr_offset = (adjusted_opcode / DBG_LINE_RANGE)
+            addr_offset = int(adjusted_opcode / DBG_LINE_RANGE)
             setattr(self, 'line_offset', line_offset)
             setattr(self, 'addr_offset', addr_offset)
         setattr(self, 'byte_size', data.tell() - self.get_offset())
