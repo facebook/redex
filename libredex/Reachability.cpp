@@ -322,7 +322,7 @@ References TransitiveClosureMarker::gather(const DexField* field) const {
 void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   auto* type = meth->get_class();
   auto* cls = type_class(type);
-  bool check_strings = true;
+  bool check_strings = m_ignore_sets.keep_class_in_string;
   if (m_ignore_sets.string_literals.count(type)) {
     ++m_worker_state->get_data()->num_ignore_check_strings;
     check_strings = false;

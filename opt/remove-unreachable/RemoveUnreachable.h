@@ -25,6 +25,7 @@ class RemoveUnreachablePass : public Pass {
     bind("ignore_system_annos",
          {},
          m_ignore_sets.system_annos);
+    bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
     after_configuration([this] {
       // To keep the backward compatability of this code, ensure that the
       // "MemberClasses" annotation is always in system_annos.
