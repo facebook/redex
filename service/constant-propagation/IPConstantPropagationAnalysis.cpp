@@ -36,18 +36,25 @@ void FixpointIterator::analyze_node(DexMethod* const& method,
   }
   auto& cfg = code->cfg();
   auto intra_cp = get_intraprocedural_analysis(method);
-
+  const auto outgoing_edges =
+      call_graph::GraphInterface::successors(m_call_graph, method);
+  std::unordered_set<IRInstruction*> outgoing_insns;
+  for (const auto edge : outgoing_edges) {
+    outgoing_insns.emplace(edge->invoke_iterator()->insn);
+  }
   for (auto* block : cfg.blocks()) {
     auto state = intra_cp->get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       auto* insn = mie.insn;
       auto op = insn->opcode();
-      if (op == OPCODE_INVOKE_DIRECT || op == OPCODE_INVOKE_STATIC) {
-        ArgumentDomain out_args;
-        for (size_t i = 0; i < insn->srcs_size(); ++i) {
-          out_args.set(i, state.get(insn->src(i)));
+      if (insn->has_method()) {
+        if (outgoing_insns.count(insn)) {
+          ArgumentDomain out_args;
+          for (size_t i = 0; i < insn->srcs_size(); ++i) {
+            out_args.set(i, state.get(insn->src(i)));
+          }
+          current_state->set(insn, out_args);
         }
-        current_state->set(insn, out_args);
       }
       intra_cp->analyze_instruction(insn, &state);
     }

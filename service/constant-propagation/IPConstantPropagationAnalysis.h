@@ -71,7 +71,8 @@ class FixpointIterator
   FixpointIterator(const call_graph::Graph& call_graph,
                    const ProcedureAnalysisFactory& proc_analysis_factory)
       : MonotonicFixpointIterator(call_graph),
-        m_proc_analysis_factory(proc_analysis_factory) {
+        m_proc_analysis_factory(proc_analysis_factory),
+        m_call_graph(call_graph) {
     auto wps = new WholeProgramState();
     wps->set_to_top();
     m_wps.reset(wps);
@@ -95,6 +96,7 @@ class FixpointIterator
  private:
   std::unique_ptr<const WholeProgramState> m_wps;
   ProcedureAnalysisFactory m_proc_analysis_factory;
+  call_graph::Graph m_call_graph;
 };
 
 } // namespace interprocedural
