@@ -142,7 +142,6 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
 
   // Traverse the tree in an depth first order so that the extra loads are
   // tracked in the same order that they will be executed at runtime
-  std::unordered_map<cfg::Block*, uint16_t> visit_count;
   std::unordered_set<cfg::Block*> non_leaves;
   std::function<bool(cfg::Block*, InstructionSet)> recurse;
   std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move;
@@ -151,7 +150,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
     for (cfg::Edge* succ : b->succs()) {
       cfg::Block* next = succ->target();
 
-      uint16_t count = ++visit_count[next];
+      uint16_t count = ++m_visit_count[next];
       if (count > next->preds().size()) {
         // Infinite loop. Bail
         TRACE(SWITCH_EQUIV, 2, "Failure Reason: Detected loop\n");
@@ -246,7 +245,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   if (!m_extra_loads.empty()) {
     // Make sure there are no other ways to reach the leaf nodes. If there were
     // other ways to reach them, m_extra_loads would be incorrect.
-    for (const auto& block_and_count : visit_count) {
+    for (const auto& block_and_count : m_visit_count) {
       cfg::Block* b = block_and_count.first;
       uint16_t count = block_and_count.second;
       if (b->preds().size() > count) {

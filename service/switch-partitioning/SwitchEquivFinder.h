@@ -40,6 +40,13 @@ class SwitchEquivFinder final {
   bool success() const { return m_success; }
   const KeyToCase& key_to_case() const { return m_key_to_case; }
   const ExtraLoads& extra_loads() const { return m_extra_loads; }
+  const std::vector<cfg::Block*> visited_blocks() const {
+    std::vector<cfg::Block*> result;
+    for (auto entry : m_visit_count) {
+      result.emplace_back(entry.first);
+    }
+    return result;
+  }
 
  private:
   std::vector<cfg::Edge*> find_leaves();
@@ -84,4 +91,7 @@ class SwitchEquivFinder final {
   // keyed by the destination register so that values can be overwritten and
   // iterated in a deterministic order
   ExtraLoads m_extra_loads;
+
+  // This stores the blocks visited and how many times in building m_key_to_case
+  std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
 };

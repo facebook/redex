@@ -52,6 +52,7 @@
   TM(GETTER)         \
   TM(INL)            \
   TM(INLRES)         \
+  TM(INTRO_SWITCH)   \
   TM(INSTRUMENT)     \
   TM(INTF)           \
   TM(BLD_PATTERN)    \
