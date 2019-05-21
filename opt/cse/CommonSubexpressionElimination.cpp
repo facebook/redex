@@ -280,7 +280,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    if (induces_barrier(insn)) {
+    if (m_shared_state->is_barrier(insn)) {
       auto b = make_barrier(insn);
       m_shared_state->log_barrier(b);
 
@@ -457,7 +457,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       is_positional = true;
       break;
     default:
-      is_positional = induces_barrier(insn);
+      is_positional = m_shared_state->is_barrier(insn);
       break;
     }
     if (is_positional) {
@@ -476,51 +476,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       value.data = insn->get_data();
     }
     return value;
-  }
-
-  bool induces_barrier(const IRInstruction* insn) const {
-    switch (insn->opcode()) {
-    case OPCODE_MONITOR_ENTER:
-    case OPCODE_MONITOR_EXIT:
-    case OPCODE_FILL_ARRAY_DATA:
-    case OPCODE_APUT:
-    case OPCODE_APUT_WIDE:
-    case OPCODE_APUT_OBJECT:
-    case OPCODE_APUT_BOOLEAN:
-    case OPCODE_APUT_BYTE:
-    case OPCODE_APUT_CHAR:
-    case OPCODE_APUT_SHORT:
-    case OPCODE_IPUT:
-    case OPCODE_IPUT_WIDE:
-    case OPCODE_IPUT_OBJECT:
-    case OPCODE_IPUT_BOOLEAN:
-    case OPCODE_IPUT_BYTE:
-    case OPCODE_IPUT_CHAR:
-    case OPCODE_IPUT_SHORT:
-    case OPCODE_SPUT:
-    case OPCODE_SPUT_WIDE:
-    case OPCODE_SPUT_OBJECT:
-    case OPCODE_SPUT_BOOLEAN:
-    case OPCODE_SPUT_BYTE:
-    case OPCODE_SPUT_CHAR:
-    case OPCODE_SPUT_SHORT:
-      return true;
-    case OPCODE_INVOKE_VIRTUAL:
-    case OPCODE_INVOKE_SUPER:
-    case OPCODE_INVOKE_DIRECT:
-    case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_INTERFACE:
-      return m_shared_state->is_invoke_a_barrier(insn);
-    default:
-      if (insn->has_field()) {
-        auto field_ref = insn->get_field();
-        DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
-                                                       ? FieldSearch::Static
-                                                       : FieldSearch::Instance);
-        return field == nullptr || is_volatile(field);
-      }
-      return false;
-    }
   }
 
   CommonSubexpressionElimination::SharedState* m_shared_state;
@@ -714,20 +669,127 @@ CommonSubexpressionElimination::SharedState::SharedState() {
   }
 }
 
-bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
+void CommonSubexpressionElimination::SharedState::init_method_barriers(
+    const Scope& scope) {
+  ConcurrentMap<DexMethod*, std::vector<Barrier>> method_barriers;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+    code.build_cfg(/* editable */ true);
+    method_barriers.emplace(method, compute_barriers(code.cfg()));
+  });
+  std::copy(method_barriers.begin(), method_barriers.end(),
+            std::inserter(m_method_barriers, m_method_barriers.end()));
+}
+
+std::vector<CommonSubexpressionElimination::Barrier>
+CommonSubexpressionElimination::SharedState::compute_barriers(
+    cfg::ControlFlowGraph& cfg) {
+  std::unordered_set<Barrier, BarrierHasher> barriers;
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
+    if (may_be_barrier(insn)) {
+      barriers.insert(make_barrier(insn));
+    }
+  }
+  std::vector<Barrier> result(barriers.begin(), barriers.end());
+  return result;
+}
+
+bool CommonSubexpressionElimination::SharedState::may_be_barrier(
+    const IRInstruction* insn) {
+  switch (insn->opcode()) {
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_APUT:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_OBJECT:
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_SPUT:
+  case OPCODE_SPUT_WIDE:
+  case OPCODE_SPUT_OBJECT:
+  case OPCODE_SPUT_BOOLEAN:
+  case OPCODE_SPUT_BYTE:
+  case OPCODE_SPUT_CHAR:
+  case OPCODE_SPUT_SHORT:
+    return true;
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_DIRECT:
+  case OPCODE_INVOKE_STATIC:
+  case OPCODE_INVOKE_INTERFACE:
+    return !is_invoke_safe(insn);
+  default:
+    if (insn->has_field()) {
+      auto field_ref = insn->get_field();
+      DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
+                                                     ? FieldSearch::Static
+                                                     : FieldSearch::Instance);
+      return field == nullptr || is_volatile(field);
+    }
+    return false;
+  }
+}
+
+bool CommonSubexpressionElimination::SharedState::is_barrier(
+    const IRInstruction* insn) {
+  if (!may_be_barrier(insn)) {
+    return false;
+  }
+
+  if (is_invoke(insn->opcode())) {
+    return is_invoke_a_barrier(insn);
+  }
+
+  return true;
+}
+
+bool CommonSubexpressionElimination::SharedState::is_invoke_safe(
     const IRInstruction* insn) {
   always_assert(is_invoke(insn->opcode()));
   auto method_ref = insn->get_method();
   auto opcode = insn->opcode();
+
   if (opcode == OPCODE_INVOKE_STATIC &&
       m_safe_types.count(method_ref->get_class())) {
-    return false;
+    return true;
   }
+
   if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT ||
        opcode == OPCODE_INVOKE_VIRTUAL) &&
       m_safe_methods.count(method_ref)) {
-    return false;
+    return true;
   }
+
+  return false;
+}
+
+bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
+    const IRInstruction* insn) {
+  always_assert(is_invoke(insn->opcode()));
+
+  auto opcode = insn->opcode();
+  if (opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) {
+    auto method_ref = insn->get_method();
+    DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+    if (method != nullptr) {
+      auto it = m_method_barriers.find(method);
+      if (it != m_method_barriers.end()) {
+        auto& barriers = it->second;
+        return barriers.size() > 0;
+      }
+    }
+  }
+
   return true;
 }
 
@@ -896,8 +958,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   ConfigFiles& /* conf */,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
-  auto shared_state = CommonSubexpressionElimination::SharedState();
 
+  auto shared_state = CommonSubexpressionElimination::SharedState();
+  shared_state.init_method_barriers(scope);
   const auto stats =
       walk::parallel::reduce_methods<CommonSubexpressionElimination::Stats>(
           scope,
@@ -908,7 +971,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
             }
 
             TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
-            code->build_cfg(/* editable */ true);
             CommonSubexpressionElimination cse(&shared_state, code->cfg());
             bool any_changes = cse.patch(is_static(method), method->get_class(),
                                          method->get_proto()->get_args());

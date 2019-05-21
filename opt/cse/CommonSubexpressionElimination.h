@@ -36,14 +36,20 @@ class CommonSubexpressionElimination {
   class SharedState {
    public:
     SharedState();
-    bool is_invoke_a_barrier(const IRInstruction* insn);
+    void init_method_barriers(const Scope&);
+    bool is_barrier(const IRInstruction* insn);
     void log_barrier(const Barrier& barrier);
     void cleanup();
 
    private:
+    std::vector<Barrier> compute_barriers(cfg::ControlFlowGraph&);
+    bool may_be_barrier(const IRInstruction* insn);
+    bool is_invoke_safe(const IRInstruction* insn);
+    bool is_invoke_a_barrier(const IRInstruction* insn);
     std::unordered_set<DexMethodRef*> m_safe_methods;
     std::unordered_set<DexType*> m_safe_types;
     std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
+    std::unordered_map<DexMethod*, std::vector<Barrier>> m_method_barriers;
   };
 
   CommonSubexpressionElimination(SharedState* shared_state,

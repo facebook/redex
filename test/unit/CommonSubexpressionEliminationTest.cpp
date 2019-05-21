@@ -9,18 +9,22 @@
 
 #include "CommonSubexpressionElimination.h"
 #include "ControlFlow.h"
+#include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
 
 class CommonSubexpressionEliminationTest : public RedexTest {};
 
-void test(const std::string& code_str,
+void test(const Scope& scope,
+          const std::string& code_str,
           const std::string& expected_str,
           size_t expected_instructions_eliminated) {
-
   auto field_a = static_cast<DexField*>(DexField::make_field("LFoo;.a:I"));
   field_a->make_concrete(ACC_PUBLIC);
+
+  auto field_b = static_cast<DexField*>(DexField::make_field("LFoo;.b:I"));
+  field_b->make_concrete(ACC_PUBLIC);
 
   auto field_v = static_cast<DexField*>(DexField::make_field("LFoo;.v:I"));
   field_v->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
@@ -30,6 +34,7 @@ void test(const std::string& code_str,
 
   code.get()->build_cfg(/* editable */ true);
   CommonSubexpressionElimination::SharedState shared_state;
+  shared_state.init_method_barriers(scope);
   CommonSubexpressionElimination cse(&shared_state, code.get()->cfg());
   bool is_static = true;
   DexType* declaring_type = nullptr;
@@ -63,7 +68,7 @@ TEST_F(CommonSubexpressionEliminationTest, simple) {
       (move v2 v3)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, pre_values) {
@@ -84,7 +89,7 @@ TEST_F(CommonSubexpressionEliminationTest, pre_values) {
       (move v2 v3)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, many) {
@@ -107,7 +112,7 @@ TEST_F(CommonSubexpressionEliminationTest, many) {
       (move v3 v4)
     )
   )";
-  test(code_str, expected_str, 2);
+  test(Scope{}, code_str, expected_str, 2);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
@@ -129,7 +134,7 @@ TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
       (move v3 v4)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, commutative) {
@@ -151,7 +156,7 @@ TEST_F(CommonSubexpressionEliminationTest, commutative) {
       (move v3 v4)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wide) {
@@ -171,7 +176,7 @@ TEST_F(CommonSubexpressionEliminationTest, wide) {
       (move-wide v4 v6)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, object) {
@@ -193,7 +198,7 @@ TEST_F(CommonSubexpressionEliminationTest, object) {
       (move-object v1 v2)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget) {
@@ -217,7 +222,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget) {
       (move v2 v3)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
@@ -231,7 +236,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
     )
   )";
   auto expected_str = code_str;
-  test(code_str, expected_str, 0);
+  test(Scope{}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
@@ -246,7 +251,7 @@ TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
     )
   )";
   auto expected_str = code_str;
-  test(code_str, expected_str, 0);
+  test(Scope{}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
@@ -272,7 +277,7 @@ TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
       (move v2 v3)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
@@ -304,7 +309,7 @@ TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
       (move v3 v4)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
@@ -328,7 +333,7 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
       (move-object v1 v2)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
@@ -352,5 +357,75 @@ TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
       (move v3 v4)
     )
   )";
-  test(code_str, expected_str, 1);
+  test(Scope{}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       empty_static_methods_are_not_barriers) {
+  ClassCreator creator(DexType::make_type("LTest1;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest1;.test1:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LTest1;.test1:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static () "LTest1;.test1:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+
+  test(Scope{creator.create()}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_some_barrier) {
+  ClassCreator creator(DexType::make_type("LTest2;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest2;.test2:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.b:I")
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LTest2;.test2:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = code_str;
+
+  test(Scope{creator.create()}, code_str, expected_str, 0);
 }
