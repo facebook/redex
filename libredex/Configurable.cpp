@@ -9,9 +9,11 @@
 
 #include "DexClass.h"
 
-#define error_or_warn(error, warn, msg, ...) \
+#define error_or_warn(error, warn, msg, ...)       \
   always_assert_log(!(error), msg, ##__VA_ARGS__); \
-  if (!(warn)) { fprintf(stderr, msg, ##__VA_ARGS__); }
+  if (warn) {                                      \
+    fprintf(stderr, msg, ##__VA_ARGS__);           \
+  }
 
 void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
