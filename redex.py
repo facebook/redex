@@ -873,6 +873,8 @@ def finalize_redex(state):
                          'iodi metadata', 'iodi-metadata')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'graphql_dead_queries.txt',
                          'dead graphql queries', 'graphql_dead_queries.txt')
+
+    copy_all_file_to_out_dir(state.dex_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
