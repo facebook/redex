@@ -997,8 +997,8 @@ int main(int argc, char* argv[]) {
                                     stores, args.entry_data);
     }
 
-    std::string stats_output_path =
-        cfg.metafile(args.config.get("stats_output", "").asString());
+    std::string stats_output_path = cfg.metafile(
+        args.config.get("stats_output", "redex-stats.txt").asString());
     {
       std::ofstream out(stats_output_path);
       Json::StyledStreamWriter writer;
