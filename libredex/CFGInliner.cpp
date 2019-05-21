@@ -115,9 +115,9 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
 
   // The call is already the last instruction of the block.
   // No need to change the code, just return the next block
-  Edge* goto_edge = caller->get_succ_edge_of_type(old_block, EDGE_GOTO);
-  always_assert(goto_edge != nullptr);
-  return goto_edge->target();
+  Block* goto_block = old_block->goes_to();
+  always_assert(goto_block != nullptr);
+  return goto_block;
 }
 
 /*

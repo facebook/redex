@@ -317,7 +317,15 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
-Block* Block::follow_goto() const {
+Block* Block::goes_to() const {
+  const Edge* e = m_parent->get_succ_edge_of_type(this, EDGE_GOTO);
+  if (e != nullptr) {
+    return e->target();
+  }
+  return nullptr;
+}
+
+Block* Block::goes_to_only_edge() const {
   const auto& s = succs();
   if (s.size() == 1) {
     const auto& e = s[0];
@@ -1118,13 +1126,10 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
       return next_insn;
     }
   }
-  auto goto_edge = get_succ_edge_of_type(it.block(), EDGE_GOTO);
-  if (goto_edge != nullptr) {
-    auto next_block = goto_edge->target();
-    if (next_block->starts_with_move_result()) {
-      return next_block->to_cfg_instruction_iterator(
-          next_block->get_first_insn());
-    }
+  auto next_block = it.block()->goes_to();
+  if (next_block != nullptr && next_block->starts_with_move_result()) {
+    return next_block->to_cfg_instruction_iterator(
+        next_block->get_first_insn());
   }
   return end;
 }
@@ -1979,8 +1984,10 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
-      auto goto_edge = get_succ_edge_of_type(block, EDGE_GOTO);
-      auto move_result_block = goto_edge->target();
+      auto move_result_block = block->goes_to();
+      always_assert_log(move_result_block != nullptr,
+                        "Cannot follow goto of B%u in %s", block->id(),
+                        SHOW(*this));
       auto first_it = move_result_block->get_first_insn();
       always_assert(first_it != move_result_block->end());
       always_assert_log(opcode::is_move_result_pseudo(first_it->insn->opcode()),

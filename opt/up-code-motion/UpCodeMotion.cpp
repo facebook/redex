@@ -245,9 +245,7 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       auto it = b->to_cfg_instruction_iterator(last_insn_it);
       cfg.insert_before(it, insn);
     }
-    cfg.set_edge_target(
-        branch_edge,
-        cfg.get_succ_edge_of_type(branch_block, cfg::EDGE_GOTO)->target());
+    cfg.set_edge_target(branch_edge, branch_block->goes_to());
     blocks_to_remove.insert(branch_block);
 
     stats.instructions_moved += instructions_to_insert.size();

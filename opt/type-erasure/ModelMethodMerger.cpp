@@ -159,7 +159,7 @@ static void find_common_ctor_invocations(
   if (targets.size() <= 1) return;
 
   for (auto& target : targets) {
-    if (return_block != target->follow_goto()) {
+    if (return_block != target->goes_to_only_edge()) {
       // not all switch statements goto return block
       invocations.clear();
       return;
