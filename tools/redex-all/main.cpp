@@ -1097,8 +1097,8 @@ int main(int argc, char* argv[]) {
                                     args.entry_data);
     }
 
-    stats_output_path =
-        conf.metafile(args.config.get("stats_output", "").asString());
+    stats_output_path = conf.metafile(
+        args.config.get("stats_output", "redex-stats.txt").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;

@@ -823,12 +823,10 @@ def finalize_redex(state):
                       state.args.keyalias, state.args.keypass, state.args.ignore_zipalign, state.args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
         timer() - repack_start_time))
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'redex-line-number-map', 'line number map', 'redex-line-number-map')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-line-number-map-v2',
                          'line number map v2', 'redex-line-number-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'stats.txt', 'stats', 'redex-stats.txt')
+                         'redex-stats.txt', 'stats', 'redex-stats.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'filename_mappings.txt',
                          'src strings map', 'redex-src-strings-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'outliner-artifacts.bin',
