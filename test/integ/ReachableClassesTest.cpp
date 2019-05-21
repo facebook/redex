@@ -47,17 +47,17 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   TRACE(EMPTY, 3, "Loaded classes: %ld\n", classes.size());
   // Report the classes that were loaded through tracing.
   for (const auto& cls : classes) {
-    TRACE(EMPTY, 3, "Input class: %s\n",
-        cls->get_type()->get_name()->c_str());
+    TRACE(EMPTY, 3, "Input class: %s\n", cls->get_type()->get_name()->c_str());
   }
 
   std::vector<Pass*> passes;
   Json::Value conf_obj;
+  // Note: This config option is no longer used, and this test isn't really
+  // doing anything useful at the moment! We should really update it to test
+  // the logic inside RenameClassesPassV2...
+  conf_obj["legacy_reflection_reachability"] = true;
 
-  PassManager manager(
-    passes,
-    conf_obj
-  );
+  PassManager manager(passes, conf_obj);
   manager.set_testing_mode();
 
   ConfigFiles dummy_cfg(conf_obj);
@@ -70,14 +70,15 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   auto type1 = type_class(DexType::get_type("Lcom/facebook/redextest/Type1;"));
   auto type2 = type_class(DexType::get_type("Lcom/facebook/redextest/Type2;"));
   auto type3 = type_class(DexType::get_type("Lcom/facebook/redextest/Type3;"));
-  auto type4 = type_class(DexType::get_type("Lcom/facebook/redextest/Type3$Type4;"));
+  auto type4 =
+      type_class(DexType::get_type("Lcom/facebook/redextest/Type3$Type4;"));
   auto type5 = type_class(DexType::get_type("Lcom/facebook/redextest/Type5;"));
 
-  ASSERT_TRUE(can_rename(type1));
-  ASSERT_FALSE(can_rename(type2));
-  ASSERT_FALSE(can_rename(type3));
-  ASSERT_FALSE(can_rename(type4));
-  ASSERT_TRUE(can_rename(type5));
+  EXPECT_TRUE(can_rename(type1));
+  EXPECT_FALSE(can_rename(type2));
+  EXPECT_FALSE(can_rename(type3));
+  EXPECT_FALSE(can_rename(type4));
+  EXPECT_TRUE(can_rename(type5));
 
   delete g_redex;
 }
