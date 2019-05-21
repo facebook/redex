@@ -547,7 +547,7 @@ void update_references(const Scope& scope,
 }
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
-  std::unordered_set<DexType*> new_intfs;
+  std::set<DexType*, dextypes_comparator> new_intfs;
   TRACE(VMERGE, 5, "interface before : \n");
   for (const auto& cls_intf : to_cls->get_interfaces()->get_type_list()) {
     TRACE(VMERGE, 5, "  %s\n", SHOW(cls_intf));
@@ -597,7 +597,7 @@ void remove_merged(
  * we move the method to merger class and change invoke call.
  */
 void VerticalMergingPass::change_super_calls(
-    std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
+    const std::unordered_map<DexClass*, DexClass*>& mergeable_to_merger) {
   auto process_subclass_methods = [&](DexClass* merger, DexClass* mergeable) {
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>
         callee_to_insns;
@@ -612,7 +612,7 @@ void VerticalMergingPass::change_super_calls(
     handle_invoke_init(init_callers, merger, mergeable);
   };
 
-  for (const auto& pair : *mergeable_to_merger) {
+  for (const auto& pair : mergeable_to_merger) {
     DexClass* merger = pair.second;
     DexClass* mergeable = pair.first;
     if (merger->get_super_class() == mergeable->get_type()) {
@@ -763,8 +763,7 @@ void VerticalMergingPass::run_pass(DexStoresVector& stores,
   collect_can_merge(scope, xstores, dont_merge_status, &mergeable_to_merger);
   remove_both_have_clinit(&mergeable_to_merger);
 
-  std::unordered_set<DexMethod*> no_default_inlinables;
-  change_super_calls(&mergeable_to_merger);
+  change_super_calls(mergeable_to_merger);
 
   merge_classes(scope, mergeable_to_merger, referenced_methods);
   remove_merged(scope, mergeable_to_merger);

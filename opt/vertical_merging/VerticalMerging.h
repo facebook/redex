@@ -40,6 +40,6 @@ class VerticalMergingPass : public Pass {
                     bool,
                     const std::unordered_set<DexMethod*>&,
                     std::unordered_map<DexMethodRef*, DexMethodRef*>*);
-  void change_super_calls(std::unordered_map<DexClass*, DexClass*>*);
+  void change_super_calls(const std::unordered_map<DexClass*, DexClass*>&);
   std::vector<std::string> m_blacklist;
 };
