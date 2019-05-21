@@ -16,9 +16,6 @@ class StripDebugInfoPass : public Pass {
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
   void bind_config() override {
-    bind("cls_whitelist", {}, m_config.cls_patterns);
-    bind("method_whitelist", {}, m_config.meth_patterns);
-    bind("use_whitelist", false, m_config.use_whitelist);
     bind("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
     bind("drop_local_variables", false, m_config.drop_local_variables);
     bind("drop_line_numbers", false, m_config.drop_line_nrs);
@@ -41,9 +38,6 @@ class StripDebugInfoPass : public Pass {
   void set_drop_line_numbers(bool b) { m_config.drop_line_nrs = b; }
 
   struct Config {
-    std::vector<std::string> cls_patterns;
-    std::vector<std::string> meth_patterns;
-    bool use_whitelist{false};
     bool drop_all_dbg_info{false};
     bool drop_local_variables{false};
     bool drop_line_nrs{false};
@@ -95,7 +89,6 @@ class StripDebugInfo {
   bool drop_line_numbers() const {
     return m_config.drop_line_nrs || m_config.drop_all_dbg_info;
   }
-  bool method_passes_filter(DexMethod* meth) const;
   bool should_remove(const MethodItemEntry& mei, Stats& stats);
   bool should_drop_for_synth(const DexMethod*) const;
 

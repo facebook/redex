@@ -25,17 +25,6 @@ constexpr const char* METRIC_EPILOGUE_DROPPED = "num_epilogue_dropped";
 constexpr const char* METRIC_EMPTY_DROPPED = "num_empty_dropped";
 constexpr const char* METRIC_SKIPPED_INLINE = "num_skipped_due_to_inlining";
 
-bool pattern_matches(const char* str,
-                     const std::vector<std::string>& patterns) {
-  for (const auto& p : patterns) {
-    auto substr = strstr(str, p.c_str());
-    if (substr != nullptr) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool is_debug_entry(const MethodItemEntry& mie) {
   return mie.type == MFLOW_DEBUG || mie.type == MFLOW_POSITION;
 }
@@ -53,13 +42,6 @@ Stats& Stats::operator+=(const Stats& other) {
   num_empty_dropped += other.num_empty_dropped;
   num_skipped_due_to_inlining += other.num_skipped_due_to_inlining;
   return *this;
-}
-
-bool StripDebugInfo::method_passes_filter(DexMethod* meth) const {
-  return !m_config.use_whitelist ||
-         pattern_matches(meth->get_class()->get_name()->c_str(),
-                         m_config.cls_patterns) ||
-         pattern_matches(meth->get_name()->c_str(), m_config.meth_patterns);
 }
 
 bool StripDebugInfo::should_remove(const MethodItemEntry& mei, Stats& stats) {
@@ -130,7 +112,6 @@ bool StripDebugInfo::should_drop_for_synth(const DexMethod* method) const {
 Stats StripDebugInfo::run(Scope scope) {
   Stats stats;
   walk::code(scope, [&](DexMethod* meth, IRCode& code) {
-    if (!method_passes_filter(meth)) return;
     stats += run(code, should_drop_for_synth(meth));
   });
   return stats;
