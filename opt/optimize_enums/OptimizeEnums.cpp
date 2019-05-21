@@ -44,7 +44,7 @@ constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES_REMOVED =
     "num_lookup_tables_replaced";
 constexpr const char* METRIC_NUM_ENUM_CLASSES = "num_candidate_enum_classes";
-constexpr const char* METRIC_NUM_ENUM_OBJS = "num_enum_objs";
+constexpr const char* METRIC_NUM_ENUM_OBJS = "num_erased_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
 constexpr const char* METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES =
     "num_switch_equiv_finder_failures";
@@ -299,25 +299,19 @@ class OptimizeEnums {
    * Replace enum with Boxed Integer object
    */
   void replace_enum_with_int() {
-    const ConcurrentSet<DexType*>& candidate_enums = collect_simple_enums();
+    optimize_enums::Config config;
+    walk::classes(m_scope, [&config](DexClass* cls) {
+      if (is_simple_enum(cls)) {
+        config.candidate_enums.insert(cls->get_type());
+      }
+    });
+    optimize_enums::reject_unsafe_enums(m_scope, &config);
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        candidate_enums, &m_stores, &m_stats.num_int_objs);
-    m_stats.num_enum_classes = candidate_enums.size();
+        config, &m_stores, &m_stats.num_int_objs);
+    m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
  private:
-
-  ConcurrentSet<DexType*> collect_simple_enums() {
-    ConcurrentSet<DexType*> enum_set;
-    walk::classes(m_scope, [&](DexClass* cls) {
-      if (is_simple_enum(cls)) {
-        enum_set.insert(cls->get_type());
-      }
-    });
-    optimize_enums::reject_unsafe_enums(m_scope, &enum_set);
-    return enum_set;
-  }
-
   /**
    * TODO(fengliu) : Some enums with cached values should be optimized.
    * But we simply ignore them in the first version.

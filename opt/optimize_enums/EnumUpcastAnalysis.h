@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
 #include <limits>
 
 #include "BaseIRAnalyzer.h"
-#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
+#include "EnumConfig.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
@@ -38,15 +39,19 @@ using EnumTypeEnvironment =
 class EnumFixpointIterator final
     : public ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment> {
  public:
-  explicit EnumFixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg) {}
+  explicit EnumFixpointIterator(const cfg::ControlFlowGraph& cfg,
+                                const Config& config)
+      : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg),
+        m_config(config) {}
 
   void analyze_instruction(IRInstruction* insn,
                            EnumTypeEnvironment* env) const override;
 
   static EnumTypeEnvironment gen_env(const DexMethod* method);
+
+ private:
+  const Config& m_config;
 };
 
-void reject_unsafe_enums(const std::vector<DexClass*>& classes,
-                         ConcurrentSet<DexType*>* candidate_enums);
+void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);
 } // namespace optimize_enums

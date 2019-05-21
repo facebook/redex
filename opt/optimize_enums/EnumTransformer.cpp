@@ -48,15 +48,6 @@ using namespace dex_asm;
 using EnumAttrMap =
     std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
 
-/**
- * We create a helper class `EnumUtils` in primary dex with all the boxed
- * integer fields for representing enum values. The maximum number of the fields
- * is equal to largest number of values of candidate enum classes. To limit the
- * size of the class, exclude the enum classes that contain more than
- * MAXIMUM_ENUM_SIZE values before the transformation.
- */
-constexpr uint32_t MAXIMUM_ENUM_SIZE = 100;
-
 std::vector<EnumAttr> sort_enum_values(
     const std::unordered_map<const DexField*, EnumAttr>& enum_values) {
   std::map<uint32_t, const EnumAttr&> enums;
@@ -83,6 +74,8 @@ struct EnumUtil {
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
   DexMethodRef* m_values_method_ref = nullptr;
+
+  const Config& m_config;
 
   DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
   DexString* REDEX_TOSTRING = DexString::make_string("redex$OE$toString");
@@ -134,6 +127,8 @@ struct EnumUtil {
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V");
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
+
+  explicit EnumUtil(const Config& config) : m_config(config) {}
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
     DexClass* cls = make_enumutils_class(fields_count);
@@ -366,7 +361,7 @@ class CodeTransformer final {
     auto* code = m_method->get_code();
     code->build_cfg();
     auto& cfg = code->cfg();
-    optimize_enums::EnumFixpointIterator engine(cfg);
+    optimize_enums::EnumFixpointIterator engine(cfg, m_enum_util->m_config);
     engine.run(start_env);
 
     for (auto& block : cfg.blocks()) {
@@ -661,11 +656,12 @@ class EnumTransformer final {
   /**
    * EnumTransformer constructor. Analyze <clinit> of candidate enums.
    */
-  EnumTransformer(const ConcurrentSet<DexType*>& candidate_enums,
-                  DexStoresVector* stores)
+  EnumTransformer(const Config& config, DexStoresVector* stores)
       : m_stores(*stores), m_int_objs(0) {
-    m_enum_util = std::make_unique<EnumUtil>();
-    for (auto it = candidate_enums.begin(); it != candidate_enums.end(); ++it) {
+    m_enum_util = std::make_unique<EnumUtil>(config);
+    for (auto it = config.candidate_enums.begin();
+         it != config.candidate_enums.end();
+         ++it) {
       auto enum_cls = type_class(*it);
       auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
       if (enum_attrs.empty() ||
@@ -680,7 +676,7 @@ class EnumTransformer final {
         TRACE(ENUM, 1, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
               SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
-      } else if (enum_attrs.size() > MAXIMUM_ENUM_SIZE) {
+      } else if (enum_attrs.size() > config.max_enum_size) {
         TRACE(ENUM, 2, "\tSkip %s %lu values\n", SHOW(enum_cls),
               enum_attrs.size());
       } else {
@@ -980,14 +976,14 @@ namespace optimize_enums {
  * Transform enums to Integer objects, return the total number of eliminated
  * enum objects.
  */
-int transform_enums(const ConcurrentSet<DexType*>& candidate_enums,
+int transform_enums(const Config& config,
                     DexStoresVector* stores,
                     size_t* num_int_objs) {
-  if (!candidate_enums.size()) {
+  if (!config.candidate_enums.size()) {
     return 0;
   }
 
-  EnumTransformer transformer(candidate_enums, stores);
+  EnumTransformer transformer(config, stores);
   transformer.run();
   *num_int_objs = transformer.get_int_objs_count();
   return transformer.get_enum_objs_count();

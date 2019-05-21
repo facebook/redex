@@ -70,9 +70,10 @@ enum Reason {
  */
 class EnumUpcastDetector {
  public:
-  EnumUpcastDetector(const DexMethod* method,
-                     const ConcurrentSet<DexType*>* candidate_enums)
-      : m_method(method), m_candidate_enums(candidate_enums) {}
+  EnumUpcastDetector(const DexMethod* method, Config* config)
+      : m_method(method),
+        m_config(config),
+        m_candidate_enums(&config->candidate_enums) {}
 
   void run(const EnumFixpointIterator& engine,
            const cfg::ControlFlowGraph& cfg,
@@ -411,6 +412,7 @@ class EnumUpcastDetector {
   const DexType* STRING_TYPE = get_string_type();
 
   const DexMethod* m_method;
+  Config* m_config;
   const ConcurrentSet<DexType*>* m_candidate_enums;
 };
 
@@ -527,8 +529,8 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
 }
 
 void reject_unsafe_enums(const std::vector<DexClass*>& classes,
-                         ConcurrentSet<DexType*>* candidate_enums) {
-
+                         Config* config) {
+  auto candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
   // When do static analysis, simply skip javac-generated methods for enum
@@ -589,10 +591,10 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
 
     auto* code = method->get_code();
     code->build_cfg(/* editable */ false);
-    EnumFixpointIterator engine(code->cfg());
+    EnumFixpointIterator engine(code->cfg(), *config);
     engine.run(env);
 
-    EnumUpcastDetector detector(method, candidate_enums);
+    EnumUpcastDetector detector(method, config);
     detector.run(engine, code->cfg(), &rejected_enums);
     code->clear_cfg();
   });
