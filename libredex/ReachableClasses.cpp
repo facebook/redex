@@ -649,7 +649,7 @@ void init_permanently_reachable_classes(
   config.get("keep_class_members", {}, class_members);
   config.get("keep_methods", {}, methods);
   config.get("compute_xml_reachability", true, compute_xml_reachability);
-  config.get("legacy_reflection_reachability", true,
+  config.get("legacy_reflection_reachability", false,
              legacy_reflection_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
 
