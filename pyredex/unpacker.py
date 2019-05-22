@@ -109,7 +109,8 @@ class DexMetadata(object):
                  have_locators=False,
                  have_name_based_locators=False,
                  is_root_relative=False,
-                 locator_store_id=0):
+                 locator_store_id=0,
+                 superpack_files=0):
         self._have_locators = False
         self._have_name_based_locators = False
         self._store = store
@@ -119,6 +120,7 @@ class DexMetadata(object):
         self._is_root_relative = is_root_relative
         self._dexen = []
         self._locator_store_id = locator_store_id
+        self.superpack_files = superpack_files
 
     def add_dex(self, dex_path, canary_class, hash=None):
         if hash is None:
@@ -144,6 +146,8 @@ class DexMetadata(object):
                 meta.write('.name_based_locators\n')
             if self._locator_store_id > 0:
                 meta.write('.locator_id ' + str(self._locator_store_id) + '\n')
+            if self.superpack_files > 0:
+                meta.write('.superpack_files ' + str(self.superpack_files) + '\n')
             for dex in self._dexen:
                 meta.write(' '.join(dex) + '\n')
 
