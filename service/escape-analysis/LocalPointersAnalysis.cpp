@@ -324,7 +324,7 @@ void escape_heap_referenced_objects(const IRInstruction* insn,
       op == OPCODE_IPUT_OBJECT) {
     env->set_may_escape(insn->src(0));
   } else if (op == OPCODE_FILLED_NEW_ARRAY &&
-             is_array(get_array_component_type(insn->get_type()))) {
+             !is_primitive(get_array_component_type(insn->get_type()))) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       env->set_may_escape(insn->src(i));
     }
