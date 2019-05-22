@@ -14,7 +14,7 @@
 
 namespace check_casts {
 
-size_t remove_redundant_check_casts_v2(DexMethod* method) {
+size_t remove_redundant_check_casts(DexMethod* method) {
   if (!method || !method->get_code()) {
     return 0;
   }
@@ -46,7 +46,7 @@ void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
   size_t num_redundant_check_casts = walk::parallel::reduce_methods<size_t>(
       scope,
       [&](DexMethod* method) -> size_t {
-        return remove_redundant_check_casts_v2(method);
+        return remove_redundant_check_casts(method);
       },
       std::plus<size_t>());
 
