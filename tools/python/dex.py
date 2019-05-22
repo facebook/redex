@@ -1263,6 +1263,9 @@ class DexMethod:
     def is_abstract(self):
         return (self.encoded_method.access_flags & ACC_ABSTRACT) != 0
 
+    def is_native(self):
+        return (self.encoded_method.access_flags & ACC_NATIVE) != 0
+
     def is_synthetic(self):
         return (self.encoded_method.access_flags & ACC_SYNTHETIC) != 0
 
