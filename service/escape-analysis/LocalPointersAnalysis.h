@@ -226,6 +226,12 @@ class MayEscapeStore {
 
 using Environment = EnvironmentWithStoreImpl<MayEscapeStore>;
 
+/*
+ * Analyze the given method to determine which pointers escape. Note that we do
+ * not mark returned or thrown pointers as escaping here. This makes it easier
+ * to use as part of an interprocedural analysis -- the analysis of the caller
+ * can choose whether to track these pointers or treat them as having escaped.
+ */
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   FixpointIterator(
@@ -280,6 +286,20 @@ FixpointIteratorMapPtr analyze_scope(const Scope&,
                                      const call_graph::Graph&,
                                      SummaryCMap* = nullptr);
 
+/*
+ * Join over all possible returned and thrown values.
+ */
+void collect_exiting_pointers(const FixpointIterator& fp_iter,
+                              const IRCode& code,
+                              PointerSet* returned_ptrs,
+                              PointerSet* thrown_pointers);
+
+/*
+ * Summarize the effect a method has on its input parameters -- e.g. whether
+ * they may have escaped, and whether they are being returned. Note that we
+ * don't have a way to represent thrown pointers in our summary, so any such
+ * pointers are treated as escaping.
+ */
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
                                  const IRCode& code);
 

@@ -398,8 +398,8 @@ static void analyze_method_recursive(
     const auto& callee_edges = call_graph.node(method).callees();
     for (const auto& edge : callee_edges) {
       auto* callee = edge->callee();
-      analyze_method_recursive(
-          callee, call_graph, visiting, fp_iter_map, summary_map);
+      analyze_method_recursive(callee, call_graph, visiting, fp_iter_map,
+                               summary_map);
       if (summary_map->count(callee) != 0) {
         invoke_to_summary_map.emplace(edge->invoke_iterator()->insn,
                                       summary_map->at(callee));
@@ -434,32 +434,38 @@ FixpointIteratorMapPtr analyze_scope(const Scope& scope,
   return fp_iter_map;
 }
 
-/*
- * Join over all possible return values.
- */
-static PointerSet get_return_value(const FixpointIterator& fp_iter,
-                                   const IRCode& code) {
+void collect_exiting_pointers(const FixpointIterator& fp_iter,
+                              const IRCode& code,
+                              PointerSet* returned_ptrs,
+                              PointerSet* thrown_ptrs) {
   auto& cfg = code.cfg();
   PointerSet rv = PointerSet::bottom();
+  returned_ptrs->set_to_bottom();
+  thrown_ptrs->set_to_bottom();
   for (auto* block : cfg.blocks()) {
     auto last_insn_it = block->get_last_insn();
     if (last_insn_it == block->end()) {
       continue;
     }
     auto insn = last_insn_it->insn;
-    if (!is_return_value(insn->opcode())) {
-      continue;
-    }
     const auto& state =
         fp_iter.get_exit_state_at(const_cast<cfg::Block*>(block));
-    rv.join_with(state.get_pointers(insn->src(0)));
+    if (is_return_value(insn->opcode())) {
+      returned_ptrs->join_with(state.get_pointers(insn->src(0)));
+    } else if (insn->opcode() == OPCODE_THROW) {
+      thrown_ptrs->join_with(state.get_pointers(insn->src(0)));
+    }
   }
-  return rv;
 }
 
 EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
                                  const IRCode& code) {
   EscapeSummary summary;
+
+  PointerSet returned_ptrs;
+  PointerSet thrown_ptrs;
+  collect_exiting_pointers(fp_iter, code, &returned_ptrs, &thrown_ptrs);
+
   auto& cfg = code.cfg();
   // FIXME: fix cfg's GraphInterface so this const_cast isn't necessary
   const auto& exit_state =
@@ -471,14 +477,15 @@ EscapeSummary get_escape_summary(const FixpointIterator& fp_iter,
     if (insn->opcode() == IOPCODE_LOAD_PARAM_OBJECT) {
       param_indexes.emplace(insn, idx);
 
-      if (exit_state.may_have_escaped(insn)) {
+      // Unlike returned pointers, we don't model thrown pointers specially in
+      // our EscapeSummary; they are treated as escaping pointers.
+      if (exit_state.may_have_escaped(insn) || thrown_ptrs.contains(insn)) {
         summary.escaping_parameters.emplace(idx);
       }
     }
     ++idx;
   }
 
-  auto returned_ptrs = get_return_value(fp_iter, code);
   switch (returned_ptrs.kind()) {
   case sparta::AbstractValueKind::Value: {
     for (auto insn : returned_ptrs.elements()) {

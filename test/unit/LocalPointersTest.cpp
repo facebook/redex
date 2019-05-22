@@ -229,6 +229,33 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre());
 }
 
+TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (throw v0)
+    )
+  )");
+
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  ptrs::FixpointIterator fp_iter(cfg);
+  fp_iter.run(ptrs::Environment());
+
+  ptrs::PointerSet returned_ptrs;
+  ptrs::PointerSet thrown_ptrs;
+  ptrs::collect_exiting_pointers(fp_iter, *code, &returned_ptrs, &thrown_ptrs);
+  EXPECT_EQ(returned_ptrs, ptrs::PointerSet::bottom());
+  EXPECT_THAT(thrown_ptrs.elements(),
+              UnorderedElementsAre(Pointee(
+                  *(IRInstruction(IOPCODE_LOAD_PARAM_OBJECT)).set_dest(0))));
+
+  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::bottom());
+  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre(0));
+}
+
 /*
  * Given the following code snippet:
  *
