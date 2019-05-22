@@ -217,7 +217,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       conf.get_json_config()["ir_type_checker"];
   bool run_type_checker_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
-  bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
+  bool verify_moves = type_checker_args.get("verify_moves", true).asBool();
   bool check_no_overwrite_this =
       type_checker_args.get("check_no_overwrite_this", false).asBool();
   std::unordered_set<std::string> type_checker_trigger_passes;
