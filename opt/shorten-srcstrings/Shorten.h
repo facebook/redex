@@ -14,7 +14,7 @@ class ShortenSrcStringsPass : public Pass {
   ShortenSrcStringsPass() : Pass("ShortenSrcStringsPass") {}
 
   void bind_config() override {
-    bind("filename_mappings", "filename_mappings.txt", m_filename_mappings);
+    bind("filename_mappings", "redex-src-strings-map.txt", m_filename_mappings);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
