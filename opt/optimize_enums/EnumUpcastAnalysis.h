@@ -10,8 +10,8 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "DexClass.h"
 #include "EnumConfig.h"
+#include "DexUtil.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
@@ -51,6 +51,9 @@ class EnumFixpointIterator final
 
  private:
   const Config& m_config;
+
+  const DexType* ENUM_TYPE = get_enum_type();
+  const DexType* OBJECT_TYPE = get_object_type();
 };
 
 void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);

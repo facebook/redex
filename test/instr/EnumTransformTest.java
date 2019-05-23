@@ -94,7 +94,7 @@ enum CAST_PARAMETER {
 }
 enum USED_AS_CLASS_OBJECT {
   ONE;
-  public static void method(Class c) {}
+  public static <T> void method(Class<T> c) {}
   public static void method() { method(USED_AS_CLASS_OBJECT.class); }
 }
 enum CAST_CHECK_CAST { ONE; }
@@ -111,14 +111,16 @@ enum ENUM_TYPE_2 {
     int selector = random.nextInt() % 2;
     if (selector == 0) {
       obj = ENUM_TYPE_1.ONE;
-    } else {
+    } else if (selector == 1) {
       obj = ENUM_TYPE_2.TWO;
+    } else if (selector > 1) {
+      obj = Enum.valueOf(ENUM_TYPE_1.class, "NotReach");
     }
-    // obj may be ENUM_TYPE_1 or ENUM_TYPE_2.
+    // obj may be Enum, ENUM_TYPE_1 or ENUM_TYPE_2
     int res = obj.ordinal();
     if (selector == 0) {
       assertThat(res).isEqualTo(0);
-    } else {
+    } else if (selector == 1) {
       assertThat(res).isEqualTo(1);
     }
   }
@@ -147,6 +149,8 @@ class EnumHelper {
   }
 
   public static int my_ordinal(SCORE score) { return score.ordinal(); }
+
+  public static <T> T notEscape(T obj) { return obj; }
 }
 
 /* Test cases */
@@ -278,5 +282,15 @@ public class EnumTransformTest {
     SCORE.valueOf("ZERO");
   }
 
-  public void test_join_with_multitypes() { ENUM_TYPE_2.test_join(); }
+  @Test
+  public void test_join_with_multitypes() {
+    ENUM_TYPE_2.test_join();
+  }
+
+  @Test
+  public void test_non_escape_invocation() {
+    SCORE one = SCORE.ONE;
+    SCORE obj = EnumHelper.notEscape(one);
+    assertThat(one.ordinal()).isEqualTo(obj.ordinal());
+  }
 }

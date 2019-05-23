@@ -437,6 +437,8 @@ class DexTypeList {
   }
 
  public:
+  std::deque<DexType*>::iterator begin() { return m_list.begin(); }
+  std::deque<DexType*>::iterator end() { return m_list.end(); }
   // DexTypeList retrieval/creation
 
   // If the DexTypeList exists, return it, otherwise create it and return it.

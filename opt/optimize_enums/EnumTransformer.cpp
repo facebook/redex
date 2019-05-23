@@ -436,10 +436,24 @@ class CodeTransformer final {
         insn->set_type(new_type);
       }
     } break;
+    case OPCODE_CHECK_CAST: {
+      auto type = insn->get_type();
+      if (try_convert_to_int_type(type)) {
+        DexType* candidate_type =
+            extract_candidate_enum_type(env.get(insn->src(0)));
+        always_assert(candidate_type == type);
+        m_replacements.push_back(InsnReplacement(
+            mie, dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
+                      {{VREG, insn->src(0)}})));
+      } else if (type == m_enum_util->ENUM_TYPE) {
+        always_assert(!extract_candidate_enum_type(env.get(insn->src(0))));
+      }
+    } break;
     default: {
       if (insn->has_type()) {
-        auto array_type = insn->get_type();
-        always_assert(try_convert_to_int_type(array_type) == nullptr);
+        auto type = insn->get_type();
+        always_assert_log(try_convert_to_int_type(type) == nullptr,
+                          "Unhandled type in %s\n", SHOW(insn));
       }
     } break;
     }

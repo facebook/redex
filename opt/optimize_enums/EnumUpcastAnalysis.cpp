@@ -7,6 +7,7 @@
 
 #include "EnumUpcastAnalysis.h"
 
+#include "Resolver.h"
 #include "Walkers.h"
 
 namespace {
@@ -98,10 +99,15 @@ class EnumUpcastDetector {
                            const EnumTypeEnvironment* env,
                            ConcurrentSet<DexType*>* rejected_enums) {
     switch (insn->opcode()) {
-    case OPCODE_CHECK_CAST:
-      reject_if_inconsistent(env->get(insn->src(0)), insn->get_type(),
-                             rejected_enums, CAST_CHECK_CAST);
-      break;
+    case OPCODE_CHECK_CAST: {
+      auto type = insn->get_type();
+      // Assume the local upcast is safe and we only care about upcasting when
+      // the value is escaping.
+      if (type != OBJECT_TYPE) {
+        reject_if_inconsistent(env->get(insn->src(0)), type, rejected_enums,
+                               CAST_CHECK_CAST);
+      }
+    } break;
     case OPCODE_CONST_CLASS:
       reject(insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
       break;
@@ -218,20 +224,42 @@ class EnumUpcastDetector {
    * Analyze static method invocations if the invoked method is not
    * LCandidateEnum;.valueOf:(String)LCandidateEnum; or
    * LCandidateEnum;.values:()[LCandidateEnum;
+   *
+   * Otherwise, figure out implicit parameter upcasting by adopting param
+   * summary data.
    */
-  void process_static_invocation(
-      const IRInstruction* insn,
-      const EnumTypeEnvironment* env,
-      ConcurrentSet<DexType*>* rejected_enums) const {
+  void process_static_invocation(const IRInstruction* insn,
+                                 const EnumTypeEnvironment* env,
+                                 ConcurrentSet<DexType*>* rejected_enums) {
     always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
-    auto method = insn->get_method();
-    auto container = method->get_class();
+    auto method_ref = insn->get_method();
+    auto container = method_ref->get_class();
     if (m_candidate_enums->count_unsafe(container)) {
-      if (is_enum_values(method) || is_enum_valueof(method)) {
+      if (is_enum_values(method_ref) || is_enum_valueof(method_ref)) {
         return;
       }
     }
-    process_general_invocation(insn, env, rejected_enums);
+    auto method = resolve_method(method_ref, MethodSearch::Static);
+    if (!method || !params_contain_object_type(method, OBJECT_TYPE)) {
+      process_general_invocation(insn, env, rejected_enums);
+      return;
+    }
+    auto summary_it = m_config->param_summary_map.find(method);
+    boost::optional<std::unordered_set<uint16_t>&> safe_params;
+    if (summary_it != m_config->param_summary_map.end()) {
+      auto& summary = summary_it->second;
+      safe_params = summary.safe_params;
+    }
+
+    const auto args = method->get_proto()->get_args();
+    auto it = args->begin();
+    for (size_t arg_id = 0; arg_id < insn->srcs_size(); ++arg_id, ++it) {
+      if (safe_params && safe_params->count(arg_id)) {
+        continue;
+      }
+      reject_if_inconsistent(env->get(insn->src(arg_id)), *it, rejected_enums,
+                             CAST_PARAMETER);
+    }
   }
 
   /**
@@ -409,6 +437,7 @@ class EnumUpcastDetector {
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
   const DexType* ENUM_TYPE = get_enum_type();
+  const DexType* OBJECT_TYPE = get_object_type();
   const DexType* STRING_TYPE = get_string_type();
 
   const DexMethod* m_method;
@@ -429,7 +458,8 @@ bool is_static_method_on_enum_class(const DexMethodRef* ref) {
 namespace optimize_enums {
 
 /**
- * Analyze all the instructions that may involve object or type.
+ * Analyze all the instructions that may involve object or type and handle
+ * possible candidate enums specificly.
  */
 void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
                                                EnumTypeEnvironment* env) const {
@@ -447,7 +477,23 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
     case OPCODE_MOVE_OBJECT:
       env->set(dest, env->get(insn->src(0)));
       break;
-    case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_STATIC: {
+      auto method = resolve_method(insn->get_method(), MethodSearch::Static);
+      if (method) {
+        auto it = m_config.param_summary_map.find(method);
+        if (it != m_config.param_summary_map.end()) {
+          const auto& summary = it->second;
+          if (summary.returned_param) {
+            auto returned = summary.returned_param.get();
+            if (summary.safe_params.count(returned)) {
+              env->set(dest, env->get(insn->src(returned)));
+              return;
+            }
+          }
+        }
+      }
+      env->set(dest, EnumTypes(insn->get_method()->get_proto()->get_rtype()));
+    } break;
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE:
@@ -457,9 +503,14 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
     case OPCODE_CONST_CLASS:
       env->set(dest, EnumTypes(get_class_type()));
       break;
-    case OPCODE_CHECK_CAST:
-      env->set(dest, EnumTypes(insn->get_type()));
-      break;
+    case OPCODE_CHECK_CAST: {
+      auto type = insn->get_type();
+      if (type == OBJECT_TYPE) {
+        env->set(dest, env->get(insn->src(0)));
+      } else {
+        env->set(dest, EnumTypes(type));
+      }
+    } break;
     case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
     case OPCODE_MOVE_RESULT_OBJECT:
       env->set(dest, env->get(RESULT_REGISTER));
@@ -546,7 +597,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
             is_enum_valueof(method));
   };
 
-  walk::parallel::fields(classes, [&](DexField* field) {
+  walk::parallel::fields(classes, [candidate_enums,
+                                   &rejected_enums](DexField* field) {
     if (candidate_enums->count_unsafe(field->get_class())) {
       return;
     }

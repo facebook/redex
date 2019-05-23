@@ -298,13 +298,19 @@ class OptimizeEnums {
   /**
    * Replace enum with Boxed Integer object
    */
-  void replace_enum_with_int() {
-    optimize_enums::Config config;
+  void replace_enum_with_int(int max_enum_size) {
+    if (max_enum_size <= 0) {
+      return;
+    }
+    optimize_enums::Config config(max_enum_size);
+    calculate_param_summaries(m_scope, &config.param_summary_map);
+
     walk::classes(m_scope, [&config](DexClass* cls) {
       if (is_simple_enum(cls)) {
         config.candidate_enums.insert(cls->get_type());
       }
     });
+
     optimize_enums::reject_unsafe_enums(m_scope, &config);
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         config, &m_stores, &m_stats.num_int_objs);
@@ -812,12 +818,18 @@ class OptimizeEnums {
 
 namespace optimize_enums {
 
+void OptimizeEnumsPass::bind_config() {
+  bind("max_enum_size", 100, m_max_enum_size,
+       "The maximum number of enum field substitutions that are generated and "
+       "stored in primary dex.");
+}
+
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& conf,
                                  PassManager& mgr) {
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  opt_enums.replace_enum_with_int();
+  opt_enums.replace_enum_with_int(m_max_enum_size);
   opt_enums.stats(mgr);
 }
 
