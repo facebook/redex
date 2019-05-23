@@ -209,11 +209,10 @@ DexType* Configurable::as<DexType*>(const Json::Value& value,
              "Only type bindflags may be specified for a DexType*");
   auto type = DexType::get_type(value.asString());
   if (type == nullptr) {
-      error_or_warn(
+    error_or_warn(
         bindflags & Configurable::bindflags::types::error_if_unresolvable,
         bindflags & Configurable::bindflags::types::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known type", value.asString().c_str()
-      );
+        "\"%s\" failed to resolve to a known type\n", value.asString().c_str());
   }
   return type;
 }
@@ -229,10 +228,9 @@ std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
     auto type = DexType::get_type(str.asString());
     if (type == nullptr) {
       error_or_warn(
-        bindflags & Configurable::bindflags::types::error_if_unresolvable,
-        bindflags & Configurable::bindflags::types::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known type", str.asString().c_str()
-      );
+          bindflags & Configurable::bindflags::types::error_if_unresolvable,
+          bindflags & Configurable::bindflags::types::warn_if_unresolvable,
+          "\"%s\" failed to resolve to a known type\n", str.asString().c_str());
     } else {
       result.emplace_back(static_cast<DexType*>(type));
     }
@@ -252,10 +250,9 @@ std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
     auto type = DexType::get_type(str.asString());
     if (type == nullptr) {
       error_or_warn(
-        bindflags & Configurable::bindflags::types::error_if_unresolvable,
-        bindflags & Configurable::bindflags::types::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known type", str.asString().c_str()
-      );
+          bindflags & Configurable::bindflags::types::error_if_unresolvable,
+          bindflags & Configurable::bindflags::types::warn_if_unresolvable,
+          "\"%s\" failed to resolve to a known type\n", str.asString().c_str());
     } else {
       result.emplace(static_cast<DexType*>(type));
     }
@@ -275,10 +272,9 @@ Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
     auto type = DexType::get_type(str.asString());
     if (type == nullptr) {
       error_or_warn(
-        bindflags & Configurable::bindflags::types::error_if_unresolvable,
-        bindflags & Configurable::bindflags::types::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known type", str.asString().c_str()
-      );
+          bindflags & Configurable::bindflags::types::error_if_unresolvable,
+          bindflags & Configurable::bindflags::types::warn_if_unresolvable,
+          "\"%s\" failed to resolve to a known type\n", str.asString().c_str());
     } else {
       result.emplace(static_cast<DexType*>(type));
     }
@@ -298,10 +294,10 @@ std::unordered_set<DexClass*> Configurable::as<std::unordered_set<DexClass*>>(
         type_class(DexType::get_type(DexString::get_string(str.asString())));
     if (cls == nullptr) {
       error_or_warn(
-        bindflags & Configurable::bindflags::classes::error_if_unresolvable,
-        bindflags & Configurable::bindflags::classes::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known class", str.asString().c_str()
-      );
+          bindflags & Configurable::bindflags::classes::error_if_unresolvable,
+          bindflags & Configurable::bindflags::classes::warn_if_unresolvable,
+          "\"%s\" failed to resolve to a known class\n",
+          str.asString().c_str());
     } else {
       result.emplace(static_cast<DexClass*>(cls));
     }
@@ -320,17 +316,16 @@ std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
     auto meth = DexMethod::get_method(str.asString());
     if (meth == nullptr) {
       error_or_warn(
-        bindflags & Configurable::bindflags::methods::error_if_unresolvable,
-        bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
-        "\"%s\" failed to resolve to a known method", str.asString().c_str()
-      );
+          bindflags & Configurable::bindflags::methods::error_if_unresolvable,
+          bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
+          "\"%s\" failed to resolve to a known method\n",
+          str.asString().c_str());
     } else {
       if (!meth->is_def()) {
         error_or_warn(
-          bindflags & Configurable::bindflags::methods::error_if_not_def,
-          bindflags & Configurable::bindflags::methods::warn_if_not_def,
-          "\"%s\" resolved to a method reference", str.asString().c_str()
-        );
+            bindflags & Configurable::bindflags::methods::error_if_not_def,
+            bindflags & Configurable::bindflags::methods::warn_if_not_def,
+            "\"%s\" resolved to a method reference\n", str.asString().c_str());
       } else {
         result.emplace(static_cast<DexMethod*>(meth));
       }
