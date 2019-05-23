@@ -36,7 +36,7 @@ class CopyPropagationPass : public Pass {
     bind("replace_with_representative", true,
          m_config.replace_with_representative);
     bind("wide_registers", true, m_config.wide_registers);
-    bind("static_finals", false, m_config.static_finals);
+    bind("static_finals", true, m_config.static_finals);
     bind("debug", false, m_config.debug);
     bind("max_estimated_registers", {3000}, m_config.max_estimated_registers);
   }
@@ -47,7 +47,7 @@ class CopyPropagationPass : public Pass {
     bool eliminate_const_classes{true};
     bool replace_with_representative{true};
     bool wide_registers{true};
-    bool static_finals{false};
+    bool static_finals{true};
     bool debug{false};
 
     // this is set by PassManager, not by JsonWrapper
