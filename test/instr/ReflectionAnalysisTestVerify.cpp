@@ -101,7 +101,7 @@ void test_join_meet(const AbstractObject& foo,
   EXPECT_EQ(bar_copy.meet_with(foo), sparta::AbstractValueKind::Bottom);
 }
 
-TEST_F(PostVerify, TestAbstractDomain) {
+TEST_F(PreVerify, TestAbstractDomain) {
   auto foo_name = DexString::get_string(
       "Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;");
   ASSERT_NE(foo_name, nullptr);
@@ -130,7 +130,7 @@ TEST_F(PostVerify, TestAbstractDomain) {
                  AbstractObject(AbstractObjectKind::METHOD, nullptr, nullptr));
 }
 
-TEST_F(PostVerify, JoinSameClassType) {
+TEST_F(PreVerify, JoinSameClassType) {
   test_analysis(
       classes, "getClassJoinSame",
       "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
@@ -140,7 +140,7 @@ INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{Lcom
 MOVE_RESULT_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
 }
 
-TEST_F(PostVerify, JoinDifferentClassType) {
+TEST_F(PreVerify, JoinDifferentClassType) {
   test_analysis(
       classes, "getClassJoinDifferent",
       "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
@@ -150,7 +150,7 @@ INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}(RE
 MOVE_RESULT_OBJECT v1 {1, CLASS{}(REFLECTION)}\n");
 }
 
-TEST_F(PostVerify, JoinClassTypeWithEmpty) {
+TEST_F(PreVerify, JoinClassTypeWithEmpty) {
   test_analysis(
       classes, "getClassJoinEmpty",
       "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
@@ -159,20 +159,20 @@ INVOKE_VIRTUAL v1, Ljava/lang/Class;.getName:()Ljava/lang/String; {1, CLASS{}}\n
 MOVE_RESULT_OBJECT v1 {1, CLASS{}}\n");
 }
 
-TEST_F(PostVerify, JoinSameString) {
+TEST_F(PreVerify, JoinSameString) {
   test_analysis(
       classes, "getStringJoinSame",
       "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n\
 RETURN_OBJECT v1 {1, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION);4294967294, CLASS{Lcom/facebook/redextest/ReflectionAnalysisTest$Foo;}(REFLECTION)}\n");
 }
 
-TEST_F(PostVerify, JoinDifferentString) {
+TEST_F(PreVerify, JoinDifferentString) {
   test_analysis(classes, "getStringJoinDifferent",
                 "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{}(REFLECTION)}\n\
 RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
 }
 
-TEST_F(PostVerify, JoinStringWithEmpty) {
+TEST_F(PreVerify, JoinStringWithEmpty) {
   test_analysis(classes, "getStringJoinEmpty",
                 "MOVE_RESULT_OBJECT v1 {4294967294, CLASS{}(REFLECTION)}\n\
 RETURN_OBJECT v1 {1, CLASS{}(REFLECTION);4294967294, CLASS{}(REFLECTION)}\n");
