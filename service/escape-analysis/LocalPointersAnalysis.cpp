@@ -367,6 +367,9 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
     env->set_fresh_pointer(insn->dest(), insn);
   } else {
     default_instruction_handler(insn, env);
+    if (m_escape_check_cast && op == OPCODE_CHECK_CAST) {
+      env->set_may_escape(insn->src(0));
+    }
   }
 }
 

@@ -231,14 +231,20 @@ using Environment = EnvironmentWithStoreImpl<MayEscapeStore>;
  * not mark returned or thrown pointers as escaping here. This makes it easier
  * to use as part of an interprocedural analysis -- the analysis of the caller
  * can choose whether to track these pointers or treat them as having escaped.
+ * Check-casts would not let source value escape in normal cases. But for
+ * OptimizeEnumsPass which replaces enum object with boxed integer, check-casts
+ * may result in cast error. So we add the option `escape_check_cast` to make
+ * OptimizeEnumsPass able to treat check-cast as an escaping instruction.
  */
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  FixpointIterator(
+  explicit FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
-      InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap())
+      InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap(),
+      bool escape_check_cast = false)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-        m_invoke_to_summary_map(invoke_to_summary_map) {}
+        m_invoke_to_summary_map(invoke_to_summary_map),
+        m_escape_check_cast(escape_check_cast) {}
 
   void analyze_instruction(IRInstruction* insn,
                            Environment* env) const override;
@@ -253,6 +259,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   // ourselves -- we are able to switch easily between different call graph
   // construction strategies.
   InvokeToSummaryMap m_invoke_to_summary_map;
+  const bool m_escape_check_cast;
 };
 
 void escape_heap_referenced_objects(const IRInstruction* insn,
