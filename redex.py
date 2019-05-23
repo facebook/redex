@@ -767,7 +767,7 @@ def prepare_redex(args):
         prev_value = config_dict.get(key, "(No previous value)")
         log("Got Override %s = %s from %s. Previous %s" %
             (key, value, key_value_str, prev_value))
-        config_dict[key] = value
+        config_dict[key] = json.loads(value)
 
     log('Running redex-all on {} dex files '.format(len(dexen)))
     if args.lldb:
@@ -883,8 +883,6 @@ def finalize_redex(state):
         redex_pg_file = state.config_dict['RenameClassesPassV2'].get('class_rename', redex_pg_file)
 
     if state.config_dict.get('proguard_map_output', '') != '':
-        # if our map output strategy is overwrite, we don't merge at all
-        # if you enable ObfuscatePass, this needs to be overwrite
         if state.config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
             overwrite_proguard_maps(
                 state.config_dict['proguard_map_output'],
