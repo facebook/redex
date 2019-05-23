@@ -190,25 +190,26 @@ class CseEnvironment final
 };
 
 static CommonSubexpressionElimination::Barrier make_barrier(
-    IRInstruction* insn) {
+    const IRInstruction* insn) {
   CommonSubexpressionElimination::Barrier b;
   b.opcode = insn->opcode();
-  if (insn->has_type()) {
-    b.type = insn->get_type();
-  } else if (insn->has_field()) {
-    b.field = insn->get_field();
+  if (insn->has_field()) {
+    b.field = resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
+                                                   ? FieldSearch::Static
+                                                   : FieldSearch::Instance);
   } else if (insn->has_method()) {
-    b.method = insn->get_method();
+    b.method = resolve_method(insn->get_method(), opcode_to_search(insn));
   }
   return b;
 }
 
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
-
  public:
   Analyzer(CommonSubexpressionElimination::SharedState* shared_state,
            cfg::ControlFlowGraph& cfg)
-      : BaseIRAnalyzer(cfg), m_shared_state(shared_state) {
+      : BaseIRAnalyzer(cfg),
+        m_read_accesses(shared_state->compute_read_accesses(cfg)),
+        m_shared_state(shared_state) {
     MonotonicFixpointIterator::run(CseEnvironment::top());
   }
 
@@ -280,7 +281,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    if (m_shared_state->is_barrier(insn)) {
+    if (m_shared_state->is_barrier(insn, m_read_accesses)) {
       auto b = make_barrier(insn);
       m_shared_state->log_barrier(b);
 
@@ -457,7 +458,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       is_positional = true;
       break;
     default:
-      is_positional = m_shared_state->is_barrier(insn);
+      is_positional = m_shared_state->is_barrier(insn, m_read_accesses);
       break;
     }
     if (is_positional) {
@@ -478,6 +479,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return value;
   }
 
+  CommonSubexpressionElimination::ReadAccesses m_read_accesses;
   CommonSubexpressionElimination::SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
 };
@@ -680,6 +682,49 @@ void CommonSubexpressionElimination::SharedState::init_method_barriers(
             std::inserter(m_method_barriers, m_method_barriers.end()));
 }
 
+CommonSubexpressionElimination::ReadAccesses
+CommonSubexpressionElimination::SharedState::compute_read_accesses(
+    cfg::ControlFlowGraph& cfg) {
+  ReadAccesses ra;
+  for (auto& mie : cfg::InstructionIterable(cfg)) {
+    auto* insn = mie.insn;
+    switch (insn->opcode()) {
+    case OPCODE_AGET:
+      ra.array_component_types[CommonSubexpressionElimination::INT] = true;
+      break;
+    case OPCODE_AGET_BYTE:
+      ra.array_component_types[CommonSubexpressionElimination::BYTE] = true;
+      break;
+    case OPCODE_AGET_CHAR:
+      ra.array_component_types[CommonSubexpressionElimination::CHAR] = true;
+      break;
+    case OPCODE_AGET_WIDE:
+      ra.array_component_types[CommonSubexpressionElimination::WIDE] = true;
+      break;
+    case OPCODE_AGET_SHORT:
+      ra.array_component_types[CommonSubexpressionElimination::SHORT] = true;
+      break;
+    case OPCODE_AGET_OBJECT:
+      ra.array_component_types[CommonSubexpressionElimination::OBJECT] = true;
+      break;
+    case OPCODE_AGET_BOOLEAN:
+      ra.array_component_types[CommonSubexpressionElimination::BOOLEAN] = true;
+      break;
+    default:
+      if (is_iget(insn->opcode()) || is_sget(insn->opcode())) {
+        auto field_ref = insn->get_field();
+        DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
+                                                       ? FieldSearch::Static
+                                                       : FieldSearch::Instance);
+        if (field == nullptr || !is_volatile(field)) {
+          ra.fields.insert(field);
+        }
+      }
+    }
+  }
+  return ra;
+}
+
 std::vector<CommonSubexpressionElimination::Barrier>
 CommonSubexpressionElimination::SharedState::compute_barriers(
     cfg::ControlFlowGraph& cfg) {
@@ -741,16 +786,17 @@ bool CommonSubexpressionElimination::SharedState::may_be_barrier(
 }
 
 bool CommonSubexpressionElimination::SharedState::is_barrier(
-    const IRInstruction* insn) {
+    const IRInstruction* insn, const ReadAccesses& read_accesses) {
   if (!may_be_barrier(insn)) {
     return false;
   }
 
   if (is_invoke(insn->opcode())) {
-    return is_invoke_a_barrier(insn);
+    return is_invoke_a_barrier(insn, read_accesses);
+  } else {
+    auto barrier = make_barrier(insn);
+    return is_barrier_relevant(barrier, read_accesses);
   }
-
-  return true;
 }
 
 bool CommonSubexpressionElimination::SharedState::is_invoke_safe(
@@ -774,7 +820,7 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_safe(
 }
 
 bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
-    const IRInstruction* insn) {
+    const IRInstruction* insn, const ReadAccesses& read_accesses) {
   always_assert(is_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
@@ -785,12 +831,49 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
       auto it = m_method_barriers.find(method);
       if (it != m_method_barriers.end()) {
         auto& barriers = it->second;
-        return barriers.size() > 0;
+        for (auto& barrier : barriers) {
+          if (is_invoke(barrier.opcode) ||
+              is_barrier_relevant(barrier, read_accesses)) {
+            return true;
+          }
+        }
+        return false;
       }
     }
   }
 
   return true;
+}
+
+bool CommonSubexpressionElimination::SharedState::is_barrier_relevant(
+    const Barrier& barrier, const ReadAccesses& read_accesses) {
+  auto op = barrier.opcode;
+  switch (op) {
+  case OPCODE_APUT:
+    return read_accesses.array_component_types[INT];
+  case OPCODE_APUT_BYTE:
+    return read_accesses.array_component_types[BYTE];
+  case OPCODE_APUT_CHAR:
+    return read_accesses.array_component_types[CHAR];
+  case OPCODE_APUT_WIDE:
+    return read_accesses.array_component_types[WIDE];
+  case OPCODE_APUT_SHORT:
+    return read_accesses.array_component_types[SHORT];
+  case OPCODE_APUT_OBJECT:
+    return read_accesses.array_component_types[OBJECT];
+  case OPCODE_APUT_BOOLEAN:
+    return read_accesses.array_component_types[BOOLEAN];
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_FILL_ARRAY_DATA:
+    return true;
+  default:
+    always_assert(is_sfield_op(op) || is_ifield_op(op));
+    auto field = barrier.field;
+    return field == nullptr || is_volatile(field) ||
+           read_accesses.fields.count(nullptr) ||
+           read_accesses.fields.count(field);
+  }
 }
 
 void CommonSubexpressionElimination::SharedState::log_barrier(

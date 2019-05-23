@@ -26,6 +26,12 @@ void test(const Scope& scope,
   auto field_b = static_cast<DexField*>(DexField::make_field("LFoo;.b:I"));
   field_b->make_concrete(ACC_PUBLIC);
 
+  auto field_s = static_cast<DexField*>(DexField::make_field("LFoo;.s:I"));
+  field_s->make_concrete(ACC_PUBLIC | ACC_STATIC);
+
+  auto field_t = static_cast<DexField*>(DexField::make_field("LFoo;.t:I"));
+  field_t->make_concrete(ACC_PUBLIC | ACC_STATIC);
+
   auto field_v = static_cast<DexField*>(DexField::make_field("LFoo;.v:I"));
   field_v->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
 
@@ -398,7 +404,106 @@ TEST_F(CommonSubexpressionEliminationTest,
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
-       invoked_static_method_with_some_barrier) {
+       invoked_static_method_with_relevant_i_barrier) {
+  ClassCreator creator(DexType::make_type("LTest2;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest2;.test2:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.a:I")
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LTest2;.test2:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = code_str;
+
+  test(Scope{creator.create()}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_relevant_s_barrier) {
+  ClassCreator creator(DexType::make_type("LTest3;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest3;.test3:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LTest3;.test3:()V")
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = code_str;
+
+  test(Scope{creator.create()}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_relevant_a_barrier) {
+  ClassCreator creator(DexType::make_type("LTest4;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest4;.test4:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput v0 v1 v2)
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (invoke-static () "LTest4;.test4:()V")
+      (aget v0 v1)
+      (move-result-pseudo v3)
+    )
+  )";
+  auto expected_str = code_str;
+
+  test(Scope{creator.create()}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_irrelevant_i_barrier) {
   ClassCreator creator(DexType::make_type("LTest2;"));
   creator.set_super(get_object_type());
 
@@ -425,7 +530,106 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move-result-pseudo v2)
     )
   )";
-  auto expected_str = code_str;
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static () "LTest2;.test2:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
 
-  test(Scope{creator.create()}, code_str, expected_str, 0);
+  test(Scope{creator.create()}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_irrelevant_s_barrier) {
+  ClassCreator creator(DexType::make_type("LTest5;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest5;.test5:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LTest5;.test5:()V")
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v0)
+      (move v2 v0)
+      (invoke-static () "LTest5;.test5:()V")
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+    )
+  )";
+
+  test(Scope{creator.create()}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_irrelevant_a_barrier) {
+  ClassCreator creator(DexType::make_type("LTest6;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest6;.test6:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput-object v0 v1 v2)
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (invoke-static () "LTest6;.test6:()V")
+      (aget v0 v1)
+      (move-result-pseudo v3)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (move v4 v2)
+      (invoke-static () "LTest6;.test6:()V")
+      (aget v0 v1)
+      (move-result-pseudo v3)
+      (move v3 v4)
+    )
+  )";
+
+  test(Scope{creator.create()}, code_str, expected_str, 1);
 }

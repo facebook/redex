@@ -21,23 +21,42 @@ class CommonSubexpressionElimination {
   struct Barrier {
     IROpcode opcode;
     union {
-      DexType* type{nullptr};
-      DexFieldRef* field;
-      DexMethodRef* method;
+      DexField* field{nullptr};
+      DexMethod* method;
     };
   };
 
   struct BarrierHasher {
     size_t operator()(const Barrier& b) const {
-      return b.opcode ^ (size_t)b.type;
+      return b.opcode ^ (size_t)b.field;
     }
+  };
+
+  enum AccessedArrayComponentTypes {
+    INT,
+    BYTE,
+    CHAR,
+    WIDE,
+    SHORT,
+    OBJECT,
+    BOOLEAN,
+    END
+  };
+
+  struct ReadAccesses {
+    // A nullptr entry indicates that some read field could not be resolved;
+    // known-to-be volatile fields never appear in this set.
+    std::unordered_set<DexField*> fields;
+    std::bitset<AccessedArrayComponentTypes::END> array_component_types;
   };
 
   class SharedState {
    public:
     SharedState();
     void init_method_barriers(const Scope&);
-    bool is_barrier(const IRInstruction* insn);
+    ReadAccesses compute_read_accesses(cfg::ControlFlowGraph&);
+    bool is_barrier(const IRInstruction* insn,
+                    const ReadAccesses& read_accesses);
     void log_barrier(const Barrier& barrier);
     void cleanup();
 
@@ -45,7 +64,10 @@ class CommonSubexpressionElimination {
     std::vector<Barrier> compute_barriers(cfg::ControlFlowGraph&);
     bool may_be_barrier(const IRInstruction* insn);
     bool is_invoke_safe(const IRInstruction* insn);
-    bool is_invoke_a_barrier(const IRInstruction* insn);
+    bool is_invoke_a_barrier(const IRInstruction* insn,
+                             const ReadAccesses& read_accesses);
+    bool is_barrier_relevant(const Barrier& barrier,
+                             const ReadAccesses& read_accesses);
     std::unordered_set<DexMethodRef*> m_safe_methods;
     std::unordered_set<DexType*> m_safe_types;
     std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
@@ -78,7 +100,7 @@ class CommonSubexpressionElimination {
 
 inline bool operator==(const CommonSubexpressionElimination::Barrier& a,
                        const CommonSubexpressionElimination::Barrier& b) {
-  return a.opcode == b.opcode && a.type == b.type;
+  return a.opcode == b.opcode && a.field == b.field;
 }
 
 class CommonSubexpressionEliminationPass : public Pass {
