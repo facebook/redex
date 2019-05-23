@@ -38,7 +38,7 @@ class PassImpl : public Pass {
 
   void bind_config() override {
     bind("replace_moves_with_consts",
-         false,
+         true,
          m_config.transform.replace_moves_with_consts);
     bind("include_virtuals", false, m_config.include_virtuals);
     bind("create_runtime_asserts", false, m_config.create_runtime_asserts);

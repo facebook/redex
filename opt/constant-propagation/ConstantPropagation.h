@@ -21,7 +21,7 @@ class ConstantPropagationPass : public Pass {
 
   void bind_config() override {
     bind("replace_moves_with_consts",
-         false,
+         true,
          m_config.transform.replace_moves_with_consts);
   }
 
