@@ -17,6 +17,8 @@
 
 namespace {
 
+const std::string TE_MAPPING_FILE_NAME = "redex-type-erasure-mappings.txt";
+
 DexType* get_type(const std::string& type_s) {
   auto type = DexType::get_type(type_s.c_str());
   if (type == nullptr) {
@@ -147,7 +149,8 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
 } // namespace
 
 void TypeErasurePass::bind_config() {
-  bind("merged_type_mappings", "", m_merged_type_mapping_file);
+  bind("merged_type_mappings", TE_MAPPING_FILE_NAME,
+       m_merged_type_mapping_file);
   bool process_method_meta;
   bind("process_method_meta", false, process_method_meta);
   int64_t max_num_dispatch_target;

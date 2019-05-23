@@ -843,8 +843,6 @@ def finalize_redex(state):
                          'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-splitres-mapping.json',
                          'resid map after split pass', 'redex-resid-splitres-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'type-erasure-mappings.txt',
-                         'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt',
                          'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
