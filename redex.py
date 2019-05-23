@@ -827,8 +827,6 @@ def finalize_redex(state):
                          'line number map v2', 'redex-line-number-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'redex-stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'outliner-artifacts.bin',
-                         'outliner artifacts', 'redex-outliner-artifacts.bin')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
