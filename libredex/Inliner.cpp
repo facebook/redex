@@ -325,37 +325,42 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     log_nopt(INL_EXTERN_CATCH, callee);
     return false;
   }
-  if (cannot_inline_opcodes(caller, callee, insn)) {
+  std::vector<DexMethod*> make_static;
+  if (cannot_inline_opcodes(caller, callee, insn, &make_static)) {
     return false;
   }
-  if (callee->rstate.force_inline()) {
-    return true;
-  }
-  if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
-    log_nopt(INL_TOO_BIG, caller, insn);
-    return false;
+  if (!callee->rstate.force_inline()) {
+    if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+      log_nopt(INL_TOO_BIG, caller, insn);
+      return false;
+    }
+
+    // Don't inline code into a method that doesn't have the same (or higher)
+    // required API. We don't want to bring API specific code into a class where
+    // it's not supported.
+    int32_t callee_api = api::LevelChecker::get_method_level(callee);
+    if (callee_api != api::LevelChecker::get_min_level() &&
+        callee_api > api::LevelChecker::get_method_level(caller)) {
+      // check callee_api against the minimum and short-circuit because most
+      // methods don't have a required api and we want that to be fast.
+      log_nopt(INL_REQUIRES_API, caller, insn);
+      TRACE(MMINL, 4,
+            "Refusing to inline %s\n"
+            "              into %s\n because of API boundaries.",
+            show_deobfuscated(callee).c_str(),
+            show_deobfuscated(caller).c_str());
+      return false;
+    }
+
+    if (callee->rstate.dont_inline()) {
+      return false;
+    }
   }
 
-  // Don't inline code into a method that doesn't have the same (or higher)
-  // required API. We don't want to bring API specific code into a class where
-  // it's not supported.
-  int32_t callee_api = api::LevelChecker::get_method_level(callee);
-  if (callee_api != api::LevelChecker::get_min_level() &&
-      callee_api > api::LevelChecker::get_method_level(caller)) {
-    // check callee_api against the minimum and short-circuit because most
-    // methods don't have a required api and we want that to be fast.
-    log_nopt(INL_REQUIRES_API, caller, insn);
-    TRACE(MMINL, 4,
-          "Refusing to inline %s\n"
-          "              into %s\n because of API boundaries.",
-          show_deobfuscated(callee).c_str(), show_deobfuscated(caller).c_str());
-    return false;
-  }
-
-  if (callee->rstate.dont_inline()) {
-    return false;
-  }
-
+  // Only now, when we'll indicating that the method inlinable, we'll record the
+  // fact that we'll have to make some methods static.
+  std::copy(make_static.begin(), make_static.end(),
+            std::inserter(m_make_static, m_make_static.end()));
   return true;
 }
 
@@ -538,15 +543,17 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
 /**
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
-bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
-                                               const DexMethod* callee,
-                                               const IRInstruction* invk_insn) {
+bool MultiMethodInliner::cannot_inline_opcodes(
+    const DexMethod* caller,
+    const DexMethod* callee,
+    const IRInstruction* invk_insn,
+    std::vector<DexMethod*>* make_static) {
   int ret_count = 0;
   bool can_inline = true;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
-        if (create_vmethod(insn, callee, caller)) {
+        if (create_vmethod(insn, callee, caller, make_static)) {
           log_nopt(INL_CREATE_VMETH, caller, invk_insn);
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
@@ -609,7 +616,8 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
  */
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
                                         const DexMethod* callee,
-                                        const DexMethod* caller) {
+                                        const DexMethod* caller,
+                                        std::vector<DexMethod*>* make_static) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method = resolver(insn->get_method(), MethodSearch::Direct);
@@ -631,7 +639,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       return false;
     }
     if (!is_native(method) && !has_keep(method)) {
-      m_make_static.insert(method);
+      make_static->push_back(method);
     } else {
       info.need_vmethod++;
       return true;

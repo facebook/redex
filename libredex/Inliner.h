@@ -153,18 +153,22 @@ class MultiMethodInliner {
    * Return true if the callee contains certain opcodes that are difficult
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
+   * When returning false, some methods might have been added to make_static.
    */
   bool cannot_inline_opcodes(const DexMethod* caller,
                              const DexMethod* callee,
-                             const IRInstruction* invk_insn);
+                             const IRInstruction* invk_insn,
+                             std::vector<DexMethod*>* make_static);
 
   /**
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
+   * When returning false, a method might have been added to make_static.
    */
   bool create_vmethod(IRInstruction* insn,
                       const DexMethod* callee,
-                      const DexMethod* caller);
+                      const DexMethod* caller,
+                      std::vector<DexMethod*>* make_static);
 
   /**
    * Return true if a callee contains an invoke super to a different method
