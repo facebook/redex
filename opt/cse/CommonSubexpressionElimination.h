@@ -8,6 +8,7 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
+#include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "PassManager.h"
 
@@ -71,8 +72,9 @@ class CommonSubexpressionElimination {
     std::unordered_set<DexMethodRef*> m_safe_methods;
     std::unordered_set<DexType*> m_safe_types;
     std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
-    std::unordered_map<DexMethod*, std::vector<Barrier>> m_method_barriers;
-    std::unordered_set<DexMethod*> m_non_true_virtuals;
+    std::unordered_map<const DexMethod*, std::vector<Barrier>>
+        m_method_barriers;
+    std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
   };
 
   CommonSubexpressionElimination(SharedState* shared_state,

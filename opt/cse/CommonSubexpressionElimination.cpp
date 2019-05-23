@@ -674,11 +674,9 @@ CommonSubexpressionElimination::SharedState::SharedState() {
 
 void CommonSubexpressionElimination::SharedState::init_method_barriers(
     const Scope& scope) {
-  auto non_true_virtuals = devirtualize(scope);
-  std::copy(non_true_virtuals.begin(), non_true_virtuals.end(),
-            std::inserter(m_non_true_virtuals, m_non_true_virtuals.end()));
+  m_method_override_graph = method_override_graph::build_graph(scope);
 
-  ConcurrentMap<DexMethod*, std::vector<Barrier>> method_barriers;
+  ConcurrentMap<const DexMethod*, std::vector<Barrier>> method_barriers;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
     method_barriers.emplace(method, compute_barriers(code.cfg()));
@@ -829,27 +827,47 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
   always_assert(is_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
-  if (opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT ||
-      opcode == OPCODE_INVOKE_VIRTUAL) {
-    auto method_ref = insn->get_method();
-    DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
-    if (method != nullptr && (opcode != OPCODE_INVOKE_VIRTUAL ||
-                              m_non_true_virtuals.count(method))) {
-      auto it = m_method_barriers.find(method);
-      if (it != m_method_barriers.end()) {
-        auto& barriers = it->second;
-        for (auto& barrier : barriers) {
-          if (is_invoke(barrier.opcode) ||
-              is_barrier_relevant(barrier, read_accesses)) {
-            return true;
-          }
-        }
-        return false;
+  if (opcode == OPCODE_INVOKE_SUPER) {
+    // TODO
+    return true;
+  }
+
+  auto has_barriers = [&](const DexMethod* method) {
+    if (method->is_external() || is_native(method)) {
+      return true;
+    }
+    if (is_abstract(method)) {
+      // We say abstract methods are not a barrier per se, as we'll inspect all
+      // overriding methods further below.
+      return false;
+    }
+    auto& barriers = m_method_barriers.at(method);
+    for (auto& barrier : barriers) {
+      if (is_invoke(barrier.opcode) ||
+          is_barrier_relevant(barrier, read_accesses)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  auto method_ref = insn->get_method();
+  DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
+  if (method == nullptr || has_barriers(method)) {
+    return true;
+  }
+  if (opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) {
+    always_assert(method->is_virtual());
+    const auto overriding_methods =
+        method_override_graph::get_overriding_methods(*m_method_override_graph,
+                                                      method);
+    for (const DexMethod* overriding_method : overriding_methods) {
+      if (has_barriers(overriding_method)) {
+        return true;
       }
     }
   }
-
-  return true;
+  return false;
 }
 
 bool CommonSubexpressionElimination::SharedState::is_barrier_relevant(

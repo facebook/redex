@@ -418,6 +418,114 @@ TEST_F(CommonSubexpressionEliminationTest,
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
+       empty_true_virtual_methods_are_not_barriers) {
+
+  // define base type
+
+  ClassCreator base_creator(DexType::make_type("LTestBase;"));
+  base_creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTestBase;.m:()V"));
+  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  base_creator.add_method(method);
+  DexClass* base_class = base_creator.create();
+
+  // define derived type
+
+  ClassCreator derived_creator(DexType::make_type("LTestDerived;"));
+  derived_creator.set_super(base_class->get_type());
+
+  method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTestDerived;.m:()V"));
+  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  derived_creator.add_method(method);
+  DexClass* derived_class = derived_creator.create();
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-virtual (v0) "LTestBase;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-virtual (v0) "LTestBase;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type()), base_class, derived_class},
+       code_str,
+       expected_str,
+       1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       non_empty_overriding_virtual_methods_are_barriers) {
+
+  // define base type
+
+  ClassCreator base_creator(DexType::make_type("LTestBase;"));
+  base_creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTestBase;.m:()V"));
+  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  base_creator.add_method(method);
+  DexClass* base_class = base_creator.create();
+
+  // define derived type
+
+  ClassCreator derived_creator(DexType::make_type("LTestDerived;"));
+  derived_creator.set_super(base_class->get_type());
+
+  method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTestDerived;.m:()V"));
+  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.a:I")
+      (return-void)
+    )
+  )"));
+  derived_creator.add_method(method);
+  DexClass* derived_class = derived_creator.create();
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-virtual (v0) "LTestBase;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = code_str;
+
+  test(Scope{type_class(get_object_type()), base_class, derived_class},
+       code_str,
+       expected_str,
+       0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
        empty_static_methods_are_not_barriers) {
   ClassCreator creator(DexType::make_type("LTest1;"));
   creator.set_super(get_object_type());
