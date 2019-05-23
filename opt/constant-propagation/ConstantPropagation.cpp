@@ -15,7 +15,7 @@ using namespace constant_propagation;
 
 void ConstantPropagationPass::configure_pass(const JsonWrapper& jw) {
   jw.get("replace_moves_with_consts",
-         false,
+         true,
          m_config.transform.replace_moves_with_consts);
 }
 

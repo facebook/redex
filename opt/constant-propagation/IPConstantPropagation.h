@@ -37,7 +37,7 @@ class PassImpl : public Pass {
 
   void configure_pass(const JsonWrapper& jw) override {
     jw.get("replace_moves_with_consts",
-           false,
+           true,
            m_config.transform.replace_moves_with_consts);
     jw.get("include_virtuals", false, m_config.include_virtuals);
     jw.get("create_runtime_asserts", false, m_config.create_runtime_asserts);

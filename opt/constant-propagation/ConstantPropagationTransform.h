@@ -23,7 +23,7 @@ namespace constant_propagation {
 class Transform final {
  public:
   struct Config {
-    bool replace_moves_with_consts{false};
+    bool replace_moves_with_consts{true};
     const DexType* class_under_init{nullptr};
     Config() {}
   };
