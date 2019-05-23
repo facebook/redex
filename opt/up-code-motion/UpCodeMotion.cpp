@@ -6,8 +6,8 @@
  */
 
 /*
- * This pass eliminates gotos by moving trivial const-instructions
- * before a conditional branch.
+ * This pass eliminates gotos by moving trivial instructions such a consts and
+ * moves before a conditional branch.
  *
  * For example:
  *
@@ -49,6 +49,158 @@ constexpr const char* METRIC_CLOBBERED_REGISTERS = "num_clobbered_registers";
 
 } // namespace
 
+// Helper function that scans a block for leading const and move instructions,
+// and returning a value that indicates whether there's no other kind of
+// instruction in the block.
+bool UpCodeMotionPass::gather_movable_instructions(
+    cfg::Block* b, std::vector<IRInstruction*>* instructions) {
+  for (auto& mie : InstructionIterable(b)) {
+    auto insn = mie.insn;
+
+    // We really only support at this time...
+    // - const, not const-wide, const-class, or const-string.
+    // - move and move-object, not move-wide
+    // - other trivial side-effect free computations that are not wide
+    switch (insn->opcode()) {
+    case OPCODE_NOP:
+      continue;
+
+    case OPCODE_CONST:
+    case OPCODE_MOVE:
+    case OPCODE_MOVE_OBJECT:
+
+    case OPCODE_NEG_INT:
+    case OPCODE_NOT_INT:
+    case OPCODE_NEG_FLOAT:
+    case OPCODE_INT_TO_FLOAT:
+    case OPCODE_FLOAT_TO_INT:
+    case OPCODE_INT_TO_BYTE:
+    case OPCODE_INT_TO_CHAR:
+    case OPCODE_INT_TO_SHORT:
+    case OPCODE_CMPL_FLOAT:
+    case OPCODE_CMPG_FLOAT:
+
+    case OPCODE_ADD_INT:
+    case OPCODE_SUB_INT:
+    case OPCODE_MUL_INT:
+    case OPCODE_AND_INT:
+    case OPCODE_OR_INT:
+    case OPCODE_XOR_INT:
+    case OPCODE_SHL_INT:
+    case OPCODE_SHR_INT:
+    case OPCODE_USHR_INT:
+    case OPCODE_ADD_INT_LIT16:
+    case OPCODE_RSUB_INT:
+    case OPCODE_MUL_INT_LIT16:
+    case OPCODE_AND_INT_LIT16:
+    case OPCODE_OR_INT_LIT16:
+    case OPCODE_XOR_INT_LIT16:
+    case OPCODE_ADD_INT_LIT8:
+    case OPCODE_RSUB_INT_LIT8:
+    case OPCODE_MUL_INT_LIT8:
+    case OPCODE_AND_INT_LIT8:
+    case OPCODE_OR_INT_LIT8:
+    case OPCODE_XOR_INT_LIT8:
+    case OPCODE_SHL_INT_LIT8:
+    case OPCODE_SHR_INT_LIT8:
+    case OPCODE_USHR_INT_LIT8:
+      instructions->push_back(insn);
+      continue;
+
+    default:
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// Helper function that, given a branch and a goto edge, figures out if all
+// movable instructions of the branch edge target block have a matching
+// (same dest register) leading instruction in the goto edge target block,
+// and that move-instructions don't read what's written.
+bool UpCodeMotionPass::gather_instructions_to_insert(
+    cfg::Edge* branch_edge,
+    cfg::Edge* goto_edge,
+    std::vector<IRInstruction*>* instructions_to_insert) {
+  cfg::Block* branch_block = branch_edge->target();
+  // The branch edge target block must end in a goto, and
+  // have a unique predecessor.
+  if (branch_block->branchingness() != opcode::BRANCH_GOTO ||
+      branch_block->preds().size() != 1) {
+    TRACE(UCM, 5, "[up code motion] giving up: branch block\n");
+    return false;
+  }
+
+  std::vector<IRInstruction*> ordered_branch_instructions;
+  // Gather all of the movable instructions of the branch edge
+  // target block; give up when there are any other instructions.
+  if (!gather_movable_instructions(branch_block,
+                                   &ordered_branch_instructions)) {
+    TRACE(UCM, 5, "[up code motion] giving up: gather\n");
+    return false;
+  }
+
+  cfg::Block* goto_block = goto_edge->target();
+  std::vector<IRInstruction*> ordered_instructions_in_goto_block;
+  // Gather all of the movable instructions of the branch edge
+  // goto block; it's okay if there are other trailing instructions.
+  gather_movable_instructions(goto_block, &ordered_instructions_in_goto_block);
+
+  // In the following, we check if all the registers assigned to by
+  // movable instructions of the branch edge target block also
+  // get assigned by the goto edge target block.
+  std::unordered_map<uint32_t, size_t> goto_instruction_ends;
+  for (size_t i = 0; i < ordered_instructions_in_goto_block.size(); i++) {
+    IRInstruction* insn = ordered_instructions_in_goto_block[i];
+    // only the first emplace for a particular register will stick
+    goto_instruction_ends.emplace(insn->dest(), i + 1);
+  }
+
+  std::unordered_set<uint32_t> destroyed_dests;
+  size_t ordered_instructions_in_goto_block_index_end = 0;
+  for (IRInstruction* insn : ordered_branch_instructions) {
+    uint32_t dest = insn->dest();
+    destroyed_dests.insert(dest);
+    auto it = goto_instruction_ends.find(dest);
+    if (it == goto_instruction_ends.end()) {
+      TRACE(UCM, 5,
+            "[up code motion] giving up: branch instruction assigns to "
+            "dest with no corresponding goto instructions\n");
+      return false;
+    }
+    ordered_instructions_in_goto_block_index_end =
+        std::max(ordered_instructions_in_goto_block_index_end, it->second);
+  }
+
+  if (destroyed_dests.size() == 0) {
+    return false;
+  }
+
+  // Do the goto-instructions need any src that the branch-instructions
+  // destroy?
+  for (size_t i = 0; i < ordered_instructions_in_goto_block_index_end; i++) {
+    IRInstruction* insn = ordered_instructions_in_goto_block[i];
+    for (auto src : insn->srcs()) {
+      if (destroyed_dests.count(src)) {
+        TRACE(UCM, 5,
+              "[up code motion] giving up: goto source overlaps with "
+              "branch dest\n");
+        return false;
+      }
+    }
+    destroyed_dests.erase(insn->dest());
+  }
+
+  // All tests passed. Let's populate instructions_to_insert...
+  for (IRInstruction* insn : ordered_branch_instructions) {
+    insn = new IRInstruction(*insn);
+    instructions_to_insert->push_back(insn);
+  }
+
+  return true;
+}
+
 UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
                                                        DexType* declaring_type,
                                                        DexTypeList* args,
@@ -57,31 +209,6 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
 
   code->build_cfg(/* editable = true*/);
   auto& cfg = code->cfg();
-
-  // Helper function that scans a block for leading const instructions,
-  // and returning a value that indicates whether there's no other kind of
-  // instruction in the block.
-  auto gather_movable_instructions =
-      [](cfg::Block* b,
-         std::unordered_map<uint32_t, IRInstruction*>* instructions) {
-        for (auto it = b->begin(); it != b->end(); it++) {
-          const MethodItemEntry& mie = *it;
-          if (mie.type != MFLOW_OPCODE) {
-            continue;
-          }
-
-          // We really only support const at this time;
-          // not const-wide, cost-class, or const-string.
-          IRInstruction* insn = mie.insn;
-          if (insn->opcode() != OPCODE_CONST) {
-            return false;
-          }
-
-          instructions->emplace(insn->dest(), insn);
-        }
-
-        return true;
-      };
 
   std::unique_ptr<type_inference::TypeInference> type_inference;
   std::unordered_set<cfg::Block*> blocks_to_remove;
@@ -109,69 +236,6 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
     cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
     always_assert(goto_edge != nullptr);
 
-    // Helper function that, given a branch and a goto edge, figures out if all
-    // movable const-instructions of the branch edge target block have a
-    // matching (same register) leading const instruction in the goto edge
-    // target block.
-    auto gather_instructions_to_insert =
-        [gather_movable_instructions](
-            cfg::Edge* branch_edge, cfg::Edge* goto_edge,
-            std::vector<IRInstruction*>* instructions_to_insert) {
-          cfg::Block* branch_block = branch_edge->target();
-          // The branch edge target block must end in a goto, and
-          // have a unique predecessor.
-          if (branch_block->branchingness() != opcode::BRANCH_GOTO ||
-              branch_block->preds().size() != 1) {
-            TRACE(UCM, 5, "[up code motion] giving up: branch block\n");
-            return false;
-          }
-
-          std::unordered_map<uint32_t, IRInstruction*> branch_instructions;
-          // Gather all of the const instructions of the branch edge
-          // target block; give up when there are any other instructions.
-          if (!gather_movable_instructions(branch_block,
-                                           &branch_instructions)) {
-            TRACE(UCM, 5, "[up code motion] giving up: gather\n");
-            return false;
-          }
-
-          cfg::Block* goto_block = goto_edge->target();
-          std::unordered_map<uint32_t, IRInstruction*> goto_instructions;
-
-          // Gather all of the const instructions of the branch edge
-          // goto block; it's okay if there are other trailing instructions.
-          gather_movable_instructions(goto_block, &goto_instructions);
-
-          // In the following, we check if all the registers assigned to by
-          // const instructions of the branch edge target block also
-          // get assigned by the goto edge target block.
-          if (goto_instructions.size() < branch_instructions.size()) {
-            TRACE(UCM, 5, "[up code motion] giving up: instructions.size()\n");
-            return false;
-          }
-
-          std::vector<uint32_t> dests;
-          for (auto& p : branch_instructions) {
-            uint32_t dest = p.first;
-            dests.push_back(dest);
-            if (goto_instructions.count(dest) == 0) {
-              TRACE(UCM, 5, "[up code motion] giving up: missing dest\n");
-              return false;
-            }
-          }
-
-          // We sort registers to make things determistic.
-          std::sort(dests.begin(), dests.end());
-
-          for (uint32_t dest : dests) {
-            IRInstruction* insn = branch_instructions.at(dest);
-            insn = new IRInstruction(*insn);
-            instructions_to_insert->push_back(insn);
-          }
-
-          return true;
-        };
-
     std::vector<IRInstruction*> instructions_to_insert;
     std::vector<uint32_t> clobbered_regs;
     // Can we do our code transformation directly?
@@ -194,49 +258,58 @@ UpCodeMotionPass::Stats UpCodeMotionPass::process_code(bool is_static,
       stats.inverted_conditional_branches++;
     }
 
-    // We want to insert the (cloned) const instructions of the branch edge
+    // We want to insert the (cloned) movable instructions of the branch edge
     // target block just in front of the if-instruction. However, if the if-
-    // instruction reads from the same registers that the const instructions
-    // write to, then we have a problem. To work around that problem, we move
-    // the problematic registers used by the if-instruction to new temp
-    // registers, and then rewrite the if-instruction to use the new temp
-    // register. Even though the new move instructions increase code size here,
-    // this is largely undone later by register allocation + copy propagation.
+    // instruction reads from the same registers that the movable
+    // instructions write to, then we have a problem. To work around that
+    // problem, we move the problematic registers used by the if-instruction to
+    // new temp registers, and then rewrite the if-instruction to use the new
+    // temp register. Even though the new move instructions increase code size
+    // here, this is largely undone later by register allocation + copy
+    // propagation.
 
+    std::unordered_map<uint32_t, uint32_t> temps;
     for (auto instruction_to_insert : instructions_to_insert) {
       auto dest = instruction_to_insert->dest();
       const auto& srcs = if_insn->srcs();
       for (size_t i = 0; i < srcs.size(); i++) {
         if (srcs[i] == dest) {
-          if (!type_inference) {
-            // We run the type inference once, and reuse results within this
-            // method. This is okay, even though we mutate the cfg, because
-            // we don't change the set of if-instructions, and only do per-
-            // instructions lookups in the type environments.
-            type_inference.reset(new type_inference::TypeInference(cfg));
-            type_inference->run(is_static, declaring_type, args);
+          uint32_t temp;
+          auto temp_it = temps.find(dest);
+          if (temp_it != temps.end()) {
+            temp = temp_it->second;
+          } else {
+            if (!type_inference) {
+              // We run the type inference once, and reuse results within this
+              // method. This is okay, even though we mutate the cfg, because
+              // we don't change the set of if-instructions, and only do per-
+              // instructions lookups in the type environments.
+              type_inference.reset(new type_inference::TypeInference(cfg));
+              type_inference->run(is_static, declaring_type, args);
+            }
+
+            auto& type_environments = type_inference->get_type_environments();
+            auto& type_environment = type_environments.at(if_insn);
+            auto type = type_environment.get_type(dest);
+            always_assert(!type.is_top() && !type.is_bottom());
+
+            temp = cfg.allocate_temp();
+            auto it = b->to_cfg_instruction_iterator(last_insn_it);
+            IRInstruction* move_insn = new IRInstruction(
+                type.element() == REFERENCE ? OPCODE_MOVE_OBJECT : OPCODE_MOVE);
+            move_insn->set_src(0, dest)->set_dest(temp);
+            cfg.insert_before(it, move_insn);
+            stats.clobbered_registers++;
+            temps.emplace(dest, temp);
           }
-
-          auto& type_environments = type_inference->get_type_environments();
-          auto& type_environment = type_environments.at(if_insn);
-          auto type = type_environment.get_type(dest);
-          always_assert(!type.is_top() && !type.is_bottom());
-
-          auto temp = cfg.allocate_temp();
-          auto it = b->to_cfg_instruction_iterator(last_insn_it);
-          IRInstruction* move_insn = new IRInstruction(
-              type.element() == REFERENCE ? OPCODE_MOVE_OBJECT : OPCODE_MOVE);
-          move_insn->set_arg_word_count(1)->set_src(0, dest)->set_dest(temp);
-          cfg.insert_before(it, move_insn);
           if_insn->set_src(i, temp);
-          stats.clobbered_registers++;
         }
       }
     }
 
     // Okay, we can apply our transformation:
-    // We insert the (cloned) const instructions of the branch edge target block
-    // just in front of the if-instruction.
+    // We insert the (cloned) movable instructions of the branch edge target
+    // block just in front of the if-instruction.
     // And then we remove the branch edge target block, rewiring the branch edge
     // to point to the goto target of the branch edge target block.
 

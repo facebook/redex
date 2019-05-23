@@ -35,7 +35,7 @@ void test(const std::string& code_str,
             stats.inverted_conditional_branches);
   EXPECT_EQ(expected_clobbered_registers, stats.clobbered_registers);
 
-  // printf("%s\n", assembler::to_string(code.get()).c_str());
+  printf("%s\n", assembler::to_string(code.get()).c_str());
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()));
 };
@@ -67,6 +67,89 @@ TEST_F(UpCodeMotionTest, basic) {
     )
   )";
   test(code_str, expected_str, 1, 1, 0, 0);
+}
+
+TEST_F(UpCodeMotionTest, move) {
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (move v1 v2)
+      (goto :end)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (move v1 v2)
+      (if-eqz v0 :end)
+
+      (const v1 0)
+
+      (:end)
+      (return v1)
+    )
+  )";
+  test(code_str, expected_str, 1, 1, 0, 0);
+}
+
+TEST_F(UpCodeMotionTest, add_ints) {
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (add-int v1 v3 v4)
+      (add-int v2 v5 v6)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (const v1 0)
+      (const v2 0)
+      (goto :end)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (const v1 0)
+      (const v2 0)
+      (if-eqz v0 :end)
+
+      (add-int v1 v3 v4)
+      (add-int v2 v5 v6)
+
+      (:end)
+      (return v1)
+    )
+  )";
+  test(code_str, expected_str, 2, 1, 0, 0);
+}
+
+TEST_F(UpCodeMotionTest, goto_source_overlaps_with_branch_dest) {
+  const auto& code_str = R"(
+    (
+      (if-eqz v0 :true)
+
+      (add-int v1 v2 v3)
+      (const v2 0)
+
+      (:end)
+      (return v1)
+
+      (:true)
+      (xor-int v1 v2 v3)
+      (const v2 0)
+      (goto :end)
+    )
+  )";
+  const auto& expected_str = code_str;
+  test(code_str, expected_str, 0, 0, 0, 0);
 }
 
 TEST_F(UpCodeMotionTest, multiple_consts) {

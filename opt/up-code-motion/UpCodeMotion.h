@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "ControlFlow.h"
 #include "Pass.h"
 
 class UpCodeMotionPass : public Pass {
@@ -26,4 +27,12 @@ class UpCodeMotionPass : public Pass {
                             DexType* declaring_type,
                             DexTypeList* args,
                             IRCode*);
+
+ private:
+  static bool gather_movable_instructions(
+      cfg::Block* b, std::vector<IRInstruction*>* instructions);
+  static bool gather_instructions_to_insert(
+      cfg::Edge* branch_edge,
+      cfg::Edge* goto_edge,
+      std::vector<IRInstruction*>* instructions_to_insert);
 };
