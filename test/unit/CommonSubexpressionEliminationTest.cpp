@@ -13,8 +13,16 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "VirtualScope.h"
 
-class CommonSubexpressionEliminationTest : public RedexTest {};
+class CommonSubexpressionEliminationTest : public RedexTest {
+ public:
+  CommonSubexpressionEliminationTest() {
+    // Calling get_vmethods under the hood initializes the object-class, which
+    // we need in the tests to create a proper scope
+    get_vmethods(get_object_type());
+  }
+};
 
 void test(const Scope& scope,
           const std::string& code_str,
@@ -74,7 +82,10 @@ TEST_F(CommonSubexpressionEliminationTest, simple) {
       (move v2 v3)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+
+  always_assert(get_object_type());
+  always_assert(type_class(get_object_type()));
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, pre_values) {
@@ -95,7 +106,7 @@ TEST_F(CommonSubexpressionEliminationTest, pre_values) {
       (move v2 v3)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, many) {
@@ -118,7 +129,7 @@ TEST_F(CommonSubexpressionEliminationTest, many) {
       (move v3 v4)
     )
   )";
-  test(Scope{}, code_str, expected_str, 2);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 2);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
@@ -140,7 +151,7 @@ TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
       (move v3 v4)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, commutative) {
@@ -162,7 +173,7 @@ TEST_F(CommonSubexpressionEliminationTest, commutative) {
       (move v3 v4)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wide) {
@@ -182,7 +193,7 @@ TEST_F(CommonSubexpressionEliminationTest, wide) {
       (move-wide v4 v6)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, object) {
@@ -204,7 +215,7 @@ TEST_F(CommonSubexpressionEliminationTest, object) {
       (move-object v1 v2)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget) {
@@ -228,7 +239,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget) {
       (move v2 v3)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
@@ -242,7 +253,7 @@ TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{}, code_str, expected_str, 0);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
@@ -257,7 +268,7 @@ TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{}, code_str, expected_str, 0);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
@@ -283,7 +294,7 @@ TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
       (move v2 v3)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
@@ -315,7 +326,7 @@ TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
       (move v3 v4)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
@@ -339,7 +350,7 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
       (move-object v1 v2)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
@@ -363,7 +374,47 @@ TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
       (move v3 v4)
     )
   )";
-  test(Scope{}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       empty_non_true_virtual_methods_are_not_barriers) {
+  ClassCreator creator(DexType::make_type("LTest0;"));
+  creator.set_super(get_object_type());
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LTest0;.test0:()V"));
+  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-virtual (v0) "LTest0;.test0:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-virtual (v0) "LTest0;.test0:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -400,7 +451,10 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{creator.create()}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -433,7 +487,10 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{creator.create()}, code_str, expected_str, 0);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -464,7 +521,10 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{creator.create()}, code_str, expected_str, 0);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -499,7 +559,10 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{creator.create()}, code_str, expected_str, 0);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -543,7 +606,10 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{creator.create()}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -584,7 +650,10 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{creator.create()}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -631,5 +700,8 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{creator.create()}, code_str, expected_str, 1);
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }

@@ -77,6 +77,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 using namespace sparta;
@@ -673,6 +674,10 @@ CommonSubexpressionElimination::SharedState::SharedState() {
 
 void CommonSubexpressionElimination::SharedState::init_method_barriers(
     const Scope& scope) {
+  auto non_true_virtuals = devirtualize(scope);
+  std::copy(non_true_virtuals.begin(), non_true_virtuals.end(),
+            std::inserter(m_non_true_virtuals, m_non_true_virtuals.end()));
+
   ConcurrentMap<DexMethod*, std::vector<Barrier>> method_barriers;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
@@ -824,10 +829,12 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
   always_assert(is_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
-  if (opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) {
+  if (opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT ||
+      opcode == OPCODE_INVOKE_VIRTUAL) {
     auto method_ref = insn->get_method();
     DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
-    if (method != nullptr) {
+    if (method != nullptr && (opcode != OPCODE_INVOKE_VIRTUAL ||
+                              m_non_true_virtuals.count(method))) {
       auto it = m_method_barriers.find(method);
       if (it != m_method_barriers.end()) {
         auto& barriers = it->second;

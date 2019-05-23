@@ -72,6 +72,7 @@ class CommonSubexpressionElimination {
     std::unordered_set<DexType*> m_safe_types;
     std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
     std::unordered_map<DexMethod*, std::vector<Barrier>> m_method_barriers;
+    std::unordered_set<DexMethod*> m_non_true_virtuals;
   };
 
   CommonSubexpressionElimination(SharedState* shared_state,
