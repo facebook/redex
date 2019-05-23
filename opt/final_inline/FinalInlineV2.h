@@ -24,7 +24,7 @@ class FinalInlinePassV2 : public Pass {
 
   void bind_config() override {
     bind("aggressively_delete", true, m_config.aggressively_delete);
-    bind("inline_instance_field", false, m_config.inline_instance_field);
+    bind("inline_instance_field", true, m_config.inline_instance_field);
     bind("black_list_types",
          {},
          m_config.black_list_types,
