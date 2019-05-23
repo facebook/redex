@@ -116,11 +116,15 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::vector<DexMethod*>& non_true_virtuals) {
+    const std::vector<DexMethod*>& non_true_virtuals,
+    const std::unordered_set<const DexType*>& field_black_list) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be
     // written to by non-Dex bytecode.
     // All fields not in m_known_fields will be bound to Top.
+    if (field_black_list.count(field->get_class())) {
+      return;
+    }
     if (is_static(field) && !root(field)) {
       m_known_fields.emplace(field);
     }
@@ -129,8 +133,12 @@ WholeProgramState::WholeProgramState(
     }
     m_known_fields.emplace(field);
   });
-  // Put non true virtual methods in known methods.
-  m_known_methods.insert(non_true_virtuals.begin(), non_true_virtuals.end());
+  // Put non-root non true virtual methods in known methods.
+  for (const auto& non_true_virtual : non_true_virtuals) {
+    if (!root(non_true_virtual)) {
+      m_known_methods.emplace(non_true_virtual);
+    }
+  }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
     if (!method->is_virtual()) {
       // Put non virtual methods in known methods.

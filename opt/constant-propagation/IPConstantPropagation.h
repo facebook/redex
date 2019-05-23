@@ -25,6 +25,7 @@ class PassImpl : public Pass {
     // Setting this to zero means that all field values and return values will
     // be treated as Top.
     uint64_t max_heap_analysis_iterations{0};
+    std::unordered_set<const DexType*> field_black_list;
 
     Transform::Config transform;
     RuntimeAssertTransform::Config runtime_assert;
@@ -44,6 +45,10 @@ class PassImpl : public Pass {
     bind("max_heap_analysis_iterations",
          UINT64_C(0),
          m_config.max_heap_analysis_iterations);
+    bind("field_black_list",
+         {},
+         m_config.field_black_list,
+         "List of types whose fields that this optimization will omit.");
   }
 
   void run_pass(DexStoresVector& stores,

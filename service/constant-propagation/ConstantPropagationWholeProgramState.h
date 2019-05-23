@@ -46,7 +46,8 @@ class WholeProgramState {
 
   WholeProgramState(const Scope&,
                     const interprocedural::FixpointIterator&,
-                    const std::vector<DexMethod*>&);
+                    const std::vector<DexMethod*>&,
+                    const std::unordered_set<const DexType*>&);
 
   /*
    * If we only have knowledge of the constant values in a single class --
