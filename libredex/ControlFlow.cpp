@@ -80,15 +80,10 @@ bool cannot_throw(cfg::Block* b) {
 }
 
 /*
- * Return true if this is empty or only has positions in it
+ * Return true if the block does not contain any instruction.
  */
 bool is_effectively_empty(cfg::Block* b) {
-  for (const auto& mie : *b) {
-    if (mie.type != MFLOW_POSITION) {
-      return false;
-    }
-  }
-  return true;
+  return b->get_first_insn() == b->end();
 }
 
 /*
