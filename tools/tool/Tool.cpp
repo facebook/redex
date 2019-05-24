@@ -127,10 +127,10 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
     for (const auto& system_jar : system_jars) {
       if (m_verbose) {
         std::cout << "Loading " << system_jar << std::endl;
-        if (!load_jar_file(system_jar.c_str())) {
-          throw std::runtime_error("Could not load system jar file '" +
-                                   system_jar + "'");
-        }
+      }
+      if (!load_jar_file(system_jar.c_str())) {
+        throw std::runtime_error("Could not load system jar file '" +
+                                 system_jar + "'");
       }
     }
   }
