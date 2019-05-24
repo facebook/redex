@@ -271,7 +271,8 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<const DexMethod*, std::vector<DexMethod*>> callee_caller;
+  std::map<const DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
+      callee_caller;
   // this map is ordered in order that we inline our methods in a repeatable
   // fashion so as to create reproducible binaries
   std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>

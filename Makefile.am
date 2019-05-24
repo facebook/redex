@@ -298,6 +298,7 @@ redex_all_SOURCES = \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
+	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
