@@ -847,10 +847,6 @@ def finalize_redex(state):
                          'class method info map', 'redex-class-method-info-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
                          'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'reachability-graph',
-                         'reachability graph', 'redex-reachability-graph')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'method-override-graph',
-                         'method override graph', 'redex-method-override-graph')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
                          'iodi metadata', 'iodi-metadata')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'graphql_dead_queries.txt',
