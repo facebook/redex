@@ -837,12 +837,6 @@ def finalize_redex(state):
                          'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-optres-mapping.json',
-                         'resid map after optres pass', 'redex-resid-optres-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-dedup-mapping.json',
-                         'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-splitres-mapping.json',
-                         'resid map after split pass', 'redex-resid-splitres-mapping.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt',
                          'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
