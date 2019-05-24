@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IntroduceSwitch.h"
 
@@ -24,28 +25,6 @@ struct InsertSwitchTest : testing::Test {
     m_method = static_cast<DexMethod*>(DexMethod::make_method(
         get_object_type(), DexString::make_string("testMethod"), proto));
     m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    m_method->set_code(std::make_unique<IRCode>(m_method, 1));
-  }
-
-  std::pair<MethodItemEntry*, BranchTarget*> create_goto() {
-    using namespace dex_asm;
-
-    auto goto_mie = new MethodItemEntry(dasm(OPCODE_GOTO));
-    auto target = new BranchTarget(goto_mie);
-    return {goto_mie, target};
-  }
-
-  std::pair<std::pair<IRInstruction*, MethodItemEntry*>, BranchTarget*>
-  create_if_ne(dex_asm::Operand switch_arg, dex_asm::Operand constant) {
-    using namespace dex_asm;
-    auto const_set = dasm(OPCODE_CONST, {0_v, constant});
-    auto if_ne = new MethodItemEntry(dasm(OPCODE_IF_NE, {0_v, switch_arg}));
-    auto target = new BranchTarget(if_ne);
-    return {{const_set, if_ne}, target};
-  }
-
-  void clear_method_code() {
-    m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
   ~InsertSwitchTest() { delete g_redex; }
@@ -55,71 +34,75 @@ struct InsertSwitchTest : testing::Test {
 // Result:  switch r {ABC}; D
 TEST_F(InsertSwitchTest, simpleCompactSwitch) {
   using namespace dex_asm;
-  clear_method_code();
 
-  auto gt1End = create_goto();
-  auto gt2End = create_goto();
-  auto gt3End = create_goto();
-  auto gt4End = create_goto();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v4 2)
 
-  auto code = m_method->get_code();
+      ; let's have an infinite loop so that the last block has a succ
+      (:begin)
+      (const v0 0)
+      (if-ne v0 v3 :a)
 
-  code->push_back(dasm(OPCODE_CONST, {4_v, 2_L}));
+      (add-int v0 v1 v1)
+      (goto :d)
 
-  auto first_branch = create_if_ne(3_v, 0_L);
-  auto second_branch = create_if_ne(3_v, 1_L);
-  auto third_branch = create_if_ne(3_v, 2_L);
+      (:a)
+      (const v0 1)
+      (if-ne v0 v3 :b)
 
-  // let's have an infinite loop so that the last block has a succ
-  code->push_back(gt4End.second);
+      (add-int v0 v2 v2)
+      (goto :d)
 
-  code->push_back(first_branch.first.first /* set constant*/);
-  code->push_back(*first_branch.first.second /* branch */);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 1_v, 1_v}));
-  code->push_back(*gt1End.first);
+      (:b)
+      (const v0 2)
+      (if-ne v0 v3 :c)
 
-  code->push_back(first_branch.second /* branch target*/);
-  code->push_back(second_branch.first.first);
-  code->push_back(*second_branch.first.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 2_v, 2_v}));
-  code->push_back(*gt2End.first);
+      (add-int v0 v4 v4)
+      (goto :d)
 
-  code->push_back(second_branch.second);
-  code->push_back(third_branch.first.first);
-  code->push_back(*third_branch.first.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 4_v, 4_v}));
-  code->push_back(*gt3End.first);
+      (:c)
+      (nop)
 
-  code->push_back(third_branch.second);
-  code->push_back(dasm(OPCODE_NOP));
+      (:d)
+      (add-int v4 v4 v4)
+      (goto :begin)
+    )
+  )");
+  m_method->set_code(std::move(code));
 
-  code->push_back(gt1End.second);
-  code->push_back(gt2End.second);
-  code->push_back(gt3End.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {4_v, 4_v, 4_v}));
-  code->push_back(*gt4End.first);
-
-  code->set_registers_size(5);
-
-  printf("Original code: %s\n", SHOW(m_method->get_code()));
   IntroduceSwitchPass().run(m_method);
-  printf("Result code: %s\n", SHOW(m_method->get_code()));
-  m_method->get_code()->build_cfg(/* editable */ false);
 
-  printf("Result cfg: %s\n", SHOW(m_method->get_code()->cfg()));
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v4 2)
 
-  auto final_code = m_method->get_code();
-  auto switch_insn_OPCODE = OPCODE_NOP;
-  for (auto i = final_code->begin(); i != final_code->end(); i++) {
-    if (i->insn->opcode() == OPCODE_PACKED_SWITCH) {
-      switch_insn_OPCODE = OPCODE_PACKED_SWITCH;
-    } else if (i->insn->opcode() == OPCODE_SPARSE_SWITCH) {
-      switch_insn_OPCODE = OPCODE_SPARSE_SWITCH;
-    }
-  }
-  EXPECT_EQ(OPCODE_PACKED_SWITCH, switch_insn_OPCODE);
-  EXPECT_EQ(6, final_code->cfg().blocks().size());
-  EXPECT_EQ(10, final_code->count_opcodes());
+      (:begin)
+      (const v0 0)
+      (packed-switch v3 (:a :b :c))
+
+      (nop)
+
+      (:end)
+      (add-int v4 v4 v4)
+      (goto :begin)
+
+      (:c 2)
+      (add-int v0 v4 v4)
+      (goto :end)
+
+      (:b 1)
+      (add-int v0 v2 v2)
+      (goto :end)
+
+      (:a 0)
+      (add-int v0 v1 v1)
+      (goto :end)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(m_method->get_code()));
 }
 
 // Code:    if r==i A else if r==i+10 B else if r==i+2 C
@@ -127,123 +110,110 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
 TEST_F(InsertSwitchTest, simplifySparseSwitch) {
   using namespace dex_asm;
 
-  clear_method_code();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v4 2)
 
-  auto gt1End = create_goto();
-  auto gt2End = create_goto();
-  auto gt3End = create_goto();
-  auto gt4End = create_goto();
+      (:begin)
+      (const v0 0)
+      (if-ne v0 v3 :a)
 
-  auto code = m_method->get_code();
+      (add-int v1 v1 v1)
+      (goto :exit)
 
-  code->push_back(dasm(OPCODE_CONST, {4_v, 2_L}));
+      (:a)
+      (const v0 10)
+      (if-ne v0 v3 :b)
 
-  auto first_branch = create_if_ne(3_v, 0_L);
-  auto second_branch = create_if_ne(3_v, 10_L);
-  auto third_branch = create_if_ne(3_v, 2_L);
+      (add-int v2 v2 v2)
+      (goto :exit)
 
-  // let's have an infinite loop so that the last block has a succ
-  code->push_back(gt4End.second);
+      (:b)
+      (const v0 2)
+      (if-ne v0 v3 :c)
 
-  code->push_back(first_branch.first.first /* set constant*/);
-  code->push_back(*first_branch.first.second /* branch */);
-  code->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 1_v}));
-  code->push_back(*gt1End.first);
+      (add-int v1 v2 v1)
+      (goto :exit)
 
-  code->push_back(first_branch.second /* branch target*/);
-  code->push_back(second_branch.first.first);
-  code->push_back(*second_branch.first.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {2_v, 2_v, 2_v}));
-  code->push_back(*gt2End.first);
+      (:c)
+      (nop)
 
-  code->push_back(second_branch.second);
-  code->push_back(third_branch.first.first);
-  code->push_back(*third_branch.first.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {1_v, 2_v, 1_v}));
-  code->push_back(*gt3End.first);
-
-  code->push_back(third_branch.second);
-  code->push_back(dasm(OPCODE_NOP));
-
-  code->push_back(gt1End.second);
-  code->push_back(gt2End.second);
-  code->push_back(gt3End.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {4_v, 1_v, 2_v}));
-  code->push_back(*gt4End.first);
-
-  code->set_registers_size(5);
-
-  printf("Original code: %s\n", SHOW(m_method->get_code()));
-  m_method->get_code()->build_cfg(/* editable */ false);
-  printf("Result cfg: %s\n", SHOW(m_method->get_code()->cfg()));
+      (:exit)
+      (add-int v4 v1 v2)
+      (goto :begin)
+    )
+  )");
+  m_method->set_code(std::move(code));
 
   IntroduceSwitchPass().run(m_method);
-  printf("Result code: %s\n", SHOW(m_method->get_code()));
-  m_method->get_code()->build_cfg(/* editable */ false);
 
-  printf("Result cfg: %s\n", SHOW(m_method->get_code()->cfg()));
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v4 2)
 
-  auto final_code = m_method->get_code();
-  auto switch_insn_OPCODE = OPCODE_NOP;
-  for (auto i = final_code->begin(); i != final_code->end(); i++) {
-    if (i->insn->opcode() == OPCODE_PACKED_SWITCH) {
-      switch_insn_OPCODE = OPCODE_PACKED_SWITCH;
-    } else if (i->insn->opcode() == OPCODE_SPARSE_SWITCH) {
-      switch_insn_OPCODE = OPCODE_SPARSE_SWITCH;
-    }
-  }
-  EXPECT_EQ(OPCODE_SPARSE_SWITCH, switch_insn_OPCODE);
-  EXPECT_EQ(6, final_code->cfg().blocks().size());
-  EXPECT_EQ(10, final_code->count_opcodes());
+      (:begin)
+      (const v0 0)
+      (sparse-switch v3 (:a :b :c))
+
+      (nop)
+
+      (:exit)
+      (add-int v4 v1 v2)
+      (goto :begin)
+
+      (:c 10)
+      (add-int v2 v2 v2)
+      (goto :exit)
+
+      (:b 2)
+      (add-int v1 v2 v1)
+      (goto :exit)
+
+      (:a 0)
+      (add-int v1 v1 v1)
+      (goto :exit)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(m_method->get_code()));
 }
 
 // Code:    if r==i A else if r==i+10 B
 // Result:  no change
 TEST_F(InsertSwitchTest, skipSmallChain) {
   using namespace dex_asm;
-  clear_method_code();
 
-  auto gt1End = create_goto();
-  auto gt2End = create_goto();
-  auto gt3End = create_goto();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v3 2)
 
-  auto code = m_method->get_code();
+      (:begin)
+      (const v0 0)
+      (if-ne v0 v3 :a)
 
-  code->push_back(dasm(OPCODE_CONST, {3_v, 2_L}));
+      (add-int v0 v0 v0)
 
-  auto first_branch = create_if_ne(3_v, 0_L);
-  auto second_branch = create_if_ne(3_v, 10_L);
+      (:exit)
+      (add-int v0 v0 v0)
+      (goto :begin)
 
-  code->push_back(gt3End.second);
-  code->push_back(first_branch.first.first /* set constant*/);
-  code->push_back(*first_branch.first.second /* branch */);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*gt1End.first);
+      (:a)
+      (const v0 10)
+      (if-ne v0 v3 :b)
 
-  code->push_back(first_branch.second /* branch target*/);
-  code->push_back(second_branch.first.first);
-  code->push_back(*second_branch.first.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 1_v}));
-  code->push_back(*gt2End.first);
+      (add-int v0 v0 v1)
+      (goto :exit)
 
-  code->push_back(second_branch.second);
-  code->push_back(dasm(OPCODE_NOP));
+      (:b)
+      (nop)
+      (goto :exit)
+    )
+  )");
+  m_method->set_code(std::move(code));
+  const std::string& input = assembler::to_string(m_method->get_code());
 
-  code->push_back(gt1End.second);
-  code->push_back(gt2End.second);
-  code->push_back(dasm(OPCODE_ADD_INT, {0_v, 0_v, 0_v}));
-  code->push_back(*gt3End.first);
-  code->set_registers_size(4);
-
-  printf("Original code: %s\n", SHOW(m_method->get_code()));
   IntroduceSwitchPass().run(m_method);
-  printf("Result code: %s\n", SHOW(m_method->get_code()));
-  m_method->get_code()->build_cfg(/* editable */ false);
 
-  printf("Result cfg: %s\n", SHOW(m_method->get_code()->cfg()));
-
-  EXPECT_EQ(
-      17,
-      std::distance(m_method->get_code()->begin(), m_method->get_code()->end()))
-      << show(code);
+  EXPECT_EQ(input, assembler::to_string(m_method->get_code()));
 }

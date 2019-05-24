@@ -123,9 +123,9 @@ class IntroduceSwitch {
               } else {
                 sparse++;
               }
-              IRInstruction* insn = new IRInstruction(
+              IRInstruction* new_switch = new IRInstruction(
                   compact ? OPCODE_PACKED_SWITCH : OPCODE_SPARSE_SWITCH);
-              insn->set_src(0, possible_start_block.second);
+              new_switch->set_src(0, possible_start_block.second);
               std::vector<std::pair<int32_t, cfg::Block*>> edges;
               cfg::Block* default_block = nullptr;
 
@@ -160,12 +160,12 @@ class IntroduceSwitch {
 
               for (auto it = block->begin(); it != block->end(); it++) {
                 if (it->insn == possible_start_block.first) {
+                  // this also deletes the outgoing branch edges
                   block->remove_insn(it);
                   break;
                 }
               }
-              cfg.delete_succ_edges(block);
-              cfg.create_branch(block, insn, edges.back().second, edges);
+              cfg.create_branch(block, new_switch, default_block, edges);
             }
           }
         }
