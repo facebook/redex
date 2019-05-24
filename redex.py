@@ -837,8 +837,6 @@ def finalize_redex(state):
                          'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt',
-                         'metadata file for instrumentation', 'redex-instrument-metadata.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
                          'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',

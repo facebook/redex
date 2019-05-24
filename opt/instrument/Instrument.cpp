@@ -1156,7 +1156,7 @@ void InstrumentPass::bind_config() {
   bind("blacklist", {}, m_options.blacklist);
   bind("whitelist", {}, m_options.whitelist);
   bind("blacklist_file_name", "", m_options.blacklist_file_name);
-  bind("metadata_file_name", "instrument-mapping.txt",
+  bind("metadata_file_name", "redex-instrument-metadata.txt",
        m_options.metadata_file_name);
   bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
   bind("num_shards", {1}, m_options.num_shards);
