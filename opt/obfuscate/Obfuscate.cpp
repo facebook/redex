@@ -138,7 +138,7 @@ void get_totals(Scope& scope, RenameStats& stats) {
 
 void obfuscate(Scope& scope,
                RenameStats& stats,
-               const ObfuscatePass::Config& config) {
+               bool avoid_colliding_debug_name) {
   get_totals(scope, stats);
   ClassHierarchy ch = build_type_hierarchy(scope);
 
@@ -256,8 +256,7 @@ void obfuscate(Scope& scope,
   stats.fields_renamed = field_name_manager.commit_renamings_to_dex();
   stats.dmethods_renamed = method_name_manager.commit_renamings_to_dex();
 
-  stats.vmethods_renamed =
-      rename_virtuals(scope, config.avoid_colliding_debug_name);
+  stats.vmethods_renamed = rename_virtuals(scope, avoid_colliding_debug_name);
 
   debug_logging(scope);
 
@@ -277,24 +276,25 @@ void ObfuscatePass::run_pass(DexStoresVector& stores,
                              ConfigFiles& /* conf */,
                              PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(OBFUSCATE, 1, "ObfuscatePass not run because no ProGuard configuration was provided.");
+    TRACE(OBFUSCATE, 1,
+          "ObfuscatePass not run because no ProGuard configuration was "
+          "provided.");
     return;
   }
   auto scope = build_class_scope(stores);
   RenameStats stats;
-  obfuscate(scope, stats, m_config);
-  mgr.incr_metric(
-      METRIC_FIELD_TOTAL, static_cast<int>(stats.fields_total));
-  mgr.incr_metric(
-      METRIC_FIELD_RENAMED, static_cast<int>(stats.fields_renamed));
-  mgr.incr_metric(
-      METRIC_DMETHODS_TOTAL, static_cast<int>(stats.dmethods_total));
-  mgr.incr_metric(
-      METRIC_DMETHODS_RENAMED, static_cast<int>(stats.dmethods_renamed));
-  mgr.incr_metric(
-      METRIC_VMETHODS_TOTAL, static_cast<int>(stats.vmethods_total));
-  mgr.incr_metric(
-      METRIC_VMETHODS_RENAMED, static_cast<int>(stats.vmethods_renamed));
+  auto debug_info_kind = mgr.get_redex_options().debug_info_kind;
+  obfuscate(scope, stats, is_iodi(debug_info_kind));
+  mgr.incr_metric(METRIC_FIELD_TOTAL, static_cast<int>(stats.fields_total));
+  mgr.incr_metric(METRIC_FIELD_RENAMED, static_cast<int>(stats.fields_renamed));
+  mgr.incr_metric(METRIC_DMETHODS_TOTAL,
+                  static_cast<int>(stats.dmethods_total));
+  mgr.incr_metric(METRIC_DMETHODS_RENAMED,
+                  static_cast<int>(stats.dmethods_renamed));
+  mgr.incr_metric(METRIC_VMETHODS_TOTAL,
+                  static_cast<int>(stats.vmethods_total));
+  mgr.incr_metric(METRIC_VMETHODS_RENAMED,
+                  static_cast<int>(stats.vmethods_renamed));
 }
 
 static ObfuscatePass s_pass;

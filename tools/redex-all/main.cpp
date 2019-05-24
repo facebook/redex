@@ -54,6 +54,12 @@
 #include "Warning.h"
 
 namespace {
+
+// Do *not* change these values. Many services will break.
+constexpr const char* LINE_NUMBER_MAP = "redex-line-number-map-v2";
+constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
+constexpr const char* IODI_METADATA = "iodi-metadata";
+
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
 void print_usage() {
@@ -82,6 +88,10 @@ UNUSED void dump_args(const Arguments& args) {
   std::cout << "art_build: " << args.redex_options.is_art_build << std::endl;
   std::cout << "enable_instrument_pass: "
             << args.redex_options.instrument_pass_enabled << std::endl;
+  std::cout << "min_sdk: " << args.redex_options.min_sdk << std::endl;
+  std::cout << "debug_info_kind: "
+            << debug_info_kind_to_string(args.redex_options.debug_info_kind)
+            << std::endl;
   std::cout << "jar_paths: " << std::endl;
   for (const auto& e : args.jar_paths) {
     std::cout << "  " << e << std::endl;
@@ -424,6 +434,9 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
+  args.redex_options.debug_info_kind =
+      parse_debug_info_kind(args.config.get("debug_info_kind", "").asString());
+
   // Development usage only
   if (vm.count("stop-pass")) {
     args.stop_pass_idx = vm["stop-pass"].as<int>();
@@ -612,14 +625,11 @@ void output_moved_methods_map(const char* path, const ConfigFiles& conf) {
 }
 
 void write_debug_line_mapping(
-    const std::string& debug_line_mapping_filename_v2,
+    const std::string& debug_line_map_filename,
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
     const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
         code_debug_lines,
     DexStoresVector& stores) {
-  if (debug_line_mapping_filename_v2.empty()) {
-    return;
-  }
   /*
    * Binary file format:
    * magic number 0xfaceb000 (4 byte)
@@ -642,7 +652,7 @@ void write_debug_line_mapping(
   // method-id => offset info, so set the start of offset to be after that.
   int binary_offset =
       3 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
-  std::ofstream ofs(debug_line_mapping_filename_v2.c_str(),
+  std::ofstream ofs(debug_line_map_filename.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
   ofs.write((const char*)&magic, bit_32_size);
@@ -834,6 +844,8 @@ void redex_backend(const PassManager& manager,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
+  const RedexOptions& redex_options = manager.get_redex_options();
+
   instruction_lowering::Stats instruction_lowering_stats;
   {
     bool lower_with_cfg = true;
@@ -861,34 +873,25 @@ void redex_backend(const PassManager& manager,
   dex_stats_t output_totals;
   std::vector<dex_stats_t> output_dexes_stats;
 
-  auto pos_output_v2 =
-      conf.metafile(json_cfg.get("line_number_map_v2", std::string()));
-  auto debug_line_mapping_filename_v2 =
-      conf.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
-  auto iodi_metadata_filename =
-      conf.metafile(json_cfg.get("iodi_metadata", std::string()));
+  const std::string& line_number_map_filename = conf.metafile(LINE_NUMBER_MAP);
+  const std::string& debug_line_map_filename = conf.metafile(DEBUG_LINE_MAP);
+  const std::string& iodi_metadata_filename = conf.metafile(IODI_METADATA);
+
+  auto dik = redex_options.debug_info_kind;
+  bool needs_addresses = dik == DebugInfoKind::NoPositions || is_iodi(dik);
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
-  if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
-      !iodi_metadata_filename.empty()) {
-    fprintf(stderr,
-            "[WARNING] IODI will not be used because it requires"
-            " debug_line_method_map_v2 and line_number_map_v2 to be set"
-            " (these artifacts are required for leaveraging iodi_metadata)!\n");
-    iodi_metadata_filename = "";
-  } else if (!iodi_metadata_filename.empty()) {
-    TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
-          iodi_enable_overloaded_methods ? "yes" : "no");
-  }
 
-  std::unique_ptr<PositionMapper> pos_mapper(
-      PositionMapper::make(pos_output_v2));
+  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
+        iodi_enable_overloaded_methods ? "yes" : "no");
+
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
+      dik == DebugInfoKind::NoCustomSymbolication ? ""
+                                                  : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);
-  bool needs_method_to_id = !iodi_metadata_filename.empty() ||
-                            !debug_line_mapping_filename_v2.empty();
-  if (!iodi_metadata_filename.empty()) {
+  if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
   }
@@ -910,25 +913,26 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
-      auto this_dex_stats = write_classes_to_dex(
-          ss.str(),
-          &store.get_dexen()[i],
-          locator_index,
-          emit_name_based_locators,
-          store_number,
-          i,
-          conf,
-          pos_mapper.get(),
-          needs_method_to_id ? &method_to_id : nullptr,
-          debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines,
-          iodi_metadata_filename.empty() ? nullptr : &iodi_metadata,
-          stores[0].get_dex_magic());
+      auto this_dex_stats =
+          write_classes_to_dex(redex_options,
+                               ss.str(),
+                               &store.get_dexen()[i],
+                               locator_index,
+                               emit_name_based_locators,
+                               store_number,
+                               i,
+                               conf,
+                               pos_mapper.get(),
+                               needs_addresses ? &method_to_id : nullptr,
+                               needs_addresses ? &code_debug_lines : nullptr,
+                               is_iodi(dik) ? &iodi_metadata : nullptr,
+                               stores[0].get_dex_magic());
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
 
-  if (!iodi_metadata_filename.empty()) {
+  if (is_iodi(dik)) {
     Timer t("Compute IODI caller metadata");
     iodi_metadata.mark_callers();
   }
@@ -954,9 +958,13 @@ void redex_backend(const PassManager& manager,
     Timer t("Writing stats");
     auto method_move_map =
         conf.metafile(json_cfg.get("method_move_map", std::string()));
-    write_debug_line_mapping(debug_line_mapping_filename_v2, method_to_id,
-                             code_debug_lines, stores);
-    iodi_metadata.write(iodi_metadata_filename, method_to_id);
+    if (needs_addresses) {
+      write_debug_line_mapping(debug_line_map_filename, method_to_id,
+                               code_debug_lines, stores);
+    }
+    if (is_iodi(dik)) {
+      iodi_metadata.write(iodi_metadata_filename, method_to_id);
+    }
     pos_mapper->write_map();
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);

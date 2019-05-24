@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -6,6 +6,8 @@
  */
 
 #include <algorithm>
+#include <boost/filesystem.hpp>
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -13,11 +15,13 @@
 
 #include <json/json.h>
 
-#include "DexOutput.h"
 #include "DexLoader.h"
-#include "InstructionLowering.h"
+#include "DexOutput.h"
 #include "IRCode.h"
+#include "InstructionLowering.h"
 #include "TestGenerator.h"
+
+namespace fs = boost::filesystem;
 
 void EquivalenceTest::generate(DexClass* cls) {
   setup(cls);
@@ -65,7 +69,9 @@ int main(int argc, char* argv[]) {
   EquivalenceTest::generate_all(*runner_cls);
 
   Json::Value json(Json::objectValue);
-  ConfigFiles conf(json);
+  char templ[] = "redex_equivalence_test_XXXXXX";
+  auto tmpdir = mkdtemp(templ);
+  ConfigFiles conf(json, tmpdir);
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
   DexStore store("classes");
@@ -75,7 +81,9 @@ int main(int argc, char* argv[]) {
   stores.emplace_back(std::move(store));
   instruction_lowering::run(stores);
 
-  write_classes_to_dex(dex,
+  RedexOptions redex_options;
+  write_classes_to_dex(redex_options,
+                       dex,
                        &classes,
                        nullptr /* LocatorIndex* */,
                        false /* name-based locators */,
@@ -88,6 +96,7 @@ int main(int argc, char* argv[]) {
                        nullptr /* IODIMetadata* */,
                        stores[0].get_dex_magic());
 
+  fs::remove_all(tmpdir);
   delete g_redex;
   return 0;
 }

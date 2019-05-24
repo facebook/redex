@@ -7,12 +7,15 @@
 
 #include "RedexOptions.h"
 
+#include "Debug.h"
+
 void RedexOptions::serialize(Json::Value& entry_data) const {
   auto& options = entry_data["redex_options"];
   options["verify_none_enabled"] = verify_none_enabled;
   options["is_art_build"] = is_art_build;
   options["instrument_pass_enabled"] = instrument_pass_enabled;
   options["min_sdk"] = min_sdk;
+  options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
 }
 
 void RedexOptions::deserialize(const Json::Value& entry_data) {
@@ -21,6 +24,8 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   is_art_build = options_data["is_art_build"].asBool();
   instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
   min_sdk = options_data["min_sdk"].asInt();
+  debug_info_kind =
+      parse_debug_info_kind(options_data["debug_info_kind"].asString());
 }
 
 Architecture parse_architecture(const std::string& s) {
@@ -53,4 +58,53 @@ const char* architecture_to_string(Architecture arch) {
   default:
     return "UNKNOWN";
   }
+}
+
+DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
+  if (raw_kind == "no_custom_symbolication" || raw_kind == "") {
+    return DebugInfoKind::NoCustomSymbolication;
+  } else if (raw_kind == "per_method_debug") {
+    return DebugInfoKind::PerMethodDebug;
+  } else if (raw_kind == "no_positions") {
+    return DebugInfoKind::NoPositions;
+  } else if (raw_kind == "iodi") {
+    return DebugInfoKind::InstructionOffsets;
+  } else if (raw_kind == "iodi_per_arity") {
+    return DebugInfoKind::InstructionOffsetsPerArity;
+  } else {
+    std::ostringstream os;
+    bool first{true};
+    for (uint32_t i = 0; i < static_cast<uint32_t>(DebugInfoKind::Size); ++i) {
+      if (!first) {
+        os << ", ";
+      }
+      first = false;
+      os << '"' << debug_info_kind_to_string(static_cast<DebugInfoKind>(i))
+         << '"';
+    }
+    always_assert_log(false, "Unknown debug info kind. Supported kinds are %s",
+                      os.str().c_str());
+  }
+}
+
+std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
+  switch (kind) {
+  case DebugInfoKind::NoCustomSymbolication:
+    return "no_custom_symbolication";
+  case DebugInfoKind::PerMethodDebug:
+    return "per_method_debug";
+  case DebugInfoKind::NoPositions:
+    return "no_positions";
+  case DebugInfoKind::InstructionOffsets:
+    return "iodi";
+  case DebugInfoKind::InstructionOffsetsPerArity:
+    return "iodi_per_arity";
+  case DebugInfoKind::Size:
+    always_assert_log(false, "DebugInfoKind::Size should not be used");
+  }
+}
+
+bool is_iodi(const DebugInfoKind& kind) {
+  return kind == DebugInfoKind::InstructionOffsets ||
+         kind == DebugInfoKind::InstructionOffsetsPerArity;
 }

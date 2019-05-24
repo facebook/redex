@@ -82,7 +82,8 @@ void write_ir_meta(const std::string& output_ir_dir, DexStoresVector& stores) {
  * Write intermediate dex to files.
  * Development usage only
  */
-void write_intermediate_dex(const ConfigFiles& conf,
+void write_intermediate_dex(const RedexOptions& redex_options,
+                            const ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             DexStoresVector& stores,
                             Json::Value& dex_files) {
@@ -120,7 +121,8 @@ void write_intermediate_dex(const ConfigFiles& conf,
       }
       ss << ".dex";
 
-      write_classes_to_dex(ss.str(),
+      write_classes_to_dex(redex_options,
+                           ss.str(),
                            &store.get_dexen()[i],
                            nullptr /* locator_index */,
                            false /* name-based locators */,
@@ -207,8 +209,8 @@ void write_all_intermediate(const ConfigFiles& /* conf */,
   redex_options.serialize(entry_data);
   entry_data["dex_list"] = Json::arrayValue;
   write_ir_meta(output_ir_dir, stores);
-  write_intermediate_dex(ConfigFiles(Json::nullValue), output_ir_dir, stores,
-                         entry_data["dex_list"]);
+  write_intermediate_dex(redex_options, ConfigFiles(Json::nullValue),
+                         output_ir_dir, stores, entry_data["dex_list"]);
   write_entry_file(output_ir_dir, entry_data);
 }
 

@@ -95,7 +95,8 @@ class DexOutputIdx {
 class IODIMetadata;
 
 dex_stats_t write_classes_to_dex(
-    std::string filename,
+    const RedexOptions&,
+    const std::string& filename,
     DexClasses* classes,
     LocatorIndex* locator_index /* nullable */,
     bool emit_name_based_locators,
@@ -202,14 +203,6 @@ typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
 typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
 typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
 
-enum class DebugInfoKind {
-  Normal = 0,
-  NoPositions = 1,
-  InstructionOffsets = 2,
-  InstructionOffsetsPerArity = 3,
-  Max = 4,
-};
-
 struct CodeItemEmit {
   DexMethod* method;
   DexCode* code;
@@ -308,8 +301,6 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
-            const std::string& method_mapping_path,
-            const std::string& class_mapping_path,
             const std::string& pg_mapping_path,
             const std::string& bytecode_offset_path);
   ~DexOutput();

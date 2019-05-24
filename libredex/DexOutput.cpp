@@ -335,6 +335,12 @@ constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
 CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
     : method(meth), code(c), code_item(ci) {}
 
+namespace {
+// Keep these values in sync with those in redex.py.
+constexpr const char* METHOD_MAPPING = "method_mapping.txt";
+constexpr const char* CLASS_MAPPING = "class_mapping.txt";
+} // namespace
+
 DexOutput::DexOutput(
     const char* path,
     DexClasses* classes,
@@ -349,8 +355,6 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::string& method_mapping_filename,
-    const std::string& class_mapping_filename,
     const std::string& pg_mapping_filename,
     const std::string& bytecode_offset_filename)
     : m_config_files(config_files) {
@@ -365,8 +369,8 @@ DexOutput::DexOutput(
   m_pos_mapper = pos_mapper;
   m_method_to_id = method_to_id;
   m_code_debug_lines = code_debug_lines;
-  m_method_mapping_filename = method_mapping_filename;
-  m_class_mapping_filename = class_mapping_filename;
+  m_method_mapping_filename = config_files.metafile(METHOD_MAPPING);
+  m_class_mapping_filename = config_files.metafile(CLASS_MAPPING);
   m_pg_mapping_filename = pg_mapping_filename;
   m_bytecode_offset_filename = bytecode_offset_filename;
   m_store_number = store_number;
@@ -1754,7 +1758,7 @@ void write_method_mapping(
   uint8_t* dex_signature,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id
 ) {
-  if (filename.empty()) return;
+  always_assert(!filename.empty());
   FILE* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open method mapping file %s: %s\n",
              filename.c_str(),
@@ -1842,7 +1846,7 @@ void write_class_mapping(
   const size_t class_defs_size,
   uint8_t* dex_signature
 ) {
-  if (filename.empty()) return;
+  always_assert(!filename.empty());
   FILE* fd = fopen(filename.c_str(), "a");
 
   for (uint32_t idx = 0; idx < class_defs_size; idx++) {
@@ -2042,23 +2046,17 @@ void write_bytecode_offset_mapping(
 } // namespace
 
 void DexOutput::write_symbol_files() {
-  write_method_mapping(
-    m_method_mapping_filename,
-    dodx,
-    m_classes,
-    hdr.signature,
-    m_method_to_id
-  );
-  write_class_mapping(
-    m_class_mapping_filename,
-    m_classes,
-    hdr.class_defs_size,
-    hdr.signature
-  );
-  write_pg_mapping(
-    m_pg_mapping_filename,
-    m_classes
-  );
+  if (m_debug_info_kind != DebugInfoKind::NoCustomSymbolication) {
+    write_method_mapping(m_method_mapping_filename,
+                         dodx,
+                         m_classes,
+                         hdr.signature,
+                         m_method_to_id);
+    write_class_mapping(m_class_mapping_filename, m_classes,
+                        hdr.class_defs_size, hdr.signature);
+    // XXX: should write_bytecode_offset_mapping be included here too?
+  }
+  write_pg_mapping(m_pg_mapping_filename, m_classes);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
 }
@@ -2199,23 +2197,9 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   }
 }
 
-static DebugInfoKind deserialize_debug_info_kind(std::string raw_kind) {
-  if (raw_kind == "no_positions") {
-    return DebugInfoKind::NoPositions;
-  } else if (raw_kind == "iodi") {
-    return DebugInfoKind::InstructionOffsets;
-  } else if (raw_kind == "iodi_per_arity") {
-    return DebugInfoKind::InstructionOffsetsPerArity;
-  } else {
-    always_assert_log(raw_kind == "normal" || raw_kind == "",
-                      "Unknown debug info kind. Supported kinds are \"normal\","
-                      " \"no_positions\", \"iodi\", \"iodi_per_arity\".");
-    return DebugInfoKind::Normal;
-  }
-}
-
 dex_stats_t write_classes_to_dex(
-    std::string filename,
+    const RedexOptions& redex_options,
+    const std::string& filename,
     DexClasses* classes,
     LocatorIndex* locator_index,
     bool emit_name_based_locators,
@@ -2228,17 +2212,11 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic) {
   const JsonWrapper& json_cfg = conf.get_json_config();
-  auto method_mapping_filename =
-      conf.metafile(json_cfg.get("method_mapping", std::string()));
-  auto class_mapping_filename =
-      conf.metafile(json_cfg.get("class_mapping", std::string()));
   auto pg_mapping_filename =
       conf.metafile(json_cfg.get("proguard_map_output", std::string()));
   auto bytecode_offset_filename =
       conf.metafile(json_cfg.get("bytecode_offset_map", std::string()));
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
-  DebugInfoKind debug_info_kind = deserialize_debug_info_kind(
-      json_cfg.get("debug_info_kind", std::string()));
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
     string_sort_mode = SortMode::CLASS_STRINGS;
@@ -2272,14 +2250,12 @@ dex_stats_t write_classes_to_dex(
                              normal_primary_dex,
                              store_number,
                              dex_number,
-                             debug_info_kind,
+                             redex_options.debug_info_kind,
                              iodi_metadata,
                              conf,
                              pos_mapper,
                              method_to_id,
                              code_debug_lines,
-                             method_mapping_filename,
-                             class_mapping_filename,
                              pg_mapping_filename,
                              bytecode_offset_filename);
 
