@@ -139,6 +139,8 @@ struct ModelSpec {
   bool merge_types_with_static_fields{false};
   // Preserve debug info like line numbers.
   bool keep_debug_info{false};
+  // Replace string literals matching a merged type.
+  bool replace_type_like_const_strings{true};
   // Exclude types with references to Android SDK types. The referenced type may
   // or may not exist depending on the Android version the app runs on. That
   // could cause us to merge a class that fails to verify on certain versions of
