@@ -1177,8 +1177,11 @@ void InstrumentPass::bind_config() {
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
-  if (!pm.get_redex_options().instrument_pass_enabled) {
-    TRACE(INSTRUMENT, 1, "--enable-instrument-pass is not specified.\n");
+  if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
+      !pm.get_redex_options().instrument_pass_enabled) {
+    TRACE(INSTRUMENT, 1,
+          "--enable-instrument-pass (or \"instrument_pass_enabled\": true) is "
+          "not specified.\n");
     return;
   }
 
