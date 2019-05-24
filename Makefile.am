@@ -291,7 +291,6 @@ redex_all_SOURCES = \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove_unused_args/RemoveUnusedArgs.cpp \
-	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
