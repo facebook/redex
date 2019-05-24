@@ -111,7 +111,7 @@ enum ENUM_TYPE_2 {
     int selector = random.nextInt() % 2;
     if (selector == 0) {
       obj = ENUM_TYPE_1.ONE;
-    } else if (selector == 1) {
+    } else if (selector == 1 || selector == -1) {
       obj = ENUM_TYPE_2.TWO;
     } else if (selector > 1) {
       obj = Enum.valueOf(ENUM_TYPE_1.class, "NotReach");

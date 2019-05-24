@@ -205,18 +205,21 @@ class EnumUpcastDetector {
   }
 
   /**
-   * No direct invocation allowed on candidate enums.
-   * Candidate enum constructor invocations should be in the enum classes'
-   * <clinit> which we should already exclude in previous step.
+   * No other direct invocation allowed on candidate enums except
+   * candidate enum constructor invocations in the enum classes'
+   * <clinit>.
    */
   void process_direct_invocation(
       const IRInstruction* insn,
       const EnumTypeEnvironment* env,
       ConcurrentSet<DexType*>* rejected_enums) const {
     always_assert(insn->opcode() == OPCODE_INVOKE_DIRECT);
-    auto container = insn->get_method()->get_class();
-    always_assert_log(!m_candidate_enums->count_unsafe(container), "%s\n",
-                      SHOW(insn));
+    auto invoked = insn->get_method();
+    auto container = invoked->get_class();
+    if (m_candidate_enums->count_unsafe(container) && is_init(invoked) &&
+        is_clinit(m_method)) {
+      return;
+    }
     process_general_invocation(insn, env, rejected_enums);
   }
 
@@ -584,13 +587,13 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   auto candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
-  // When do static analysis, simply skip javac-generated methods for enum
-  // types : <clinit>, <init>, values(), valueOf(String)
+  // When do static analysis, simply skip some javac-generated methods for enum
+  // types : <init>, values(), valueOf(String)
   auto is_generated_enum_method = [&](const DexMethod* method) -> bool {
     auto& args = method->get_proto()->get_args()->get_type_list();
     return candidate_enums->count_unsafe(method->get_class()) &&
            !rejected_enums.count(method->get_class()) &&
-           (is_clinit(method) || is_init(method) ||
+           (is_init(method) ||
             // values()
             is_enum_values(method) ||
             // valueOf(String)

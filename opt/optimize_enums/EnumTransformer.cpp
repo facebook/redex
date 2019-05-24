@@ -12,7 +12,9 @@
 #include "EnumClinitAnalysis.h"
 #include "EnumUpcastAnalysis.h"
 #include "OptData.h"
+#include "Resolver.h"
 #include "TypeReference.h"
+#include "UsedVarsAnalysis.h"
 #include "Walkers.h"
 
 /**
@@ -47,6 +49,7 @@ using namespace optimize_enums;
 using namespace dex_asm;
 using EnumAttrMap =
     std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
+namespace ptrs = local_pointers;
 
 std::vector<EnumAttr> sort_enum_values(
     const std::unordered_map<const DexField*, EnumAttr>& enum_values) {
@@ -453,7 +456,8 @@ class CodeTransformer final {
       if (insn->has_type()) {
         auto type = insn->get_type();
         always_assert_log(try_convert_to_int_type(type) == nullptr,
-                          "Unhandled type in %s\n", SHOW(insn));
+                          "Unhandled type in %s method %s\n", SHOW(insn),
+                          SHOW(m_method));
       }
     } break;
     }
@@ -493,10 +497,11 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto method = insn->get_method();
     auto container = method->get_class();
-    if (m_enum_attrs.count(container)) {
+    auto attrs_it = m_enum_attrs.find(container);
+    if (attrs_it != m_enum_attrs.end()) {
       auto reg = allocate_temp();
       auto cls = type_class(container);
-      uint64_t enum_size = cls->get_sfields().size() - 1;
+      uint64_t enum_size = attrs_it->second.size();
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
       new_insns.push_back(
@@ -697,7 +702,7 @@ class EnumTransformer final {
         m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
         m_enum_objs += enum_attrs.size();
         m_enum_attrs.emplace(*it, enum_attrs);
-        delete_generated_methods(enum_cls);
+        clean_generated_methods_fields(enum_cls);
         opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       }
     }
@@ -931,11 +936,45 @@ class EnumTransformer final {
     code->clear_cfg();
   }
 
-  void delete_generated_methods(DexClass* enum_cls) {
+  /**
+   * 1. Erase the enum instance fields and synthetic array field which is
+   * usually `$VALUES`.
+   * 2. Delete <init>, values() and valueOf(String) methods, and delete
+   * instructions that construct these fields from <clinit>.
+   */
+  void clean_generated_methods_fields(DexClass* enum_cls) {
+    auto& sfields = enum_cls->get_sfields();
+    auto& attrs = m_enum_attrs.at(enum_cls->get_type());
+    auto synth_field_access = synth_access();
+    DexField* values_field = nullptr;
+
+    for (auto fit = sfields.begin(); fit != sfields.end();) {
+      auto field = *fit;
+      if (attrs.count(field)) {
+        fit = sfields.erase(fit);
+      } else if (check_required_access_flags(synth_field_access,
+                                             field->get_access())) {
+        always_assert(!values_field);
+        values_field = field;
+        fit = sfields.erase(fit);
+      } else {
+        ++fit;
+      }
+    }
+
+    always_assert(values_field);
     auto& dmethods = enum_cls->get_dmethods();
-    // delete <clinit>, <init>, values() and valueOf(String)
+    // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
     for (auto mit = dmethods.begin(); mit != dmethods.end();) {
-      if (is_generated_enum_method(*mit)) {
+      auto method = *mit;
+      if (is_clinit(method)) {
+        clean_clinit(attrs, enum_cls, method, values_field);
+        if (empty(method->get_code())) {
+          mit = dmethods.erase(mit);
+        } else {
+          ++mit;
+        }
+      } else if (is_generated_enum_method(method)) {
         mit = dmethods.erase(mit);
       } else {
         ++mit;
@@ -944,19 +983,72 @@ class EnumTransformer final {
   }
 
   /**
-   * Whether a method is <clinit>, <init>, values() or valueOf(String).
+   * Erase the put instructions that write enum values and synthetic $VALUES
+   * array, then erase the dead instructions.
+   */
+  void clean_clinit(const AttrMap& attrs,
+                    DexClass* enum_cls,
+                    DexMethod* clinit,
+                    DexField* values_field) {
+    auto code = clinit->get_code();
+    auto ctors = enum_cls->get_ctors();
+    always_assert(ctors.size() == 1);
+    auto ctor = ctors[0];
+    side_effects::InvokeToSummaryMap summaries;
+
+    for (auto it = code->begin(); it != code->end();) {
+      if (it->type != MFLOW_OPCODE) {
+        ++it;
+        continue;
+      }
+      auto insn = it->insn;
+      if (is_sput(insn->opcode())) {
+        auto field = resolve_field(insn->get_field());
+        if (field && (attrs.count(field) || field == values_field)) {
+          it = code->erase(it);
+          continue;
+        }
+      } else if (is_invoke_direct(insn->opcode()) &&
+                 insn->get_method() == ctor) {
+        summaries.emplace(insn, side_effects::Summary());
+      }
+      ++it;
+    }
+
+    code->build_cfg(/* editable */ false);
+    auto& cfg = code->cfg();
+    cfg.calculate_exit_block();
+    ptrs::FixpointIterator fp_iter(cfg);
+    fp_iter.run(ptrs::Environment());
+    used_vars::FixpointIterator uv_fpiter(fp_iter, summaries, cfg);
+    uv_fpiter.run(used_vars::UsedVarsSet());
+    auto dead_instructions = used_vars::get_dead_instructions(*code, uv_fpiter);
+    code->clear_cfg();
+    for (auto insn : dead_instructions) {
+      code->remove_opcode(insn);
+    }
+  }
+
+  /**
+   * Only use for <clinit> code.
+   */
+  bool empty(IRCode* code) {
+    auto iterable = InstructionIterable(code);
+    auto begin = iterable.begin();
+    return is_return_void(begin->insn->opcode());
+  }
+
+  /**
+   * Whether a method is <init>, values() or valueOf(String).
    */
   bool is_generated_enum_method(DexMethodRef* method) {
     auto name = method->get_name();
-    auto args = method->get_proto()->get_args();
-    return name == m_enum_util->CLINIT_METHOD_STR ||
-           name == m_enum_util->INIT_METHOD_STR || is_enum_values(method) ||
+    return name == m_enum_util->INIT_METHOD_STR || is_enum_values(method) ||
            is_enum_valueof(method);
   }
 
   /**
-   * Change candidates' superclass from Enum to Object, delete all the static
-   * fields.
+   * Change candidates' superclass from Enum to Object.
    */
   void post_update_enum_classes(Scope& scope) {
     for (auto cls : scope) {
@@ -969,7 +1061,6 @@ class EnumTransformer final {
                         SHOW(cls->get_super_class()));
       cls->set_super_class(m_enum_util->OBJECT_TYPE);
       cls->set_access(cls->get_access() & ~ACC_ENUM);
-      cls->get_sfields().clear();
     }
   }
 
