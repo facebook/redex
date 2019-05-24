@@ -643,7 +643,9 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
-  update_const_string_type_refs(scope, merged_type_names);
+  if (model_spec.replace_type_like_const_strings) {
+    update_const_string_type_refs(scope, merged_type_names);
+  }
 
   // Write out mapping files
   auto method_dedup_map = mm.get_method_dedup_map();

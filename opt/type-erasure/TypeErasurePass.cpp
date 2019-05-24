@@ -251,6 +251,8 @@ void TypeErasurePass::bind_config() {
       model_spec.get("merge_types_with_static_fields", false,
                      model.merge_types_with_static_fields);
       model_spec.get("keep_debug_info", false, model.keep_debug_info);
+      model_spec.get("replace_type_like_const_strings", true,
+                     model.replace_type_like_const_strings);
       model_spec.get("exclude_reference_to_android_sdk", Json::Value(),
                      model.exclude_reference_to_android_sdk);
       if (max_count > 0) {
