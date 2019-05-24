@@ -837,8 +837,6 @@ def finalize_redex(state):
                          'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
-                         'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
@@ -847,8 +845,6 @@ def finalize_redex(state):
                          'debug method id map', 'redex-debug-line-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
                          'class method info map', 'redex-class-method-info-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'cfp-unsafe-references.txt',
-                         'cfp unsafe references', 'redex-cfp-unsafe-references.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
                          'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'reachability-graph',
