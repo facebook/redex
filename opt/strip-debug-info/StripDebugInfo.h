@@ -17,13 +17,13 @@ class StripDebugInfoPass : public Pass {
 
   void bind_config() override {
     bind("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
-    bind("drop_local_variables", false, m_config.drop_local_variables);
+    bind("drop_local_variables", true, m_config.drop_local_variables);
     bind("drop_line_numbers", false, m_config.drop_line_nrs);
-    bind("drop_src_files", false, m_config.drop_src_files);
-    bind("drop_prologue_end", false, m_config.drop_prologue_end);
-    bind("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
+    bind("drop_src_files", true, m_config.drop_src_files);
+    bind("drop_prologue_end", true, m_config.drop_prologue_end);
+    bind("drop_epilogue_begin", true, m_config.drop_epilogue_begin);
     bind("drop_all_dbg_info_if_empty",
-         false,
+         true,
          m_config.drop_all_dbg_info_if_empty);
     bind("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
     bind("drop_synth_conservative", false, m_config.drop_synth_conservative);
