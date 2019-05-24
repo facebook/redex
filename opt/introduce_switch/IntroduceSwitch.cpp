@@ -41,10 +41,10 @@ class IntroduceSwitch {
    * for a nested if else chain that is like a switch.
    * If not, nullptr is returned, if so the branching instruction is returned
    * along with the register being tested.
-
+   *
    * Generally experimental runs indicate that an if with three cases has fewer
    * instructions when represented as an if, so that is the current default
-
+   *
    * It is also the case from experimental evidence in prior work, that compact
    * switches run faster than nested if/else and that the majority of other
    * switch statements also out perform nested if in cases where the if is not
@@ -54,6 +54,7 @@ class IntroduceSwitch {
    */
   static std::pair<IRInstruction*, uint32_t> candidate_switch_start(
       cfg::Block* block) {
+    // TODO make this more general
     IRInstruction *const_set = nullptr, *if_ins = nullptr;
     for (auto it = block->rbegin(); it != block->rend(); it++) {
       if (it->type == MFLOW_OPCODE && (it->insn->opcode() == OPCODE_IF_NE ||
@@ -71,7 +72,7 @@ class IntroduceSwitch {
     if (const_set != nullptr && if_ins != nullptr) {
       auto compare_dest = const_set->dest();
       auto compare_srcs = if_ins->srcs();
-      assert(compare_srcs.size() == 2);
+      always_assert(compare_srcs.size() == 2);
 
       // Is constant compared in if, if so other one is potential switch reg
       size_t shared_index = compare_srcs[0] == compare_dest
@@ -116,39 +117,7 @@ class IntroduceSwitch {
               TRACE(INTRO_SWITCH, 3, "}\n");
               intro_switch++;
 
-              // Determine if this is a compact or non-compact switch
-              bool last_case_set = false, compact_direction_set = false;
-              int32_t last_case = 0;
-              bool compact = true;
-              bool compact_check_positive = false;
-
-              for (auto it = key_to_case.begin(); it != key_to_case.end();
-                   it++) {
-                if (it->first) {
-                  if (!last_case_set) {
-                    last_case_set = true;
-                    last_case = it->first.value();
-                  } else {
-                    auto difference = last_case - it->first.value();
-                    last_case = it->first.value();
-                    if (compact && std::abs(difference) == 1) {
-                      if (!compact_direction_set) {
-                        compact_direction_set = true;
-                        compact_check_positive = difference > 0;
-                      } else {
-                        if (!((compact_check_positive && difference > 0) ||
-                              (!compact_check_positive && difference < 0))) {
-                          compact = false;
-                          break;
-                        }
-                      }
-                    } else {
-                      compact = false;
-                      break;
-                    }
-                  }
-                }
-              }
+              bool compact = can_be_compact(key_to_case);
               if (compact) {
                 num_compact++;
               } else {
@@ -162,12 +131,10 @@ class IntroduceSwitch {
 
               const auto& extra_loads = finder->extra_loads();
               for (const auto& e : key_to_case) {
+                const auto& key = e.first;
                 cfg::Block* case_block = e.second;
-                if (e.first) {
-                  std::pair<int32_t, cfg::Block*> p = {e.first.value(),
-                                                       case_block};
-                  visited_blocks.insert(case_block);
-                  edges.emplace_back(p);
+                if (key) {
+                  edges.emplace_back(*key, case_block);
                   switch_cases++;
                 } else if (default_block == nullptr) {
                   default_block = case_block;
@@ -212,6 +179,42 @@ class IntroduceSwitch {
     return m;
   }
 
+  // Determine if this is a compact or non-compact switch
+  static bool can_be_compact(const SwitchEquivFinder::KeyToCase& key_to_case) {
+    bool last_case_set = false;
+    bool compact_direction_set = false;
+    int32_t last_case = 0;
+    bool compact_check_positive = false;
+
+    for (const auto& pair : key_to_case) {
+      const auto& key = pair.first;
+      cfg::Block* case_block = pair.second;
+      if (key) {
+        if (!last_case_set) {
+          last_case_set = true;
+          last_case = *key;
+        } else {
+          auto difference = last_case - *key;
+          last_case = *key;
+          if (std::abs(difference) == 1) {
+            if (!compact_direction_set) {
+              compact_direction_set = true;
+              compact_check_positive = difference > 0;
+            } else {
+              if (!((compact_check_positive && difference > 0) ||
+                    (!compact_check_positive && difference < 0))) {
+                return false;
+              }
+            }
+          } else {
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+
  public:
   static IntroduceSwitchPass::Metrics process_method(DexMethod* method) {
     auto code = method->get_code();
@@ -222,7 +225,6 @@ class IntroduceSwitch {
     TRACE(INTRO_SWITCH, 4, "Initial opcode count: %d\n", init_opcode_count);
 
     TRACE(INTRO_SWITCH, 3, "input code\n%s", SHOW(code));
-    const char* origin_code = SHOW(code);
     code->build_cfg(/* editable */ true);
     auto& cfg = code->cfg();
 
@@ -292,7 +294,6 @@ void IntroduceSwitchPass::run_pass(DexStoresVector& stores,
                     total_switch_cases.removed_instrs);
     mgr.incr_metric(METRIC_INSTRUCTIONS_ADDED, total_switch_cases.added_instrs);
 
-    TRACE(INTRO_SWITCH, 1, "Introduced switch\n");
     TRACE(INTRO_SWITCH,
           1,
           "Number of nested if elses converted to switches: %d\n",

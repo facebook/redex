@@ -40,13 +40,10 @@ class SwitchEquivFinder final {
   bool success() const { return m_success; }
   const KeyToCase& key_to_case() const { return m_key_to_case; }
   const ExtraLoads& extra_loads() const { return m_extra_loads; }
-  const std::vector<cfg::Block*> visited_blocks() const {
-    std::vector<cfg::Block*> result;
-    for (auto entry : m_visit_count) {
-      result.emplace_back(entry.first);
-    }
-    return result;
-  }
+
+  // Return all the blocks traversed by the finder, including leaves and
+  // non-leaves.
+  const std::vector<cfg::Block*> visited_blocks() const;
 
  private:
   std::vector<cfg::Edge*> find_leaves();
@@ -93,5 +90,6 @@ class SwitchEquivFinder final {
   ExtraLoads m_extra_loads;
 
   // This stores the blocks visited and how many times in building m_key_to_case
+  // Note that this does not include the root branch.
   std::unordered_map<cfg::Block*, uint16_t> m_visit_count;
 };

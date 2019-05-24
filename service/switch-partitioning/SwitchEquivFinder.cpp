@@ -447,3 +447,13 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
   }
   m_success = true;
 }
+
+const std::vector<cfg::Block*> SwitchEquivFinder::visited_blocks() const {
+  std::vector<cfg::Block*> result;
+  result.reserve(1 + m_visit_count.size());
+  result.emplace_back(m_root_branch.block());
+  for (auto entry : m_visit_count) {
+    result.emplace_back(entry.first);
+  }
+  return result;
+}
