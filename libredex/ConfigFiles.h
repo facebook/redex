@@ -78,18 +78,6 @@ struct ConfigFiles {
     return m_method_sorting_whitelisted_substrings;
   }
 
-  bool save_move_map() const { return m_move_map; }
-
-  const MethodMap& get_moved_methods_map() const {
-    return m_moved_methods_map;
-  }
-
-  /* DEPRECATED! */
-  void add_moved_methods(MethodTuple mt, DexClass* cls) {
-    m_move_map = true;
-    m_moved_methods_map[mt] = cls;
-  }
-
   std::string metafile(const std::string& basename) const {
     if (basename.empty()) {
       return std::string();
@@ -142,10 +130,8 @@ struct ConfigFiles {
   void load_method_sorting_whitelisted_substrings();
   void load_inliner_config(inliner::InlinerConfig*);
 
-  bool m_move_map{false};
   bool m_load_class_lists_attempted{false};
   ProguardMap m_proguard_map;
-  MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_method_filename;
   std::string m_profiled_methods_filename;

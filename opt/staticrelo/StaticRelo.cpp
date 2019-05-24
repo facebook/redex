@@ -539,17 +539,6 @@ void delete_classes(
   post_dexen_changes(scope, dexen);
 }
 
-void record_move_data(DexMethod* from_meth,
-                      DexClass* from_cls,
-                      DexClass* to_cls,
-                      ConfigFiles& conf) {
-  MethodTuple from_tuple = std::make_tuple(
-      from_cls->get_type()->get_name(),
-      from_meth->get_name(),
-      from_cls->get_source_file());
-  conf.add_moved_methods(from_tuple, to_cls);
-}
-
 void do_mutations(PassManager& mgr,
                   Scope& scope,
                   DexClassesVector& dexen,
@@ -578,7 +567,6 @@ void do_mutations(PassManager& mgr,
         TRACE(RELO, 5, "skipping class move\n");
         continue;
       }
-      record_move_data(from_meth, from_cls, to_cls, conf);
       // Move the method to the target class
       from_cls->remove_method(from_meth);
       DexMethodSpec spec;

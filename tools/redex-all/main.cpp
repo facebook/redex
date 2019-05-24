@@ -589,41 +589,6 @@ Json::Value get_output_stats(
   return d;
 }
 
-void output_moved_methods_map(const char* path, const ConfigFiles& conf) {
-  // print out moved methods map
-  if (conf.save_move_map() && strcmp(path, "")) {
-    FILE* fd = fopen(path, "w");
-    if (fd == nullptr) {
-      perror("Error opening method move file");
-      return;
-    }
-    auto const& move_map = conf.get_moved_methods_map();
-    std::string dummy = "dummy";
-    for (const auto& it : move_map) {
-      MethodTuple mt = it.first;
-      auto cls_name = std::get<0>(mt);
-      auto meth_name = std::get<1>(mt);
-      auto src_file = std::get<2>(mt);
-      auto ren_to_cls_name = it.second->get_type()->get_name()->c_str();
-      const char* src_string;
-      if (src_file != nullptr) {
-        src_string = src_file->c_str();
-      } else {
-        src_string = dummy.c_str();
-      }
-      fprintf(fd,
-              "%s %s (%s) -> %s \n",
-              cls_name->c_str(),
-              meth_name->c_str(),
-              src_string,
-              ren_to_cls_name);
-    }
-    fclose(fd);
-  } else {
-    TRACE(MAIN, 1, "No method move map data structure!\n");
-  }
-}
-
 void write_debug_line_mapping(
     const std::string& debug_line_map_filename,
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
@@ -968,7 +933,6 @@ void redex_backend(const PassManager& manager,
     pos_mapper->write_map();
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
-    output_moved_methods_map(method_move_map.c_str(), conf);
     print_warning_summary();
   }
 }
