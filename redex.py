@@ -833,8 +833,6 @@ def finalize_redex(state):
                          'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'bytecode_offset_map.txt',
                          'bytecode offset map', 'redex-bytecode-offset-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'coldstart_fields_in_R_classes.txt',
-                         'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',

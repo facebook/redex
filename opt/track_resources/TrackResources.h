@@ -15,7 +15,6 @@ class TrackResourcesPass : public Pass {
 
   void bind_config() override {
     bind("classes_to_track", {}, m_classes_to_track);
-    bind("tracked_fields_output", "", m_tracked_fields_output);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -28,10 +27,8 @@ class TrackResourcesPass : public Pass {
       std::unordered_set<std::string>& classes_to_search);
 
   static std::unordered_set<DexClass*> build_tracked_cls_set(
-      const std::vector<std::string>& cls_suffixes,
-      const ProguardMap& pg_map);
+      const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map);
 
  private:
   std::vector<std::string> m_classes_to_track;
-  std::string m_tracked_fields_output;
 };

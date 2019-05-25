@@ -25,6 +25,9 @@
 
 namespace {
 
+const std::string TRACKED_RESOURCES_FILE_NAME =
+    "redex-tracked-coldstart-resources.txt";
+
 std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cls_list) {
   std::unordered_set<std::string> cls_set;
   for (auto& cls : cls_list) {
@@ -147,8 +150,8 @@ void TrackResourcesPass::run_pass(DexStoresVector& stores,
   auto coldstart_cls_map = build_cls_set(conf.get_coldstart_classes());
   find_accessed_fields(scope, conf, tracked_classes, recorded_fields,
                        coldstart_cls_map);
-  m_tracked_fields_output = conf.metafile(m_tracked_fields_output);
-  write_found_fields(m_tracked_fields_output, recorded_fields);
+  auto tracked_res = conf.metafile(TRACKED_RESOURCES_FILE_NAME);
+  write_found_fields(tracked_res, recorded_fields);
 }
 
 static TrackResourcesPass s_pass;
