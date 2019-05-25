@@ -24,7 +24,7 @@ class AccessMarkingPass : public Pass {
          "Mark every non-abstract class as final.");
     bind("finalize_methods", true, m_finalize_methods,
          "Mark every non-abstract method as final.");
-    bind("finalize_fields", false, m_finalize_fields,
+    bind("finalize_fields", true, m_finalize_fields,
          "Mark every non-final, non-volatile field as final.");
     bind("privatize_methods", true, m_privatize_methods,
          "Mark every eligible method as private.");
