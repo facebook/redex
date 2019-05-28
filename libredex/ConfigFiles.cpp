@@ -190,7 +190,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("enforce_method_size_limit",
          true,
          inliner_config->enforce_method_size_limit);
-  jw.get("use_cfg_inliner", false, inliner_config->use_cfg_inliner);
+  jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
          false,
