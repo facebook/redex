@@ -38,6 +38,8 @@ class RenameClassesPassV2 : public Pass {
   RenameClassesPassV2() : Pass("RenameClassesPassV2") {}
 
   void bind_config() override {
+    std::string unused;
+    bind("class_rename", "", unused);
     bind("rename_annotations", false, m_rename_annotations);
     bind("force_rename_hierarchies", {}, m_force_rename_hierarchies);
     bind("allow_layout_rename_packages", {}, m_allow_layout_rename_packages);
