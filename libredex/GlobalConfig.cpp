@@ -38,9 +38,11 @@ void IRTypeCheckerConfig::bind_config() {
 void GlobalConfig::bind_config() {
   OptDecisionsConfig opt_decisions_param;
   IRTypeCheckerConfig ir_type_checker_param;
+  InlinerConfig inliner_param;
   bool bool_param;
   std::string string_param;
   std::vector<std::string> string_vector_param;
+  bind("inliner", InlinerConfig(), inliner_param);
   bind("opt_decisions", OptDecisionsConfig(), opt_decisions_param);
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("lower_with_cfg", {}, bool_param);
@@ -58,4 +60,5 @@ void GlobalConfig::bind_config() {
   bind("json_serde_supercls", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
+  bind("prune_unexported_components", {}, string_vector_param);
 }
