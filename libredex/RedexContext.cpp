@@ -17,7 +17,8 @@
 
 RedexContext* g_redex;
 
-RedexContext::RedexContext() {}
+RedexContext::RedexContext(bool allow_class_duplicates)
+    : m_allow_class_duplicates(allow_class_duplicates) {}
 
 RedexContext::~RedexContext() {
   // Delete DexStrings.
@@ -382,16 +383,18 @@ void RedexContext::publish_class(DexClass* cls) {
 
       TRACE(MAIN,
             1,
-            "ABORT! Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
+            "Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
             "2: %s\n",
             class_name.c_str(),
             dex_1.c_str(),
             dex_2.c_str());
 
-      throw RedexException(
-          RedexError::DUPLICATE_CLASSES,
-          "Found duplicate class in two different files.",
-          {{"class", class_name}, {"dex1", dex_1}, {"dex2", dex_2}});
+      if (!m_allow_class_duplicates) {
+        throw RedexException(
+            RedexError::DUPLICATE_CLASSES,
+            "Found duplicate class in two different files.",
+            {{"class", class_name}, {"dex1", dex_1}, {"dex2", dex_2}});
+      }
     }
   }
   m_type_to_class.emplace(type, cls);

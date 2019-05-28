@@ -39,7 +39,7 @@ struct RedexContext;
 extern RedexContext* g_redex;
 
 struct RedexContext {
-  RedexContext();
+  RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
   DexString* make_string(const char* nstr, uint32_t utfsize);
@@ -208,6 +208,7 @@ struct RedexContext {
       s_keep_reasons;
 
   bool m_record_keep_reasons{false};
+  bool m_allow_class_duplicates;
 };
 
 // One or more exceptions
