@@ -60,6 +60,7 @@
   TM(LOC)            \
   TM(MAGIC_FIELDS)   \
   TM(MAIN)           \
+  TM(MARIANA_TRENCH) \
   TM(METH_DEDUP)     \
   TM(METH_MERGER)    \
   TM(MMINL)          \
