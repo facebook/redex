@@ -9,9 +9,11 @@
 
 #include "DexAsm.h"
 #include "DexUtil.h"
-#include "InstructionLowering.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
+#include "InstructionLowering.h"
 #include "LocalDce.h"
+#include "ScopeHelper.h"
 
 struct LocalDceTryTest : testing::Test {
   DexMethod* m_method;
@@ -212,4 +214,167 @@ TEST_F(LocalDceTryTest, deadCast) {
 
   // the if should be gone
   EXPECT_FALSE(has_check_cast);
+}
+
+struct LocalDceEnhanceTest : public testing::Test {
+  LocalDceEnhanceTest() { g_redex = new RedexContext(); }
+
+  ~LocalDceEnhanceTest() { delete g_redex; }
+};
+
+TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = get_void_type();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, get_object_type(), {},
+                                          ACC_PUBLIC | ACC_INTERFACE);
+  create_abstract_method(a_cls, "m", void_void);
+
+  scope.push_back(a_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  LocalDcePass impl;
+  impl.no_implementor_abstract_is_pure = 1;
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = get_void_type();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, get_object_type(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, a_type, {});
+
+  DexType* c_type = DexType::make_type("LC;");
+  DexClass* c_cls = create_internal_class(c_type, b_type, {});
+  create_empty_method(c_cls, "m", void_void);
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+  scope.push_back(c_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+  LocalDcePass impl;
+  impl.no_implementor_abstract_is_pure = 1;
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = get_void_type();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, get_object_type(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, a_type, {});
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (return-void)
+    )
+  )");
+  LocalDcePass impl;
+  impl.no_implementor_abstract_is_pure = 1;
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = get_void_type();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, get_object_type(), {},
+                                          ACC_PUBLIC | ACC_INTERFACE);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, get_object_type(), {a_type});
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+  LocalDcePass impl;
+  impl.no_implementor_abstract_is_pure = 1;
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  LocalDce ldce(pure_methods);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
 }

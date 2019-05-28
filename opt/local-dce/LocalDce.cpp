@@ -19,9 +19,9 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -127,6 +127,45 @@ void update_liveness(const IRInstruction* inst,
   if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
     bliveness.set(bliveness.size() - 1);
   }
+}
+
+ConcurrentSet<DexMethod*> get_no_implementor_abstract_methods(
+    const Scope& scope) {
+  ConcurrentSet<DexMethod*> method_set;
+  ClassScopes cs(scope);
+  TypeSystem ts(scope);
+  // Find non-interface abstract methods that have no implementation.
+  walk::parallel::methods(scope, [&method_set, &cs](DexMethod* method) {
+    DexClass* method_cls = type_class(method->get_class());
+    if (!is_abstract(method) || method->is_external() || method->get_code() ||
+        !method_cls || is_interface(method_cls)) {
+      return;
+    }
+    const auto& virtual_scope = cs.find_virtual_scope(method);
+    if (virtual_scope.methods.size() == 1 && !root(method)) {
+      always_assert_log(virtual_scope.methods[0].first == method,
+                        "LocalDCE: abstract method not in its virtual scope, "
+                        "virtual scope must be problematic");
+      method_set.emplace(method);
+    }
+  });
+
+  // Find methods of interfaces that have no implementor/interface children.
+  walk::parallel::classes(scope, [&method_set, &ts](DexClass* cls) {
+    if (!is_interface(cls) || cls->is_external()) {
+      return;
+    }
+    DexType* cls_type = cls->get_type();
+    if (ts.get_implementors(cls_type).size() == 0 &&
+        ts.get_interface_children(cls_type).size() == 0) {
+      for (auto method : cls->get_vmethods()) {
+        if (is_abstract(method)) {
+          method_set.emplace(method);
+        }
+      }
+    }
+  });
+  return method_set;
 }
 
 } // namespace
@@ -290,8 +329,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
           "provided.\n");
     return;
   }
-  const auto& pure_methods = find_pure_methods();
   auto scope = build_class_scope(stores);
+  const auto& pure_methods = find_no_sideeffect_methods(scope);
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
       [&](DexMethod* m) {
@@ -327,6 +366,20 @@ std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
   std::unordered_set<DexMethodRef*> pure_methods;
   pure_methods.emplace(DexMethod::make_method(
       "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
+  return pure_methods;
+}
+
+std::unordered_set<DexMethodRef*> LocalDcePass::find_no_sideeffect_methods(
+    const Scope& scope) {
+  auto pure_methods = find_pure_methods();
+  if (no_implementor_abstract_is_pure) {
+    // Find abstract methods that have no implementors
+    ConcurrentSet<DexMethod*> concurrent_method_set =
+        get_no_implementor_abstract_methods(scope);
+    for (auto method : concurrent_method_set) {
+      pure_methods.emplace(method);
+    }
+  }
   return pure_methods;
 }
 
