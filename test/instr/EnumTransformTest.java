@@ -108,7 +108,8 @@ enum ENUM_TYPE_2 {
   public static void test_join() {
     Enum obj = null;
     Random random = new Random();
-    int selector = random.nextInt() % 2;
+    int pos_rand = random.nextInt() & Integer.MAX_VALUE;
+    int selector = pos_rand % 2;
     if (selector == 0) {
       obj = ENUM_TYPE_1.ONE;
     } else if (selector == 1 || selector == -1) {
