@@ -748,18 +748,18 @@ def finalize_redex(state):
     log('Creating output APK finished in {:.2f} seconds'.format(
         timer() - repack_start_time))
 
-    meta_file_dir = join(state.dex_dir, "meta/")
-    assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
-
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'unreachable-removed-symbols.txt',
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'class-method-info-map.txt',
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
                          'class method info map', 'redex-class-method-info-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'merge-interface-mappings.txt',
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
                          'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
+                         'iodi metadata', 'iodi-metadata')
+    copy_file_to_out_dir(state.dex_dir, state.args.out, 'graphql_dead_queries.txt',
+                         'dead graphql queries', 'graphql_dead_queries.txt')
 
-    copy_all_file_to_out_dir(meta_file_dir, state.args.out, "*", "all redex generated artifacts")
-
+    copy_all_file_to_out_dir(state.dex_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 

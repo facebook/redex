@@ -82,7 +82,7 @@ struct ConfigFiles {
     if (basename.empty()) {
       return std::string();
     }
-    return outdir + "/meta/" + basename;
+    return outdir + '/' + basename;
   }
 
   std::string get_outdir() const {

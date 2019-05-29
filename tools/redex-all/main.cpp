@@ -19,8 +19,6 @@
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
-#include <sys/types.h>
-
 #ifdef _MSC_VER
 #include <io.h>
 #else
@@ -376,17 +374,6 @@ Arguments parse_args(int argc, char* argv[]) {
                 << std::endl;
       exit(EXIT_FAILURE);
     }
-  }
-
-  std::string metafiles = args.out_dir + "/meta/";
-  int status = mkdir(metafiles.c_str(), 0755);
-  if (status != 0) {
-    // Attention: errno may get changed by syscalls or lib functions.
-    // Saving before printing is a conventional way of using errno.
-    int errsv = errno;
-    std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
-              << std::endl;
-    exit(EXIT_FAILURE);
   }
 
   if (vm.count("proguard-config")) {
