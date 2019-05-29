@@ -88,21 +88,18 @@ constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
     "num_inlined_barriers_iterations";
 constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
 
-// TODO: Switch value_id_t to be uint64_t for extra breathing room both in the
-// number of tracked locations, as well as space for unique values. However,
-// this is blocked by T44394373.
-using value_id_t = uint32_t;
+using value_id_t = uint64_t;
 enum ValueIdFlags : value_id_t {
   // lower bits for tracked locations
   IS_NOT_READ_ONLY_WRITTEN_LOCATION = 0,
   IS_FIRST_TRACKED_LOCATION = ((value_id_t)1),
-  IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << (sizeof(value_id_t) * 4 - 3),
+  IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << (sizeof(value_id_t) * 4),
   IS_ONLY_READ_NOT_WRITTEN_LOCATION = ((value_id_t)1)
-                                      << (sizeof(value_id_t) * 4 - 2),
+                                      << (sizeof(value_id_t) * 4 + 1),
   IS_TRACKED_LOCATION_MASK = IS_ONLY_READ_NOT_WRITTEN_LOCATION * 2 - 1,
-  IS_PRE_STATE_SRC = ((value_id_t)1) << (sizeof(value_id_t) * 4 - 1),
+  IS_PRE_STATE_SRC = ((value_id_t)1) << (sizeof(value_id_t) * 4 + 2),
   // upper bits for unique values
-  BASE = ((value_id_t)1) << (sizeof(value_id_t) * 4),
+  BASE = ((value_id_t)1) << (sizeof(value_id_t) * 4 + 3),
 };
 
 using register_t = ir_analyzer::register_t;
