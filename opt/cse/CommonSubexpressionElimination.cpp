@@ -89,6 +89,8 @@ constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
     "num_eliminated_instructions";
 constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
     "num_inlined_barriers_into_methods";
+constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
+    "num_inlined_barriers_iterations";
 
 using value_id_t = uint32_t;
 enum ValueIdFlags : value_id_t {
@@ -676,92 +678,145 @@ CommonSubexpressionElimination::SharedState::SharedState() {
 
 CommonSubexpressionElimination::MethodBarriersStats
 CommonSubexpressionElimination::SharedState::init_method_barriers(
-    const Scope& scope) {
+    const Scope& scope, size_t max_iterations) {
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   ConcurrentMap<const DexMethod*, std::vector<Barrier>> method_barriers;
-  ConcurrentSet<const DexMethod*> methods_without_invocations;
+  ConcurrentMap<const DexMethod*, const DexMethod*> waiting_for;
+  // Let's initialize method_barriers, and waiting_for.
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
-    auto barriers = compute_barriers(code.cfg());
-    method_barriers.emplace(method, barriers);
-    auto it = std::find_if(
-        barriers.begin(), barriers.end(),
-        [](const Barrier& barrier) { return is_invoke(barrier.opcode); });
-    if (it == barriers.end()) {
-      methods_without_invocations.insert(method);
-    }
-  });
-
-  // Let's try to (semantically) inline barriers once, i.e. merging sets of
-  // barriers, looking into one level of invocations
-  ConcurrentMap<const DexMethod*, std::vector<Barrier>> inlined_method_barriers;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
-    if (methods_without_invocations.count(method)) {
-      return;
-    }
-
-    std::vector<Barrier> barriers;
-    auto append_barriers = [&](const DexMethod* other_method) {
-      if (!is_abstract(other_method)) {
-        auto& invoked_barriers = method_barriers.at_unsafe(other_method);
-        std::copy(invoked_barriers.begin(), invoked_barriers.end(),
-                  std::inserter(barriers, barriers.end()));
-      }
-    };
-
-    auto can_inline_barriers = [&](const DexMethod* other_method) {
-      if (other_method == nullptr) {
-        return false;
-      }
-      if (is_abstract(other_method)) {
-        return true;
-      }
-      return methods_without_invocations.count(other_method) &&
-             !other_method->is_external() && !is_native(other_method);
-    };
-
-    for (auto& barrier : method_barriers.at_unsafe(method)) {
-      if (!is_invoke(barrier.opcode)) {
-        barriers.push_back(barrier);
-        continue;
-      }
-
-      if (barrier.opcode == OPCODE_INVOKE_SUPER ||
-          !can_inline_barriers(barrier.method)) {
-        return;
-      }
-
-      append_barriers(barrier.method);
-
-      if (barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
-          barrier.opcode == OPCODE_INVOKE_INTERFACE) {
-        always_assert(barrier.method->is_virtual());
-        const auto overriding_methods =
-            method_override_graph::get_overriding_methods(
-                *m_method_override_graph, barrier.method);
-        for (const DexMethod* overriding_method : overriding_methods) {
-          if (!can_inline_barriers(overriding_method)) {
-            return;
-          }
-
-          append_barriers(overriding_method);
+    std::unordered_set<Barrier, BarrierHasher> set;
+    boost::optional<const DexMethod*> wait_for_method;
+    for (auto& mie : cfg::InstructionIterable(code.cfg())) {
+      auto* insn = mie.insn;
+      if (may_be_barrier(insn)) {
+        auto barrier = make_barrier(insn);
+        set.insert(barrier);
+        if (is_invoke(barrier.opcode)) {
+          wait_for_method = barrier.method;
         }
       }
     }
-    inlined_method_barriers.emplace(method, barriers);
+    std::vector<Barrier> barriers(set.begin(), set.end());
+    method_barriers.emplace(method, barriers);
+    if (wait_for_method) {
+      waiting_for.emplace(method, *wait_for_method);
+    }
   });
 
-  for (auto& p : method_barriers) {
-    auto it = inlined_method_barriers.find(p.first);
-    if (it == inlined_method_barriers.end()) {
-      m_method_barriers.insert(p);
-    } else {
-      m_method_barriers.insert(*it);
+  // Let's try to (semantically) inline barriers: We merge sets of
+  // barriers, looking into invocations. We do it incrementally,
+  // each time only from methods that do not call any other methods.
+  MethodBarriersStats stats;
+  for (size_t iterations = 0; iterations < max_iterations; iterations++) {
+    stats.inlined_barriers_iterations++;
+
+    ConcurrentMap<const DexMethod*, std::vector<Barrier>>
+        updated_method_barriers;
+    ConcurrentMap<const DexMethod*, const DexMethod*> updated_waiting_for;
+    walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
+      auto waiting_for_it = waiting_for.find(method);
+      if (waiting_for_it == waiting_for.end()) {
+        // no invocation to inline
+        return;
+      }
+
+      auto can_inline_barriers = [&](const DexMethod* other_method) {
+        if (other_method == nullptr) {
+          return false;
+        }
+        if (is_abstract(other_method)) {
+          return true;
+        }
+        // we'll only inline methods that themselves do not have any further
+        // calls
+        return !waiting_for.count_unsafe(other_method) &&
+               !other_method->is_external() && !is_native(other_method);
+      };
+
+      // Quick check: Are we are waiting for a method that cannot be inlined
+      // (yet)?
+      auto waiting_for_method = waiting_for_it->second;
+      if (!can_inline_barriers(waiting_for_method)) {
+        return;
+      }
+
+      std::unordered_set<Barrier, BarrierHasher> barriers;
+      auto inline_barriers = [&](const DexMethod* other_method) {
+        if (!is_abstract(other_method)) {
+          auto& invoked_barriers = method_barriers.at_unsafe(other_method);
+          std::copy(invoked_barriers.begin(), invoked_barriers.end(),
+                    std::inserter(barriers, barriers.end()));
+        }
+      };
+
+      for (auto& barrier : method_barriers.at_unsafe(method)) {
+        if (!is_invoke(barrier.opcode)) {
+          barriers.insert(barrier);
+          continue;
+        }
+
+        if (barrier.opcode == OPCODE_INVOKE_SUPER) {
+          // TODO: Implement
+          updated_waiting_for.insert_or_assign(std::make_pair(method, nullptr));
+          return;
+        }
+
+        if (!can_inline_barriers(barrier.method)) {
+          // giving up, won't inline anything as it's pointless
+          updated_waiting_for.insert_or_assign(
+              std::make_pair(method, barrier.method));
+          return;
+        }
+
+        inline_barriers(barrier.method);
+
+        if (barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
+            barrier.opcode == OPCODE_INVOKE_INTERFACE) {
+          always_assert(barrier.method->is_virtual());
+          const auto overriding_methods =
+              method_override_graph::get_overriding_methods(
+                  *m_method_override_graph, barrier.method);
+          for (const DexMethod* overriding_method : overriding_methods) {
+            if (!can_inline_barriers(overriding_method)) {
+              // giving up, won't inline anything as it's pointless
+              updated_waiting_for.insert_or_assign(
+                  std::make_pair(method, overriding_method));
+              return;
+            }
+
+            inline_barriers(overriding_method);
+          }
+        }
+      }
+
+      std::vector<Barrier> vector(barriers.begin(), barriers.end());
+      updated_method_barriers.emplace(method, vector);
+    });
+
+    if (updated_method_barriers.size() == 0) {
+      break;
+    }
+
+    for (auto& p : updated_waiting_for) {
+      waiting_for.insert_or_assign(p);
+      always_assert(!updated_method_barriers.count(p.first));
+    }
+
+    for (auto& p : updated_method_barriers) {
+      method_barriers.insert_or_assign(p);
+      always_assert(!updated_waiting_for.count_unsafe(p.first));
+      always_assert(waiting_for.count_unsafe(p.first));
+      waiting_for.erase(p.first);
+      stats.inlined_barriers_into_methods++;
     }
   }
 
-  return MethodBarriersStats{inlined_method_barriers.size()};
+  std::copy(method_barriers.begin(), method_barriers.end(),
+            std::inserter(m_method_barriers, m_method_barriers.end()));
+
+  return stats;
 }
 
 CommonSubexpressionElimination::ReadAccesses
@@ -805,20 +860,6 @@ CommonSubexpressionElimination::SharedState::compute_read_accesses(
     }
   }
   return ra;
-}
-
-std::vector<CommonSubexpressionElimination::Barrier>
-CommonSubexpressionElimination::SharedState::compute_barriers(
-    cfg::ControlFlowGraph& cfg) {
-  std::unordered_set<Barrier, BarrierHasher> barriers;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto* insn = mie.insn;
-    if (may_be_barrier(insn)) {
-      barriers.insert(make_barrier(insn));
-    }
-  }
-  std::vector<Barrier> result(barriers.begin(), barriers.end());
-  return result;
 }
 
 bool CommonSubexpressionElimination::SharedState::may_be_barrier(
@@ -1148,13 +1189,23 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   return true;
 }
 
+void CommonSubexpressionEliminationPass::bind_config() {
+  bind("debug", false, m_debug);
+  // The default value 77 is somewhat arbitrary. In practice, the fixed-point
+  // computation terminates after fewer iterations.
+  int64_t default_max_iterations = 77;
+  bind("max_iterations", default_max_iterations, m_max_iterations);
+  after_configuration([this] { always_assert(m_max_iterations >= 0); });
+}
+
 void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   ConfigFiles& /* conf */,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
 
   auto shared_state = CommonSubexpressionElimination::SharedState();
-  auto method_barriers_stats = shared_state.init_method_barriers(scope);
+  auto method_barriers_stats =
+      shared_state.init_method_barriers(scope, m_max_iterations);
   const auto stats =
       walk::parallel::reduce_methods<CommonSubexpressionElimination::Stats>(
           scope,
@@ -1195,12 +1246,16 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
             a.results_captured += b.results_captured;
             a.instructions_eliminated += b.instructions_eliminated;
             return a;
-          });
+          },
+          CommonSubexpressionElimination::Stats{},
+          m_debug ? 1 : walk::parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
   mgr.incr_metric(METRIC_INLINED_BARRIERS_INTO_METHODS,
                   method_barriers_stats.inlined_barriers_into_methods);
+  mgr.incr_metric(METRIC_INLINED_BARRIERS_ITERATIONS,
+                  method_barriers_stats.inlined_barriers_iterations);
 
   shared_state.cleanup();
 }

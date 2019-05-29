@@ -52,13 +52,15 @@ class CommonSubexpressionElimination {
   };
 
   struct MethodBarriersStats {
+    size_t inlined_barriers_iterations{0};
     size_t inlined_barriers_into_methods{0};
   };
 
   class SharedState {
    public:
     SharedState();
-    MethodBarriersStats init_method_barriers(const Scope&);
+    MethodBarriersStats init_method_barriers(const Scope&,
+                                             size_t max_iterations);
     ReadAccesses compute_read_accesses(cfg::ControlFlowGraph&);
     bool is_barrier(const IRInstruction* insn,
                     const ReadAccesses& read_accesses);
@@ -66,7 +68,6 @@ class CommonSubexpressionElimination {
     void cleanup();
 
    private:
-    std::vector<Barrier> compute_barriers(cfg::ControlFlowGraph&);
     bool may_be_barrier(const IRInstruction* insn);
     bool is_invoke_safe(const IRInstruction* insn);
     bool is_invoke_a_barrier(const IRInstruction* insn,
@@ -115,5 +116,10 @@ class CommonSubexpressionEliminationPass : public Pass {
   CommonSubexpressionEliminationPass()
       : Pass("CommonSubexpressionEliminationPass") {}
 
-  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+  virtual void bind_config() override;
+  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  int64_t m_max_iterations;
+  bool m_debug;
 };

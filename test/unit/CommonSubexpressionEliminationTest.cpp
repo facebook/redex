@@ -28,7 +28,9 @@ void test(const Scope& scope,
           const std::string& code_str,
           const std::string& expected_str,
           size_t expected_instructions_eliminated,
-          size_t expected_inlined_barriers_into_methods = 0) {
+          size_t expected_inlined_barriers_into_methods = 0,
+          size_t expected_inlined_barriers_iterations = 1,
+          size_t max_iterations = 10) {
   auto field_a = static_cast<DexField*>(DexField::make_field("LFoo;.a:I"));
   field_a->make_concrete(ACC_PUBLIC);
 
@@ -49,7 +51,8 @@ void test(const Scope& scope,
 
   code.get()->build_cfg(/* editable */ true);
   CommonSubexpressionElimination::SharedState shared_state;
-  auto method_barriers_stats = shared_state.init_method_barriers(scope);
+  auto method_barriers_stats =
+      shared_state.init_method_barriers(scope, max_iterations);
   CommonSubexpressionElimination cse(&shared_state, code.get()->cfg());
   bool is_static = true;
   DexType* declaring_type = nullptr;
@@ -63,6 +66,10 @@ void test(const Scope& scope,
 
   EXPECT_EQ(expected_inlined_barriers_into_methods,
             method_barriers_stats.inlined_barriers_into_methods)
+      << assembler::to_string(code.get()).c_str();
+
+  EXPECT_EQ(expected_inlined_barriers_iterations,
+            method_barriers_stats.inlined_barriers_iterations)
       << assembler::to_string(code.get()).c_str();
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
@@ -621,7 +628,78 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
 
   test(Scope{type_class(get_object_type()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 1, 1);
+       code_str, expected_str, 1, 1, 2);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
+  ClassCreator a_creator(DexType::make_type("LA;"));
+  a_creator.set_super(get_object_type());
+
+  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+     (
+       (const v0 0)
+       (iget v0 "LFoo;.a:I")
+       (move-result-pseudo v1)
+       (invoke-static () "LB;.m:()V")
+       (iget v0 "LFoo;.a:I")
+       (move-result-pseudo v2)
+     )
+   )"));
+  a_creator.add_method(method);
+
+  ClassCreator b_creator(DexType::make_type("LB;"));
+  b_creator.set_super(get_object_type());
+
+  method = static_cast<DexMethod*>(DexMethod::make_method("LB;.m:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+     (
+       (const v0 0)
+       (iget v0 "LFoo;.a:I")
+       (move-result-pseudo v1)
+       (invoke-static () "LC;.m:()V")
+       (iget v0 "LFoo;.a:I")
+       (move-result-pseudo v2)
+     )
+   )"));
+  b_creator.add_method(method);
+
+  ClassCreator c_creator(DexType::make_type("LC;"));
+  c_creator.set_super(get_object_type());
+
+  method = static_cast<DexMethod*>(DexMethod::make_method("LC;.m:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  c_creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LA;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static () "LA;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type()), a_creator.create(),
+             b_creator.create(), c_creator.create()},
+       code_str, expected_str, 1, 2, 3);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
@@ -671,7 +749,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
 
   test(Scope{type_class(get_object_type()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 0, 1);
+       code_str, expected_str, 0, 1, 2);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
