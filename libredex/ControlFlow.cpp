@@ -1589,6 +1589,54 @@ std::vector<Block*> ControlFlowGraph::blocks() const {
   return result;
 }
 
+// Uses a standard depth-first search ith a side table of already-visited nodes.
+std::vector<Block*> ControlFlowGraph::blocks_post_helper(bool reverse) const {
+  std::stack<Block*> stack;
+  for (const auto& entry : m_blocks) {
+    // include unreachable blocks too
+    Block* b = entry.second;
+    if (b != entry_block() && b->preds().empty()) {
+      stack.push(b);
+    }
+  }
+  stack.push(entry_block());
+
+  std::vector<Block*> postorder;
+  postorder.reserve(m_blocks.size());
+  std::unordered_set<Block*> visited;
+  visited.reserve(m_blocks.size());
+  while (!stack.empty()) {
+    const auto& curr = stack.top();
+    visited.insert(curr);
+    bool all_succs_visited = [&] {
+      for (auto const& s : curr->succs()) {
+        if (!visited.count(s->target())) {
+          stack.push(s->target());
+          return false;
+        }
+      }
+      return true;
+    }();
+    if (all_succs_visited) {
+      redex_assert(curr == stack.top());
+      postorder.push_back(curr);
+      stack.pop();
+    }
+  }
+  if (reverse) {
+    std::reverse(postorder.begin(), postorder.end());
+  }
+  return postorder;
+}
+
+std::vector<Block*> ControlFlowGraph::blocks_reverse_post() const {
+  return blocks_post_helper(true);
+}
+
+std::vector<Block*> ControlFlowGraph::blocks_post() const {
+  return blocks_post_helper(false);
+}
+
 ControlFlowGraph::~ControlFlowGraph() {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
@@ -2170,37 +2218,6 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   return o;
 }
 
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
-  std::vector<Block*> postorder;
-  std::vector<Block*> stack;
-  std::unordered_set<Block*> visited;
-  for (size_t i = 1; i < cfg.size(); i++) {
-    if (cfg[i]->preds().empty()) {
-      stack.push_back(cfg[i]);
-    }
-  }
-  stack.push_back(cfg[0]);
-  while (!stack.empty()) {
-    auto const& curr = stack.back();
-    visited.insert(curr);
-    bool all_succs_visited = [&] {
-      for (auto const& s : curr->succs()) {
-        if (!visited.count(s->target())) {
-          stack.push_back(s->target());
-          return false;
-        }
-      }
-      return true;
-    }();
-    if (all_succs_visited) {
-      redex_assert(curr == stack.back());
-      postorder.push_back(curr);
-      stack.pop_back();
-    }
-  }
-  return postorder;
-}
-
 Block* ControlFlowGraph::idom_intersect(
     const std::unordered_map<Block*, DominatorInfo>& postorder_dominator,
     Block* block1,
@@ -2227,7 +2244,7 @@ std::unordered_map<Block*, DominatorInfo>
 ControlFlowGraph::immediate_dominators() const {
   // Get postorder of blocks and create map of block to postorder number.
   std::unordered_map<Block*, DominatorInfo> postorder_dominator;
-  auto postorder_blocks = postorder_sort(blocks());
+  const auto& postorder_blocks = blocks_post();
   for (size_t i = 0; i < postorder_blocks.size(); ++i) {
     postorder_dominator[postorder_blocks[i]].postorder = i;
   }

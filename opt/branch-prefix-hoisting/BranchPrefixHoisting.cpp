@@ -298,7 +298,7 @@ int BranchPrefixHoistingPass::process_cfg(cfg::ControlFlowGraph& cfg) {
   bool performed_transformation = false;
   do {
     performed_transformation = false;
-    const std::vector<cfg::Block*>& blocks = cfg::postorder_sort(cfg.blocks());
+    const std::vector<cfg::Block*>& blocks = cfg.blocks_post();
     // iterate from the back, may get to the optimal state quicker
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed

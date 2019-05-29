@@ -356,8 +356,9 @@ class ControlFlowGraph {
    */
   IRList* linearize();
 
-  // NOTE: this function copies pointers to blocks from m_blocks
+  // Return the blocks of this CFG in an arbitrary order.
   //
+  // NOTE: this function copies pointers to blocks from m_blocks.
   // If a block is created or destroyed while we're iterating on a copy, the
   // copy is now stale. That stale copy may have a pointer to a deleted block or
   // it may be incomplete (not iterating over the newly creating block).
@@ -368,6 +369,13 @@ class ControlFlowGraph {
   // elements.
   std::vector<Block*> blocks() const;
 
+  // Return vector of blocks in reverse post order (RPO). If there is a path
+  // from Block A to Block B, then A appears before B in this vector.
+  std::vector<Block*> blocks_reverse_post() const;
+  // Return vector of blocks in post order (PO). If there is a path
+  // from Block A to Block B, then A appears after B in this vector.
+  std::vector<Block*> blocks_post() const;
+
   Block* create_block();
 
   // Create a new block (with a unique ID) that has a copy of the code inside
@@ -375,10 +383,8 @@ class ControlFlowGraph {
   // outgoing edges
   Block* duplicate_block(Block* original);
 
-  const Block* entry_block() const { return m_entry_block; }
-  const Block* exit_block() const { return m_exit_block; }
-  Block* entry_block() { return m_entry_block; }
-  Block* exit_block() { return m_exit_block; }
+  Block* entry_block() const { return m_entry_block; }
+  Block* exit_block() const { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
 
@@ -962,6 +968,8 @@ class ControlFlowGraph {
   // Return the next unused block identifier
   BlockId next_block_id() const;
 
+  std::vector<Block*> blocks_post_helper(bool reverse) const;
+
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;
   EdgeSet m_edges;
@@ -1150,12 +1158,6 @@ class InstructionIterableImpl {
 
   bool empty() { return begin() == end(); }
 };
-
-/*
- * Build a postorder sorted vector of blocks from the given CFG. Uses a
- * standard depth-first search with a side table of already-visited nodes.
- */
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
 
 template <class ForwardIt>
 bool ControlFlowGraph::replace_insns(const InstructionIterator& it,

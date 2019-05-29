@@ -175,7 +175,7 @@ ConcurrentSet<DexMethod*> get_no_implementor_abstract_methods(
 void LocalDce::dce(IRCode* code) {
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  auto blocks = cfg::postorder_sort(cfg.blocks());
+  const auto& blocks = cfg.blocks_post();
   auto regs = code->get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : blocks) {
