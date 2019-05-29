@@ -11,6 +11,8 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unordered_set>
 
 #include <json/json.h>
@@ -71,6 +73,18 @@ int main(int argc, char* argv[]) {
   Json::Value json(Json::objectValue);
   char templ[] = "redex_equivalence_test_XXXXXX";
   auto tmpdir = mkdtemp(templ);
+  std::string metadir(tmpdir);
+  metadir += "/meta";
+  int status = mkdir(metadir.c_str(), 0755);
+  if (status != 0) {
+    // Attention: errno may get changed by syscalls or lib functions.
+    // Saving before printing is a conventional way of using errno.
+    int errsv = errno;
+    std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   ConfigFiles conf(json, tmpdir);
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
 
