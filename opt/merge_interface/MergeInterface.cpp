@@ -19,7 +19,8 @@
 #include "Walkers.h"
 
 namespace {
-
+const std::string MERGE_INTERFACE_MAP_FILENAME =
+    "redex-merge-interface-mappings.txt";
 using DexClassSet = std::set<DexClass*, dexclasses_comparator>;
 
 // List of classes to List of interfaces they implemented
@@ -651,7 +652,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
   remove_merged_interfaces(scope, intf_merge_map);
   post_dexen_changes(scope, stores);
   write_interface_merging_mapping_file(
-      intf_merge_map, conf.metafile(m_merged_interface_mapping_file));
+      intf_merge_map, conf.metafile(MERGE_INTERFACE_MAP_FILENAME));
 
   mgr.set_metric("num_mergeable_interfaces", m_metric.interfaces_to_merge);
   mgr.set_metric("num_created_interfaces", m_metric.interfaces_created);

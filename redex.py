@@ -751,13 +751,6 @@ def finalize_redex(state):
     meta_file_dir = join(state.dex_dir, "meta/")
     assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
 
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'unreachable-removed-symbols.txt',
-                         'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'class-method-info-map.txt',
-                         'class method info map', 'redex-class-method-info-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'merge-interface-mappings.txt',
-                         'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
-
     copy_all_file_to_out_dir(meta_file_dir, state.args.out, "*", "all redex generated artifacts")
 
     copy_all_file_to_out_dir(

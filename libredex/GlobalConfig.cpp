@@ -48,7 +48,7 @@ void GlobalConfig::bind_config() {
   bind("emit_name_based_locator_strings", {}, bool_param);
   bind("record_keep_reasons", {}, bool_param);
   bind("debug_info_kind", "", string_param);
-  bind("class_method_info_map", "", string_param);
+  bind("emit_class_method_info_map", false, bool_param);
   bind("bytecode_sort_mode", "", string_param);
   bind("keep_packages", {}, string_vector_param);
   bind("keep_annotations", {}, string_vector_param);

@@ -62,6 +62,7 @@ constexpr const char* LINE_NUMBER_MAP = "redex-line-number-map-v2";
 constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
 constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
+constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -1070,11 +1071,9 @@ int main(int argc, char* argv[]) {
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
       redex_backend(manager, args.out_dir, conf, stores, stats);
-      if (!args.config.get("class_method_info_map", "").empty()) {
-        dump_class_method_info_map(
-            conf.metafile(
-                args.config.get("class_method_info_map", "").asString()),
-            stores);
+      if (args.config.get("emit_class_method_info_map", false).asBool()) {
+        dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
+                                   stores);
       }
     } else {
       redex::write_all_intermediate(conf, args.output_ir_dir,

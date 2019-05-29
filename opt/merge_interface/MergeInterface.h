@@ -22,9 +22,6 @@
 class MergeInterfacePass : public Pass {
  public:
   MergeInterfacePass() : Pass("MergeInterfacePass") {}
-  void bind_config() override {
-    bind("merged_interface_mappings", "", m_merged_interface_mapping_file);
-  }
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   struct Metric {
@@ -32,7 +29,4 @@ class MergeInterfacePass : public Pass {
     size_t interfaces_created{0};
     size_t interfaces_in_annotation{0};
   } m_metric;
-
- private:
-  std::string m_merged_interface_mapping_file;
 };

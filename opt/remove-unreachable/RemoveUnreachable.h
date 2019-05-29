@@ -15,7 +15,6 @@ class RemoveUnreachablePass : public Pass {
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
   void bind_config() override {
-    bind("unreachable_removed_symbols", "", m_unreachable_symbols_file_name);
     bind("ignore_string_literals",
          {},
          m_ignore_sets.string_literals);
@@ -42,5 +41,4 @@ class RemoveUnreachablePass : public Pass {
 
  private:
   reachability::IgnoreSets m_ignore_sets;
-  std::string m_unreachable_symbols_file_name;
 };
