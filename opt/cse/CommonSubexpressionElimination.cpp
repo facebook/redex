@@ -80,6 +80,8 @@ namespace {
 
 constexpr const char* METRIC_RESULTS_CAPTURED = "num_results_captured";
 constexpr const char* METRIC_STORES_CAPTURED = "num_stores_captured";
+constexpr const char* METRIC_ARRAY_LENGTHS_CAPTURED =
+    "num_array_lengths_captured";
 constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
     "num_eliminated_instructions";
 constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
@@ -454,6 +456,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         ValueIdDomain domain = get_value_id_domain(insn, current_state);
         current_state->mutate_ref_env(
             [&](RefEnvironment* env) { env->set(RESULT_REGISTER, domain); });
+        if (opcode == OPCODE_NEW_ARRAY && domain.get_constant()) {
+          auto value = get_array_length_value(*domain.get_constant());
+          TRACE(CSE, 4, "[CSE] installing array-length forwarding for %s\n",
+                SHOW(insn));
+          install_forwarding(insn, value, current_state);
+        }
       }
       break;
     }
@@ -609,6 +617,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       m_positional_insns.emplace(id, value.positional_insn);
     }
     return boost::optional<value_id_t>(id);
+  }
+
+  IRValue get_array_length_value(value_id_t array_value_id) const {
+    IRValue value;
+    value.opcode = OPCODE_ARRAY_LENGTH;
+    value.srcs.push_back(array_value_id);
+    return value;
   }
 
   boost::optional<IRValue> get_equivalent_put_value(
@@ -1364,6 +1379,10 @@ bool CommonSubexpressionElimination::patch(bool is_static,
                           : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
                                                            : OPCODE_MOVE;
         m_stats.results_captured++;
+      } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+        src_reg = earlier_insn->src(0);
+        move_opcode = OPCODE_MOVE;
+        m_stats.array_lengths_captured++;
       } else {
         always_assert(is_aput(earlier_insn->opcode()) ||
                       is_iput(earlier_insn->opcode()) ||
@@ -1427,7 +1446,14 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     auto src_reg = earlier_insn->dests_size() ? earlier_insn->dest()
                                               : earlier_insn->src(0);
     move_insn->set_src(0, src_reg)->set_dest(temp_reg);
-    m_cfg.insert_after(it, move_insn);
+    if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+      // we need to capture the array-length register of a new-array instruction
+      // *before* the instruction, as the dest of the instruction may overwrite
+      // the incoming array length value
+      m_cfg.insert_before(it, move_insn);
+    } else {
+      m_cfg.insert_after(it, move_insn);
+    }
   }
 
   TRACE(CSE, 5, "[CSE] after:\n%s\n", SHOW(m_cfg));
@@ -1492,6 +1518,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       [](Stats a, Stats b) {
         a.results_captured += b.results_captured;
         a.stores_captured += b.stores_captured;
+        a.array_lengths_captured += b.array_lengths_captured;
         a.instructions_eliminated += b.instructions_eliminated;
         a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
         return a;
@@ -1500,6 +1527,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       m_debug ? 1 : walk::parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_STORES_CAPTURED, stats.stores_captured);
+  mgr.incr_metric(METRIC_ARRAY_LENGTHS_CAPTURED, stats.array_lengths_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
   mgr.incr_metric(METRIC_INLINED_BARRIERS_INTO_METHODS,

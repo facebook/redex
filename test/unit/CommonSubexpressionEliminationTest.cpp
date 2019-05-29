@@ -1242,6 +1242,28 @@ TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
       (move v1 v3)
     )
   )";
+}
 
+TEST_F(CommonSubexpressionEliminationTest, array_length) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v0)
+      (array-length v0)
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (move v1 v0)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v0)
+      (array-length v0)
+      (move-result-pseudo v0)
+      (move v0 v1)
+    )
+  )";
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
