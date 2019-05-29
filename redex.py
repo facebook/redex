@@ -849,6 +849,12 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
+    # check if redex-all generated the final mapping
+    pg_map_path = join(os.path.dirname(state.args.out), "redex-class-rename-map.txt")
+    if os.path.isfile(pg_map_path):
+        # no need to merge or overwrite, we are done
+        return
+
     if state.config_dict.get('proguard_map_output', '') != '':
         if state.config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
             overwrite_proguard_maps(
