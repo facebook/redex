@@ -348,82 +348,6 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
 
 
-def merge_proguard_maps(
-        redex_rename_map_path,
-        input_apk_path,
-        apk_output_path,
-        dex_dir,
-        pg_file,
-        redex_pg_out_filename):
-    log('running merge proguard step')
-    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
-    log('redex map is at ' + str(redex_rename_map_path))
-    log('pg map is at ' + str(pg_file))
-    assert os.path.isfile(redex_rename_map_path)
-    output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_out_filename)
-    # If -dontobfuscate is set, proguard won't produce a mapping file, but
-    # buck will create an empty mapping.txt. Check for this case.
-    if pg_file and os.path.getsize(pg_file) > 0:
-        update_proguard_mapping_file(
-            pg_file,
-            redex_rename_map_path,
-            output_file)
-        log('merging proguard map with redex class rename map')
-        log('pg mapping file input is ' + str(pg_file))
-        log('wrote redex pg format mapping file to ' + str(output_file))
-    else:
-        log('no proguard map file found')
-        shutil.move(redex_rename_map_path, output_file)
-
-
-def update_proguard_mapping_file(pg_map, redex_map, output_file):
-    with open(pg_map, 'r') as pg_map,\
-            open(redex_map, 'r') as redex_map,\
-            open(output_file, 'w') as output:
-        cls_regex = re.compile(r'^(.*) -> (.*):')
-        redex_dict = {}
-        for line in redex_map:
-            match_obj = cls_regex.match(line)
-            if match_obj:
-                unmangled = match_obj.group(1)
-                mangled = match_obj.group(2)
-                redex_dict[unmangled] = mangled
-        for line in pg_map:
-            match_obj = cls_regex.match(line)
-            if match_obj:
-                unmangled = match_obj.group(1)
-                mangled = match_obj.group(2)
-                new_mapping = line.rstrip()
-                if unmangled in redex_dict:
-                    out_mangled = redex_dict.pop(unmangled)
-                    new_mapping = unmangled + ' -> ' + out_mangled + ':'
-                    print(new_mapping, file=output)
-                else:
-                    print(line.rstrip(), file=output)
-            else:
-                print(line.rstrip(), file=output)
-        for unmangled, mangled in redex_dict.items():
-            print('%s -> %s:' % (unmangled, mangled), file=output)
-
-
-def overwrite_proguard_maps(
-        redex_rename_map_path,
-        apk_output_path,
-        dex_dir,
-        pg_file,
-        redex_pg_out_filename):
-    log('running overwrite proguard step')
-    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
-    log('redex map is at ' + str(redex_rename_map_path))
-    log('pg map is at ' + str(pg_file))
-    assert os.path.isfile(redex_rename_map_path)
-    output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_out_filename)
-    log('wrote redex pg format mapping file to ' + str(output_file))
-    shutil.move(redex_rename_map_path, output_file)
-
-
 def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_dir = os.path.dirname(apk_output_path)
     output_path = os.path.join(output_dir, out_name)
@@ -823,24 +747,12 @@ def finalize_redex(state):
                       state.args.keyalias, state.args.keypass, state.args.ignore_zipalign, state.args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
         timer() - repack_start_time))
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-line-number-map-v2',
-                         'line number map v2', 'redex-line-number-map-v2')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'redex-stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'bytecode_offset_map.txt',
-                         'bytecode offset map', 'redex-bytecode-offset-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
                          'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2',
-                         'debug method id map', 'redex-debug-line-map-v2')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
                          'class method info map', 'redex-class-method-info-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
@@ -853,31 +765,6 @@ def finalize_redex(state):
     copy_all_file_to_out_dir(state.dex_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
-
-    redex_pg_file = "redex-class-rename-map.txt"
-    if state.config_dict.get('RenameClassesPassV2', '') != '':
-        redex_pg_file = state.config_dict['RenameClassesPassV2'].get('class_rename', redex_pg_file)
-
-    if state.config_dict.get('proguard_map_output', '') != '':
-        if state.config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
-            overwrite_proguard_maps(
-                state.config_dict['proguard_map_output'],
-                state.args.out,
-                state.dex_dir,
-                state.args.proguard_map,
-                redex_pg_file)
-        else:
-            merge_proguard_maps(
-                state.config_dict['proguard_map_output'],
-                state.args.input_apk,
-                state.args.out,
-                state.dex_dir,
-                state.args.proguard_map,
-                redex_pg_file)
-    else:
-        passes_list = state.config_dict.get('redex', {}).get('passes', [])
-        assert 'RenameClassesPass' not in passes_list and\
-            'RenameClassesPassV2' not in passes_list
 
 
 def run_redex(args):

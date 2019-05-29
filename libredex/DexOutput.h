@@ -300,9 +300,7 @@ class DexOutput {
             PositionMapper* pos_mapper,
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-                code_debug_lines,
-            const std::string& pg_mapping_path,
-            const std::string& bytecode_offset_path);
+                code_debug_lines);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,

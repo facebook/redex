@@ -50,8 +50,6 @@ void GlobalConfig::bind_config() {
   bind("emit_name_based_locator_strings", {}, bool_param);
   bind("record_keep_reasons", {}, bool_param);
   bind("debug_info_kind", "", string_param);
-  bind("proguard_map_output", "", string_param);
-  bind("bytecode_offset_map", "", string_param);
   bind("class_method_info_map", "", string_param);
   bind("bytecode_sort_mode", "", string_param);
   bind("keep_packages", {}, string_vector_param);

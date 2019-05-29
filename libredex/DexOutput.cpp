@@ -336,9 +336,11 @@ CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
     : method(meth), code(c), code_item(ci) {}
 
 namespace {
-// Keep these values in sync with those in redex.py.
-constexpr const char* METHOD_MAPPING = "method_mapping.txt";
-constexpr const char* CLASS_MAPPING = "class_mapping.txt";
+// DO NOT CHANGE THESE VALUES! Many services will break if you do.
+constexpr const char* METHOD_MAPPING = "redex-method-id-map.txt";
+constexpr const char* CLASS_MAPPING = "redex-class-id-map.txt";
+constexpr const char* BYTECODE_OFFSET_MAPPING = "redex-bytecode-offset-map.txt";
+constexpr const char* REDEX_PG_MAPPING = "redex-class-rename-map.txt";
 } // namespace
 
 DexOutput::DexOutput(
@@ -354,9 +356,7 @@ DexOutput::DexOutput(
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::string& pg_mapping_filename,
-    const std::string& bytecode_offset_filename)
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
@@ -371,8 +371,8 @@ DexOutput::DexOutput(
   m_code_debug_lines = code_debug_lines;
   m_method_mapping_filename = config_files.metafile(METHOD_MAPPING);
   m_class_mapping_filename = config_files.metafile(CLASS_MAPPING);
-  m_pg_mapping_filename = pg_mapping_filename;
-  m_bytecode_offset_filename = bytecode_offset_filename;
+  m_pg_mapping_filename = config_files.metafile(REDEX_PG_MAPPING);
+  m_bytecode_offset_filename = config_files.metafile(BYTECODE_OFFSET_MAPPING);
   m_store_number = store_number;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
@@ -2212,10 +2212,6 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic) {
   const JsonWrapper& json_cfg = conf.get_json_config();
-  auto pg_mapping_filename =
-      conf.metafile(json_cfg.get("proguard_map_output", std::string()));
-  auto bytecode_offset_filename =
-      conf.metafile(json_cfg.get("bytecode_offset_map", std::string()));
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
@@ -2255,9 +2251,7 @@ dex_stats_t write_classes_to_dex(
                              conf,
                              pos_mapper,
                              method_to_id,
-                             code_debug_lines,
-                             pg_mapping_filename,
-                             bytecode_offset_filename);
+                             code_debug_lines);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();
