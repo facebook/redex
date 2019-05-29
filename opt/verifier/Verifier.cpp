@@ -22,6 +22,8 @@
 
 namespace {
 
+const std::string CLASS_DEPENDENCY_FILENAME = "redex-class-dependencies.txt";
+
 using refs_t = std::unordered_map<const DexClass*,
                                   std::set<DexClass*, dexclasses_comparator>>;
 using class_to_store_map_t = std::unordered_map<const DexClass*, DexStore*>;
@@ -140,14 +142,12 @@ void verifyStore(DexStoresVector& stores, DexStore& store, class_to_store_map_t 
 void VerifierPass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
-  m_class_dependencies_output = conf.metafile(m_class_dependencies_output);
-  FILE* fd = nullptr;
-  if (!m_class_dependencies_output.empty()) {
-    fd = fopen(m_class_dependencies_output.c_str(), "w");
-    if (fd == nullptr) {
-      perror("Error opening class dependencies output file");
-      return;
-    }
+  auto class_dep_out = conf.metafile(CLASS_DEPENDENCY_FILENAME);
+  FILE* fd = fopen(class_dep_out.c_str(), "w");
+
+  if (fd == nullptr) {
+    perror("Error opening class dependencies output file");
+    return;
   }
 
   allowed_store_map_t store_map;

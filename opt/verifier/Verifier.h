@@ -13,12 +13,5 @@ class VerifierPass : public Pass {
  public:
   VerifierPass() : Pass("VerifierPass") {}
 
-  void bind_config() override {
-    bind("class_dependencies_output", "", m_class_dependencies_output);
-  }
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  std::string m_class_dependencies_output;
 };

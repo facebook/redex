@@ -747,8 +747,7 @@ def finalize_redex(state):
                       state.args.keyalias, state.args.keypass, state.args.ignore_zipalign, state.args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
         timer() - repack_start_time))
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
+
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out,
