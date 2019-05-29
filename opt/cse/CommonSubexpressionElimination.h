@@ -51,10 +51,14 @@ class CommonSubexpressionElimination {
     std::bitset<AccessedArrayComponentTypes::END> array_component_types;
   };
 
+  struct MethodBarriersStats {
+    size_t inlined_barriers_into_methods{0};
+  };
+
   class SharedState {
    public:
     SharedState();
-    void init_method_barriers(const Scope&);
+    MethodBarriersStats init_method_barriers(const Scope&);
     ReadAccesses compute_read_accesses(cfg::ControlFlowGraph&);
     bool is_barrier(const IRInstruction* insn,
                     const ReadAccesses& read_accesses);

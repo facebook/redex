@@ -87,6 +87,8 @@ namespace {
 constexpr const char* METRIC_RESULTS_CAPTURED = "num_results_captured";
 constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
     "num_eliminated_instructions";
+constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
+    "num_inlined_barriers_into_methods";
 
 using value_id_t = uint32_t;
 enum ValueIdFlags : value_id_t {
@@ -672,17 +674,94 @@ CommonSubexpressionElimination::SharedState::SharedState() {
   }
 }
 
-void CommonSubexpressionElimination::SharedState::init_method_barriers(
+CommonSubexpressionElimination::MethodBarriersStats
+CommonSubexpressionElimination::SharedState::init_method_barriers(
     const Scope& scope) {
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   ConcurrentMap<const DexMethod*, std::vector<Barrier>> method_barriers;
+  ConcurrentSet<const DexMethod*> methods_without_invocations;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
-    method_barriers.emplace(method, compute_barriers(code.cfg()));
+    auto barriers = compute_barriers(code.cfg());
+    method_barriers.emplace(method, barriers);
+    auto it = std::find_if(
+        barriers.begin(), barriers.end(),
+        [](const Barrier& barrier) { return is_invoke(barrier.opcode); });
+    if (it == barriers.end()) {
+      methods_without_invocations.insert(method);
+    }
   });
-  std::copy(method_barriers.begin(), method_barriers.end(),
-            std::inserter(m_method_barriers, m_method_barriers.end()));
+
+  // Let's try to (semantically) inline barriers once, i.e. merging sets of
+  // barriers, looking into one level of invocations
+  ConcurrentMap<const DexMethod*, std::vector<Barrier>> inlined_method_barriers;
+  walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
+    if (methods_without_invocations.count(method)) {
+      return;
+    }
+
+    std::vector<Barrier> barriers;
+    auto append_barriers = [&](const DexMethod* other_method) {
+      if (!is_abstract(other_method)) {
+        auto& invoked_barriers = method_barriers.at_unsafe(other_method);
+        std::copy(invoked_barriers.begin(), invoked_barriers.end(),
+                  std::inserter(barriers, barriers.end()));
+      }
+    };
+
+    auto can_inline_barriers = [&](const DexMethod* other_method) {
+      if (other_method == nullptr) {
+        return false;
+      }
+      if (is_abstract(other_method)) {
+        return true;
+      }
+      return methods_without_invocations.count(other_method) &&
+             !other_method->is_external() && !is_native(other_method);
+    };
+
+    for (auto& barrier : method_barriers.at_unsafe(method)) {
+      if (!is_invoke(barrier.opcode)) {
+        barriers.push_back(barrier);
+        continue;
+      }
+
+      if (barrier.opcode == OPCODE_INVOKE_SUPER ||
+          !can_inline_barriers(barrier.method)) {
+        return;
+      }
+
+      append_barriers(barrier.method);
+
+      if (barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
+          barrier.opcode == OPCODE_INVOKE_INTERFACE) {
+        always_assert(barrier.method->is_virtual());
+        const auto overriding_methods =
+            method_override_graph::get_overriding_methods(
+                *m_method_override_graph, barrier.method);
+        for (const DexMethod* overriding_method : overriding_methods) {
+          if (!can_inline_barriers(overriding_method)) {
+            return;
+          }
+
+          append_barriers(overriding_method);
+        }
+      }
+    }
+    inlined_method_barriers.emplace(method, barriers);
+  });
+
+  for (auto& p : method_barriers) {
+    auto it = inlined_method_barriers.find(p.first);
+    if (it == inlined_method_barriers.end()) {
+      m_method_barriers.insert(p);
+    } else {
+      m_method_barriers.insert(*it);
+    }
+  }
+
+  return MethodBarriersStats{inlined_method_barriers.size()};
 }
 
 CommonSubexpressionElimination::ReadAccesses
@@ -841,7 +920,11 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
       // overriding methods further below.
       return false;
     }
-    auto& barriers = m_method_barriers.at(method);
+    auto it = m_method_barriers.find(method);
+    if (it == m_method_barriers.end()) {
+      return true;
+    }
+    auto& barriers = it->second;
     for (auto& barrier : barriers) {
       if (is_invoke(barrier.opcode) ||
           is_barrier_relevant(barrier, read_accesses)) {
@@ -858,6 +941,9 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
   }
   if (opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) {
     always_assert(method->is_virtual());
+    if (!m_method_override_graph) {
+      return true;
+    }
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(*m_method_override_graph,
                                                       method);
@@ -1068,7 +1154,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   const auto scope = build_class_scope(stores);
 
   auto shared_state = CommonSubexpressionElimination::SharedState();
-  shared_state.init_method_barriers(scope);
+  auto method_barriers_stats = shared_state.init_method_barriers(scope);
   const auto stats =
       walk::parallel::reduce_methods<CommonSubexpressionElimination::Stats>(
           scope,
@@ -1113,6 +1199,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
+  mgr.incr_metric(METRIC_INLINED_BARRIERS_INTO_METHODS,
+                  method_barriers_stats.inlined_barriers_into_methods);
 
   shared_state.cleanup();
 }
