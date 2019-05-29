@@ -795,62 +795,69 @@ def finalize_redex(state):
                       state.args.keyalias, state.args.keypass, state.args.ignore_zipalign, state.args.page_align_libs)
     log('Creating output APK finished in {:.2f} seconds'.format(
         timer() - repack_start_time))
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+
+    meta_file_dir = join(state.dex_dir, "meta/")
+    # newer version of redex-all will put meta files in meta/
+    if not os.path.isdir(meta_file_dir):
+        meta_file_dir = state.dex_dir
+
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'redex-line-number-map', 'line number map', 'redex-line-number-map')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-line-number-map-v2',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'redex-line-number-map-v2',
                          'line number map v2', 'redex-line-number-map-v2')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'redex-stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'filename_mappings.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'filename_mappings.txt',
                          'src strings map', 'redex-src-strings-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'outliner-artifacts.bin',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'outliner-artifacts.bin',
                          'outliner artifacts', 'redex-outliner-artifacts.bin')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'bytecode_offset_map.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'bytecode_offset_map.txt',
                          'bytecode offset map', 'redex-bytecode-offset-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'coldstart_fields_in_R_classes.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'coldstart_fields_in_R_classes.txt',
                          'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-optres-mapping.json',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-optres-mapping.json',
                          'resid map after optres pass', 'redex-resid-optres-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-dedup-mapping.json',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-dedup-mapping.json',
                          'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'resid-splitres-mapping.json',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-splitres-mapping.json',
                          'resid map after split pass', 'redex-resid-splitres-mapping.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'type-erasure-mappings.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'type-erasure-mappings.txt',
                          'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'instrument-metadata.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'instrument-metadata.txt',
                          'metadata file for instrumentation', 'redex-instrument-metadata.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'cleanup-removed-classes.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'cleanup-removed-classes.txt',
                          'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
+    copy_file_to_out_dir(meta_file_dir, state.args.out,
                          'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'redex-debug-line-map-v2',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'redex-debug-line-map-v2',
                          'debug method id map', 'redex-debug-line-map-v2')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'class-method-info-map.txt',
                          'class method info map', 'redex-class-method-info-map.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'cfp-unsafe-references.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'cfp-unsafe-references.txt',
                          'cfp unsafe references', 'redex-cfp-unsafe-references.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'merge-interface-mappings.txt',
                          'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'reachability-graph',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'reachability-graph',
                          'reachability graph', 'redex-reachability-graph')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'method-override-graph',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'method-override-graph',
                          'method override graph', 'redex-method-override-graph')
-    copy_file_to_out_dir(state.dex_dir, state.args.out, 'iodi-metadata',
+    copy_file_to_out_dir(meta_file_dir, state.args.out, 'iodi-metadata',
                          'iodi metadata', 'iodi-metadata')
-    copy_all_file_to_out_dir(state.dex_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
+    copy_all_file_to_out_dir(meta_file_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
 
     # check if redex-all generated the final mapping
     pg_map_path = join(os.path.dirname(state.args.out), "redex-class-rename-map.txt")
+    print("pg_map is %s" % pg_map_path, file=sys.stderr)
     if os.path.isfile(pg_map_path):
         # no need to merge or overwrite, we are done
         return
@@ -860,19 +867,19 @@ def finalize_redex(state):
             overwrite_proguard_maps(
                 state.config_dict['proguard_map_output'],
                 state.args.out,
-                state.dex_dir,
+                meta_file_dir,
                 state.args.proguard_map)
         else:
             merge_proguard_maps(
                 state.config_dict['proguard_map_output'],
                 state.args.input_apk,
                 state.args.out,
-                state.dex_dir,
+                meta_file_dir,
                 state.args.proguard_map)
     else:
         passes_list = state.config_dict.get('redex', {}).get('passes', [])
         assert 'RenameClassesPass' not in passes_list and\
-            'RenameClassesPassV2' not in passes_list
+            'RenameClassesPassV2' not in passes_list, "outdir is %s" % state.args.out
 
 
 def run_redex(args):
