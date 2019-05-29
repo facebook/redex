@@ -59,6 +59,7 @@ namespace {
 constexpr const char* LINE_NUMBER_MAP = "redex-line-number-map-v2";
 constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
 constexpr const char* IODI_METADATA = "iodi-metadata";
+constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
 
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
@@ -907,8 +908,7 @@ void redex_backend(const PassManager& manager,
     const Json::Value& opt_decisions_args =
         conf.get_json_config()["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
-      auto opt_decisions_output_path = conf.metafile(
-          opt_decisions_args.get("output_file_name", "").asString());
+      auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
       Json::StyledStreamWriter writer;

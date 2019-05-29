@@ -44,7 +44,6 @@ struct OptDecisionsConfig : public Configurable {
   }
 
   bool enable_logs;
-  std::string output_file_name;
 };
 
 class GlobalConfig : public Configurable {

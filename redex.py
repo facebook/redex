@@ -750,8 +750,6 @@ def finalize_redex(state):
 
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'unreachable-removed-symbols.txt',
                          'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
-    copy_file_to_out_dir(state.dex_dir, state.args.out,
-                         'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'class-method-info-map.txt',
                          'class method info map', 'redex-class-method-info-map.txt')
     copy_file_to_out_dir(state.dex_dir, state.args.out, 'merge-interface-mappings.txt',
