@@ -103,17 +103,18 @@ class SharedState {
   MethodBarriersStats init_method_barriers(const Scope&, size_t);
   boost::optional<Location> get_relevant_written_location(
       const IRInstruction* insn,
+      DexType* exact_virtual_scope,
       const std::unordered_set<Location, LocationHasher>& read_locations);
   void log_barrier(const Barrier& barrier);
   void cleanup();
 
  private:
-  bool may_be_barrier(const IRInstruction* insn);
-  bool is_invoke_safe(const IRInstruction* insn);
+  bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
+  bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
   bool is_invoke_a_barrier(
       const IRInstruction* insn,
       const std::unordered_set<Location, LocationHasher>& read_locations);
-  std::unordered_set<DexMethodRef*> m_safe_methods;
+  std::unordered_set<const DexMethod*> m_safe_methods;
   std::unordered_set<DexType*> m_safe_types;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*,

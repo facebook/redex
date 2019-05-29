@@ -333,7 +333,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         written_location_counts;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
       auto location = shared_state->get_relevant_written_location(
-          mie.insn, m_read_locations);
+          mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
       if (location) {
         written_location_counts[*location]++;
       }
@@ -478,8 +478,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    auto location =
-        m_shared_state->get_relevant_written_location(insn, m_read_locations);
+    auto location = get_clobbered_location(insn, current_state);
     if (location) {
       auto mask = get_location_value_id_mask(*location);
 
@@ -572,6 +571,19 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   size_t get_value_ids_size() { return m_value_ids.size(); }
 
  private:
+  boost::optional<Location> get_clobbered_location(
+      const IRInstruction* insn, CseEnvironment* current_state) const {
+    DexType* exact_virtual_scope = nullptr;
+    if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      auto src0 = current_state->get_ref_env().get(insn->src(0)).get_constant();
+      if (src0) {
+        exact_virtual_scope = get_exact_type(*src0);
+      }
+    }
+    return m_shared_state->get_relevant_written_location(
+        insn, exact_virtual_scope, m_read_locations);
+  }
+
   ValueIdDomain get_value_id_domain(const IRInstruction* insn,
                                     CseEnvironment* current_state) const {
     auto value = get_value(insn, current_state);
@@ -611,6 +623,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       }
     }
     m_value_ids.emplace(value, id);
+    if (value.opcode == IOPCODE_POSITIONAL) {
+      m_positional_insns.emplace(id, value.positional_insn);
+    }
     return boost::optional<value_id_t>(id);
   }
 
@@ -719,8 +734,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       is_positional = true;
       break;
     default:
-      auto location =
-          m_shared_state->get_relevant_written_location(insn, m_read_locations);
+      auto location = m_shared_state->get_relevant_written_location(
+          insn, nullptr /* exact_virtual_scope */, m_read_locations);
       is_positional = !!location;
       break;
     }
@@ -751,10 +766,28 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
   }
 
+  DexType* get_exact_type(value_id_t value_id) const {
+    auto it = m_positional_insns.find(value_id);
+    if (it == m_positional_insns.end()) {
+      return nullptr;
+    }
+    auto insn = it->second;
+    switch (insn->opcode()) {
+    case OPCODE_NEW_ARRAY:
+    case OPCODE_NEW_INSTANCE:
+    case OPCODE_FILLED_NEW_ARRAY:
+      return insn->get_type();
+    default:
+      return nullptr;
+    }
+  }
+
   std::unordered_set<Location, LocationHasher> m_read_locations;
   std::unordered_map<Location, value_id_t, LocationHasher> m_tracked_locations;
   SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
+  mutable std::unordered_map<value_id_t, const IRInstruction*>
+      m_positional_insns;
 };
 
 } // namespace
@@ -775,21 +808,17 @@ SharedState::SharedState() {
   // The list of methods is not exhaustive; it was derived by observing the most
   // common barriers encountered in real-life code, and then studying their spec
   // to check whether they are "safe" in the context of CSE barriers.
-  //
-  // (Some items are commented out; that's because they are virtual methods in
-  // non-final classes. They could be re-enabled once we can track the exact
-  // receiver type.3)
   static const char* safe_method_names[] = {
       "Landroid/os/SystemClock;.elapsedRealtime:()J",
       "Landroid/os/SystemClock;.uptimeMillis:()J",
       "Landroid/util/Pair;.<init>:(Ljava/lang/Object;Ljava/lang/Object;)V",
       "Landroid/util/SparseArray;.<init>:()V",
-      // "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
-      // "Landroid/util/SparseArray;.get:(I)Ljava/lang/Object;",
-      // "Landroid/util/SparseArray;.put:(ILjava/lang/Object;)V",
-      // "Landroid/util/SparseArray;.size:()I",
-      // "Landroid/util/SparseArray;.valueAt:(I)Ljava/lang/Object;",
-      // "Landroid/util/SparseIntArray;.put:(II)V",
+      "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
+      "Landroid/util/SparseArray;.get:(I)Ljava/lang/Object;",
+      "Landroid/util/SparseArray;.put:(ILjava/lang/Object;)V",
+      "Landroid/util/SparseArray;.size:()I",
+      "Landroid/util/SparseArray;.valueAt:(I)Ljava/lang/Object;",
+      "Landroid/util/SparseIntArray;.put:(II)V",
       "Ljava/io/IOException;.<init>:(Ljava/lang/String;)V",
       "Ljava/lang/Boolean;.booleanValue:()Z",
       "Ljava/lang/Boolean;.equals:(Ljava/lang/Object;)Z",
@@ -809,7 +838,8 @@ SharedState::SharedState() {
       "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;",
       "Ljava/lang/Class;.getName:()Ljava/lang/String;",
       "Ljava/lang/Class;.getSimpleName:()Ljava/lang/String;",
-      "Ljava/lang/Double;.compare:(DD)I", "Ljava/lang/Double;.doubleValue:()D",
+      "Ljava/lang/Double;.compare:(DD)I",
+      "Ljava/lang/Double;.doubleValue:()D",
       "Ljava/lang/Double;.doubleToLongBits:(D)J",
       "Ljava/lang/Double;.doubleToRawLongBits:(D)J",
       "Ljava/lang/Double;.longBitsToDouble:(J)D",
@@ -821,23 +851,27 @@ SharedState::SharedState() {
       "Ljava/lang/Enum;.ordinal:()I",
       "Ljava/lang/Enum;.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/"
       "lang/Enum;",
-      "Ljava/lang/Exception;.<init>:()V", "Ljava/lang/Float;.floatValue:()F",
+      "Ljava/lang/Exception;.<init>:()V",
+      "Ljava/lang/Float;.floatValue:()F",
       "Ljava/lang/Float;.compare:(FF)I",
       "Ljava/lang/Float;.equals:(Ljava/lang/Object;)Z",
       "Ljava/lang/Float;.intBitsToFloat:(I)F",
       "Ljava/lang/Float;.floatToIntBits:(F)I",
-      "Ljava/lang/Float;.isInfinite:(F)Z", "Ljava/lang/Float;.isNaN:(F)Z",
+      "Ljava/lang/Float;.isInfinite:(F)Z",
+      "Ljava/lang/Float;.isNaN:(F)Z",
       "Ljava/lang/Float;.parseFloat:(Ljava/lang/String;)F",
       "Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;",
       "Ljava/lang/Float;.toString:(F)Ljava/lang/String;",
       "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V",
       "Ljava/lang/IllegalStateException;.<init>:()V",
       "Ljava/lang/IllegalStateException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/Integer;.<init>:(I)V", "Ljava/lang/Integer;.byteValue:()B",
+      "Ljava/lang/Integer;.<init>:(I)V",
+      "Ljava/lang/Integer;.byteValue:()B",
       "Ljava/lang/Integer;.equals:(Ljava/lang/Object;)Z",
       "Ljava/lang/Integer;.hashCode:()I",
       "Ljava/lang/Integer;.highestOneBit:(I)I",
-      "Ljava/lang/Integer;.intValue:()I", "Ljava/lang/Integer;.longValue:()J",
+      "Ljava/lang/Integer;.intValue:()I",
+      "Ljava/lang/Integer;.longValue:()J",
       "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I",
       "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;I)I",
       "Ljava/lang/Integer;.shortValue:()S",
@@ -846,10 +880,12 @@ SharedState::SharedState() {
       "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;",
       "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
       "Ljava/lang/Integer;.valueOf:(Ljava/lang/String;)Ljava/lang/Integer;",
-      "Ljava/lang/Long;.<init>:(J)V", "Ljava/lang/Long;.bitCount:(J)I",
+      "Ljava/lang/Long;.<init>:(J)V",
+      "Ljava/lang/Long;.bitCount:(J)I",
       "Ljava/lang/Long;.compareTo:(Ljava/lang/Long;)I",
       "Ljava/lang/Long;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Long;.hashCode:()I", "Ljava/lang/Long;.intValue:()I",
+      "Ljava/lang/Long;.hashCode:()I",
+      "Ljava/lang/Long;.intValue:()I",
       "Ljava/lang/Long;.longValue:()J",
       "Ljava/lang/Long;.parseLong:(Ljava/lang/String;)J",
       "Ljava/lang/Long;.signum:(J)I",
@@ -861,6 +897,7 @@ SharedState::SharedState() {
       "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V",
       "Ljava/lang/Object;.<init>:()V",
       "Ljava/lang/Object;.getClass:()Ljava/lang/Class;",
+      "Ljava/lang/ref/Reference;.get:()Ljava/lang/Object;",
       "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V",
       "Ljava/lang/Short;.<init>:(S)V",
       "Ljava/lang/Short;.equals:(Ljava/lang/Object;)Z",
@@ -872,10 +909,13 @@ SharedState::SharedState() {
       "Ljava/lang/String;.concat:(Ljava/lang/String;)Ljava/lang/String;",
       "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z",
       "Ljava/lang/String;.equalsIgnoreCase:(Ljava/lang/String;)Z",
-      "Ljava/lang/String;.getBytes:()[B", "Ljava/lang/String;.hashCode:()I",
-      "Ljava/lang/String;.indexOf:(I)I", "Ljava/lang/String;.isEmpty:()Z",
+      "Ljava/lang/String;.getBytes:()[B",
+      "Ljava/lang/String;.hashCode:()I",
+      "Ljava/lang/String;.indexOf:(I)I",
+      "Ljava/lang/String;.isEmpty:()Z",
       "Ljava/lang/String;.lastIndexOf:(I)I",
-      "Ljava/lang/String;.lastIndexOf:(I)I", "Ljava/lang/String;.length:()I",
+      "Ljava/lang/String;.lastIndexOf:(I)I",
+      "Ljava/lang/String;.length:()I",
       "Ljava/lang/String;.split:(Ljava/lang/String;)[Ljava/lang/String;",
       "Ljava/lang/String;.startsWith:(Ljava/lang/String;)Z",
       "Ljava/lang/String;.substring:(I)Ljava/lang/String;",
@@ -901,41 +941,49 @@ SharedState::SharedState() {
       "Ljava/lang/Thread;.currentThread:()Ljava/lang/Thread;",
       "Ljava/lang/UnsupportedOperationException;.<init>:(Ljava/lang/"
       "String;)V",
-      "Ljava/util/ArrayList;.<init>:()V", "Ljava/util/ArrayList;.<init>:(I)V",
-      // "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z",
-      // "Ljava/util/ArrayList;.clear:()V",
-      // "Ljava/util/ArrayList;.get:(I)Ljava/lang/Object;",
-      // "Ljava/util/ArrayList;.isEmpty:()Z",
-      // "Ljava/util/ArrayList;.remove:(I)Ljava/lang/Object;",
-      // "Ljava/util/ArrayList;.size:()I",
+      "Ljava/util/ArrayList;.<init>:()V",
+      "Ljava/util/ArrayList;.<init>:(I)V",
+      "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z",
+      "Ljava/util/ArrayList;.add:(ILjava/lang/Object;)V",
+      "Ljava/util/ArrayList;.clear:()V",
+      "Ljava/util/ArrayList;.get:(I)Ljava/lang/Object;",
+      "Ljava/util/ArrayList;.isEmpty:()Z",
+      "Ljava/util/ArrayList;.remove:(I)Ljava/lang/Object;",
+      "Ljava/util/ArrayList;.size:()I",
       "Ljava/util/BitSet;.<init>:(I)V",
-      // "Ljava/util/BitSet;.set:(I)V",
-      "Ljava/util/HashMap;.<init>:()V", "Ljava/util/HashSet;.<init>:()V",
+      "Ljava/util/BitSet;.clear:()V",
+      "Ljava/util/BitSet;.get:(I)Z",
+      "Ljava/util/BitSet;.set:(I)V",
+      "Ljava/util/HashMap;.<init>:()V",
+      "Ljava/util/HashMap;.<init>:(I)V",
+      "Ljava/util/HashMap;.isEmpty:()Z",
+      "Ljava/util/HashMap;.size:()I",
+      "Ljava/util/HashSet;.<init>:()V",
+      "Ljava/util/HashSet;.clear:()V",
       "Ljava/util/LinkedHashMap;.<init>:()V",
       "Ljava/util/LinkedList;.<init>:()V",
-      // "Ljava/util/LinkedList;.size:()I",
-      // "Ljava/util/List;.add:(Ljava/lang/Object;)Z",
-      // "Ljava/util/List;.clear:()V",
-      // "Ljava/util/List;.get:(I)Ljava/lang/Object;",
-      // "Ljava/util/List;.isEmpty:()Z",
-      // "Ljava/util/List;.iterator:()Ljava/util/Iterator;",
-      // "Ljava/util/List;.remove:(I)Ljava/lang/Object;",
-      // "Ljava/util/List;.size:()I",
-      // "Ljava/util/Map;.clear:()V",
-      // "Ljava/util/Map;.size:()I",
-      // "Ljava/util/Map$Entry;.getKey:()Ljava/lang/Object;",
-      // "Ljava/util/Map$Entry;.getValue:()Ljava/lang/Object;",
-      // "Ljava/util/Set;.isEmpty:()Z",
-      // "Ljava/util/Set;.iterator:()Ljava/util/Iterator;",
-      // "Ljava/util/Set;.size:()I"
+      "Ljava/util/LinkedList;.add:(Ljava/lang/Object;)Z",
+      "Ljava/util/LinkedList;.addLast:(Ljava/lang/Object;)V",
+      "Ljava/util/LinkedList;.clear:()V",
+      "Ljava/util/LinkedList;.get:(I)Ljava/lang/Object;",
+      "Ljava/util/LinkedList;.getFirst:()Ljava/lang/Object;",
+      "Ljava/util/LinkedList;.removeFirst:()Ljava/lang/Object;",
+      "Ljava/util/LinkedList;.size:()I",
+      "Ljava/util/Random;.<init>:()V",
+      "Ljava/util/Random;.nextInt:(I)I",
   };
 
   for (auto const safe_method_name : safe_method_names) {
     const std::string& s(safe_method_name);
-    auto method = DexMethod::get_method(s);
-    if (method == nullptr) {
+    auto method_ref = DexMethod::get_method(s);
+    if (method_ref == nullptr) {
       fprintf(stderr, "[CSE]: Could not find safe method %s\n", s.c_str());
     } else {
+      always_assert(method_ref->is_def());
+      always_assert(method_ref->is_external());
+      always_assert(!is_interface(type_class(method_ref->get_class())));
+      auto method = static_cast<DexMethod*>(method_ref);
+      always_assert(!is_abstract(method));
       m_safe_methods.insert(method);
     }
   }
@@ -959,7 +1007,7 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
     boost::optional<const DexMethod*> wait_for_method;
     for (auto& mie : cfg::InstructionIterable(code.cfg())) {
       auto* insn = mie.insn;
-      if (may_be_barrier(insn)) {
+      if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
         auto barrier = make_barrier(insn);
         get_written_location(barrier);
         set.insert(barrier);
@@ -1096,8 +1144,9 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
 
 boost::optional<Location> SharedState::get_relevant_written_location(
     const IRInstruction* insn,
+    DexType* exact_virtual_scope,
     const std::unordered_set<Location, LocationHasher>& read_locations) {
-  if (may_be_barrier(insn)) {
+  if (may_be_barrier(insn, exact_virtual_scope)) {
     if (is_invoke(insn->opcode())) {
       if (is_invoke_a_barrier(insn, read_locations)) {
         return boost::optional<Location>(Location(GENERAL_MEMORY_BARRIER));
@@ -1112,7 +1161,8 @@ boost::optional<Location> SharedState::get_relevant_written_location(
   return boost::none;
 }
 
-bool SharedState::may_be_barrier(const IRInstruction* insn) {
+bool SharedState::may_be_barrier(const IRInstruction* insn,
+                                 DexType* exact_virtual_scope) {
   auto opcode = insn->opcode();
   switch (opcode) {
   case OPCODE_MONITOR_ENTER:
@@ -1123,7 +1173,7 @@ bool SharedState::may_be_barrier(const IRInstruction* insn) {
     if (is_aput(opcode) || is_iput(opcode) || is_sput(opcode)) {
       return true;
     } else if (is_invoke(opcode)) {
-      return !is_invoke_safe(insn);
+      return !is_invoke_safe(insn, exact_virtual_scope);
     }
     if (insn->has_field()) {
       always_assert(is_iget(opcode) || is_sget(opcode));
@@ -1137,7 +1187,8 @@ bool SharedState::may_be_barrier(const IRInstruction* insn) {
   }
 }
 
-bool SharedState::is_invoke_safe(const IRInstruction* insn) {
+bool SharedState::is_invoke_safe(const IRInstruction* insn,
+                                 DexType* exact_virtual_scope) {
   always_assert(is_invoke(insn->opcode()));
   auto method_ref = insn->get_method();
   auto opcode = insn->opcode();
@@ -1147,10 +1198,32 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn) {
     return true;
   }
 
-  if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT ||
-       opcode == OPCODE_INVOKE_VIRTUAL) &&
-      m_safe_methods.count(method_ref)) {
+  auto method = resolve_method(method_ref, opcode_to_search(insn));
+  if (!method) {
+    return false;
+  }
+
+  // Let's check again, as even ReBindRefs doesn't pre-resolve external methods
+  if (opcode == OPCODE_INVOKE_STATIC &&
+      m_safe_types.count(method->get_class())) {
     return true;
+  }
+
+  if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) &&
+      m_safe_methods.count(method)) {
+    return true;
+  }
+
+  if (opcode == OPCODE_INVOKE_VIRTUAL && m_safe_methods.count(method)) {
+    auto type = method->get_class();
+    auto cls = type_class(type);
+    always_assert(cls);
+    if (is_final(cls) || is_final(method)) {
+      return true;
+    }
+    if (type == exact_virtual_scope) {
+      return true;
+    }
   }
 
   return false;

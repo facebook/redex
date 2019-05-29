@@ -310,6 +310,58 @@ TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
 
+TEST_F(CommonSubexpressionEliminationTest,
+       safe_virtual_methods_with_exact_types_are_not_barriers) {
+  ClassCreator creator(DexType::make_type("Ljava/util/ArrayList;"));
+  creator.set_super(get_object_type());
+
+  auto method = static_cast<DexMethod*>(
+      DexMethod::make_method("Ljava/util/ArrayList;.<init>:()V"));
+  method->set_access(ACC_PUBLIC);
+  method->set_external();
+  // method->set_code(assembler::ircode_from_string("((return-void))"));
+  creator.add_method(method);
+
+  method = static_cast<DexMethod*>(DexMethod::make_method(
+      "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z"));
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  // method->set_code(assembler::ircode_from_string("((return-void))"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (new-instance "Ljava/util/ArrayList;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/util/ArrayList;.<init>:()V")
+      (invoke-virtual (v2 v0) "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v3)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v4 v1)
+      (new-instance "Ljava/util/ArrayList;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "Ljava/util/ArrayList;.<init>:()V")
+      (invoke-virtual (v2 v0) "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v3)
+      (move v3 v4)
+    )
+  )";
+  test(Scope{type_class(get_object_type()), creator.create()}, code_str,
+       expected_str, 1);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
   // at a barrier, the mappings have been reset, but afterwards cse kicks in as
   // expected
