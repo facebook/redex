@@ -1216,3 +1216,32 @@ TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
   auto expected_str = code_str;
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
+  // The initial sget is there just so that CSE actually tracks the sput as a
+  // potentially interesting operation
+  auto code_str = R"(
+    (
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v2)
+      (const v0 0)
+      (add-int v1 v0 v0)
+      (sput v0 "LFoo;.s:I")
+      (add-int v1 v0 v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v2)
+      (const v0 0)
+      (add-int v1 v0 v0)
+      (move v3 v1)
+      (sput v0 "LFoo;.s:I")
+      (add-int v1 v0 v0)
+      (move v1 v3)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}

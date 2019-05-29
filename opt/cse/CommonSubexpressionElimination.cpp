@@ -430,30 +430,15 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       set_current_state_at(insn->dest(), insn->dest_is_wide(), domain);
       break;
     }
-    case OPCODE_MOVE_RESULT:
-    case OPCODE_MOVE_RESULT_OBJECT:
-    case OPCODE_MOVE_RESULT_WIDE:
-    case IOPCODE_MOVE_RESULT_PSEUDO:
-    case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
-    case IOPCODE_MOVE_RESULT_PSEUDO_WIDE: {
-      auto domain = current_state->get_ref_env().get(RESULT_REGISTER);
-      auto c = domain.get_constant();
-      if (c) {
-        auto value_id = *c;
-        auto ibs = is_barrier_sensitive(value_id);
-        if (!current_state->get_def_env(ibs).get(value_id).get_constant()) {
-          current_state->mutate_def_env(ibs, [&](DefEnvironment* env) {
-            env->set(value_id, IRInstructionDomain(insn));
-          });
-        }
-      }
-      set_current_state_at(insn->dest(), insn->dest_is_wide(), domain);
-      break;
-    }
     default: {
       // If we get here, reset destination.
       if (insn->dests_size()) {
-        ValueIdDomain domain = get_value_id_domain(insn, current_state);
+        ValueIdDomain domain;
+        if (opcode::is_move_result_or_move_result_pseudo(opcode)) {
+          domain = current_state->get_ref_env().get(RESULT_REGISTER);
+        } else {
+          domain = get_value_id_domain(insn, current_state);
+        }
         auto c = domain.get_constant();
         if (c) {
           auto value_id = *c;
@@ -463,7 +448,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
               env->set(value_id, IRInstructionDomain(insn));
             });
           }
-          domain = ValueIdDomain(value_id);
         }
         set_current_state_at(insn->dest(), insn->dest_is_wide(), domain);
       } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
@@ -538,23 +522,24 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (location != Location(GENERAL_MEMORY_BARRIER)) {
         auto value = get_equivalent_put_value(insn, current_state);
         if (value) {
-          auto value_id = *get_value_id(*value);
           TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s\n",
                 SHOW(insn));
-          auto insn_domain = IRInstructionDomain(insn);
-          current_state->mutate_def_env(
-              true /* is_barrier_sensitive */,
-              [value_id, insn_domain](DefEnvironment* env) {
-                env->set(value_id, insn_domain);
-              });
-          auto value_domain = ValueIdDomain(value_id);
-          current_state->mutate_ref_env(
-              [insn, value_domain](RefEnvironment* env) {
-                env->set(insn->src(0), value_domain);
-              });
+          install_forwarding(insn, *value, current_state);
         }
       }
     }
+  }
+
+  void install_forwarding(IRInstruction* insn,
+                          const IRValue& value,
+                          CseEnvironment* current_state) const {
+    auto value_id = *get_value_id(value);
+    auto ibs = is_barrier_sensitive(value_id);
+    auto insn_domain = IRInstructionDomain(insn);
+    current_state->mutate_def_env(ibs,
+                                  [value_id, insn_domain](DefEnvironment* env) {
+                                    env->set(value_id, insn_domain);
+                                  });
   }
 
   bool is_pre_state_src(value_id_t value_id) const {
@@ -629,7 +614,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   boost::optional<IRValue> get_equivalent_put_value(
       IRInstruction* insn, CseEnvironment* current_state) const {
     auto ref_env = current_state->get_ref_env();
-    boost::optional<value_id_t> value_id;
     if (is_sput(insn->opcode())) {
       always_assert(insn->srcs_size() == 1);
       IRValue value;
@@ -1427,7 +1411,6 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     IRInstruction* move_insn = new IRInstruction(move_opcode);
     move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
     m_cfg.insert_after(it, move_insn);
-
     TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u\n", SHOW(earlier_insn),
           SHOW(insn), temp_reg);
   }
