@@ -499,8 +499,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_GOTO: {
     break;
   }
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH: {
+  case OPCODE_SWITCH: {
     refine_integer(current_state, insn->src(0));
     break;
   }

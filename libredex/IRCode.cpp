@@ -23,6 +23,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "InstructionLowering.h"
 #include "Transform.h"
 #include "Util.h"
 
@@ -164,25 +165,6 @@ bool encode_offset(IRList* ir,
 static bool multi_target_compare_case_key(const BranchTarget* a,
                                           const BranchTarget* b) {
   return (a->case_key < b->case_key);
-}
-
-// Computes number of entries needed for a packed switch, accounting for any
-// holes that might exist
-static uint64_t get_packed_switch_size(
-    const std::vector<BranchTarget*>& targets) {
-  int32_t first_key = targets.front()->case_key;
-  int32_t last_key = targets.back()->case_key;
-  always_assert(first_key <= last_key);
-  return (uint64_t)((int64_t)last_key - first_key + 1);
-}
-
-// Whether a sparse switch statement will be more compact than a packed switch
-static bool sufficiently_sparse(const std::vector<BranchTarget*>& targets) {
-  uint64_t size = get_packed_switch_size(targets);
-  // packed switches must have less than 2^16 entries, and
-  // sparse switches pay off once there are more holes than entries
-  return size > std::numeric_limits<uint16_t>::max() ||
-         size / 2 > targets.size();
 }
 
 static void insert_multi_branch_target(IRList* ir,
@@ -900,7 +882,7 @@ bool IRCode::try_sync(DexCode* code) {
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
     always_assert_log(
         !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
-    if (sufficiently_sparse(targets)) {
+    if (multiopcode->dex_insn->opcode() == DOPCODE_SPARSE_SWITCH) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;
       auto sparse_payload = std::make_unique<uint16_t[]>(count);
@@ -930,7 +912,13 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      const uint64_t size = get_packed_switch_size(targets);
+      std::vector<int32_t> case_keys;
+      case_keys.reserve(targets.size());
+      for (const BranchTarget* t : targets) {
+        case_keys.push_back(t->case_key);
+      }
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
       always_assert(size <= std::numeric_limits<uint16_t>::max());
       const size_t count = (size * 2) + 4;
       auto packed_payload = std::make_unique<uint16_t[]>(count);

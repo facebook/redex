@@ -336,8 +336,7 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_FILL_ARRAY_DATA:
       return analyze_fill_array_data(
           std::index_sequence_for<Analyzers...>{}, insn, env);
-    case OPCODE_PACKED_SWITCH:
-    case OPCODE_SPARSE_SWITCH:
+    case OPCODE_SWITCH:
       return analyze_switch(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_IGET:
     case OPCODE_IGET_WIDE:

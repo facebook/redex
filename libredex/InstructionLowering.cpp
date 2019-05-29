@@ -424,6 +424,20 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
 
   // Check the load-param opcodes make sense before removing them
   check_load_params(method);
+
+  std::unordered_map<MethodItemEntry*, std::vector<int32_t>> case_keys;
+  for (const MethodItemEntry& it : *code) {
+    if (it.type == MFLOW_TARGET) {
+      BranchTarget* bt = it.target;
+      if (bt->type == BRANCH_MULTI) {
+        case_keys[bt->src].push_back(bt->case_key);
+      }
+    }
+  }
+  for (auto& entry : case_keys) {
+    std::sort(entry.second.begin(), entry.second.end());
+  }
+
   for (auto it = code->begin(); it != code->end(); ++it) {
     if (it->type != MFLOW_OPCODE) {
       continue;
@@ -442,6 +456,15 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
       lower_to_range_instruction(method, code, &it);
     } else {
       lower_simple_instruction(method, code, &it);
+    }
+
+    // Overwrite the switch dex opcode with the correct type, depending on how
+    // its cases are laid out.
+    if (op == OPCODE_SWITCH) {
+      const auto& keys = case_keys.at(&*it);
+      DexOpcode dop = sufficiently_sparse(keys) ? DOPCODE_SPARSE_SWITCH
+                                                : DOPCODE_PACKED_SWITCH;
+      it->dex_insn->set_opcode(dop);
     }
   }
   for (auto it = code->begin(); it != code->end(); ++it) {
@@ -470,6 +493,24 @@ Stats run(DexStoresVector& stores, bool lower_with_cfg) {
         a.accumulate(b);
         return a;
       });
+}
+
+// Computes number of entries needed for a packed switch, accounting for any
+// holes that might exist
+uint64_t get_packed_switch_size(const std::vector<int32_t>& case_keys) {
+  int32_t first_key = case_keys.front();
+  int32_t last_key = case_keys.back();
+  always_assert(first_key <= last_key);
+  return (uint64_t)((int64_t)last_key - first_key + 1);
+}
+
+// Whether a sparse switch statement will be more compact than a packed switch
+bool sufficiently_sparse(const std::vector<int32_t>& case_keys) {
+  uint64_t size = get_packed_switch_size(case_keys);
+  // packed switches must have less than 2^16 entries, and
+  // sparse switches pay off once there are more holes than entries
+  return size > std::numeric_limits<uint16_t>::max() ||
+         size / 2 > case_keys.size();
 }
 
 } // namespace instruction_lowering

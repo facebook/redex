@@ -706,8 +706,8 @@ class OptimizeEnums {
     // D8 made?  It would probably be better to build a more general purpose
     // switch -> if-else converter pass and run it after this pass.
     if (cases.size() > 1) {
-      // Dex Lowering will convert this to packed if that would be better
-      IRInstruction* new_switch = new IRInstruction(OPCODE_SPARSE_SWITCH);
+      // Dex Lowering will decide if packed or sparse would be better
+      IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
       new_switch->set_src(0, new_ordinal_reg);
       cfg.create_branch(branch_block, new_switch, fallthrough, cases);
     } else if (cases.size() == 1) {

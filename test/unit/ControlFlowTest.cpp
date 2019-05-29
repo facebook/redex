@@ -709,7 +709,7 @@ TEST(ControlFlow, remove_all_but_return) {
 TEST(ControlFlow, remove_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
 
       (:exit)
       (return-void)
@@ -726,7 +726,7 @@ TEST(ControlFlow, remove_switch) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -741,7 +741,7 @@ TEST(ControlFlow, remove_switch) {
 TEST(ControlFlow, remove_switch2) {
   auto code = assembler::ircode_from_string(R"(
     (
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
       (goto :exit)
 
       (:a 0)
@@ -759,7 +759,7 @@ TEST(ControlFlow, remove_switch2) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -778,7 +778,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
       (const v0 1)
       (if-eqz v0 :end)
 
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
 
       (:b 1)
       (const v0 2)
@@ -803,7 +803,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
       (const v0 1)
       (if-eqz v0 :end)
 
-      (sparse-switch v0 (:b))
+      (switch v0 (:b))
 
       (:b 1)
       (const v0 2)
@@ -1842,7 +1842,7 @@ TEST(ControlFlow, add_switch) {
   auto entry = cfg.entry_block();
   auto exit_block =
       cfg.split_block(entry->to_cfg_instruction_iterator(*entry->begin()));
-  auto sw = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw = new IRInstruction(OPCODE_SWITCH);
   sw->set_src(0, 0);
   cfg.create_branch(cfg.entry_block(),
                     sw,
@@ -1853,7 +1853,7 @@ TEST(ControlFlow, add_switch) {
   auto expected = assembler::ircode_from_string(R"(
     (
       (load-param v0)
-      (packed-switch v0 (:ten :twenty :thirty :forty))
+      (switch v0 (:ten :twenty :thirty :forty))
       (return v0)
 
       (:forty 3)

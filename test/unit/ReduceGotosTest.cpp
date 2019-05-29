@@ -23,8 +23,7 @@ void test(const std::string& code_str,
           size_t expected_removed_switches = 0,
           size_t expected_reduced_switches = 0,
           size_t expected_remaining_trivial_switches = 0,
-          size_t expected_removed_sparse_switch_cases = 0,
-          size_t expected_removed_packed_switch_cases = 0,
+          size_t expected_removed_switch_cases = 0,
           size_t expected_replaced_trivial_switches = 0) {
   g_redex = new RedexContext();
 
@@ -41,10 +40,7 @@ void test(const std::string& code_str,
   EXPECT_EQ(expected_reduced_switches, stats.reduced_switches);
   EXPECT_EQ(expected_remaining_trivial_switches,
             stats.remaining_trivial_switches);
-  EXPECT_EQ(expected_removed_sparse_switch_cases,
-            stats.removed_sparse_switch_cases);
-  EXPECT_EQ(expected_removed_packed_switch_cases,
-            stats.removed_packed_switch_cases);
+  EXPECT_EQ(expected_removed_switch_cases, stats.removed_switch_cases);
   EXPECT_EQ(expected_replaced_trivial_switches,
             stats.replaced_trivial_switches);
 
@@ -57,7 +53,7 @@ void test(const std::string& code_str,
 TEST(ReduceGotosTest, packed_switch_useless) {
   auto code_str = R"(
     (
-      (packed-switch v0 (:b :a))
+      (switch v0 (:b :a))
       (:a)
       (:b)
       (return-void)
@@ -68,13 +64,13 @@ TEST(ReduceGotosTest, packed_switch_useless) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 0, 2);
+  test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 2);
 }
 
 TEST(ReduceGotosTest, sparse_switch_useless) {
   auto code_str = R"(
     (
-      (sparse-switch v0 (:b :a))
+      (switch v0 (:b :a))
       (:a 0)
       (:b 1)
       (return-void)
@@ -85,13 +81,13 @@ TEST(ReduceGotosTest, sparse_switch_useless) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 2, 0);
+  test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 2);
 }
 
 TEST(ReduceGotosTest, sparse_switch_reducible) {
   auto code_str = R"(
     (
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:b 1)
       (return-void)
 
@@ -102,7 +98,7 @@ TEST(ReduceGotosTest, sparse_switch_reducible) {
   )";
   const auto& expected_str = R"(
     (
-      (sparse-switch v0 (:a :c))
+      (switch v0 (:a :c))
       (return-void)
 
       (:c 16)
@@ -110,13 +106,13 @@ TEST(ReduceGotosTest, sparse_switch_reducible) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 1, 0);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 1);
 }
 
 TEST(ReduceGotosTest, packed_switch_reducible) {
   auto code_str = R"(
     (
-      (packed-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 0)
       (return-void)
 
@@ -127,7 +123,7 @@ TEST(ReduceGotosTest, packed_switch_reducible) {
   )";
   const auto& expected_str = R"(
     (
-      (packed-switch v0 (:b :c))
+      (switch v0 (:b :c))
       (return-void)
 
       (:c 2)
@@ -135,7 +131,7 @@ TEST(ReduceGotosTest, packed_switch_reducible) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 0, 1);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 1);
 }
 
 TEST(ReduceGotosTest, trivial_irreducible_remaining_switch) {
@@ -157,7 +153,7 @@ TEST(ReduceGotosTest, trivial_irreducible_remaining_switch) {
       (load-param v13)
       (load-param v14)
       (load-param v15)
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 0)
       (:b 1)
       (return-void)
@@ -184,20 +180,20 @@ TEST(ReduceGotosTest, trivial_irreducible_remaining_switch) {
       (load-param v13)
       (load-param v14)
       (load-param v15)
-      (packed-switch v0 (:c))
+      (switch v0 (:c))
       (return-void)
 
       (:c 32768)
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 1, 2, 0);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 1, 2);
 }
 
 TEST(ReduceGotosTest, trivial_replaced_switch_nop) {
   auto code_str = R"(
     (
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 1)
       (:b 2)
       (return-void)
@@ -215,14 +211,14 @@ TEST(ReduceGotosTest, trivial_replaced_switch_nop) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 0, 1);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
 TEST(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
   auto code_str = R"(
     (
       (load-param v0)
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 0)
       (:b 1)
       (return-void)
@@ -242,14 +238,14 @@ TEST(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 0, 1);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
 TEST(ReduceGotosTest, trivial_replaced_switch_rsub) {
   auto code_str = R"(
     (
       (load-param v0)
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 0)
       (:b 1)
       (return-void)
@@ -269,14 +265,14 @@ TEST(ReduceGotosTest, trivial_replaced_switch_rsub) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 0, 1);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
 TEST(ReduceGotosTest, trivial_replaced_switch_const) {
   auto code_str = R"(
     (
       (load-param v0)
-      (sparse-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (:a 0)
       (:b 1)
       (return-void)
@@ -296,7 +292,7 @@ TEST(ReduceGotosTest, trivial_replaced_switch_const) {
       (return-void)
     )
   )";
-  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 0, 1);
+  test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
 TEST(ReduceGotosTest, trivial) {

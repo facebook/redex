@@ -263,8 +263,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_CONST:
     return const_dest_type(insn);
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_WIDE:
@@ -535,8 +534,7 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
     not_reached();
   case OPCODE_FILL_ARRAY_DATA:
     return RegisterType::OBJECT;
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     return RegisterType::UNKNOWN;
   case OPCODE_CONST_WIDE:
     always_assert_log(false, "No src");

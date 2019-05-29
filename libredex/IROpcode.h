@@ -58,8 +58,7 @@ enum class Ref {
   OP(FILL_ARRAY_DATA   , Ref::Data, "fill-array-data") \
   OP(THROW             , Ref::None, "throw") \
   OP(GOTO              , Ref::None, "goto") \
-  OP(PACKED_SWITCH     , Ref::None, "packed-switch") \
-  OP(SPARSE_SWITCH     , Ref::None, "sparse-switch") \
+  OP(SWITCH            , Ref::None, "switch") \
   OP(CMPL_FLOAT        , Ref::None, "cmpl-float") \
   OP(CMPG_FLOAT        , Ref::None, "cmpg-float") \
   OP(CMPL_DOUBLE       , Ref::None, "cmpl-double") \

@@ -930,8 +930,8 @@ class EnumTransformer final {
     // exhaustive.
     //
     // Arbitrarily choose the first case block.
-    cfg.create_branch(entry, dasm(OPCODE_PACKED_SWITCH, {0_v}),
-                      cases.front().second, cases);
+    cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
+                      cases);
     cfg.recompute_registers_size();
     code->clear_cfg();
   }

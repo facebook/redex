@@ -48,10 +48,7 @@ constexpr const char* METRIC_REMAINING_TWO_CASE_SWITCHES =
     "num_remaining_two_case_switches";
 constexpr const char* METRIC_REPLACED_TRIVIAL_SWITCHES =
     "num_replaced_trivial_switches";
-constexpr const char* METRIC_REMOVED_SPARSE_SWITCH_CASES =
-    "num_removed_sparse_switch_cases";
-constexpr const char* METRIC_REMOVED_PACKED_SWITCH_CASES =
-    "num_removed_packed_switch_cases";
+constexpr const char* METRIC_REMOVED_SWITCH_CASES = "num_removed_switch_cases";
 constexpr const char* METRIC_GOTOS_REPLACED_WITH_RETURNS =
     "num_gotos_replaced_with_returns";
 constexpr const char* METRIC_TRAILING_MOVES_REMOVED =
@@ -121,12 +118,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       }
     }
 
-    if (opcode == OPCODE_SPARSE_SWITCH) {
-      stats.removed_sparse_switch_cases += fallthrough_edges.size();
-    } else {
-      always_assert(opcode == OPCODE_PACKED_SWITCH);
-      stats.removed_packed_switch_cases += fallthrough_edges.size();
-    }
+    stats.removed_switch_cases += fallthrough_edges.size();
 
     if (fallthrough_edges.size() == branch_edges.size()) {
       // all branches fall through; just remove switch...
@@ -261,11 +253,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         [](std::pair<int32_t, cfg::Block*> a,
            std::pair<int32_t, cfg::Block*> b) { return a.first < b.first; });
 
-    auto new_opcode = (int64_t)cases.back().first - cases.front().first + 1 ==
-                              (int64_t)cases.size()
-                          ? OPCODE_PACKED_SWITCH
-                          : OPCODE_SPARSE_SWITCH;
-    IRInstruction* new_switch = new IRInstruction(new_opcode);
+    IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
     new_switch->set_src(0, insn->src(0));
     b->remove_insn(it);
     cfg.create_branch(b, new_switch, goto_target, cases);
@@ -274,8 +262,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       // If there's a significant amount of switches with just two cases, it
       // might be worthwhile to turn those into two ifs.
       stats.remaining_two_case_switches++;
-    } else if (new_opcode == OPCODE_PACKED_SWITCH &&
-               std::all_of(cases.begin(), cases.end(),
+    } else if (std::all_of(cases.begin(), cases.end(),
                            [&cases](const std::pair<int32_t, cfg::Block*>& c) {
                              return c.second == cases[0].second;
                            })) {
@@ -486,10 +473,8 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
             a.replaced_trivial_switches + b.replaced_trivial_switches;
         c.remaining_trivial_switches =
             a.remaining_trivial_switches + b.remaining_trivial_switches;
-        c.removed_sparse_switch_cases =
-            a.removed_sparse_switch_cases + b.removed_sparse_switch_cases;
-        c.removed_packed_switch_cases =
-            a.removed_packed_switch_cases + b.removed_packed_switch_cases;
+        c.removed_switch_cases =
+            a.removed_switch_cases + b.removed_switch_cases;
         c.replaced_gotos_with_returns =
             a.replaced_gotos_with_returns + b.replaced_gotos_with_returns;
         c.removed_trailing_moves =
@@ -517,10 +502,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                   stats.remaining_range_switch_cases);
   mgr.incr_metric(METRIC_REMAINING_TWO_CASE_SWITCHES,
                   stats.remaining_two_case_switches);
-  mgr.incr_metric(METRIC_REMOVED_SPARSE_SWITCH_CASES,
-                  stats.removed_sparse_switch_cases);
-  mgr.incr_metric(METRIC_REMOVED_PACKED_SWITCH_CASES,
-                  stats.removed_packed_switch_cases);
+  mgr.incr_metric(METRIC_REMOVED_SWITCH_CASES, stats.removed_switch_cases);
   mgr.incr_metric(METRIC_GOTOS_REPLACED_WITH_RETURNS,
                   stats.replaced_gotos_with_returns);
   mgr.incr_metric(METRIC_TRAILING_MOVES_REMOVED, stats.removed_trailing_moves);

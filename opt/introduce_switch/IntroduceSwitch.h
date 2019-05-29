@@ -14,8 +14,6 @@ class IntroduceSwitchPass : public Pass {
   struct Metrics {
     int32_t switch_intro{0};
     int32_t switch_cases{0};
-    int32_t compact_switch{0};
-    int32_t sparse_switch{0};
     int32_t removed_instrs{0};
     int32_t added_instrs{0};
 
@@ -25,8 +23,6 @@ class IntroduceSwitchPass : public Pass {
       Metrics m;
       m.switch_intro = this->switch_intro + b.switch_intro;
       m.switch_cases = this->switch_cases + b.switch_cases;
-      m.compact_switch = this->compact_switch + b.compact_switch;
-      m.sparse_switch = this->sparse_switch + b.sparse_switch;
       m.removed_instrs = this->removed_instrs + b.removed_instrs;
       m.added_instrs = this->added_instrs + b.added_instrs;
       return m;

@@ -361,7 +361,7 @@ TEST_F(BranchPrefixHoistingTest, switch_two_same_cases) {
   const auto& code_str = R"(
     (
       (const v0 0)
-      (sparse-switch v0 (:case1 :case1))
+      (switch v0 (:case1 :case1))
       (:case1 1)
       (const v1 1)
       (const v2 2)
@@ -371,7 +371,7 @@ TEST_F(BranchPrefixHoistingTest, switch_two_same_cases) {
   const auto& expected_str = R"(
     (
       (const v0 0)
-      (sparse-switch v0 (:case1 :case1))
+      (switch v0 (:case1 :case1))
       (:case1 1)
       (const v1 1)
       (const v2 2)

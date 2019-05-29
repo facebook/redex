@@ -53,6 +53,10 @@
  *    {packed, sparse}-switch-payloads are represented by MFLOW_TARGET entries
  *    in the IRCode instruction stream.
  *
+ * 8. There is only one type of switch. Sparse switches and packed switches are
+ *    both represented as the single `switch` IR opcode. Lowering will choose
+ *    the better option.
+ *
  * Background behind move-result-pseudo
  * ====================================
  * Opcodes that write to a register (say v0) but may also throw are somewhat

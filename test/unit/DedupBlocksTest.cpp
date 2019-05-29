@@ -314,7 +314,7 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c :d :e :f))
+      (switch v0 (:a :b :c :d :e :f))
       (return v0)
 
       (:a 0)
@@ -361,7 +361,7 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c :d :e :f))
+      (switch v0 (:a :b :c :d :e :f))
 
       (:a 0)
       (return v0)
@@ -405,7 +405,7 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
 
       (:a 0)
       (return v0)
@@ -435,7 +435,7 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
 
       (:a 0)
       (return v0)
@@ -489,7 +489,7 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
       (return v0)
 
       (:a 0)
@@ -513,7 +513,7 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
     (
       (const v0 0)
       (const v1 1)
-      (packed-switch v0 (:a :b :c))
+      (switch v0 (:a :b :c))
 
       (:a 0)
       (return v0)

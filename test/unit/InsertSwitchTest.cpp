@@ -79,7 +79,7 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
 
       (:begin)
       (const v0 0)
-      (packed-switch v3 (:a :b :c))
+      (switch v3 (:a :b :c))
 
       (nop)
 
@@ -153,7 +153,7 @@ TEST_F(InsertSwitchTest, simplifySparseSwitch) {
 
       (:begin)
       (const v0 0)
-      (sparse-switch v3 (:a :b :c))
+      (switch v3 (:a :b :c))
 
       (nop)
 

@@ -28,8 +28,6 @@ namespace {
 
 constexpr const char* METRIC_SWITCH_INTRODUCED = "num_switch_introduced";
 constexpr const char* METRIC_SWITCH_CASES = "num_switch_introduced_cases";
-constexpr const char* METRIC_COMPACT_SWITCHES = "num_packed_switches";
-constexpr const char* METRIC_SPARSE_SWITCHES = "num_sparse_switches";
 constexpr const char* METRIC_INSTRUCTIONS_REMOVED = "num_instructions_removed";
 constexpr const char* METRIC_INSTRUCTIONS_ADDED = "num_instructions_added";
 
@@ -90,8 +88,6 @@ class IntroduceSwitch {
 
     int32_t intro_switch = 0;
     int32_t switch_cases = 0;
-    int32_t sparse = 0;
-    int32_t num_compact = 0;
 
     for (cfg::Block* block : cfg.blocks()) {
       if (visited_blocks.count(block) == 0) {
@@ -117,14 +113,7 @@ class IntroduceSwitch {
               TRACE(INTRO_SWITCH, 3, "}\n");
               intro_switch++;
 
-              bool compact = can_be_compact(key_to_case);
-              if (compact) {
-                num_compact++;
-              } else {
-                sparse++;
-              }
-              IRInstruction* new_switch = new IRInstruction(
-                  compact ? OPCODE_PACKED_SWITCH : OPCODE_SPARSE_SWITCH);
+              IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
               new_switch->set_src(0, possible_start_block.second);
               std::vector<std::pair<int32_t, cfg::Block*>> edges;
               cfg::Block* default_block = nullptr;
@@ -174,45 +163,7 @@ class IntroduceSwitch {
     IntroduceSwitchPass::Metrics m = IntroduceSwitchPass::Metrics();
     m.switch_intro = intro_switch;
     m.switch_cases = switch_cases;
-    m.compact_switch = num_compact;
-    m.sparse_switch = sparse;
     return m;
-  }
-
-  // Determine if this is a compact or non-compact switch
-  static bool can_be_compact(const SwitchEquivFinder::KeyToCase& key_to_case) {
-    bool last_case_set = false;
-    bool compact_direction_set = false;
-    int32_t last_case = 0;
-    bool compact_check_positive = false;
-
-    for (const auto& pair : key_to_case) {
-      const auto& key = pair.first;
-      cfg::Block* case_block = pair.second;
-      if (key) {
-        if (!last_case_set) {
-          last_case_set = true;
-          last_case = *key;
-        } else {
-          auto difference = last_case - *key;
-          last_case = *key;
-          if (std::abs(difference) == 1) {
-            if (!compact_direction_set) {
-              compact_direction_set = true;
-              compact_check_positive = difference > 0;
-            } else {
-              if (!((compact_check_positive && difference > 0) ||
-                    (!compact_check_positive && difference < 0))) {
-                return false;
-              }
-            }
-          } else {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
   }
 
  public:
@@ -288,8 +239,6 @@ void IntroduceSwitchPass::run_pass(DexStoresVector& stores,
   if (total_switch_cases.switch_intro > 0) {
     mgr.incr_metric(METRIC_SWITCH_INTRODUCED, total_switch_cases.switch_intro);
     mgr.incr_metric(METRIC_SWITCH_CASES, total_switch_cases.switch_cases);
-    mgr.incr_metric(METRIC_SPARSE_SWITCHES, total_switch_cases.sparse_switch);
-    mgr.incr_metric(METRIC_COMPACT_SWITCHES, total_switch_cases.compact_switch);
     mgr.incr_metric(METRIC_INSTRUCTIONS_REMOVED,
                     total_switch_cases.removed_instrs);
     mgr.incr_metric(METRIC_INSTRUCTIONS_ADDED, total_switch_cases.added_instrs);

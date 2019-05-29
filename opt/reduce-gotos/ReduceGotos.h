@@ -19,8 +19,7 @@ class ReduceGotosPass : public Pass {
     size_t remaining_two_case_switches{0};
     size_t remaining_range_switches{0};
     size_t remaining_range_switch_cases{0};
-    size_t removed_sparse_switch_cases{0};
-    size_t removed_packed_switch_cases{0};
+    size_t removed_switch_cases{0};
     size_t replaced_gotos_with_returns{0};
     size_t removed_trailing_moves{0};
     size_t inverted_conditional_branches{0};

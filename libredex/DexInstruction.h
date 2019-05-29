@@ -361,8 +361,7 @@ inline bool writes_result_register(IROpcode op) {
 
 inline bool is_branch(IROpcode op) {
   switch (op) {
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
@@ -406,9 +405,7 @@ inline bool is_goto(IROpcode op) {
   return op == OPCODE_GOTO;
 }
 
-inline bool is_switch(IROpcode op) {
-  return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
-}
+inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
 
 inline bool is_literal_const(IROpcode op) {
   return op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE;

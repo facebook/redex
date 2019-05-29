@@ -81,7 +81,7 @@ TEST(MakeSwitch, MultiIndices) {
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM, {2_v}));
   EXPECT_EQ(*it++->insn, *dasm(IOPCODE_LOAD_PARAM_WIDE, {3_v}));
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST, {0_v, 1_L}));
-  EXPECT_EQ(*it++->insn, *dasm(OPCODE_PACKED_SWITCH, {0_v}));
+  EXPECT_EQ(*it++->insn, *dasm(OPCODE_SWITCH, {0_v}));
 
   EXPECT_EQ(*it++->insn, *dasm(OPCODE_CONST, {2_v, 0_L}));
 

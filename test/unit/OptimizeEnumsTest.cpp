@@ -61,7 +61,7 @@ TEST(OptimizeEnums, basic_pos) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v0)
-      (sparse-switch v0 (:case))
+      (switch v0 (:case))
 
       (:case 0)
       (return-void)
@@ -88,7 +88,7 @@ TEST(OptimizeEnums, overwritten) {
       (aget v0 v1)
       (move-result-pseudo v0)
       (const v0 0)
-      (sparse-switch v0 (:case))
+      (switch v0 (:case))
 
       (:case 0)
       (return-void)
@@ -114,7 +114,7 @@ TEST(OptimizeEnums, nested) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v0)
-      (packed-switch v0 (:a))
+      (switch v0 (:a))
 
       (return-void)
 
@@ -125,7 +125,7 @@ TEST(OptimizeEnums, nested) {
 
       (:x)
       (move-result v0)
-      (packed-switch v0 (:b))
+      (switch v0 (:b))
 
       (return-void)
 
@@ -555,7 +555,7 @@ TEST(OptimizeEnums, goto_default) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v1)
-      (sparse-switch v1 (:a :b))
+      (switch v1 (:a :b))
 
       (:fallthrough)
       (return-void)

@@ -170,8 +170,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_CONST:
     return insn->get_literal() == 0;
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_WIDE:

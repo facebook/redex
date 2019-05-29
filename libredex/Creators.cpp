@@ -493,7 +493,7 @@ MethodBlock* MethodBlock::if_else_testz(IROpcode if_op,
 
 MethodBlock* MethodBlock::switch_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   // Convert to SwitchIndices map.
   std::map<SwitchIndices, MethodBlock*> indices_cases;
@@ -514,7 +514,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
 
 MethodBlock* MethodBlock::switch_op(
     Location test, std::map<SwitchIndices, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   return make_switch_block(sw_opcode, cases);
 }

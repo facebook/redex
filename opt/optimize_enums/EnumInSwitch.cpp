@@ -185,8 +185,7 @@ void Iterator::analyze_insn(cfg::InstructionIterator it,
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
     analyze_move_result(it, env);
     break;
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
