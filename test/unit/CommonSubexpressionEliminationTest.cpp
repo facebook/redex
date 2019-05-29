@@ -1064,3 +1064,103 @@ TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
   auto expected_str = code_str;
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput v0 v1 v2)
+      (aget v1 v2)
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (const v2 0)
+      (aput v0 v1 v2)
+      (move v3 v0)
+      (aget v1 v2)
+      (move-result-pseudo v0)
+      (move v0 v3)
+    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.a:I")
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.a:I")
+      (move v2 v0)
+      (iget v1 "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (move v0 v2)
+    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (move v1 v0)
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+      (move v0 v1)
+    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, sput_related_sget_with_barrier) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (invoke-static () "LWhat;.ever:()V")
+      (sget "LFoo;.s:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (const v1 0)
+      (iput v0 v1 "LFoo;.v:I")
+      (iget v1 "LFoo;.v:I")
+      (move-result-pseudo v0)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+}

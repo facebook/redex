@@ -16,6 +16,7 @@ namespace cse_impl {
 
 struct Stats {
   size_t results_captured{0};
+  size_t stores_captured{0};
   size_t instructions_eliminated{0};
   size_t max_value_ids{0};
 };

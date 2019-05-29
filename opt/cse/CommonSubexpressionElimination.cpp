@@ -79,6 +79,7 @@ using namespace cse_impl;
 namespace {
 
 constexpr const char* METRIC_RESULTS_CAPTURED = "num_results_captured";
+constexpr const char* METRIC_STORES_CAPTURED = "num_stores_captured";
 constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
     "num_eliminated_instructions";
 constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
@@ -537,6 +538,26 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (any_changes) {
         m_shared_state->log_barrier(make_barrier(insn));
       }
+
+      if (location != Location(GENERAL_MEMORY_BARRIER)) {
+        auto value = get_equivalent_put_value(insn, current_state);
+        if (value) {
+          auto value_id = *get_value_id(*value);
+          TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s\n",
+                SHOW(insn));
+          auto insn_domain = IRInstructionDomain(insn);
+          current_state->mutate_def_env(
+              true /* is_barrier_sensitive */,
+              [value_id, insn_domain](DefEnvironment* env) {
+                env->set(value_id, insn_domain);
+              });
+          auto value_domain = ValueIdDomain(value_id);
+          current_state->mutate_ref_env(
+              [insn, value_domain](RefEnvironment* env) {
+                env->set(insn->src(0), value_domain);
+              });
+        }
+      }
     }
   }
 
@@ -591,6 +612,41 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     m_value_ids.emplace(value, id);
     return boost::optional<value_id_t>(id);
+  }
+
+  boost::optional<IRValue> get_equivalent_put_value(
+      IRInstruction* insn, CseEnvironment* current_state) const {
+    auto ref_env = current_state->get_ref_env();
+    boost::optional<value_id_t> value_id;
+    if (is_sput(insn->opcode())) {
+      always_assert(insn->srcs_size() == 1);
+      IRValue value;
+      value.opcode = (IROpcode)(insn->opcode() - OPCODE_SPUT + OPCODE_SGET);
+      value.field = insn->get_field();
+      return value;
+    } else if (is_iput(insn->opcode())) {
+      always_assert(insn->srcs_size() == 2);
+      auto src1 = ref_env.get(insn->src(1)).get_constant();
+      if (src1) {
+        IRValue value;
+        value.opcode = (IROpcode)(insn->opcode() - OPCODE_IPUT + OPCODE_IGET);
+        value.srcs.push_back(*src1);
+        value.field = insn->get_field();
+        return value;
+      }
+    } else if (is_aput(insn->opcode())) {
+      always_assert(insn->srcs_size() == 3);
+      auto src1 = ref_env.get(insn->src(1)).get_constant();
+      auto src2 = ref_env.get(insn->src(2)).get_constant();
+      if (src1 && src2) {
+        IRValue value;
+        value.opcode = (IROpcode)(insn->opcode() - OPCODE_APUT + OPCODE_AGET);
+        value.srcs.push_back(*src1);
+        value.srcs.push_back(*src2);
+        return value;
+      }
+    }
+    return boost::none;
   }
 
   IRValue get_pre_state_src_value(register_t reg,
@@ -1245,19 +1301,32 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
     if (!temps.count(earlier_insn)) {
-      auto src_reg = earlier_insn->dest();
-      uint32_t temp_reg;
+      uint32_t src_reg;
       IROpcode move_opcode;
-      if (earlier_insn->dest_is_object()) {
-        move_opcode = OPCODE_MOVE_OBJECT;
-        temp_reg = m_cfg.allocate_temp();
-      } else if (earlier_insn->dest_is_wide()) {
-        move_opcode = OPCODE_MOVE_WIDE;
-        temp_reg = m_cfg.allocate_wide_temp();
+      if (earlier_insn->dests_size()) {
+        src_reg = earlier_insn->dest();
+        move_opcode = earlier_insn->dest_is_wide()
+                          ? OPCODE_MOVE_WIDE
+                          : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
+                                                           : OPCODE_MOVE;
+        m_stats.results_captured++;
       } else {
-        move_opcode = OPCODE_MOVE;
-        temp_reg = m_cfg.allocate_temp();
+        always_assert(is_aput(earlier_insn->opcode()) ||
+                      is_iput(earlier_insn->opcode()) ||
+                      is_sput(earlier_insn->opcode()));
+        src_reg = earlier_insn->src(0);
+        move_opcode = earlier_insn->src_is_wide(0)
+                          ? OPCODE_MOVE_WIDE
+                          : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
+                             earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
+                             earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
+                                ? OPCODE_MOVE_OBJECT
+                                : OPCODE_MOVE;
+        m_stats.stores_captured++;
       }
+      uint32_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
+                              ? m_cfg.allocate_wide_temp()
+                              : m_cfg.allocate_temp();
       temps.emplace(earlier_insn, std::make_pair(move_opcode, temp_reg));
       insns.insert(earlier_insn);
     }
@@ -1302,7 +1371,8 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
     auto& it = iterators.at(earlier_insn);
     IRInstruction* move_insn = new IRInstruction(move_opcode);
-    auto src_reg = earlier_insn->dest();
+    auto src_reg = earlier_insn->dests_size() ? earlier_insn->dest()
+                                              : earlier_insn->src(0);
     move_insn->set_src(0, src_reg)->set_dest(temp_reg);
     m_cfg.insert_after(it, move_insn);
   }
@@ -1310,7 +1380,6 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   TRACE(CSE, 5, "[CSE] after:\n%s\n", SHOW(m_cfg));
 
   m_stats.instructions_eliminated += m_forward.size();
-  m_stats.results_captured += temps.size();
   return true;
 }
 
@@ -1369,6 +1438,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       },
       [](Stats a, Stats b) {
         a.results_captured += b.results_captured;
+        a.stores_captured += b.stores_captured;
         a.instructions_eliminated += b.instructions_eliminated;
         a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
         return a;
@@ -1376,6 +1446,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       Stats{},
       m_debug ? 1 : walk::parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
+  mgr.incr_metric(METRIC_STORES_CAPTURED, stats.stores_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
   mgr.incr_metric(METRIC_INLINED_BARRIERS_INTO_METHODS,
