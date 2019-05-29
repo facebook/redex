@@ -52,13 +52,6 @@
  * - Implement proper phi-nodes, tracking merged values as early as possible,
  *   instead of just tracking on first use after value went to 'top'. Not sure
  *   if there are tangible benefits.
- * - Making tracking of (memory) barrier more refined. As far as I understand
- *   the memory model, reads can be freely reordered in the absence of
- *   true synchronization events, and to maintain thread-local behavior we
- *   could further partition the "barrier-sensitive" store by tracking
- *   separately...
- *   - different fields accessed
- *   - different array element kinds accessed
  * - Identify pure method invocations that do not need to trigger a (memory)
  *   barrier
  *
@@ -81,6 +74,7 @@
 #include "Walkers.h"
 
 using namespace sparta;
+using namespace cse_impl;
 
 namespace {
 
@@ -91,12 +85,23 @@ constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
     "num_inlined_barriers_into_methods";
 constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
     "num_inlined_barriers_iterations";
+constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
 
+// TODO: Switch value_id_t to be uint64_t for extra breathing room both in the
+// number of tracked locations, as well as space for unique values. However,
+// this is blocked by T44394373.
 using value_id_t = uint32_t;
 enum ValueIdFlags : value_id_t {
-  IS_PRE_STATE_SRC = 0x01,
-  IS_BARRIER_SENSITIVE = 0x02,
-  BASE = 0x04,
+  // lower bits for tracked locations
+  IS_NOT_READ_ONLY_WRITTEN_LOCATION = 0,
+  IS_FIRST_TRACKED_LOCATION = ((value_id_t)1),
+  IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << (sizeof(value_id_t) * 4 - 3),
+  IS_ONLY_READ_NOT_WRITTEN_LOCATION = ((value_id_t)1)
+                                      << (sizeof(value_id_t) * 4 - 2),
+  IS_TRACKED_LOCATION_MASK = IS_ONLY_READ_NOT_WRITTEN_LOCATION * 2 - 1,
+  IS_PRE_STATE_SRC = ((value_id_t)1) << (sizeof(value_id_t) * 4 - 1),
+  // upper bits for unique values
+  BASE = ((value_id_t)1) << (sizeof(value_id_t) * 4),
 };
 
 using register_t = ir_analyzer::register_t;
@@ -105,6 +110,9 @@ using namespace ir_analyzer;
 // Marker opcode for values representing a source of an instruction; this is
 // used to recover from merged / havoced values.
 const IROpcode IOPCODE_PRE_STATE_SRC = IROpcode(0xFFFF);
+
+// Marker opcode for positional values that must not be moved.
+const IROpcode IOPCODE_POSITIONAL = IROpcode(0xFFFE);
 
 struct IRValue {
   IROpcode opcode;
@@ -194,9 +202,8 @@ class CseEnvironment final
   }
 };
 
-static CommonSubexpressionElimination::Barrier make_barrier(
-    const IRInstruction* insn) {
-  CommonSubexpressionElimination::Barrier b;
+static Barrier make_barrier(const IRInstruction* insn) {
+  Barrier b;
   b.opcode = insn->opcode();
   if (insn->has_field()) {
     b.field = resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
@@ -208,13 +215,197 @@ static CommonSubexpressionElimination::Barrier make_barrier(
   return b;
 }
 
+Location get_field_location(IROpcode opcode, const DexField* field) {
+  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
+  if (field != nullptr && !is_volatile(field)) {
+    return Location(field);
+  }
+
+  return Location(GENERAL_MEMORY_BARRIER);
+}
+
+Location get_field_location(IROpcode opcode, const DexFieldRef* field_ref) {
+  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
+  DexField* field =
+      resolve_field(field_ref, is_sfield_op(opcode) ? FieldSearch::Static
+                                                    : FieldSearch::Instance);
+  return get_field_location(opcode, field);
+}
+
+Location get_written_array_location(IROpcode opcode) {
+  switch (opcode) {
+  case OPCODE_APUT:
+    return Location(ARRAY_COMPONENT_TYPE_INT);
+  case OPCODE_APUT_BYTE:
+    return Location(ARRAY_COMPONENT_TYPE_BYTE);
+  case OPCODE_APUT_CHAR:
+    return Location(ARRAY_COMPONENT_TYPE_CHAR);
+  case OPCODE_APUT_WIDE:
+    return Location(ARRAY_COMPONENT_TYPE_WIDE);
+  case OPCODE_APUT_SHORT:
+    return Location(ARRAY_COMPONENT_TYPE_SHORT);
+  case OPCODE_APUT_OBJECT:
+    return Location(ARRAY_COMPONENT_TYPE_OBJECT);
+  case OPCODE_APUT_BOOLEAN:
+    return Location(ARRAY_COMPONENT_TYPE_BOOLEAN);
+  default:
+    always_assert(false);
+  }
+}
+
+Location get_written_location(const Barrier& barrier) {
+  if (is_aput(barrier.opcode)) {
+    return get_written_array_location(barrier.opcode);
+  } else if (is_iput(barrier.opcode) || is_sput(barrier.opcode)) {
+    return get_field_location(barrier.opcode, barrier.field);
+  } else {
+    return Location(GENERAL_MEMORY_BARRIER);
+  }
+}
+
+Location get_read_array_location(IROpcode opcode) {
+  switch (opcode) {
+  case OPCODE_AGET:
+    return Location(ARRAY_COMPONENT_TYPE_INT);
+  case OPCODE_AGET_BYTE:
+    return Location(ARRAY_COMPONENT_TYPE_BYTE);
+  case OPCODE_AGET_CHAR:
+    return Location(ARRAY_COMPONENT_TYPE_CHAR);
+  case OPCODE_AGET_WIDE:
+    return Location(ARRAY_COMPONENT_TYPE_WIDE);
+  case OPCODE_AGET_SHORT:
+    return Location(ARRAY_COMPONENT_TYPE_SHORT);
+  case OPCODE_AGET_OBJECT:
+    return Location(ARRAY_COMPONENT_TYPE_OBJECT);
+  case OPCODE_AGET_BOOLEAN:
+    return Location(ARRAY_COMPONENT_TYPE_BOOLEAN);
+  default:
+    always_assert(false);
+  }
+}
+
+Location get_read_location(const IRInstruction* insn) {
+  if (is_aget(insn->opcode())) {
+    return get_read_array_location(insn->opcode());
+  } else if (is_iget(insn->opcode()) || is_sget(insn->opcode())) {
+    return get_field_location(insn->opcode(), insn->get_field());
+  } else {
+    return Location(GENERAL_MEMORY_BARRIER);
+  }
+}
+
+bool is_barrier_relevant(
+    const Barrier& barrier,
+    const std::unordered_set<Location, LocationHasher>& read_locations) {
+  auto location = get_written_location(barrier);
+  return location == Location(GENERAL_MEMORY_BARRIER) ||
+         read_locations.count(location);
+}
+
+template <class Set>
+bool are_disjoint(const Set* s, const Set* t) {
+  if (s->size() > t->size()) {
+    std::swap(s, t);
+  }
+  for (const auto& elem : *s) {
+    if (t->count(elem)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
  public:
-  Analyzer(CommonSubexpressionElimination::SharedState* shared_state,
-           cfg::ControlFlowGraph& cfg)
-      : BaseIRAnalyzer(cfg),
-        m_read_accesses(shared_state->compute_read_accesses(cfg)),
-        m_shared_state(shared_state) {
+  Analyzer(SharedState* shared_state, cfg::ControlFlowGraph& cfg)
+      : BaseIRAnalyzer(cfg), m_shared_state(shared_state) {
+    std::unordered_map<Location, size_t, LocationHasher> read_location_counts;
+    for (auto& mie : cfg::InstructionIterable(cfg)) {
+      auto location = get_read_location(mie.insn);
+      if (location != Location(GENERAL_MEMORY_BARRIER)) {
+        read_location_counts[location]++;
+        m_read_locations.insert(location);
+      }
+    }
+
+    std::unordered_map<Location, size_t, LocationHasher>
+        written_location_counts;
+    for (auto& mie : cfg::InstructionIterable(cfg)) {
+      auto location = shared_state->get_relevant_written_location(
+          mie.insn, m_read_locations);
+      if (location) {
+        written_location_counts[*location]++;
+      }
+    }
+
+    std::vector<Location> read_and_written_locations;
+    for (auto& p : written_location_counts) {
+      if (read_location_counts.count(p.first)) {
+        read_and_written_locations.push_back(p.first);
+      } else if (p.first != Location(GENERAL_MEMORY_BARRIER)) {
+        m_tracked_locations.emplace(
+            p.first, ValueIdFlags::IS_NOT_READ_ONLY_WRITTEN_LOCATION);
+      }
+    }
+    for (auto& p : read_location_counts) {
+      if (!written_location_counts.count(p.first)) {
+        m_tracked_locations.emplace(
+            p.first, ValueIdFlags::IS_ONLY_READ_NOT_WRITTEN_LOCATION);
+      }
+    }
+    // We'll use roughly half of the bits in a value_id to encode what kind of
+    // heap locations were involved in producing the value, so that we can
+    // later quickly identify which values need to be invalidated when
+    // encountering a write to a specific location. However, we only have a
+    // limited number of bits available, and potentially many more relevant
+    // locations.
+    //
+    // We'll identify the long tail of locations that are read and written via a
+    // separate bit (IS_OTHER_TRACKED_LOCATION), and we'll also reserve one bit
+    // for locations that are read but not written
+    // (IS_ONLY_READ_NOT_WRITTEN_LOCATION), so that we can identify these
+    // heap-dependent locations when we need to validate all heap-dependent
+    // locations in case of a general memory barrier.
+    //
+    // We use a heuristic to decide which locations get their own bit, vs
+    // the long-tail treatment.
+    //
+    // The currently implemented heuristic prefers locations that are often
+    // read and rarely written.
+    //
+    // TODO: Explore other (variations of this) heuristics.
+
+    std::sort(read_and_written_locations.begin(),
+              read_and_written_locations.end(), [&](Location a, Location b) {
+                auto get_weight = [&](Location l) {
+                  auto reads = read_location_counts.at(l);
+                  auto writes = written_location_counts.at(l);
+                  return (reads << 16) / writes;
+                };
+                auto weight_a = get_weight(a);
+                auto weight_b = get_weight(b);
+                if (weight_a != weight_b) {
+                  // higher weight takes precedence
+                  return weight_a > weight_b;
+                }
+                // in case of a tie, still ensure a deterministic total ordering
+                return a < b;
+              });
+    TRACE(CSE, 4, "[CSE] relevant locations: %u %s\n",
+          read_and_written_locations.size(),
+          read_and_written_locations.size() > 13 ? "(HUGE!)" : "");
+    value_id_t next_bit = ValueIdFlags::IS_FIRST_TRACKED_LOCATION;
+    for (auto l : read_and_written_locations) {
+      TRACE(CSE, 4, "[CSE]   %s: %u reads, %u writes\n",
+            l.special_location < END ? "array element" : SHOW(l.field),
+            read_location_counts.at(l), written_location_counts.at(l));
+      m_tracked_locations.emplace(l, next_bit);
+      if (next_bit != ValueIdFlags::IS_OTHER_TRACKED_LOCATION) {
+        // we've already reached the last catch-all tracked read/write location
+        next_bit <<= 1;
+      }
+    }
+
     MonotonicFixpointIterator::run(CseEnvironment::top());
   }
 
@@ -286,41 +477,66 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    if (m_shared_state->is_barrier(insn, m_read_accesses)) {
-      auto b = make_barrier(insn);
-      m_shared_state->log_barrier(b);
+    auto location =
+        m_shared_state->get_relevant_written_location(insn, m_read_locations);
+    if (location) {
+      auto mask = get_location_value_id_mask(*location);
 
-      // TODO: This is quite conservative and can be relaxed:
-      // - the only real barriers are volatile field accesses, monitor
-      //   instructions, and invocations of un-analyzable methods
-      // - for analyzable methods we could compute some kind of summary
-      // - for non-volatile heap writes, we could keep track of some type
-      //   information or even alias information, and only reset that portion
-      //   of the def-env which is actually affected
+      // TODO: The following loops are probably the most expensive thing in this
+      // algorithm; is there a better way of doing this? (Then again, overall,
+      // the time this algorithm takes seems reasonable.)
 
-      current_state->mutate_def_env(true /* is_barrier_sensitive */,
-                                    [](DefEnvironment* env) { env->clear(); });
-      current_state->mutate_ref_env([&](RefEnvironment* env) {
+      bool any_changes = false;
+      current_state->mutate_def_env(
+          true /* is_barrier_sensitive */,
+          [mask, &any_changes](DefEnvironment* env) {
+            if (!env->is_value()) {
+              return;
+            }
+            if (mask == ValueIdFlags::IS_TRACKED_LOCATION_MASK) {
+              if (env->size()) {
+                any_changes = true;
+                env->clear();
+              }
+              return;
+            }
+            std::vector<value_id_t> barrier_sensitive_value_ids;
+            for (auto& p : env->bindings()) {
+              if ((p.first & mask) && !p.second.is_top()) {
+                barrier_sensitive_value_ids.push_back(p.first);
+              }
+            }
+            for (auto value_id : barrier_sensitive_value_ids) {
+              env->set(value_id, IRInstructionDomain::top());
+            }
+            if (barrier_sensitive_value_ids.size()) {
+              any_changes = true;
+            }
+          });
+      current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
         if (!env->is_value()) {
           return;
         }
-        std::unordered_set<register_t> barrier_sensitive_regs;
-        // TODO: The following loop is probably the most expensive thing in this
-        // algorithm; is there a better way of doing this? (Then again, overall,
-        // the time this algorithm takes seems reasonable.)
+        std::vector<register_t> barrier_sensitive_regs;
         for (auto& p : env->bindings()) {
           auto c = p.second.get_constant();
           if (c) {
             auto value_id = *c;
-            if (is_barrier_sensitive(value_id)) {
-              barrier_sensitive_regs.insert(p.first);
+            if (value_id & mask) {
+              barrier_sensitive_regs.push_back(p.first);
             }
           }
         }
         for (auto reg : barrier_sensitive_regs) {
           env->set(reg, ValueIdDomain::top());
         }
+        if (barrier_sensitive_regs.size()) {
+          any_changes = true;
+        }
       });
+      if (any_changes) {
+        m_shared_state->log_barrier(make_barrier(insn));
+      }
     }
   }
 
@@ -329,68 +545,52 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   bool is_barrier_sensitive(value_id_t value_id) const {
-    return !!(value_id & ValueIdFlags::IS_BARRIER_SENSITIVE);
+    return !!(value_id & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
   }
+
+  size_t get_value_ids_size() { return m_value_ids.size(); }
 
  private:
   ValueIdDomain get_value_id_domain(const IRInstruction* insn,
                                     CseEnvironment* current_state) const {
     auto value = get_value(insn, current_state);
     auto value_id = get_value_id(value);
-    return ValueIdDomain(value_id);
+    return value_id ? ValueIdDomain(*value_id) : ValueIdDomain::top();
   }
 
   value_id_t get_pre_state_src_value_id(register_t reg,
                                         const IRInstruction* insn) const {
     auto value = get_pre_state_src_value(reg, insn);
-    return get_value_id(value);
+    auto value_id = get_value_id(value);
+    always_assert(value_id);
+    return *value_id;
   }
 
-  value_id_t get_value_id(const IRValue& value) const {
+  boost::optional<value_id_t> get_value_id(const IRValue& value) const {
     auto it = m_value_ids.find(value);
     if (it != m_value_ids.end()) {
-      return it->second;
+      return boost::optional<value_id_t>(it->second);
     }
     value_id_t id = m_value_ids.size() * ValueIdFlags::BASE;
     always_assert(id / ValueIdFlags::BASE == m_value_ids.size());
-    switch (value.opcode) {
-    case OPCODE_IGET:
-    case OPCODE_IGET_BYTE:
-    case OPCODE_IGET_CHAR:
-    case OPCODE_IGET_WIDE:
-    case OPCODE_IGET_SHORT:
-    case OPCODE_IGET_OBJECT:
-    case OPCODE_IGET_BOOLEAN:
-    case OPCODE_AGET:
-    case OPCODE_AGET_BYTE:
-    case OPCODE_AGET_CHAR:
-    case OPCODE_AGET_WIDE:
-    case OPCODE_AGET_SHORT:
-    case OPCODE_AGET_OBJECT:
-    case OPCODE_AGET_BOOLEAN:
-    case OPCODE_SGET:
-    case OPCODE_SGET_BYTE:
-    case OPCODE_SGET_CHAR:
-    case OPCODE_SGET_WIDE:
-    case OPCODE_SGET_SHORT:
-    case OPCODE_SGET_OBJECT:
-    case OPCODE_SGET_BOOLEAN:
-      id |= ValueIdFlags::IS_BARRIER_SENSITIVE;
-      break;
-    case IOPCODE_PRE_STATE_SRC:
-      id |= ValueIdFlags::IS_PRE_STATE_SRC;
-      break;
-    default:
-      for (auto src : value.srcs) {
-        if (is_barrier_sensitive(src)) {
-          id |= ValueIdFlags::IS_BARRIER_SENSITIVE;
-          break;
-        }
+    if (is_aget(value.opcode)) {
+      id |= get_location_value_id_mask(get_read_array_location(value.opcode));
+    } else if (is_iget(value.opcode) || is_sget(value.opcode)) {
+      auto location = get_field_location(value.opcode, value.field);
+      if (location == Location(GENERAL_MEMORY_BARRIER)) {
+        return boost::none;
       }
-      break;
+      id |= get_location_value_id_mask(location);
+    } else if (value.opcode == IOPCODE_PRE_STATE_SRC) {
+      id |= ValueIdFlags::IS_PRE_STATE_SRC;
+    }
+    if (value.opcode != IOPCODE_PRE_STATE_SRC) {
+      for (auto src : value.srcs) {
+        id |= (src & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
+      }
     }
     m_value_ids.emplace(value, id);
-    return id;
+    return boost::optional<value_id_t>(id);
   }
 
   IRValue get_pre_state_src_value(register_t reg,
@@ -463,10 +663,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       is_positional = true;
       break;
     default:
-      is_positional = m_shared_state->is_barrier(insn, m_read_accesses);
+      auto location =
+          m_shared_state->get_relevant_written_location(insn, m_read_locations);
+      is_positional = !!location;
       break;
     }
     if (is_positional) {
+      value.opcode = IOPCODE_POSITIONAL;
       value.positional_insn = insn;
     } else if (insn->has_literal()) {
       value.literal = insn->get_literal();
@@ -484,16 +687,27 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return value;
   }
 
-  CommonSubexpressionElimination::ReadAccesses m_read_accesses;
-  CommonSubexpressionElimination::SharedState* m_shared_state;
+  value_id_t get_location_value_id_mask(Location l) const {
+    if (l == Location(GENERAL_MEMORY_BARRIER)) {
+      return ValueIdFlags::IS_TRACKED_LOCATION_MASK;
+    } else {
+      return m_tracked_locations.at(l);
+    }
+  }
+
+  std::unordered_set<Location, LocationHasher> m_read_locations;
+  std::unordered_map<Location, value_id_t, LocationHasher> m_tracked_locations;
+  SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
 };
 
 } // namespace
 
+namespace cse_impl {
+
 ////////////////////////////////////////////////////////////////////////////////
 
-CommonSubexpressionElimination::SharedState::SharedState() {
+SharedState::SharedState() {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -676,9 +890,8 @@ CommonSubexpressionElimination::SharedState::SharedState() {
   }
 }
 
-CommonSubexpressionElimination::MethodBarriersStats
-CommonSubexpressionElimination::SharedState::init_method_barriers(
-    const Scope& scope, size_t max_iterations) {
+MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
+                                                      size_t max_iterations) {
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   ConcurrentMap<const DexMethod*, std::vector<Barrier>> method_barriers;
@@ -692,6 +905,7 @@ CommonSubexpressionElimination::SharedState::init_method_barriers(
       auto* insn = mie.insn;
       if (may_be_barrier(insn)) {
         auto barrier = make_barrier(insn);
+        get_written_location(barrier);
         set.insert(barrier);
         if (is_invoke(barrier.opcode)) {
           wait_for_method = barrier.method;
@@ -813,117 +1027,61 @@ CommonSubexpressionElimination::SharedState::init_method_barriers(
     }
   }
 
-  std::copy(method_barriers.begin(), method_barriers.end(),
-            std::inserter(m_method_barriers, m_method_barriers.end()));
+  for (auto& p : method_barriers) {
+    std::unordered_set<Location, LocationHasher>& written_locations =
+        m_method_written_locations[p.first];
+    for (auto& barrier : p.second) {
+      written_locations.insert(get_written_location(barrier));
+    }
+  }
 
   return stats;
 }
 
-CommonSubexpressionElimination::ReadAccesses
-CommonSubexpressionElimination::SharedState::compute_read_accesses(
-    cfg::ControlFlowGraph& cfg) {
-  ReadAccesses ra;
-  for (auto& mie : cfg::InstructionIterable(cfg)) {
-    auto* insn = mie.insn;
-    switch (insn->opcode()) {
-    case OPCODE_AGET:
-      ra.array_component_types[CommonSubexpressionElimination::INT] = true;
-      break;
-    case OPCODE_AGET_BYTE:
-      ra.array_component_types[CommonSubexpressionElimination::BYTE] = true;
-      break;
-    case OPCODE_AGET_CHAR:
-      ra.array_component_types[CommonSubexpressionElimination::CHAR] = true;
-      break;
-    case OPCODE_AGET_WIDE:
-      ra.array_component_types[CommonSubexpressionElimination::WIDE] = true;
-      break;
-    case OPCODE_AGET_SHORT:
-      ra.array_component_types[CommonSubexpressionElimination::SHORT] = true;
-      break;
-    case OPCODE_AGET_OBJECT:
-      ra.array_component_types[CommonSubexpressionElimination::OBJECT] = true;
-      break;
-    case OPCODE_AGET_BOOLEAN:
-      ra.array_component_types[CommonSubexpressionElimination::BOOLEAN] = true;
-      break;
-    default:
-      if (is_iget(insn->opcode()) || is_sget(insn->opcode())) {
-        auto field_ref = insn->get_field();
-        DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
-                                                       ? FieldSearch::Static
-                                                       : FieldSearch::Instance);
-        if (field == nullptr || !is_volatile(field)) {
-          ra.fields.insert(field);
-        }
+boost::optional<Location> SharedState::get_relevant_written_location(
+    const IRInstruction* insn,
+    const std::unordered_set<Location, LocationHasher>& read_locations) {
+  if (may_be_barrier(insn)) {
+    if (is_invoke(insn->opcode())) {
+      if (is_invoke_a_barrier(insn, read_locations)) {
+        return boost::optional<Location>(Location(GENERAL_MEMORY_BARRIER));
+      }
+    } else {
+      auto barrier = make_barrier(insn);
+      if (is_barrier_relevant(barrier, read_locations)) {
+        return boost::optional<Location>(get_written_location(barrier));
       }
     }
   }
-  return ra;
+  return boost::none;
 }
 
-bool CommonSubexpressionElimination::SharedState::may_be_barrier(
-    const IRInstruction* insn) {
-  switch (insn->opcode()) {
+bool SharedState::may_be_barrier(const IRInstruction* insn) {
+  auto opcode = insn->opcode();
+  switch (opcode) {
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_APUT:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_IPUT:
-  case OPCODE_IPUT_WIDE:
-  case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN:
-  case OPCODE_IPUT_BYTE:
-  case OPCODE_IPUT_CHAR:
-  case OPCODE_IPUT_SHORT:
-  case OPCODE_SPUT:
-  case OPCODE_SPUT_WIDE:
-  case OPCODE_SPUT_OBJECT:
-  case OPCODE_SPUT_BOOLEAN:
-  case OPCODE_SPUT_BYTE:
-  case OPCODE_SPUT_CHAR:
-  case OPCODE_SPUT_SHORT:
     return true;
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_DIRECT:
-  case OPCODE_INVOKE_STATIC:
-  case OPCODE_INVOKE_INTERFACE:
-    return !is_invoke_safe(insn);
   default:
-    if (insn->has_field()) {
-      auto field_ref = insn->get_field();
-      DexField* field = resolve_field(field_ref, is_sfield_op(insn->opcode())
-                                                     ? FieldSearch::Static
-                                                     : FieldSearch::Instance);
-      return field == nullptr || is_volatile(field);
+    if (is_aput(opcode) || is_iput(opcode) || is_sput(opcode)) {
+      return true;
+    } else if (is_invoke(opcode)) {
+      return !is_invoke_safe(insn);
     }
+    if (insn->has_field()) {
+      always_assert(is_iget(opcode) || is_sget(opcode));
+      if (get_field_location(opcode, insn->get_field()) ==
+          Location(GENERAL_MEMORY_BARRIER)) {
+        return true;
+      }
+    }
+
     return false;
   }
 }
 
-bool CommonSubexpressionElimination::SharedState::is_barrier(
-    const IRInstruction* insn, const ReadAccesses& read_accesses) {
-  if (!may_be_barrier(insn)) {
-    return false;
-  }
-
-  if (is_invoke(insn->opcode())) {
-    return is_invoke_a_barrier(insn, read_accesses);
-  } else {
-    auto barrier = make_barrier(insn);
-    return is_barrier_relevant(barrier, read_accesses);
-  }
-}
-
-bool CommonSubexpressionElimination::SharedState::is_invoke_safe(
-    const IRInstruction* insn) {
+bool SharedState::is_invoke_safe(const IRInstruction* insn) {
   always_assert(is_invoke(insn->opcode()));
   auto method_ref = insn->get_method();
   auto opcode = insn->opcode();
@@ -942,8 +1100,9 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_safe(
   return false;
 }
 
-bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
-    const IRInstruction* insn, const ReadAccesses& read_accesses) {
+bool SharedState::is_invoke_a_barrier(
+    const IRInstruction* insn,
+    const std::unordered_set<Location, LocationHasher>& read_locations) {
   always_assert(is_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
@@ -961,18 +1120,15 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
       // overriding methods further below.
       return false;
     }
-    auto it = m_method_barriers.find(method);
-    if (it == m_method_barriers.end()) {
+    auto it = m_method_written_locations.find(method);
+    if (it == m_method_written_locations.end()) {
       return true;
     }
-    auto& barriers = it->second;
-    for (auto& barrier : barriers) {
-      if (is_invoke(barrier.opcode) ||
-          is_barrier_relevant(barrier, read_accesses)) {
-        return true;
-      }
+    auto& written_locations = it->second;
+    if (written_locations.count(Location(GENERAL_MEMORY_BARRIER))) {
+      return true;
     }
-    return false;
+    return !are_disjoint(&written_locations, &read_locations);
   };
 
   auto method_ref = insn->get_method();
@@ -997,46 +1153,14 @@ bool CommonSubexpressionElimination::SharedState::is_invoke_a_barrier(
   return false;
 }
 
-bool CommonSubexpressionElimination::SharedState::is_barrier_relevant(
-    const Barrier& barrier, const ReadAccesses& read_accesses) {
-  auto op = barrier.opcode;
-  switch (op) {
-  case OPCODE_APUT:
-    return read_accesses.array_component_types[INT];
-  case OPCODE_APUT_BYTE:
-    return read_accesses.array_component_types[BYTE];
-  case OPCODE_APUT_CHAR:
-    return read_accesses.array_component_types[CHAR];
-  case OPCODE_APUT_WIDE:
-    return read_accesses.array_component_types[WIDE];
-  case OPCODE_APUT_SHORT:
-    return read_accesses.array_component_types[SHORT];
-  case OPCODE_APUT_OBJECT:
-    return read_accesses.array_component_types[OBJECT];
-  case OPCODE_APUT_BOOLEAN:
-    return read_accesses.array_component_types[BOOLEAN];
-  case OPCODE_MONITOR_ENTER:
-  case OPCODE_MONITOR_EXIT:
-  case OPCODE_FILL_ARRAY_DATA:
-    return true;
-  default:
-    always_assert(is_sfield_op(op) || is_ifield_op(op));
-    auto field = barrier.field;
-    return field == nullptr || is_volatile(field) ||
-           read_accesses.fields.count(nullptr) ||
-           read_accesses.fields.count(field);
-  }
-}
-
-void CommonSubexpressionElimination::SharedState::log_barrier(
-    const Barrier& barrier) {
+void SharedState::log_barrier(const Barrier& barrier) {
   if (m_barriers) {
     m_barriers->update(
         barrier, [](const Barrier, size_t& v, bool /* exists */) { v++; });
   }
 }
 
-void CommonSubexpressionElimination::SharedState::cleanup() {
+void SharedState::cleanup() {
   if (!m_barriers) {
     return;
   }
@@ -1066,6 +1190,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     SharedState* shared_state, cfg::ControlFlowGraph& cfg)
     : m_shared_state(shared_state), m_cfg(cfg) {
   Analyzer analyzer(shared_state, cfg);
+  m_stats.max_value_ids = analyzer.get_value_ids_size();
 
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
@@ -1189,6 +1314,8 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   return true;
 }
 
+} // namespace cse_impl
+
 void CommonSubexpressionEliminationPass::bind_config() {
   bind("debug", false, m_debug);
   // The default value 77 is somewhat arbitrary. In practice, the fixed-point
@@ -1203,52 +1330,51 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
 
-  auto shared_state = CommonSubexpressionElimination::SharedState();
+  auto shared_state = SharedState();
   auto method_barriers_stats =
       shared_state.init_method_barriers(scope, m_max_iterations);
-  const auto stats =
-      walk::parallel::reduce_methods<CommonSubexpressionElimination::Stats>(
-          scope,
-          [&](DexMethod* method) {
-            const auto code = method->get_code();
-            if (code == nullptr) {
-              return CommonSubexpressionElimination::Stats();
-            }
+  const auto stats = walk::parallel::reduce_methods<Stats>(
+      scope,
+      [&](DexMethod* method) {
+        const auto code = method->get_code();
+        if (code == nullptr) {
+          return Stats();
+        }
 
-            TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
-            CommonSubexpressionElimination cse(&shared_state, code->cfg());
-            bool any_changes = cse.patch(is_static(method), method->get_class(),
-                                         method->get_proto()->get_args());
+        TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
+        CommonSubexpressionElimination cse(&shared_state, code->cfg());
+        bool any_changes = cse.patch(is_static(method), method->get_class(),
+                                     method->get_proto()->get_args());
+        code->clear_cfg();
+        if (any_changes) {
+          // TODO: CopyPropagation and LocalDce will separately construct
+          // an editable cfg. Don't do that, and fully convert those passes
+          // to be cfg-based.
+
+          CopyPropagationPass::Config config;
+          copy_propagation_impl::CopyPropagation copy_propagation(config);
+          copy_propagation.run(code, method);
+
+          std::unordered_set<DexMethodRef*> pure_methods;
+          auto local_dce = LocalDce(pure_methods);
+          local_dce.dce(code);
+
+          if (traceEnabled(CSE, 5)) {
+            code->build_cfg(/* editable */ true);
+            TRACE(CSE, 5, "[CSE] final:\n%s\n", SHOW(code->cfg()));
             code->clear_cfg();
-            if (any_changes) {
-              // TODO: CopyPropagation and LocalDce will separately construct
-              // an editable cfg. Don't do that, and fully convert those passes
-              // to be cfg-based.
-
-              CopyPropagationPass::Config config;
-              copy_propagation_impl::CopyPropagation copy_propagation(config);
-              copy_propagation.run(code, method);
-
-              std::unordered_set<DexMethodRef*> pure_methods;
-              auto local_dce = LocalDce(pure_methods);
-              local_dce.dce(code);
-
-              if (traceEnabled(CSE, 5)) {
-                code->build_cfg(/* editable */ true);
-                TRACE(CSE, 5, "[CSE] final:\n%s\n", SHOW(code->cfg()));
-                code->clear_cfg();
-              }
-            }
-            return cse.get_stats();
-          },
-          [](CommonSubexpressionElimination::Stats a,
-             CommonSubexpressionElimination::Stats b) {
-            a.results_captured += b.results_captured;
-            a.instructions_eliminated += b.instructions_eliminated;
-            return a;
-          },
-          CommonSubexpressionElimination::Stats{},
-          m_debug ? 1 : walk::parallel::default_num_threads());
+          }
+        }
+        return cse.get_stats();
+      },
+      [](Stats a, Stats b) {
+        a.results_captured += b.results_captured;
+        a.instructions_eliminated += b.instructions_eliminated;
+        a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+        return a;
+      },
+      Stats{},
+      m_debug ? 1 : walk::parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
@@ -1256,6 +1382,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                   method_barriers_stats.inlined_barriers_into_methods);
   mgr.incr_metric(METRIC_INLINED_BARRIERS_ITERATIONS,
                   method_barriers_stats.inlined_barriers_iterations);
+  mgr.incr_metric(METRIC_MAX_VALUE_IDS, stats.max_value_ids);
 
   shared_state.cleanup();
 }

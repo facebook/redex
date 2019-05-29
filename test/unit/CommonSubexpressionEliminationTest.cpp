@@ -50,10 +50,11 @@ void test(const Scope& scope,
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
-  CommonSubexpressionElimination::SharedState shared_state;
+  cse_impl::SharedState shared_state;
   auto method_barriers_stats =
       shared_state.init_method_barriers(scope, max_iterations);
-  CommonSubexpressionElimination cse(&shared_state, code.get()->cfg());
+  cse_impl::CommonSubexpressionElimination cse(&shared_state,
+                                               code.get()->cfg());
   bool is_static = true;
   DexType* declaring_type = nullptr;
   DexTypeList* args = DexTypeList::make_type_list({});
@@ -999,4 +1000,67 @@ TEST_F(CommonSubexpressionEliminationTest,
        code_str,
        expected_str,
        1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, iget_unrelated_iput) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (iput v1 v0 "LFoo;.b:I")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (iput v1 v0 "LFoo;.b:I")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
+  auto code_str = R"(
+    (
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (aput-object v0 v0 v1)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (move v3 v2)
+      (aput-object v0 v0 v1)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (move v2 v3)    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
+  auto code_str = R"(
+    (
+      (aget v0 v1)
+      (move-result-pseudo v2)
+      (aput v2 v0 v3)
+      (aget v0 v1)
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
 }
