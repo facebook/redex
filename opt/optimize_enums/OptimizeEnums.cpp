@@ -8,8 +8,7 @@
 #include "OptimizeEnums.h"
 
 #include "ClassAssemblingUtils.h"
-#include "ConcurrentContainers.h"
-#include "DexClass.h"
+#include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
@@ -305,10 +304,11 @@ class OptimizeEnums {
     optimize_enums::Config config(max_enum_size);
     calculate_param_summaries(m_scope, &config.param_summary_map);
 
-    walk::classes(m_scope, [&config](DexClass* cls) {
-      if (is_simple_enum(cls)) {
-        config.candidate_enums.insert(cls->get_type());
+    walk::classes(m_scope, [this, &config](DexClass* cls) {
+      if (!is_simple_enum(cls) || !only_one_static_synth_field(cls)) {
+        return;
       }
+      config.candidate_enums.insert(cls->get_type());
     });
 
     optimize_enums::reject_unsafe_enums(m_scope, &config);
@@ -319,9 +319,31 @@ class OptimizeEnums {
 
  private:
   /**
-   * TODO(fengliu) : Some enums with cached values should be optimized.
-   * But we simply ignore them in the first version.
+   * There is usually one synthetic static field in enum class, typically named
+   * "$VALUES", but also may be renamed.
+   * Return true if there is only one static synthetic field in the class,
+   * otherwise return false.
    */
+  bool only_one_static_synth_field(DexClass* cls) {
+    DexField* synth_field = nullptr;
+    auto synth_access = optimize_enums::synth_access();
+    for (auto field : cls->get_sfields()) {
+      if (check_required_access_flags(synth_access, field->get_access())) {
+        if (synth_field) {
+          TRACE(ENUM, 2, "Multiple synthetic fields %s %s\n", SHOW(synth_field),
+                SHOW(field));
+          return false;
+        }
+        synth_field = field;
+      }
+    }
+    if (!synth_field) {
+      TRACE(ENUM, 2, "No synthetic field found on %s\n", SHOW(cls));
+      return false;
+    }
+    return true;
+  }
+
   static bool is_simple_enum(const DexClass* cls) {
     if (!is_enum(cls) || cls->is_external() || !is_final(cls) ||
         !can_delete(cls) || cls->get_interfaces()->size() > 0 ||
@@ -334,20 +356,7 @@ class OptimizeEnums {
         return false;
       }
     }
-
-    // No other kinds of static fields
-    const DexType* array_of_enum = make_array_type(cls->get_type());
-    always_assert(array_of_enum != nullptr);
-    const DexString* values_str = DexString::get_string("$VALUES");
-    for (const DexField* field : cls->get_sfields()) {
-      if (field->get_type() == array_of_enum) {
-        if (field->get_name() != values_str) {
-          return false;
-        }
-      } else if (field->get_type() != cls->get_type()) {
-        return false;
-      }
-    }
+    // Static fields are allowed.
     return true;
   }
 

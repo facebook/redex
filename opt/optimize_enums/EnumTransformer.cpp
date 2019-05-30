@@ -683,18 +683,11 @@ class EnumTransformer final {
          ++it) {
       auto enum_cls = type_class(*it);
       auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
-      if (enum_attrs.empty() ||
-          enum_cls->get_sfields().size() - 1 != enum_attrs.size()) {
-        // Simply ignore enum classes that may contain multiple static fields
-        // that refer to the same enum object, for instance:
-        // enum CandidateEnum
-        // {
-        //   ONE, TWO;
-        //   static final CandidateEnum THREE = ONE;
-        // }
-        TRACE(ENUM, 1, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
+      if (enum_attrs.empty()) {
+        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
               SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
+        continue;
       } else if (enum_attrs.size() > config.max_enum_size) {
         TRACE(ENUM, 2, "\tSkip %s %lu values\n", SHOW(enum_cls),
               enum_attrs.size());

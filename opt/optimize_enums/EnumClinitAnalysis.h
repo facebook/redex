@@ -29,7 +29,7 @@ struct EnumAttr {
 };
 
 using AttrMap = std::unordered_map<const DexField*, EnumAttr>;
-/*
+/**
  * Returns a mapping of enum field -> ordinal value if success,
  * otherwise, return an empty map.
  */

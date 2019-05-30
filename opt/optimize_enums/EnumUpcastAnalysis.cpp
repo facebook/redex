@@ -7,6 +7,7 @@
 
 #include "EnumUpcastAnalysis.h"
 
+#include "EnumClinitAnalysis.h"
 #include "Resolver.h"
 #include "Walkers.h"
 
@@ -602,17 +603,19 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
 
   walk::parallel::fields(classes, [candidate_enums,
                                    &rejected_enums](DexField* field) {
-    if (candidate_enums->count_unsafe(field->get_class())) {
+    if (can_rename(field)) {
       return;
     }
-    auto type = field->get_type();
-    if (is_array(type)) {
-      type = get_array_type(type);
-    }
-    if (candidate_enums->count_unsafe(type) && !rejected_enums.count(type)) {
-      if (!can_rename(field)) {
-        rejected_enums.insert(type);
+    if (candidate_enums->count_unsafe(field->get_class())) {
+      auto access = field->get_access();
+      if (check_required_access_flags(enum_field_access(), access) ||
+          check_required_access_flags(synth_access(), access)) {
+        return;
       }
+    }
+    auto type = const_cast<DexType*>(get_array_type_or_self(field->get_type()));
+    if (candidate_enums->count_unsafe(type)) {
+      rejected_enums.insert(type);
     }
   });
 
@@ -622,18 +625,13 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       return;
     }
 
-    {
+    if (!can_rename(method)) {
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
       for (auto type : types) {
-        if (is_array(type)) {
-          type = get_array_type(type);
-        }
-        if (candidate_enums->count_unsafe(type) &&
-            !rejected_enums.count(type)) {
-          if (!can_rename(method)) {
-            rejected_enums.insert(type);
-          }
+        auto elem_type = const_cast<DexType*>(get_array_type_or_self(type));
+        if (candidate_enums->count_unsafe(elem_type)) {
+          rejected_enums.insert(elem_type);
         }
       }
     }

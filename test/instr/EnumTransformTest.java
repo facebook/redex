@@ -20,6 +20,10 @@ enum SCORE {
   TWO,
   THREE;
 
+  static final SCORE DEFAULT = ONE;
+  static final SCORE[] array = values();
+  static int number = 0;
+
   public static @Nullable SCORE increase(SCORE score) {
     if (score == null) {
       return null;
@@ -89,7 +93,7 @@ enum CAST_THIS_POINTER {
 }
 enum CAST_PARAMETER {
   ONE;
-  public static void method(Object o) {}
+  public static <E extends Enum<E>> void method(Enum<E> o) {}
   public static void method() { method(ONE); }
 }
 enum USED_AS_CLASS_OBJECT {
@@ -207,7 +211,12 @@ public class EnumTransformTest {
   // SCORE.values() is transformed.
   @Test
   public void test_values() {
-    assertThat(SCORE.values().length).isEqualTo(3);
+    SCORE[] values = SCORE.values();
+    assertThat(values.length).isEqualTo(3);
+    assertThat(SCORE.array.length).isEqualTo(3);
+    for (int i = 0; i < 3; i++) {
+      assertThat(values[i].ordinal()).isEqualTo(SCORE.array[i].ordinal());
+    }
   }
 
   // NullPointerException.

@@ -183,6 +183,7 @@ bool validate_result(
     if (it != enum_field_to_attrs->end()) {
       if (!check_required_access_flags(enum_field_access, access)) {
         TRACE(ENUM, 2, "\tUnexpected access %x on %s\n", access, SHOW(field));
+        return false;
       }
       auto ordinal = it->second.ordinal;
       if (ordinal > ordinals.size()) {
@@ -199,14 +200,10 @@ bool validate_result(
       }
       if (check_required_access_flags(values_access, access)) {
         if (!synth_values_field) {
-          if (field->str() == "$VALUES") {
-            synth_values_field = true;
-          } else {
-            TRACE(ENUM, 2, "\tUnexpected field %s\n", SHOW(field));
-            return false;
-          }
+          synth_values_field = true;
         } else {
-          TRACE(ENUM, 2, "\tMultiple $VALUES on %s\n", SHOW(cls));
+          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s\n",
+                SHOW(cls));
           return false;
         }
       }
