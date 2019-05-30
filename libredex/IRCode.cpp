@@ -608,6 +608,8 @@ void IRCode::clear_cfg() {
   }
 }
 
+bool IRCode::cfg_built() const { return m_cfg != nullptr; }
+
 bool IRCode::editable_cfg_built() const {
   return m_cfg != nullptr && m_cfg->editable();
 }
