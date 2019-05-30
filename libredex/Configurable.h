@@ -24,29 +24,6 @@ class DexClass;
 class DexMethod;
 class DexType;
 
-struct ConfigurableReflection {
-  enum Type {
-    // Primtives are types we support intrinsically, e.g. scalars or arrays of
-    // scalars.
-    // The primitives we support are defined by DEFINE_CONFIGURABLE_PRIMITIVE
-    // macros
-    // at the bottom of this file.
-    PRIMITIVE,
-    // Composites are types that are made up recursively of other Configurables,
-    // e.g.
-    // key/value pairs. Composite types are typically ones which derive from
-    // Configurabl.
-    COMPOSITE,
-  };
-  std::string name;
-  std::string doc;
-  // N.B. this tuple, which was supposed to be a variant, is now turning into a
-  // struct, meh
-  std::map<std::string,
-           std::tuple<std::string, ConfigurableReflection, Type, std::string>>
-      params;
-};
-
 /**
  * HOWTO Use Configurable
  *
@@ -83,46 +60,7 @@ struct ConfigurableReflection {
  * }
  */
 class Configurable {
-
  public:
-  virtual ~Configurable() {}
-
-  /** 
-   * Returns the human readable name of this Configurable, as used in
-   * reflection. */
-  virtual std::string get_config_name() = 0;
-
-  /** Returns help text explaining this Configurable's purpose. */
-  virtual std::string get_config_doc() { return default_doc(); };
-
-  /** 
-   * Configurables should override this function in order to declare their
-   * bindings.
-   *
-   * bind_config is called in both reflection and configuration parsing
-   * scenarios; implementations should NOT assume that the code is only called
-   * in order to parse the configuration.
-   *
-   * Typically, you should only be calling the bind() function in bind_config().
-   * If you wish to execute imperative code during the configuration parsing
-   * scenario, but not the reflection scenario, then call "after_configuration"
-   * in bind_config. The function supplied to after_configuration will be called
-   * immediately after bind_config has been called.
-   */
-  virtual void bind_config() {}
-
-  /** 
-   * Returns a data structure containing the schema of this Configurable. This
-   * schema itself may contain nested schemas, reflecting parameters which are
-   * composite.
-   */
-  ConfigurableReflection reflect();
-
-  /** 
-   * Apply the declared bindings in order to consume json at configuration
-   * time. */
-  void parse_config(const JsonWrapper& json);
-
   // Binding flags
   using bindflags_t = unsigned long;
   struct bindflags {
@@ -161,6 +99,105 @@ class Configurable {
       static constexpr bindflags_t skip_empty_string = {0x01L << shift};
     };
   };
+
+  struct ReflectionParam;
+
+  struct Reflection {
+    std::string name;
+    std::string doc;
+    std::map<std::string, ReflectionParam> params;
+  };
+
+  struct ReflectionParam {
+    ReflectionParam() {}
+
+    explicit ReflectionParam(const std::string& name,
+                             const std::string& doc,
+                             const bool is_required,
+                             const bindflags_t bindflags,
+                             const std::string& primitive) {
+      this->name = name;
+      this->doc = doc;
+      this->is_required = is_required;
+      this->bindflags = bindflags;
+      this->type = Type::PRIMITIVE;
+      this->variant = std::make_tuple(primitive, Reflection());
+    }
+
+    explicit ReflectionParam(const std::string& name,
+                             const std::string& doc,
+                             const bool is_required,
+                             const bindflags_t bindflags,
+                             const Reflection& composite) {
+      this->name = name;
+      this->doc = doc;
+      this->is_required = is_required;
+      this->bindflags = bindflags;
+      this->type = Type::COMPOSITE;
+      this->variant = std::make_tuple("", composite);
+    }
+
+    enum Type {
+      /**
+       *  Primtives are types we support intrinsically, e.g. scalars or arrays
+       * of scalars. The primitives we support are defined by
+       * DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file. */
+      PRIMITIVE = 0,
+      /**
+       * Composites are types that are made up recursively of other
+       * Configurables, e.g. key/value pairs. Composite types are typically ones
+       * which derive from Configurable. */
+      COMPOSITE = 1,
+    };
+
+    std::string name;
+    std::string doc;
+    bool is_required;
+    bindflags_t bindflags;
+
+    // n.b. make this a std::variant after c++17
+    Type type;
+    std::tuple<std::string, Reflection> variant;
+  };
+
+ public:
+  virtual ~Configurable() {}
+
+  /**
+   * Returns the human readable name of this Configurable, as used in
+   * reflection. */
+  virtual std::string get_config_name() = 0;
+
+  /** Returns help text explaining this Configurable's purpose. */
+  virtual std::string get_config_doc() { return default_doc(); };
+
+  /**
+   * Configurables should override this function in order to declare their
+   * bindings.
+   *
+   * bind_config is called in both reflection and configuration parsing
+   * scenarios; implementations should NOT assume that the code is only called
+   * in order to parse the configuration.
+   *
+   * Typically, you should only be calling the bind() function in bind_config().
+   * If you wish to execute imperative code during the configuration parsing
+   * scenario, but not the reflection scenario, then call "after_configuration"
+   * in bind_config. The function supplied to after_configuration will be called
+   * immediately after bind_config has been called.
+   */
+  virtual void bind_config() {}
+
+  /**
+   * Returns a data structure containing the schema of this Configurable. This
+   * schema itself may contain nested schemas, reflecting parameters which are
+   * composite.
+   */
+  Reflection reflect();
+
+  /**
+   * Apply the declared bindings in order to consume json at configuration
+   * time. */
+  void parse_config(const JsonWrapper& json);
 
   // Type aliases for convience
   using MapOfVectorOfStrings =
@@ -207,23 +244,29 @@ class Configurable {
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  void reflect(std::function<void((const std::string& param_name,
-                                   const std::string& param_doc,
-                                   std::tuple<std::string,
-                                              ConfigurableReflection,
-                                              ConfigurableReflection::Type>
-                                       param_type))>& reflector,
-               const std::string& name,
-               const std::string& doc,
-               T& param) {
+  void reflect(
+      std::function<void(
+          const std::string& param_name,
+          const std::string& param_doc,
+          const bool param_is_required,
+          const bindflags_t param_bindflags,
+          const Configurable::ReflectionParam::Type param_type_tag,
+          const std::tuple<std::string, Configurable::Reflection>& param_type)>&
+          reflector,
+      const std::string& param_name,
+      const std::string& param_doc,
+      const bool param_is_required,
+      const bindflags_t param_bindflags,
+      T& param) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");
-    reflector(name,
-              doc,
-              std::make_tuple("",
-                              param.reflect(),
-                              ConfigurableReflection::Type::COMPOSITE));
+    reflector(param_name,
+              param_doc,
+              param_is_required,
+              param_bindflags,
+              ReflectionParam::Type::COMPOSITE,
+              std::make_tuple("", param.reflect()));
   }
 
   template <typename T>
@@ -233,7 +276,12 @@ class Configurable {
             const std::string& doc = default_doc(),
             bindflags_t bindflags = 0) {
     if (m_reflecting) {
-      reflect(m_reflector, name, doc, dest);
+      reflect(m_reflector,
+              name,
+              doc,
+              false /* param_is_required */,
+              bindflags,
+              dest);
     } else {
       parse(name, defaultValue, dest, bindflags);
     }
@@ -246,7 +294,12 @@ class Configurable {
                      bindflags_t bindflags = 0) {
     // TODO(T44504176): we could reflect the requiredness here
     if (m_reflecting) {
-      reflect(m_reflector, name, doc, dest);
+      reflect(m_reflector,
+              name,
+              doc,
+              true /* param_is_required */,
+              bindflags,
+              dest);
     } else {
       parse_required(name, dest, bindflags);
     }
@@ -291,32 +344,38 @@ class Configurable {
   std::function<void()> m_after_configuration;
   std::function<boost::optional<const Json::Value&>(const std::string& name)>
       m_parser;
-  std::function<void((const std::string& param_name,
-                      const std::string& param_doc,
-                      std::tuple<std::string,
-                                 ConfigurableReflection,
-                                 ConfigurableReflection::Type> param_type))>
+  std::function<void(
+      const std::string& param_name,
+      const std::string& param_doc,
+      const bool param_is_required,
+      const Configurable::bindflags_t param_bindflags,
+      const Configurable::ReflectionParam::Type param_type_tag,
+      const std::tuple<std::string, Configurable::Reflection>& param_type)>
       m_reflector;
   bool m_reflecting;
 };
 
 // Specializations for primitives
 
-#define DEFINE_CONFIGURABLE_PRIMITIVE(type)                                   \
-  template <>                                                                 \
-  type Configurable::as<type>(const Json::Value& value,                       \
-                              bindflags_t bindflags);                         \
-  template <>                                                                 \
-  void Configurable::reflect(                                                 \
-      std::function<void(                                                     \
-          (const std::string& param_name,                                     \
-           const std::string& param_doc,                                      \
-           std::tuple<std::string,                                            \
-                      ConfigurableReflection,                                 \
-                      ConfigurableReflection::Type> param_type))>& reflector, \
-      const std::string& name,                                                \
-      const std::string& doc,                                                 \
-      type&);
+#define DEFINE_CONFIGURABLE_PRIMITIVE(type)                         \
+  template <>                                                       \
+  type Configurable::as<type>(const Json::Value& value,             \
+                              bindflags_t bindflags);               \
+  template <>                                                       \
+  void Configurable::reflect(                                       \
+      std::function<void(                                           \
+          const std::string& param_name,                            \
+          const std::string& param_doc,                             \
+          const bool param_is_required,                             \
+          const Configurable::bindflags_t param_bindflags,          \
+          const Configurable::ReflectionParam::Type param_type_tag, \
+          const std::tuple<std::string, Configurable::Reflection>&  \
+              param_type)>& reflector,                              \
+      const std::string& param_name,                                \
+      const std::string& param_doc,                                 \
+      const bool param_is_required,                                 \
+      const Configurable::bindflags_t param_bindflags,              \
+      type& param);
 
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)

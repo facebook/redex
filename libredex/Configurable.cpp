@@ -18,9 +18,14 @@
 void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
   m_reflecting = false;
-  m_reflector = [](const std::string& param_name, const std::string& param_doc,
-                   std::tuple<std::string, ConfigurableReflection,
-                              ConfigurableReflection::Type> param_type) {};
+  m_reflector =
+      [](const std::string& param_name,
+         const std::string& param_doc,
+         const bool param_is_required,
+         const bindflags_t param_bindflags,
+         const Configurable::ReflectionParam::Type param_type_tag,
+         const std::tuple<std::string, Configurable::Reflection>& param_type) {
+      };
   m_parser = [&json](const std::string& name) {
     // TODO: add std::string API for contains
     if (json.contains(name.c_str())) {
@@ -36,8 +41,8 @@ void Configurable::parse_config(const JsonWrapper& json) {
   }
 }
 
-ConfigurableReflection Configurable::reflect() {
-  ConfigurableReflection cr;
+Configurable::Reflection Configurable::reflect() {
+  Configurable::Reflection cr;
   cr.name = get_config_name();
   cr.doc = get_config_doc();
   m_after_configuration = {};
@@ -48,22 +53,26 @@ ConfigurableReflection Configurable::reflect() {
   m_reflecting = true;
   m_reflector = [&cr](const std::string& param_name,
                       const std::string& param_doc,
-                      std::tuple<std::string, ConfigurableReflection,
-                                 ConfigurableReflection::Type> param_type) {
-    switch (std::get<2>(param_type)) {
-    case ConfigurableReflection::Type::PRIMITIVE:
-      cr.params[param_name] =
-          std::make_tuple(std::get<0>(param_type), ConfigurableReflection(),
-                          ConfigurableReflection::Type::PRIMITIVE, param_doc);
+                      const bool param_is_required,
+                      const bindflags_t param_bindflags,
+                      const Configurable::ReflectionParam::Type param_type_tag,
+                      const std::tuple<std::string, Configurable::Reflection>&
+                          param_type) {
+    switch (param_type_tag) {
+    case Configurable::ReflectionParam::Type::PRIMITIVE:
+      cr.params[param_name] = Configurable::ReflectionParam(
+          param_name, param_doc, param_is_required, param_bindflags,
+          std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(param_type));
       break;
-    case ConfigurableReflection::Type::COMPOSITE:
-      cr.params[param_name] =
-          std::make_tuple("", std::get<1>(param_type),
-                          ConfigurableReflection::Type::COMPOSITE, param_doc);
+    case Configurable::ReflectionParam::Type::COMPOSITE:
+      cr.params[param_name] = Configurable::ReflectionParam(
+          param_name, param_doc, param_is_required, param_bindflags,
+          std::get<Configurable::ReflectionParam::Type::COMPOSITE>(param_type));
       break;
     default:
-      always_assert_log(false, "Invalid ConfigurableReflection::Type: %d",
-                        std::get<2>(param_type));
+      always_assert_log(false,
+                        "Invalid Configurable::ReflectionParam::Type: %d",
+                        param_type_tag);
       break;
     }
   };
@@ -369,31 +378,42 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
   return value;
 }
 
-#define IMPLEMENT_REFLECTOR(type)                                             \
-  template <>                                                                 \
-  void Configurable::reflect(                                                 \
-      std::function<void(                                                     \
-          (const std::string& param_name, const std::string& param_doc,       \
-           std::tuple<std::string, ConfigurableReflection,                    \
-                      ConfigurableReflection::Type> param_type))>& reflector, \
-      const std::string& name, const std::string& doc, type&) {               \
-    reflector(name, doc,                                                      \
-              std::make_tuple(std::string{#type}, ConfigurableReflection(),   \
-                              ConfigurableReflection::Type::PRIMITIVE));      \
+#define IMPLEMENT_REFLECTOR(type)                                         \
+  template <>                                                             \
+  void Configurable::reflect(                                             \
+      std::function<void(                                                 \
+          const std::string& param_name, const std::string& param_doc,    \
+          const bool param_is_required,                                   \
+          const Configurable::bindflags_t param_bindflags,                \
+          const Configurable::ReflectionParam::Type param_type_tag,       \
+          const std::tuple<std::string, Configurable::Reflection>&        \
+              param_type)>& reflector,                                    \
+      const std::string& param_name, const std::string& param_doc,        \
+      const bool param_is_required,                                       \
+      const Configurable::bindflags_t param_bindflags, type& param) {     \
+    reflector(                                                            \
+        param_name, param_doc, param_is_required, param_bindflags,        \
+        Configurable::ReflectionParam::PRIMITIVE,                         \
+        std::make_tuple(std::string{#type}, Configurable::Reflection())); \
   }
 
 #define IMPLEMENT_REFLECTOR_EX(type, type_name)                               \
   template <>                                                                 \
   void Configurable::reflect(                                                 \
       std::function<void(                                                     \
-          (const std::string& param_name, const std::string& param_doc,       \
-           std::tuple<std::string, ConfigurableReflection,                    \
-                      ConfigurableReflection::Type> param_type))>& reflector, \
-      const std::string& name, const std::string& doc, type&) {               \
-    reflector(name, doc,                                                      \
-              std::make_tuple(std::string{type_name},                         \
-                              ConfigurableReflection(),                       \
-                              ConfigurableReflection::Type::PRIMITIVE));      \
+          const std::string& param_name, const std::string& param_doc,        \
+          const bool param_is_required,                                       \
+          const Configurable::bindflags_t param_bindflags,                    \
+          const Configurable::ReflectionParam::Type param_type_tag,           \
+          const std::tuple<std::string, Configurable::Reflection>&            \
+              param_type)>& reflector,                                        \
+      const std::string& param_name, const std::string& param_doc,            \
+      const bool param_is_required,                                           \
+      const Configurable::bindflags_t param_bindflags, type& param) {         \
+    reflector(                                                                \
+        param_name, param_doc, param_is_required, param_bindflags,            \
+        Configurable::ReflectionParam::PRIMITIVE,                             \
+        std::make_tuple(std::string{type_name}, Configurable::Reflection())); \
   }
 
 IMPLEMENT_REFLECTOR(float)

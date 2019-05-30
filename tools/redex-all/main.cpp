@@ -169,25 +169,31 @@ Json::Value default_config() {
   return cfg;
 }
 
-Json::Value reflect_config(const ConfigurableReflection& cr) {
+Json::Value reflect_config(const Configurable::Reflection& cr) {
   Json::Value params = Json::arrayValue;
   int params_idx = 0;
   for (auto& entry : cr.params) {
     Json::Value param;
     param["name"] = entry.first;
-    switch (std::get<2>(entry.second)) {
-    case ConfigurableReflection::Type::PRIMITIVE:
-      param["type"] = std::get<0>(entry.second);
+    param["doc"] = entry.second.doc;
+    param["is_required"] = entry.second.is_required;
+    param["bindflags"] = static_cast<Json::UInt64>(entry.second.bindflags);
+    switch (entry.second.type) {
+    case Configurable::ReflectionParam::Type::PRIMITIVE:
+      param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
+          entry.second.variant);
       break;
-    case ConfigurableReflection::Type::COMPOSITE:
-      param["type"] = reflect_config(std::get<1>(entry.second));
+    case Configurable::ReflectionParam::Type::COMPOSITE:
+      param["type"] = reflect_config(
+          std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
+              entry.second.variant));
       break;
     default:
-      always_assert_log(false, "Invalid ConfigurableReflection::Type: %d",
-                        std::get<2>(entry.second));
+      always_assert_log(false,
+                        "Invalid Configurable::ReflectionParam::Type: %d",
+                        entry.second.type);
       break;
     }
-    param["doc"] = std::get<3>(entry.second);
     params[params_idx++] = param;
   }
   Json::Value reflected_config;

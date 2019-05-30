@@ -260,6 +260,13 @@ TEST(Configurable, TypesBindFlags) {
                                                  DexType::get_type("Ltype3;")};
 
   {
+    // Check reflection
+    TypesBindFlags c(Configurable::bindflags::types::error_if_unresolvable);
+    Configurable::bindflags_t expected_bindflags =
+        Configurable::bindflags::types::error_if_unresolvable;
+    EXPECT_EQ(expected_bindflags, c.reflect().params["types_param"].bindflags);
+  }
+  {
     // Throws because type2 is not resolvable
     TypesBindFlags c(Configurable::bindflags::types::error_if_unresolvable);
     EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
@@ -311,6 +318,14 @@ TEST(Configurable, MethodsBindFlags) {
   EXPECT_EQ(false, DexMethod::get_method(m1desc)->is_def());
   EXPECT_EQ(true, DexMethod::get_method(m3desc)->is_def());
 
+  {
+    // Check reflection
+    MethodsBindFlags c(Configurable::bindflags::methods::warn_if_not_def |
+                       Configurable::bindflags::methods::warn_if_unresolvable);
+    EXPECT_EQ(Configurable::bindflags::methods::warn_if_not_def |
+                  Configurable::bindflags::methods::warn_if_unresolvable,
+              c.reflect().params["methods_param"].bindflags);
+  }
   {
     // Throws because type1;.foo is a ref
     MethodsBindFlags c(Configurable::bindflags::methods::error_if_not_def);
@@ -384,6 +399,7 @@ struct RequiredBinds : public Base {
     bind_required("int_param", m_int_param);
     bind_required("type_param", m_type_param, "",
                   Configurable::bindflags::types::error_if_unresolvable);
+    bind("string_param", "", m_string_param);
   }
 };
 
@@ -393,6 +409,14 @@ TEST(Configurable, RequiredBinds) {
   g_redex = new RedexContext();
   DexType::make_type(type1);
 
+  {
+    // Check reflection
+    Json::Value json;
+    RequiredBinds c;
+    EXPECT_EQ(true, c.reflect().params["int_param"].is_required);
+    EXPECT_EQ(true, c.reflect().params["type_param"].is_required);
+    EXPECT_EQ(false, c.reflect().params["string_param"].is_required);
+  }
   {
     // Throws because missing int_param and type_param
     Json::Value json;
