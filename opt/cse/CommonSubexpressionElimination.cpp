@@ -89,6 +89,7 @@ constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
 constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
     "num_inlined_barriers_iterations";
 constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
+constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 
 using value_id_t = uint64_t;
 enum ValueIdFlags : value_id_t {
@@ -1432,6 +1433,11 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     m_cfg.insert_after(it, move_insn);
     TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u\n", SHOW(earlier_insn),
           SHOW(insn), temp_reg);
+
+    if (opcode::is_move_result_or_move_result_pseudo(insn->opcode())) {
+      insn = m_cfg.primary_instruction_of_move_result(it)->insn;
+    }
+    m_stats.eliminated_opcodes[insn->opcode()]++;
   }
 
   // insert moves to define the forwarded value
@@ -1521,6 +1527,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         a.array_lengths_captured += b.array_lengths_captured;
         a.instructions_eliminated += b.instructions_eliminated;
         a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+        for (auto& p : b.eliminated_opcodes) {
+          a.eliminated_opcodes[p.first] += p.second;
+        }
         return a;
       },
       Stats{},
@@ -1535,6 +1544,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_INLINED_BARRIERS_ITERATIONS,
                   method_barriers_stats.inlined_barriers_iterations);
   mgr.incr_metric(METRIC_MAX_VALUE_IDS, stats.max_value_ids);
+  for (auto& p : stats.eliminated_opcodes) {
+    std::string name = METRIC_INSTR_PREFIX;
+    name += SHOW(static_cast<IROpcode>(p.first));
+    mgr.incr_metric(name, p.second);
+  }
 
   shared_state.cleanup();
 }
