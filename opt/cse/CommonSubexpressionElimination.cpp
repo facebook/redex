@@ -89,6 +89,8 @@ constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
 constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
     "num_inlined_barriers_iterations";
 constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
+constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
+    "methods_using_other_tracked_location_bit";
 constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 
 using value_id_t = uint64_t;
@@ -401,7 +403,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
             l.special_location < END ? "array element" : SHOW(l.field),
             read_location_counts.at(l), written_location_counts.at(l));
       m_tracked_locations.emplace(l, next_bit);
-      if (next_bit != ValueIdFlags::IS_OTHER_TRACKED_LOCATION) {
+      if (next_bit == ValueIdFlags::IS_OTHER_TRACKED_LOCATION) {
+        m_using_other_tracked_location_bit = true;
+      } else {
         // we've already reached the last catch-all tracked read/write location
         next_bit <<= 1;
       }
@@ -560,6 +564,10 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   size_t get_value_ids_size() { return m_value_ids.size(); }
+
+  bool using_other_tracked_location_bit() {
+    return m_using_other_tracked_location_bit;
+  }
 
  private:
   boost::optional<Location> get_clobbered_location(
@@ -779,6 +787,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
   }
 
+  bool m_using_other_tracked_location_bit{false};
   std::unordered_set<Location, LocationHasher> m_read_locations;
   std::unordered_map<Location, value_id_t, LocationHasher> m_tracked_locations;
   SharedState* m_shared_state;
@@ -1317,6 +1326,9 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
     : m_shared_state(shared_state), m_cfg(cfg) {
   Analyzer analyzer(shared_state, cfg);
   m_stats.max_value_ids = analyzer.get_value_ids_size();
+  if (analyzer.using_other_tracked_location_bit()) {
+    m_stats.methods_using_other_tracked_location_bit = 1;
+  }
 
   // identify all instruction pairs where the result of the first instruction
   // can be forwarded to the second
@@ -1527,6 +1539,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         a.array_lengths_captured += b.array_lengths_captured;
         a.instructions_eliminated += b.instructions_eliminated;
         a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+        a.methods_using_other_tracked_location_bit +=
+            b.methods_using_other_tracked_location_bit;
         for (auto& p : b.eliminated_opcodes) {
           a.eliminated_opcodes[p.first] += p.second;
         }
@@ -1544,6 +1558,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_INLINED_BARRIERS_ITERATIONS,
                   method_barriers_stats.inlined_barriers_iterations);
   mgr.incr_metric(METRIC_MAX_VALUE_IDS, stats.max_value_ids);
+  mgr.incr_metric(METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT,
+                  stats.methods_using_other_tracked_location_bit);
   for (auto& p : stats.eliminated_opcodes) {
     std::string name = METRIC_INSTR_PREFIX;
     name += SHOW(static_cast<IROpcode>(p.first));

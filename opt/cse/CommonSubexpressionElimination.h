@@ -20,6 +20,7 @@ struct Stats {
   size_t array_lengths_captured{0};
   size_t instructions_eliminated{0};
   size_t max_value_ids{0};
+  size_t methods_using_other_tracked_location_bit{0};
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
 };
