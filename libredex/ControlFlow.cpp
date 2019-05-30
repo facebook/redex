@@ -1115,6 +1115,29 @@ void ControlFlowGraph::gather_methods(
   }
 }
 
+cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
+    const cfg::InstructionIterator& it) {
+  auto move_result_insn = it->insn;
+  always_assert(
+      opcode::is_move_result_or_move_result_pseudo(move_result_insn->opcode()));
+  auto block = const_cast<Block*>(it.block());
+  if (block->get_first_insn()->insn == move_result_insn) {
+    auto& preds = block->preds();
+    always_assert(preds.size() == 1);
+    auto previous_block = preds.front()->src();
+    auto res = previous_block->to_cfg_instruction_iterator(
+        previous_block->get_last_insn());
+    auto insn = res->insn;
+    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    return res;
+  } else {
+    auto res = std::prev(it.unwrap());
+    auto insn = res->insn;
+    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    return block->to_cfg_instruction_iterator(res);
+  }
+}
+
 cfg::InstructionIterator ControlFlowGraph::move_result_of(
     const cfg::InstructionIterator& it) {
   auto next_insn = std::next(it);
@@ -1123,13 +1146,17 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
     // The easy case where the move result is in the same block
     auto op = next_insn->insn->opcode();
     if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+      always_assert(primary_instruction_of_move_result(next_insn) == it);
       return next_insn;
     }
-  }
-  auto next_block = it.block()->goes_to();
-  if (next_block != nullptr && next_block->starts_with_move_result()) {
-    return next_block->to_cfg_instruction_iterator(
-        next_block->get_first_insn());
+  } else {
+    auto next_block = it.block()->goes_to();
+    if (next_block != nullptr && next_block->starts_with_move_result()) {
+      next_insn =
+          next_block->to_cfg_instruction_iterator(next_block->get_first_insn());
+      always_assert(primary_instruction_of_move_result(next_insn) == it);
+      return next_insn;
+    }
   }
   return end;
 }
