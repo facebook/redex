@@ -64,7 +64,8 @@ void check_dont_merge_list(
     // can merge child class into parent class instead (which requires parent
     // class is not having STRICT don't merge status, and child class is
     // removable).
-    if (find_parent->second != STRICT && can_delete(child_cls)) {
+    if (find_parent->second != STRICT && can_delete(child_cls) &&
+        can_rename_if_ignoring_blanket_keepnames(child_cls)) {
       (*mergeable_to_merger)[child_cls] = parent_cls;
     }
   }
@@ -221,7 +222,8 @@ void collect_can_merge(
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
   TypeSystem ts(scope);
   for (DexClass* cls : scope) {
-    if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls)) {
+    if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
+        can_rename_if_ignoring_blanket_keepnames(cls)) {
       DexType* cls_type = cls->get_type();
       const auto& children_types = ts.get_children(cls->get_type());
       if (children_types.size() != 1) {
