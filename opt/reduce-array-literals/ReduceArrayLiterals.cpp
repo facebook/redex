@@ -636,7 +636,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* m) {
         const auto code = m->get_code();
-        if (code == nullptr) {
+        if (code == nullptr || m->rstate.no_optimizations()) {
           return ReduceArrayLiterals::Stats();
         }
 
