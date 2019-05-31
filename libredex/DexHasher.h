@@ -29,10 +29,15 @@ namespace hashing {
 
 std::string hash_to_string(size_t hash);
 
+struct DexHash {
+  size_t code_hash;
+  size_t signature_hash;
+};
+
 class DexScopeHasher final {
  public:
   DexScopeHasher(const Scope& scope) : m_scope(scope) {}
-  size_t run();
+  DexHash run();
 
  private:
   const Scope& m_scope;
@@ -41,7 +46,7 @@ class DexScopeHasher final {
 class DexClassHasher final {
  public:
   DexClassHasher(DexClass* cls) : m_cls(cls) {}
-  size_t run();
+  DexHash run();
 
  private:
   void hash(const std::string& str);
@@ -91,6 +96,7 @@ class DexClassHasher final {
   }
   DexClass* m_cls;
   size_t m_hash{0};
+  size_t m_code_hash{0};
 };
 
 } // namespace hashing

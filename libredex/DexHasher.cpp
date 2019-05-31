@@ -24,19 +24,23 @@ std::string hash_to_string(size_t hash) {
   return result.str();
 }
 
-size_t DexScopeHasher::run() {
+DexHash DexScopeHasher::run() {
   std::unordered_map<DexClass*, size_t> class_indices;
   walk::classes(m_scope, [&](DexClass* cls) {
     class_indices.emplace(cls, class_indices.size());
   });
-  std::vector<size_t> class_hashes(class_indices.size());
+  std::vector<size_t> class_code_hashes(class_indices.size());
+  std::vector<size_t> class_signature_hashes(class_indices.size());
   walk::parallel::classes(m_scope, [&](DexClass* cls) {
     DexClassHasher class_hasher(cls);
-    auto class_hash = class_hasher.run();
-    class_hashes.at(class_indices.at(cls)) = class_hash;
+    DexHash class_hash = class_hasher.run();
+    auto index = class_indices.at(cls);
+    class_code_hashes.at(index) = class_hash.code_hash;
+    class_signature_hashes.at(index) = class_hash.signature_hash;
   });
 
-  return boost::hash_value(class_hashes);
+  return DexHash{boost::hash_value(class_code_hashes),
+                 boost::hash_value(class_signature_hashes)};
 }
 
 void DexClassHasher::hash(const std::string& str) {
@@ -102,6 +106,9 @@ void DexClassHasher::hash(const IRCode* c) {
     return;
   }
 
+  auto old_hash = m_hash;
+  m_hash = 0;
+
   std::unordered_map<MethodItemEntry*, uint32_t> ids;
   auto get_id = [&ids](MethodItemEntry* mie) {
     auto it = ids.find(mie);
@@ -148,6 +155,9 @@ void DexClassHasher::hash(const IRCode* c) {
       always_assert(false);
     }
   }
+
+  boost::hash_combine(m_code_hash, m_hash);
+  m_hash = old_hash;
 }
 
 void DexClassHasher::hash(const DexProto* p) {
@@ -269,8 +279,9 @@ void DexClassHasher::hash(const DexField* f) {
   hash(f->get_deobfuscated_name());
 }
 
-size_t DexClassHasher::run() {
+DexHash DexClassHasher::run() {
   TRACE(HASHER, 2, "[hasher] ==== hashing class %s\n", SHOW(m_cls->get_type()));
+
   hash(m_cls->get_access());
   hash(m_cls->get_type());
   if (m_cls->get_super_class()) {
@@ -293,7 +304,7 @@ size_t DexClassHasher::run() {
   TRACE(HASHER, 3, "[hasher] === ifields: %zu\n", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
-  return m_hash;
+  return DexHash{m_code_hash, m_hash};
 }
 
 } // namespace hashing

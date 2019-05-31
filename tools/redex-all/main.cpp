@@ -551,12 +551,16 @@ Json::Value get_pass_hashes(const PassManager& mgr) {
   Json::Value all(Json::ValueType::objectValue);
   auto initial_hash = mgr.get_initial_hash();
   if (initial_hash) {
-    all["(initial)"] = hashing::hash_to_string(*initial_hash);
+    all["(initial)-code"] = hashing::hash_to_string(initial_hash->code_hash);
+    all["(initial)-signature"] =
+        hashing::hash_to_string(initial_hash->signature_hash);
   }
   for (const auto& pass_info : mgr.get_pass_info()) {
     auto hash = pass_info.hash;
     if (hash) {
-      all[pass_info.name] = hashing::hash_to_string(*hash);
+      all[pass_info.name + "-code"] = hashing::hash_to_string(hash->code_hash);
+      all[pass_info.name + "-signature"] =
+          hashing::hash_to_string(hash->signature_hash);
     }
   }
   return all;

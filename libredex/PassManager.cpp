@@ -17,7 +17,6 @@
 #include "ConfigFiles.h"
 #include "Debug.h"
 #include "DexClass.h"
-#include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
@@ -115,18 +114,24 @@ void PassManager::init(const Json::Value& config) {
   }
 }
 
-size_t PassManager::run_hasher(const char* pass_name, const Scope& scope) {
+hashing::DexHash PassManager::run_hasher(const char* pass_name,
+                                         const Scope& scope) {
   TRACE(PM, 2, "Running hasher...\n");
   Timer t("Hasher");
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
   if (pass_name) {
     // log metric value in a way that fits into JSON number value
-    set_metric("~result~hash~", hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~code~hash~",
+               hash.code_hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~signature~hash~",
+               hash.signature_hash & ((((size_t)1) << 52) - 1));
   }
-  auto hash_string = hashing::hash_to_string(hash);
-  TRACE(PM, 3, "[scope hash] %s: %s\n", pass_name ? pass_name : "(initial)",
-        hash_string.c_str());
+  auto code_hash_string = hashing::hash_to_string(hash.code_hash);
+  auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
+  TRACE(PM, 3, "[scope hash] %s: code#%s, signature#%s\n",
+        pass_name ? pass_name : "(initial)", code_hash_string.c_str(),
+        signature_hash_string.c_str());
   return hash;
 }
 
@@ -227,7 +232,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   }
 
   if (run_hasher_after_each_pass) {
-    m_initial_hash = boost::optional<size_t>(this->run_hasher(nullptr, scope));
+    m_initial_hash =
+        boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
   }
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
@@ -252,7 +258,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     if (run_hasher || run_type_checker) {
       scope = build_class_scope(it);
       if (run_hasher) {
-        m_current_pass_info->hash = boost::optional<size_t>(
+        m_current_pass_info->hash = boost::optional<hashing::DexHash>(
             this->run_hasher(pass->name().c_str(), scope));
       }
       if (run_type_checker) {
