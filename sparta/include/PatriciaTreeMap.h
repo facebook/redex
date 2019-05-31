@@ -79,6 +79,11 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
 
 template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> erase_all_matching(
+    IntegerType key_mask,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
+
+template <typename IntegerType, typename Value>
 inline std::shared_ptr<PatriciaTree<IntegerType, Value>> merge(
     const CombiningFunction<typename Value::type>& combine,
     const std::shared_ptr<PatriciaTree<IntegerType, Value>>& s,
@@ -272,6 +277,14 @@ class PatriciaTreeMap final {
         Value::default_value(),
         m_tree);
     return *this;
+  }
+
+  bool erase_all_matching(Key key_mask) {
+    auto new_tree = ptmap_impl::erase_all_matching<IntegerType, Value>(
+        encode(key_mask), m_tree);
+    bool res = new_tree != m_tree;
+    m_tree = new_tree;
+    return res;
   }
 
   PatriciaTreeMap& insert_or_assign(Key key, const mapped_type& value) {
@@ -669,6 +682,42 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     return branch;
   }
   return join<IntegerType, Value>(key, new_leaf, branch->prefix(), branch);
+}
+
+// Erases all entries where keys and :key_mask share common bits.
+template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> erase_all_matching(
+    IntegerType key_mask,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree) {
+  if (tree == nullptr) {
+    return nullptr;
+  }
+  if (tree->is_leaf()) {
+    const auto& leaf =
+        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
+    if (key_mask & leaf->key()) {
+      return nullptr;
+    }
+    return tree;
+  }
+  const auto& branch =
+      std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
+  if (key_mask & branch->prefix()) {
+    return nullptr;
+  }
+  if (key_mask < branch->branching_bit()) {
+    return branch;
+  }
+  auto new_left_tree = erase_all_matching(key_mask, branch->left_tree());
+  auto new_right_tree = erase_all_matching(key_mask, branch->right_tree());
+  if (new_left_tree == branch->left_tree() &&
+      new_right_tree == branch->right_tree()) {
+    return branch;
+  }
+  return make_branch(branch->prefix(),
+                     branch->branching_bit(),
+                     new_left_tree,
+                     new_right_tree);
 }
 
 // We keep the notations of the paper so as to make the implementation easier

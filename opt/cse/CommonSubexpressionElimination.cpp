@@ -481,32 +481,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // the time this algorithm takes seems reasonable.)
 
       bool any_changes = false;
-      current_state->mutate_def_env(
-          true /* is_barrier_sensitive */,
-          [mask, &any_changes](DefEnvironment* env) {
-            if (!env->is_value()) {
-              return;
-            }
-            if (mask == ValueIdFlags::IS_TRACKED_LOCATION_MASK) {
-              if (env->size()) {
-                any_changes = true;
-                env->clear();
-              }
-              return;
-            }
-            std::vector<value_id_t> barrier_sensitive_value_ids;
-            for (auto& p : env->bindings()) {
-              if ((p.first & mask) && !p.second.is_top()) {
-                barrier_sensitive_value_ids.push_back(p.first);
-              }
-            }
-            for (auto value_id : barrier_sensitive_value_ids) {
-              env->set(value_id, IRInstructionDomain::top());
-            }
-            if (barrier_sensitive_value_ids.size()) {
-              any_changes = true;
-            }
-          });
+      current_state->mutate_def_env(true /* is_barrier_sensitive */,
+                                    [mask, &any_changes](DefEnvironment* env) {
+                                      if (env->erase_all_matching(mask)) {
+                                        any_changes = true;
+                                      }
+                                    });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
         if (!env->is_value()) {
           return;
@@ -514,11 +494,10 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         std::vector<register_t> barrier_sensitive_regs;
         for (auto& p : env->bindings()) {
           auto c = p.second.get_constant();
-          if (c) {
-            auto value_id = *c;
-            if (value_id & mask) {
-              barrier_sensitive_regs.push_back(p.first);
-            }
+          always_assert(c);
+          auto value_id = *c;
+          if (value_id & mask) {
+            barrier_sensitive_regs.push_back(p.first);
           }
         }
         for (auto reg : barrier_sensitive_regs) {
