@@ -836,7 +836,21 @@ static const std::vector<Pattern>& get_string_patterns() {
         const_string(String::A),
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_append(Register::A, Register::B, LjavaString),
-        move_result_object(Register::A)},
+        move_result_object(Register::C)},
+       {const_string(String::A),
+        move_result_pseudo_object(Register::B),
+        invoke_StringBuilder_init_String(Register::A, Register::B),
+        move_object(Register::C, Register::A)}},
+
+      // It coalesces init(void) and append(string) into init(string).
+      // new StringBuilder().append("...") = new StringBuilder("...")
+      // Difference from Coalesce_InitVoid_AppendString is it don't have
+      // trailing move_result_object
+      {"Coalesce_InitVoid_AppendString_WithoutMoveResult",
+       {invoke_StringBuilder_init(Register::A),
+        const_string(String::A),
+        move_result_pseudo_object(Register::B),
+        invoke_StringBuilder_append(Register::A, Register::B, LjavaString)},
        {const_string(String::A),
         move_result_pseudo_object(Register::B),
         invoke_StringBuilder_init_String(Register::A, Register::B)}},
