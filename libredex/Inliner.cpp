@@ -371,8 +371,8 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
  */
 bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
   auto cls = type_class(callee->get_class());
-  // Enums are all blacklisted
-  if (is_enum(cls)) {
+  // Enums' kept methods are all blacklisted
+  if (is_enum(cls) && root(callee)) {
     return true;
   }
   while (cls != nullptr) {
@@ -468,7 +468,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
         count_important_opcodes(callee->get_code());
   }
 
-  if (!can_delete(callee)) {
+  if (root(callee)) {
     if (m_config.inline_small_non_deletables) {
       return code_size > CODE_SIZE_ANY_CALLERS;
     } else {
