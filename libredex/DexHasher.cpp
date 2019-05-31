@@ -29,17 +29,20 @@ DexHash DexScopeHasher::run() {
   walk::classes(m_scope, [&](DexClass* cls) {
     class_indices.emplace(cls, class_indices.size());
   });
+  std::vector<size_t> class_registers_hashes(class_indices.size());
   std::vector<size_t> class_code_hashes(class_indices.size());
   std::vector<size_t> class_signature_hashes(class_indices.size());
   walk::parallel::classes(m_scope, [&](DexClass* cls) {
     DexClassHasher class_hasher(cls);
     DexHash class_hash = class_hasher.run();
     auto index = class_indices.at(cls);
+    class_registers_hashes.at(index) = class_hash.registers_hash;
     class_code_hashes.at(index) = class_hash.code_hash;
     class_signature_hashes.at(index) = class_hash.signature_hash;
   });
 
-  return DexHash{boost::hash_value(class_code_hashes),
+  return DexHash{boost::hash_value(class_registers_hashes),
+                 boost::hash_value(class_code_hashes),
                  boost::hash_value(class_signature_hashes)};
 }
 
@@ -78,10 +81,16 @@ void DexClassHasher::hash(int value) { hash((uint)value); }
 
 void DexClassHasher::hash(const IRInstruction* insn) {
   hash((uint16_t)insn->opcode());
+
+  auto old_hash = m_hash;
+  m_hash = 0;
   hash(insn->srcs());
   if (insn->dests_size()) {
     hash(insn->dest());
   }
+  boost::hash_combine(m_registers_hash, m_hash);
+  m_hash = old_hash;
+
   if (insn->has_literal()) {
     hash((uint64_t)insn->get_literal());
   } else if (insn->has_string()) {
@@ -304,7 +313,7 @@ DexHash DexClassHasher::run() {
   TRACE(HASHER, 3, "[hasher] === ifields: %zu\n", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
-  return DexHash{m_code_hash, m_hash};
+  return DexHash{m_registers_hash, m_code_hash, m_hash};
 }
 
 } // namespace hashing

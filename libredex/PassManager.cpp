@@ -124,14 +124,17 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
     // log metric value in a way that fits into JSON number value
     set_metric("~result~code~hash~",
                hash.code_hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~registers~hash~",
+               hash.registers_hash & ((((size_t)1) << 52) - 1));
     set_metric("~result~signature~hash~",
                hash.signature_hash & ((((size_t)1) << 52) - 1));
   }
+  auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
   auto code_hash_string = hashing::hash_to_string(hash.code_hash);
   auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
-  TRACE(PM, 3, "[scope hash] %s: code#%s, signature#%s\n",
-        pass_name ? pass_name : "(initial)", code_hash_string.c_str(),
-        signature_hash_string.c_str());
+  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s\n",
+        pass_name ? pass_name : "(initial)", registers_hash_string.c_str(),
+        code_hash_string.c_str(), signature_hash_string.c_str());
   return hash;
 }
 
