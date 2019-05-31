@@ -117,7 +117,7 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, latticeOperations) {
 
   EXPECT_TRUE(e1.meet(Environment::bottom()).is_bottom());
   EXPECT_TRUE(e1.meet(Environment::top()).equals(e1));
-  
+
   Environment s1({{7, Domain({"a", "b"})}});
   Environment s2({{7, Domain({"a", "b", "c"})}});
   Environment s3({{4, Domain({"a", "b", "c"})}});
@@ -249,6 +249,15 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, whiteBox) {
   EXPECT_TRUE(e.bindings().reference_equals(before));
   e.join_with(e);
   EXPECT_TRUE(e.bindings().reference_equals(before));
+}
+
+TEST_F(PatriciaTreeMapAbstractEnvironmentTest, erase_all_matching) {
+  Environment e1({{1, Domain({"a", "b"})}});
+  bool any_changes = e1.erase_all_matching(0);
+  EXPECT_FALSE(any_changes);
+  any_changes = e1.erase_all_matching(1);
+  EXPECT_TRUE(any_changes);
+  EXPECT_TRUE(e1.is_top());
 }
 
 TEST_F(PatriciaTreeMapAbstractEnvironmentTest, prettyPrinting) {
