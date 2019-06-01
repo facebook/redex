@@ -64,7 +64,7 @@ class ApplicationModule(object):
         with open(metadata_file, 'w') as store_metadata:
             json.dump(metadata, store_metadata)
 
-    def unpackage(self, extracted_apk_dir, dex_dir):
+    def unpackage(self, extracted_apk_dir, dex_dir, unpackage_metadata=False):
         self.dex_mode = XZSDexMode(dex_asset_dir=self.path,
                                    store_name=self.name,
                                    dex_prefix=self.name,
@@ -73,7 +73,7 @@ class ApplicationModule(object):
                                    dependencies=self.dependencies)
         if (self.dex_mode.detect(extracted_apk_dir)):
             log('module ' + self.name + ' is XZSDexMode')
-            self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+            self.dex_mode.unpackage(extracted_apk_dir, dex_dir, unpackage_metadata)
         else:
             self.dex_mode = SubdirDexMode(dex_asset_dir=self.path,
                                           store_name=self.name,
@@ -83,7 +83,7 @@ class ApplicationModule(object):
                                           dependencies=self.dependencies)
             if (self.dex_mode.detect(extracted_apk_dir)):
                 log('module ' + self.name + ' is SubdirDexMode')
-                self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+                self.dex_mode.unpackage(extracted_apk_dir, dex_dir, unpackage_metadata)
             else:
                 self.dex_mode = Api21ModuleDexMode(dex_asset_dir=self.path,
                                                    store_name=self.name,
@@ -91,7 +91,7 @@ class ApplicationModule(object):
                                                    store_id=self.name,
                                                    dependencies=self.dependencies)
                 log('module ' + self.name + ' is Api21ModuleDexMode')
-                self.dex_mode.unpackage(extracted_apk_dir, dex_dir)
+                self.dex_mode.unpackage(extracted_apk_dir, dex_dir, unpackage_metadata)
 
     def repackage(
         self, extracted_apk_dir, dex_dir, have_locators, have_name_based_locators, locator_store_id,
@@ -199,7 +199,7 @@ class Api21DexMode(BaseDexMode):
         # apk.
         return isfile(join(extracted_apk_dir, self._dex_prefix + '.dex'))
 
-    def unpackage(self, extracted_apk_dir, dex_dir):
+    def unpackage(self, extracted_apk_dir, dex_dir, unpackage_metadata=False):
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
 
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
@@ -284,7 +284,7 @@ class SubdirDexMode(BaseDexMode):
         return isdir(secondary_dex_dir) and \
                 len(list(abs_glob(secondary_dex_dir, '*.dex.jar')))
 
-    def unpackage(self, extracted_apk_dir, dex_dir):
+    def unpackage(self, extracted_apk_dir, dex_dir, unpackage_metadata=False):
         jars = abs_glob(join(extracted_apk_dir, self._secondary_dir),
                         '*.dex.jar')
         for jar in jars:
@@ -292,8 +292,12 @@ class SubdirDexMode(BaseDexMode):
             extract_dex_from_jar(jar, dexpath)
             os.remove(jar + '.meta')
             os.remove(jar)
-        os.remove(join(extracted_apk_dir, self._secondary_dir, 'metadata.txt'))
+        metadata_txt = join(extracted_apk_dir, self._secondary_dir, 'metadata.txt')
+        if unpackage_metadata:
+            shutil.copy(metadata_txt, dex_dir)
+        os.remove(metadata_txt)
         BaseDexMode.unpackage(self, extracted_apk_dir, dex_dir)
+
 
     def repackage(
         self, extracted_apk_dir, dex_dir, have_locators, have_name_based_locators, locator_store_id=0,
@@ -358,7 +362,7 @@ class XZSDexMode(BaseDexMode):
                 self._xzs_filename)
         return isfile(path)
 
-    def unpackage(self, extracted_apk_dir, dex_dir):
+    def unpackage(self, extracted_apk_dir, dex_dir, unpackage_metadata=False):
         src = join(extracted_apk_dir, self._xzs_dir,
                 self._xzs_filename)
         dest = join(dex_dir, self._xzs_filename)
@@ -370,6 +374,9 @@ class XZSDexMode(BaseDexMode):
         concat_jar = join(dex_dir, self._xzs_filename[:-4])
         cmd = 'cat {} | xz -d --threads 6 > {}'.format(dest, concat_jar)
         subprocess.check_call(cmd, shell=True)
+
+        if unpackage_metadata:
+            shutil.copy(join(extracted_apk_dir, self._xzs_dir, 'metadata.txt'), dex_dir)
 
         dex_order = []
         with open(join(extracted_apk_dir, self._xzs_dir, 'metadata.txt')) as dex_metadata:
