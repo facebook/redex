@@ -896,8 +896,13 @@ void ClassScopes::build_interface_scopes() {
 }
 
 InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
-  InterfaceScope  intf_scope;
+  InterfaceScope intf_scope;
   DexType* intf = meth->get_class();
+  if (m_sig_map.count(meth->get_name()) == 0 ||
+      m_sig_map.at(meth->get_name()).count(meth->get_proto()) == 0) {
+    return intf_scope;
+  }
+
   const auto& scopes = m_sig_map.at(meth->get_name()).at(meth->get_proto());
   always_assert(scopes.size() > 0); // at least the method itself
   for (const auto& scope : scopes) {
