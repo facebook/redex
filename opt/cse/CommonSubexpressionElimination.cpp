@@ -988,6 +988,10 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
   // Let's initialize method_barriers, and waiting_for.
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     code.build_cfg(/* editable */ true);
+    if (method->rstate.no_optimizations()) {
+      waiting_for.emplace(method, nullptr);
+      return;
+    }
     std::unordered_set<Barrier, BarrierHasher> set;
     boost::optional<const DexMethod*> wait_for_method;
     for (auto& mie : cfg::InstructionIterable(code.cfg())) {
@@ -1048,6 +1052,7 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
       std::unordered_set<Barrier, BarrierHasher> barriers;
       auto inline_barriers = [&](const DexMethod* other_method) {
         if (!is_abstract(other_method)) {
+          always_assert(method_barriers.count(other_method));
           auto& invoked_barriers = method_barriers.at_unsafe(other_method);
           std::copy(invoked_barriers.begin(), invoked_barriers.end(),
                     std::inserter(barriers, barriers.end()));
@@ -1487,6 +1492,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         }
 
         TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
+        always_assert(code->editable_cfg_built());
         CommonSubexpressionElimination cse(&shared_state, code->cfg());
         bool any_changes = cse.patch(is_static(method), method->get_class(),
                                      method->get_proto()->get_args());
