@@ -987,11 +987,11 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
   ConcurrentMap<const DexMethod*, const DexMethod*> waiting_for;
   // Let's initialize method_barriers, and waiting_for.
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    code.build_cfg(/* editable */ true);
     if (method->rstate.no_optimizations()) {
       waiting_for.emplace(method, nullptr);
       return;
     }
+    code.build_cfg(/* editable */ true);
     std::unordered_set<Barrier, BarrierHasher> set;
     boost::optional<const DexMethod*> wait_for_method;
     for (auto& mie : cfg::InstructionIterable(code.cfg())) {
@@ -1487,7 +1487,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
-        if (code == nullptr) {
+        if (code == nullptr || method->rstate.no_optimizations()) {
           return Stats();
         }
 
