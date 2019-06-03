@@ -83,7 +83,11 @@ enum PURE_SCORE {
 /* Some enums that are unsafe to be transformed. */
 enum CAST_WHEN_RETURN {
   ONE;
-  public static Enum method() { return ONE; }
+  public static Enum[] method() {
+    CAST_WHEN_RETURN[] array = new CAST_WHEN_RETURN[1];
+    array[0] = ONE;
+    return array;
+  }
 }
 enum CAST_THIS_POINTER {
   ONE;

@@ -376,6 +376,14 @@ class EnumUpcastDetector {
     }
   }
 
+  bool is_candidate(DexType* type) const {
+    if (type == nullptr) {
+      return false;
+    }
+    type = const_cast<DexType*>(get_array_type_or_self(type));
+    return m_candidate_enums->count_unsafe(type);
+  }
+
   /**
    * If types of register is not consistent with required_type, remove these
    * types from candidate enum set.
@@ -384,7 +392,7 @@ class EnumUpcastDetector {
                               DexType* required_type,
                               ConcurrentSet<DexType*>* rejected_enums,
                               Reason reason = UNKNOWN) const {
-    if (m_candidate_enums->count_unsafe(required_type)) {
+    if (is_candidate(required_type)) {
       bool need_delete = false;
       for (auto possible_type : types.elements()) {
         if (!is_primitive(possible_type) && possible_type != required_type) {
@@ -421,6 +429,7 @@ class EnumUpcastDetector {
   void reject(DexType* type,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
+    type = const_cast<DexType*>(get_array_type_or_self(type));
     if (m_candidate_enums->count_unsafe(type)) {
       rejected_enums->insert(type);
       TRACE(ENUM, 9, "reject %s %d %s\n", SHOW(type), reason, SHOW(m_method));
