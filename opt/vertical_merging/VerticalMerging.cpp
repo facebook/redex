@@ -497,6 +497,11 @@ void update_references(const Scope& scope,
       scope,
       [](DexMethod* method) { return true; },
       [&](DexMethod* method, IRInstruction* insn) {
+        if (update_map.count(method->get_class())) {
+          // Ignore references in methods in classes that are going to be
+          // removed.
+          return;
+        }
         if (insn->has_type()) {
           auto ref_type = insn->get_type();
           DexType* type =
