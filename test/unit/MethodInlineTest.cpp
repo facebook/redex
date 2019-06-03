@@ -240,8 +240,12 @@ TEST_F(MethodInlineTest, test_intra_dex_inlining) {
 
   inliner::InlinerConfig inliner_config;
   inliner_config.populate(scope);
-  MultiMethodInliner inliner(
-      scope, stores, canidates, resolver, inliner_config, intra_dex);
+  MultiMethodInliner inliner(scope,
+                             stores,
+                             canidates,
+                             resolver,
+                             inliner_config,
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
   auto inlined = inliner.get_inlined();
   EXPECT_EQ(inlined.size(), expected_inlined.size());

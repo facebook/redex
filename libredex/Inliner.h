@@ -58,6 +58,15 @@ bool inline_with_cfg(DexMethod* caller_method,
 } // namespace inliner
 
 /**
+ * What kind of caller-callee relationships the inliner should consider.
+ */
+enum MultiMethodInlinerMode {
+  None,
+  InterDex,
+  IntraDex,
+};
+
+/**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
  * to find and inline all calls to candidate.
@@ -79,7 +88,7 @@ class MultiMethodInliner {
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const inliner::InlinerConfig& config,
-      bool intra_dex = false);
+      MultiMethodInlinerMode mode = InterDex);
 
   ~MultiMethodInliner() {
     invoke_direct_to_static();
@@ -110,6 +119,16 @@ class MultiMethodInliner {
   void inline_callees(DexMethod* caller,
                       const std::unordered_set<IRInstruction*>& insns);
 
+  /**
+   * Return true if the callee is inlinable into the caller.
+   * The predicates below define the constraints for inlining.
+   * Providing an instrucion is optional, and only used for logging.
+   */
+  bool is_inlinable(DexMethod* caller,
+                    DexMethod* callee,
+                    const IRInstruction* insn,
+                    size_t estimated_insn_size);
+
  private:
   /**
    * Inline all callees into caller.
@@ -124,15 +143,6 @@ class MultiMethodInliner {
   void inline_inlinables(
       DexMethod* caller,
       const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
-
-  /**
-   * Return true if the callee is inlinable into the caller.
-   * The predicates below define the constraints for inlining.
-   */
-  bool is_inlinable(DexMethod* caller,
-                    DexMethod* callee,
-                    const IRInstruction* insn,
-                    size_t estimated_insn_size);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).

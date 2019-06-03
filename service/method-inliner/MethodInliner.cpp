@@ -174,7 +174,7 @@ void run_inliner(DexStoresVector& stores,
 
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
-                             intra_dex);
+                             intra_dex ? IntraDex : InterDex);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {

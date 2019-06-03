@@ -74,14 +74,14 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const inliner::InlinerConfig& config,
-    bool intra_dex /* default is false */)
+    MultiMethodInlinerMode mode /* default is InterDex */)
     : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers. If
   // intra_dex is false, we build the map for all the candidates. If intra_dex
   // is true, we properly exclude methods who have callers being located in
   // another dex from the candidates.
-  if (intra_dex) {
+  if (mode == IntraDex) {
     std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
                                                      candidates.end());
     XDexRefs x_dex(stores);
@@ -110,7 +110,7 @@ MultiMethodInliner::MultiMethodInliner(
         caller_callee[caller].push_back(callee);
       }
     }
-  } else {
+  } else if (mode == InterDex) {
     walk::opcodes(scope, [](DexMethod* caller) { return true; },
                   [&](DexMethod* caller, IRInstruction* insn) {
                     if (is_invoke(insn->opcode())) {
@@ -310,19 +310,27 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
   if (cross_store_reference(callee)) {
-    log_nopt(INL_CROSS_STORE_REFS, caller, insn);
+    if (insn) {
+      log_nopt(INL_CROSS_STORE_REFS, caller, insn);
+    }
     return false;
   }
   if (is_blacklisted(callee)) {
-    log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    if (insn) {
+      log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    }
     return false;
   }
   if (caller_is_blacklisted(caller)) {
-    log_nopt(INL_BLACKLISTED_CALLER, caller);
+    if (insn) {
+      log_nopt(INL_BLACKLISTED_CALLER, caller);
+    }
     return false;
   }
   if (has_external_catch(callee)) {
-    log_nopt(INL_EXTERN_CATCH, callee);
+    if (insn) {
+      log_nopt(INL_EXTERN_CATCH, callee);
+    }
     return false;
   }
   std::vector<DexMethod*> make_static;
@@ -331,7 +339,9 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
   }
   if (!callee->rstate.force_inline()) {
     if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
-      log_nopt(INL_TOO_BIG, caller, insn);
+      if (insn) {
+        log_nopt(INL_TOO_BIG, caller, insn);
+      }
       return false;
     }
 
@@ -343,7 +353,9 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
         callee_api > api::LevelChecker::get_method_level(caller)) {
       // check callee_api against the minimum and short-circuit because most
       // methods don't have a required api and we want that to be fast.
-      log_nopt(INL_REQUIRES_API, caller, insn);
+      if (insn) {
+        log_nopt(INL_REQUIRES_API, caller, insn);
+      }
       TRACE(MMINL, 4,
             "Refusing to inline %s\n"
             "              into %s\n because of API boundaries.",
@@ -554,7 +566,9 @@ bool MultiMethodInliner::cannot_inline_opcodes(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
         if (create_vmethod(insn, callee, caller, make_static)) {
-          log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+          if (invk_insn) {
+            log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+          }
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
@@ -563,17 +577,23 @@ bool MultiMethodInliner::cannot_inline_opcodes(
         // methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
           if (nonrelocatable_invoke_super(insn)) {
-            log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+            if (invk_insn) {
+              log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+            }
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
           if (unknown_virtual(insn)) {
-            log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+            if (invk_insn) {
+              log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+            }
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
           if (unknown_field(insn)) {
-            log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+            if (invk_insn) {
+              log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+            }
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
@@ -601,7 +621,9 @@ bool MultiMethodInliner::cannot_inline_opcodes(
   // The CFG inliner can handle multiple return callees.
   if (ret_count > 1 && !m_config.use_cfg_inliner) {
     info.multi_ret++;
-    log_nopt(INL_MULTIPLE_RETURNS, callee);
+    if (invk_insn) {
+      log_nopt(INL_MULTIPLE_RETURNS, callee);
+    }
     can_inline = false;
   }
   return !can_inline;
