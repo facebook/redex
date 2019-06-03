@@ -123,7 +123,8 @@
   TM(MEINT)          \
   TM(OPUT)           \
   TM(IODI)           \
-  TM(MODULARITY)
+  TM(MODULARITY)     \
+  TM(VM)
 
 enum TraceModule : int {
 #define TM(x) x,

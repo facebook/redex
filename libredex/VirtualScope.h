@@ -42,7 +42,7 @@
  *    happened. The method is effectively unknown
  */
 enum VirtualFlags : uint16_t {
-  // the top method definition (DexMehthod) in a VirtualScope.
+  // the top method definition (DexMethod) in a VirtualScope.
   // This is where the method was first introduced for the virtual scope.
   TOP_DEF =         0x0,
   // the method is an override, it has a parent

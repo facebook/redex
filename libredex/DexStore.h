@@ -215,6 +215,11 @@ class XStoreRefs {
 
     return true;
   }
+
+  bool cross_store_ref(const DexMethod* caller, const DexMethod* callee) const {
+    size_t store_idx = get_store_idx(caller->get_class());
+    return illegal_ref(store_idx, callee->get_class());
+  }
 };
 
 /**
