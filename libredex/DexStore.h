@@ -222,7 +222,7 @@ class XStoreRefs {
  * is used for quick validation for crossing-dex references.
  */
 class XDexRefs {
-  std::vector<std::unordered_set<const DexType*>> m_dexes;
+  std::unordered_map<const DexType*, size_t> m_dexes;
 
  public:
   explicit XDexRefs(const DexStoresVector& stores);
