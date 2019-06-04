@@ -312,6 +312,11 @@ class OptimizeEnums {
     });
 
     optimize_enums::reject_unsafe_enums(m_scope, &config);
+    if (traceEnabled(ENUM, 4)) {
+      for (auto cls : config.candidate_enums) {
+        TRACE(ENUM, 4, "candidate_enum %s\n", SHOW(cls));
+      }
+    }
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();

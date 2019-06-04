@@ -110,6 +110,8 @@ struct EnumUtil {
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
   const DexMethodRef* ENUM_NAME_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
+  const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
+      "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;");
   const DexMethodRef* STRINGBUILDER_APPEND_OBJ_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
@@ -426,7 +428,9 @@ class CodeTransformer final {
     } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
-      if (is_enum_values(method)) {
+      if (method == m_enum_util->STRING_VALUEOF_METHOD) {
+        update_invoke_string_valueof(env, mie);
+      } else if (is_enum_values(method)) {
         update_invoke_values(env, block, mie);
       } else if (is_enum_valueof(method)) {
         update_invoke_valueof(env, mie);
@@ -561,6 +565,27 @@ class CodeTransformer final {
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
         mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
+  }
+
+  /**
+   * If v0 is a candidate enum object,
+   * invoke-static v0 LString;.valueOf:(LObject;)LString;
+   * =>
+   *   invoke-static v0 LCandidateEnum;.redex$OE$String_valueOf:(Integer)String
+   */
+  void update_invoke_string_valueof(
+      const optimize_enums::EnumTypeEnvironment& env, MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    DexType* candidate_type =
+        extract_candidate_enum_type(env.get(insn->src(0)));
+    if (candidate_type == nullptr) {
+      return;
+    }
+    DexMethodRef* string_valueof_meth =
+        m_enum_util->add_substitute_of_stringvalueof(candidate_type);
+    m_replacements.push_back(
+        InsnReplacement(mie, dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
+                                  {{VREG, insn->src(0)}})));
   }
 
   /**

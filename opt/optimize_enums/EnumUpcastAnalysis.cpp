@@ -55,16 +55,16 @@ std::unordered_set<DexType*> discard_primitives(const EnumTypes& types) {
  * them.
  */
 enum Reason {
-  UNKNOWN,
-  CAST_WHEN_RETURN,
-  CAST_THIS_POINTER,
-  CAST_PARAMETER,
-  USED_AS_CLASS_OBJECT,
-  CAST_CHECK_CAST,
-  CAST_ISPUT_OBJECT,
-  CAST_APUT_OBJECT,
-  MULTI_ENUM_TYPES,
-  UNSAFE_INVOCATION_ON_CANDIDATE_ENUM,
+  UNKNOWN = 0,
+  CAST_WHEN_RETURN = 1,
+  CAST_THIS_POINTER = 2,
+  CAST_PARAMETER = 3,
+  USED_AS_CLASS_OBJECT = 4,
+  CAST_CHECK_CAST = 5,
+  CAST_ISPUT_OBJECT = 6,
+  CAST_APUT_OBJECT = 7,
+  MULTI_ENUM_TYPES = 8,
+  UNSAFE_INVOCATION_ON_CANDIDATE_ENUM = 9,
 };
 
 /**
@@ -105,12 +105,12 @@ class EnumUpcastDetector {
       // Assume the local upcast is safe and we only care about upcasting when
       // the value is escaping.
       if (type != OBJECT_TYPE) {
-        reject_if_inconsistent(env->get(insn->src(0)), type, rejected_enums,
-                               CAST_CHECK_CAST);
+        reject_if_inconsistent(insn, env->get(insn->src(0)), type,
+                               rejected_enums, CAST_CHECK_CAST);
       }
     } break;
     case OPCODE_CONST_CLASS:
-      reject(insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
+      reject(insn, insn->get_type(), rejected_enums, USED_AS_CLASS_OBJECT);
       break;
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_SUPER:
@@ -159,8 +159,8 @@ class EnumUpcastDetector {
     always_assert_log(env->get(insn->src(0)).is_value(),
                       "method %s\ninsn %s %s\n", SHOW(m_method), SHOW(insn),
                       SHOW(m_method->get_code()->cfg()));
-    reject_if_inconsistent(env->get(insn->src(0)), return_type, rejected_enums,
-                           CAST_WHEN_RETURN);
+    reject_if_inconsistent(insn, env->get(insn->src(0)), return_type,
+                           rejected_enums, CAST_WHEN_RETURN);
   }
 
   /**
@@ -172,7 +172,7 @@ class EnumUpcastDetector {
                             ConcurrentSet<DexType*>* rejected_enums) const {
     auto arg_reg = insn->src(0);
     DexType* field_type = insn->get_field()->get_type();
-    reject_if_inconsistent(env->get(arg_reg), field_type, rejected_enums,
+    reject_if_inconsistent(insn, env->get(arg_reg), field_type, rejected_enums,
                            CAST_ISPUT_OBJECT);
   }
 
@@ -196,11 +196,11 @@ class EnumUpcastDetector {
     if (acceptable_elem_types.size() > 1) {
       // If a register might be an array of multiple types, it's hard to do
       // further analysis so that we simply reject the types here.
-      reject(elem_types, rejected_enums, CAST_APUT_OBJECT);
-      reject(acceptable_elem_types, rejected_enums, CAST_APUT_OBJECT);
+      reject(insn, elem_types, rejected_enums, CAST_APUT_OBJECT);
+      reject(insn, acceptable_elem_types, rejected_enums, CAST_APUT_OBJECT);
     } else if (acceptable_elem_types.size() == 1) {
       DexType* acceptable = *acceptable_elem_types.begin();
-      reject_if_inconsistent(elem_types, acceptable, rejected_enums,
+      reject_if_inconsistent(insn, elem_types, acceptable, rejected_enums,
                              CAST_APUT_OBJECT);
     }
   }
@@ -226,6 +226,7 @@ class EnumUpcastDetector {
 
   /**
    * Analyze static method invocations if the invoked method is not
+   * LString;.valueOf:(LObject;)LString;
    * LCandidateEnum;.valueOf:(String)LCandidateEnum; or
    * LCandidateEnum;.values:()[LCandidateEnum;
    *
@@ -237,6 +238,9 @@ class EnumUpcastDetector {
                                  ConcurrentSet<DexType*>* rejected_enums) {
     always_assert(insn->opcode() == OPCODE_INVOKE_STATIC);
     auto method_ref = insn->get_method();
+    if (method_ref == STRING_VALUEOF_METHOD) {
+      return;
+    }
     auto container = method_ref->get_class();
     if (m_candidate_enums->count_unsafe(container)) {
       if (is_enum_values(method_ref) || is_enum_valueof(method_ref)) {
@@ -261,8 +265,8 @@ class EnumUpcastDetector {
       if (safe_params && safe_params->count(arg_id)) {
         continue;
       }
-      reject_if_inconsistent(env->get(insn->src(arg_id)), *it, rejected_enums,
-                             CAST_PARAMETER);
+      reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
+                             rejected_enums, CAST_PARAMETER);
     }
   }
 
@@ -314,15 +318,15 @@ class EnumUpcastDetector {
         // Reject multiple types in the registers.
         if (this_types.size() > 1 || that_types.size() > 1 ||
             (this_type && that_type && this_type != that_type)) {
-          reject(this_types, rejected_enums, CAST_THIS_POINTER);
-          reject(that_types, rejected_enums, CAST_PARAMETER);
+          reject(insn, this_types, rejected_enums, CAST_THIS_POINTER);
+          reject(insn, that_types, rejected_enums, CAST_PARAMETER);
         }
         return;
       } else if (signatures_match(method, ENUM_TOSTRING_METHOD) ||
                  signatures_match(method, ENUM_NAME_METHOD) ||
                  signatures_match(method, ENUM_ORDINAL_METHOD)) {
         if (this_types.size() > 1) {
-          reject(this_types, rejected_enums, MULTI_ENUM_TYPES);
+          reject(insn, this_types, rejected_enums, MULTI_ENUM_TYPES);
         }
         return;
       }
@@ -330,7 +334,7 @@ class EnumUpcastDetector {
       EnumTypes b_types = env->get(insn->src(1));
       auto that_types = discard_primitives(b_types);
       if (that_types.size() > 1) {
-        reject(that_types, rejected_enums, MULTI_ENUM_TYPES);
+        reject(insn, that_types, rejected_enums, MULTI_ENUM_TYPES);
       }
       return;
     }
@@ -354,8 +358,8 @@ class EnumUpcastDetector {
     // unsafe to optimize.
     if (insn->opcode() != OPCODE_INVOKE_STATIC &&
         m_candidate_enums->count_unsafe(container)) {
-      TRACE(ENUM, 9, "unsafe_invocation %s\n", SHOW(insn));
-      reject(container, rejected_enums, UNSAFE_INVOCATION_ON_CANDIDATE_ENUM);
+      reject(insn, container, rejected_enums,
+             UNSAFE_INVOCATION_ON_CANDIDATE_ENUM);
     }
     // Check the type of arguments.
     const std::deque<DexType*>& args = proto->get_args()->get_type_list();
@@ -364,15 +368,15 @@ class EnumUpcastDetector {
     size_t arg_id = 0;
     if (insn->srcs_size() == args.size() + 1) {
       // this pointer
-      reject_if_inconsistent(env->get(insn->src(arg_id)), container,
+      reject_if_inconsistent(insn, env->get(insn->src(arg_id)), container,
                              rejected_enums, CAST_THIS_POINTER);
       arg_id++;
     }
     // Arguments
     auto it = args.begin();
     for (; arg_id < insn->srcs_size(); ++arg_id, ++it) {
-      reject_if_inconsistent(env->get(insn->src(arg_id)), *it, rejected_enums,
-                             CAST_PARAMETER);
+      reject_if_inconsistent(insn, env->get(insn->src(arg_id)), *it,
+                             rejected_enums, CAST_PARAMETER);
     }
   }
 
@@ -388,7 +392,8 @@ class EnumUpcastDetector {
    * If types of register is not consistent with required_type, remove these
    * types from candidate enum set.
    */
-  void reject_if_inconsistent(const EnumTypes& types,
+  void reject_if_inconsistent(const IRInstruction* insn,
+                              const EnumTypes& types,
                               DexType* required_type,
                               ConcurrentSet<DexType*>* rejected_enums,
                               Reason reason = UNKNOWN) const {
@@ -397,42 +402,46 @@ class EnumUpcastDetector {
       for (auto possible_type : types.elements()) {
         if (!is_primitive(possible_type) && possible_type != required_type) {
           need_delete = true;
-          reject(possible_type, rejected_enums, reason);
+          reject(insn, possible_type, rejected_enums, reason);
         }
       }
       if (need_delete) {
-        reject(required_type, rejected_enums, reason);
+        reject(insn, required_type, rejected_enums, reason);
       }
     } else {
       for (auto possible_type : types.elements()) {
-        reject(possible_type, rejected_enums, reason);
+        reject(insn, possible_type, rejected_enums, reason);
       }
     }
   }
 
-  void reject(std::unordered_set<DexType*> types,
+  void reject(const IRInstruction* insn,
+              std::unordered_set<DexType*> types,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
     for (DexType* type : types) {
-      reject(type, rejected_enums, reason);
+      reject(insn, type, rejected_enums, reason);
     }
   }
 
-  void reject(EnumTypes types,
+  void reject(const IRInstruction* insn,
+              EnumTypes types,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
     for (DexType* type : types.elements()) {
-      reject(type, rejected_enums, reason);
+      reject(insn, type, rejected_enums, reason);
     }
   }
 
-  void reject(DexType* type,
+  void reject(const IRInstruction* insn,
+              DexType* type,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
     type = const_cast<DexType*>(get_array_type_or_self(type));
     if (m_candidate_enums->count_unsafe(type)) {
       rejected_enums->insert(type);
-      TRACE(ENUM, 9, "reject %s %d %s\n", SHOW(type), reason, SHOW(m_method));
+      TRACE(ENUM, 9, "reject %s %d %s %s\n", SHOW(type), reason, SHOW(m_method),
+            SHOW(insn));
     }
   }
 
@@ -446,6 +455,8 @@ class EnumUpcastDetector {
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
   const DexMethodRef* ENUM_ORDINAL_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.ordinal:()I");
+  const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
+      "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;");
   const DexMethodRef* STRINGBUILDER_APPEND_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");

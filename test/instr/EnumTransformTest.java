@@ -223,6 +223,22 @@ public class EnumTransformTest {
     }
   }
 
+  @Test
+  public void test_string_valueof() {
+    SCORE obj;
+    int rand = new Random().nextInt();
+    if (rand >= 0) {
+      obj = SCORE.ONE;
+    } else {
+      obj = null;
+    }
+    if (rand >= 0) {
+      assertThat(String.valueOf(obj)).isEqualTo(SCORE.ONE.name());
+    } else {
+      assertThat(String.valueOf(obj)).isEqualTo("null");
+    }
+  }
+
   // NullPointerException.
   @Test(expected = NullPointerException.class)
   public void test_npe() {
