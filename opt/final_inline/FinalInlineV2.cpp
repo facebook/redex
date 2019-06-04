@@ -198,8 +198,41 @@ class encoding_visitor : public boost::static_visitor<DexEncodedValue*> {
   const DexField* m_field;
 };
 
-void encode_values(DexClass* cls, FieldEnvironment field_env) {
+/*
+ * If a field is both read and written to in its initializer, then we can
+ * update its encoded value with the value at exit only if the reads (sgets) are
+ * are dominated by the writes (sputs) -- otherwise we may change program
+ * semantics. Checking for dominance takes some work, and static fields are
+ * rarely read in their class' <clinit>, so we simply avoid inlining all fields
+ * that are read in their class' <clinit>.
+ *
+ * TODO: We should really transitively analyze all callees for field reads.
+ * Right now this just analyzes the sgets directly in the <clinit>.
+ */
+std::unordered_set<const DexFieldRef*> gather_read_static_fields(
+    DexClass* cls) {
+  std::unordered_set<const DexFieldRef*> read_fields;
+  auto clinit = cls->get_clinit();
+  for (auto* block : clinit->get_code()->cfg().blocks()) {
+    for (auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
+      if (is_sget(insn->opcode())) {
+        read_fields.emplace(insn->get_field());
+        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s\n",
+              SHOW(insn->get_field()));
+      }
+    }
+  }
+  return read_fields;
+}
+
+void encode_values(DexClass* cls,
+                   FieldEnvironment field_env,
+                   const std::unordered_set<const DexFieldRef*>& blacklist) {
   for (auto* field : cls->get_sfields()) {
+    if (blacklist.count(field)) {
+      continue;
+    }
     auto value = field_env.get(field);
     auto encoded_value =
         ConstantValue::apply_visitor(encoding_visitor(field), value);
@@ -207,10 +240,7 @@ void encode_values(DexClass* cls, FieldEnvironment field_env) {
       continue;
     }
     field->make_concrete(field->get_access(), encoded_value);
-    TRACE(FINALINLINE,
-          2,
-          "Found encodable field: %s %s\n",
-          SHOW(field),
+    TRACE(FINALINLINE, 2, "Found encodable field: %s %s\n", SHOW(field),
           SHOW(value));
   }
 }
@@ -242,8 +272,9 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       intra_cp.run(env);
       env = intra_cp.get_exit_state_at(cfg.exit_block());
 
-      // Generate the encoded_values and re-run the analysis.
-      encode_values(cls, env.get_field_environment());
+      // Generate the new encoded_values and re-run the analysis.
+      encode_values(cls, env.get_field_environment(),
+                    gather_read_static_fields(cls));
       auto fresh_env = ConstantEnvironment();
       cp::set_encoded_values(cls, &fresh_env);
       intra_cp.run(fresh_env);
@@ -309,8 +340,8 @@ cp::WholeProgramState analyze_and_simplify_inits(
         LocalDcePass::run(code);
       }
     }
-    wps.collect_instance_finals(
-        cls, eligible_ifields, env.get_field_environment());
+    wps.collect_instance_finals(cls, eligible_ifields,
+                                env.get_field_environment());
   }
   return wps;
 }
@@ -525,8 +556,8 @@ void aggressively_delete_static_finals(const Scope& scope) {
 size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(scope);
-    return inline_final_gets(
-        scope, wps, config.black_list_types, cp::FieldType::STATIC);
+    return inline_final_gets(scope, wps, config.black_list_types,
+                             cp::FieldType::STATIC);
   } catch (final_inline::class_initialization_cycle& e) {
     std::cerr << e.what();
     return 0;
@@ -538,8 +569,8 @@ size_t FinalInlinePassV2::run_inline_ifields(
     const cp::EligibleIfields& eligible_ifields,
     Config config) {
   auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
-  return inline_final_gets(
-      scope, wps, config.black_list_types, cp::FieldType::INSTANCE);
+  return inline_final_gets(scope, wps, config.black_list_types,
+                           cp::FieldType::INSTANCE);
 }
 
 void FinalInlinePassV2::run_pass(DexStoresVector& stores,
