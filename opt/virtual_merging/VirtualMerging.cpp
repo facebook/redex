@@ -206,6 +206,9 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
   for (auto& p : m_mergeable_scope_methods) {
     virtual_scopes.push_back(p.first);
   }
+  ConcurrentMap<const VirtualScope*,
+                std::vector<std::pair<DexMethod*, DexMethod*>>>
+      mergeable_pairs_by_virtual_scopes;
   walk::parallel::virtual_scopes(
       virtual_scopes, [&](const VirtualScope* virtual_scope) {
         std::vector<DexMethod*> methods;
@@ -313,13 +316,13 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
                       mergeable_pairs.size() + stats.cross_store_refs +
                           stats.cross_dex_refs +
                           stats.inconcrete_overridden_methods);
-        m_mergeable_pairs_by_virtual_scopes.emplace(virtual_scope,
-                                                    mergeable_pairs);
+        mergeable_pairs_by_virtual_scopes.emplace(virtual_scope,
+                                                  mergeable_pairs);
         local_stats.emplace(virtual_scope, stats);
       });
 
   m_stats.virtual_scopes_with_mergeable_pairs +=
-      m_mergeable_pairs_by_virtual_scopes.size();
+      mergeable_pairs_by_virtual_scopes.size();
 
   size_t overriding_methods = 0;
   for (auto& p : local_stats) {
@@ -331,10 +334,13 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
   }
 
   always_assert(overriding_methods == m_stats.mergeable_virtual_methods);
-  for (auto& p : m_mergeable_pairs_by_virtual_scopes) {
+  for (auto& p : mergeable_pairs_by_virtual_scopes) {
     const auto& mergeable_pairs = p.second;
     m_stats.mergeable_pairs += mergeable_pairs.size();
+    m_mergeable_pairs_by_virtual_scopes.insert(p);
   }
+  always_assert(mergeable_pairs_by_virtual_scopes.size() ==
+                m_mergeable_pairs_by_virtual_scopes.size());
   always_assert(m_stats.mergeable_pairs ==
                 m_stats.mergeable_virtual_methods - m_stats.cross_store_refs -
                     m_stats.cross_dex_refs -

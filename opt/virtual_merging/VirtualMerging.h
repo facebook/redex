@@ -59,8 +59,9 @@ class VirtualMerging {
       m_mergeable_scope_methods;
 
   void compute_mergeable_pairs_by_virtual_scopes();
-  ConcurrentMap<const VirtualScope*,
-                std::vector<std::pair<DexMethod*, DexMethod*>>>
+  std::map<const VirtualScope*,
+           std::vector<std::pair<DexMethod*, DexMethod*>>,
+           virtualscopes_comparator>
       m_mergeable_pairs_by_virtual_scopes;
 
   void merge_methods();

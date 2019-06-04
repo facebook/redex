@@ -519,3 +519,9 @@ inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {
  * it generates fictional methods for it.
  */
 const std::vector<DexMethod*>& get_vmethods(const DexType* type);
+
+struct virtualscopes_comparator {
+  bool operator()(const VirtualScope* a, const VirtualScope* b) const {
+    return compare_dexmethods(a->methods.at(0).first, b->methods.at(0).first);
+  }
+};
