@@ -11,6 +11,7 @@
 #include "memory-accounter.h"
 
 #include <cstring>
+#include <functional>
 #include <vector>
 
 typedef uint32_t VdexChecksum;
