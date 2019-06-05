@@ -603,12 +603,12 @@ class ReduceArrayLiteralsInterDexPlugin : public interdex::InterDexPassPlugin {
 
 void ReduceArrayLiteralsPass::bind_config() {
   bind("debug", false, m_debug);
-  // The default value 77 is somewhat arbitrary and could be tweaked.
+  // The default value 27 is somewhat arbitrary and could be tweaked.
   // Intention is to be reasonably small as to not cause excessive pressure on
   // the register allocator, and use an excessive number of stack space at
   // runtime, while also being reasonably large so that this optimization still
   // results in a significant win in terms of instructions count.
-  bind("max_filled_elements", {77}, m_max_filled_elements);
+  bind("max_filled_elements", {27}, m_max_filled_elements);
   after_configuration([this] {
     always_assert(m_max_filled_elements < 0xff);
     interdex::InterDexRegistry* registry =
