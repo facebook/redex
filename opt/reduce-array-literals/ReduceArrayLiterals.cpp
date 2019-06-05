@@ -221,9 +221,9 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
             } else {
               it->second.join_with(escaped_array);
             }
-            TRACE(RAL, 4, "[RAL]   literal array escaped\n");
+            TRACE(RAL, 4, "[RAL]   literal array escaped");
           } else {
-            TRACE(RAL, 4, "[RAL]   non-literal array escaped\n");
+            TRACE(RAL, 4, "[RAL]   non-literal array escaped");
             m_escaped_arrays[value.new_array_insn] = EscapedArrayDomain::top();
           }
         }
@@ -245,7 +245,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       }
     };
 
-    TRACE(RAL, 3, "[RAL] %s\n", SHOW(insn));
+    TRACE(RAL, 3, "[RAL] %s", SHOW(insn));
     switch (insn->opcode()) {
     case OPCODE_CONST:
       set_current_state_at(insn->dest(), false /* is_wide */,
@@ -253,11 +253,11 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       break;
 
     case OPCODE_NEW_ARRAY: {
-      TRACE(RAL, 4, "[RAL]   new array of type %s\n", SHOW(insn->get_type()));
+      TRACE(RAL, 4, "[RAL]   new array of type %s", SHOW(insn->get_type()));
       const auto length = get_singleton(current_state->get(insn->src(0)));
       if (length && is_literal(*length)) {
         auto length_literal = get_literal(*length);
-        TRACE(RAL, 4, "[RAL]     with length %ld\n", length_literal);
+        TRACE(RAL, 4, "[RAL]     with length %ld", length_literal);
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
                            TrackedDomain(make_array(length_literal, insn)));
@@ -285,15 +285,15 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       escape_new_arrays(insn->src(0));
       const auto array = get_singleton(current_state->get(insn->src(1)));
       const auto index = get_singleton(current_state->get(insn->src(2)));
-      TRACE(RAL, 4, "[RAL]   aput: %d %d\n", array && is_new_array(*array),
+      TRACE(RAL, 4, "[RAL]   aput: %d %d", array && is_new_array(*array),
             index && is_literal(*index));
       if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
           is_literal(*index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %ld of %u\n", index_literal,
+        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal,
               array->length);
         if (is_next_index(*array, index_literal)) {
-          TRACE(RAL, 4, "[RAL]    is next\n");
+          TRACE(RAL, 4, "[RAL]    is next");
           TrackedValue new_array = *array;
           if (add_element(new_array, index_literal, insn)) {
             current_state->set(insn->src(1), TrackedDomain(new_array));
@@ -627,7 +627,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   Architecture arch = mgr.get_redex_options().arch;
-  TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s\n", min_sdk,
+  TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s", min_sdk,
         architecture_to_string(arch));
 
   const auto scope = build_class_scope(stores);

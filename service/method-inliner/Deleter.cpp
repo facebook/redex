@@ -37,7 +37,7 @@ size_t delete_methods(
     cls->remove_method(callee);
     DexMethod::erase_method(callee);
     deleted++;
-    TRACE(DELMET, 4, "removing %s\n", SHOW(callee));
+    TRACE(DELMET, 4, "removing %s", SHOW(callee));
   }
   return deleted;
 }

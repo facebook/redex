@@ -82,7 +82,7 @@ void update_call_refs_simple(
       always_assert_log(!is_private(new_callee) || is_static(new_callee),
                         "%s\n",
                         vshow(new_callee).c_str());
-      TRACE(REFU, 9, " Updated call %s to %s\n", SHOW(insn), SHOW(new_callee));
+      TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
       insn->set_method(new_callee);
       if (new_callee->is_virtual()) {
         always_assert_log(is_invoke_virtual(insn->opcode()),
@@ -125,7 +125,7 @@ CallSites collect_call_refs(const Scope& scope,
       }
 
       call_sites.emplace_back(caller, &mie, callee);
-      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(caller));
+      TRACE(REFU, 9, "  Found call %s from %s", SHOW(insn), SHOW(caller));
     }
 
     return call_sites;

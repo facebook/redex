@@ -175,7 +175,7 @@ void TypeErasureInterDexPlugin::filter_extra_mergeables(
     if (classes_set.count(cls) == 0) {
       TRACE(TERA,
             5,
-            "[interdex] Class %s did not end up in the dex\n",
+            "[interdex] Class %s did not end up in the dex",
             SHOW(cls));
 
       const auto& mergeables = pair.second;

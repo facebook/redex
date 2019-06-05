@@ -61,7 +61,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
                                          Environment* env) const {
   always_assert(it->type == MFLOW_OPCODE);
   auto insn = it->insn;
-  TRACE(STR_SIMPLE, 8, "insn: %s\n", SHOW(insn));
+  TRACE(STR_SIMPLE, 8, "insn: %s", SHOW(insn));
 
   if (is_const_string(it)) {
     const std::string& s = insn->get_string()->str();
@@ -103,7 +103,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
     }
 
   } else if (is_sb_to_string(it)) {
-    TRACE(STR_SIMPLE, 6, "found StringBuilder.toString()\n");
+    TRACE(STR_SIMPLE, 6, "found StringBuilder.toString()");
 
   } else if (is_invoke(insn->opcode())) {
     // Set all call's to top if not static strings.
@@ -132,7 +132,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
       }
     }
   }
-  TRACE(STR_SIMPLE, 8, "env: %s\n", showd(*env).c_str());
+  TRACE(STR_SIMPLE, 8, "env: %s", showd(*env).c_str());
 }
 
 void StringIterator::simplify_instruction(const NodeId block,
@@ -147,12 +147,12 @@ void StringIterator::simplify_instruction(const NodeId block,
   const auto sb_abstract = current_state->eval(sb_reg);
   always_assert(!sb_abstract.is_bottom());
 
-  TRACE(STR_SIMPLE, 4, "Simplifying toString()\n");
+  TRACE(STR_SIMPLE, 4, "Simplifying toString()");
   if (sb_abstract.is_top() || sb_abstract.value().has_base()) {
-    TRACE(STR_SIMPLE, 4, "Aborting, no information known.\n");
+    TRACE(STR_SIMPLE, 4, "Aborting, no information known.");
     return;
   }
-  TRACE(STR_SIMPLE, 4, "value: %s\n", showd(sb_abstract).c_str());
+  TRACE(STR_SIMPLE, 4, "value: %s", showd(sb_abstract).c_str());
 
   auto future = next_insn(it);
   if (future->insn->opcode() != OPCODE_MOVE_RESULT_OBJECT) {
@@ -170,7 +170,7 @@ void StringIterator::simplify_instruction(const NodeId block,
 
     auto final_string = sb_abstract.value().suffix();
     insert_const_string(it, result_reg, final_string);
-    TRACE(STR_SIMPLE, 5, "pushed constant: %s\n", final_string.c_str());
+    TRACE(STR_SIMPLE, 5, "pushed constant: %s", final_string.c_str());
 
   } else if (sb_abstract.value().suffix() == "") {
     using namespace dex_asm;
@@ -179,12 +179,12 @@ void StringIterator::simplify_instruction(const NodeId block,
     auto result_reg = future->insn->dest();
 
     auto base_reg = sb_abstract.value().base();
-    TRACE(STR_SIMPLE, 1, "Warning: possibly empty stringbuilder.\n");
+    TRACE(STR_SIMPLE, 1, "Warning: possibly empty stringbuilder.");
     m_code->insert_after(
         future,
         dasm(OPCODE_MOVE_OBJECT, {{VREG, result_reg}, {VREG, base_reg}}));
     ++m_instructions_added;
-    TRACE(STR_SIMPLE, 5, "pushed move.\n");
+    TRACE(STR_SIMPLE, 5, "pushed move.");
 
   } else {
     always_assert(future->insn->opcode() == OPCODE_MOVE_RESULT_OBJECT);
@@ -203,7 +203,7 @@ void StringIterator::simplify_instruction(const NodeId block,
     insert_sb_append(it, sb_reg, free_reg);
 
     insert_sb_to_string(it, sb_reg, result_reg);
-    TRACE(STR_SIMPLE, 5, "pushed simplified StringBuilder.\n");
+    TRACE(STR_SIMPLE, 5, "pushed simplified StringBuilder.");
   }
 }
 
@@ -220,7 +220,7 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
   always_assert(id.is_value());
 
   if (it == block->begin()) {
-    TRACE(STR_SIMPLE, 1, "toString at beginning of block.\n");
+    TRACE(STR_SIMPLE, 1, "toString at beginning of block.");
     m_code->remove_opcode(it);
     it = m_code->insert_after(it);
     ++m_instructions_added;
@@ -242,7 +242,7 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
     if (back_iter->insn->dests_size() &&
         eq(env.get_id(back_iter->insn->dest()), id)) {
       if (back_iter->insn->opcode() == OPCODE_NEW_INSTANCE) {
-        TRACE(STR_SIMPLE, 5, "new instance.\n");
+        TRACE(STR_SIMPLE, 5, "new instance.");
         always_assert(back_iter->insn->get_type() == m_builder_type);
         back_iter = m_code->erase(back_iter);
         ++m_instructions_removed;
@@ -269,7 +269,7 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
         should_erase = true;
         TRACE(STR_SIMPLE,
               5,
-              "propagating: %d to %d\n",
+              "propagating: %d to %d",
               sb_reg,
               past->insn->src(0));
         env.move(past->insn->src(0), sb_reg);

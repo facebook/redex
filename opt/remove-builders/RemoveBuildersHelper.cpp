@@ -998,7 +998,7 @@ bool tainted_reg_escapes(
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       size_t args_reg_start{0};
       if (invoked == nullptr) {
-        TRACE(BUILDERS, 5, "Unable to resolve %s\n", SHOW(insn));
+        TRACE(BUILDERS, 5, "Unable to resolve %s", SHOW(insn));
         continue;
       }
 
@@ -1035,7 +1035,7 @@ bool tainted_reg_escapes(
             }
           }
 
-          TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+          TRACE(BUILDERS, 5, "Escaping instruction: %s", SHOW(insn));
           return true;
         }
       }
@@ -1045,7 +1045,7 @@ bool tainted_reg_escapes(
         if (op == OPCODE_RETURN_OBJECT && method->get_class() == ty) {
           continue;
         }
-        TRACE(BUILDERS, 5, "Escaping instruction: %s\n", SHOW(insn));
+        TRACE(BUILDERS, 5, "Escaping instruction: %s", SHOW(insn));
         return true;
       }
     } else if (is_conditional_branch(op) || is_monitor(op)) {
@@ -1165,7 +1165,7 @@ bool BuilderTransform::inline_methods(
       if (!inlinable->get_code()) {
         TRACE(BUILDERS,
               2,
-              "Trying to inline abstract / native etc method: %s in %s\n",
+              "Trying to inline abstract / native etc method: %s in %s",
               SHOW(inlinable),
               SHOW(method));
         return false;

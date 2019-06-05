@@ -185,7 +185,7 @@ public:
       // Make sure if either isn't renamable, we mark the end result as not
       // renamable
       if (!renamable || !other->should_rename()) {
-        TRACE(OBFUSCATE, 4, "Elem %s marking\n\t%s unrenamable\n",
+        TRACE(OBFUSCATE, 4, "Elem %s marking\n\t%s unrenamable",
             SHOW(renamable ? other->get() : this->get()),
             SHOW(renamable ? this->get() : other->get()));
         other->mark_unrenamable();
@@ -212,7 +212,7 @@ public:
 
   void mark_unrenamable() override {
     if (next == nullptr) {
-      TRACE(OBFUSCATE, 4, "Elem %s marked unrenamable\n", SHOW(this->get()));
+      TRACE(OBFUSCATE, 4, "Elem %s marked unrenamable", SHOW(this->get()));
       renamable = false;
       return;
     }
@@ -263,7 +263,7 @@ protected:
         max_ident = kMaxIdentChar;
       }
       ctr += 1;
-      TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s\n",
+      TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s",
           res.c_str());
     } while (ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
     return res;
@@ -284,7 +284,7 @@ public:
   virtual void bind_names() {}
 
   virtual void reset() {
-    TRACE(OBFUSCATE, 3, "Resetting generator\n");
+    TRACE(OBFUSCATE, 3, "Resetting generator");
     ctr = 1;
   }
 };
@@ -306,7 +306,7 @@ public:
     T elem = wrap->get();
     TRACE(OBFUSCATE,
           2,
-          "\tIntending to rename elem %s (%s) (renamable %s) to %s\n",
+          "\tIntending to rename elem %s (%s) (renamable %s) to %s",
           SHOW(elem),
           SHOW(elem->get_name()),
           should_rename_elem(elem) ? "true" : "false",
@@ -333,7 +333,7 @@ public:
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
       TRACE(OBFUSCATE, 3,
-            "\tTrying method name %s for %s\n",
+            "\tTrying method name %s for %s",
             wrap->get_name(),
             SHOW(wrap->get()));
     } while (DexMethod::get_method(
@@ -342,7 +342,7 @@ public:
         wrap->get()->get_proto()) != nullptr);
     TRACE(OBFUSCATE,
           2,
-          "\tIntending to rename method %s (%s) to %s ids to avoid %d\n",
+          "\tIntending to rename method %s (%s) to %s ids to avoid %d",
           SHOW(wrap->get()),
           SHOW(wrap->get()->get_name()),
           wrap->get_name(),
@@ -364,7 +364,7 @@ class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
       TRACE(OBFUSCATE, 2,
-            "\tTrying field name %s for %s\n",
+            "\tTrying field name %s for %s",
             wrap->get_name(),
             SHOW(wrap->get()));
     } while (DexField::get_field(
@@ -374,7 +374,7 @@ class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
     // Keep spinning on a name until you find one that isn't used at all
     TRACE(OBFUSCATE,
           2,
-          "\tIntending to rename elem %s (%s) (renamable %s) to %s\n",
+          "\tIntending to rename elem %s (%s) (renamable %s) to %s",
           SHOW(wrap->get()),
           SHOW(wrap->get()->get_name()),
           should_rename_elem(wrap->get()) ? "true" : "false",
@@ -412,7 +412,7 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
     for (unsigned int i = 0;
         i < fields.size() + static_final_null_fields.size(); ++i)
       names.emplace_back(this->next_name());
-    TRACE(OBFUSCATE, 3, "Static Generator\n");
+    TRACE(OBFUSCATE, 3, "Static Generator");
     unsigned int i = 0;
     for (auto& pair : fields) {
       DexFieldWrapper* wrap = pair.second;
@@ -420,7 +420,7 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
       wrap->set_name(new_name);
       this->used_ids.insert(new_name);
       DexField* field = wrap->get();
-      TRACE(OBFUSCATE, 3, "\tIntending to rename field (%s) %s:%s to %s\n",
+      TRACE(OBFUSCATE, 3, "\tIntending to rename field (%s) %s:%s to %s",
           SHOW(field->get_type()), SHOW(field->get_class()),
           SHOW(field->get_name()), new_name.c_str());
     }
@@ -431,7 +431,7 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
       this->used_ids.insert(new_name);
       DexField* field = wrap->get();
       TRACE(OBFUSCATE, 3,
-          "\tIntending to rename static null field (%s) %s:%s to %s\n",
+          "\tIntending to rename static null field (%s) %s:%s to %s",
           SHOW(field->get_type()), SHOW(field->get_class()),
           SHOW(field->get_name()), new_name.c_str());
     }
@@ -523,7 +523,7 @@ public:
           if (!wrap->is_modified() || !should_rename_elem(wrap->get()) ||
               !wrap->should_commit() ||
               strcmp(wrap->get()->get_name()->c_str(), wrap->get_name()) == 0) {
-            TRACE(OBFUSCATE, 2, "Not committing %s to %s\n", SHOW(wrap->get()),
+            TRACE(OBFUSCATE, 2, "Not committing %s to %s", SHOW(wrap->get()),
                 wrap->get_name());
             continue;
           }
@@ -535,7 +535,7 @@ public:
                 type_class(elem->get_class())->is_external() ? "true" : "false",
                 can_rename(elem) ? "true" : "false");
           if (renamed_elems.count(elem) > 0) {
-            TRACE(OBFUSCATE, 2, "Found elem we've already renamed %s\n",
+            TRACE(OBFUSCATE, 2, "Found elem we've already renamed %s",
                   SHOW(elem));
           }
           renamed_elems.insert(elem);
@@ -595,11 +595,11 @@ private:
 
   // Debug print of the mapping
   virtual void print_elements() {
-    TRACE(OBFUSCATE, 4, "Elem Ptr: (type/proto) class:old name -> new name\n");
+    TRACE(OBFUSCATE, 4, "Elem Ptr: (type/proto) class:old name -> new name");
     for (auto& class_itr : elements) {
       for (auto& type_itr : class_itr.second) {
         for (auto& name_wrap : type_itr.second) {
-          TRACE(OBFUSCATE, 2, " (%s) %s\n",
+          TRACE(OBFUSCATE, 2, " (%s) %s",
               SHOW(type_itr.first),
               name_wrap.second->get_printable().c_str());
               /*SHOW(class_itr.first),

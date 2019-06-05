@@ -278,7 +278,7 @@ static void associate_try_items(IRList* ir,
     CatchEntry* last_catch = nullptr;
     for (const auto& catz : tri->m_catches) {
       auto catzop = bm.by<Addr>().at(catz.second);
-      TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
+      TRACE(MTRANS, 3, "try_catch %08x mei %p", catz.second, catzop);
       auto catch_mie = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mie : catch_start;
       if (last_catch != nullptr) {
@@ -290,12 +290,12 @@ static void associate_try_items(IRList* ir,
     }
 
     auto begin = bm.by<Addr>().at(tri->m_start_addr);
-    TRACE(MTRANS, 3, "try_start %08x mei %p\n", tri->m_start_addr, begin);
+    TRACE(MTRANS, 3, "try_start %08x mei %p", tri->m_start_addr, begin);
     auto try_start = new MethodItemEntry(TRY_START, catch_start);
     ir->insert_before(ir->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
     auto end = bm.by<Addr>().at(lastaddr);
-    TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
+    TRACE(MTRANS, 3, "try_end %08x mei %p", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
   }
@@ -438,7 +438,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
     }
     ir_list->push_back(*mei);
     bm.insert(EntryAddrBiMap::relation(mei, addr));
-    TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
+    TRACE(MTRANS, 5, "%08x: %s[mei %p]", addr, SHOW(insn), mei);
     addr += insn->size();
   }
   bm.insert(EntryAddrBiMap::relation(&*ir_list->end(), addr));
@@ -620,7 +620,7 @@ using RegMap = transform::RegMap;
 
 const char* DEBUG_ONLY show_reg_map(RegMap& map) {
   for (auto pair : map) {
-    TRACE(INL, 5, "%u -> %u\n", pair.first, pair.second);
+    TRACE(INL, 5, "%u -> %u", pair.first, pair.second);
   }
   return "";
 }
@@ -790,13 +790,13 @@ bool IRCode::try_sync(DexCode* code) {
   uint32_t addr = 0;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
-  TRACE(MTRANS, 5, "Emitting opcodes\n");
+  TRACE(MTRANS, 5, "Emitting opcodes");
   for (auto miter = m_ir_list->begin(); miter != m_ir_list->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
-    TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
+    TRACE(MTRANS, 5, "Analyzing mentry %p", mentry);
     entry_to_addr[mentry] = addr;
     if (mentry->type == MFLOW_DEX_OPCODE) {
-      TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
+      TRACE(MTRANS, 5, "Emitting mentry %p at %08x", mentry, addr);
       addr += mentry->dex_insn->size();
     }
   }
@@ -807,7 +807,7 @@ bool IRCode::try_sync(DexCode* code) {
   // For instructions that use address offsets but never need resizing (i.e.
   // switch and fill-array-data opcodes), we calculate their offsets after
   // we have reached the fixed point.
-  TRACE(MTRANS, 5, "Recalculating branches\n");
+  TRACE(MTRANS, 5, "Recalculating branches");
   std::vector<MethodItemEntry*> multi_branches;
   std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
   std::unordered_map<BranchTarget*, uint32_t> multi_targets;
@@ -871,12 +871,12 @@ bool IRCode::try_sync(DexCode* code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
     }
-    TRACE(MTRANS, 6, "Emitting insn %s\n", SHOW(mie.dex_insn));
+    TRACE(MTRANS, 6, "Emitting insn %s", SHOW(mie.dex_insn));
     opout.push_back(mie.dex_insn);
   }
   addr += num_align_nops;
 
-  TRACE(MTRANS, 5, "Emitting multi-branches\n");
+  TRACE(MTRANS, 5, "Emitting multi-branches");
   // Step 3, generate multi-branch fopcodes
   for (auto multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
@@ -956,13 +956,13 @@ bool IRCode::try_sync(DexCode* code) {
   }
 
   // Step 4, emit debug entries
-  TRACE(MTRANS, 5, "Emitting debug entries\n");
+  TRACE(MTRANS, 5, "Emitting debug entries");
   auto debugitem = code->get_debug_item();
   if (debugitem) {
     gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
-  TRACE(MTRANS, 5, "Emitting try items & catch handlers\n");
+  TRACE(MTRANS, 5, "Emitting try items & catch handlers");
   auto& tries = code->get_tries();
   tries.clear();
   MethodItemEntry* active_try = nullptr;

@@ -89,23 +89,23 @@ bool RootSetMarker::should_mark_cls(const DexClass* cls) {
 
 void RootSetMarker::mark_all_as_seed(const Scope& scope) {
   walk::parallel::classes(scope, [&](const DexClass* cls) {
-    TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
+    TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
     push_seed(cls);
 
     for (auto const& f : cls->get_ifields()) {
-      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
       push_seed(f);
     }
     for (auto const& f : cls->get_sfields()) {
-      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
       push_seed(f);
     }
     for (auto const& m : cls->get_dmethods()) {
-      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+      TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
       push_seed(m);
     }
     for (auto const& m : cls->get_vmethods()) {
-      TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
+      TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
       push_seed(m);
     }
   });
@@ -118,30 +118,30 @@ void RootSetMarker::mark_all_as_seed(const Scope& scope) {
 void RootSetMarker::mark(const Scope& scope) {
   walk::parallel::classes(scope, [&](const DexClass* cls) {
     if (should_mark_cls(cls)) {
-      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
+      TRACE(REACH, 3, "Visiting seed: %s", SHOW(cls));
       push_seed(cls);
     }
     for (auto const& f : cls->get_ifields()) {
       if (root(f) || is_volatile(f)) {
-        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
         push_seed(f);
       }
     }
     for (auto const& f : cls->get_sfields()) {
       if (root(f)) {
-        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(f));
         push_seed(f);
       }
     }
     for (auto const& m : cls->get_dmethods()) {
       if (root(m)) {
-        TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+        TRACE(REACH, 3, "Visiting seed: %s", SHOW(m));
         push_seed(m);
       }
     }
     for (auto const& m : cls->get_vmethods()) {
       if (root(m)) {
-        TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
+        TRACE(REACH, 3, "Visiting seed: %s (root)", SHOW(m));
         push_seed(m);
       }
     }
@@ -192,7 +192,7 @@ void RootSetMarker::mark_external_method_overriders() {
       // already have conditionally marked all their children.
       visited.emplace(overriding);
       if (!overriding->is_external()) {
-        TRACE(REACH, 3, "Visiting seed: %s (implements %s)\n", SHOW(overriding),
+        TRACE(REACH, 3, "Visiting seed: %s (implements %s)", SHOW(overriding),
               SHOW(method));
         push_seed(overriding);
       }
@@ -283,7 +283,7 @@ void TransitiveClosureMarker::push(const Parent* parent,
 
 void TransitiveClosureMarker::push_cond(const DexMethod* method) {
   if (!method || m_reachable_objects->marked(method)) return;
-  TRACE(REACH, 4, "Conditionally marking method: %s\n", SHOW(method));
+  TRACE(REACH, 4, "Conditionally marking method: %s", SHOW(method));
   auto clazz = type_class(method->get_class());
   m_cond_marked->methods.insert(method);
   // If :clazz has been marked, we cannot count on visit(DexClass*) to move
@@ -368,7 +368,7 @@ void TransitiveClosureMarker::push_typelike_strings(
 }
 
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
-  TRACE(REACH, 4, "Visiting class: %s\n", SHOW(cls));
+  TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   for (auto& m : cls->get_dmethods()) {
     if (is_clinit(m)) {
       push(cls, m);
@@ -390,7 +390,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
       if (m_ignore_sets.system_annos.count(anno->type())) {
         TRACE(REACH,
               5,
-              "Stop marking from %s by system anno: %s\n",
+              "Stop marking from %s by system anno: %s",
               SHOW(cls),
               SHOW(anno->type()));
         continue;
@@ -422,7 +422,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
 }
 
 void TransitiveClosureMarker::visit(const DexFieldRef* field) {
-  TRACE(REACH, 4, "Visiting field: %s\n", SHOW(field));
+  TRACE(REACH, 4, "Visiting field: %s", SHOW(field));
   if (!field->is_concrete()) {
     auto const& realfield =
         resolve_field(field->get_class(), field->get_name(), field->get_type());
@@ -433,10 +433,10 @@ void TransitiveClosureMarker::visit(const DexFieldRef* field) {
 }
 
 void TransitiveClosureMarker::visit(const DexMethodRef* method) {
-  TRACE(REACH, 4, "Visiting method: %s\n", SHOW(method));
+  TRACE(REACH, 4, "Visiting method: %s", SHOW(method));
   auto resolved_method = resolve(method, type_class(method->get_class()));
   if (resolved_method != nullptr) {
-    TRACE(REACH, 5, "    Resolved to: %s\n", SHOW(resolved_method));
+    TRACE(REACH, 5, "    Resolved to: %s", SHOW(resolved_method));
     push(method, resolved_method);
     gather_and_push(resolved_method);
   }
@@ -592,7 +592,7 @@ static void sweep_fields_if_unmarked(
     ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](DexField* f) {
     if (reachables.marked_unsafe(f) == 0) {
-      TRACE(RMU, 2, "Removing %s\n", SHOW(f));
+      TRACE(RMU, 2, "Removing %s", SHOW(f));
       DexField::erase_field(f);
       return false;
     }
@@ -619,7 +619,7 @@ static void sweep_if_unmarked(Container& c,
                               ConcurrentSet<std::string>* removed_symbols) {
   auto p = [&](const auto& m) {
     if (reachables.marked_unsafe(m) == 0) {
-      TRACE(RMU, 2, "Removing %s\n", SHOW(m));
+      TRACE(RMU, 2, "Removing %s", SHOW(m));
       return false;
     }
     return true;

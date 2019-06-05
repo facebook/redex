@@ -203,7 +203,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           ++m_stats.relocated_static_methods;
         }
 
-        TRACE(CS, 3, "[class splitting] Method {%s} relocated to {%s}\n",
+        TRACE(CS, 3, "[class splitting] Method {%s} relocated to {%s}",
               SHOW(method), SHOW(method_info.target_cls));
 
         if (target_classes_set.insert(method_info.target_cls).second) {

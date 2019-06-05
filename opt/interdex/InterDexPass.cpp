@@ -41,7 +41,7 @@ std::unordered_set<DexClass*> get_mixed_mode_classes(
   std::unordered_set<DexClass*> mixed_mode_classes;
 
   if (!input) {
-    TRACE(IDEX, 2, "Mixed mode class file: %s : not found\n",
+    TRACE(IDEX, 2, "Mixed mode class file: %s : not found",
           mixed_mode_classes_file.c_str());
     return mixed_mode_classes;
   }
@@ -50,21 +50,21 @@ std::unordered_set<DexClass*> get_mixed_mode_classes(
   while (input >> class_name) {
     auto type = DexType::get_type(class_name.c_str());
     if (!type) {
-      TRACE(IDEX, 4, "Couldn't find DexType for mixed mode class: %s\n",
+      TRACE(IDEX, 4, "Couldn't find DexType for mixed mode class: %s",
             class_name.c_str());
       continue;
     }
     auto cls = type_class(type);
     if (!cls) {
-      TRACE(IDEX, 4, "Couldn't find DexClass for mixed mode class: %s\n",
+      TRACE(IDEX, 4, "Couldn't find DexClass for mixed mode class: %s",
             class_name.c_str());
       continue;
     }
     if (mixed_mode_classes.count(cls)) {
-      TRACE(IDEX, 2, "Duplicate classes found in mixed mode list\n");
+      TRACE(IDEX, 2, "Duplicate classes found in mixed mode list");
       exit(1);
     }
-    TRACE(IDEX, 4, "Adding %s in mixed mode list\n", SHOW(cls));
+    TRACE(IDEX, 4, "Adding %s in mixed mode list", SHOW(cls));
     mixed_mode_classes.emplace(cls);
   }
   input.close();
@@ -84,7 +84,7 @@ std::unordered_set<DexClass*> get_mixed_mode_classes(
   for (const auto& dex : dexen) {
     for (const auto& cls : dex) {
       if (cls->rstate.has_mix_mode()) {
-        TRACE(IDEX, 4, "Adding class %s to the scroll list\n", SHOW(cls));
+        TRACE(IDEX, 4, "Adding class %s to the scroll list", SHOW(cls));
         mixed_mode_classes.emplace(cls);
       }
     }
@@ -200,13 +200,13 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
   if (m_mixed_mode_dex_statuses.size()) {
-    TRACE(IDEX, 3, "Will compile pre-defined dex(es)\n");
+    TRACE(IDEX, 3, "Will compile pre-defined dex(es)");
     interdex.set_mixed_mode_dex_statuses(std::move(m_mixed_mode_dex_statuses));
   } else {
     auto mixed_mode_classes =
         get_mixed_mode_classes(dexen, m_mixed_mode_classes_file);
     if (mixed_mode_classes.size() > 0) {
-      TRACE(IDEX, 3, "[mixed mode]: %d pre-computed mixed mode classes\n",
+      TRACE(IDEX, 3, "[mixed mode]: %d pre-computed mixed mode classes",
             mixed_mode_classes.size());
       interdex.set_mixed_mode_classes(std::move(mixed_mode_classes),
                                       m_can_touch_coldstart_cls,

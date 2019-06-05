@@ -42,10 +42,10 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
         }
         auto& code = *m->get_code();
 
-        TRACE(REG, 3, "Handling %s:\n", SHOW(m));
+        TRACE(REG, 3, "Handling %s:", SHOW(m));
         TRACE(REG,
               5,
-              "regs:%d code:\n%s\n",
+              "regs:%d code:\n%s",
               code.get_registers_size(),
               SHOW(&code));
         try {
@@ -59,7 +59,7 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
 
           TRACE(REG,
                 5,
-                "After alloc: regs:%d code:\n%s\n",
+                "After alloc: regs:%d code:\n%s",
                 code.get_registers_size(),
                 SHOW(&code));
         } catch (std::exception&) {
@@ -74,15 +74,15 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
         return a;
       });
 
-  TRACE(REG, 1, "Total reiteration count: %lu\n", stats.reiteration_count);
-  TRACE(REG, 1, "Total Params spilled early: %lu\n", stats.params_spill_early);
-  TRACE(REG, 1, "Total spill count: %lu\n", stats.moves_inserted());
-  TRACE(REG, 1, "  Total param spills: %lu\n", stats.param_spill_moves);
-  TRACE(REG, 1, "  Total range spills: %lu\n", stats.range_spill_moves);
-  TRACE(REG, 1, "  Total global spills: %lu\n", stats.global_spill_moves);
-  TRACE(REG, 1, "  Total splits: %lu\n", stats.split_moves);
-  TRACE(REG, 1, "Total coalesce count: %lu\n", stats.moves_coalesced);
-  TRACE(REG, 1, "Total net moves: %ld\n", stats.net_moves());
+  TRACE(REG, 1, "Total reiteration count: %lu", stats.reiteration_count);
+  TRACE(REG, 1, "Total Params spilled early: %lu", stats.params_spill_early);
+  TRACE(REG, 1, "Total spill count: %lu", stats.moves_inserted());
+  TRACE(REG, 1, "  Total param spills: %lu", stats.param_spill_moves);
+  TRACE(REG, 1, "  Total range spills: %lu", stats.range_spill_moves);
+  TRACE(REG, 1, "  Total global spills: %lu", stats.global_spill_moves);
+  TRACE(REG, 1, "  Total splits: %lu", stats.split_moves);
+  TRACE(REG, 1, "Total coalesce count: %lu", stats.moves_coalesced);
+  TRACE(REG, 1, "Total net moves: %ld", stats.net_moves());
 
   mgr.incr_metric("param spilled too early", stats.params_spill_early);
   mgr.incr_metric("reiteration_count", stats.reiteration_count);

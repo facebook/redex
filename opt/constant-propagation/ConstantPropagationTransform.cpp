@@ -67,7 +67,7 @@ void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
     auto new_val = env.get(insn->src(0));
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), existing_val,
                                      new_val)) {
-      TRACE(FINALINLINE, 2, "%s has %s\n", SHOW(field), SHOW(existing_val));
+      TRACE(FINALINLINE, 2, "%s has %s", SHOW(field), SHOW(existing_val));
       // This field must already hold this value. We don't need to write to it
       // again.
       m_deletes.push_back(it);
@@ -160,7 +160,7 @@ void Transform::eliminate_dead_branch(
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
       auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
-      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s\n",
+      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s",
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;
       if (is_fallthrough) {
@@ -187,7 +187,7 @@ void Transform::apply_changes(IRCode* code) {
     }
   }
   for (auto it : m_deletes) {
-    TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(it->insn));
+    TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
     code->remove_opcode(it);
   }
 }

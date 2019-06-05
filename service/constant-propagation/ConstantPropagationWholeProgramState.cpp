@@ -32,11 +32,11 @@ void set_fields_in_partition(const DexClass* cls,
   for (auto& field : fields) {
     auto value = field_env.get(field);
     if (!value.is_top()) {
-      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>\n",
+      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>",
             SHOW(field), SHOW(value));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>\n",
+      TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>",
             SHOW(field));
     }
     field_partition->set(field, value);

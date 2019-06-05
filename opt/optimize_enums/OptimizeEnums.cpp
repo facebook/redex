@@ -282,7 +282,7 @@ class OptimizeEnums {
   void stats(PassManager& mgr) {
     const auto& report = [&mgr](const char* name, size_t stat) {
       mgr.set_metric(name, stat);
-      TRACE(ENUM, 1, "\t%s : %u\n", name, stat);
+      TRACE(ENUM, 1, "\t%s : %u", name, stat);
     };
     report(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
     report(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
@@ -314,7 +314,7 @@ class OptimizeEnums {
     optimize_enums::reject_unsafe_enums(m_scope, &config);
     if (traceEnabled(ENUM, 4)) {
       for (auto cls : config.candidate_enums) {
-        TRACE(ENUM, 4, "candidate_enum %s\n", SHOW(cls));
+        TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
       }
     }
     m_stats.num_enum_objs = optimize_enums::transform_enums(
@@ -335,7 +335,7 @@ class OptimizeEnums {
     for (auto field : cls->get_sfields()) {
       if (check_required_access_flags(synth_access, field->get_access())) {
         if (synth_field) {
-          TRACE(ENUM, 2, "Multiple synthetic fields %s %s\n", SHOW(synth_field),
+          TRACE(ENUM, 2, "Multiple synthetic fields %s %s", SHOW(synth_field),
                 SHOW(field));
           return false;
         }
@@ -343,7 +343,7 @@ class OptimizeEnums {
       }
     }
     if (!synth_field) {
-      TRACE(ENUM, 2, "No synthetic field found on %s\n", SHOW(cls));
+      TRACE(ENUM, 2, "No synthetic field found on %s", SHOW(cls));
       return false;
     }
     return true;
@@ -669,7 +669,7 @@ class OptimizeEnums {
             // null instruction pointers are used to signify the upper half of a
             // wide load.
             auto copy = new IRInstruction(*insn);
-            TRACE(ENUM, 4, "adding %s to B%d\n", SHOW(copy), leaf->id());
+            TRACE(ENUM, 4, "adding %s to B%d", SHOW(copy), leaf->id());
             leaf->push_front(copy);
           }
         }

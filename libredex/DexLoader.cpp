@@ -73,7 +73,7 @@ static std::vector<std::exception_ptr> class_work(class_load_work* clw) {
     clw->dl->load_dex_class(clw->num);
     return {}; // no exception
   } catch (const std::exception& exc) {
-    TRACE(MAIN, 1, "Worker throw the exception:%s\n", exc.what());
+    TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
 
     return {std::current_exception()};
   }
@@ -333,7 +333,7 @@ DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon,
                                  bool support_dex_v37) {
-  TRACE(MAIN, 1, "Loading classes from dex from %s\n", location);
+  TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
   auto classes = dl.load_dex(location, stats, support_dex_v37);
   if (balloon) {

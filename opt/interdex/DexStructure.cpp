@@ -226,7 +226,7 @@ void DexStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                        const TypeRefs& clazz_trefs,
                                        unsigned laclazz,
                                        DexClass* clazz) {
-  TRACE(IDEX, 7, "Adding class: %s\n", SHOW(clazz));
+  TRACE(IDEX, 7, "Adding class: %s", SHOW(clazz));
   m_mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
   m_frefs.insert(clazz_frefs.begin(), clazz_frefs.end());
   m_trefs.insert(clazz_trefs.begin(), clazz_trefs.end());
@@ -247,7 +247,7 @@ void DexStructure::check_refs_count() {
   if (mrefs_set.size() > m_mrefs.size()) {
     for (DexMethodRef* mr : mrefs_set) {
       if (!m_mrefs.count(mr)) {
-        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set\n",
+        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
               SHOW(mr));
       }
     }
@@ -261,7 +261,7 @@ void DexStructure::check_refs_count() {
   if (frefs_set.size() > m_frefs.size()) {
     for (auto* fr : frefs_set) {
       if (!m_frefs.count(fr)) {
-        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set\n",
+        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",
               SHOW(fr));
       }
     }

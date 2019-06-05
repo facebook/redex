@@ -32,12 +32,12 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   auto reachables = reachability::compute_reachable_objects(
       stores, m_ignore_sets, &num_ignore_check_strings);
   reachability::ObjectCounts before = reachability::count_objects(stores);
-  TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods\n",
+  TRACE(RMU, 1, "before: %lu classes, %lu fields, %lu methods",
         before.num_classes, before.num_fields, before.num_methods);
   reachability::sweep(stores, *reachables,
                       output_unreachable_symbols ? &removed_symbols : nullptr);
   reachability::ObjectCounts after = reachability::count_objects(stores);
-  TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods\n",
+  TRACE(RMU, 1, "after: %lu classes, %lu fields, %lu methods",
         after.num_classes, after.num_fields, after.num_methods);
   pm.incr_metric("num_ignore_check_strings", num_ignore_check_strings);
   pm.incr_metric("classes_removed", before.num_classes - after.num_classes);

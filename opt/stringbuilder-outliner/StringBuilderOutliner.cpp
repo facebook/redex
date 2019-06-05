@@ -96,7 +96,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
         env->set_pointers(RESULT_REGISTER, env->get_pointers(insn->src(0)));
       }
     } else if (!is_eligible_init(method)) {
-      TRACE(STRBUILD, 5, "Unhandled SB method: %s\n", SHOW(insn));
+      TRACE(STRBUILD, 5, "Unhandled SB method: %s", SHOW(insn));
       ptrs::default_instruction_handler(insn, env);
     }
   } else if (op == OPCODE_NEW_INSTANCE && insn->get_type() == m_stringbuilder) {
@@ -155,14 +155,14 @@ BuilderStateMap Outliner::gather_builder_states(
       if (tostring_instructions.count(insn)) {
         const auto& pointers = env.get_pointers(insn->src(0));
         if (!pointers.is_value() || pointers.elements().size() != 1) {
-          TRACE(STRBUILD, 5, "Did not get single pointer for %s\n", SHOW(insn));
+          TRACE(STRBUILD, 5, "Did not get single pointer for %s", SHOW(insn));
           continue;
         }
         const auto& pointer = *pointers.elements().begin();
         const auto& builder = env.get_store().get(pointer);
         const auto& state_opt = builder.state();
         if (!state_opt) {
-          TRACE(STRBUILD, 5, "Did not get state for %s\n", SHOW(insn));
+          TRACE(STRBUILD, 5, "Did not get state for %s", SHOW(insn));
         } else {
           tostring_instruction_to_state.emplace_back(insn, *state_opt);
         }
@@ -245,7 +245,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
       continue;
     }
     TRACE(STRBUILD, 3,
-          "Outlining %lu StringBuilders of length %lu with typelist %s\n",
+          "Outlining %lu StringBuilders of length %lu with typelist %s",
           count, typelist->size(), SHOW(typelist));
     m_stats.stringbuilders_removed += count;
     m_stats.operations_removed += count * typelist->size();

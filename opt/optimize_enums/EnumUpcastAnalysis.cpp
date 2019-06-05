@@ -440,7 +440,7 @@ class EnumUpcastDetector {
     type = const_cast<DexType*>(get_array_type_or_self(type));
     if (m_candidate_enums->count_unsafe(type)) {
       rejected_enums->insert(type);
-      TRACE(ENUM, 9, "reject %s %d %s %s\n", SHOW(type), reason, SHOW(m_method),
+      TRACE(ENUM, 9, "reject %s %d %s %s", SHOW(type), reason, SHOW(m_method),
             SHOW(insn));
     }
   }

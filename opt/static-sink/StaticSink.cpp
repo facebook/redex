@@ -154,7 +154,7 @@ std::vector<DexMethod*> get_noncoldstart_statics(
     }
   }
   TRACE(SINK, 1,
-          "statics that are used (or can't be moved): %d\n",
+          "statics that are used (or can't be moved): %d",
           keep_statics);
   return noncold_methods;
 }
@@ -302,7 +302,7 @@ DexClass* move_statics_out(
       access_count++;
       continue;
     }
-    TRACE(SINK, 2, "sink %s to %s\n", SHOW(meth), SHOW(sink_class));
+    TRACE(SINK, 2, "sink %s to %s", SHOW(meth), SHOW(sink_class));
     type_class(meth->get_class())->remove_method(meth);
     DexMethodSpec spec;
     spec.cls = sink_class->get_type();
@@ -315,12 +315,12 @@ DexClass* move_statics_out(
   }
 
   TRACE(SINK, 1,
-    "cannot move:\n"
+    "cannot move:"
     "  collision: %-d\n"
     "  native:    %-d\n"
     "  access:    %-d\n",
     collision_count, native_count, access_count);
-  TRACE(SINK, 1, "moved %lu methods\n", moved_count);
+  TRACE(SINK, 1, "moved %lu methods", moved_count);
   return holder;
 }
 
@@ -364,9 +364,9 @@ void count_coldstart_statics(const std::vector<DexClass*>& classes) {
     }
     num_vmethods += cls->get_vmethods().size();
   }
-  TRACE(SINK, 1, "statics in coldstart classes: %d\n", num_statics);
-  TRACE(SINK, 1, "dmethods in coldstart classes: %d\n", num_dmethods);
-  TRACE(SINK, 1, "vmethods in coldstart classes: %d\n", num_vmethods);
+  TRACE(SINK, 1, "statics in coldstart classes: %d", num_statics);
+  TRACE(SINK, 1, "dmethods in coldstart classes: %d", num_dmethods);
+  TRACE(SINK, 1, "vmethods in coldstart classes: %d", num_vmethods);
 }
 
 }
@@ -382,17 +382,17 @@ void StaticSinkPass::run_pass(DexStoresVector& stores,
   DexClassesVector& root_store = stores[0].get_dexen();
   auto method_list = conf.get_coldstart_methods();
   auto methods = strings_to_dexmethods(method_list);
-  TRACE(SINK, 1, "methods used in coldstart: %lu\n", methods.size());
+  TRACE(SINK, 1, "methods used in coldstart: %lu", methods.size());
   auto coldstart_classes = get_coldstart_classes(root_store, conf);
   count_coldstart_statics(coldstart_classes);
   auto statics = get_noncoldstart_statics(coldstart_classes, methods);
-  TRACE(SINK, 1, "statics not used in coldstart: %lu\n", statics.size());
+  TRACE(SINK, 1, "statics not used in coldstart: %lu", statics.size());
   remove_primary_dex_refs(root_store[0], statics);
-  TRACE(SINK, 1, "statics after removing primary dex: %lu\n", statics.size());
+  TRACE(SINK, 1, "statics after removing primary dex: %lu", statics.size());
   auto sink_map = get_sink_map(stores, coldstart_classes, statics);
-  TRACE(SINK, 1, "statics with sinkable callsite: %lu\n", sink_map.size());
+  TRACE(SINK, 1, "statics with sinkable callsite: %lu", sink_map.size());
   auto holder = move_statics_out(ch, statics, sink_map);
-  TRACE(SINK, 1, "methods in static holder: %lu\n",
+  TRACE(SINK, 1, "methods in static holder: %lu",
           holder->get_dmethods().size());
   DexClasses dc(1);
   dc.at(0) = holder;

@@ -158,7 +158,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
       }
     }
     TRACE(BRCR, 1,
-          "Dangling References in Fields: %ld\n"
+          "Dangling References in Fields: %ld"
           "Dangling References in Methods: %ld\n"
           "Dangling References in Type Instructions: %ld\n"
           "Dangling References in Fields Field Instructions: %ld\n"
@@ -171,7 +171,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
         "ERROR - Dangling References (contact redex@on-call):\n%s",
         ss.str().c_str());
   } else {
-    TRACE(BRCR, 1, "No dangling references\n");
+    TRACE(BRCR, 1, "No dangling references");
   }
   mgr.incr_metric(METRIC_BAD_FIELDS, bad_fields_count);
   mgr.incr_metric(METRIC_BAD_METHODS, bad_methods_count);
@@ -238,7 +238,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
 
   TRACE(BRCR,
         1,
-        "Illegal fields : %ld\n"
+        "Illegal fields : %ld"
         "Illegal type refs : %ld\n"
         "Illegal field type refs : %ld\n"
         "Illegal field cls refs : %ld\n"

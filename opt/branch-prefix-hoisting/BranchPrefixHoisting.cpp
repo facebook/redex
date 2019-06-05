@@ -329,7 +329,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
         int insns_hoisted = BranchPrefixHoistingPass::process_code(code);
         if (insns_hoisted) {
           TRACE(BPH, 3,
-                "[branch prefix hoisting] Moved %u insns in method {%s}\n",
+                "[branch prefix hoisting] Moved %u insns in method {%s}",
                 insns_hoisted, SHOW(method));
         }
         return insns_hoisted;

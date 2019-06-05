@@ -29,7 +29,7 @@ void OriginalNamePass::build_hierarchies(
     auto base_class = base_type != nullptr ? type_class(base_type) : nullptr;
     if (base_class == nullptr) {
       TRACE(ORIGINALNAME, 2,
-            "Can't find class for annotate_original_name rule %s\n",
+            "Can't find class for annotate_original_name rule %s",
             base.c_str());
       mgr.incr_metric(METRIC_MISSING_ORIGINAL_NAME_ROOT, 1);
     } else {

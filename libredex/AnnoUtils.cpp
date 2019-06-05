@@ -18,14 +18,14 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
     if (anno->type() != target_anno) {
       continue;
     }
-    TRACE(ANNO, 9, "   anno %s\n", SHOW(anno));
+    TRACE(ANNO, 9, "   anno %s", SHOW(anno));
     auto& elems = anno->anno_elems();
     if (elem_str.empty()) {
       always_assert(elems.size() == 1);
       auto& elem = elems[0];
       always_assert(elem.encoded_value->evtype() == type);
       auto val = elem.encoded_value->value();
-      TRACE(ANNO, 9, " parsed annotation value: %d\n", val);
+      TRACE(ANNO, 9, " parsed annotation value: %d", val);
       return elem.encoded_value;
     }
 
@@ -34,7 +34,7 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
         continue;
       }
       always_assert(elem.encoded_value->evtype() == type);
-      TRACE(ANNO, 9, " parsed annotation elem: %d\n", SHOW(elem.encoded_value));
+      TRACE(ANNO, 9, " parsed annotation elem: %d", SHOW(elem.encoded_value));
       return elem.encoded_value;
     }
   }
@@ -54,7 +54,7 @@ uint32_t parse_anno_value(const DexMember* member,
   always_assert(anno_set != nullptr);
   TRACE(ANNO,
         9,
-        " Parsing annotations elem %s on %s: %s\n",
+        " Parsing annotations elem %s on %s: %s",
         elem_str.c_str(),
         SHOW(member),
         SHOW(anno_set));
@@ -73,7 +73,7 @@ std::string parse_str_anno_value(const DexMember* member,
   always_assert(anno_set != nullptr);
   TRACE(ANNO,
         9,
-        " Parsing annotations elem %s on %s: %s\n",
+        " Parsing annotations elem %s on %s: %s",
         elem_str.c_str(),
         SHOW(member),
         SHOW(anno_set));

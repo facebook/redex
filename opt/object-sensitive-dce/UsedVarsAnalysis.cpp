@@ -48,7 +48,7 @@ FixpointIterator::FixpointIterator(
 
 void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            UsedVarsSet* used_vars) const {
-  TRACE(OSDCE, 5, "Before %s : %s : %s\n", SHOW(insn), SHOW(*used_vars));
+  TRACE(OSDCE, 5, "Before %s : %s : %s", SHOW(insn), SHOW(*used_vars));
   bool required = is_required(insn, *used_vars);
   auto op = insn->opcode();
   if (ptrs::may_alloc(op)) {
@@ -88,7 +88,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
       used_vars->add(RESULT_REGISTER);
     }
   }
-  TRACE(OSDCE, 5, "After: %s\n", SHOW(*used_vars));
+  TRACE(OSDCE, 5, "After: %s", SHOW(*used_vars));
 }
 
 bool FixpointIterator::is_used_or_escaping_write(const ptrs::Environment& env,
@@ -226,7 +226,7 @@ std::vector<IRList::iterator> get_dead_instructions(
   std::vector<IRList::iterator> dead_instructions;
   for (auto* block : cfg.blocks()) {
     auto used_vars = fp_iter.get_used_vars_at_exit(block);
-    TRACE(OSDCE, 5, "B%u exit : %s\n", block->id(), SHOW(used_vars));
+    TRACE(OSDCE, 5, "B%u exit : %s", block->id(), SHOW(used_vars));
     for (auto it = block->rbegin(); it != block->rend(); ++it) {
       if (it->type != MFLOW_OPCODE) {
         continue;
@@ -241,7 +241,7 @@ std::vector<IRList::iterator> get_dead_instructions(
       }
       fp_iter.analyze_instruction(insn, &used_vars);
     }
-    TRACE(OSDCE, 5, "B%u entry : %s\n", block->id(),
+    TRACE(OSDCE, 5, "B%u entry : %s", block->id(),
           SHOW(fp_iter.get_used_vars_at_entry(block)));
   }
   return dead_instructions;

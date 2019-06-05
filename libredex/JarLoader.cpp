@@ -361,11 +361,11 @@ void read_dup_class_whitelist(const JsonWrapper& json_cfg) {
       "Lcom/facebook/soloader/MergedSoMapping;", "Ljunit/framework/TestSuite;"};
 
   json_cfg.get("dup_class_whitelist", default_whitelist, g_dup_class_whitelist);
-  TRACE(MAIN, 1, "dup_class_whitelist: { \n");
+  TRACE(MAIN, 1, "dup_class_whitelist: { ");
   for (auto whitelist_name : g_dup_class_whitelist) {
-    TRACE(MAIN, 1, "  %s\n", whitelist_name.c_str());
+    TRACE(MAIN, 1, "  %s", whitelist_name.c_str());
   }
-  TRACE(MAIN, 1, "}\n");
+  TRACE(MAIN, 1, "}");
 }
 
 static bool parse_class(uint8_t* buffer,
@@ -410,7 +410,7 @@ static bool parse_class(uint8_t* buffer,
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());
     } else if (!is_known_dup(cls)) {
       TRACE(MAIN, 1,
-            "Warning: Found a duplicate class '%s' in .dex and .jar file.\n"
+            "Warning: Found a duplicate class '%s' in .dex and .jar file."
             "  Current: '%s'\n"
             "  Previous: '%s'\n",
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());

@@ -34,7 +34,7 @@ int count_ops(cfg::ControlFlowGraph& cfg, IROpcode op) {
 }
 
 TEST_F(PreVerify, ConstantPropagation) {
-  TRACE(CONSTP, 1, "------------- pre ---------------\n");
+  TRACE(CONSTP, 1, "------------- pre ---------------");
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
@@ -46,8 +46,8 @@ TEST_F(PreVerify, ConstantPropagation) {
     code->build_cfg(/* editable */ true);
     bool has_if = false;
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      TRACE(CONSTP, 1, "%s\n", SHOW(meth));
-      TRACE(CONSTP, 1, "%s\n", SHOW(code));
+      TRACE(CONSTP, 1, "%s", SHOW(meth));
+      TRACE(CONSTP, 1, "%s", SHOW(code));
     }
 
     if (meth->get_name()->str().find("overflow") == std::string::npos) {
@@ -97,7 +97,7 @@ TEST_F(PreVerify, ConstantPropagation) {
 }
 
 TEST_F(PostVerify, ConstantPropagation) {
-  TRACE(CONSTP, 1, "------------- post ---------------\n");
+  TRACE(CONSTP, 1, "------------- post ---------------");
   auto cls = find_class_named(classes, "Lredex/ConstantPropagationTest;");
   ASSERT_NE(cls, nullptr);
   for (auto& meth : cls->get_vmethods()) {
@@ -108,8 +108,8 @@ TEST_F(PostVerify, ConstantPropagation) {
     EXPECT_NE(code, nullptr);
     code->build_cfg(/* editable */ true);
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      TRACE(CONSTP, 1, "%s\n", SHOW(meth));
-      TRACE(CONSTP, 1, "%s\n", SHOW(code));
+      TRACE(CONSTP, 1, "%s", SHOW(meth));
+      TRACE(CONSTP, 1, "%s", SHOW(code));
     }
 
     EXPECT_EQ(0, count_ifs(code->cfg()));

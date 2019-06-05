@@ -375,7 +375,7 @@ void RedexContext::publish_class(DexClass* cls) {
     const auto& prev_loc = m_type_to_class[type]->get_location();
     const auto& cur_loc = cls->get_location();
     if (prev_loc == cur_loc) {
-      TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
+      TRACE(MAIN, 1, "Warning: found a duplicate class: %s", SHOW(cls));
     } else {
       std::string class_name = show(cls);
       std::string dex_1 = m_type_to_class[type]->get_location();

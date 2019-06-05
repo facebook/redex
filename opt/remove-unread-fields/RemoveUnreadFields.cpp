@@ -34,7 +34,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
     auto& stats = pair.second;
     TRACE(RMUF,
           3,
-          "%s: %lu %lu %lu %d\n",
+          "%s: %lu %lu %lu %d",
           SHOW(field),
           stats.reads,
           stats.reads_outside_init,
@@ -44,7 +44,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
       ++unread_fields;
     }
   }
-  TRACE(RMUF, 2, "unread_fields %u\n", unread_fields);
+  TRACE(RMUF, 2, "unread_fields %u", unread_fields);
   mgr.set_metric("unread_fields", unread_fields);
 
   // Remove the writes to unread fields.
@@ -65,7 +65,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
             continue;
           }
           if (it->second.reads == 0) {
-            TRACE(RMUF, 5, "Removing %s\n", SHOW(insn));
+            TRACE(RMUF, 5, "Removing %s", SHOW(insn));
             code.remove_opcode(code.iterator_to(mie));
           }
         }

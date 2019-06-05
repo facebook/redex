@@ -40,39 +40,39 @@ AnnoKill::AnnoKill(Scope& scope,
                    )
   : m_scope(scope), m_only_force_kill(only_force_kill), m_kill_bad_signatures(kill_bad_signatures) {
   // Load annotations that should not be deleted.
-  TRACE(ANNO, 2, "Keep annotations count %d\n", keep.size());
+  TRACE(ANNO, 2, "Keep annotations count %d", keep.size());
   for (const auto& anno_name : keep) {
     auto anno_type = DexType::get_type(anno_name.c_str());
-    TRACE(ANNO, 2, "Keep annotation type string %s\n", anno_name.c_str());
+    TRACE(ANNO, 2, "Keep annotation type string %s", anno_name.c_str());
     if (anno_type) {
-      TRACE(ANNO, 2, "Keep annotation type %s\n", SHOW(anno_type));
+      TRACE(ANNO, 2, "Keep annotation type %s", SHOW(anno_type));
       m_keep.insert(anno_type);
     } else {
-      TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+      TRACE(ANNO, 2, "Cannot find annotation type %s", anno_name.c_str());
     }
   }
 
   // Load annotations we know and want dead.
   for (auto const& anno_name : kill) {
     DexType* anno = DexType::get_type(anno_name.c_str());
-    TRACE(ANNO, 2, "Kill annotation type string %s\n", anno_name.c_str());
+    TRACE(ANNO, 2, "Kill annotation type string %s", anno_name.c_str());
     if (anno) {
-      TRACE(ANNO, 2, "Kill anno: %s\n", SHOW(anno));
+      TRACE(ANNO, 2, "Kill anno: %s", SHOW(anno));
       m_kill.insert(anno);
     } else {
-      TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+      TRACE(ANNO, 2, "Cannot find annotation type %s", anno_name.c_str());
     }
   }
 
   // Load annotations we know and want dead.
   for (auto const& anno_name : force_kill) {
     DexType* anno = DexType::get_type(anno_name.c_str());
-    TRACE(ANNO, 2, "Force kill annotation type string %s\n", anno_name.c_str());
+    TRACE(ANNO, 2, "Force kill annotation type string %s", anno_name.c_str());
     if (anno) {
-      TRACE(ANNO, 2, "Force kill anno: %s\n", SHOW(anno));
+      TRACE(ANNO, 2, "Force kill anno: %s", SHOW(anno));
       m_force_kill.insert(anno);
     } else {
-      TRACE(ANNO, 2, "Cannot find annotation type %s\n", anno_name.c_str());
+      TRACE(ANNO, 2, "Cannot find annotation type %s", anno_name.c_str());
     }
   }
 
@@ -96,7 +96,7 @@ AnnoKill::AnnoKill(Scope& scope,
   }
   for (auto it : m_anno_class_hierarchy_keep) {
     for (auto type : it.second) {
-      TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s\n", it.first->get_name()->c_str(), type->get_name()->c_str());
+      TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s", it.first->get_name()->c_str(), type->get_name()->c_str());
     }
   }
   // Populate anno keep map
@@ -167,7 +167,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
     if (all_annos.count(ftype) > 0) {
       TRACE(ANNO,
             3,
-            "Field typed with an annotation type %s.%s:%s\n",
+            "Field typed with an annotation type %s.%s:%s",
             SHOW(field->get_class()),
             SHOW(field->get_name()),
             SHOW(ftype));
@@ -193,7 +193,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
       if (all_annos.count(type) > 0) {
         TRACE(ANNO,
               3,
-              "Method contains annotation type in signature %s.%s:%s\n",
+              "Method contains annotation type in signature %s.%s:%s",
               SHOW(meth->get_class()),
               SHOW(meth->get_name()),
               SHOW(meth->get_proto()));
@@ -230,7 +230,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
             referenced_annos.insert(type);
             TRACE(ANNO,
                   3,
-                  "Annotation referenced in type opcode\n\t%s.%s:%s - %s\n",
+                  "Annotation referenced in type opcode\n\t%s.%s:%s - %s",
                   SHOW(meth->get_class()),
                   SHOW(meth->get_name()),
                   SHOW(meth->get_proto()),
@@ -258,7 +258,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           if (referenced) {
             TRACE(ANNO,
                   3,
-                  "Annotation referenced in field opcode\n\t%s.%s:%s - %s\n",
+                  "Annotation referenced in field opcode\n\t%s.%s:%s - %s",
                   SHOW(meth->get_class()),
                   SHOW(meth->get_name()),
                   SHOW(meth->get_proto()),
@@ -291,7 +291,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
           if (referenced) {
             TRACE(ANNO,
                   3,
-                  "Annotation referenced in method opcode\n\t%s.%s:%s - %s\n",
+                  "Annotation referenced in method opcode\n\t%s.%s:%s - %s",
                   SHOW(meth->get_class()),
                   SHOW(meth->get_name()),
                   SHOW(meth->get_proto()),
@@ -321,7 +321,7 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
         bannotations.insert(clazz->get_type());
         TRACE(ANNO,
               3,
-              "removable annotation class %s\n",
+              "removable annotation class %s",
               SHOW(clazz->get_type()));
       }
     }
@@ -365,7 +365,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
     if (keep_annos.count(anno_type) > 0) {
       TRACE(ANNO,
             4,
-            "Prohibited from removing annotation %s\n", SHOW(da));
+            "Prohibited from removing annotation %s", SHOW(da));
       return false;
     }
 
@@ -404,7 +404,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
     }
 
     if (!m_only_force_kill && !da->system_visible()) {
-      TRACE(ANNO, 3, "Killing annotation instance %s\n", SHOW(da));
+      TRACE(ANNO, 3, "Killing annotation instance %s", SHOW(da));
       m_stats.annotations_killed++;
       delete da;
       return true;
@@ -425,7 +425,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
 
 bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
   if (!m_kill_bad_signatures) return false;
-  TRACE(ANNO, 3, "Examining @Signature instance %s\n", SHOW(da));
+  TRACE(ANNO, 3, "Examining @Signature instance %s", SHOW(da));
   auto elems = da->anno_elems();
   for (auto elem : elems) {
     auto ev = elem.encoded_value;
@@ -489,7 +489,7 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
           }
         }
         if (!sigtype) {
-          TRACE(ANNO, 3, "Killing bad @Signature: %s\n", sigcstr);
+          TRACE(ANNO, 3, "Killing bad @Signature: %s", sigcstr);
           return true;
         }
       }
@@ -527,7 +527,7 @@ bool AnnoKill::kill_annotations() {
     if (aset->size() == 0) {
       TRACE(ANNO,
             3,
-            "Clearing annotation for class %s\n",
+            "Clearing annotation for class %s",
             SHOW(clazz->get_type()));
       clazz->clear_annotations();
       m_stats.class_asets_cleared++;
@@ -544,7 +544,7 @@ bool AnnoKill::kill_annotations() {
       if (method_aset->size() == 0) {
         TRACE(ANNO,
               3,
-              "Clearing annotations for method %s.%s:%s\n",
+              "Clearing annotations for method %s.%s:%s",
               SHOW(method->get_class()),
               SHOW(method->get_name()),
               SHOW(method->get_proto()));
@@ -573,7 +573,7 @@ bool AnnoKill::kill_annotations() {
       if (clear_pas) {
         TRACE(ANNO,
               3,
-              "Clearing parameter annotations for method parameters %s.%s:%s\n",
+              "Clearing parameter annotations for method parameters %s.%s:%s",
               SHOW(method->get_class()),
               SHOW(method->get_name()),
               SHOW(method->get_proto()));
@@ -597,7 +597,7 @@ bool AnnoKill::kill_annotations() {
     if (aset->size() == 0) {
       TRACE(ANNO,
             3,
-            "Clearing annotations for field %s.%s:%s\n",
+            "Clearing annotations for field %s.%s:%s",
             SHOW(field->get_class()),
             SHOW(field->get_name()),
             SHOW(field->get_type()));
@@ -624,7 +624,7 @@ bool AnnoKill::kill_annotations() {
                                  }
                                  TRACE(ANNO,
                                        3,
-                                       "Removing annotation type: %s\n",
+                                       "Removing annotation type: %s",
                                        SHOW(type));
                                  classes_removed = true;
                                  return true;
@@ -632,15 +632,15 @@ bool AnnoKill::kill_annotations() {
                 m_scope.end());
 
   for (const auto& p : m_build_anno_map) {
-    TRACE(ANNO, 3, "Build anno: %lu, %s\n", p.second, p.first.c_str());
+    TRACE(ANNO, 3, "Build anno: %lu, %s", p.second, p.first.c_str());
   }
 
   for (const auto& p : m_runtime_anno_map) {
-    TRACE(ANNO, 3, "Runtime anno: %lu, %s\n", p.second, p.first.c_str());
+    TRACE(ANNO, 3, "Runtime anno: %lu, %s", p.second, p.first.c_str());
   }
 
   for (const auto& p : m_system_anno_map) {
-    TRACE(ANNO, 3, "System anno: %lu, %s\n", p.second, p.first.c_str());
+    TRACE(ANNO, 3, "System anno: %lu, %s", p.second, p.first.c_str());
   }
 
   return classes_removed;
@@ -668,48 +668,48 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
 
   auto stats = ak.get_stats();
 
-  TRACE(ANNO, 1, "AnnoKill report killed/total\n");
+  TRACE(ANNO, 1, "AnnoKill report killed/total");
   TRACE(ANNO,
         1,
-        "Annotations: %d/%d\n",
+        "Annotations: %d/%d",
         stats.annotations_killed,
         stats.annotations);
   TRACE(ANNO,
         1,
-        "Class Asets: %d/%d\n",
+        "Class Asets: %d/%d",
         stats.class_asets_cleared,
         stats.class_asets);
   TRACE(ANNO,
         1,
-        "Method Asets: %d/%d\n",
+        "Method Asets: %d/%d",
         stats.method_asets_cleared,
         stats.method_asets);
   TRACE(ANNO,
         1,
-        "MethodParam Asets: %d/%d\n",
+        "MethodParam Asets: %d/%d",
         stats.method_param_asets_cleared,
         stats.method_param_asets);
   TRACE(ANNO,
         1,
-        "Field Asets: %d/%d\n",
+        "Field Asets: %d/%d",
         stats.field_asets_cleared,
         stats.field_asets);
 
   TRACE(ANNO,
         3,
-        "Total referenced Build Annos: %d\n",
+        "Total referenced Build Annos: %d",
         stats.visibility_build_count);
   TRACE(ANNO,
         3,
-        "Total referenced Runtime Annos: %d\n",
+        "Total referenced Runtime Annos: %d",
         stats.visibility_runtime_count);
   TRACE(ANNO,
         3,
-        "Total referenced System Annos: %d\n",
+        "Total referenced System Annos: %d",
         stats.visibility_system_count);
   TRACE(ANNO,
         1,
-        "@Signatures Killed: %d\n",
+        "@Signatures Killed: %d",
         stats.signatures_killed);
 
   mgr.incr_metric(METRIC_ANNO_KILLED, stats.annotations_killed);

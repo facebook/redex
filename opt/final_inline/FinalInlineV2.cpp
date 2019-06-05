@@ -106,11 +106,11 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
       return;
     }
     if (visiting.count(cls) != 0) {
-      TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):\n");
+      TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):");
       for (auto visiting_cls : visiting) {
-        TRACE(FINALINLINE, 1, "  %s\n", SHOW(visiting_cls));
+        TRACE(FINALINLINE, 1, "  %s", SHOW(visiting_cls));
       }
-      TRACE(FINALINLINE, 1, "  %s\n", SHOW(cls));
+      TRACE(FINALINLINE, 1, "  %s", SHOW(cls));
       fprintf(stderr,
               "WARNING: Possible class init cycle found in FinalInlineV2. "
               "To check re-run with TRACE=FINALINLINE:1.\n");
@@ -218,7 +218,7 @@ std::unordered_set<const DexFieldRef*> gather_read_static_fields(
       auto insn = mie.insn;
       if (is_sget(insn->opcode())) {
         read_fields.emplace(insn->get_field());
-        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s\n",
+        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s",
               SHOW(insn->get_field()));
       }
     }
@@ -240,7 +240,7 @@ void encode_values(DexClass* cls,
       continue;
     }
     field->make_concrete(field->get_access(), encoded_value);
-    TRACE(FINALINLINE, 2, "Found encodable field: %s %s\n", SHOW(field),
+    TRACE(FINALINLINE, 2, "Found encodable field: %s %s", SHOW(field),
           SHOW(value));
   }
 }

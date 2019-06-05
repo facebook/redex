@@ -168,7 +168,7 @@ bool validate_result(
     std::unordered_map<const DexField*, optimize_enums::EnumAttr>*
         enum_field_to_attrs) {
   if (enum_field_to_attrs->empty()) {
-    TRACE(ENUM, 2, "\tEmpty result for %s\n", SHOW(cls));
+    TRACE(ENUM, 2, "\tEmpty result for %s", SHOW(cls));
     return false;
   }
   std::vector<bool> ordinals(enum_field_to_attrs->size(), false);
@@ -182,19 +182,19 @@ bool validate_result(
     auto it = enum_field_to_attrs->find(field);
     if (it != enum_field_to_attrs->end()) {
       if (!check_required_access_flags(enum_field_access, access)) {
-        TRACE(ENUM, 2, "\tUnexpected access %x on %s\n", access, SHOW(field));
+        TRACE(ENUM, 2, "\tUnexpected access %x on %s", access, SHOW(field));
         return false;
       }
       auto ordinal = it->second.ordinal;
       if (ordinal > ordinals.size()) {
-        TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s\n", SHOW(ordinal),
+        TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s", SHOW(ordinal),
               SHOW(field));
         return false;
       }
       ordinals[ordinal] = true;
     } else {
       if (check_required_access_flags(enum_field_access, access)) {
-        TRACE(ENUM, 2, "\tEnum value %s is missing in the result\n",
+        TRACE(ENUM, 2, "\tEnum value %s is missing in the result",
               SHOW(field));
         return false;
       }
@@ -202,7 +202,7 @@ bool validate_result(
         if (!synth_values_field) {
           synth_values_field = true;
         } else {
-          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s\n",
+          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s",
                 SHOW(cls));
           return false;
         }
@@ -213,7 +213,7 @@ bool validate_result(
                   [](bool item) { return item; })) {
     return true;
   }
-  TRACE(ENUM, 2, "\tEnum %s has some values in the same ordinal\n", SHOW(cls));
+  TRACE(ENUM, 2, "\tEnum %s has some values in the same ordinal", SHOW(cls));
   return false;
 }
 

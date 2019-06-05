@@ -76,7 +76,7 @@ void blacklist(DexMethod* reflecting_method,
     if (!is_public(t) && !declared) {
       return;
     }
-    TRACE(PGR, 4, "SRA BLACKLIST: %s\n", SHOW(t));
+    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
   DexItemIter<T, decltype(yield)>::iterate(cls, yield);
@@ -190,7 +190,7 @@ void analyze_reflection(const Scope& scope) {
         continue;
       }
 
-      TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s\n",
+      TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s",
             insn->get_method()->get_name()->str().c_str(), refl_type,
             method_class_name.c_str(), method_name.c_str(), arg_cls->obj_kind,
             SHOW(arg_cls->dex_type), SHOW(arg_cls->dex_string),
@@ -322,7 +322,7 @@ void mark_onclick_attributes_reachable(
         TRACE(
           PGR,
           2,
-          "Keeping vmethod %s due to onClick attribute in XML.\n",
+          "Keeping vmethod %s due to onClick attribute in XML.",
           SHOW(m));
         m->rstate.set_referenced_by_resource_xml();
       }
@@ -345,10 +345,10 @@ DexClass* maybe_class_from_string(const std::string& classname) {
 void mark_manifest_root(const std::string& classname) {
   auto dclass = maybe_class_from_string(classname);
   if (dclass == nullptr) {
-    TRACE(PGR, 3, "Dangling reference from manifest: %s\n", classname.c_str());
+    TRACE(PGR, 3, "Dangling reference from manifest: %s", classname.c_str());
     return;
   }
-  TRACE(PGR, 3, "manifest: %s\n", classname.c_str());
+  TRACE(PGR, 3, "manifest: %s", classname.c_str());
   dclass->rstate.set_root(keep_reason::MANIFEST);
   // Prevent renaming.
   dclass->rstate.increment_keep_count();
@@ -413,7 +413,7 @@ void analyze_reachable_from_manifest(
           !prune_unexported_components.count(tag_info.tag)) {
         mark_manifest_root(tag_info.classname);
       } else {
-        TRACE(PGR, 3, "%s not exported\n", tag_info.classname.c_str());
+        TRACE(PGR, 3, "%s not exported", tag_info.classname.c_str());
         auto dclass = maybe_class_from_string(tag_info.classname);
         if (dclass) {
           dclass->rstate.increment_keep_count();
@@ -468,7 +468,7 @@ void analyze_reachable_from_xml_layouts(
   collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
                                         attribute_values);
   for (std::string classname : layout_classes) {
-    TRACE(PGR, 3, "xml_layout: %s\n", classname.c_str());
+    TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
     mark_reachable_by_xml(classname);
   }
   auto attr_values =
@@ -676,7 +676,7 @@ void init_permanently_reachable_classes(
                 const_string->get_string()->c_str());
             TRACE(PGR,
                   4,
-                  "Found Class.forName of: %s, marking %s reachable\n",
+                  "Found Class.forName of: %s, marking %s reachable",
                   const_string->get_string()->c_str(),
                   classname.c_str());
             mark_reachable_by_classname(classname);
@@ -713,7 +713,7 @@ void init_permanently_reachable_classes(
     for (std::string classname : get_native_classes(apk_dir)) {
       auto type = DexType::get_type(classname.c_str());
       if (type == nullptr) continue;
-      TRACE(PGR, 3, "native_lib: %s\n", classname.c_str());
+      TRACE(PGR, 3, "native_lib: %s", classname.c_str());
       mark_reachable_by_classname(type);
     }
   }
@@ -739,7 +739,7 @@ void init_permanently_reachable_classes(
        * them currently.  So, we mark with the most
        * conservative sense here.
        */
-      TRACE(PGR, 3, "reflected_package: %s\n", SHOW(clazz));
+      TRACE(PGR, 3, "reflected_package: %s", SHOW(clazz));
       mark_reachable_by_classname(clazz);
     }
   }
@@ -760,7 +760,7 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
   walk::methods(scope,
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
-                   TRACE(PGR, 3, "native_method: %s\n", SHOW(meth->get_class()));
+                   TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
                    mark_reachable_by_classname(meth->get_class());
                  }
                });

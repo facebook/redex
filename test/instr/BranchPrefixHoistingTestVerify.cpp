@@ -24,7 +24,7 @@ int count_ops(cfg::ControlFlowGraph& cfg, IROpcode op) {
 }
 
 TEST_F(PreVerify, BranchPrefixHoisting) {
-  TRACE(BPH, 1, "------------- pre ---------------\n");
+  TRACE(BPH, 1, "------------- pre ---------------");
   auto cls = find_class_named(classes, "Lredex/BranchPrefixHoistingTest;");
   ASSERT_NE(cls, nullptr);
   auto method = find_method_named(*cls, "testPrefixHoisting1");
@@ -36,7 +36,7 @@ TEST_F(PreVerify, BranchPrefixHoisting) {
 }
 
 TEST_F(PostVerify, BranchPrefixHoisting) {
-  TRACE(BPH, 1, "------------- post ---------------\n");
+  TRACE(BPH, 1, "------------- post ---------------");
   auto cls = find_class_named(classes, "Lredex/BranchPrefixHoistingTest;");
   ASSERT_NE(cls, nullptr);
   auto method = find_method_named(*cls, "testPrefixHoisting1");

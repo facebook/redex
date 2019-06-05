@@ -62,13 +62,13 @@ TEST(PropagationTest1, localDCE1) {
   stores.emplace_back(std::move(root_store));
   std::cout << "Loaded classes: " << classes.size() << std::endl ;
 
-  TRACE(DCE, 2, "Code before:\n");
+  TRACE(DCE, 2, "Code before:");
   for(const auto& cls : classes) {
-    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
+    TRACE(DCE, 2, "Class %s", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
       }
     }
   }
@@ -85,13 +85,13 @@ TEST(PropagationTest1, localDCE1) {
   ConfigFiles dummy_cfg(conf_obj);
   manager.run_passes(stores, dummy_cfg);
 
-  TRACE(DCE, 2, "Code after:\n");
+  TRACE(DCE, 2, "Code after:");
   for(const auto& cls : classes) {
-    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
+    TRACE(DCE, 2, "Class %s", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
         for (auto& mie : InstructionIterable(dm->get_code())) {
           auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.

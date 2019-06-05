@@ -990,7 +990,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
   }
   std::ostringstream out;
   out << *state << std::endl;
-  TRACE(TYPE, 9, "%s\n", out.str().c_str());
+  TRACE(TYPE, 9, "%s", out.str().c_str());
 }
 
 void TypeInference::populate_type_environments() {

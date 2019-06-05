@@ -48,25 +48,25 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 template <class Container>
 DexMethod* find_method_named(const Container& methods,
                              const std::string& name) {
-  TRACE(PGR, 8, "==> Searching for method %s\n", name.c_str());
+  TRACE(PGR, 8, "==> Searching for method %s", name.c_str());
   auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
     auto deobfuscated_method = m->get_deobfuscated_name();
     TRACE(PGR,
           8,
-          "====> Comparing against method %s [%s]\n",
+          "====> Comparing against method %s [%s]",
           m->c_str(),
           deobfuscated_method.c_str());
     bool found =
         (name == std::string(m->c_str()) || (name == deobfuscated_method));
     if (found) {
-      TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
+      TRACE(PGR, 8, "=====> Found %s.", name.c_str());
     }
     return found;
   });
   if (it == methods.end()) {
-    TRACE(PGR, 8, "===> %s not found.\n", name.c_str());
+    TRACE(PGR, 8, "===> %s not found.", name.c_str());
   } else {
-    TRACE(PGR, 8, "===> %s found.\n", name.c_str());
+    TRACE(PGR, 8, "===> %s found.", name.c_str());
   }
   return it == methods.end() ? nullptr : *it;
 }
@@ -82,19 +82,19 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
 template <class Container>
 DexField* find_field_named(const Container& fields,
                            const char* name) {
-  TRACE(PGR, 8, "==> Searching for field %s\n", name);
+  TRACE(PGR, 8, "==> Searching for field %s", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
     auto deobfuscated_field = f->get_deobfuscated_name();
     TRACE(PGR,
           8,
-          "====> Comparing against %s [%s] <%s>\n",
+          "====> Comparing against %s [%s] <%s>",
           f->c_str(),
           SHOW(f),
           deobfuscated_field.c_str());
     bool found =
         (name == std::string(f->c_str()) || (name == deobfuscated_field));
     if (found) {
-      TRACE(PGR, 8, "====> Matched.\n");
+      TRACE(PGR, 8, "====> Matched.");
     }
     return found;
   });

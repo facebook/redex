@@ -376,7 +376,7 @@ struct Matcher {
       bool retry = (match_index == 1);
       TRACE(PEEPHOLE,
             8,
-            "Not Matched: %s[%lu] != %s\n",
+            "Not Matched: %s[%lu] != %s",
             pattern.name.c_str(),
             match_index,
             SHOW(insn));
@@ -393,7 +393,7 @@ struct Matcher {
 
     TRACE(PEEPHOLE,
           8,
-          "Matched [%lu/%lu]: %s\n",
+          "Matched [%lu/%lu]: %s",
           match_index + 1,
           pattern.match.size(),
           SHOW(insn));
@@ -1638,7 +1638,7 @@ class PeepholeOptimizer {
         } else {
           TRACE(PEEPHOLE,
                 2,
-                "not running disabled peephole opt %s\n",
+                "not running disabled peephole opt %s",
                 pattern.name.c_str());
         }
       }
@@ -1671,7 +1671,7 @@ class PeepholeOptimizer {
             continue;
           }
           m_stats.at(i)++;
-          TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!\n",
+          TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
                 matcher.pattern.name.c_str());
           for (auto insn : matcher.matched_instructions) {
             if (opcode::is_move_result_pseudo(insn->opcode())) {
@@ -1682,7 +1682,7 @@ class PeepholeOptimizer {
 
           auto replace = matcher.get_replacements();
           for (const auto& r : replace) {
-            TRACE(PEEPHOLE, 8, "-- %s\n", SHOW(r));
+            TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
           }
 
           m_stats_inserted += replace.size();
@@ -1704,11 +1704,11 @@ class PeepholeOptimizer {
   }
 
   void print_stats() {
-    TRACE(PEEPHOLE, 1, "%d instructions removed\n", m_stats_removed);
-    TRACE(PEEPHOLE, 1, "%d instructions inserted\n", m_stats_inserted);
+    TRACE(PEEPHOLE, 1, "%d instructions removed", m_stats_removed);
+    TRACE(PEEPHOLE, 1, "%d instructions inserted", m_stats_inserted);
     TRACE(PEEPHOLE,
           1,
-          "%d net instruction change\n",
+          "%d net instruction change",
           m_stats_inserted - m_stats_removed);
     int num_patterns_matched = 0;
     for (size_t i = 0; i < m_matchers.size(); ++i) {
@@ -1717,14 +1717,14 @@ class PeepholeOptimizer {
     }
     TRACE(PEEPHOLE,
           1,
-          "%lu patterns matched and replaced\n",
+          "%lu patterns matched and replaced",
           num_patterns_matched);
-    TRACE(PEEPHOLE, 5, "Detailed pattern match stats:\n");
+    TRACE(PEEPHOLE, 5, "Detailed pattern match stats:");
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       std::string current_pattern_name = m_matchers[i].pattern.name;
       TRACE(PEEPHOLE,
             5,
-            "%s: %d\n",
+            "%s: %d",
             current_pattern_name.c_str(),
             m_mgr.get_metric(current_pattern_name.c_str()));
     }
@@ -1785,7 +1785,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
   } else {
     TRACE(PEEPHOLE,
           2,
-          "not running disabled peephole opt %s\n",
+          "not running disabled peephole opt %s",
           RedundantCheckCastRemover::get_name().c_str());
   }
 }

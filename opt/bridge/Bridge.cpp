@@ -53,7 +53,7 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
   always_assert_log(it != end, "In %s", SHOW(bridge));
   if (it->insn->opcode() != OPCODE_INVOKE_DIRECT &&
       it->insn->opcode() != OPCODE_INVOKE_STATIC) {
-    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
+    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'", SHOW(bridge));
     return nullptr;
   }
   auto invoke = it->insn;
@@ -63,14 +63,14 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
     ++it;
   }
   if (!is_return(it->insn->opcode())) {
-    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
+    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'", SHOW(bridge));
     return nullptr;
   }
   ++it;
   if (it != end) return nullptr;
   auto bridgee_ref = invoke->get_method();
   if (bridgee_ref->get_class() != bridge->get_class()) {
-    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'\n", SHOW(bridge));
+    TRACE(BRIDGE, 5, "Rejecting unhandled pattern: `%s'", SHOW(bridge));
     return nullptr;
   }
   return bridgee_ref;
@@ -79,13 +79,13 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
 bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
   if (!can_delete(bridgee)) {
     TRACE(BRIDGE, 5,
-          "Cannot delete bridgee! bridge: %s\n bridgee: %s\n",
+          "Cannot delete bridgee! bridge: %s\n bridgee: %s",
           SHOW(bridge),
           SHOW(bridgee));
     return false;
   }
   if (!bridgee->get_code()) {
-    TRACE(BRIDGE, 5, "Rejecting, bridgee has no code: `%s'\n", SHOW(bridge));
+    TRACE(BRIDGE, 5, "Rejecting, bridgee has no code: `%s'", SHOW(bridge));
     return false;
   }
   return true;
@@ -176,7 +176,7 @@ class BridgeRemover {
                      m_bridges_to_bridgees.emplace(m, bridgee);
                      TRACE(BRIDGE,
                            5,
-                           "Bridge:%p:%s\nBridgee:%p:%s\n",
+                           "Bridge:%p:%s\nBridgee:%p:%s",
                            m,
                            SHOW(m),
                            bridgee,
@@ -192,7 +192,7 @@ class BridgeRemover {
     auto clstype = bridgee->get_class();
     auto name = bridgee->get_name();
     auto proto = bridgee->get_proto();
-    TRACE(BRIDGE, 5, "   %s %s %s\n", SHOW(clstype), SHOW(name), SHOW(proto));
+    TRACE(BRIDGE, 5, "   %s %s %s", SHOW(clstype), SHOW(name), SHOW(proto));
     m_potential_bridgee_refs.emplace(MethodRef(clstype, name, proto), bridge);
     if (!bridgee->is_virtual()) return;
 
@@ -218,7 +218,7 @@ class BridgeRemover {
           for (auto DEBUG_ONLY refp : maybe_refs) {
             TRACE(BRIDGE,
                   5,
-                  "    %s %s %s\n",
+                  "    %s %s %s",
                   SHOW(std::get<0>(refp.first)),
                   SHOW(std::get<1>(refp.first)),
                   SHOW(std::get<2>(refp.first)));
@@ -241,7 +241,7 @@ class BridgeRemover {
                                        bridge);
       TRACE(BRIDGE,
             5,
-            "    %s %s %s\n",
+            "    %s %s %s",
             SHOW(subclass),
             SHOW(name),
             SHOW(proto));
@@ -252,9 +252,9 @@ class BridgeRemover {
     for (auto bpair : m_bridges_to_bridgees) {
       auto bridge = bpair.first;
       auto bridgee = bpair.second;
-      TRACE(BRIDGE, 5, "Bridge method: %s\n", SHOW(bridge));
-      TRACE(BRIDGE, 5, "  Bridgee: %s\n", SHOW(bridgee));
-      TRACE(BRIDGE, 5, "  Potential references:\n");
+      TRACE(BRIDGE, 5, "Bridge method: %s", SHOW(bridge));
+      TRACE(BRIDGE, 5, "  Bridgee: %s", SHOW(bridgee));
+      TRACE(BRIDGE, 5, "  Potential references:");
       search_hierarchy_for_matches(bridge, bridgee);
     }
   }
@@ -273,7 +273,7 @@ class BridgeRemover {
         if (referenced_bridge == code_method) continue;
         TRACE(BRIDGE,
               5,
-              "Rejecting, reference `%s.%s.%s' in `%s' blocks `%s'\n",
+              "Rejecting, reference `%s.%s.%s' in `%s' blocks `%s'",
               SHOW(method->get_class()),
               SHOW(method->get_name()),
               SHOW(method->get_proto()),
@@ -341,7 +341,7 @@ class BridgeRemover {
     for (auto bpair : m_bridges_to_bridgees) {
       auto bridge = bpair.first;
       auto bridgee = bpair.second;
-      TRACE(BRIDGE, 5, "Inlining %s\n", SHOW(bridge));
+      TRACE(BRIDGE, 5, "Inlining %s", SHOW(bridge));
       do_inlining(bridge, bridgee);
     }
   }
@@ -373,12 +373,12 @@ class BridgeRemover {
     find_bridges();
     find_potential_bridgee_refs();
     exclude_referenced_bridgees();
-    TRACE(BRIDGE, 5, "%lu bridges to optimize\n", m_bridges_to_bridgees.size());
+    TRACE(BRIDGE, 5, "%lu bridges to optimize", m_bridges_to_bridgees.size());
     m_mgr.incr_metric(METRIC_BRIDGES_TO_OPTIMIZE, m_bridges_to_bridgees.size());
     inline_bridges();
     delete_unused_bridgees();
     TRACE(BRIDGE, 1,
-            "Inlined and removed %lu bridges\n",
+            "Inlined and removed %lu bridges",
             m_bridges_to_bridgees.size());
     m_mgr.incr_metric(METRIC_BRIDGES_REMOVED, m_bridges_to_bridgees.size());
   }

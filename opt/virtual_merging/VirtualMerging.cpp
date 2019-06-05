@@ -149,7 +149,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
 
     auto virtual_scope = m_type_system.find_virtual_scope(overriding_method);
     if (virtual_scope == nullptr) {
-      TRACE(VM, 1, "[VM] virtual method {%s} has no virtual scope!\n",
+      TRACE(VM, 1, "[VM] virtual method {%s} has no virtual scope!",
             SHOW(overriding_method));
       return;
     }
@@ -159,7 +159,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
     }
 
     if (m_unsupported_virtual_scopes.count(virtual_scope)) {
-      TRACE(VM, 2, "[VM] virtual method {%s} in an unsupported virtual scope\n",
+      TRACE(VM, 2, "[VM] virtual method {%s} in an unsupported virtual scope",
             SHOW(overriding_method));
       return;
     }
@@ -173,7 +173,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
     if (it != m_unsupported_named_protos.end() &&
         it->second.count(overriding_method->get_proto())) {
       // Never observed in practice, but I guess it might happen
-      TRACE(VM, 1, "[VM] virtual method {%s} has unsupported name/proto\n",
+      TRACE(VM, 1, "[VM] virtual method {%s} has unsupported name/proto",
             SHOW(overriding_method));
       return;
     }
@@ -363,7 +363,7 @@ void VirtualMerging::merge_methods() {
           m_max_overriding_method_instructions) {
         TRACE(VM,
               2,
-              "[VM] %s is too large to be merged into %s\n",
+              "[VM] %s is too large to be merged into %s",
               SHOW(overriding_method),
               SHOW(overridden_method));
         m_stats.huge_methods++;
@@ -379,7 +379,7 @@ void VirtualMerging::merge_methods() {
                                    estimated_insn_size)) {
         TRACE(VM,
               3,
-              "[VM] Cannot inline %s into %s\n",
+              "[VM] Cannot inline %s into %s",
               SHOW(overriding_method),
               SHOW(overridden_method));
         m_stats.uninlinable_methods++;
@@ -387,7 +387,7 @@ void VirtualMerging::merge_methods() {
       }
       TRACE(VM,
             4,
-            "[VM] Merging %s into %s\n",
+            "[VM] Merging %s into %s",
             SHOW(overriding_method),
             SHOW(overridden_method));
 
@@ -619,19 +619,19 @@ void VirtualMerging::remap_invoke_virtuals() {
 }
 
 void VirtualMerging::run() {
-  TRACE(VM, 1, "[VM] Finding unsupported virtual scopes\n");
+  TRACE(VM, 1, "[VM] Finding unsupported virtual scopes");
   find_unsupported_virtual_scopes();
-  TRACE(VM, 1, "[VM] Computing mergeable scope methods\n");
+  TRACE(VM, 1, "[VM] Computing mergeable scope methods");
   compute_mergeable_scope_methods();
-  TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes\n");
+  TRACE(VM, 1, "[VM] Computing mergeable pairs by virtual scopes");
   compute_mergeable_pairs_by_virtual_scopes();
-  TRACE(VM, 1, "[VM] Merging methods\n");
+  TRACE(VM, 1, "[VM] Merging methods");
   merge_methods();
-  TRACE(VM, 1, "[VM] Removing methods\n");
+  TRACE(VM, 1, "[VM] Removing methods");
   remove_methods();
-  TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions\n");
+  TRACE(VM, 1, "[VM] Remapping invoke-virtual instructions");
   remap_invoke_virtuals();
-  TRACE(VM, 1, "[VM] Done\n");
+  TRACE(VM, 1, "[VM] Done");
 }
 
 void VirtualMergingPass::bind_config() {

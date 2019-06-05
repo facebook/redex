@@ -261,22 +261,22 @@ void StaticReloPassV2::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   std::vector<DexClass*> candidate_classes = gen_candidates(scope);
-  TRACE(STATIC_RELO, 2, "candidate_classes %d\n", candidate_classes.size());
+  TRACE(STATIC_RELO, 2, "candidate_classes %d", candidate_classes.size());
 
   int relocated_methods = run_relocation(scope, candidate_classes);
   int empty_classes = 0;
-  TRACE(STATIC_RELO, 4, "\tEmpty classes after relocation:\n");
+  TRACE(STATIC_RELO, 4, "\tEmpty classes after relocation:");
   for (DexClass* cls : candidate_classes) {
     if (cls->get_dmethods().empty()) {
       empty_classes++;
-      TRACE(STATIC_RELO, 4, "\t\t%s\n", show(cls).c_str());
+      TRACE(STATIC_RELO, 4, "\t\t%s", show(cls).c_str());
     }
   }
 
   mgr.set_metric(METRIC_RELOCATED, relocated_methods);
   mgr.set_metric(METRIC_EMPTY_CLASSES, empty_classes);
-  TRACE(STATIC_RELO, 2, "\trelocate %d static methods\n", relocated_methods);
-  TRACE(STATIC_RELO, 2, "\tGenerate %d empty classes\n", empty_classes);
+  TRACE(STATIC_RELO, 2, "\trelocate %d static methods", relocated_methods);
+  TRACE(STATIC_RELO, 2, "\tGenerate %d empty classes", empty_classes);
 }
 
 static StaticReloPassV2 s_pass;

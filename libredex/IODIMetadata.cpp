@@ -45,7 +45,7 @@ void emplace_warning_existence(T& map,
                                const DexMethod* m,
                                const std::string& key) {
   if (!map.emplace(m, key).second) {
-    TRACE(IODI, 1, "[IODI] Already found method for %s in pretty map\n",
+    TRACE(IODI, 1, "[IODI] Already found method for %s in pretty map",
           key.c_str());
   }
 }
@@ -58,7 +58,7 @@ void IODIMetadata::emplace_entry(const std::string& key,
   auto end = m_entries.end();
   always_assert(allow_collision || iter == end);
   if (iter == end) {
-    TRACE(IODI, 6, "[IODI] Found 1 %s\n", key.c_str());
+    TRACE(IODI, 6, "[IODI] Found 1 %s", key.c_str());
     m_entries.emplace(key, method);
     emplace_warning_existence(m_pretty_map, method, key);
   } else {
@@ -114,7 +114,7 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
 
 void IODIMetadata::mark_method_huge(const DexMethod* method, uint32_t size) {
   m_huge_methods.insert(method);
-  TRACE(IODI, 3, "[IODI] %s is too large to benefit from IODI: %u\n",
+  TRACE(IODI, 3, "[IODI] %s is too large to benefit from IODI: %u",
         SHOW(method), size);
 }
 
@@ -274,7 +274,7 @@ struct CallerMarker {
       if (search == MethodSearch::Direct || search == MethodSearch::Static) {
         auto iter = caller_map.find(callee);
         if (iter != caller_map.end()) {
-          TRACE(IODI, 5, "[IODI] Adding %p, %u to callsite vec for %p\n",
+          TRACE(IODI, 5, "[IODI] Adding %p, %u to callsite vec for %p",
                 caller, pc, callee);
           std::lock_guard<std::mutex> locker(caller_map_mutex);
           iter->second->emplace_back(caller, pc);

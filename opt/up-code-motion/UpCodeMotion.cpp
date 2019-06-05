@@ -128,7 +128,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // have a unique predecessor.
   if (branch_block->branchingness() != opcode::BRANCH_GOTO ||
       branch_block->preds().size() != 1) {
-    TRACE(UCM, 5, "[up code motion] giving up: branch block\n");
+    TRACE(UCM, 5, "[up code motion] giving up: branch block");
     return false;
   }
 
@@ -137,7 +137,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // target block; give up when there are any other instructions.
   if (!gather_movable_instructions(branch_block,
                                    &ordered_branch_instructions)) {
-    TRACE(UCM, 5, "[up code motion] giving up: gather\n");
+    TRACE(UCM, 5, "[up code motion] giving up: gather");
     return false;
   }
 

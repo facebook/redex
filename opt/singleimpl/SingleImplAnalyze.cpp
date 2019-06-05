@@ -468,7 +468,7 @@ void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
   auto sit = single_impls.find(intf);
   if (sit == single_impls.end()) return;
   sit->second.escape |= reason;
-  TRACE(INTF, 5, "(ESC) Escape %s => 0x%X\n", SHOW(intf), reason);
+  TRACE(INTF, 5, "(ESC) Escape %s => 0x%X", SHOW(intf), reason);
   const auto intf_cls = type_class(intf);
   if (intf_cls) {
     const auto super_intfs = intf_cls->get_interfaces();

@@ -96,7 +96,7 @@ struct Stats {
     mgr.set_metric("string_fields_resolved", string_fields_resolved);
     TRACE(
         STR_CAT, 1,
-        "insns removed: %d, methods rewritten %d, string fields resolved %d\n",
+        "insns removed: %d, methods rewritten %d, string fields resolved %d",
         insns_removed, clinits_emptied, string_fields_resolved);
   }
 };
@@ -361,7 +361,7 @@ class Concatenator {
     stats.clinits_emptied += 1;
     stats.string_fields_resolved += fields.size();
 
-    TRACE(STR_CAT, 2, "optimize %s from %d to %d\n", SHOW(method), before_size,
+    TRACE(STR_CAT, 2, "optimize %s from %d to %d", SHOW(method), before_size,
           block->num_opcodes());
     return stats;
   }

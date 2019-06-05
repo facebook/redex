@@ -119,15 +119,15 @@ std::vector<DexString*> GatheredTypes::keep_cls_strings_together_emitlist() {
 std::vector<DexMethod*> GatheredTypes::get_dexmethod_emitlist() {
   std::vector<DexMethod*> methlist;
   for (auto cls : *m_classes) {
-    TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s\n", cls->c_str());
+    TRACE(OPUT, 3, "[dexmethod_emitlist][class] %s", cls->c_str());
     auto const& dmethods = cls->get_dmethods();
     auto const& vmethods = cls->get_vmethods();
     if (traceEnabled(OPUT, 3)) {
       for (const auto &dmeth : dmethods) {
-        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s\n", dmeth->c_str());
+        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s", dmeth->c_str());
       }
       for (const auto &vmeth : vmethods) {
-        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s\n", vmeth->c_str());
+        TRACE(OPUT, 3, "  [dexmethod_emitlist][dmethod] %s", vmeth->c_str());
       }
     }
     methlist.insert(methlist.end(), dmethods.begin(), dmethods.end());
@@ -294,7 +294,7 @@ void GatheredTypes::build_cls_load_map() {
       }
     });
   }
-  TRACE(CUSTOMSORT, 1, "found %d strings from types, %d from strings in init methods, %d total strings\n",
+  TRACE(CUSTOMSORT, 1, "found %d strings from types, %d from strings in init methods, %d total strings",
       type_strings,
       init_strings,
       total_strings);
@@ -467,13 +467,13 @@ void DexOutput::generate_string_data(SortMode mode) {
    */
   std::vector<DexString*> string_order;
   if (mode == SortMode::CLASS_ORDER) {
-    TRACE(CUSTOMSORT, 2, "using class order for string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using class order for string pool sorting");
     string_order = m_gtypes->get_cls_order_dexstring_emitlist();
   } else if (mode == SortMode::CLASS_STRINGS) {
-    TRACE(CUSTOMSORT, 2, "using class names pack for string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using class names pack for string pool sorting");
     string_order = m_gtypes->keep_cls_strings_together_emitlist();
   } else {
-    TRACE(CUSTOMSORT, 2, "using default string pool sorting\n");
+    TRACE(CUSTOMSORT, 2, "using default string pool sorting");
     string_order = m_gtypes->get_dexstring_emitlist();
   }
   dex_string_id* stringids = (dex_string_id*)(m_output + hdr.string_ids_off);
@@ -518,7 +518,7 @@ void DexOutput::generate_string_data(SortMode mode) {
     }
 
     // Emit the string itself
-    TRACE(CUSTOMSORT, 3, "str emit %s\n", SHOW(str));
+    TRACE(CUSTOMSORT, 3, "str emit %s", SHOW(str));
     stringids[idx].offset = m_offset;
     str->encode(m_output + m_offset);
     m_offset += str->get_entry_size();
@@ -526,7 +526,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   }
 
   if (m_locator_index != nullptr || m_emit_name_based_locators) {
-    TRACE(LOC, 2, "Used %u bytes for %u locator strings\n", locator_size,
+    TRACE(LOC, 2, "Used %u bytes for %u locator strings", locator_size,
           locators);
   }
 }
@@ -542,7 +542,7 @@ void DexOutput::emit_name_based_locators() {
     DexClass* clz = m_classes->at(i);
     const char* str = clz->get_name()->c_str();
     uint32_t global_clsnr = Locator::decodeGlobalClassIndex(str);
-    TRACE(LOC, 3, "Class %s has global class index %u\n", str, global_clsnr);
+    TRACE(LOC, 3, "Class %s has global class index %u", str, global_clsnr);
     if (global_clsnr != Locator::invalid_global_class_index) {
       global_class_indices_last = global_clsnr;
       if (global_class_indices_first == Locator::invalid_global_class_index) {
@@ -565,7 +565,7 @@ void DexOutput::emit_name_based_locators() {
   }
 
   TRACE(LOC, 2,
-        "Global class indices for store %u, dex %u: first %u, last %u\n",
+        "Global class indices for store %u, dex %u: first %u, last %u",
         m_store_number, m_dex_number, global_class_indices_first,
         global_class_indices_last);
 
@@ -761,7 +761,7 @@ static void sync_all(const Scope& scope) {
             [](DexMethod*) { return true; },
             [&](DexMethod* m, IRCode&) {
               if (serial) {
-                TRACE(MTRANS, 2, "Syncing %s\n", SHOW(m));
+                TRACE(MTRANS, 2, "Syncing %s", SHOW(m));
                 m->sync();
               } else {
                 wq.add_item(m);
@@ -771,7 +771,7 @@ static void sync_all(const Scope& scope) {
 }
 
 void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
-  TRACE(MAIN, 2, "generate_code_items\n");
+  TRACE(MAIN, 2, "generate_code_items");
   /*
    * Optimization note:  We should pass a sort routine to the
    * emitlist to optimize pagecache efficiency.
@@ -788,12 +788,12 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
   for (auto it = mode.rbegin(); it != mode.rend(); ++it) {
     switch (*it) {
       case SortMode::CLASS_ORDER:
-        TRACE(CUSTOMSORT, 2, "using class order for bytecode sorting\n");
+        TRACE(CUSTOMSORT, 2, "using class order for bytecode sorting");
         m_gtypes->sort_dexmethod_emitlist_cls_order(lmeth);
         break;
       case SortMode::METHOD_PROFILED_ORDER:
         TRACE(CUSTOMSORT, 2,
-              "using method profiled order for bytecode sorting\n");
+              "using method profiled order for bytecode sorting");
         m_gtypes->sort_dexmethod_emitlist_profiled_order(lmeth);
         break;
       case SortMode::CLINIT_FIRST:
@@ -804,10 +804,10 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
 
       case SortMode::CLASS_STRINGS:
         TRACE(CUSTOMSORT, 2,
-              "Unsupport bytecode sorting method SortMode::CLASS_STRINGS\n");
+              "Unsupport bytecode sorting method SortMode::CLASS_STRINGS");
         break;
       case SortMode::DEFAULT:
-        TRACE(CUSTOMSORT, 2, "using default sorting order\n");
+        TRACE(CUSTOMSORT, 2, "using default sorting order");
         m_gtypes->sort_dexmethod_emitlist_default_order(lmeth);
         break;
       }
@@ -817,7 +817,7 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
       // There is no code item for ABSTRACT or NATIVE methods.
       continue;
     }
-    TRACE(CUSTOMSORT, 3, "method emit %s %s\n", SHOW(meth->get_class()), SHOW(meth));
+    TRACE(CUSTOMSORT, 3, "method emit %s %s", SHOW(meth->get_class()), SHOW(meth));
     DexCode* code = meth->get_dex_code();
     always_assert_log(
         meth->is_concrete() && code != nullptr,
@@ -1376,7 +1376,7 @@ uint32_t emit_instruction_offset_debug_info(
     } while (total_inflated_size > MAX_INFLATED_SIZE && ++best_iter != end);
     size_t total_ignored = std::distance(sizes.begin(), best_iter);
     TRACE(IODI, 3,
-          "[IODI] (%u) Ignored %u methods because they inflated too much\n",
+          "[IODI] (%u) Ignored %u methods because they inflated too much",
           param_size, total_ignored);
 
     // 2.1.2) In order to filter out methods who increase uncompressed APK size
@@ -1487,7 +1487,7 @@ uint32_t emit_instruction_offset_debug_info(
       // If using IODI period isn't valuable then don't use it!
       best_iter = end;
       TRACE(IODI, 3,
-            "[IODI] Opting out of IODI for %u arity methods entirely\n",
+            "[IODI] Opting out of IODI for %u arity methods entirely",
             param_size);
     }
 
@@ -1502,7 +1502,7 @@ uint32_t emit_instruction_offset_debug_info(
 
     // 2.2) Emit IODI programs (other debug programs will be emitted below)
     TRACE(IODI, 2,
-          "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u\n",
+          "[IODI] @%u(%u): Of %u methods %u were too big, %u at biggest %u",
           offset, param_size, sizes.size(), num_big, num_small_enough,
           insns_size);
     if (num_small_enough == 0) {
@@ -1516,7 +1516,7 @@ uint32_t emit_instruction_offset_debug_info(
       double ammortized_cost = (double)iodi_size / (double)num_small_enough;
       for (auto it = best_iter; it != end; it++) {
         TRACE(IODI, 4,
-              "[IODI][savings] %s saved %u bytes (%u), cost of %f, net %f\n",
+              "[IODI][savings] %s saved %u bytes (%u), cost of %f, net %f",
               SHOW(it->first.method), it->second, it->first.size,
               ammortized_cost, (double)it->second - ammortized_cost);
       }
@@ -1532,7 +1532,7 @@ uint32_t emit_instruction_offset_debug_info(
     }
     for (auto& bucket : buckets) {
       auto bucket_size = bucket.first;
-      TRACE(IODI, 3, "  - %u methods in bucket size %u\n", bucket.second,
+      TRACE(IODI, 3, "  - %u methods in bucket size %u", bucket.second,
             bucket_size);
       size_to_offset.emplace(bucket_size, offset);
       std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
@@ -2237,7 +2237,7 @@ dex_stats_t write_classes_to_dex(
     code_sort_mode.push_back(SortMode::DEFAULT);
   }
 
-  TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s\n", filename.c_str());
+  TRACE(OPUT, 2, "[write_classes_to_dex][filename] %s", filename.c_str());
 
   DexOutput dout = DexOutput(filename.c_str(),
                              classes,
@@ -2277,7 +2277,7 @@ LocatorIndex make_locator_index(DexStoresVector& stores,
           uint32_t global_clsnr = Locator::decodeGlobalClassIndex(cstr);
           if (global_clsnr != Locator::invalid_global_class_index) {
             TRACE(LOC, 3,
-                  "%s (%u, %u, %u) needs no locator; global class index=%u\n",
+                  "%s (%u, %u, %u) needs no locator; global class index=%u",
                   cstr, strnr, dexnr, clsnr, global_clsnr);
             // This prefix is followed by the global class index; this case
             // doesn't need a locator since emit_name_based_locators is enabled.

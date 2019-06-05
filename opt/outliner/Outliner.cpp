@@ -88,7 +88,7 @@ void build_dispatcher(DexStoresVector& stores,
     always_assert(str);
     TRACE(OUTLINE,
           1,
-          "Outlined: %d %s %s\n",
+          "Outlined: %d %s %s",
           case_entry.first,
           SHOW(type),
           SHOW(str));
@@ -100,7 +100,7 @@ void build_dispatcher(DexStoresVector& stores,
   }
   mb->throwex(ex_local);
 
-  TRACE(OUTLINE, 1, "Method creator: %s\n", SHOW(mc));
+  TRACE(OUTLINE, 1, "Method creator: %s", SHOW(mc));
 
   // create outline class and dispatch method
   auto dispatch_cls = new ClassCreator(dispatch_method->get_class());
@@ -179,7 +179,7 @@ void Outliner::run_pass(DexStoresVector& stores,
             new_instance_result->dest() == throwex->src(0)) {
           TRACE(OUTLINE,
                 1,
-                "Found pattern in %s:\n  %s\n  %s\n  %s\n  %s\n",
+                "Found pattern in %s:\n  %s\n  %s\n  %s\n  %s",
                 SHOW(method),
                 SHOW(new_instance),
                 SHOW(const_string),

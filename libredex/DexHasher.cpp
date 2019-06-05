@@ -47,33 +47,33 @@ DexHash DexScopeHasher::run() {
 }
 
 void DexClassHasher::hash(const std::string& str) {
-  TRACE(HASHER, 4, "[hasher] %s\n", str.c_str());
+  TRACE(HASHER, 4, "[hasher] %s", str.c_str());
   boost::hash_combine(m_hash, str);
 }
 
 void DexClassHasher::hash(const DexString* s) { hash(s->str()); }
 
 void DexClassHasher::hash(bool value) {
-  TRACE(HASHER, 4, "[hasher] %u\n", value);
+  TRACE(HASHER, 4, "[hasher] %u", value);
   boost::hash_combine(m_hash, value);
 }
 void DexClassHasher::hash(uint8_t value) {
-  TRACE(HASHER, 4, "[hasher] %u\n", value);
+  TRACE(HASHER, 4, "[hasher] %u", value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint16_t value) {
-  TRACE(HASHER, 4, "[hasher] %u\n", value);
+  TRACE(HASHER, 4, "[hasher] %u", value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint32_t value) {
-  TRACE(HASHER, 4, "[hasher] %u\n", value);
+  TRACE(HASHER, 4, "[hasher] %u", value);
   boost::hash_combine(m_hash, value);
 }
 
 void DexClassHasher::hash(uint64_t value) {
-  TRACE(HASHER, 4, "[hasher] %lu\n", value);
+  TRACE(HASHER, 4, "[hasher] %lu", value);
   boost::hash_combine(m_hash, value);
 }
 
@@ -289,7 +289,7 @@ void DexClassHasher::hash(const DexField* f) {
 }
 
 DexHash DexClassHasher::run() {
-  TRACE(HASHER, 2, "[hasher] ==== hashing class %s\n", SHOW(m_cls->get_type()));
+  TRACE(HASHER, 2, "[hasher] ==== hashing class %s", SHOW(m_cls->get_type()));
 
   hash(m_cls->get_access());
   hash(m_cls->get_type());
@@ -299,18 +299,18 @@ DexHash DexClassHasher::run() {
   hash(m_cls->get_interfaces());
   hash(m_cls->get_anno_set());
 
-  TRACE(HASHER, 3, "[hasher] === dmethods: %zu\n",
+  TRACE(HASHER, 3, "[hasher] === dmethods: %zu",
         m_cls->get_dmethods().size());
   hash(m_cls->get_dmethods());
 
-  TRACE(HASHER, 3, "[hasher] === vmethods: %zu\n",
+  TRACE(HASHER, 3, "[hasher] === vmethods: %zu",
         m_cls->get_vmethods().size());
   hash(m_cls->get_vmethods());
 
-  TRACE(HASHER, 3, "[hasher] === sfields: %zu\n", m_cls->get_sfields().size());
+  TRACE(HASHER, 3, "[hasher] === sfields: %zu", m_cls->get_sfields().size());
   hash(m_cls->get_sfields());
 
-  TRACE(HASHER, 3, "[hasher] === ifields: %zu\n", m_cls->get_ifields().size());
+  TRACE(HASHER, 3, "[hasher] === ifields: %zu", m_cls->get_ifields().size());
   hash(m_cls->get_ifields());
 
   return DexHash{m_registers_hash, m_code_hash, m_hash};

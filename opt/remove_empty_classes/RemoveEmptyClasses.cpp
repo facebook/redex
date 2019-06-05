@@ -25,19 +25,19 @@ bool is_empty_class(DexClass* cls,
   cls->get_ifields().empty();
   uint32_t access = cls->get_access();
   auto name = cls->get_type()->get_name()->c_str();
-  TRACE(EMPTY, 4, ">> Empty Analysis for %s\n", name);
-  TRACE(EMPTY, 4, "   no methods or fields: %d\n", empty_class);
-  TRACE(EMPTY, 4, "   can delete: %d\n", can_delete(cls));
-  TRACE(EMPTY, 4, "   not interface: %d\n",
+  TRACE(EMPTY, 4, ">> Empty Analysis for %s", name);
+  TRACE(EMPTY, 4, "   no methods or fields: %d", empty_class);
+  TRACE(EMPTY, 4, "   can delete: %d", can_delete(cls));
+  TRACE(EMPTY, 4, "   not interface: %d",
       !(access & DexAccessFlags::ACC_INTERFACE));
-  TRACE(EMPTY, 4, "   references: %d\n",
+  TRACE(EMPTY, 4, "   references: %d",
       class_references.count(cls->get_type()));
   bool remove =
          empty_class &&
          can_delete(cls) &&
          !(access & DexAccessFlags::ACC_INTERFACE) &&
          class_references.count(cls->get_type()) == 0;
-  TRACE(EMPTY, 4, "   remove: %d\n", remove);
+  TRACE(EMPTY, 4, "   remove: %d", remove);
   return remove;
 }
 
@@ -47,7 +47,7 @@ void process_annotation(
   std::vector<DexType*> ltype;
   annotation->gather_types(ltype);
   for (DexType* dextype : ltype) {
-    TRACE(EMPTY, 4, "Adding type annotation to keep list: %s\n",
+    TRACE(EMPTY, 4, "Adding type annotation to keep list: %s",
           dextype->get_name()->c_str());
     class_references->insert(dextype);
   }
@@ -79,7 +79,7 @@ void process_code(std::unordered_set<const DexType*>* class_references,
     auto opcode = mie.insn;
     if (opcode->has_type()) {
       auto typ = array_base_type(opcode->get_type());
-      TRACE(EMPTY, 4, "Adding type from code to keep list: %s\n",
+      TRACE(EMPTY, 4, "Adding type from code to keep list: %s",
             typ->get_name()->c_str());
       class_references->insert(typ);
     }
@@ -123,13 +123,13 @@ size_t remove_empty_classes(Scope& classes) {
     class_references.insert(s);
   }
 
-  TRACE(EMPTY, 3, "About to erase classes.\n");
+  TRACE(EMPTY, 3, "About to erase classes.");
   classes.erase(remove_if(classes.begin(), classes.end(),
     [&](DexClass* cls) { return is_empty_class(cls, class_references); }),
     classes.end());
 
   auto num_classes_removed = classes_before_size - classes.size();
-  TRACE(EMPTY, 1, "Empty classes removed: %ld\n", num_classes_removed);
+  TRACE(EMPTY, 1, "Empty classes removed: %ld", num_classes_removed);
   return num_classes_removed;
 }
 

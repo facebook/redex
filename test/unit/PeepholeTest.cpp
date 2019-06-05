@@ -86,7 +86,7 @@ TEST_F(PeepholeTestB, StringBuilderInit) {
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
   manager.run_passes(stores, config);
-  TRACE(PEEPHOLE, 1, "\n\n\n\nfinished\n\n\n\n");
+  TRACE(PEEPHOLE, 1, "\n\n\n\nfinished\n\n\n");
   auto expected_code_1 = assembler::ircode_from_string(R"(
        (
         (new-instance "Ljava/lang/StringBuilder;")

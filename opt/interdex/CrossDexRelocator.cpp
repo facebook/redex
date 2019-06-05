@@ -152,7 +152,7 @@ void CrossDexRelocator::relocate_methods(
         }
 
         std::string new_type_name = create_new_type_name(kind);
-        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}\n",
+        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}",
               m->get_class()->get_name()->c_str(), m->get_name()->c_str(),
               new_type_name.c_str(), m->get_name()->c_str());
 
@@ -192,7 +192,7 @@ void CrossDexRelocator::re_relocate_method(const RelocatedMethodInfo& info,
                                            DexClass* target_class) {
   DexMethod* method = info.method;
   always_assert(is_static(method));
-  TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}\n",
+  TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}",
         method->get_class()->get_name()->c_str(), method->get_name()->c_str(),
         target_class == info.source_class ? "back " : "",
         target_class->get_name()->c_str(), method->get_name()->c_str());
@@ -309,7 +309,7 @@ void CrossDexRelocator::add_to_current_dex(DexClass* cls) {
 }
 
 void CrossDexRelocator::cleanup(const Scope& final_scope) {
-  TRACE(IDEX, 2, "[dex ordering] %zu relocatable methods\n",
+  TRACE(IDEX, 2, "[dex ordering] %zu relocatable methods",
         m_relocated_method_infos.size());
 
   // We now rewrite all invoke-instructions as needed to reflect the fact that

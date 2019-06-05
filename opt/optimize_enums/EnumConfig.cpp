@@ -63,15 +63,15 @@ void ParamSummary::print(const DexMethodRef* method) const {
   if (!traceEnabled(ENUM, 9)) {
     return;
   }
-  TRACE(ENUM, 9, "summary of %s\n", SHOW(method));
+  TRACE(ENUM, 9, "summary of %s", SHOW(method));
   TRACE(ENUM, 9, "safe_params: ");
   for (auto param : safe_params) {
     TRACE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {
-    TRACE(ENUM, 9, "returned: %d\n", returned_param.get());
+    TRACE(ENUM, 9, "returned: %d", returned_param.get());
   } else {
-    TRACE(ENUM, 9, "returned: none\n");
+    TRACE(ENUM, 9, "returned: none");
   }
 }
 
@@ -160,7 +160,7 @@ void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map) {
         param_summary_map->emplace(method, summary);
         summary.print(method);
       });
-  TRACE(ENUM, 9, "External method summaries\n");
+  TRACE(ENUM, 9, "External method summaries");
   load_external_method_summaries(object_type, param_summary_map);
 }
 } // namespace optimize_enums

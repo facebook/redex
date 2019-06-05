@@ -42,7 +42,7 @@ class ModelMerger {
       TypeTags& type_tags,
       std::unordered_map<const DexType*, const DexMethod*>&
           mergeable_to_merger_ctor) {
-    TRACE(TERA, 5, "[TERA] default post process\n");
+    TRACE(TERA, 5, "[TERA] default post process");
   }
 
  private:

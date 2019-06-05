@@ -394,12 +394,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                 // in case of a tie, still ensure a deterministic total ordering
                 return a < b;
               });
-    TRACE(CSE, 4, "[CSE] relevant locations: %u %s\n",
+    TRACE(CSE, 4, "[CSE] relevant locations: %u %s",
           read_and_written_locations.size(),
           read_and_written_locations.size() > 13 ? "(HUGE!)" : "");
     value_id_t next_bit = ValueIdFlags::IS_FIRST_TRACKED_LOCATION;
     for (auto l : read_and_written_locations) {
-      TRACE(CSE, 4, "[CSE]   %s: %u reads, %u writes\n",
+      TRACE(CSE, 4, "[CSE]   %s: %u reads, %u writes",
             l.special_location < END ? "array element" : SHOW(l.field),
             read_location_counts.at(l), written_location_counts.at(l));
       m_tracked_locations.emplace(l, next_bit);
@@ -463,7 +463,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
             [&](RefEnvironment* env) { env->set(RESULT_REGISTER, domain); });
         if (opcode == OPCODE_NEW_ARRAY && domain.get_constant()) {
           auto value = get_array_length_value(*domain.get_constant());
-          TRACE(CSE, 4, "[CSE] installing array-length forwarding for %s\n",
+          TRACE(CSE, 4, "[CSE] installing array-length forwarding for %s",
                 SHOW(insn));
           install_forwarding(insn, value, current_state);
         }
@@ -514,7 +514,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       if (location != Location(GENERAL_MEMORY_BARRIER)) {
         auto value = get_equivalent_put_value(insn, current_state);
         if (value) {
-          TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s\n",
+          TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s",
                 SHOW(insn));
           install_forwarding(insn, *value, current_state);
         }
@@ -1291,16 +1291,16 @@ void SharedState::cleanup() {
       [](const std::pair<Barrier, size_t>& a,
          const std::pair<Barrier, size_t>& b) { return b.second < a.second; });
 
-  TRACE(CSE, 2, "most common barriers:\n");
+  TRACE(CSE, 2, "most common barriers:");
   for (auto& p : ordered_barriers) {
     auto& b = p.first;
     auto c = p.second;
     if (is_invoke(b.opcode)) {
-      TRACE(CSE, 2, "%s %s x %u\n", SHOW(b.opcode), SHOW(b.method), c);
+      TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.method), c);
     } else if (is_ifield_op(b.opcode) || is_sfield_op(b.opcode)) {
-      TRACE(CSE, 2, "%s %s x %u\n", SHOW(b.opcode), SHOW(b.field), c);
+      TRACE(CSE, 2, "%s %s x %u", SHOW(b.opcode), SHOW(b.field), c);
     } else {
-      TRACE(CSE, 2, "%s x %u\n", SHOW(b.opcode), c);
+      TRACE(CSE, 2, "%s x %u", SHOW(b.opcode), c);
     }
   }
 }
@@ -1358,7 +1358,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     return false;
   }
 
-  TRACE(CSE, 5, "[CSE] before:\n%s\n", SHOW(m_cfg));
+  TRACE(CSE, 5, "[CSE] before:\n%s", SHOW(m_cfg));
 
   // gather relevant instructions, and allocate temp registers
 
@@ -1427,7 +1427,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     IRInstruction* move_insn = new IRInstruction(move_opcode);
     move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
     m_cfg.insert_after(it, move_insn);
-    TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u\n", SHOW(earlier_insn),
+    TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
           SHOW(insn), temp_reg);
 
     if (opcode::is_move_result_or_move_result_pseudo(insn->opcode())) {
@@ -1458,7 +1458,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     }
   }
 
-  TRACE(CSE, 5, "[CSE] after:\n%s\n", SHOW(m_cfg));
+  TRACE(CSE, 5, "[CSE] after:\n%s", SHOW(m_cfg));
 
   m_stats.instructions_eliminated += m_forward.size();
   return true;
@@ -1491,7 +1491,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           return Stats();
         }
 
-        TRACE(CSE, 3, "[CSE] processing %s\n", SHOW(method));
+        TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
         always_assert(code->editable_cfg_built());
         CommonSubexpressionElimination cse(&shared_state, code->cfg());
         bool any_changes = cse.patch(is_static(method), method->get_class(),
@@ -1512,7 +1512,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
           if (traceEnabled(CSE, 5)) {
             code->build_cfg(/* editable */ true);
-            TRACE(CSE, 5, "[CSE] final:\n%s\n", SHOW(code->cfg()));
+            TRACE(CSE, 5, "[CSE] final:\n%s", SHOW(code->cfg()));
             code->clear_cfg();
           }
         }

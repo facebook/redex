@@ -97,14 +97,14 @@ void get_call_to_super(
           (*init_callers)[insn_method_def].emplace(method->get_code());
           TRACE(VMERGE,
                 5,
-                "Changing init call %s:\n %s\n",
+                "Changing init call %s:\n %s",
                 SHOW(insn),
                 SHOW(insn_method_def->get_code()));
         } else {
           (*callee_to_insns)[insn_method_def].emplace(insn);
           TRACE(VMERGE,
                 5,
-                "Replacing super call %s:\n %s\n",
+                "Replacing super call %s:\n %s",
                 SHOW(insn),
                 SHOW(insn_method_def->get_code()));
         }
@@ -412,7 +412,7 @@ void record_black_list(
       if (strstr(cls->get_name()->c_str(), name.c_str()) != nullptr) {
         TRACE(VMERGE,
               5,
-              "%s | %s | %u\n",
+              "%s | %s | %u",
               SHOW(cls),
               cls->rstate.str().c_str(),
               can_delete(cls));
@@ -470,13 +470,13 @@ void record_referenced(
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
   DexType* target_cls_type = to_cls->get_type();
   auto move_field = [&](DexField* field) {
-    TRACE(VMERGE, 5, "move field : %s \n", SHOW(field));
+    TRACE(VMERGE, 5, "move field : %s ", SHOW(field));
     from_cls->remove_field(field);
     DexFieldSpec field_spec;
     field_spec.cls = target_cls_type;
     field->change(field_spec, true /* rename_on_collision */);
 
-    TRACE(VMERGE, 5, "field after : %s \n", SHOW(field));
+    TRACE(VMERGE, 5, "field after : %s ", SHOW(field));
     to_cls->add_field(field);
   };
   auto sfields = from_cls->get_sfields();
@@ -564,9 +564,9 @@ void update_references(const Scope& scope,
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
   std::set<DexType*, dextypes_comparator> new_intfs;
-  TRACE(VMERGE, 5, "interface before : \n");
+  TRACE(VMERGE, 5, "interface before : ");
   for (const auto& cls_intf : to_cls->get_interfaces()->get_type_list()) {
-    TRACE(VMERGE, 5, "  %s\n", SHOW(cls_intf));
+    TRACE(VMERGE, 5, "  %s", SHOW(cls_intf));
     new_intfs.emplace(cls_intf);
   }
   for (const auto& cls_intf : from_cls->get_interfaces()->get_type_list()) {
@@ -574,9 +574,9 @@ void update_implements(DexClass* from_cls, DexClass* to_cls) {
   }
   std::deque<DexType*> deque;
 
-  TRACE(VMERGE, 5, "interface after : \n");
+  TRACE(VMERGE, 5, "interface after : ");
   for (const auto& intf : new_intfs) {
-    TRACE(VMERGE, 5, "  %s\n", SHOW(intf));
+    TRACE(VMERGE, 5, "  %s", SHOW(intf));
     deque.emplace_back(intf);
   }
 
@@ -593,7 +593,7 @@ void remove_merged(
   for (const auto& pair : mergeable_to_merger) {
     TRACE(VMERGE,
           5,
-          "Removing class | %s | merged into | %s\n",
+          "Removing class | %s | merged into | %s",
           SHOW(pair.first),
           SHOW(pair.second));
   }
@@ -647,7 +647,7 @@ void VerticalMergingPass::move_methods(
   auto move_method = [&](DexMethod* method) {
     TRACE(VMERGE,
           5,
-          "%s | %s | %s\n",
+          "%s | %s | %s",
           SHOW(from_cls),
           SHOW(to_cls),
           SHOW(method));
@@ -658,14 +658,14 @@ void VerticalMergingPass::move_methods(
       if (methodref_in_context) {
         TRACE(VMERGE,
               5,
-              "ALREADY EXISTED METHODREF %s\n",
+              "ALREADY EXISTED METHODREF %s",
               SHOW(methodref_in_context));
         DexMethod* method_def =
             resolve_method(methodref_in_context, MethodSearch::Any);
         always_assert_log(
             method_def != nullptr,
             "Found a method ref can't be resolve during merging.\n");
-        TRACE(VMERGE, 5, "RESOLVED to %s\n", SHOW(method_def));
+        TRACE(VMERGE, 5, "RESOLVED to %s", SHOW(method_def));
         if (method_def->get_class() != target_cls_type) {
           // the method resolved is not defined in target class, so the method
           // in mergeable class should have implementation for the method ref
@@ -673,7 +673,7 @@ void VerticalMergingPass::move_methods(
           // substitute it with real method implementation.
           (*methodref_update_map)[methodref_in_context] = method;
           DexMethodRef::erase_method(methodref_in_context);
-          TRACE(VMERGE, 5, "Erasing method ref.\n");
+          TRACE(VMERGE, 5, "Erasing method ref.");
         } else {
           if (referenced_methods.count(method)) {
             // Static or direct method. Safe to move
@@ -722,11 +722,11 @@ void VerticalMergingPass::move_methods(
   auto dmethod = from_cls->get_dmethods();
   auto vmethod = from_cls->get_vmethods();
   for (DexMethod* method : dmethod) {
-    TRACE(VMERGE, 5, "dmethods:\n");
+    TRACE(VMERGE, 5, "dmethods:");
     move_method(method);
   }
   for (DexMethod* method : vmethod) {
-    TRACE(VMERGE, 5, "vmethods:\n");
+    TRACE(VMERGE, 5, "vmethods:");
     move_method(method);
   }
 }

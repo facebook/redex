@@ -38,9 +38,9 @@ void RedundantCheckCastRemover::run() {
           method->get_code()->remove_opcode(check_cast);
           num_check_casts_removed++;
 
-          TRACE(PEEPHOLE, 8, "redundant check cast in %s\n", SHOW(method));
+          TRACE(PEEPHOLE, 8, "redundant check cast in %s", SHOW(method));
           for (IRInstruction* insn : insns) {
-            TRACE(PEEPHOLE, 8, "  %s\n", SHOW(insn));
+            TRACE(PEEPHOLE, 8, "  %s", SHOW(insn));
           }
         }
       });

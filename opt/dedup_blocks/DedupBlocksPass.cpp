@@ -409,7 +409,7 @@ class DedupBlocksImpl {
     }
 
     TRACE(DEDUP_BLOCKS, 4,
-          "split_postfix: partitioned %d blocks into %d groups\n",
+          "split_postfix: partitioned %d blocks into %d groups",
           blocks.size(), splitGroupMap.size());
 
     struct CountGroup {
@@ -428,7 +428,7 @@ class DedupBlocksImpl {
       }
 
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: current group (succs=%d, blocks=%d)\n",
+            "split_postfix: current group (succs=%d, blocks=%d)",
             b->succs().size(), succ_blocks.size());
 
       // Keep track of best we've seen so far.
@@ -448,7 +448,7 @@ class DedupBlocksImpl {
       // Find the best common blocks
       size_t cur_insn_index = 0;
       while (true) {
-        TRACE(DEDUP_BLOCKS, 4, "split_postfix: scanning instruction at %d\n",
+        TRACE(DEDUP_BLOCKS, 4, "split_postfix: scanning instruction at %d",
               cur_insn_index);
 
         // For each "iteration" - we count the distinct instructions and select
@@ -543,7 +543,7 @@ class DedupBlocksImpl {
 
       // Update the current group with the best savings
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: best block group.size() = %d, instruction at %d\n",
+            "split_postfix: best block group.size() = %d, instruction at %d",
             best_blocks.size(), best_insn_count);
       split_group.postfix_block_its = std::move(best_block_its);
       split_group.postfix_blocks = std::move(best_blocks);
@@ -554,7 +554,7 @@ class DedupBlocksImpl {
       return it->second.postfix_blocks.size() <= 1;
     });
 
-    TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d\n",
+    TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d",
           splitGroupMap.size());
     return splitGroupMap;
   }
@@ -570,7 +570,7 @@ class DedupBlocksImpl {
     for (const PostfixSplitGroupMap::value_type* entry : get_id_order(dups)) {
       const auto& group = entry->second;
       TRACE(DEDUP_BLOCKS, 4,
-            "split_postfix: splitting blocks.size() = %d, instruction at %d\n",
+            "split_postfix: splitting blocks.size() = %d, instruction at %d",
             group.postfix_blocks.size(), group.insn_count);
 
       // Split the blocks at the reverse iterator where we determine to be
@@ -617,7 +617,7 @@ class DedupBlocksImpl {
         auto split_block =
             cfg.split_block(block->to_cfg_instruction_iterator(fwd_it));
         TRACE(DEDUP_BLOCKS, 4,
-              "split_postfix: split block : old = %d, new = %d\n", block->id(),
+              "split_postfix: split block : old = %d, new = %d", block->id(),
               split_block->id());
         ++m_num_blocks_split;
       }
@@ -806,18 +806,18 @@ class DedupBlocksImpl {
     m_mgr.incr_metric(METRIC_ELIGIBLE_BLOCKS, eligible_blocks);
     m_mgr.incr_metric(METRIC_BLOCKS_REMOVED, removed);
     m_mgr.incr_metric(METRIC_BLOCKS_SPLIT, split);
-    TRACE(DEDUP_BLOCKS, 2, "%d eligible_blocks\n", eligible_blocks);
+    TRACE(DEDUP_BLOCKS, 2, "%d eligible_blocks", eligible_blocks);
 
     for (const auto& entry : m_dup_sizes) {
       TRACE(DEDUP_BLOCKS,
             2,
-            "found %d duplicate blocks with %d instructions\n",
+            "found %d duplicate blocks with %d instructions",
             entry.second,
             entry.first);
     }
 
-    TRACE(DEDUP_BLOCKS, 1, "%d blocks split\n", split);
-    TRACE(DEDUP_BLOCKS, 1, "%d blocks removed\n", removed);
+    TRACE(DEDUP_BLOCKS, 1, "%d blocks split", split);
+    TRACE(DEDUP_BLOCKS, 1, "%d blocks removed", removed);
   }
 
   // remove sets with only one block
@@ -862,17 +862,17 @@ class DedupBlocksImpl {
   }
 
   static void print_dups(Duplicates dups) {
-    TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {\n");
+    TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : dups) {
-      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu\n", BlockHasher{}(entry.first));
+      TRACE(DEDUP_BLOCKS, 4, "  hash = %lu", BlockHasher{}(entry.first));
       for (cfg::Block* b : entry.second) {
-        TRACE(DEDUP_BLOCKS, 4, "    block %d\n", b->id());
+        TRACE(DEDUP_BLOCKS, 4, "    block %d", b->id());
         for (const MethodItemEntry& mie : *b) {
-          TRACE(DEDUP_BLOCKS, 4, "      %s\n", SHOW(mie));
+          TRACE(DEDUP_BLOCKS, 4, "      %s", SHOW(mie));
         }
       }
     }
-    TRACE(DEDUP_BLOCKS, 4, "} end duplicate blocks set\n");
+    TRACE(DEDUP_BLOCKS, 4, "} end duplicate blocks set");
   }
 };
 

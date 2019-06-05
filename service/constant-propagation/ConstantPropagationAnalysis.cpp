@@ -206,10 +206,10 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
     break;
   }
   if (insn->dests_size()) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
-    TRACE(CONSTP, 5, "Clearing result register\n");
+    TRACE(CONSTP, 5, "Clearing result register");
     env->set(RESULT_REGISTER, ConstantValue::top());
   }
   return true;
@@ -217,7 +217,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
                                       ConstantEnvironment* env) {
-  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld",
         insn->dest(), insn->get_literal());
   env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;
@@ -267,7 +267,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
                                           ConstantEnvironment* env) {
   auto op = insn->opcode();
   int32_t lit = insn->get_literal();
-  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn), lit);
+  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu", SHOW(insn), lit);
   auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
   boost::optional<int64_t> result = boost::none;
   if (cst) {
@@ -597,13 +597,13 @@ namespace intraprocedural {
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env) const {
-  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
+  TRACE(CONSTP, 5, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
 }
 
 void FixpointIterator::analyze_node(const NodeId& block,
                                     ConstantEnvironment* state_at_entry) const {
-  TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
+  TRACE(CONSTP, 5, "Analyzing block: %d", block->id());
   for (auto& mie : InstructionIterable(block)) {
     analyze_instruction(mie.insn, state_at_entry);
   }

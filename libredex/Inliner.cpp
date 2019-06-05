@@ -43,7 +43,7 @@ DEBUG_ONLY bool method_breakup(
     for (auto callee : group) {
       callee->get_access() & ACC_STATIC ? stat++ : inst++;
     }
-    TRACE(INLINE, 5, "%ld callers %ld: instance %ld, static %ld\n", i,
+    TRACE(INLINE, 5, "%ld callers %ld: instance %ld, static %ld", i,
           group.size(), inst, stat);
   }
   return true;
@@ -266,7 +266,7 @@ void MultiMethodInliner::inline_inlinables(
       continue;
     }
 
-    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)\n", SHOW(callee),
+    TRACE(MMINL, 4, "inline %s (%d) in %s (%d)", SHOW(callee),
           caller->get_registers_size(), SHOW(caller),
           callee->get_registers_size());
 
@@ -284,12 +284,12 @@ void MultiMethodInliner::inline_inlinables(
 
       inliner::inline_method(caller, callee, callsite);
     }
-    TRACE(INL, 2, "caller: %s\tcallee: %s\n", SHOW(caller), SHOW(callee));
+    TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
     estimated_insn_size += callee->editable_cfg_built()
                                ? callee->cfg().sum_opcode_sizes()
                                : callee->sum_opcode_sizes();
 
-    TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
+    TRACE(MMINL, 6, "checking visibility usage of members in %s",
           SHOW(callee));
     change_visibility(callee_method, caller_method->get_class());
     info.calls_inlined++;
@@ -357,7 +357,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
         log_nopt(INL_REQUIRES_API, caller, insn);
       }
       TRACE(MMINL, 4,
-            "Refusing to inline %s\n"
+            "Refusing to inline %s"
             "              into %s\n because of API boundaries.",
             show_deobfuscated(callee).c_str(),
             show_deobfuscated(caller).c_str());
@@ -835,7 +835,7 @@ void MultiMethodInliner::invoke_direct_to_static() {
   std::vector<DexMethod*> methods(m_make_static.begin(), m_make_static.end());
   std::sort(methods.begin(), methods.end(), compare_dexmethods);
   for (auto method : methods) {
-    TRACE(MMINL, 6, "making %s static\n", method->get_name()->c_str());
+    TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);
   }
   walk::opcodes(m_scope, [](DexMethod* meth) { return true; },
@@ -1130,8 +1130,8 @@ DexPosition* last_position_before(const IRList::const_iterator& it,
 void inline_method(IRCode* caller_code,
                    IRCode* callee_code,
                    IRList::iterator pos) {
-  TRACE(INL, 5, "caller code:\n%s\n", SHOW(caller_code));
-  TRACE(INL, 5, "callee code:\n%s\n", SHOW(callee_code));
+  TRACE(INL, 5, "caller code:\n%s", SHOW(caller_code));
+  TRACE(INL, 5, "callee code:\n%s", SHOW(callee_code));
 
   auto callee_reg_map = gen_callee_reg_map(caller_code, callee_code, pos);
 
@@ -1146,7 +1146,7 @@ void inline_method(IRCode* caller_code,
   // find the last position entry before the invoke.
   const auto invoke_position = last_position_before(pos, caller_code);
   if (invoke_position) {
-    TRACE(INL, 3, "Inlining call at %s:%d\n",
+    TRACE(INL, 3, "Inlining call at %s:%d",
           invoke_position->file->c_str(),
           invoke_position->line);
   }
@@ -1231,13 +1231,13 @@ void inline_method(IRCode* caller_code,
     }
   }
   splice.fix_parent_positions();
-  TRACE(INL, 5, "post-inline caller code:\n%s\n", SHOW(caller_code));
+  TRACE(INL, 5, "post-inline caller code:\n%s", SHOW(caller_code));
 }
 
 void inline_tail_call(DexMethod* caller,
                       DexMethod* callee,
                       IRList::iterator pos) {
-  TRACE(INL, 2, "caller: %s\ncallee: %s\n", SHOW(caller), SHOW(callee));
+  TRACE(INL, 2, "caller: %s\ncallee: %s", SHOW(caller), SHOW(callee));
   auto* caller_code = caller->get_code();
   auto* callee_code = callee->get_code();
 

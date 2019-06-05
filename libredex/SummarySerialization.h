@@ -64,7 +64,7 @@ size_t read(std::istream& input,
     // ArrayList.equals() inherits from Object.equals()).
     auto cls = type_class(dex_method->get_class());
     if (cls == nullptr || !cls->is_external()) {
-      TRACE(LIB, 1, "Found a summary for non-external method '%s', ignoring\n",
+      TRACE(LIB, 1, "Found a summary for non-external method '%s', ignoring",
             SHOW(dex_method));
       continue;
     }

@@ -48,7 +48,7 @@ int obfuscate_elems(const RenamingContext<T>& context,
   for (T elem : context.elems) {
     if (!context.can_rename_elem(elem) ||
         !name_mapping[elem]->should_rename()) {
-      TRACE(OBFUSCATE, 4, "Ignoring member %s because we shouldn't rename it\n",
+      TRACE(OBFUSCATE, 4, "Ignoring member %s because we shouldn't rename it",
           SHOW(elem->get_name()));
       continue;
     }
@@ -63,20 +63,20 @@ void debug_logging(std::vector<DexClass*>& classes) {
     TRACE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
     for (DexField* f : cls->get_ifields())
       TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
-    TRACE(OBFUSCATE, 4, "\n");
+    TRACE(OBFUSCATE, 4, "");
     TRACE(OBFUSCATE, 4, "  List of sfields\t");
     for (DexField* f : cls->get_sfields())
       TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
-    TRACE(OBFUSCATE, 4, "\n");
+    TRACE(OBFUSCATE, 4, "");
   }
-  TRACE(OBFUSCATE, 3, "Finished applying new names to defs\n");
+  TRACE(OBFUSCATE, 3, "Finished applying new names to defs");
 }
 
 template<typename DexMember, typename DexMemberRef, typename DexMemberSpec, typename K>
 DexMember* find_renamable_ref(DexMemberRef* ref,
     std::unordered_map<DexMemberRef*, DexMember*>& ref_def_cache,
     DexElemManager<DexMember*, DexMemberRef*, DexMemberSpec, K>& name_mapping) {
-  TRACE(OBFUSCATE, 4, "Found a ref opcode\n");
+  TRACE(OBFUSCATE, 4, "Found a ref opcode");
   DexMember* def = nullptr;
   auto member_itr = ref_def_cache.find(ref);
   if (member_itr != ref_def_cache.end()) {
@@ -163,7 +163,7 @@ void obfuscate(Scope& scope,
       StaticFieldNameGenerator static_name_generator(
           f_ob_state.ids_to_avoid, f_ob_state.used_ids);
 
-      TRACE(OBFUSCATE, 3, "Renaming the fields of class %s\n",
+      TRACE(OBFUSCATE, 3, "Renaming the fields of class %s",
           SHOW(cls->get_name()));
 
       f_ob_state.populate_ids_to_avoid(cls, field_name_manager, true, ch);
@@ -214,7 +214,7 @@ void obfuscate(Scope& scope,
       MethodNameGenerator simple_name_gen(m_ob_state.ids_to_avoid,
           m_ob_state.used_ids);
 
-      TRACE(OBFUSCATE, 3, "Renaming the methods of class %s\n",
+      TRACE(OBFUSCATE, 3, "Renaming the methods of class %s",
                 SHOW(cls->get_name()));
       m_ob_state.populate_ids_to_avoid(cls, method_name_manager, true, ch);
 
@@ -243,14 +243,14 @@ void obfuscate(Scope& scope,
   method_name_manager.print_elements();
 
 
-  TRACE(OBFUSCATE, 3, "Finished picking new names\n");
+  TRACE(OBFUSCATE, 3, "Finished picking new names");
 
   // Update any instructions with a member that is a ref to the corresponding
   // def for any field that we are going to rename. This allows us to in-place
   // rename the field def and have that change seen everywhere.
   update_refs(scope, field_name_manager, method_name_manager);
 
-  TRACE(OBFUSCATE, 3, "Finished transforming refs\n");
+  TRACE(OBFUSCATE, 3, "Finished transforming refs");
 
   // Apply new names, recording what we're changing
   stats.fields_renamed = field_name_manager.commit_renamings_to_dex();
@@ -261,7 +261,7 @@ void obfuscate(Scope& scope,
   debug_logging(scope);
 
   TRACE(OBFUSCATE, 1,
-      "%s: %ld\n%s: %ld\n"
+      "%s: %ld\n%s: %ld"
       "%s: %ld\n%s: %ld\n"
       "%s: %ld\n%s: %ld\n",
       METRIC_FIELD_TOTAL, stats.fields_total,

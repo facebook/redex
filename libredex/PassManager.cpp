@@ -116,7 +116,7 @@ void PassManager::init(const Json::Value& config) {
 
 hashing::DexHash PassManager::run_hasher(const char* pass_name,
                                          const Scope& scope) {
-  TRACE(PM, 2, "Running hasher...\n");
+  TRACE(PM, 2, "Running hasher...");
   Timer t("Hasher");
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
@@ -132,7 +132,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
   auto code_hash_string = hashing::hash_to_string(hash.code_hash);
   auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
-  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s\n",
+  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s",
         pass_name ? pass_name : "(initial)", registers_hash_string.c_str(),
         code_hash_string.c_str(), signature_hash_string.c_str());
   return hash;
@@ -141,7 +141,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
 void PassManager::run_type_checker(const Scope& scope,
                                    bool verify_moves,
                                    bool check_no_overwrite_this) {
-  TRACE(PM, 1, "Running IRTypeChecker...\n");
+  TRACE(PM, 1, "Running IRTypeChecker...");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method);
@@ -208,7 +208,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
+    TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
     m_current_pass_info = &m_pass_info[i];
     pass->eval_pass(stores, conf, *this);
@@ -241,7 +241,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
+    TRACE(PM, 1, "Running %s...", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
 

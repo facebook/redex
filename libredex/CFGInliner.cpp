@@ -30,8 +30,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
 
-  TRACE(CFG, 3, "caller %s\n", SHOW(*caller));
-  TRACE(CFG, 3, "callee %s\n", SHOW(callee));
+  TRACE(CFG, 3, "caller %s", SHOW(*caller));
+  TRACE(CFG, 3, "callee %s", SHOW(callee));
 
   if (caller->get_succ_edge_of_type(callsite.block(), EDGE_THROW) != nullptr) {
     split_on_callee_throws(&callee);
@@ -43,7 +43,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
 
   // make the invoke last of its block
   Block* after_callee = maybe_split_block(caller, callsite);
-  TRACE(CFG, 3, "caller after split %s\n", SHOW(*caller));
+  TRACE(CFG, 3, "caller after split %s", SHOW(*caller));
 
   DexPosition* callsite_dbg_pos = get_dbg_pos(callsite);
   if (callsite_dbg_pos) {
@@ -71,7 +71,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                       ? boost::none
                       : boost::optional<uint16_t>{move_res->insn->dest()});
 
-  TRACE(CFG, 3, "callee after remap %s\n", SHOW(callee));
+  TRACE(CFG, 3, "callee after remap %s", SHOW(callee));
 
   // delete the move-result before connecting the cfgs because it's in a block
   // that may be merged into another
@@ -86,7 +86,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                callee_return_blocks, after_callee);
   caller->set_registers_size(callee_regs_size + caller_regs_size);
 
-  TRACE(CFG, 3, "caller after connect %s\n", SHOW(*caller));
+  TRACE(CFG, 3, "caller after connect %s", SHOW(*caller));
 
   // delete the invoke after connecting the CFGs because remove_insn will
   // remove the outgoing throw if we remove the callsite
@@ -95,7 +95,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   if (ControlFlowGraph::DEBUG) {
     caller->sanity_check();
   }
-  TRACE(CFG, 3, "final %s\n", SHOW(*caller));
+  TRACE(CFG, 3, "final %s", SHOW(*caller));
 }
 
 /*
@@ -182,7 +182,7 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
 
   auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 4, "connecting %d, %d in %s\n", pred->id(), succ->id(), SHOW(*cfg));
+      TRACE(CFG, 4, "connecting %d, %d in %s", pred->id(), succ->id(), SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
       // If this is the only connecting edge, we can merge these blocks into one
       if (preds.size() == 1 && succ->preds().size() == 1 &&

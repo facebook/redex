@@ -37,7 +37,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
   if (args.is_bottom()) {
     args.set_to_top();
   } else if (!args.is_top()) {
-    TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
+    TRACE(ICONSTP, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
   }
 
   auto env = env_with_params(&code, args);
@@ -46,7 +46,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
     class_under_init = method->get_class();
     set_encoded_values(type_class(class_under_init), &env);
   }
-  TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
+  TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
 
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(),

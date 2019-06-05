@@ -379,7 +379,7 @@ int instrument_onBasicBlockBegin(
   // Since we reserve the MSB as the end marker, we divide by 15.
   const size_t num_vectors = (blocks.size() + 15 - 1) / 15;
 
-  TRACE(INSTRUMENT, 7, "[%s] Basic Blocks: %zu, Necessary vectors: %zu\n",
+  TRACE(INSTRUMENT, 7, "[%s] Basic Blocks: %zu, Necessary vectors: %zu",
         SHOW(method->get_name()), blocks.size(), num_vectors);
 
   all_bbs += blocks.size();
@@ -427,7 +427,7 @@ int instrument_onBasicBlockBegin(
     // 1. It only has internal or MOVE instructions.
     // 2. BB has no opcodes.
     if (insert_point == block->end() || block->num_opcodes() < 1) {
-      TRACE(INSTRUMENT, 7, "No instrumentation to block: %s\n",
+      TRACE(INSTRUMENT, 7, "No instrumentation to block: %s",
             SHOW(show(method) + std::to_string(block->id())));
       continue;
     }
@@ -454,8 +454,8 @@ int instrument_onBasicBlockBegin(
     code->insert_before(insert_point_init, const_inst_int.at(reg_index));
   }
 
-  TRACE(INSTRUMENT, 7, "Id: %zu Method: %s\n", method_id, SHOW(method_name));
-  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s\n", SHOW(code));
+  TRACE(INSTRUMENT, 7, "Id: %zu Method: %s", method_id, SHOW(method_name));
+  TRACE(INSTRUMENT, 7, "After Instrumentation Full:\n %s", SHOW(code));
 
   method_id += num_vectors;
   all_methods_inst++;
@@ -512,20 +512,20 @@ void instrument_onMethodBegin(DexMethod* method,
   if (debug) {
     for (auto it = code->begin(); it != code->end(); ++it) {
       if (it == insert_point) {
-        TRACE(INSTRUMENT, 9, "<==== insertion\n");
-        TRACE(INSTRUMENT, 9, "%s\n", SHOW(*it));
+        TRACE(INSTRUMENT, 9, "<==== insertion");
+        TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
         ++it;
         if (it != code->end()) {
-          TRACE(INSTRUMENT, 9, "%s\n", SHOW(*it));
+          TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
           ++it;
           if (it != code->end()) {
-            TRACE(INSTRUMENT, 9, "%s\n", SHOW(*it));
+            TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
           }
         }
-        TRACE(INSTRUMENT, 9, "\n");
+        TRACE(INSTRUMENT, 9, "");
         break;
       }
-      TRACE(INSTRUMENT, 9, "%s\n", SHOW(*it));
+      TRACE(INSTRUMENT, 9, "%s", SHOW(*it));
     }
   }
 }
@@ -578,7 +578,7 @@ void patch_array_size(DexClass& analysis_cls,
     exit(1);
   }
 
-  TRACE(INSTRUMENT, 2, "%s array was patched: %d\n", SHOW(array_name),
+  TRACE(INSTRUMENT, 2, "%s array was patched: %d", SHOW(array_name),
         array_size);
 }
 
@@ -605,7 +605,7 @@ void patch_static_field(DexClass& analysis_cls,
   // SPUT can be null if the original field value was encoded in the
   // static_values_off array. And consider simplifying using make_concrete.
   if (sput_inst == nullptr) {
-    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it\n", field_name);
+    TRACE(INSTRUMENT, 2, "sput %s was deleted; creating it", field_name);
     sput_inst = new IRInstruction(OPCODE_SPUT);
     sput_inst->set_field(
         DexField::make_field(DexType::make_type(analysis_cls.get_name()),
@@ -623,7 +623,7 @@ void patch_static_field(DexClass& analysis_cls,
 
   sput_inst->set_src(0, reg_dest);
   code->insert_before(insert_point, const_inst);
-  TRACE(INSTRUMENT, 2, "%s was patched: %d\n", field_name, new_number);
+  TRACE(INSTRUMENT, 2, "%s was patched: %d", field_name, new_number);
 }
 
 void write_basic_block_index_file(
@@ -634,7 +634,7 @@ void write_basic_block_index_file(
     ofs << p.first << "," << p.second.first << "," << p.second.second
         << std::endl;
   }
-  TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
+  TRACE(INSTRUMENT, 2, "Index file was written to: %s", file_name.c_str());
 } // namespace
 
 auto generate_sharded_analysis_methods(DexClass& cls,
@@ -698,7 +698,7 @@ auto generate_sharded_analysis_methods(DexClass& cls,
                       new_name.c_str());
     names[new_name] = i;
     methods[i] = new_method;
-    TRACE(INSTRUMENT, 4, "Cloned %s and patched the stat array successfully\n",
+    TRACE(INSTRUMENT, 4, "Cloned %s and patched the stat array successfully",
           new_name.c_str());
   }
 
@@ -884,7 +884,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     if (analysis_method_names.count(method->get_name()->str()) ||
         method == analysis_cls->get_clinit()) {
       ++excluded;
-      TRACE(INSTRUMENT, 2, "Excluding analysis method: %s\n", SHOW(method));
+      TRACE(INSTRUMENT, 2, "Excluding analysis method: %s", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
           << "MYSELF " << vshow(method->get_access(), true) << "\"\n";
       return 0;
@@ -893,10 +893,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // Handle whitelist and blacklist.
     if (!options.whitelist.empty()) {
       if (is_included(method, options.whitelist)) {
-        TRACE(INSTRUMENT, 8, "Whitelist: included: %s\n", SHOW(method));
+        TRACE(INSTRUMENT, 8, "Whitelist: included: %s", SHOW(method));
       } else {
         ++excluded;
-        TRACE(INSTRUMENT, 9, "Whitelist: excluded: %s\n", SHOW(method));
+        TRACE(INSTRUMENT, 9, "Whitelist: excluded: %s", SHOW(method));
         return 0;
       }
     }
@@ -906,13 +906,13 @@ void do_simple_method_tracing(DexClass* analysis_cls,
     // is not instrumented.
     if (is_included(method, options.blacklist)) {
       ++excluded;
-      TRACE(INSTRUMENT, 8, "Blacklist: excluded: %s\n", SHOW(method));
+      TRACE(INSTRUMENT, 8, "Blacklist: excluded: %s", SHOW(method));
       ofs << "M,-1," << name << "," << sum_opcode_sizes << ",\""
           << "BLACKLIST " << vshow(method->get_access(), true) << "\"\n";
       return 0;
     }
 
-    TRACE(INSTRUMENT, 8, "%zu: %s\n", method_id, SHOW(method));
+    TRACE(INSTRUMENT, 8, "%zu: %s", method_id, SHOW(method));
     assert(to_instrument.size() == method_id);
     to_instrument.push_back(method);
 
@@ -994,10 +994,10 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Now we know the total number of methods to be instrumented. Do some
   // computations and actual instrumentation.
   const size_t kTotalSize = to_instrument.size();
-  TRACE(INSTRUMENT, 2, "%zu methods to be instrumented; shard size: %zu (+1)\n",
+  TRACE(INSTRUMENT, 2, "%zu methods to be instrumented; shard size: %zu (+1)",
         kTotalSize, kTotalSize / NUM_SHARDS);
   for (size_t i = 0; i < kTotalSize; ++i) {
-    TRACE(INSTRUMENT, 6, "Sharded %zu => [%zu][%zu] %s\n", i, (i % NUM_SHARDS),
+    TRACE(INSTRUMENT, 6, "Sharded %zu => [%zu][%zu] %s", i, (i % NUM_SHARDS),
           (i / NUM_SHARDS), SHOW(to_instrument[i]));
     instrument_onMethodBegin(to_instrument[i],
                              (i / NUM_SHARDS) * options.num_stats_per_method,
@@ -1006,7 +1006,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   TRACE(INSTRUMENT,
         1,
-        "%d methods were instrumented (%d methods were excluded)\n",
+        "%d methods were instrumented (%d methods were excluded)",
         method_id,
         excluded);
 
@@ -1023,7 +1023,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   patch_static_field(*analysis_cls, "sMethodCount", kTotalSize);
 
   ofs.close();
-  TRACE(INSTRUMENT, 2, "Index file was written to: %s\n", file_name.c_str());
+  TRACE(INSTRUMENT, 2, "Index file was written to: %s", file_name.c_str());
 
   pm.incr_metric("Instrumented", method_id);
   pm.incr_metric("Excluded", excluded);
@@ -1078,7 +1078,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
     class_string.back() = '/';
     cold_start_classes.insert(class_string);
   }
-  TRACE(INSTRUMENT, 7, "Number of classes: %d\n", cold_start_classes.size());
+  TRACE(INSTRUMENT, 7, "Number of classes: %d", cold_start_classes.size());
 
   std::map<size_t /* num_vectors */, int /* count */> bb_vector_stat;
   walk::code(scope, [&](DexMethod* method, IRCode& code) {
@@ -1101,11 +1101,11 @@ void do_basic_block_tracing(DexClass* analysis_cls,
 
     // Blacklist has priority over whitelist or cold start list.
     if (is_included(method, options.blacklist)) {
-      TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s\n", SHOW(method));
+      TRACE(INSTRUMENT, 9, "Blacklist: excluded: %s", SHOW(method));
       return;
     }
 
-    TRACE(INSTRUMENT, 9, "Whitelist: included: %s\n", SHOW(method));
+    TRACE(INSTRUMENT, 9, "Whitelist: included: %s", SHOW(method));
     all_methods++;
     method_index = instrument_onBasicBlockBegin(
         &code, method, method_onMethodExit_map, method_index, all_bb_nums,
@@ -1117,11 +1117,11 @@ void do_basic_block_tracing(DexClass* analysis_cls,
                                method_id_name_map);
 
   double cumulative = 0.;
-  TRACE(INSTRUMENT, 4, "BB vector stats:\n");
+  TRACE(INSTRUMENT, 4, "BB vector stats:");
   for (const auto& p : bb_vector_stat) {
     double percent = (double)p.second * 100. / (float)all_method_inst;
     cumulative += percent;
-    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)\n",
+    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)",
           p.first, p.second, percent, cumulative);
   }
 
@@ -1143,7 +1143,7 @@ std::unordered_set<std::string> load_blacklist_file(
     ret.insert(line);
   }
 
-  TRACE(INSTRUMENT, 3, "Loaded %zu blacklist entries from %s\n", ret.size(),
+  TRACE(INSTRUMENT, 3, "Loaded %zu blacklist entries from %s", ret.size(),
         file_name.c_str());
   return ret;
 }
@@ -1225,7 +1225,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
   // Each instrumentation strategy worker function will do its own job.
   TRACE(INSTRUMENT,
         3,
-        "Loaded analysis class: %s (%s)\n",
+        "Loaded analysis class: %s (%s)",
         m_options.analysis_class_name.c_str(),
         analysis_cls->get_location().c_str());
 

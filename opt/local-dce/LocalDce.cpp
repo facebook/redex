@@ -193,7 +193,7 @@ void LocalDce::dce(IRCode* code) {
       auto prev_liveness = liveness.at(b->id());
       auto& bliveness = liveness.at(b->id());
       bliveness.reset();
-      TRACE(DCE, 5, "B%lu: %s\n", b->id(), show(bliveness).c_str());
+      TRACE(DCE, 5, "B%lu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
@@ -202,7 +202,7 @@ void LocalDce::dce(IRCode* code) {
         }
         TRACE(DCE,
               5,
-              "  S%lu: %s\n",
+              "  S%lu: %s",
               s->target()->id(),
               SHOW(liveness.at(s->target()->id())));
         bliveness |= liveness.at(s->target()->id());
@@ -227,7 +227,7 @@ void LocalDce::dce(IRCode* code) {
         }
         TRACE(CFG,
               5,
-              "%s\n%s\n",
+              "%s\n%s",
               show(it->insn).c_str(),
               show(bliveness).c_str());
       }
@@ -245,7 +245,7 @@ void LocalDce::dce(IRCode* code) {
     if (seen.count(it->insn)) {
       continue;
     }
-    TRACE(DCE, 2, "DEAD: %s\n", SHOW(it->insn));
+    TRACE(DCE, 2, "DEAD: %s", SHOW(it->insn));
     seen.emplace(it->insn);
     b->remove_insn(it);
   }
@@ -255,7 +255,7 @@ void LocalDce::dce(IRCode* code) {
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
-  TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
+  TRACE(DCE, 5, "=== Post-DCE CFG ===");
   TRACE(DCE, 5, "%s", SHOW(code->cfg()));
   code->clear_cfg();
 }
@@ -350,7 +350,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
-  TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d\n",
+  TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d",
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
 

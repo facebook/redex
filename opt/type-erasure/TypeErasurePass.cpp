@@ -141,7 +141,7 @@ TypeTagConfig get_type_tag_config(const std::string& type_tag_config) {
                     "Type tag config type %s not found. Please check the list"
                     " of accepted values.",
                     type_tag_config.c_str());
-  TRACE(TERA, 5, "type tag config %s %d\n", type_tag_config.c_str(),
+  TRACE(TERA, 5, "type tag config %s %d", type_tag_config.c_str(),
         string_to_config.at(type_tag_config));
   return string_to_config.at(type_tag_config);
 }
@@ -271,7 +271,7 @@ void TypeErasurePass::bind_config() {
 
       if (model.dex_sharding) {
         if (!model.enabled) {
-          TRACE(TERA, 3, "Per dex Type Erased model not enabled. Skipping %s\n",
+          TRACE(TERA, 3, "Per dex Type Erased model not enabled. Skipping %s",
                 model.name.c_str());
         } else {
           m_dex_sharding_model_specs.emplace_back(std::move(model));
@@ -281,7 +281,7 @@ void TypeErasurePass::bind_config() {
       }
     }
 
-    TRACE(TERA, 1, "[TERA] valid model specs %ld\n", m_model_specs.size());
+    TRACE(TERA, 1, "[TERA] valid model specs %ld", m_model_specs.size());
   });
 }
 
@@ -329,7 +329,7 @@ void TypeErasurePass::erase_model(const ModelSpec& spec,
                                   PassManager& mgr,
                                   DexStoresVector& stores,
                                   ConfigFiles& conf) {
-  TRACE(TERA, 2, "[TERA] erasing %s model\n", spec.name.c_str());
+  TRACE(TERA, 2, "[TERA] erasing %s model", spec.name.c_str());
   Timer t("erase_model");
   for (const auto root : spec.roots) {
     always_assert(!is_interface(type_class(root)));

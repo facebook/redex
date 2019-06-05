@@ -284,7 +284,7 @@ public:
         m_num_methods++;
         auto invoked_meth = get_trivial_return_invoke_super(meth);
         if (invoked_meth) {
-          TRACE(SUPER, 5, "Found trivial return invoke-super: %s\n",
+          TRACE(SUPER, 5, "Found trivial return invoke-super: %s",
             SHOW(meth));
           m_delmeths.emplace(meth, invoked_meth);
           m_num_passed++;
@@ -316,7 +316,7 @@ public:
         always_assert(meth->is_virtual());
         clazz->remove_method(meth);
         DexMethod::erase_method(meth);
-        TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s\n",
+        TRACE(SUPER, 5, "Deleted trivial return invoke-super: %s",
           SHOW(meth));
       }
     }
@@ -324,40 +324,40 @@ public:
   }
 
   void print_stats(bool do_delete, PassManager& mgr) {
-    TRACE(SUPER, 1, "Examined %d total methods\n", m_num_methods);
-    TRACE(SUPER, 1, "Found %d candidate trivial methods\n", m_num_trivial);
-    TRACE(SUPER, 5, "Culled %d due to super not defined\n",
+    TRACE(SUPER, 1, "Examined %d total methods", m_num_methods);
+    TRACE(SUPER, 1, "Found %d candidate trivial methods", m_num_trivial);
+    TRACE(SUPER, 5, "Culled %d due to super not defined",
       m_num_culled_super_not_def);
-    TRACE(SUPER, 5, "Culled %d due to method is static\n",
+    TRACE(SUPER, 5, "Culled %d due to method is static",
       m_num_culled_static);
-    TRACE(SUPER, 5, "Culled %d due to method name doesn't match super\n",
+    TRACE(SUPER, 5, "Culled %d due to method name doesn't match super",
       m_num_culled_name_differs);
-    TRACE(SUPER, 5, "Culled %d due to method proto doesn't match super\n",
+    TRACE(SUPER, 5, "Culled %d due to method proto doesn't match super",
       m_num_culled_proto_differs);
-    TRACE(SUPER, 5, "Culled %d due to method doesn't return move result\n",
+    TRACE(SUPER, 5, "Culled %d due to method doesn't return move result",
       m_num_culled_return_move_result_differs);
-    TRACE(SUPER, 5, "Culled %d due to method args doesn't match super\n",
+    TRACE(SUPER, 5, "Culled %d due to method args doesn't match super",
       m_num_culled_args_differs);
-    TRACE(SUPER, 5, "Culled %d due to non-public super method in sdk\n",
+    TRACE(SUPER, 5, "Culled %d due to non-public super method in sdk",
       m_num_culled_super_is_non_public_sdk);
-    TRACE(SUPER, 5, "Culled %d due to non-public super class in sdk\n",
+    TRACE(SUPER, 5, "Culled %d due to non-public super class in sdk",
       m_num_culled_super_cls_non_public);
-    TRACE(SUPER, 1, "Found %d trivial return invoke-super methods\n",
+    TRACE(SUPER, 1, "Found %d trivial return invoke-super methods",
       m_num_passed);
     if (do_delete) {
-      TRACE(SUPER, 1, "Deleted %d trivial return invoke-super methods\n",
+      TRACE(SUPER, 1, "Deleted %d trivial return invoke-super methods",
         m_num_passed);
-      TRACE(SUPER, 1, "Promoted %d methods to public visibility\n",
+      TRACE(SUPER, 1, "Promoted %d methods to public visibility",
         m_num_relaxed_vis);
-      TRACE(SUPER, 1, "Promoted %d classes to public visibility\n",
+      TRACE(SUPER, 1, "Promoted %d classes to public visibility",
         m_num_cls_relaxed_vis);
     } else {
-      TRACE(SUPER, 1, "Preview-only; not performing any changes.\n");
-      TRACE(SUPER, 1, "Would delete %d trivial return invoke-super methods\n",
+      TRACE(SUPER, 1, "Preview-only; not performing any changes.");
+      TRACE(SUPER, 1, "Would delete %d trivial return invoke-super methods",
         m_num_passed);
-      TRACE(SUPER, 1, "Would promote %d methods to public visibility\n",
+      TRACE(SUPER, 1, "Would promote %d methods to public visibility",
         m_num_relaxed_vis);
-      TRACE(SUPER, 1, "Would promote %d classes to public visibility\n",
+      TRACE(SUPER, 1, "Would promote %d classes to public visibility",
         m_num_cls_relaxed_vis);
     }
 

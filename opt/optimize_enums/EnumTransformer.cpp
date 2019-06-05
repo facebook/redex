@@ -709,12 +709,12 @@ class EnumTransformer final {
       auto enum_cls = type_class(*it);
       auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
       if (enum_attrs.empty()) {
-        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
+        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
               SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
         continue;
       } else if (enum_attrs.size() > config.max_enum_size) {
-        TRACE(ENUM, 2, "\tSkip %s %lu values\n", SHOW(enum_cls),
+        TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
               enum_attrs.size());
       } else {
         m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());

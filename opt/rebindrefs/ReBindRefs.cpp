@@ -183,7 +183,7 @@ struct Rebinder {
     void insert(T tin) { insert(tin, T()); }
 
     void print(const char* tag, PassManager* mgr) {
-      TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]\n",
+      TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]",
             tag, count, in.size(), out.size());
 
       if (mgr) {
@@ -234,7 +234,7 @@ struct Rebinder {
     if (!real_ref || real_ref == mref || real_ref->is_external()) {
       return;
     }
-    TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(mref), SHOW(real_ref));
+    TRACE(BIND, 2, "Rebinding %s\n\t=>%s", SHOW(mref), SHOW(real_ref));
     m_mrefs.insert(mref, real_ref);
     mop->set_method(real_ref);
     auto cls = type_class(real_ref->get_class());
@@ -279,7 +279,7 @@ struct Rebinder {
         if (cls->is_external()) return;
         set_public(cls);
       }
-      TRACE(BIND, 2, "Rebinding %s\n\t=>%s\n", SHOW(fref), SHOW(real_ref));
+      TRACE(BIND, 2, "Rebinding %s\n\t=>%s", SHOW(fref), SHOW(real_ref));
       insn->set_field(real_ref);
       m_frefs.insert(fref, real_ref);
     }

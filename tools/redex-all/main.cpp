@@ -404,7 +404,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("jarpath")) {
     const auto& jar_paths = vm["jarpath"].as<std::vector<std::string>>();
     for (const auto& e : jar_paths) {
-      TRACE(MAIN, 2, "Command line -j option: %s\n", e.c_str());
+      TRACE(MAIN, 2, "Command line -j option: %s", e.c_str());
       args.jar_paths.emplace(e);
     }
   }
@@ -489,11 +489,11 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
-  TRACE(MAIN, 2, "Verify-none mode: %s\n",
+  TRACE(MAIN, 2, "Verify-none mode: %s",
         args.redex_options.verify_none_enabled ? "Yes" : "No");
-  TRACE(MAIN, 2, "Art build: %s\n",
+  TRACE(MAIN, 2, "Art build: %s",
         args.redex_options.is_art_build ? "Yes" : "No");
-  TRACE(MAIN, 2, "Enable InstrumentPass: %s\n",
+  TRACE(MAIN, 2, "Enable InstrumentPass: %s",
         args.redex_options.instrument_pass_enabled ? "Yes" : "No");
 
   return args;
@@ -723,7 +723,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     while (std::getline(jar_stream, dependent_jar_path, ':')) {
       TRACE(MAIN,
             2,
-            "Dependent JAR specified on command-line: %s\n",
+            "Dependent JAR specified on command-line: %s",
             dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
     }
@@ -780,7 +780,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     read_dup_class_whitelist(json_cfg);
 
     for (const auto& library_jar : library_jars) {
-      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+      TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
         std::string basedir_path =
@@ -849,7 +849,7 @@ void redex_backend(const PassManager& manager,
         instruction_lowering::run(stores, lower_with_cfg);
   }
 
-  TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+  TRACE(MAIN, 1, "Writing out new DexClasses...");
   const JsonWrapper& json_cfg = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
@@ -858,7 +858,7 @@ void redex_backend(const PassManager& manager,
     emit_name_based_locators =
         json_cfg.get("emit_name_based_locator_strings", false);
     TRACE(LOC, 1,
-          "Will emit%s class-locator strings for classloader optimization\n",
+          "Will emit%s class-locator strings for classloader optimization",
           emit_name_based_locators ? " name-based" : "");
     locator_index =
         new LocatorIndex(make_locator_index(stores, emit_name_based_locators));
@@ -876,7 +876,7 @@ void redex_backend(const PassManager& manager,
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
 
-  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
+  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s",
         iodi_enable_overloaded_methods ? "yes" : "no");
 
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
@@ -1110,6 +1110,6 @@ int main(int argc, char* argv[]) {
     writer.write(out, stats);
   }
 
-  TRACE(MAIN, 1, "Done.\n");
+  TRACE(MAIN, 1, "Done.");
   return 0;
 }

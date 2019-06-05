@@ -352,7 +352,7 @@ void IRTypeChecker::run() {
   if (traceEnabled(TYPE, 5)) {
     std::ostringstream out;
     m_type_inference->print(out);
-    TRACE(TYPE, 5, "%s\n", out.str().c_str());
+    TRACE(TYPE, 5, "%s", out.str().c_str());
   }
 }
 

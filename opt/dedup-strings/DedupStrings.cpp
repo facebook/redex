@@ -104,10 +104,10 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
     }
 
     if (host_cls) {
-      TRACE(DS, 2, "[dedup strings] host class in dex #%u is {%s}\n",
+      TRACE(DS, 2, "[dedup strings] host class in dex #%u is {%s}",
             host_classes.size(), SHOW(host_cls));
     } else {
-      TRACE(DS, 2, "[dedup strings] no host class in dex #%u\n",
+      TRACE(DS, 2, "[dedup strings] no host class in dex #%u",
             host_classes.size());
       ++m_stats.dexes_without_host_cls;
     }
@@ -268,7 +268,7 @@ DedupStrings::get_occurrences(
   // to the non_load_strings datastructure, as we won't attempt to dedup them.
   for (const auto& it : perf_sensitive_strings) {
     const auto str = it.first;
-    TRACE(DS, 3, "[dedup strings] perf sensitive string: {%s}\n", SHOW(str));
+    TRACE(DS, 3, "[dedup strings] perf sensitive string: {%s}", SHOW(str));
 
     const auto& dexes = it.second;
     for (const auto dexnr : dexes) {
@@ -386,7 +386,7 @@ DedupStrings::get_strings_to_dedup(
     // hosting_dexnr
     if (!host_info) {
       TRACE(DS, 3,
-            "[dedup strings] non perf sensitive string: {%s} - no host\n",
+            "[dedup strings] non perf sensitive string: {%s} - no host",
             SHOW(s));
       continue;
     }
@@ -497,7 +497,7 @@ DedupStrings::get_strings_to_dedup(
 
       TRACE(
           DS, 2,
-          "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}\n",
+          "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
           dexnr, i, info.duplicate_string_loads, SHOW(s));
 
       redex_assert(info.index == 0xFFFFFFFF);
@@ -656,13 +656,13 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_PERF_SENSITIVE_STRINGS, stats.perf_sensitive_strings);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_STRINGS,
                   stats.non_perf_sensitive_strings);
-  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %u vs %u\n",
+  TRACE(DS, 1, "[dedup strings] perf sensitive strings: %u vs %u",
         stats.perf_sensitive_strings, stats.non_perf_sensitive_strings);
 
   mgr.incr_metric(METRIC_PERF_SENSITIVE_METHODS, stats.perf_sensitive_methods);
   mgr.incr_metric(METRIC_NON_PERF_SENSITIVE_METHODS,
                   stats.non_perf_sensitive_methods);
-  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %u vs %u\n",
+  TRACE(DS, 1, "[dedup strings] perf sensitive methods: %u vs %u",
         stats.perf_sensitive_methods, stats.non_perf_sensitive_methods);
 
   mgr.incr_metric(METRIC_DUPLICATE_STRINGS, stats.duplicate_strings);

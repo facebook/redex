@@ -1227,7 +1227,7 @@ class PointsToActionGenerator final {
     always_assert(!s.is_top());
     if (s.is_bottom()) {
       // This means that some code in the method is unreachable.
-      TRACE(PTA, 2, "Unreachable code in %s\n", SHOW(m_dex_method));
+      TRACE(PTA, 2, "Unreachable code in %s", SHOW(m_dex_method));
       return PointsToVariable();
     }
     auto anchors = s.elements();
@@ -1590,7 +1590,7 @@ void PointsToSemantics::load_stubs(const std::string& file_name) {
     if (it == m_method_semantics.end()) {
       m_method_semantics.emplace(dex_method, *semantics_opt);
     } else {
-      TRACE(PTA, 2, "Collision with stub for method %s\n", SHOW(dex_method));
+      TRACE(PTA, 2, "Collision with stub for method %s", SHOW(dex_method));
     }
   }
 }

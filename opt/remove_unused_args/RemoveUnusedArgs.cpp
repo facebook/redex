@@ -188,7 +188,7 @@ bool RemoveArgs::update_method_signature(
   for (const auto& s : m_black_list) {
     if (full_name.find(s) != std::string::npos) {
       TRACE(ARGS, 3,
-            "Skipping {%s} due to black list match of {%s} against {%s}\n",
+            "Skipping {%s} due to black list match of {%s} against {%s}",
             SHOW(method), full_name.c_str(), s.c_str());
       return false;
     }
@@ -255,7 +255,7 @@ bool RemoveArgs::update_method_signature(
     }
   }
 
-  TRACE(ARGS, 3, "Method signature updated to %s\n", SHOW(method));
+  TRACE(ARGS, 3, "Method signature updated to %s", SHOW(method));
   log_opt(METHOD_PARAMS_REMOVED, method);
   return true;
 }
@@ -478,19 +478,19 @@ void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,
 
   TRACE(ARGS,
         1,
-        "Removed %d redundant callsite arguments\n",
+        "Removed %d redundant callsite arguments",
         num_callsite_args_removed);
   TRACE(ARGS,
         1,
-        "Removed %d redundant method parameters\n",
+        "Removed %d redundant method parameters",
         num_method_params_removed);
   TRACE(ARGS,
         1,
-        "Removed %d redundant method results\n",
+        "Removed %d redundant method results",
         num_method_results_removed_count);
   TRACE(ARGS,
         1,
-        "Updated %d methods with redundant parameters\n",
+        "Updated %d methods with redundant parameters",
         num_methods_updated);
 
   mgr.set_metric(METRIC_CALLSITE_ARGS_REMOVED, num_callsite_args_removed);

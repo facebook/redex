@@ -103,6 +103,7 @@ struct Tracer {
       fprintf(m_file, "[%s:%d] ", m_module_id_name_map[module].c_str(), level);
     }
     vfprintf(m_file, fmt, ap);
+    fprintf(m_file, "\n");
     fflush(m_file);
   }
 

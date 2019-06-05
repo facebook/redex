@@ -148,7 +148,7 @@ void ConfigFiles::load_method_to_weight() {
 
   std::string deobfuscated_name;
   unsigned int weight;
-  TRACE(CUSTOMSORT, 2, "Setting sort start file %s\n",
+  TRACE(CUSTOMSORT, 2, "Setting sort start file %s",
         m_profiled_methods_filename.c_str());
 
   unsigned int count = 0;
@@ -159,7 +159,7 @@ void ConfigFiles::load_method_to_weight() {
 
   assert_log(count > 0, "Method profile file %s didn't contain valid entries\n",
              m_profiled_methods_filename.c_str());
-  TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d\n", count);
+  TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d", count);
 }
 
 void ConfigFiles::load_method_sorting_whitelisted_substrings() {

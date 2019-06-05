@@ -128,11 +128,11 @@ const VirtualScope* TypeSystem::find_virtual_scope(
 
   auto type = meth->get_class();
   while (type != nullptr) {
-    TRACE(VIRT, 5, "check... %s\n", SHOW(type));
+    TRACE(VIRT, 5, "check... %s", SHOW(type));
     for (const auto& scope : m_class_scopes.get(type)) {
-      TRACE(VIRT, 5, "check... %s\n", SHOW(scope->methods[0].first));
+      TRACE(VIRT, 5, "check... %s", SHOW(scope->methods[0].first));
       if (match(scope->methods[0].first, meth)) {
-        TRACE(VIRT, 5, "return scope\n");
+        TRACE(VIRT, 5, "return scope");
         return scope;
       }
     }
@@ -219,11 +219,11 @@ void TypeSystem::select_methods(
     const VirtualScope& scope,
     const std::unordered_set<DexType*>& types,
     std::unordered_set<DexMethod*>& methods) const {
-  TRACE(VIRT, 1, "select_methods make filter\n");
+  TRACE(VIRT, 1, "select_methods make filter");
   std::unordered_set<DexType*> filter;
   filter.insert(types.begin(), types.end());
 
-  TRACE(VIRT, 1, "select_methods make type_method map\n");
+  TRACE(VIRT, 1, "select_methods make type_method map");
   std::unordered_map<const DexType*, DexMethod*> type_method;
   for (const auto& vmeth : scope.methods) {
     const auto meth = vmeth.first;
@@ -231,11 +231,11 @@ void TypeSystem::select_methods(
     type_method[meth->get_class()] = meth;
   }
 
-  TRACE(VIRT, 1, "select_methods walk hierarchy\n");
+  TRACE(VIRT, 1, "select_methods walk hierarchy");
   while (!filter.empty()) {
     const auto type = *filter.begin();
     filter.erase(filter.begin());
-    TRACE(VIRT, 1, "check... %s\n", SHOW(type));
+    TRACE(VIRT, 1, "check... %s", SHOW(type));
     if (!is_subtype(scope.type, type)) continue;
     const auto& meth = type_method.find(type);
     if (meth != type_method.end()) {

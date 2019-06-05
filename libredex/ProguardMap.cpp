@@ -430,28 +430,28 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
   };
 
   std::function<void(DexClass*)> worker_pg_map = [&](DexClass* cls) {
-    TRACE(PGR, 4, "deob cls %s %s\n", SHOW(cls),
+    TRACE(PGR, 4, "deob cls %s %s", SHOW(cls),
           pm.deobfuscate_class(show(cls)).c_str());
     cls->set_deobfuscated_name(pm.deobfuscate_class(show(cls)));
     for (const auto& m : cls->get_dmethods()) {
-      TRACE(PGR, 4, "deob dmeth %s %s\n", SHOW(m),
+      TRACE(PGR, 4, "deob dmeth %s %s", SHOW(m),
             pm.deobfuscate_method(show(m)).c_str());
       m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
       pg_impl::apply_deobfuscated_positions(m, pm);
     }
     for (const auto& m : cls->get_vmethods()) {
-      TRACE(PM, 4, "deob vmeth %s %s\n", SHOW(m),
+      TRACE(PM, 4, "deob vmeth %s %s", SHOW(m),
             pm.deobfuscate_method(show(m)).c_str());
       m->set_deobfuscated_name(pm.deobfuscate_method(show(m)));
       pg_impl::apply_deobfuscated_positions(m, pm);
     }
     for (const auto& f : cls->get_ifields()) {
-      TRACE(PM, 4, "deob ifield %s %s\n", SHOW(f),
+      TRACE(PM, 4, "deob ifield %s %s", SHOW(f),
             pm.deobfuscate_field(show(f)).c_str());
       f->set_deobfuscated_name(pm.deobfuscate_field(show(f)));
     }
     for (const auto& f : cls->get_sfields()) {
-      TRACE(PM, 4, "deob sfield %s %s\n", SHOW(f),
+      TRACE(PM, 4, "deob sfield %s %s", SHOW(f),
             pm.deobfuscate_field(show(f)).c_str());
       f->set_deobfuscated_name(pm.deobfuscate_field(show(f)));
     }

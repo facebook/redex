@@ -576,7 +576,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       block->m_begin = next;
     }
   }
-  TRACE(CFG, 5, "  build: boundaries found\n");
+  TRACE(CFG, 5, "  build: boundaries found");
 }
 
 // Link the blocks together with edges. If the CFG is editable, also insert
@@ -622,12 +622,12 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     auto next = std::next(it);
     Block* next_b = next->second;
     if (fallthrough && next != m_blocks.end()) {
-      TRACE(CFG, 6, "adding fallthrough goto %d -> %d\n", b->id(),
+      TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(),
             next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
     }
   }
-  TRACE(CFG, 5, "  build: edges added\n");
+  TRACE(CFG, 5, "  build: edges added");
 }
 
 void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
@@ -671,7 +671,7 @@ void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
       --bid;
     }
   }
-  TRACE(CFG, 5, "  build: catch edges added\n");
+  TRACE(CFG, 5, "  build: catch edges added");
 }
 
 BlockId ControlFlowGraph::next_block_id() const {
@@ -699,10 +699,10 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
       continue;
     }
 
-    TRACE(CFG, 5, "  build: removing succ edges from block %d\n", b->id());
+    TRACE(CFG, 5, "  build: removing succ edges from block %d", b->id());
     delete_succ_edges(b);
   }
-  TRACE(CFG, 5, "  build: unreachables removed\n");
+  TRACE(CFG, 5, "  build: unreachables removed");
 }
 
 /*

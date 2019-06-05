@@ -72,7 +72,7 @@ void check_intf_common(Scope& scope) {
 }
 
 void print_scope(Scope& scope) {
-  TRACE(OBFUSCATE, 2, "------------------------------------------------\n");
+  TRACE(OBFUSCATE, 2, "------------------------------------------------");
   for (const auto& cls : scope) {
     TRACE(OBFUSCATE, 2, "** %s extends %s",
         SHOW(cls), SHOW(cls->get_super_class()));
@@ -82,21 +82,21 @@ void print_scope(Scope& scope) {
         TRACE(OBFUSCATE, 2, "%s, ", SHOW(intf));
       }
     }
-    TRACE(OBFUSCATE, 2, "\n");
+    TRACE(OBFUSCATE, 2, "");
     for (const auto& field : cls->get_sfields()) {
-      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(field));
+      TRACE(OBFUSCATE, 2, "\t%s", SHOW(field));
     }
     for (const auto& meth : cls->get_dmethods()) {
-      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(meth));
+      TRACE(OBFUSCATE, 2, "\t%s", SHOW(meth));
     }
     for (const auto& field : cls->get_ifields()) {
-      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(field));
+      TRACE(OBFUSCATE, 2, "\t%s", SHOW(field));
     }
     for (const auto& meth : cls->get_vmethods()) {
-      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(meth));
+      TRACE(OBFUSCATE, 2, "\t%s", SHOW(meth));
     }
   }
-  TRACE(OBFUSCATE, 2, "------------------------------------------------\n");
+  TRACE(OBFUSCATE, 2, "------------------------------------------------");
 }
 
 }

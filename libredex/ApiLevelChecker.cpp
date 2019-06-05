@@ -102,13 +102,13 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
     const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
     DexType* outer = DexType::get_type(outer_name);
     if (outer == nullptr) {
-      TRACE(MMINL, 4, "Can't find outer class! %s -> %s\n", cls_name.c_str(),
+      TRACE(MMINL, 4, "Can't find outer class! %s -> %s", cls_name.c_str(),
             outer_name.c_str());
       return nullptr;
     }
     DexClass* outer_cls = type_class(outer);
     if (cls == nullptr) {
-      TRACE(MMINL, 4, "outer class %s is external?\n", SHOW(outer));
+      TRACE(MMINL, 4, "outer class %s is external?", SHOW(outer));
       return nullptr;
     }
     return outer_cls;

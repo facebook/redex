@@ -19,7 +19,7 @@ void fix_colliding_dmethods(
     const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
         colliding_methods) {
   // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %d\n", colliding_methods.size());
+  TRACE(REFU, 9, "sig: colliding_methods %d", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
@@ -53,7 +53,7 @@ void fix_colliding_dmethods(
     }
     TRACE(REFU,
           9,
-          "sig: patching colliding method %s with %d additional args\n",
+          "sig: patching colliding method %s with %d additional args",
           SHOW(meth),
           arg_count);
   }
@@ -80,7 +80,7 @@ void fix_colliding_dmethods(
       always_assert(callee != nullptr);
       TRACE(REFU,
             9,
-            "sig: patching colliding method callsite to %s in %s\n",
+            "sig: patching colliding method callsite to %s in %s",
             SHOW(callee),
             SHOW(meth));
       // 42 is a dummy int val as the additional argument to the patched
@@ -270,7 +270,7 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   for (auto method : group.methods) {
     TRACE(REFU,
           8,
-          "sig: updating virtual method %s to %s:%s\n",
+          "sig: updating virtual method %s to %s:%s",
           SHOW(method),
           SHOW(spec.name),
           SHOW(spec.proto));
@@ -351,7 +351,7 @@ bool TypeRefUpdater::mangling(DexFieldRef* field) {
     spec.name = gen_new_name(field->str(), seed);
     spec.type = new_type;
     field->change(spec);
-    TRACE(REFU, 9, "Update field %s \n", SHOW(field));
+    TRACE(REFU, 9, "Update field %s ", SHOW(field));
     return true;
   }
   return false;
@@ -397,7 +397,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   method->change(spec,
                  false /* rename on collision */,
                  true /* update deobfuscated name */);
-  TRACE(REFU, 9, "Update method %s \n", SHOW(method));
+  TRACE(REFU, 9, "Update method %s ", SHOW(method));
   return true;
 }
 
@@ -560,7 +560,7 @@ void update_method_signature_type_references(
       auto collision = DexMethod::get_method(
           method->get_class(), method->get_name(), new_proto);
       if (!collision || (!is_init(method) && can_rename(method))) {
-        TRACE(REFU, 8, "sig: updating direct method %s\n", SHOW(method));
+        TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;
         method->change(spec,
@@ -608,7 +608,7 @@ void update_method_signature_type_references(
 void update_field_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
-  TRACE(REFU, 4, " updating field refs\n");
+  TRACE(REFU, 4, " updating field refs");
   const auto update_field = [&](DexFieldRef* field) {
     const auto ref_type = field->get_type();
     const auto type = get_array_type_or_self(ref_type);
@@ -621,7 +621,7 @@ void update_field_type_references(
     auto new_type_incl_array = make_array_type(new_type, level);
     spec.type = new_type_incl_array;
     field->change(spec);
-    TRACE(REFU, 9, " updating field ref to %s\n", SHOW(type));
+    TRACE(REFU, 9, " updating field ref to %s", SHOW(type));
   };
   walk::parallel::fields(scope, update_field);
 

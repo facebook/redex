@@ -23,7 +23,7 @@
 boost::optional<ParamIndex> find_return_param_index(
     cfg::ControlFlowGraph& cfg) {
   for (auto& mie : InstructionIterable(cfg)) {
-    TRACE(RP, 2, "  %s\n", SHOW(mie.insn));
+    TRACE(RP, 2, "  %s", SHOW(mie.insn));
   }
   // find register that is being returned (if any)
   cfg.calculate_exit_block();
@@ -32,12 +32,12 @@ boost::optional<ParamIndex> find_return_param_index(
   if (it == exit_block->rend() || !is_return_value(it->insn->opcode()))
     return boost::none;
   auto return_reg = it->insn->src(0);
-  TRACE(RP, 2, "  returns v%d\n", return_reg);
+  TRACE(RP, 2, "  returns v%d", return_reg);
   ++it;
   if (it == exit_block->rend() || !is_move(it->insn->opcode()))
     return boost::none;
   auto src_reg = it->insn->src(0);
-  TRACE(RP, 2, "  move v%d, v%d\n", it->insn->dest(), src_reg);
+  TRACE(RP, 2, "  move v%d, v%d", it->insn->dest(), src_reg);
   if (it->insn->dest() != return_reg) return boost::none;
   // let's see if it came from a unique load-param
   IRInstruction* load_param = nullptr;
@@ -47,7 +47,7 @@ boost::optional<ParamIndex> find_return_param_index(
         if (opcode::is_load_param(mie.insn->opcode())) {
           load_param = mie.insn;
         } else {
-          TRACE(RP, 2, "  move_reg clobbered\n");
+          TRACE(RP, 2, "  move_reg clobbered");
           return boost::none;
         }
       }
@@ -55,10 +55,10 @@ boost::optional<ParamIndex> find_return_param_index(
   }
   if (load_param != nullptr) {
     ParamIndex param_index = get_load_param_map(cfg).at(load_param);
-    TRACE(RP, 2, "  found matching load-param %d\n", param_index);
+    TRACE(RP, 2, "  found matching load-param %d", param_index);
     return param_index;
   } else {
-    TRACE(RP, 2, "  did not find matching load-param\n");
+    TRACE(RP, 2, "  did not find matching load-param");
     return boost::none;
   }
 }
@@ -94,12 +94,12 @@ TEST(ResultPropagationTest, useSwitch) {
   for (const auto& cls : classes) {
     if (strncmp(cls->get_name()->c_str(), test_class_prefix,
                 strlen(test_class_prefix)) == 0) {
-      TRACE(RP, 1, "test class %s\n", cls->get_name()->c_str());
+      TRACE(RP, 1, "test class %s", cls->get_name()->c_str());
       num_test_classes++;
       int num_tests_in_class = 0;
       for (const auto& m : cls->get_vmethods()) {
         const auto method_name = m->get_name()->c_str();
-        TRACE(RP, 1, " test method %s\n", method_name);
+        TRACE(RP, 1, " test method %s", method_name);
         EXPECT_EQ(strncmp(method_name, test_method_prefix,
                           strlen(test_method_prefix)),
                   0);

@@ -189,7 +189,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_SKIPPED_INLINE, stats.num_skipped_due_to_inlining);
 
   if (m_config.drop_src_files) {
-    TRACE(DBGSTRIP, 1, "dropping src file strings\n");
+    TRACE(DBGSTRIP, 1, "dropping src file strings");
     for (auto& dex : scope)
       dex->set_source_file(nullptr);
   }

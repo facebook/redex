@@ -805,7 +805,7 @@ void ReflectionAnalysis::get_reflection_site(
       out << *cls_src;
     }
     out << std::endl;
-    TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
+    TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
   }
   (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }

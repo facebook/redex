@@ -400,11 +400,11 @@ Stats CopyPropagation::run(Scope scope) {
             std::string msg = checker.what();
             TRACE(RME,
                   1,
-                  "%s: Inconsistency in Dex code. %s\n",
+                  "%s: Inconsistency in Dex code. %s",
                   SHOW(m),
                   msg.c_str());
-            TRACE(RME, 1, "before code:\n%s\n", before_code.c_str());
-            TRACE(RME, 1, "after  code:\n%s\n", SHOW(m->get_code()));
+            TRACE(RME, 1, "before code:\n%s", before_code.c_str());
+            TRACE(RME, 1, "after  code:\n%s", SHOW(m->get_code()));
             always_assert(false);
           }
         }
@@ -444,7 +444,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   if (max_dest > m_config.max_estimated_registers) {
     TRACE(RME,
           2,
-          "[RME] Skipping {%s} - too many registers: %u.\n",
+          "[RME] Skipping {%s} - too many registers: %u.",
           SHOW(method),
           (unsigned)max_dest);
     ++stats.skipped_due_to_too_many_registers;
@@ -499,15 +499,15 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
                   stats.skipped_due_to_too_many_registers);
   TRACE(RME,
         1,
-        "%d redundant moves eliminated\n",
+        "%d redundant moves eliminated",
         mgr.get_metric("redundant_moves_eliminated"));
   TRACE(RME,
         1,
-        "%d source registers replaced with representative\n",
+        "%d source registers replaced with representative",
         mgr.get_metric("source_regs_replaced_with_representative"));
   TRACE(RME,
         1,
-        "%d methods skipped due to too many registers\n",
+        "%d methods skipped due to too many registers",
         mgr.get_metric("methods_skipped_due_to_too_many_registers"));
 }
 

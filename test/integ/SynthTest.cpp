@@ -135,7 +135,7 @@ TEST(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/SyntheticConstructor$InnerClass;") == 0) {
       for (const auto& method : cls->get_dmethods()) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
-          TRACE(DCE, 2, "dmethod: %s\n",  SHOW(method->get_code()));
+          TRACE(DCE, 2, "dmethod: %s",  SHOW(method->get_code()));
           for (auto& mie : InstructionIterable(method->get_code())) {
             auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.

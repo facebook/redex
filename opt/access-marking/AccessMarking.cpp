@@ -26,7 +26,7 @@ size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
     if (has_keep(cls) || is_abstract(cls) || is_final(cls)) continue;
     auto const& children = get_children(ch, cls->get_type());
     if (children.empty()) {
-      TRACE(ACCESS, 2, "Finalizing class: %s\n", SHOW(cls));
+      TRACE(ACCESS, 2, "Finalizing class: %s", SHOW(cls));
       set_final(cls);
       ++n_classes_finalized;
     }
@@ -59,7 +59,7 @@ size_t mark_methods_final(const Scope& scope, const ClassHierarchy& ch) {
         continue;
       }
       if (!find_override(method, cls, ch)) {
-        TRACE(ACCESS, 2, "Finalizing method: %s\n", SHOW(method));
+        TRACE(ACCESS, 2, "Finalizing method: %s", SHOW(method));
         set_final(method);
         ++n_methods_finalized;
       }
@@ -99,7 +99,7 @@ std::unordered_set<DexMethod*> find_private_methods(
     const std::vector<DexClass*>& scope, const std::vector<DexMethod*>& cv) {
   std::unordered_set<DexMethod*> candidates;
   for (auto m : cv) {
-    TRACE(ACCESS, 3, "Considering for privatization: %s\n", SHOW(m));
+    TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
     if (!is_clinit(m) && !has_keep(m) && !is_abstract(m) && !is_private(m)) {
       candidates.emplace(m);
     }
@@ -147,7 +147,7 @@ void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
       ordered_privates.begin(), ordered_privates.end(), compare_dexmethods);
 
   for (auto method : ordered_privates) {
-    TRACE(ACCESS, 2, "Privatized method: %s\n", SHOW(method));
+    TRACE(ACCESS, 2, "Privatized method: %s", SHOW(method));
     auto cls = type_class(method->get_class());
     cls->remove_method(method);
     method->set_virtual(false);
@@ -166,17 +166,17 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
   if (m_finalize_classes) {
     auto n_classes_final = mark_classes_final(scope, ch);
     pm.incr_metric("finalized_classes", n_classes_final);
-    TRACE(ACCESS, 1, "Finalized %lu classes\n", n_classes_final);
+    TRACE(ACCESS, 1, "Finalized %lu classes", n_classes_final);
   }
   if (m_finalize_methods) {
     auto n_methods_final = mark_methods_final(scope, ch);
     pm.incr_metric("finalized_methods", n_methods_final);
-    TRACE(ACCESS, 1, "Finalized %lu methods\n", n_methods_final);
+    TRACE(ACCESS, 1, "Finalized %lu methods", n_methods_final);
   }
   if (m_finalize_fields) {
     auto n_fields_final = mark_fields_final(scope);
     pm.incr_metric("finalized_fields", n_fields_final);
-    TRACE(ACCESS, 1, "Finalized %lu fields\n", n_fields_final);
+    TRACE(ACCESS, 1, "Finalized %lu fields", n_fields_final);
   }
   auto candidates = devirtualize(sm);
   auto dmethods = direct_methods(scope);
@@ -186,7 +186,7 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     fix_call_sites_private(scope, privates);
     mark_methods_private(privates);
     pm.incr_metric("privatized_methods", privates.size());
-    TRACE(ACCESS, 1, "Privatized %lu methods\n", privates.size());
+    TRACE(ACCESS, 1, "Privatized %lu methods", privates.size());
   }
 }
 
