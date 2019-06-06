@@ -367,13 +367,7 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
       (return v0)
 
       (:f 5)
-      (const v0 0)
-      (goto :g)
-
       (:e 4)
-      (const v0 0)
-      (goto :g)
-
       (:d 3)
       (const v0 0)
       (goto :g)

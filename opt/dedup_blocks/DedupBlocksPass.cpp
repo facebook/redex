@@ -175,12 +175,15 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   // Dedup blocks that are exactly the same
-  void dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+  bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     Duplicates dups = collect_duplicates(method, cfg);
     if (dups.size() > 0) {
       record_stats(dups);
       deduplicate(dups, cfg);
+      return true;
     }
+
+    return false;
   }
 
   /*
@@ -203,16 +206,11 @@ class DedupBlocksImpl {
       code.build_cfg(/* editable */ true);
       auto& cfg = code.cfg();
 
-      if (m_config.split_postfix) {
-        // TODO: Might want to do this repeatedly until no more work can be
-        // performed, horribly inefficient though. We might want to do a proper
-        // graph traversal in (forward/reverse) topological order.
-        //
-        // We could also split based on a shared prefix of instructions
-        split_postfix(method, cfg);
-      }
-
-      dedup(method, cfg);
+      do {
+        if (m_config.split_postfix) {
+          split_postfix(method, cfg);
+        }
+      } while (dedup(method, cfg));
 
       code.clear_cfg();
     });
