@@ -445,7 +445,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER);
+    set_reference(current_state, RESULT_REGISTER, get_class_type());
     break;
   }
   case OPCODE_MONITOR_ENTER:
