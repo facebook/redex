@@ -140,8 +140,11 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   uint32_t line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
   while (paramcount--) {
-    DexString* str = decode_noindexable_string(idx, encdata);
-    m_param_names.push_back(str);
+    // We intentionally drop the parameter string name here because we don't
+    // have a convenient representation of it, and our internal tooling doesn't
+    // use this info anyway.
+    // We emit matching number of nulls as method arguments at the end.
+    decode_noindexable_string(idx, encdata);
   }
   std::vector<std::unique_ptr<DexDebugInstruction>> insns;
   DexDebugInstruction* dbgp;
@@ -165,8 +168,7 @@ uint32_t DexDebugItem::get_line_start() const {
   return 0;
 }
 
-DexDebugItem::DexDebugItem(const DexDebugItem& that)
-    : m_param_names(that.m_param_names) {
+DexDebugItem::DexDebugItem(const DexDebugItem& that) {
   std::unordered_map<DexPosition*, DexPosition*> pos_map;
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
@@ -274,18 +276,14 @@ int DexDebugItem::encode(
     DexOutputIdx* dodx,
     uint8_t* output,
     uint32_t line_start,
-    const std::vector<DexString*>& parameters,
+    uint32_t num_params,
     const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, line_start);
-  encdata = write_uleb128(encdata, (uint32_t)parameters.size());
-  for (auto s : parameters) {
-    if (s == nullptr) {
-      encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
-      continue;
-    }
-    uint32_t idx = dodx->stringidx(s);
-    encdata = write_uleb128p1(encdata, idx);
+  encdata = write_uleb128(encdata, num_params);
+  for (uint32_t i = 0; i < num_params; ++i) {
+    encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
+    continue;
   }
   for (auto& dbgop : dbgops) {
     dbgop->encode(dodx, encdata);
@@ -314,9 +312,6 @@ void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) const {
-  for (auto p : m_param_names) {
-    if (p) lstring.push_back(p);
-  }
   for (auto& entry : m_dbg_entries) {
     entry.gather_strings(lstring);
   }

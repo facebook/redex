@@ -1066,6 +1066,7 @@ struct DebugMetadata {
   DexDebugItem* dbg;
   dex_code_item* dci;
   uint32_t line_start;
+  uint32_t num_params;
   std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
 };
 
@@ -1074,11 +1075,13 @@ DebugMetadata calculate_debug_metadata(
     DexCode* dc,
     dex_code_item* dci,
     PositionMapper* pos_mapper,
+    uint32_t num_params,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
   std::vector<DebugLineItem> debug_line_info;
   DebugMetadata metadata;
   metadata.dbg = dbg;
   metadata.dci = dci;
+  metadata.num_params = num_params;
   metadata.dbgops = generate_debug_instructions(
       dbg, pos_mapper, &metadata.line_start, &debug_line_info);
   if (dbg_lines != nullptr) {
@@ -1092,8 +1095,8 @@ int emit_debug_info_for_metadata(DexOutputIdx* dodx,
                                  uint8_t* output,
                                  uint32_t offset,
                                  bool set_dci_offset = true) {
-  int size = metadata.dbg->encode(dodx, output + offset, metadata.line_start,
-                                  metadata.dbgops);
+  int size = DexDebugItem::encode(dodx, output + offset, metadata.line_start,
+                                  metadata.num_params, metadata.dbgops);
   if (set_dci_offset) {
     metadata.dci->debug_info_off = offset;
   }
@@ -1109,10 +1112,11 @@ int emit_debug_info(
     PositionMapper* pos_mapper,
     uint8_t* output,
     uint32_t offset,
+    uint32_t num_params,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* dbg_lines) {
   // No align requirement for debug items.
   DebugMetadata metadata =
-      calculate_debug_metadata(dbg, dc, dci, pos_mapper, dbg_lines);
+      calculate_debug_metadata(dbg, dc, dci, pos_mapper, num_params, dbg_lines);
   return emit_positions
              ? emit_debug_info_for_metadata(dodx, metadata, output, offset)
              : 0;
@@ -1192,11 +1196,14 @@ uint32_t emit_instruction_offset_debug_info(
     }
     dex_code_item* dci = it.code_item;
     DexMethod* method = it.method;
+    uint32_t real_param_size = method->get_proto()->get_args()->size();
     // We still want to fill in pos_mapper and code_debug_map, so run the
     // usual code to emit debug info. We cache this and use it later if
     // it turns out we want to emit normal debug info for a given method.
-    DebugMetadata metadata = calculate_debug_metadata(
-        dbg_item, dc, it.code_item, pos_mapper, code_debug_map);
+    DebugMetadata metadata =
+        calculate_debug_metadata(dbg_item, dc, it.code_item, pos_mapper,
+                                 real_param_size, code_debug_map);
+
     int debug_size =
         emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
     always_assert_log(debug_size < TMP_SIZE, "Tmp buffer overrun");
@@ -1204,7 +1211,6 @@ uint32_t emit_instruction_offset_debug_info(
     if (!iodi_metadata.can_safely_use_iodi(method)) {
       continue;
     }
-    uint32_t real_param_size = method->get_proto()->get_args()->size();
     uint32_t param_size = per_arity ? real_param_size : 0;
     auto res = param_to_sizes[param_size].emplace(MethodKey{method, dc->size()},
                                                   debug_size);
@@ -1526,10 +1532,6 @@ uint32_t emit_instruction_offset_debug_info(
           " inflated size %u:\n",
           param_size, buckets.size(), total_inflated_size);
     auto& size_to_offset = param_size_to_oset[param_size];
-    std::vector<DexString*> params;
-    for (size_t i = 0; i < param_size; i++) {
-      params.push_back(nullptr);
-    }
     for (auto& bucket : buckets) {
       auto bucket_size = bucket.first;
       TRACE(IODI, 3, "  - %u methods in bucket size %u", bucket.second,
@@ -1546,7 +1548,7 @@ uint32_t emit_instruction_offset_debug_info(
         }
       }
       offset +=
-          DexDebugItem::encode(nullptr, output + offset, 0, params, dbgops);
+          DexDebugItem::encode(nullptr, output + offset, 0, param_size, dbgops);
       *dbgcount += 1;
     }
   }
@@ -1623,9 +1625,10 @@ void DexOutput::generate_debug_items() {
       auto dbg = dc->get_debug_item();
       if (dbg == nullptr) continue;
       dbgcount++;
+      size_t num_params = it.method->get_proto()->get_args()->size();
       m_offset +=
           emit_debug_info(dodx, emit_positions, dbg, dc, dci, m_pos_mapper,
-                          m_output, m_offset, m_code_debug_lines);
+                          m_output, m_offset, num_params, m_code_debug_lines);
     }
   }
   if (emit_positions) {

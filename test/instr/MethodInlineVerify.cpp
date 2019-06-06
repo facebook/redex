@@ -312,9 +312,6 @@ TEST_F(PostVerify, InlineInvokeDirect) {
   auto noninlinable = static_cast<DexMethod*>(
       noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()), "()V");
-  EXPECT_EQ(
-      noninlinable->get_proto()->get_args()->get_type_list().size(),
-      noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
 
   // verify that there is (still) one direct "noninlinable" method in the class.
   auto dmethods = cls->get_dmethods();
@@ -367,9 +364,6 @@ TEST_F(PostVerify, InlineInvokeDirectCrossClasses) {
       static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
   EXPECT_EQ(show(noninlinable->get_proto()),
             "(Lcom/facebook/redexinline/MethodInlineTest$OtherClass;)V");
-  EXPECT_EQ(
-      noninlinable->get_proto()->get_args()->get_type_list().size(),
-      noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
 
   auto nested_cls = find_class_named(
       classes, "Lcom/facebook/redexinline/MethodInlineTest$OtherClass;");

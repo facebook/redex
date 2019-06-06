@@ -233,28 +233,6 @@ bool RemoveArgs::update_method_signature(
                  true /* rename on collision */,
                  true /* update deobfuscated name */);
 
-  // We must also update debug info when we change the method proto.
-  // We calculate this separately from live_args in case the method isn't
-  // changeable to avoid unnecessary computation.
-  auto code = method->get_code();
-  DexDebugItem* debug = nullptr;
-  if (code && (debug = code->get_debug_item())) {
-    auto& param_names = debug->get_param_names();
-    // Avoid adding debug params to methods that don't originally have them.
-    // Methods that don't have them are created methods where param debug info
-    // seems generally useless anyway.
-    if (param_names.size() == num_orig_args) {
-      // NOTE: The "this" argument isn't included in param_names, so
-      //       we must apply instance_offset to each param_names update.
-      size_t instance_offset = is_static(method) ? 0 : 1;
-      for (size_t i = instance_offset; i < live_arg_idxs.size(); ++i) {
-        param_names.at(i - instance_offset) =
-            param_names.at(live_arg_idxs.at(i) - instance_offset);
-      }
-      param_names.resize(live_arg_idxs.size() - instance_offset);
-    }
-  }
-
   TRACE(ARGS, 3, "Method signature updated to %s", SHOW(method));
   log_opt(METHOD_PARAMS_REMOVED, method);
   return true;

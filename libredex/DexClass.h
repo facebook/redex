@@ -604,7 +604,6 @@ struct DexDebugEntry final {
 };
 
 class DexDebugItem {
-  std::vector<DexString*> m_param_names;
   std::vector<DexDebugEntry> m_dbg_entries;
   DexDebugItem(DexIdx* idx, uint32_t offset);
 
@@ -620,8 +619,6 @@ class DexDebugItem {
     m_dbg_entries.swap(dbg_entries);
   }
   uint32_t get_line_start() const;
-  std::vector<DexString*>& get_param_names() { return m_param_names; }
-  void remove_parameter_names() { m_param_names.clear(); };
   void bind_positions(DexMethod* method, DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
@@ -629,16 +626,8 @@ class DexDebugItem {
       DexOutputIdx* dodx,
       uint8_t* output,
       uint32_t line_start,
-      const std::vector<DexString*>& parameters,
+      uint32_t num_params,
       const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops);
-
-  int encode(DexOutputIdx* dodx,
-             uint8_t* output,
-             uint32_t line_start,
-             const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
-    return DexDebugItem::encode(dodx, output, line_start, m_param_names,
-                                dbgops);
-  }
 
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_strings(std::vector<DexString*>& lstring) const;

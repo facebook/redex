@@ -192,15 +192,6 @@ void handle_invoke_init(
     callee->change(spec,
                    false /* rename_on_collision */,
                    true /* update deobfuscated name */);
-    // If the debug info param count doesn't match the param count in the
-    // method signature, ART will not parse any of the debug info for the
-    // method. Note that this shows up as a runtime error and not a
-    // verification error. To avoid that, we insert nullptrs for added param.
-    auto debug = callee->get_code()->get_debug_item();
-    if (num_add_args > 0 && debug) {
-      auto& param_names = debug->get_param_names();
-      param_names.insert(param_names.end(), num_add_args, nullptr);
-    }
     merger->add_method(callee);
   }
 }
