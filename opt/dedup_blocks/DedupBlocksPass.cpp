@@ -20,6 +20,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRList.h"
+#include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "Util.h"
@@ -164,16 +165,6 @@ std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   return order;
 }
 
-bool has_new_instance_opcode(const cfg::ControlFlowGraph& cfg) {
-  for (const auto& mie : cfg::ConstInstructionIterable(cfg)) {
-    auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_NEW_INSTANCE) {
-      return true;
-    }
-  }
-  return false;
-}
-
 class DedupBlocksImpl {
  public:
   DedupBlocksImpl(const std::vector<DexClass*>& scope,
@@ -267,11 +258,11 @@ class DedupBlocksImpl {
   // Find blocks with the same exact code
   Duplicates collect_duplicates(const cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
-    const bool has_new_instance = has_new_instance_opcode(cfg);
     Duplicates duplicates;
 
+    std::unique_ptr<reaching_defs::FixpointIterator> fixpoint_iter;
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block, has_new_instance)) {
+      if (is_eligible(block)) {
         // Find a group that matches this one. The key equality function of this
         // map is actually a check that they are duplicates, not that they're
         // the same block.
@@ -287,8 +278,10 @@ class DedupBlocksImpl {
       }
     }
 
-    remove_singletons(duplicates,
-                      [](auto it) { return it->second.size() <= 1; });
+    remove_if(duplicates, [&](auto it) {
+      return is_singleton_or_has_unsupported_init(it->second, cfg,
+                                                  fixpoint_iter);
+    });
     return duplicates;
   }
 
@@ -396,11 +389,11 @@ class DedupBlocksImpl {
       const cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
     PostfixSplitGroupMap splitGroupMap;
-    const bool has_new_instance = has_new_instance_opcode(cfg);
 
+    std::unique_ptr<reaching_defs::FixpointIterator> fixpoint_iter;
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block, has_new_instance)) {
+      if (is_eligible(block)) {
         if (block->num_opcodes() >= m_config.block_split_min_opcode_count) {
           // Insert into other blocks that share the same successors
           splitGroupMap[block].postfix_blocks.insert(block);
@@ -550,8 +543,9 @@ class DedupBlocksImpl {
       split_group.insn_count = best_insn_count;
     }
 
-    remove_singletons(splitGroupMap, [](auto it) {
-      return it->second.postfix_blocks.size() <= 1;
+    remove_if(splitGroupMap, [&](auto it) {
+      return is_singleton_or_has_unsupported_init(it->second.postfix_blocks,
+                                                  cfg, fixpoint_iter);
     });
 
     TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d",
@@ -693,17 +687,13 @@ class DedupBlocksImpl {
     }
   }
 
-  static bool is_eligible(cfg::Block* block, bool has_new_instance) {
+  static bool is_eligible(cfg::Block* block) {
     if (!has_opcodes(block)) {
       return false;
     }
 
     // We can't split up move-result(-pseudo) instruction pairs
     if (begins_with_move_result(block)) {
-      return false;
-    }
-
-    if (has_new_instance && constructs_object_from_another_block(block)) {
       return false;
     }
 
@@ -754,36 +744,44 @@ class DedupBlocksImpl {
   // }
   // (a or b) = new Foo();
   //
-  // We try to avoid this situation by skipping the blocks with uninitalized
-  // objects at the entrance
-  static bool constructs_object_from_another_block(cfg::Block* block) {
-    std::unordered_set<uint16_t> objs;
-
-    const auto& iterable = InstructionIterable(block);
+  // We avoid this situation by skipping blocks that contain an init invocation
+  // to an object that didn't come from a unique instruction.
+  static boost::optional<std::vector<IRInstruction*>>
+  get_init_receiver_instructions_defined_outside_of_block(
+      cfg::Block* block,
+      const cfg::ControlFlowGraph& cfg,
+      std::unique_ptr<reaching_defs::FixpointIterator>& fixpoint_iter) {
+    std::vector<IRInstruction*> res;
+    boost::optional<reaching_defs::Environment> defs_in;
+    auto iterable = InstructionIterable(block);
+    auto defs_in_it = iterable.begin();
+    std::unordered_set<IRInstruction*> insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
-      if (is_new_instance(it->insn->opcode())) {
-        ++it;
-        if (it == iterable.end()) {
-          break;
+      auto insn = it->insn;
+      if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
+        if (!fixpoint_iter) {
+          fixpoint_iter.reset(new reaching_defs::FixpointIterator(cfg));
+          fixpoint_iter->run(reaching_defs::Environment());
         }
-        always_assert(it->type == MFLOW_OPCODE &&
-                      opcode::is_move_result_pseudo(it->insn->opcode()));
-        objs.insert(it->insn->dest());
-
-      } else if (is_invoke_direct(it->insn->opcode())) {
-        if (is_init(it->insn->get_method())) {
-          auto reg = it->insn->src(0);
-          if (objs.count(reg) == 0) {
-            // Found a constructor call on an object from another block
-            return true;
-          } else {
-            // normal initialization
-            objs.erase(reg);
-          }
+        if (!defs_in) {
+          defs_in = fixpoint_iter->get_entry_state_at(block);
+        }
+        for (; defs_in_it != it; defs_in_it++) {
+          fixpoint_iter->analyze_instruction(defs_in_it->insn, &*defs_in);
+        }
+        auto defs = defs_in->get(insn->src(0));
+        if (defs.is_top() || defs.elements().size() > 1) {
+          // should never happen, but we are not going to fight that here
+          return boost::none;
+        }
+        auto def = *defs.elements().begin();
+        if (!insns.count(def)) {
+          res.push_back(def);
         }
       }
+      insns.insert(insn);
     }
-    return false;
+    return res;
   }
 
   void record_stats(const Duplicates& duplicates) {
@@ -826,7 +824,7 @@ class DedupBlocksImpl {
             typename THash,
             typename TPred,
             typename NeedToRemove>
-  static void remove_singletons(
+  static void remove_if(
       std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
       NeedToRemove need_to_remove) {
     for (auto it = duplicates.begin(); it != duplicates.end();) {
@@ -836,6 +834,31 @@ class DedupBlocksImpl {
         ++it;
       }
     }
+  }
+
+  static bool is_singleton_or_has_unsupported_init(
+      const BlockSet& blocks,
+      const cfg::ControlFlowGraph& cfg,
+      std::unique_ptr<reaching_defs::FixpointIterator>& fixpoint_iter) {
+    if (blocks.size() <= 1) {
+      return true;
+    }
+
+    // Next we check if there are disagreeing init-receiver instructions.
+    // TODO: Instead of just dropping all blocks in this case, do finer-grained
+    // partitioning.
+    boost::optional<std::vector<IRInstruction*>> insns;
+    for (cfg::Block* block : blocks) {
+      auto other_insns =
+          get_init_receiver_instructions_defined_outside_of_block(
+              block, cfg, fixpoint_iter);
+      if (!insns && other_insns) {
+        insns = other_insns;
+      } else if (!other_insns || insns != other_insns) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {
