@@ -1052,7 +1052,12 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
       std::unordered_set<Barrier, BarrierHasher> barriers;
       auto inline_barriers = [&](const DexMethod* other_method) {
         if (!is_abstract(other_method)) {
-          always_assert(method_barriers.count(other_method));
+          always_assert(!waiting_for.count_unsafe(other_method));
+          always_assert(!other_method->is_external());
+          always_assert(!is_native(other_method));
+          always_assert(other_method->get_code());
+          always_assert(can_inline_barriers(other_method));
+          always_assert(method_barriers.count_unsafe(other_method));
           auto& invoked_barriers = method_barriers.at_unsafe(other_method);
           std::copy(invoked_barriers.begin(), invoked_barriers.end(),
                     std::inserter(barriers, barriers.end()));
