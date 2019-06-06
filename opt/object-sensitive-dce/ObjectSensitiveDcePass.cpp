@@ -11,10 +11,10 @@
 
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
+#include "HierarchyUtil.h"
 #include "LocalPointersAnalysis.h"
 #include "SummarySerialization.h"
 #include "Transform.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 /*
@@ -36,15 +36,15 @@
  * to run.
  */
 
+namespace hier = hierarchy_util;
 namespace ptrs = local_pointers;
-
 namespace uv = used_vars;
 
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
   CallGraphStrategy(const Scope& scope)
       : m_scope(scope),
-        m_non_overridden_virtuals(find_non_overridden_virtuals(scope)) {}
+        m_non_overridden_virtuals(hier::find_non_overridden_virtuals(scope)) {}
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
     call_graph::CallSites callsites;
@@ -163,8 +163,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
             used_vars::get_dead_instructions(*code, used_vars_fp_iter);
         for (auto dead : dead_instructions) {
           // This logging is useful for quantifying what gets removed. E.g. to
-          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log | grep
-          // " L.*$" -Po | sort | uniq -c
+          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
+          // grep " L.*$" -Po | sort | uniq -c
           TRACE(OSDCE, 3, "DEAD: %s", SHOW(dead->insn));
           code->remove_opcode(dead);
         }

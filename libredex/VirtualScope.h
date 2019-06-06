@@ -7,14 +7,18 @@
 
 #pragma once
 
+#include "ClassHierarchy.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "ClassHierarchy.h"
 #include "Timer.h"
-#include <vector>
 #include <map>
 #include <unordered_map>
+#include <vector>
 
+/*
+ * NOTE: Before using this code, check and see if MethodOverrideGraph.h or
+ * HierarchyUtil.h can serve your needs -- they should be more efficient.
+ */
 
 /**
  * Flags to mark virtual method state.
@@ -29,7 +33,9 @@
  * OVERRIDE: a child of a TOP_DEF
  * OVERRIDE | FINAL: a leaf method
  * TOP_DEF | FINAL: a method that is virtual only because
- *    of visibility but could be made static
+ *    of visibility but could be made static (FIXME: This flag currently seems
+ *    to be erroroneously applied to external non-final methods, which we cannot
+ *    safely conclude are final)
  * IMPL | <one of the above>: the method contributes (lexically) to
  *    interface resolution
  * MIRANDA | <above>: the method is an implementation of an interface at the
@@ -462,34 +468,6 @@ inline std::vector<DexMethod*> devirtualize(
   ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
   auto signature_map = build_signature_map(class_hierarchy);
   return devirtualize(signature_map);
-}
-
-inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const SignatureMap& sig_map) {
-  std::unordered_set<const DexMethod*> non_overridden_virtuals;
-  for (const auto& proto_it : sig_map) {
-    for (const auto& scopes : proto_it.second) {
-      for (const auto& scope : scopes.second) {
-        if (type_class(scope.type) == nullptr ||
-            is_interface(type_class(scope.type))) {
-          continue;
-        }
-        for (const auto& meth : scope.methods) {
-          if (meth.second & FINAL) {
-            non_overridden_virtuals.emplace(meth.first);
-          }
-        }
-      }
-    }
-  }
-  return non_overridden_virtuals;
-}
-
-inline std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
-    const std::vector<DexClass*>& scope) {
-  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
-  auto signature_map = build_signature_map(class_hierarchy);
-  return find_non_overridden_virtuals(signature_map);
 }
 
 inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {
