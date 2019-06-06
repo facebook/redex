@@ -722,4 +722,15 @@ DexMethod* method_from_string(const std::string& s) {
   return method_from_s_expr(expr);
 }
 
+DexMethod* class_with_method(const std::string& class_name,
+                             const std::string& method_instructions) {
+  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  ClassCreator class_creator(class_type);
+  class_creator.set_super(get_object_type());
+  auto method = assembler::method_from_string(method_instructions);
+  class_creator.add_method(method);
+  class_creator.create();
+  return method;
+}
+
 } // namespace assembler

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include "Creators.h"
 #include "IRCode.h"
 #include "S_Expression.h"
 
@@ -65,5 +66,8 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string&);
 DexMethod* method_from_s_expr(const sparta::s_expr&);
 
 DexMethod* method_from_string(const std::string&);
+
+DexMethod* class_with_method(const std::string& class_name,
+                             const std::string& method_instructions);
 
 } // namespace assembler

@@ -71,6 +71,21 @@ TEST_F(IRAssemblerTest, assembleMethod) {
   EXPECT_STREQ(static_method->get_class()->get_name()->c_str(), "LFoo;");
 }
 
+TEST_F(IRAssemblerTest, assembleClassWithMethod) {
+  auto method = assembler::class_with_method("LFoo;",
+                                             R"(
+      (method (private) "LFoo;.bar:(I)V"
+       (
+        (return-void)
+       )
+      )
+    )");
+  EXPECT_EQ(method->get_access(), ACC_PRIVATE);
+  EXPECT_STREQ(method->get_name()->c_str(), "bar");
+  EXPECT_STREQ(method->get_class()->get_name()->c_str(), "LFoo;");
+  EXPECT_EQ(assembler::to_string(method->get_code()), "((return-void))");
+}
+
 TEST_F(IRAssemblerTest, use_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
