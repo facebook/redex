@@ -20,9 +20,11 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRList.h"
+#include "Liveness.h"
 #include "ReachingDefinitions.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "TypeInference.h"
 #include "Util.h"
 #include "Walkers.h"
 
@@ -173,8 +175,8 @@ class DedupBlocksImpl {
       : m_scope(scope), m_mgr(mgr), m_config(config) {}
 
   // Dedup blocks that are exactly the same
-  void dedup(cfg::ControlFlowGraph& cfg) {
-    Duplicates dups = collect_duplicates(cfg);
+  void dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+    Duplicates dups = collect_duplicates(method, cfg);
     if (dups.size() > 0) {
       record_stats(dups);
       deduplicate(dups, cfg);
@@ -185,8 +187,8 @@ class DedupBlocksImpl {
    * Split blocks that share postfix of instructions (that ends with the same
    * set of instructions).
    */
-  void split_postfix(cfg::ControlFlowGraph& cfg) {
-    PostfixSplitGroupMap dups = collect_postfix_duplicates(cfg);
+  void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
+    PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
     if (dups.size() > 0) {
       split_postfix_blocks(dups, cfg);
     }
@@ -207,10 +209,10 @@ class DedupBlocksImpl {
         // graph traversal in (forward/reverse) topological order.
         //
         // We could also split based on a shared prefix of instructions
-        split_postfix(cfg);
+        split_postfix(method, cfg);
       }
 
-      dedup(cfg);
+      dedup(method, cfg);
 
       code.clear_cfg();
     });
@@ -256,11 +258,10 @@ class DedupBlocksImpl {
   std::mutex lock;
 
   // Find blocks with the same exact code
-  Duplicates collect_duplicates(const cfg::ControlFlowGraph& cfg) {
+  Duplicates collect_duplicates(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
     Duplicates duplicates;
 
-    std::unique_ptr<reaching_defs::FixpointIterator> fixpoint_iter;
     for (cfg::Block* block : blocks) {
       if (is_eligible(block)) {
         // Find a group that matches this one. The key equality function of this
@@ -278,9 +279,14 @@ class DedupBlocksImpl {
       }
     }
 
+    std::unique_ptr<reaching_defs::FixpointIterator>
+        reaching_defs_fixpoint_iter;
+    std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
+    std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(duplicates, [&](auto it) {
-      return is_singleton_or_has_unsupported_init(it->second, cfg,
-                                                  fixpoint_iter);
+      return is_singleton_or_inconsistent(
+          method, it->second, cfg, reaching_defs_fixpoint_iter,
+          liveness_fixpoint_iter, type_inference);
     });
     return duplicates;
   }
@@ -385,12 +391,11 @@ class DedupBlocksImpl {
   // (1, 1, 1).
   // @TODO - Instead of keeping track of just one group, in the future we can
   // consider maintaining multiple groups and split them.
-  PostfixSplitGroupMap collect_postfix_duplicates(
-      const cfg::ControlFlowGraph& cfg) {
+  PostfixSplitGroupMap collect_postfix_duplicates(DexMethod* method,
+                                                  cfg::ControlFlowGraph& cfg) {
     const auto& blocks = cfg.blocks();
     PostfixSplitGroupMap splitGroupMap;
 
-    std::unique_ptr<reaching_defs::FixpointIterator> fixpoint_iter;
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
       if (is_eligible(block)) {
@@ -543,9 +548,14 @@ class DedupBlocksImpl {
       split_group.insn_count = best_insn_count;
     }
 
+    std::unique_ptr<reaching_defs::FixpointIterator>
+        reaching_defs_fixpoint_iter;
+    std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
+    std::unique_ptr<type_inference::TypeInference> type_inference;
     remove_if(splitGroupMap, [&](auto it) {
-      return is_singleton_or_has_unsupported_init(it->second.postfix_blocks,
-                                                  cfg, fixpoint_iter);
+      return is_singleton_or_inconsistent(
+          method, it->second.postfix_blocks, cfg, reaching_defs_fixpoint_iter,
+          liveness_fixpoint_iter, type_inference);
     });
 
     TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d",
@@ -836,10 +846,14 @@ class DedupBlocksImpl {
     }
   }
 
-  static bool is_singleton_or_has_unsupported_init(
+  static bool is_singleton_or_inconsistent(
+      DexMethod* method,
       const BlockSet& blocks,
-      const cfg::ControlFlowGraph& cfg,
-      std::unique_ptr<reaching_defs::FixpointIterator>& fixpoint_iter) {
+      cfg::ControlFlowGraph& cfg,
+      std::unique_ptr<reaching_defs::FixpointIterator>&
+          reaching_defs_fixpoint_iter,
+      std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter,
+      std::unique_ptr<type_inference::TypeInference>& type_inference) {
     if (blocks.size() <= 1) {
       return true;
     }
@@ -851,14 +865,81 @@ class DedupBlocksImpl {
     for (cfg::Block* block : blocks) {
       auto other_insns =
           get_init_receiver_instructions_defined_outside_of_block(
-              block, cfg, fixpoint_iter);
+              block, cfg, reaching_defs_fixpoint_iter);
       if (!insns && other_insns) {
         insns = other_insns;
       } else if (!other_insns || insns != other_insns) {
         return true;
       }
     }
-    return false;
+
+    // Next we check if there are inconsistently typed incoming registers.
+    // TODO: Instead of just dropping all blocks in this case, do finer-grained
+    // partitioning.
+
+    // Initializing stuff...
+    if (!type_inference) {
+      type_inference.reset(new type_inference::TypeInference(cfg));
+      type_inference->run(method);
+    }
+    auto& environments = type_inference->get_type_environments();
+    if (!liveness_fixpoint_iter) {
+      cfg.calculate_exit_block();
+      liveness_fixpoint_iter.reset(new LivenessFixpointIterator(cfg));
+      liveness_fixpoint_iter->run(LivenessDomain());
+    }
+    auto live_in_vars =
+        liveness_fixpoint_iter->get_live_in_vars_at(*blocks.begin());
+    if (!(live_in_vars.is_value())) {
+      // should never happen, but we are not going to fight that here
+      return true;
+    }
+    // Join together all initial type environments of the the blocks; this
+    // corresponds to what will happen when we dedup the blocks.
+    boost::optional<type_inference::TypeEnvironment> joined_env;
+    for (cfg::Block* block : blocks) {
+      auto first_insn = block->get_first_insn();
+      always_assert(first_insn != block->end());
+      auto& env = environments.at(first_insn->insn);
+      if (!joined_env) {
+        joined_env = env;
+      } else {
+        joined_env->join_with(env);
+      }
+    }
+    always_assert(joined_env);
+    // Let's see if any of the type environments of the existing blocks matches,
+    // considering live-in registers. If so, we know that things will verify
+    // after deduping.
+    // TODO: Can we be even more lenient without actually deduping and
+    // re-type-inferring?
+    for (cfg::Block* block : blocks) {
+      auto first_insn = block->get_first_insn();
+      always_assert(first_insn != block->end());
+      auto& env = environments.at(first_insn->insn);
+      bool matches = true;
+      for (auto reg : live_in_vars.elements()) {
+        auto type = joined_env->get_type(reg);
+        if (type.is_top() || type.is_bottom()) {
+          // should never happen, but we are not going to fight that here
+          return true;
+        }
+        if (type != env.get_type(reg)) {
+          matches = false;
+          break;
+        }
+        if (type.element() == REFERENCE &&
+            joined_env->get_dex_type(reg) != env.get_dex_type(reg)) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return false;
+      }
+    }
+    // we did not find any matching block
+    return true;
   }
 
   static boost::optional<MethodItemEntry&> last_opcode(cfg::Block* block) {

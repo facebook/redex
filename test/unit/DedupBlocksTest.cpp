@@ -865,3 +865,42 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
   EXPECT_EQ(assembler::to_string(expect_code.get()),
             assembler::to_string(code));
 }
+
+TEST_F(DedupBlocksTest, respectTypes) {
+  using namespace dex_asm;
+  DexMethod* method = get_fresh_method("v");
+
+  auto str = R"(
+    (
+      ; A
+      (const-string "hello")
+      (move-result-pseudo-object v0)
+      (if-eqz v0 :D)
+
+      ; B
+      (const v0 1)
+      (if-eqz v0 :C)
+
+      (:E)
+      (return-void)
+
+      (:C)
+      (if-nez v0 :E)
+      (goto :E)
+
+      (:D)
+      (if-nez v0 :E)
+      (goto :E)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_dedup_blocks();
+
+  auto expected_str = str;
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
