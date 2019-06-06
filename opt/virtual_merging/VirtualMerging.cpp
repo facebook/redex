@@ -251,8 +251,10 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
               } else if (m_xstores.cross_store_ref(overridden_method,
                                                    overriding_method)) {
                 stats.cross_store_refs++;
-              } else if (m_xdexes.cross_dex_ref(overridden_method,
-                                                overriding_method)) {
+              } else if (m_xdexes.cross_dex_ref_override(overridden_method,
+                                                         overriding_method) ||
+                         (m_xdexes.num_dexes() > 1 &&
+                          m_xdexes.is_in_primary_dex(overridden_method))) {
                 stats.cross_dex_refs++;
               } else {
                 always_assert(overriding_method->get_code());

@@ -104,6 +104,7 @@ XDexRefs::XDexRefs(const DexStoresVector& stores) {
       dex_nr++;
     }
   }
+  m_num_dexes = dex_nr;
 }
 
 size_t XDexRefs::get_dex_idx(const DexType* type) const {
@@ -113,6 +114,25 @@ size_t XDexRefs::get_dex_idx(const DexType* type) const {
   }
   always_assert_log(false, "type %s not in the current APK", SHOW(type));
 }
+
+bool XDexRefs::cross_dex_ref_override(const DexMethod* overridden,
+                                      const DexMethod* overriding) const {
+  auto type = overriding->get_class();
+  auto idx = get_dex_idx(type);
+  do {
+    type = type_class(type)->get_super_class();
+    if (idx != get_dex_idx(type)) {
+      return true;
+    }
+  } while (type != overridden->get_class());
+  return false;
+}
+
+bool XDexRefs::is_in_primary_dex(const DexMethod* method) const {
+  return get_dex_idx(method->get_class()) == 0;
+}
+
+size_t XDexRefs::num_dexes() const { return m_num_dexes; }
 
 bool XDexRefs::cross_dex_ref(const DexMethod* caller,
                              const DexMethod* callee) const {

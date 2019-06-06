@@ -228,6 +228,7 @@ class XStoreRefs {
  */
 class XDexRefs {
   std::unordered_map<const DexType*, size_t> m_dexes;
+  size_t m_num_dexes;
 
  public:
   explicit XDexRefs(const DexStoresVector& stores);
@@ -238,4 +239,24 @@ class XDexRefs {
    * Return true if the caller and callee are in different dexes.
    */
   bool cross_dex_ref(const DexMethod* caller, const DexMethod* callee) const;
+
+  /**
+   * Return true if the overridden and overriding methods, or any of the
+   * intermediate classes in the inheritance hierarchy, are in different dexes.
+   * The two methods must be non-interface virtual methods in the same virtual
+   * scope, where the overriding method is defined in a (possibly nested)
+   * sub-class of the class where the overridden method is defined.
+   */
+  bool cross_dex_ref_override(const DexMethod* overridden,
+                              const DexMethod* overriding) const;
+
+  /**
+   * Return true if the method is located in the primary dex.
+   */
+  bool is_in_primary_dex(const DexMethod* overridden) const;
+
+  /**
+   * Number of dexes.
+   */
+  size_t num_dexes() const;
 };
