@@ -77,6 +77,28 @@ TEST(PatriciaTreeMapTest, erase_all_matching) {
   EXPECT_EQ(m1.at(1), 1);
 }
 
+TEST(PatriciaTreeMapTest, map) {
+  constexpr uint32_t default_value = 0;
+  pt_map m1;
+  m1.insert_or_assign(0, 1);
+  m1.insert_or_assign(1, 2);
+  m1.insert_or_assign(2, 4);
+
+  bool any_changes = m1.map([](uint32_t value) { return value; });
+  EXPECT_FALSE(any_changes);
+  EXPECT_EQ(3, m1.size());
+  EXPECT_EQ(m1.at(0), 1);
+  EXPECT_EQ(m1.at(1), 2);
+  EXPECT_EQ(m1.at(2), 4);
+
+  any_changes = m1.map([](uint32_t value) { return value - 1; });
+  EXPECT_TRUE(any_changes);
+  EXPECT_EQ(2, m1.size());
+  EXPECT_EQ(m1.at(0), default_value);
+  EXPECT_EQ(m1.at(1), 1);
+  EXPECT_EQ(m1.at(2), 3);
+}
+
 TEST(PatriciaTreeMapTest, mapOfUnsignedInt64) {
   PatriciaTreeMap<uint64_t, std::string> m;
   std::unordered_map<uint64_t, std::string> entries = {
