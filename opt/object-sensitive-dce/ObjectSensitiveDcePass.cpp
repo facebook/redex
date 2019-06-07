@@ -11,10 +11,10 @@
 
 #include "ConcurrentContainers.h"
 #include "DexUtil.h"
+#include "HierarchyUtil.h"
 #include "LocalPointersAnalysis.h"
 #include "SummarySerialization.h"
 #include "Transform.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 /*
@@ -36,15 +36,15 @@
  * to run.
  */
 
+namespace hier = hierarchy_util;
 namespace ptrs = local_pointers;
-
 namespace uv = used_vars;
 
 class CallGraphStrategy final : public call_graph::BuildStrategy {
  public:
   CallGraphStrategy(const Scope& scope)
       : m_scope(scope),
-        m_non_overridden_virtuals(find_non_overridden_virtuals(scope)) {}
+        m_non_overridden_virtuals(hier::find_non_overridden_virtuals(scope)) {}
 
   call_graph::CallSites get_callsites(const DexMethod* method) const override {
     call_graph::CallSites callsites;
