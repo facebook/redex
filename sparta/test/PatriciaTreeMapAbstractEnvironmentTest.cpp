@@ -260,6 +260,16 @@ TEST_F(PatriciaTreeMapAbstractEnvironmentTest, erase_all_matching) {
   EXPECT_TRUE(e1.is_top());
 }
 
+TEST_F(PatriciaTreeMapAbstractEnvironmentTest, map) {
+  Environment e1({{1, Domain({"a", "b"})}});
+  bool any_changes = e1.map([](Domain d) { return d; });
+  EXPECT_FALSE(any_changes);
+
+  any_changes = e1.map([](Domain d) { return Domain::top(); });
+  EXPECT_TRUE(any_changes);
+  EXPECT_TRUE(e1.is_top());
+}
+
 TEST_F(PatriciaTreeMapAbstractEnvironmentTest, prettyPrinting) {
   using StringEnvironment =
       PatriciaTreeMapAbstractEnvironment<std::string*, Domain>;

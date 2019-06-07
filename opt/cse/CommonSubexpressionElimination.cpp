@@ -488,22 +488,16 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                                       }
                                     });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
-        if (!env->is_value()) {
-          return;
-        }
-        std::vector<register_t> barrier_sensitive_regs;
-        for (auto& p : env->bindings()) {
-          auto c = p.second.get_constant();
+        bool any_map_changes = env->map([mask](ValueIdDomain domain) {
+          auto c = domain.get_constant();
           always_assert(c);
           auto value_id = *c;
           if (value_id & mask) {
-            barrier_sensitive_regs.push_back(p.first);
+            return ValueIdDomain::top();
           }
-        }
-        for (auto reg : barrier_sensitive_regs) {
-          env->set(reg, ValueIdDomain::top());
-        }
-        if (barrier_sensitive_regs.size()) {
+          return domain;
+        });
+        if (any_map_changes) {
           any_changes = true;
         }
       });

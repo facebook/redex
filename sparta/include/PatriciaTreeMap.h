@@ -51,6 +51,9 @@ class PatriciaTreeIterator;
 template <typename T>
 using CombiningFunction = std::function<T(const T&, const T&)>;
 
+template <typename Value>
+using MappingFunction = std::function<Value(const Value&)>;
+
 template <typename IntegerType, typename Value>
 inline const typename Value::type* find_value(
     IntegerType key,
@@ -76,6 +79,11 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     const CombiningFunction<typename Value::type>& combine,
     IntegerType key,
     const typename Value::type& value,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
+
+template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> map(
+    const MappingFunction<typename Value::type>& f,
     const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree);
 
 template <typename IntegerType, typename Value>
@@ -177,6 +185,7 @@ class PatriciaTreeMap final {
   using IntegerType =
       typename std::conditional_t<std::is_pointer<Key>::value, uintptr_t, Key>;
   using combining_function = ptmap_impl::CombiningFunction<mapped_type>;
+  using mapping_function = ptmap_impl::MappingFunction<mapped_type>;
 
   ~PatriciaTreeMap() {
     // The destructor is the only method that is guaranteed to be created when a
@@ -277,6 +286,13 @@ class PatriciaTreeMap final {
         Value::default_value(),
         m_tree);
     return *this;
+  }
+
+  bool map(const mapping_function& f) {
+    auto new_tree = ptmap_impl::map<IntegerType, Value>(f, m_tree);
+    bool res = new_tree != m_tree;
+    m_tree = new_tree;
+    return res;
   }
 
   bool erase_all_matching(Key key_mask) {
@@ -682,6 +698,34 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> update(
     return branch;
   }
   return join<IntegerType, Value>(key, new_leaf, branch->prefix(), branch);
+}
+
+// Maps all entries with non-default values, applying a given function.
+template <typename IntegerType, typename Value>
+inline std::shared_ptr<PatriciaTree<IntegerType, Value>> map(
+    const MappingFunction<typename Value::type>& f,
+    const std::shared_ptr<PatriciaTree<IntegerType, Value>>& tree) {
+  if (tree == nullptr) {
+    return nullptr;
+  }
+  if (tree->is_leaf()) {
+    const auto& leaf =
+        std::static_pointer_cast<PatriciaTreeLeaf<IntegerType, Value>>(tree);
+    auto new_value = f(leaf->value());
+    return combine_leaf(ptmap_impl::snd<typename Value::type>, new_value, leaf);
+  }
+  const auto& branch =
+      std::static_pointer_cast<PatriciaTreeBranch<IntegerType, Value>>(tree);
+  auto new_left_tree = map(f, branch->left_tree());
+  auto new_right_tree = map(f, branch->right_tree());
+  if (new_left_tree == branch->left_tree() &&
+      new_right_tree == branch->right_tree()) {
+    return branch;
+  }
+  return make_branch(branch->prefix(),
+                     branch->branching_bit(),
+                     new_left_tree,
+                     new_right_tree);
 }
 
 // Erases all entries where keys and :key_mask share common bits.

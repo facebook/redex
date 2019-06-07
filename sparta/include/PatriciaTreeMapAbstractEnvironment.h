@@ -109,6 +109,15 @@ class PatriciaTreeMapAbstractEnvironment final
     return *this;
   }
 
+  bool map(std::function<Domain(const Domain&)> f) {
+    if (this->is_bottom()) {
+      return false;
+    }
+    bool res = this->get_value()->map(f);
+    this->normalize();
+    return res;
+  }
+
   bool erase_all_matching(
       const Variable& variable_mask) {
     if (this->is_bottom()) {
@@ -262,6 +271,10 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     // The Bottom value is handled by the caller and should never occur here.
     RUNTIME_CHECK(!value.is_bottom(), internal_error());
     m_map.insert_or_assign(variable, value);
+  }
+
+  bool map(std::function<Domain(const Domain&)>& f) {
+    return m_map.map(f);
   }
 
   bool erase_all_matching(const Variable& variable_mask) {
