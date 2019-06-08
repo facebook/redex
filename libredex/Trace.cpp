@@ -13,8 +13,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <mutex>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -26,7 +26,7 @@ struct Tracer {
   bool m_show_timestamps{false};
   bool m_show_tracemodule{false};
   const char* m_method_filter;
-  std::unordered_map<int/*TraceModule*/, std::string> m_module_id_name_map;
+  std::unordered_map<int /*TraceModule*/, std::string> m_module_id_name_map;
 
   Tracer() {
     const char* traceenv = getenv("TRACE");
@@ -76,7 +76,11 @@ struct Tracer {
     return level <= m_level || level <= m_traces[module];
   }
 
-  void trace(TraceModule module, int level, const char* fmt, va_list ap) {
+  void trace(TraceModule module,
+             int level,
+             bool suppress_newline,
+             const char* fmt,
+             va_list ap) {
     if (m_method_filter && TraceContext::s_current_method != nullptr) {
       if (strstr(TraceContext::s_current_method->c_str(), m_method_filter) ==
           nullptr) {
@@ -103,17 +107,19 @@ struct Tracer {
       fprintf(m_file, "[%s:%d] ", m_module_id_name_map[module].c_str(), level);
     }
     vfprintf(m_file, fmt, ap);
-    fprintf(m_file, "\n");
+    if (!suppress_newline) {
+      fprintf(m_file, "\n");
+    }
     fflush(m_file);
   }
 
  private:
   void init_trace_modules(const char* traceenv) {
     std::unordered_map<std::string, int> module_id_map;
-#define TM(x) module_id_map[ #x ] = x;
+#define TM(x) module_id_map[#x] = x;
     TMS
 #undef TM
-    char* tracespec = strdup(traceenv);
+        char* tracespec = strdup(traceenv);
     const char* sep = ",: ";
     const char* tok = strtok(tracespec, sep);
     const char* module = nullptr;
@@ -177,10 +183,14 @@ bool traceEnabled(TraceModule module, int level) {
 }
 #endif
 
-void trace(TraceModule module, int level, const char* fmt, ...) {
+void trace(TraceModule module,
+           int level,
+           bool suppress_newline,
+           const char* fmt,
+           ...) {
   va_list ap;
   va_start(ap, fmt);
-  tracer.trace(module, level, fmt, ap);
+  tracer.trace(module, level, suppress_newline, fmt, ap);
   va_end(ap);
 }
 
