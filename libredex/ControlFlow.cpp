@@ -484,14 +484,14 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
     // TODO: fix the optimizations that don't track registers size correctly.
     recompute_registers_size();
 
-    TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
+    TRACE_NO_LINE(CFG, 5, "before simplify:\n%s", SHOW(*this));
     simplify();
-    TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
+    TRACE_NO_LINE(CFG, 5, "after simplify:\n%s", SHOW(*this));
   } else {
     remove_unreachable_succ_edges();
   }
 
-  TRACE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
+  TRACE_NO_LINE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
 }
 
 void ControlFlowGraph::find_block_boundaries(IRList* ir,
@@ -1427,7 +1427,7 @@ IRList* ControlFlowGraph::linearize() {
   sanity_check();
   IRList* result = new IRList;
 
-  TRACE(CFG, 5, "before linearize:\n%s", SHOW(*this));
+  TRACE_NO_LINE(CFG, 5, "before linearize:\n%s", SHOW(*this));
 
   const std::vector<Block*>& ordering = order();
   insert_branches_and_targets(ordering);

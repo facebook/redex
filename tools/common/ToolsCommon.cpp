@@ -240,7 +240,7 @@ void load_all_intermediate(const std::string& input_ir_dir,
         "different from the result of running whole optimization passes with "
         "redex-all\n";
     std::cerr << error;
-    TRACE(MAIN, 1, "%s", error.c_str());
+    TRACE_NO_LINE(MAIN, 1, "%s", error.c_str());
   }
 }
 } // namespace redex

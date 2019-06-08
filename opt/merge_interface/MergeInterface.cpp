@@ -85,12 +85,12 @@ std::vector<DexClassSet> collect_can_merge(
       TRACE(MEINT, 7, "interfaces: %p", cls->get_type());
       const TypeSet& implementors =
           type_system.get_implementors(cls->get_type());
-      TRACE(MEINT, 7, "implementors : ");
+      TRACE_NO_LINE(MEINT, 7, "implementors : ");
       TRACE(MEINT, 7, SHOW(implementors));
       // Need to find common interfaces that implement this interface too.
       const TypeSet& intf_children =
           type_system.get_interface_children(cls->get_type());
-      TRACE(MEINT, 7, "children intfs : ");
+      TRACE_NO_LINE(MEINT, 7, "children intfs : ");
       TRACE(MEINT, 7, SHOW(intf_children));
       TypeSet implementors_and_intfs;
       // TODO(suree404): This merge interfaces that have same implementors and
@@ -365,7 +365,7 @@ void move_fields_to_interface(DexClass* from_interface,
   DexType* target_intf_type = target_interface->get_type();
   auto sfields = from_interface->get_sfields();
   for (DexField* field : sfields) {
-    TRACE(MEINT, 7, "Moving field ");
+    TRACE_NO_LINE(MEINT, 7, "Moving field ");
     TRACE(MEINT, 7, SHOW(field));
     TRACE(MEINT, 7, "");
     from_interface->remove_field(field);
@@ -411,7 +411,7 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     // Merge other interfaces into the interface we chose.
     for (auto set_it = set_start; set_it != intf_set.end(); ++set_it) {
       DexClass* interface_to_copy = (*set_it);
-      TRACE(MEINT, 3, "merged:   %p\n    ", interface_to_copy->get_type());
+      TRACE_NO_LINE(MEINT, 3, "merged:   %p", interface_to_copy->get_type());
       TRACE(MEINT, 3, SHOW(interface_to_copy));
       TRACE(MEINT, 3, "");
       intf_merge_map[interface_to_copy->get_type()] = merge_to_intf->get_type();
@@ -527,9 +527,9 @@ void remove_implements(
     }
     TRACE(MEINT, 9, "Updating interface for %p", cls->get_type());
     std::unordered_set<DexType*> new_intfs;
-    TRACE(MEINT, 9, "Original was:");
+    TRACE_NO_LINE(MEINT, 9, "Original was:");
     for (DexType* cls_intf : cls->get_interfaces()->get_type_list()) {
-      TRACE(MEINT, 9, "%p ", cls_intf);
+      TRACE_NO_LINE(MEINT, 9, "%p ", cls_intf);
       const auto& find_intf = intf_merge_map.find(cls_intf);
       if (find_intf != intf_merge_map.end()) {
         // This interface is merged interface, add its merger interface instead
@@ -542,9 +542,9 @@ void remove_implements(
       }
     }
     std::deque<DexType*> deque;
-    TRACE(MEINT, 9, "\nAfter is:");
+    TRACE_NO_LINE(MEINT, 9, "\nAfter is:");
     for (DexType* intf : new_intfs) {
-      TRACE(MEINT, 9, "%p ", intf);
+      TRACE_NO_LINE(MEINT, 9, "%p ", intf);
       deque.emplace_back(intf);
     }
     TRACE(MEINT, 9, "");

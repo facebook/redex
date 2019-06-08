@@ -1127,7 +1127,7 @@ void do_basic_block_tracing(DexClass* analysis_cls,
 
   TRACE(INSTRUMENT, 3,
         "Instrumented %d methods and %d blocks, out of %d methods and %d "
-        "blocks\n",
+        "blocks",
         (all_method_inst - 1), all_bb_inst, all_methods, all_bb_nums);
 }
 
@@ -1181,7 +1181,7 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
       !pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1,
           "--enable-instrument-pass (or \"instrument_pass_enabled\": true) is "
-          "not specified.\n");
+          "not specified.");
     return;
   }
 

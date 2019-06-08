@@ -80,7 +80,7 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     }
     TRACE(CONSTP, 5,
           "Propagated constant in branch instruction %s, "
-          "Operands [%d] [%d] -> Result: [%d]\n",
+          "Operands [%d] [%d] -> Result: [%d]",
           SHOW(insn), l_val, r_val, result);
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {

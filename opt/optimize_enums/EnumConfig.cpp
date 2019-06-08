@@ -64,9 +64,9 @@ void ParamSummary::print(const DexMethodRef* method) const {
     return;
   }
   TRACE(ENUM, 9, "summary of %s", SHOW(method));
-  TRACE(ENUM, 9, "safe_params: ");
+  TRACE_NO_LINE(ENUM, 9, "safe_params: ");
   for (auto param : safe_params) {
-    TRACE(ENUM, 9, "%d ", param);
+    TRACE_NO_LINE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {
     TRACE(ENUM, 9, "returned: %d", returned_param.get());

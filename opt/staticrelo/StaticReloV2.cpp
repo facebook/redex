@@ -190,7 +190,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       TRACE(STATIC_RELO, 4,
             "method %s has %d static method callers, and the method and its "
             "callers are all unreachable from other classes. Enable "
-            "RemoveUnreachablePass to remove them.\n",
+            "RemoveUnreachablePass to remove them.",
             show(vertex.method).c_str(), number_of_callers);
       if (number_of_callers == 1) {
         // Relocate the unreachable method to its caller class if only one

@@ -31,7 +31,7 @@ class ObjectSensitiveDcePass final : public Pass {
         !m_external_side_effect_summaries_file) {
       TRACE(OSDCE, 1,
             "WARNING: External summary file missing; OSDCE will make "
-            "conservative assumptions about system & third-party code.\n");
+            "conservative assumptions about system & third-party code.");
     }
   }
 

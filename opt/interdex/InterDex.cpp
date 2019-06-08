@@ -316,11 +316,11 @@ void InterDex::emit_primary_dex(
   }
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex "
-        "from interdex list.\n",
+        "from interdex list.",
         coldstart_classes_in_primary, primary_dex.size());
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex skipped "
-        "from interdex list.\n",
+        "from interdex list.",
         coldstart_classes_skipped_in_primary, primary_dex.size());
 
   flush_out_dex(primary_dex_info);
@@ -387,7 +387,7 @@ void InterDex::emit_interdex_classes(
           if (m_mixed_mode_info.has_predefined_classes()) {
             TRACE(IDEX, 3,
                   "Emitting the mixed mode dex between the coldstart "
-                  "set and the extended set of classes.\n");
+                  "set and the extended set of classes.");
             bool can_touch_interdex_order =
                 m_mixed_mode_info.can_touch_coldstart_set() ||
                 m_mixed_mode_info.can_touch_coldstart_extended_set();
@@ -414,7 +414,7 @@ void InterDex::emit_interdex_classes(
       if (last_end_marker_it > it) {
         TRACE(IDEX, 2,
               "%s is part of coldstart classes. Removing it from the "
-              "list of mix mode classes\n",
+              "list of mix mode classes",
               SHOW(cls));
         m_mixed_mode_info.remove_mixed_mode_class(cls);
       } else if (!m_mixed_mode_info.can_touch_coldstart_extended_set()) {
@@ -446,7 +446,7 @@ void InterDex::emit_interdex_classes(
 
   TRACE(IDEX, 3,
         "[interdex order]: %d classes are unreferenced from the interdex order "
-        "in secondary dexes.\n",
+        "in secondary dexes.",
         cls_skipped_in_secondary);
 }
 
@@ -477,7 +477,7 @@ void InterDex::emit_mixed_mode_classes(
       if (can_touch_interdex_order) {
         TRACE(IDEX, 2,
               " Emitting mixed mode class, that is also in the "
-              "interdex list: %s \n",
+              "interdex list: %s",
               SHOW(clazz));
         emit_class(mixedmode_info, clazz, /* check_if_skip */ false,
                    /* perf_sensitive */ true);
@@ -634,7 +634,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%d, field ref weight %d, type ref weight %d, string ref weight %d, "
         "method seed weight %d, field seed weight %d, type seed weight %d, "
-        "string seed weight %d.\n",
+        "string seed weight %d.",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
@@ -653,7 +653,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
     TRACE(IDEX, 2,
           "[dex ordering] Cross-dex-relocator active, max relocated methods "
           "per class: %zu, relocating static methods: %s, non-static direct "
-          "methods: %s, virtual methods: %s\n",
+          "methods: %s, virtual methods: %s",
           m_cross_dex_relocator_config.max_relocated_methods_per_class,
           m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
           m_cross_dex_relocator_config.relocate_non_static_direct_methods
@@ -853,7 +853,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
   } else {
     TRACE(IDEX, 2,
           "Writing out secondary dex number %d, which is %s of coldstart, "
-          "%s of extended set, %s scroll classes and has %d classes.\n",
+          "%s of extended set, %s scroll classes and has %d classes.",
           m_dexes_structure.get_num_secondary_dexes() + 1,
           (dex_info.coldstart ? "part of" : "not part of"),
           (dex_info.extended ? "part of" : "not part of"),

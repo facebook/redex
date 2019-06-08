@@ -268,8 +268,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
       // Nothing to do if ProGuard says we can't change the method args.
       TRACE(ARGS,
             5,
-            "Method is disqualified from being updated by ProGuard rules: "
-            "%s\n",
+            "Method is disqualified from being updated by ProGuard rules: %s",
             SHOW(method));
       return;
     }

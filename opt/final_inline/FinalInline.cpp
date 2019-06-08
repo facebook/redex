@@ -360,7 +360,7 @@ class FinalInlineImpl {
         TRACE(FINALINLINE,
               8,
               "Can't replace: %s :: Can't validate :: const :: %s :: sput :: "
-              "%s :: register match :: %s\n",
+              "%s :: register match :: %s",
               SHOW(clinit),
               condition_const ? "True" : "False",
               condition_sput ? "True" : "False",

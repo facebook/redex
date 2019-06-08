@@ -74,12 +74,12 @@ void check_intf_common(Scope& scope) {
 void print_scope(Scope& scope) {
   TRACE(OBFUSCATE, 2, "------------------------------------------------");
   for (const auto& cls : scope) {
-    TRACE(OBFUSCATE, 2, "** %s extends %s",
-        SHOW(cls), SHOW(cls->get_super_class()));
+    TRACE_NO_LINE(OBFUSCATE, 2, "** %s extends %s", SHOW(cls),
+                  SHOW(cls->get_super_class()));
     if (cls->get_interfaces()->get_type_list().size() > 0) {
-      TRACE(OBFUSCATE, 2, " implements ");
+      TRACE_NO_LINE(OBFUSCATE, 2, " implements ");
       for (const auto& intf : cls->get_interfaces()->get_type_list()) {
-        TRACE(OBFUSCATE, 2, "%s, ", SHOW(intf));
+        TRACE_NO_LINE(OBFUSCATE, 2, "%s, ", SHOW(intf));
       }
     }
     TRACE(OBFUSCATE, 2, "");

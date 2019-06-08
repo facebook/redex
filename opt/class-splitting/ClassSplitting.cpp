@@ -128,7 +128,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       trefs.push_back(target_class_info.target_cls->get_type());
       TRACE(CS, 4,
             "[class splitting] Method {%s} with weight %d will be relocated to "
-            "{%s}\n",
+            "{%s}",
             SHOW(method), weight, SHOW(target_class_info.target_cls));
     }
   }
@@ -159,7 +159,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         TRACE(CS,
               4,
               "[class splitting] Class earlier identified as relocatable is "
-              "no longer relocatable: {%s}\n",
+              "no longer relocatable: {%s}",
               SHOW(cls));
         continue;
       }
@@ -177,7 +177,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
           TRACE(CS,
                 4,
                 "[class splitting] Method earlier identified as relocatable is "
-                "not longer relocatable: {%s}\n",
+                "not longer relocatable: {%s}",
                 SHOW(method));
           continue;
         }
@@ -185,7 +185,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         if (api_level != method_info.api_level) {
           TRACE(CS, 4,
                 "[class splitting] Method {%s} api level changed to {%d} from "
-                "{%d}.\n",
+                "{%d}.",
                 SHOW(method), api_level, method_info.api_level);
           continue;
         }
@@ -214,7 +214,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
     TRACE(CS, 2,
           "[class splitting] Relocated {%zu} methods to {%zu} target classes "
-          "in this dex.\n",
+          "in this dex.",
           relocated_methods, target_classes.size());
 
     m_target_classes.clear();

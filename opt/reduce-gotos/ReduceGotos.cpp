@@ -226,7 +226,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
 
       TRACE(RG, 3,
             "[reduce gotos] Found irreducible trivial switch with register %u, "
-            "case key %d, live out: %d\n",
+            "case key %d, live out: %d",
             reg, case_key, live_out_vars.contains(insn->src(0)));
       stats.remaining_trivial_switches++;
     }
@@ -459,7 +459,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
           TRACE(RG, 3,
                 "[reduce gotos] Replaced %u gotos with returns, "
                 "removed %u trailing moves, "
-                "inverted %u conditional branches in {%s}\n",
+                "inverted %u conditional branches in {%s}",
                 stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
                 stats.inverted_conditional_branches, SHOW(method));
         }
@@ -510,7 +510,7 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                   stats.inverted_conditional_branches);
   TRACE(RG, 1,
         "[reduce gotos] Replaced %u gotos with returns, inverted %u "
-        "conditional brnaches in total\n",
+        "conditional brnaches in total",
         stats.replaced_gotos_with_returns, stats.inverted_conditional_branches);
 }
 

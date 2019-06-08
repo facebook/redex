@@ -506,7 +506,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   TRACE(RP, 1,
         "result propagation --- potential methods: %d, erased moves: %d, "
         "patched moves: %d, "
-        "unverifiable moves: %d\n",
+        "unverifiable moves: %d",
         methods_which_return_parameter.size(), stats.erased_move_results,
         stats.patched_move_results, stats.unverifiable_move_results);
 }

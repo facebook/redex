@@ -486,7 +486,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
     TRACE(RME,
           1,
           "Ignoring eliminate_const_literals because verify-none is not "
-          "enabled.\n");
+          "enabled.");
   }
   m_config.regalloc_has_run = mgr.regalloc_has_run();
 

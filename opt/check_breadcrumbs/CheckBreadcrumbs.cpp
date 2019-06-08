@@ -162,7 +162,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
           "Dangling References in Methods: %ld\n"
           "Dangling References in Type Instructions: %ld\n"
           "Dangling References in Fields Field Instructions: %ld\n"
-          "Dangling References in Method Instructions: %ld\n",
+          "Dangling References in Method Instructions: %ld",
           bad_fields_count, bad_methods_count, bad_type_insns_count,
           bad_field_insns_count, bad_meths_insns_count);
     TRACE(BRCR, 2, "%s", ss.str().c_str());
@@ -242,7 +242,7 @@ void Breadcrumbs::report_illegal_refs(bool fail_if_illegal_refs,
         "Illegal type refs : %ld\n"
         "Illegal field type refs : %ld\n"
         "Illegal field cls refs : %ld\n"
-        "Illegal method calls : %ld\n",
+        "Illegal method calls : %ld",
         num_illegal_fields,
         num_illegal_type_refs,
         num_illegal_field_type_refs,

@@ -634,7 +634,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
             TRACE(TERA,
                   5,
                   "[non mergeable] %s as it contains a non-primitive "
-                  "static field\n",
+                  "static field",
                   SHOW(field->get_class()));
             m_non_mergeables.emplace(field->get_class());
           }
@@ -1056,7 +1056,7 @@ void Model::map_fields(MergerType& merger, const TypeSet& classes) {
           type, DexString::make_string(ss.str()), field_type));
       TRACE(TERA, 9,
             "  -- A hole found at index %d, created a placeholder field of "
-            "type %s\n",
+            "type %s",
             index, field_type->c_str());
     }
     TRACE(TERA, 8, "Add field map item [%ld]", fields.size());

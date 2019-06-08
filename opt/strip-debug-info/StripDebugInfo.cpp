@@ -171,7 +171,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
         "Matched on %d methods. Removed %d dbg line entries, %d dbg local var "
         "entries, %d dbg prologue start entries, %d "
         "epilogue end entries, %u empty dbg tables, "
-        "%d skipped due to inlining\n",
+        "%d skipped due to inlining",
         stats.num_matches,
         stats.num_pos_dropped,
         stats.num_var_dropped,

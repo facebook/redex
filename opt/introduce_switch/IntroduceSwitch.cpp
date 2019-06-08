@@ -106,9 +106,9 @@ class IntroduceSwitch {
 
             // if the chain is too small, there's no benefit in compacting it
             if (key_to_case.size() >= MIN_SWITCH_LENGTH) {
-              TRACE(INTRO_SWITCH, 3, "Found switch-like chain: { ");
+              TRACE_NO_LINE(INTRO_SWITCH, 3, "Found switch-like chain: { ");
               for (const auto& b : key_to_case) {
-                TRACE(INTRO_SWITCH, 3, "%d ", b.second->id());
+                TRACE_NO_LINE(INTRO_SWITCH, 3, "%d ", b.second->id());
               }
               TRACE(INTRO_SWITCH, 3, "}");
               intro_switch++;

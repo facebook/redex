@@ -878,7 +878,7 @@ void ClassScopes::build_interface_scopes() {
   for (const auto& intf_it : m_interface_map) {
     const DexClass* intf_cls = type_class(intf_it.first);
     if (intf_cls == nullptr) {
-      TRACE(VIRT, 9, "missing DexClass for %s", SHOW(intf_it.first));
+      TRACE_NO_LINE(VIRT, 9, "missing DexClass for %s", SHOW(intf_it.first));
       continue;
     }
     for (const auto& meth : intf_cls->get_vmethods()) {
@@ -888,7 +888,8 @@ void ClassScopes::build_interface_scopes() {
       intf_scope.push_back({});
       for (const auto& scope : scopes) {
         if (scope.interfaces.count(intf_it.first) == 0) continue;
-        TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
+        TRACE_NO_LINE(
+            VIRT, 9, "add interface scope for %s", SHOW(intf_it.first));
         intf_scope.back().push_back(&scope);
       }
     }
@@ -907,7 +908,7 @@ InterfaceScope ClassScopes::find_interface_scope(const DexMethod* meth) const {
   always_assert(scopes.size() > 0); // at least the method itself
   for (const auto& scope : scopes) {
     if (scope.interfaces.count(intf) == 0) continue;
-    TRACE(VIRT, 9, "add interface scope for %s", SHOW(intf));
+    TRACE_NO_LINE(VIRT, 9, "add interface scope for %s", SHOW(intf));
     intf_scope.push_back(&scope);
   }
   return intf_scope;

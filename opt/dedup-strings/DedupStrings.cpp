@@ -343,7 +343,7 @@ DedupStrings::get_strings_to_dedup(
       if (!host_classes[dexnr]) {
         TRACE(DS, 4,
               "[dedup strings] non perf sensitive string: {%s} dex #%u has no "
-              "host\n",
+              "host",
               SHOW(s), dexnr);
         continue;
       }
@@ -356,7 +356,7 @@ DedupStrings::get_strings_to_dedup(
         // but the best fix in this case is probably to raise the limit
         TRACE(DS, 4,
               "[dedup strings] non perf sensitive string: {%s} dex #%u cannot "
-              "be used as dedup strings max factory methods limit reached\n",
+              "be used as dedup strings max factory methods limit reached",
               SHOW(s), dexnr);
         continue;
       }
@@ -371,13 +371,13 @@ DedupStrings::get_strings_to_dedup(
       if (!host_info || size_reduction < host_info->size_reduction) {
         TRACE(DS, 4,
               "[dedup strings] non perf sensitive string: {%s} dex #%u can "
-              "host with size reduction %u\n",
+              "host with size reduction %u",
               SHOW(s), dexnr, size_reduction);
         host_info = (HostInfo){dexnr, size_reduction};
       } else {
         TRACE(DS, 4,
               "[dedup strings] non perf sensitive string: {%s} dex #%u won't "
-              "host due insufficient size reduction %u\n",
+              "host due insufficient size reduction %u",
               SHOW(s), dexnr, size_reduction);
       }
     }
@@ -410,7 +410,7 @@ DedupStrings::get_strings_to_dedup(
         always_assert(size_reduction == 0);
         TRACE(DS, 4,
               "[dedup strings] non perf sensitive string: {%s}*%u is a "
-              "non-load string in non-hosting dex #%u\n",
+              "non-load string in non-hosting dex #%u",
               SHOW(s), loads, dexnr);
         ++m_stats.excluded_duplicate_non_load_strings;
         // No point in rewriting const-string instructions for this string
@@ -433,7 +433,7 @@ DedupStrings::get_strings_to_dedup(
     if (total_size_reduction < hosting_code_size_increase) {
       TRACE(DS, 3,
             "[dedup strings] non perf sensitive string: {%s} ignored as %u < "
-            "%u\n",
+            "%u",
             SHOW(s), total_size_reduction, hosting_code_size_increase);
       continue;
     }
@@ -447,7 +447,7 @@ DedupStrings::get_strings_to_dedup(
         TRACE(
             DS, 1,
             "[dedup strings] dedup strings max factory methods limit reached; "
-            "consider changing configuration to increase limit\n");
+            "consider changing configuration to increase limit");
       }
     }
 
@@ -466,7 +466,7 @@ DedupStrings::get_strings_to_dedup(
         DS, 3,
         "[dedup strings] non perf sensitive string: {%s} is deduped in %u "
         "dexes, saving %u string table bytes, transforming %u string loads, %u "
-        "expected size reduction\n",
+        "expected size reduction",
         SHOW(s), dexes_to_dedup.size(),
         (4 + entry_size) * dexes_to_dedup.size(), duplicate_string_loads,
         total_size_reduction - hosting_code_size_increase);
@@ -678,7 +678,7 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
         "[dedup strings] duplicate strings: %u, size: %u, loads: %u; "
         "expected size reduction: %u; "
         "dexes without host: %u; "
-        "excluded duplicate non-load strings: %u; factory methods: %u\n",
+        "excluded duplicate non-load strings: %u; factory methods: %u",
         stats.duplicate_strings, stats.duplicate_strings_size,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,

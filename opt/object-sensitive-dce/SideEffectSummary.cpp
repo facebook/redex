@@ -216,9 +216,9 @@ void analyze_method_recursive(const DexMethod* method,
           summary.effects != EFF_NONE ? "has" : "does not have",
           summary.effects);
     if (summary.modified_params.size() != 0) {
-      TRACE(OSDCE, 3, "Modified params: ");
+      TRACE_NO_LINE(OSDCE, 3, "Modified params: ");
       for (auto idx : summary.modified_params) {
-        TRACE(OSDCE, 3, "%u ", idx);
+        TRACE_NO_LINE(OSDCE, 3, "%u ", idx);
       }
       TRACE(OSDCE, 3, "");
     }

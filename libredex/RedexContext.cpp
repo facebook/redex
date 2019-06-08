@@ -384,7 +384,7 @@ void RedexContext::publish_class(DexClass* cls) {
       TRACE(MAIN,
             1,
             "Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
-            "2: %s\n",
+            "2: %s",
             class_name.c_str(),
             dex_1.c_str(),
             dex_2.c_str());

@@ -356,7 +356,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       TRACE(ANNO,
             3,
             "Annotation type %s with type referenced in "
-            "code, skipping...\n\tannotation: %s\n",
+            "code, skipping...\n\tannotation: %s",
             SHOW(anno_type),
             SHOW(da));
       return false;
@@ -373,7 +373,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       TRACE(ANNO,
             3,
             "Blacklisted annotation type %s, "
-            "skipping...\n\tannotation: %s\n",
+            "skipping...\n\tannotation: %s",
             SHOW(anno_type),
             SHOW(da));
       return false;
@@ -383,7 +383,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       TRACE(ANNO,
             3,
             "Annotation instance (type: %s) marked for removal, "
-            "annotation: %s\n",
+            "annotation: %s",
             SHOW(anno_type),
             SHOW(da));
       m_stats.annotations_killed++;
@@ -395,7 +395,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
       TRACE(ANNO,
             3,
             "Annotation instance (type: %s) marked for forced removal, "
-            "annotation: %s\n",
+            "annotation: %s",
             SHOW(anno_type),
             SHOW(da));
       m_stats.annotations_killed++;

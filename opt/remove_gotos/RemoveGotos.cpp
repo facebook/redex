@@ -85,9 +85,9 @@ class RemoveGotos {
         const auto& chain = get_mergable_blocks(cfg, block);
         visited_blocks.insert(chain.begin(), chain.end());
         if (chain.size() > 1) {
-          TRACE(RMGOTO, 3, "Found optimizing chain: { ");
+          TRACE_NO_LINE(RMGOTO, 3, "Found optimizing chain: { ");
           for (const auto& b : chain) {
-            TRACE(RMGOTO, 3, "%d ", b->id());
+            TRACE_NO_LINE(RMGOTO, 3, "%d ", b->id());
           }
           TRACE(RMGOTO, 3, "}");
 

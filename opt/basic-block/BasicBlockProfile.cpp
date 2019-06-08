@@ -61,7 +61,7 @@ void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
       }
       TRACE(BBPROFILE, 5,
             "B,%zu,%zu,%zu,"
-            "%zu,%d\n",
+            "%zu,%d",
             block->id(), num_opcodes_bb(block), block->succs().size(),
             block->preds().size(), bb_profiled.count(block) != 0);
     }

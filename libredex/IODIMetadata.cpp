@@ -465,7 +465,7 @@ void IODIMetadata::write(
   TRACE(IODI, 1,
         "[IODI] Emitted %u singles, %u duplicates, ignored %u duplicates."
         " %u emitted dups had debug items, %u non-emitted dups had debug"
-        " items and %u methods were too big, %u were collision free\n",
+        " items and %u methods were too big, %u were collision free",
         single_count, dup_meth_count_emitted, dup_meth_count_not_emitted,
         dup_meth_with_dbg_count_emitted, dup_meth_with_dbg_count_not_emitted,
         m_huge_methods.size(), single_huge_count);

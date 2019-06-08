@@ -60,13 +60,13 @@ int obfuscate_elems(const RenamingContext<T>& context,
 
 void debug_logging(std::vector<DexClass*>& classes) {
   for (DexClass* cls : classes) {
-    TRACE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
+    TRACE_NO_LINE(OBFUSCATE, 4, "Applying new names:\n  List of ifields\t");
     for (DexField* f : cls->get_ifields())
-      TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
+      TRACE_NO_LINE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
     TRACE(OBFUSCATE, 4, "");
-    TRACE(OBFUSCATE, 4, "  List of sfields\t");
+    TRACE_NO_LINE(OBFUSCATE, 4, "  List of sfields\t");
     for (DexField* f : cls->get_sfields())
-      TRACE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
+      TRACE_NO_LINE(OBFUSCATE, 4, "%s\t", SHOW(f->get_name()));
     TRACE(OBFUSCATE, 4, "");
   }
   TRACE(OBFUSCATE, 3, "Finished applying new names to defs");
