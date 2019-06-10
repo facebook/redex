@@ -420,6 +420,7 @@ void AliasedRegisters::handle_insert_order_at_merge(
     // return false if they compare equal or if b occurs before a.
 
     // `a` and `b` only index into this, not other.
+    if (a == b) return false;
     const Value& val_a = this->m_graph[a];
     const Value& val_b = this->m_graph[b];
     auto other_a = other.find(val_a);
