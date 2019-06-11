@@ -178,6 +178,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_annotations += anno_offsets.size();
   stats->num_type_lists += type_lists.size();
 
+  for (uint32_t sidx = 0; sidx < dh->string_ids_size; ++sidx) {
+    DexString* str = m_idx->get_stringidx(sidx);
+    stats->strings_total_size += str->get_entry_size();
+  }
+
   const dex_map_list* map_list =
       reinterpret_cast<const dex_map_list*>(m_file.const_data() + dh->map_off);
   for (uint32_t i = 0; i < map_list->size; i++) {
