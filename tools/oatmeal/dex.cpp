@@ -743,9 +743,7 @@ void stream::stream_dex(const uint8_t* begin, const size_t size, InsnWalkerFn in
         printf("==================\n");
         printf("Code item offset: %zu\n", i);
         #endif
-        if (code_item_walker != nullptr) {
-          code_item_walker(begin + i);
-        }
+        code_item_walker(begin + i);
         process_code_item(begin + i, insn_walker);
       }
     }
