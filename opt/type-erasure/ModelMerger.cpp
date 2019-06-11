@@ -499,9 +499,11 @@ void write_out_type_mapping(
     auto merger = pair.second;
     out << SHOW(mergeable) << " -> " << SHOW(merger) << std::endl;
 
-    for (auto& symbol_map : method_dedup_map.at(mergeable)) {
-      out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
-          << std::endl;
+    if (method_dedup_map.count(mergeable)) {
+      for (auto& symbol_map : method_dedup_map.at(mergeable)) {
+        out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
+            << std::endl;
+      }
     }
   }
   out << std::endl;
