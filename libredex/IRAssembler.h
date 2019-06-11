@@ -70,4 +70,7 @@ DexMethod* method_from_string(const std::string&);
 DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions);
 
+DexClass* class_with_methods(const std::string& class_name,
+                             const std::vector<DexMethod*>& methods);
+
 } // namespace assembler

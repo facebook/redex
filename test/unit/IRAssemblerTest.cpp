@@ -86,6 +86,39 @@ TEST_F(IRAssemblerTest, assembleClassWithMethod) {
   EXPECT_EQ(assembler::to_string(method->get_code()), "((return-void))");
 }
 
+TEST_F(IRAssemblerTest, assembleClassWithMethods) {
+  const std::vector<DexMethod*>& methods = {
+      assembler::method_from_string(R"(
+        (method (private) "LFoo;.bar0:(I)V"
+          (
+            (return-void)
+          )
+        )
+      )"),
+      assembler::method_from_string(R"(
+        (method (public) "LFoo;.bar1:(V)V"
+          (
+            (return-void)
+          )
+        )
+      )"),
+  };
+
+  auto clazz = assembler::class_with_methods("LFoo;", methods);
+
+  DexMethod* method0 = clazz->get_dmethods().at(0);
+  EXPECT_EQ(method0->get_access(), ACC_PRIVATE);
+  EXPECT_STREQ(method0->get_name()->c_str(), "bar0");
+  EXPECT_STREQ(method0->get_class()->get_name()->c_str(), "LFoo;");
+  EXPECT_EQ(assembler::to_string(method0->get_code()), "((return-void))");
+
+  DexMethod* method1 = clazz->get_vmethods().at(0);
+  EXPECT_EQ(method1->get_access(), ACC_PUBLIC);
+  EXPECT_STREQ(method1->get_name()->c_str(), "bar1");
+  EXPECT_STREQ(method1->get_class()->get_name()->c_str(), "LFoo;");
+  EXPECT_EQ(assembler::to_string(method1->get_code()), "((return-void))");
+}
+
 TEST_F(IRAssemblerTest, use_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
