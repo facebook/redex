@@ -6,29 +6,14 @@
  */
 
 #if __ANDROID__
-#include <museum/5.0.0/bionic/libc/sys/cdefs.h>
-#include <museum/5.0.0/bionic/libc/sys/types.h>
-#include <museum/5.0.0/bionic/libc/time.h>
-#include <museum/5.0.0/bionic/libc/sys/select.h>
-#include <museum/5.0.0/bionic/libc/signal.h>
-#include <museum/5.0.0/bionic/libc/sys/ucontext.h>
-#include <museum/5.0.0/bionic/libc/sys/user.h>
-#include <museum/5.0.0/bionic/libc/xlocale.h>
-#include <museum/5.0.0/bionic/libc/strings.h>
-#include <museum/5.0.0/bionic/libc/alloca.h>
-#include <museum/5.0.0/bionic/libc/malloc.h>
-#include <museum/5.0.0/bionic/libc/assert.h>
+#include <museum/5.0.0/bionic/libc/ctype.h>
+#include <museum/5.0.0/bionic/libc/errno.h>
+#include <museum/5.0.0/bionic/libc/locale.h>
+#include <museum/5.0.0/bionic/libc/math.h>
 #include <museum/5.0.0/bionic/libc/pthread.h>
-#include <museum/5.0.0/bionic/libc/sched.h>
+#include <museum/5.0.0/bionic/libc/stdlib.h>
 #include <museum/5.0.0/bionic/libc/sys/stat.h>
 #include <museum/5.0.0/bionic/libc/wchar.h>
-#include <museum/5.0.0/bionic/libc/stdio.h>
-#include <museum/5.0.0/bionic/libc/locale.h>
-#include <museum/5.0.0/bionic/libc/ctype.h>
-#include <museum/5.0.0/bionic/libc/wctype.h>
-#include <museum/5.0.0/bionic/libc/stdlib.h>
-#include <museum/5.0.0/bionic/libc/memory.h>
-#include <museum/5.0.0/bionic/libc/math.h>
 #endif
 
 #include "elf-writer.h"
