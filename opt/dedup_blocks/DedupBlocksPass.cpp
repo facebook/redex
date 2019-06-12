@@ -277,7 +277,7 @@ class DedupBlocksImpl {
       }
     }
 
-    std::unique_ptr<reaching_defs::FixpointIterator>
+    std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
         reaching_defs_fixpoint_iter;
     std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
     std::unique_ptr<type_inference::TypeInference> type_inference;
@@ -546,7 +546,7 @@ class DedupBlocksImpl {
       split_group.insn_count = best_insn_count;
     }
 
-    std::unique_ptr<reaching_defs::FixpointIterator>
+    std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
         reaching_defs_fixpoint_iter;
     std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
     std::unique_ptr<type_inference::TypeInference> type_inference;
@@ -758,17 +758,19 @@ class DedupBlocksImpl {
   get_init_receiver_instructions_defined_outside_of_block(
       cfg::Block* block,
       const cfg::ControlFlowGraph& cfg,
-      std::unique_ptr<reaching_defs::FixpointIterator>& fixpoint_iter) {
+      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
+          fixpoint_iter) {
     std::vector<IRInstruction*> res;
     boost::optional<reaching_defs::Environment> defs_in;
     auto iterable = InstructionIterable(block);
     auto defs_in_it = iterable.begin();
-    std::unordered_set<IRInstruction*> insns;
+    std::unordered_set<IRInstruction*> block_insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
       if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
         if (!fixpoint_iter) {
-          fixpoint_iter.reset(new reaching_defs::FixpointIterator(cfg));
+          fixpoint_iter.reset(
+              new reaching_defs::MoveAwareFixpointIterator(cfg));
           fixpoint_iter->run(reaching_defs::Environment());
         }
         if (!defs_in) {
@@ -783,11 +785,22 @@ class DedupBlocksImpl {
           return boost::none;
         }
         auto def = *defs.elements().begin();
-        if (!insns.count(def)) {
+        auto def_opcode = def->opcode();
+        always_assert(
+            opcode::is_move_result_or_move_result_pseudo(def_opcode) ||
+            opcode::is_load_param(def_opcode));
+        // Log def instruction if...
+        // - it is not an earlier instruction from the current block, or
+        // - (it is from the current block and) it's the leading move (pseudo)
+        //   result instruction in the current block, which implies that the
+        //   instruction actually creating this result is from another block
+        if (!block_insns.count(def) ||
+            (opcode::is_move_result_or_move_result_pseudo(def_opcode) &&
+             block->get_first_insn()->insn == def)) {
           res.push_back(def);
         }
       }
-      insns.insert(insn);
+      block_insns.insert(insn);
     }
     return res;
   }
@@ -848,7 +861,7 @@ class DedupBlocksImpl {
       DexMethod* method,
       const BlockSet& blocks,
       cfg::ControlFlowGraph& cfg,
-      std::unique_ptr<reaching_defs::FixpointIterator>&
+      std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>&
           reaching_defs_fixpoint_iter,
       std::unique_ptr<LivenessFixpointIterator>& liveness_fixpoint_iter,
       std::unique_ptr<type_inference::TypeInference>& type_inference) {

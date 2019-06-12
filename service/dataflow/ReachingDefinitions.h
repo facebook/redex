@@ -68,4 +68,21 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   }
 };
 
+class MoveAwareFixpointIterator final
+    : public ir_analyzer::BaseIRAnalyzer<Environment> {
+ public:
+  explicit MoveAwareFixpointIterator(const cfg::ControlFlowGraph& cfg)
+      : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
+
+  void analyze_instruction(IRInstruction* insn,
+                           Environment* current_state) const override {
+    if (is_move(insn->opcode())) {
+      current_state->set(insn->dest(), current_state->get(insn->src(0)));
+    } else if (insn->dests_size()) {
+      current_state->set(insn->dest(),
+                         Domain(const_cast<IRInstruction*>(insn)));
+    }
+  }
+};
+
 } // namespace reaching_defs

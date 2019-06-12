@@ -744,6 +744,47 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
             assembler::to_string(code));
 }
 
+// newly created instances may be moved around, but that doesn't change that
+// we must not dedup in the face of multiple new-instance instructions
+TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlockViaMove) {
+  std::string str_code = R"(
+    (
+      (:a)
+      (const v0 0)
+      (if-eqz v0 :d)
+
+      (:b)
+      (new-instance "testClass")
+      (move-result-pseudo-object v2)
+
+      (:c)
+      (move-object v0 v2)
+      (const v1 1)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+
+      (:d)
+      (new-instance "testClass")
+      (move-result-pseudo-object v2)
+      (const v1 2)
+
+      (:e)
+      (move-object v0 v2)
+      (const v1 1)
+      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
+      (throw v0)
+    )
+  )";
+  auto input_code = assembler::ircode_from_string(str_code);
+  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
+  method->set_code(std::move(input_code));
+  auto code = method->get_code();
+  run_dedup_blocks();
+  auto expect_code = assembler::ircode_from_string(str_code);
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
+}
+
 TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   std::string str_code = R"(
     (
