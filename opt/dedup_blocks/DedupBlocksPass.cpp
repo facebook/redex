@@ -178,8 +178,14 @@ class DedupBlocksImpl {
   bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     Duplicates dups = collect_duplicates(method, cfg);
     if (dups.size() > 0) {
+      if (m_config.debug) {
+        check_inits(cfg);
+      }
       record_stats(dups);
       deduplicate(dups, cfg);
+      if (m_config.debug) {
+        check_inits(cfg);
+      }
       return true;
     }
 
@@ -189,31 +195,51 @@ class DedupBlocksImpl {
   /*
    * Split blocks that share postfix of instructions (that ends with the same
    * set of instructions).
+   *
+   * TODO: Some split blocks might not actually get dedup, as deduping checks
+   * additional type constraints that splitting ignores. Either perfectly line
+   * line up the splitting logic with the deduping logic (and install asserts
+   * that they agree), or re-merge left-over block pairs, either explicitly,
+   * or by running another RemoveGotos pass.
    */
   void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
     if (dups.size() > 0) {
+      if (m_config.debug) {
+        check_inits(cfg);
+      }
       split_postfix_blocks(dups, cfg);
+      if (m_config.debug) {
+        check_inits(cfg);
+      }
     }
   }
 
   void run() {
-    walk::parallel::code(m_scope, [this](DexMethod* method, IRCode& code) {
-      if (m_config.method_black_list.count(method) != 0) {
-        return;
-      }
+    walk::parallel::code(
+        m_scope,
+        [this](DexMethod* method, IRCode& code) {
+          if (m_config.method_black_list.count(method) != 0) {
+            return;
+          }
 
-      code.build_cfg(/* editable */ true);
-      auto& cfg = code.cfg();
+          TRACE(DEDUP_BLOCKS, 3, "[dedup blocks] method %s", SHOW(method));
 
-      do {
-        if (m_config.split_postfix) {
-          split_postfix(method, cfg);
-        }
-      } while (dedup(method, cfg));
+          code.build_cfg(/* editable */ true);
+          auto& cfg = code.cfg();
 
-      code.clear_cfg();
-    });
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] method %s before:\n%s",
+                SHOW(method), SHOW(cfg));
+
+          do {
+            if (m_config.split_postfix) {
+              split_postfix(method, cfg);
+            }
+          } while (dedup(method, cfg));
+
+          code.clear_cfg();
+        },
+        m_config.debug ? 1 : walk::parallel::default_num_threads());
     report_stats();
   }
 
@@ -281,9 +307,9 @@ class DedupBlocksImpl {
         reaching_defs_fixpoint_iter;
     std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
     std::unique_ptr<type_inference::TypeInference> type_inference;
-    remove_if(duplicates, [&](auto it) {
+    remove_if(duplicates, [&](auto& blocks) {
       return is_singleton_or_inconsistent(
-          method, it->second, cfg, reaching_defs_fixpoint_iter,
+          method, blocks, cfg, reaching_defs_fixpoint_iter,
           liveness_fixpoint_iter, type_inference);
     });
     return duplicates;
@@ -396,11 +422,10 @@ class DedupBlocksImpl {
 
     // Group by successors if blocks share a single successor block.
     for (cfg::Block* block : blocks) {
-      if (is_eligible(block)) {
-        if (block->num_opcodes() >= m_config.block_split_min_opcode_count) {
-          // Insert into other blocks that share the same successors
-          splitGroupMap[block].postfix_blocks.insert(block);
-        }
+      if (has_opcodes(block) &&
+          block->num_opcodes() >= m_config.block_split_min_opcode_count) {
+        // Insert into other blocks that share the same successors
+        splitGroupMap[block].postfix_blocks.insert(block);
       }
     }
 
@@ -546,15 +571,8 @@ class DedupBlocksImpl {
       split_group.insn_count = best_insn_count;
     }
 
-    std::unique_ptr<reaching_defs::MoveAwareFixpointIterator>
-        reaching_defs_fixpoint_iter;
-    std::unique_ptr<LivenessFixpointIterator> liveness_fixpoint_iter;
-    std::unique_ptr<type_inference::TypeInference> type_inference;
-    remove_if(splitGroupMap, [&](auto it) {
-      return is_singleton_or_inconsistent(
-          method, it->second.postfix_blocks, cfg, reaching_defs_fixpoint_iter,
-          liveness_fixpoint_iter, type_inference);
-    });
+    remove_if(splitGroupMap,
+              [&](auto& entry) { return entry.postfix_blocks.size() <= 1; });
 
     TRACE(DEDUP_BLOCKS, 4, "split_postfix: total split groups = %d",
           splitGroupMap.size());
@@ -768,6 +786,8 @@ class DedupBlocksImpl {
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
       if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
+        TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
+              SHOW(insn));
         if (!fixpoint_iter) {
           fixpoint_iter.reset(
               new reaching_defs::MoveAwareFixpointIterator(cfg));
@@ -780,8 +800,15 @@ class DedupBlocksImpl {
           fixpoint_iter->analyze_instruction(defs_in_it->insn, &*defs_in);
         }
         auto defs = defs_in->get(insn->src(0));
-        if (defs.is_top() || defs.elements().size() > 1) {
+        if (defs.is_top()) {
           // should never happen, but we are not going to fight that here
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] is_top");
+          return boost::none;
+        }
+        if (defs.elements().size() > 1) {
+          // should never happen, but we are not going to fight that here
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defs.elements().size() = %u",
+                defs.elements().size());
           return boost::none;
         }
         auto def = *defs.elements().begin();
@@ -798,11 +825,31 @@ class DedupBlocksImpl {
             (opcode::is_move_result_or_move_result_pseudo(def_opcode) &&
              block->get_first_insn()->insn == def)) {
           res.push_back(def);
+        } else {
+          TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defined in block");
         }
       }
       block_insns.insert(insn);
     }
     return res;
+  }
+
+  void check_inits(cfg::ControlFlowGraph& cfg) {
+    reaching_defs::Environment defs_in;
+    reaching_defs::MoveAwareFixpointIterator fixpoint_iter(cfg);
+    fixpoint_iter.run(reaching_defs::Environment());
+    for (cfg::Block* block : cfg.blocks()) {
+      auto env = fixpoint_iter.get_entry_state_at(block);
+      for (auto& mie : InstructionIterable(block)) {
+        IRInstruction* insn = mie.insn;
+        if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
+          auto defs = defs_in.get(insn->src(0));
+          always_assert(!defs.is_top());
+          always_assert(defs.elements().size() == 1);
+        }
+        fixpoint_iter.analyze_instruction(insn, &defs_in);
+      }
+    }
   }
 
   void record_stats(const Duplicates& duplicates) {
@@ -849,7 +896,7 @@ class DedupBlocksImpl {
       std::unordered_map<TKey, TValue, THash, TPred>& duplicates,
       NeedToRemove need_to_remove) {
     for (auto it = duplicates.begin(); it != duplicates.end();) {
-      if (need_to_remove(it)) {
+      if (need_to_remove(it->second)) {
         it = duplicates.erase(it);
       } else {
         ++it;
@@ -877,10 +924,17 @@ class DedupBlocksImpl {
       auto other_insns =
           get_init_receiver_instructions_defined_outside_of_block(
               block, cfg, reaching_defs_fixpoint_iter);
-      if (!insns && other_insns) {
-        insns = other_insns;
-      } else if (!other_insns || insns != other_insns) {
+      if (!other_insns) {
         return true;
+      } else if (!insns) {
+        insns = other_insns;
+      } else {
+        always_assert(insns->size() == other_insns->size());
+        for (size_t i = 0; i < insns->size(); i++) {
+          if (insns->at(i) != other_insns->at(i)) {
+            return true;
+          }
+        }
       }
     }
 
