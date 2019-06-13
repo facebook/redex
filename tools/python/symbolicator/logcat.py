@@ -9,13 +9,16 @@ from __future__ import print_function
 from __future__ import unicode_literals
 import re
 
+
 class LogcatSymbolicator(object):
 
-    CLASS_REGEX = re.compile(r'\b[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+\b')
+    CLASS_REGEX = re.compile(r"\b[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+\b")
 
     TRACE_REGEX = re.compile(
-        r'^(?P<prefix>.*)\s+at (?P<class>[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+)'
-        r'\.(?P<method>[0-9A-Za-z_$<>]+)\(:(?P<lineno>\d+)\)\s*\n', re.MULTILINE)
+        r"^(?P<prefix>.*)\s+at (?P<class>[A-Za-z][0-9A-Za-z_$]*\.[0-9A-Za-z_$.]+)"
+        r"\.(?P<method>[0-9A-Za-z_$<>]+)\(:(?P<lineno>\d+)\)\s*\n",
+        re.MULTILINE,
+    )
 
     def __init__(self, symbol_maps):
         self.symbol_maps = symbol_maps
@@ -27,26 +30,38 @@ class LogcatSymbolicator(object):
         return m
 
     def line_replacer(self, matchobj):
-        lineno = int(matchobj.group('lineno'))
-        positions = self.symbol_maps.line_map.get_stack(lineno)
-        cls = matchobj.group('class')
+        lineno = int(matchobj.group("lineno"))
+        cls = matchobj.group("class")
+        if self.symbol_maps.iodi_metadata is not None:
+            iodi_map = self.symbol_maps.iodi_metadata.collision_free
+            qualified_name = cls + "." + matchobj.group("method")
+            if qualified_name in iodi_map:
+                method_id = iodi_map[qualified_name]
+                mapped = self.symbol_maps.debug_line_map.find_line_number(
+                    method_id, lineno
+                )
+                if mapped is not None:
+                    lineno = mapped
+        positions = self.symbol_maps.line_map.get_stack(lineno - 1)
         if cls in self.symbol_maps.class_map:
             cls = self.symbol_maps.class_map[cls]
-        result = ''
+        result = ""
         for pos in positions:
             if pos.method is None:
-                result += '%s\tat %s.%s(%s:%d)\n' % (
-                        matchobj.group('prefix'),
-                        cls,
-                        matchobj.group('method'),
-                        pos.file,
-                        pos.line)
+                result += "%s\tat %s.%s(%s:%d)\n" % (
+                    matchobj.group("prefix"),
+                    cls,
+                    matchobj.group("method"),
+                    pos.file,
+                    pos.line,
+                )
             else:
-                result += '%s\tat %s(%s:%d)\n' % (
-                        matchobj.group('prefix'),
-                        pos.method,
-                        pos.file,
-                        pos.line)
+                result += "%s\tat %s(%s:%d)\n" % (
+                    matchobj.group("prefix"),
+                    pos.method,
+                    pos.file,
+                    pos.line,
+                )
         return result
 
     def symbolicate(self, line):
@@ -56,5 +71,6 @@ class LogcatSymbolicator(object):
 
     @staticmethod
     def is_likely_logcat(line):
-        return line.startswith('--------- beginning of') or\
-                re.match(r'[A-Z]/[A-Za-z0-9_$](\s*\d+):', line)
+        return line.startswith("--------- beginning of") or re.match(
+            r"[A-Z]/[A-Za-z0-9_$](\s*\d+):", line
+        )

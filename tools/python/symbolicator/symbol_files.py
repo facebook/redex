@@ -39,9 +39,11 @@ def find_buck_artifacts(target):
 
 
 class SymbolFiles(object):
-    def __init__(self, extracted_symbols, line_map):
+    def __init__(self, extracted_symbols, line_map, debug_line_map, iodi_metadata):
         self.extracted_symbols = extracted_symbols
         self.line_map = line_map
+        self.debug_line_map = debug_line_map
+        self.iodi_metadata = iodi_metadata
 
     @staticmethod
     def from_buck_artifact_dir(artifact_dir):
@@ -52,7 +54,10 @@ class SymbolFiles(object):
         else:
             line_map_fn = line_map_fn_v1
         return SymbolFiles(
-            os.path.join(artifact_dir, "redex-class-rename-map.txt"), line_map_fn
+            os.path.join(artifact_dir, "redex-class-rename-map.txt"),
+            line_map_fn,
+            os.path.join(artifact_dir, "redex-debug-line-map-v2"),
+            os.path.join(artifact_dir, "iodi-metadata"),
         )
 
     @staticmethod

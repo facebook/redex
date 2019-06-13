@@ -11,11 +11,14 @@ from __future__ import unicode_literals
 import argparse
 import io
 import logging
+import os
 import re
 import signal
 import sys
 
+from debug_line_map import DebugLineMap
 from dexdump import DexdumpSymbolicator
+from iodi import IODIMetadata
 from line_unmap import PositionMap
 from logcat import LogcatSymbolicator
 from symbol_files import SymbolFiles
@@ -41,6 +44,25 @@ class SymbolMaps(object):
     def __init__(self, symbol_files):
         self.class_map = self.get_class_map(symbol_files.extracted_symbols)
         self.line_map = PositionMap.read_from(symbol_files.line_map)
+        self.debug_line_map = (
+            DebugLineMap.read_from(symbol_files.debug_line_map)
+            if os.path.exists(symbol_files.debug_line_map)
+            else None
+        )
+        if os.path.exists(symbol_files.iodi_metadata):
+            if not self.debug_line_map:
+                logging.error(
+                    "In order to symbolicate with IODI, redex-debug-line-map-v2 is required!"
+                )
+                sys.exit(1)
+            self.iodi_metadata = IODIMetadata(symbol_files.iodi_metadata)
+            logging.info(
+                "Unpacked "
+                + str(len(self.iodi_metadata.collision_free))
+                + " methods from iodi metadata"
+            )
+        else:
+            self.iodi_metadata = None
 
     @staticmethod
     def get_class_map(mapping_filename):
@@ -130,7 +152,11 @@ def main(arg_desc=None, symbol_file_generator=None):
 
     first_line = ""
     while first_line == "":
-        first_line = next(reader)
+        try:
+            first_line = next(reader)
+        except StopIteration:
+            logging.warning("Empty input")
+            sys.exit(0)
 
     if args.input_type == "lines":
         symbolicator = LinesSymbolicator(symbol_maps)
@@ -146,9 +172,13 @@ def main(arg_desc=None, symbol_file_generator=None):
 
     logging.info("Using %s", type(symbolicator).__name__)
 
-    writer.write(symbolicator.symbolicate(first_line))
+    def output(s):
+        if s is not None:
+            writer.write(s)
+
+    output(symbolicator.symbolicate(first_line))
     for line in reader:
-        writer.write(symbolicator.symbolicate(line))
+        output(symbolicator.symbolicate(line))
 
 
 if __name__ == "__main__":
