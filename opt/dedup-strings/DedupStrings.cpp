@@ -98,6 +98,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
         }
         if (!cls->get_clinit()) {
           // Stop here if we found a suitable class without a class initializer
+          host_cls = cls;
           break;
         }
       }
