@@ -88,13 +88,40 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/TwoInitCantReplaceFinal;"),
             1);
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/MixedTypeInstance;"), 10);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/MultipleLayerAccessed;"), 4);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/EscapeObject;"), 1);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/AccessedString;"), 2);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/NotAccessedString;"), 2);
 
-  auto cls = find_class_named(classes, "Lredex/MixedTypeInstance;");
-
+  auto cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
   auto method = find_vmethod_named(*cls, "change0");
   ASSERT_NE(nullptr, method);
   ASSERT_NE(nullptr, method->get_dex_code());
   auto field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names,
+              ::testing::UnorderedElementsAre(
+                  "m_a", "m_b", "m_final_accessed", "m_non_final_accessed"));
+
+  cls = find_class_named(classes, "Lredex/ReadEscape;");
+  method = find_vmethod_named(*cls, "add_two");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names, ::testing::UnorderedElementsAre("m_a"));
+
+  cls = find_class_named(classes, "Lredex/AccessedString;");
+  method = find_vmethod_named(*cls, "toString");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names, ::testing::UnorderedElementsAre("x"));
+
+  cls = find_class_named(classes, "Lredex/MixedTypeInstance;");
+
+  method = find_vmethod_named(*cls, "change0");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  field_names = get_fields_name_accessed(method);
   EXPECT_THAT(
       field_names,
       ::testing::UnorderedElementsAre("m_changed_0", "m_final_accessed"));
@@ -170,6 +197,12 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   }
   // Make sure there is a testReadInCtors function
   ASSERT_EQ(count, 1);
+
+  method = find_vmethod_named(*test_cls, "testString");
+  ASSERT_NE(nullptr, method);
+  IRCode* code = new IRCode(method);
+  code->build_cfg(/* editable */ true);
+  EXPECT_EQ(4, count_igets(code->cfg()));
 }
 
 /*
@@ -200,18 +233,47 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/TwoInitCantReplaceFinal;"),
             1);
 
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/MultipleLayerAccessed;"), 4);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/EscapeObject;"), 1);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/AccessedString;"), 2);
+  EXPECT_EQ(get_class_num_ifields(classes, "Lredex/NotAccessedString;"), 2);
+
+  auto cls = find_class_named(classes, "Lredex/MultipleLayerAccessed;");
+
+  auto method = find_vmethod_named(*cls, "change0");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  auto field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names,
+              ::testing::UnorderedElementsAre(
+                  "m_a", "m_b", "m_final_accessed", "m_non_final_accessed"));
+
+  cls = find_class_named(classes, "Lredex/ReadEscape;");
+  method = find_vmethod_named(*cls, "add_two");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names, ::testing::UnorderedElementsAre("m_a"));
+
+  cls = find_class_named(classes, "Lredex/AccessedString;");
+  method = find_vmethod_named(*cls, "toString");
+  ASSERT_NE(nullptr, method);
+  ASSERT_NE(nullptr, method->get_dex_code());
+  field_names = get_fields_name_accessed(method);
+  EXPECT_THAT(field_names, ::testing::UnorderedElementsAre("x"));
+
   // Because m_deletable was only assigned 0 in <init>, which is equal to its
   // default value so it's iput in <init> function can be removed, then there
   // is no other references to m_deletable, so it will be removed by RMU.
   // Other fields will be remained.
   EXPECT_EQ(get_class_num_ifields(classes, "Lredex/MixedTypeInstance;"), 9);
 
-  auto cls = find_class_named(classes, "Lredex/MixedTypeInstance;");
+  cls = find_class_named(classes, "Lredex/MixedTypeInstance;");
 
-  auto method = find_vmethod_named(*cls, "change0");
+  method = find_vmethod_named(*cls, "change0");
   ASSERT_NE(nullptr, method);
   ASSERT_NE(nullptr, method->get_dex_code());
-  auto field_names = get_fields_name_accessed(method);
+  field_names = get_fields_name_accessed(method);
   EXPECT_THAT(
       field_names,
       ::testing::UnorderedElementsAre("m_changed_0", "m_final_accessed"));
@@ -290,4 +352,10 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   }
   // Make sure there is a testReadInCtors function
   ASSERT_EQ(count, 1);
+
+  method = find_vmethod_named(*test_cls, "testString");
+  ASSERT_NE(nullptr, method);
+  IRCode* code = new IRCode(method);
+  code->build_cfg(/* editable */ true);
+  EXPECT_EQ(3, count_igets(code->cfg()));
 }

@@ -15,6 +15,7 @@ class FinalInlinePassV2 : public Pass {
  public:
   struct Config {
     std::unordered_set<const DexType*> black_list_types;
+    std::unordered_set<std::string> whitelist_method_names;
     bool aggressively_delete;
     bool inline_instance_field;
     Config() : aggressively_delete(true), inline_instance_field(false) {}
@@ -29,6 +30,11 @@ class FinalInlinePassV2 : public Pass {
          {},
          m_config.black_list_types,
          "List of types that this optimization will omit.");
+    bind("whitelist_methods_name_checking_ifields_read",
+         {},
+         m_config.whitelist_method_names,
+         "List of methods names that can be ignored when checking on instance "
+         "field read in methods invoked by <init>");
   }
 
   static size_t run(const Scope&, Config config = Config());

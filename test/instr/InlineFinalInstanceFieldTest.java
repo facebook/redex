@@ -58,6 +58,24 @@ class MixedTypeInstance {
   }
 }
 
+class MultipleLayerAccessed {
+  public final int m_final_accessed;
+  public int m_non_final_accessed;
+  public int m_a;
+  public int m_b;
+  public MultipleLayerAccessed() {
+    m_non_final_accessed = 3;
+    wrapper();
+    m_final_accessed = 2;
+    m_non_final_accessed = 4;
+  }
+  public void wrapper() { change0(); }
+  public void change0() {
+    m_a = m_final_accessed;
+    m_b = m_non_final_accessed;
+  }
+}
+
 class EncodableFinal {
   public final boolean m_bool = true;
   public final byte m_byte = 'b';
@@ -130,6 +148,38 @@ class ReadInCtors2 {
   public ReadInCtors2() {
     ReadInCtors1 a = new ReadInCtors1();
     m_int_3 = a.m_int;
+  }
+}
+
+class ReadEscape {
+  public int add_two(EscapeObject a) { return a.m_a + 2; }
+}
+
+class EscapeObject {
+  public int m_a;
+  public EscapeObject() {
+    ReadEscape b = new ReadEscape();
+    m_a = b.add_two(this);
+  }
+}
+
+class AccessedString {
+  int x;
+  String s;
+  public String toString() { return Integer.toString(x); }
+  public AccessedString() {
+    // s is "0".
+    s = new StringBuilder().append(this).toString();
+    x = 42;
+  }
+}
+
+class NotAccessedString {
+  int x;
+  String s;
+  public NotAccessedString() {
+    s = new StringBuilder().append("Blah").toString();
+    x = 42;
   }
 }
 
@@ -218,5 +268,30 @@ public class InlineFinalInstanceFieldTest {
     assertThat(a.m_int).isEqualTo(5);
     assertThat(a.m_int_2).isEqualTo(5);
     assertThat(b.m_int_3).isEqualTo(5);
+  }
+
+  @Test
+  public void testMultipleLayerAccesseds() {
+    MultipleLayerAccessed a = new MultipleLayerAccessed();
+    assertThat(a.m_a).isEqualTo(0);
+    assertThat(a.m_b).isEqualTo(3);
+    assertThat(a.m_non_final_accessed).isEqualTo(4);
+    assertThat(a.m_final_accessed).isEqualTo(2);
+  }
+
+  @Test
+  public void testEscapeInInit() {
+    EscapeObject a = new EscapeObject();
+    assertThat(a.m_a).isEqualTo(2);
+  }
+
+  @Test
+  public void testString() {
+    AccessedString a = new AccessedString();
+    assertThat(a.s.length()).isEqualTo(1);
+    assertThat(a.x).isEqualTo(42);
+    NotAccessedString b = new NotAccessedString();
+    assertThat(b.s.length()).isEqualTo(4);
+    assertThat(b.x).isEqualTo(42);
   }
 }
