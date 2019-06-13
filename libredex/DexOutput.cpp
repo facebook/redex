@@ -390,13 +390,20 @@ DexOutput::~DexOutput() {
 void DexOutput::insert_map_item(uint16_t maptype,
                                 uint32_t size,
                                 uint32_t offset,
-                                uint32_t /* bytes */) {
+                                uint32_t bytes) {
   if (size == 0) return;
   dex_map_item item{};
   item.type = maptype;
   item.size = size;
   item.offset = offset;
   m_map_items.emplace_back(item);
+
+  switch (maptype) {
+  case TYPE_STRING_DATA_ITEM:
+    m_stats.map_list_num_strings += size;
+    m_stats.map_list_strings_bytes += bytes;
+    break;
+  }
 }
 
 void DexOutput::emit_locator(Locator locator) {

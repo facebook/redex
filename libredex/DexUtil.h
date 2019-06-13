@@ -485,6 +485,9 @@ struct dex_stats_t {
 
   int num_dbg_items = 0;
   int dbg_total_size = 0;
+
+  int map_list_num_strings = 0;
+  int map_list_strings_bytes = 0;
 };
 
 dex_stats_t&

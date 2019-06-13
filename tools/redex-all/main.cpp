@@ -529,6 +529,9 @@ Json::Value get_stats(const dex_stats_t& stats) {
 
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
+
+  val["map_list_num_strings"] = stats.map_list_num_strings;
+  val["map_list_strings_bytes"] = stats.map_list_strings_bytes;
   return val;
 }
 
