@@ -116,6 +116,23 @@ class TwoInitCantReplaceFinal {
   }
 }
 
+class ReadInCtors1 {
+  public final int m_int;
+  public final int m_int_2;
+  public ReadInCtors1() {
+    m_int = 5;
+    m_int_2 = m_int;
+  }
+}
+
+class ReadInCtors2 {
+  public final int m_int_3;
+  public ReadInCtors2() {
+    ReadInCtors1 a = new ReadInCtors1();
+    m_int_3 = a.m_int;
+  }
+}
+
 public class InlineFinalInstanceFieldTest {
   @Test
   public void testEncodableFinal() {
@@ -192,5 +209,14 @@ public class InlineFinalInstanceFieldTest {
     assertThat(a.m_changed_5).isEqualTo(5);
     assertThat(a.m_deletable).isEqualTo(0);
     assertThat(a.m_not_deletable).isEqualTo(0);
+  }
+
+  @Test
+  public void testReadInCtors() {
+    ReadInCtors1 a = new ReadInCtors1();
+    ReadInCtors2 b = new ReadInCtors2();
+    assertThat(a.m_int).isEqualTo(5);
+    assertThat(a.m_int_2).isEqualTo(5);
+    assertThat(b.m_int_3).isEqualTo(5);
   }
 }

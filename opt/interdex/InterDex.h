@@ -11,6 +11,7 @@
 
 #include "ApkManager.h"
 #include "CrossDexRefMinimizer.h"
+#include "CrossDexRelocator.h"
 #include "DexClass.h"
 #include "DexStructure.h"
 #include "InterDexPassPlugin.h"
@@ -20,9 +21,10 @@ namespace interdex {
 
 class InterDex {
  public:
-  InterDex(const DexClassesVector& dexen,
+  InterDex(const Scope& original_scope,
+           const DexClassesVector& dexen,
            ApkManager& apk_manager,
-           ConfigFiles& cfg,
+           ConfigFiles& conf,
            std::vector<std::unique_ptr<InterDexPassPlugin>>& plugins,
            int64_t linear_alloc_limit,
            int64_t type_refs_limit,
@@ -31,21 +33,26 @@ class InterDex {
            bool emit_scroll_set_marker,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
-           const CrossDexRefMinimizerConfig& minimize_cross_dex_refs_config,
+           const CrossDexRefMinimizerConfig& cross_dex_refs_config,
+           const CrossDexRelocatorConfig& cross_dex_relocator_config,
            size_t reserve_mrefs)
       : m_dexen(dexen),
         m_apk_manager(apk_manager),
-        m_cfg(cfg),
+        m_conf(conf),
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
-        m_cross_dex_ref_minimizer(minimize_cross_dex_refs_config) {
+        m_cross_dex_ref_minimizer(cross_dex_refs_config),
+        m_cross_dex_relocator_config(cross_dex_relocator_config),
+        m_original_scope(original_scope) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
   }
+
+  ~InterDex() { delete m_cross_dex_relocator; }
 
   void set_mixed_mode_dex_statuses(
       std::unordered_set<DexStatus, std::hash<int>>&& mixed_mode_dex_statuses) {
@@ -70,8 +77,16 @@ class InterDex {
     return m_dexes_structure.get_num_scroll_dexes();
   }
 
-  CrossDexRefMinimizerStats get_cross_dex_ref_minimizer_stats() const {
+  const CrossDexRefMinimizerStats& get_cross_dex_ref_minimizer_stats() const {
     return m_cross_dex_ref_minimizer.stats();
+  }
+
+  const CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
+    if (m_cross_dex_relocator != nullptr) {
+      return m_cross_dex_relocator->stats();
+    }
+
+    return CrossDexRelocatorStats();
   }
 
   /**
@@ -82,10 +97,14 @@ class InterDex {
 
   void run();
   void add_dexes_from_store(const DexStore& store);
+  void cleanup(const Scope& final_scope);
 
  private:
-  bool should_skip_class(const DexInfo& dex_info, DexClass* clazz);
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
+  void add_to_scope(DexClass* cls);
+  bool should_skip_class_due_to_plugin(DexClass* clazz);
+  bool should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
+                                           DexClass* clazz);
   bool emit_class(const DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,
@@ -98,6 +117,7 @@ class InterDex {
   void emit_interdex_classes(
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes);
+  void init_cross_dex_ref_minimizer_and_relocate_methods(const Scope& scope);
   void emit_remaining_classes(const Scope& scope);
   void emit_mixed_mode_classes(const std::vector<DexType*>& interdexorder,
                                bool can_touch_interdex_order);
@@ -122,7 +142,7 @@ class InterDex {
   const DexClassesVector& m_dexen;
   DexClassesVector m_outdex;
   ApkManager& m_apk_manager;
-  ConfigFiles& m_cfg;
+  ConfigFiles& m_conf;
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
@@ -136,6 +156,9 @@ class InterDex {
   std::vector<DexType*> m_scroll_markers;
 
   CrossDexRefMinimizer m_cross_dex_ref_minimizer;
+  const CrossDexRelocatorConfig m_cross_dex_relocator_config;
+  const Scope& m_original_scope;
+  CrossDexRelocator* m_cross_dex_relocator{nullptr};
 };
 
 } // namespace interdex

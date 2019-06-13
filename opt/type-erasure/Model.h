@@ -107,7 +107,7 @@ struct ModelSpec {
   TypeTagConfig type_tag_config{TypeTagConfig::GENERATE};
   // minimum nuber of mergeables to make it into a MergerType
   // (no optimization otherwise)
-  size_t min_count{1};
+  size_t min_count{2};
   // set of generated types
   std::unordered_set<DexType*> gen_types;
   // set of annotations marking generated code
@@ -120,8 +120,6 @@ struct ModelSpec {
   InterDexGroupingType merge_per_interdex_set{InterDexGroupingType::DISABLED};
   // whether to perform type erasure on the primary dex.
   bool include_primary_dex{false};
-  // Devirtualize/staticize non-virtual methods
-  bool devirtualize_non_virtuals{false};
   // Merge static methods within shape.
   bool merge_static_methods_within_shape{false};
   // Merge direct methods within shape.
@@ -195,10 +193,12 @@ class Model {
   static Model build_model(const Scope& scope,
                            const DexStoresVector& stores,
                            const ModelSpec& spec,
-                           ConfigFiles& cfg);
+                           const TypeSystem& type_system,
+                           ConfigFiles& conf);
   static Model build_model(const Scope& scope,
                            const ModelSpec& spec,
-                           const TypeSet& types);
+                           const TypeSet& types,
+                           const TypeSystem& type_system);
 
   static void update_model(Model& model);
 
@@ -246,9 +246,6 @@ class Model {
 
   const ModelSpec get_model_spec() const { return m_spec; }
 
-  bool devirtualize_non_virtuals() const {
-    return m_spec.devirtualize_non_virtuals;
-  }
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }
 
@@ -257,7 +254,7 @@ class Model {
   // output directory
   static std::string s_outdir;
 
-  static void build_interdex_groups(ConfigFiles* cfg);
+  static void build_interdex_groups(ConfigFiles* conf);
 
   /**
    * Print everything about the model.
@@ -296,6 +293,8 @@ class Model {
    * --# method
    */
   std::string print() const;
+
+  const TypeSystem& get_type_system() const { return m_type_system; }
 
  private:
   static const TypeSet empty_set;
@@ -354,7 +353,7 @@ class Model {
         const DexStoresVector& stores,
         const ModelSpec& spec,
         const TypeSystem& type_system,
-        ConfigFiles& cfg);
+        ConfigFiles& conf);
   Model(const Scope& scope,
         const ModelSpec& spec,
         const TypeSystem& type_system,
@@ -362,7 +361,7 @@ class Model {
   void init(const Scope& scope,
             const ModelSpec& spec,
             const TypeSystem& type_system,
-            ConfigFiles* cfg = nullptr);
+            ConfigFiles* conf = nullptr);
 
   void build_hierarchy(const TypeSet& roots);
   void build_interface_map(const DexType* type, TypeSet implemented);
@@ -374,7 +373,6 @@ class Model {
                                       bool include_primary_dex);
 
   // MergerType creator helpers
-  MergerType& create_merger(const DexType* type);
   MergerType& create_dummy_merger(const DexType* type);
   void create_dummy_mergers_if_children(const DexType* type);
   MergerType& create_merger_shape(const DexType* shape_type,
@@ -397,7 +395,8 @@ class Model {
       const TypeSet& group_values,
       const boost::optional<size_t>& dex_num,
       const boost::optional<size_t>& interdex_subgroup_idx,
-      const boost::optional<size_t>& max_mergeables_count);
+      const boost::optional<size_t>& max_mergeables_count,
+      size_t min_mergeables_count);
 
   // make shapes out of the model classes
   void shape_model();

@@ -41,7 +41,7 @@ const DexMethod* find_override(const DexMethod* method,
   get_all_children(ch, cls->get_type(), children);
   for (auto const& childtype : children) {
     auto const& child = type_class(childtype);
-    assert(child);
+    redex_assert(child);
     for (auto const& child_method : child->get_vmethods()) {
       if (signatures_match(method, child_method)) {
         return child_method;
@@ -137,7 +137,16 @@ void fix_call_sites_private(const std::vector<DexClass*>& scope,
 }
 
 void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
-  for (auto method : privates) {
+  // Compute an ordered representation of the methods. This matters, as
+  // the dmethods and vmethods are not necessarily sorted, but add_method does
+  // a best-effort of inserting in an ordered matter.
+  // But when dmethods and vmethods are not ordered to begin with, then the
+  // order in which we attempt to add matters.
+  std::vector<DexMethod*> ordered_privates(privates.begin(), privates.end());
+  std::sort(
+      ordered_privates.begin(), ordered_privates.end(), compare_dexmethods);
+
+  for (auto method : ordered_privates) {
     TRACE(ACCESS, 2, "Privatized method: %s\n", SHOW(method));
     auto cls = type_class(method->get_class());
     cls->remove_method(method);
@@ -149,7 +158,7 @@ void mark_methods_private(const std::unordered_set<DexMethod*>& privates) {
 } // namespace
 
 void AccessMarkingPass::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& /* conf */,
                                  PassManager& pm) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);

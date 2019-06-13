@@ -157,6 +157,33 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
             assembler::to_string(method->get_code()));
 }
 
+TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
+  using namespace dex_asm;
+  DexMethod* method = create_empty_method("castingZero");
+
+  auto str = R"(
+    (
+      (const v0 0)
+      (check-cast v0 "C;")
+      (move-result-pseudo-object v0)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(str);
+  method->set_code(std::move(code));
+
+  run_remove_redundant_check_casts();
+
+  auto expected_str = R"(
+    (
+      (const v0 0)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
+}
+
 TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("parentCheckCast");
@@ -357,8 +384,6 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
             assembler::to_string(method->get_code()));
 }
 
-// TODO: Fix this test by setting the common super type when joining (instead of
-//       bottom).
 TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
   using namespace dex_asm;
   DexMethod* method = create_empty_method("differentTypeInterfaceCheckCast");
@@ -403,8 +428,6 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (move-result-pseudo-object v1)
 
       (:lb1)
-      (check-cast v1 "I_C;")
-      (move-result-pseudo-object v1)
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);

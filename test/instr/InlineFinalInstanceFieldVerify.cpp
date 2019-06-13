@@ -10,12 +10,24 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
+#include "IRCode.h"
 #include "Resolver.h"
 #include "Show.h"
 #include "VerifyUtil.h"
+
+int count_igets(cfg::ControlFlowGraph& cfg) {
+  size_t num_igets = 0;
+  for (const auto& mie : InstructionIterable(cfg)) {
+    if (is_iget(mie.insn->opcode())) {
+      num_igets++;
+    }
+  }
+  return num_igets;
+}
 
 void expect_class_have_num_init(DexClasses& classes,
                                 const char* name,
@@ -124,6 +136,40 @@ TEST_F(PreVerify, InlineFinalInstanceField) {
   field_names = get_fields_name_accessed(method);
   EXPECT_THAT(field_names,
               ::testing::UnorderedElementsAre("m_non_final_inlineable"));
+
+  auto read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
+  auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
+
+  // Ctors of both read ctors class have one iget.
+  for (auto& meth : read_ctors_cls1->get_dmethods()) {
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(1, count_igets(code->cfg()));
+  }
+  for (auto& meth : read_ctors_cls2->get_dmethods()) {
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(1, count_igets(code->cfg()));
+  }
+
+  // 3 igets in test methods.
+  auto test_cls =
+      find_class_named(classes, "Lredex/InlineFinalInstanceFieldTest;");
+  size_t count = 0;
+  for (auto& meth : test_cls->get_vmethods()) {
+    if (meth->get_name()->str() != "testReadInCtors") {
+      continue;
+    }
+    ++count;
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(3, count_igets(code->cfg()));
+  }
+  // Make sure there is a testReadInCtors function
+  ASSERT_EQ(count, 1);
 }
 
 /*
@@ -210,4 +256,38 @@ TEST_F(PostVerify, InlineFinalInstanceField) {
   ASSERT_NE(nullptr, method->get_dex_code());
   field_names = get_fields_name_accessed(method);
   EXPECT_EQ(field_names.size(), 0);
+
+  auto read_ctors_cls1 = find_class_named(classes, "Lredex/ReadInCtors1;");
+  auto read_ctors_cls2 = find_class_named(classes, "Lredex/ReadInCtors2;");
+
+  // Ctors of both read ctors class have one iget.
+  for (auto& meth : read_ctors_cls1->get_dmethods()) {
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(0, count_igets(code->cfg()));
+  }
+  for (auto& meth : read_ctors_cls2->get_dmethods()) {
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(0, count_igets(code->cfg()));
+  }
+
+  // 3 igets in test methods.
+  auto test_cls =
+      find_class_named(classes, "Lredex/InlineFinalInstanceFieldTest;");
+  size_t count = 0;
+  for (auto& meth : test_cls->get_vmethods()) {
+    if (meth->get_name()->str() != "testReadInCtors") {
+      continue;
+    }
+    ++count;
+    IRCode* code = new IRCode(meth);
+    ASSERT_NE(code, nullptr);
+    code->build_cfg(/* editable */ true);
+    EXPECT_EQ(0, count_igets(code->cfg()));
+  }
+  // Make sure there is a testReadInCtors function
+  ASSERT_EQ(count, 1);
 }

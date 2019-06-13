@@ -81,7 +81,7 @@ class ModelMethodMerger {
                                                  const DexAccessFlags access,
                                                  DexMethod* ctor);
   static void inline_dispatch_entries(DexMethod* dispatch);
-
+  static void sink_common_ctor_to_return_block(DexMethod* dispatch);
   static std::vector<IRInstruction*> make_string_const(uint16_t dest,
                                                        std::string val);
   static std::vector<IRInstruction*> make_check_cast(DexType* type,
@@ -133,9 +133,6 @@ class ModelMethodMerger {
       const std::vector<DexMethod*>& targets);
 
   DexType* get_merger_type(DexType* mergeable);
-
-  void update_to_static(
-      const std::set<DexMethod*, dexmethods_comparator>& methods);
 
   std::string get_method_signature_string(DexMethod* meth);
 };

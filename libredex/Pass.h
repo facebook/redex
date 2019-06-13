@@ -7,19 +7,21 @@
 
 #pragma once
 
+#include <algorithm>
+#include <functional>
+#include <iostream>
+#include <json/json.h>
 #include <string>
 #include <vector>
-#include <json/json.h>
-#include <iostream>
-#include <algorithm>
 
-#include "DexStore.h"
 #include "ConfigFiles.h"
+#include "Configurable.h"
+#include "DexStore.h"
 #include "PassRegistry.h"
 
 class PassManager;
 
-class Pass {
+class Pass : public Configurable {
  public:
 
   Pass(const std::string& name)
@@ -31,7 +33,7 @@ class Pass {
 
   std::string name() const { return m_name; }
 
-  virtual void configure_pass(const JsonWrapper&) {}
+  std::string get_config_name() override { return name(); };
 
   /**
    * All passes' eval_pass are run, and then all passes' run_pass are run. This allows each
@@ -40,8 +42,12 @@ class Pass {
    * There is no protection against doing so, this is merely a convention.
    */
 
-  virtual void eval_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {};
-  virtual void run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) = 0;
+  virtual void eval_pass(DexStoresVector& stores,
+                         ConfigFiles& conf,
+                         PassManager& mgr){};
+  virtual void run_pass(DexStoresVector& stores,
+                        ConfigFiles& conf,
+                        PassManager& mgr) = 0;
 
  private:
   std::string m_name;

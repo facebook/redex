@@ -24,7 +24,7 @@ class PassImpl : public Pass {
   PassImpl() : Pass("RemoveUnreadFieldsPass") {}
 
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& conf,
                 PassManager& mgr) override;
 };
 

@@ -69,6 +69,7 @@ class DexOutputIdx {
     delete m_method;
   }
 
+  dexstring_to_idx& string_to_idx() const { return *m_string; }
   dextype_to_idx& type_to_idx() const { return *m_type; }
   dexproto_to_idx& proto_to_idx() const { return *m_proto; }
   dexfield_to_idx& field_to_idx() const { return *m_field; }
@@ -94,17 +95,19 @@ class DexOutputIdx {
 class IODIMetadata;
 
 dex_stats_t write_classes_to_dex(
-    std::string filename,
+    const RedexOptions&,
+    const std::string& filename,
     DexClasses* classes,
     LocatorIndex* locator_index /* nullable */,
     bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& cfg,
+    const ConfigFiles& conf,
     PositionMapper* line_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    IODIMetadata* iodi_metadata);
+    IODIMetadata* iodi_metadata,
+    const std::string& dex_magic);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -200,14 +203,6 @@ typedef std::map<DexAnnotationSet*, uint32_t> asetmap_t;
 typedef std::map<ParamAnnotations*, uint32_t> xrefmap_t;
 typedef std::map<DexAnnotationDirectory*, uint32_t> adirmap_t;
 
-enum class DebugInfoKind {
-  Normal = 0,
-  NoPositions = 1,
-  InstructionOffsets = 2,
-  InstructionOffsetsPerArity = 3,
-  Max = 4,
-};
-
 struct CodeItemEmit {
   DexMethod* method;
   DexCode* code;
@@ -247,6 +242,7 @@ class DexOutput {
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
   bool m_emit_name_based_locators;
+  bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
@@ -282,7 +278,7 @@ class DexOutput {
   void generate_typelist_data();
   void generate_map();
   void finalize_header();
-  void init_header_offsets();
+  void init_header_offsets(const std::string& dex_magic);
   void write_symbol_files();
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
@@ -295,6 +291,7 @@ class DexOutput {
             DexClasses* classes,
             LocatorIndex* locator_index,
             bool emit_name_based_locators,
+            bool normal_primary_dex,
             size_t store_number,
             size_t dex_number,
             DebugInfoKind debug_info_kind,
@@ -303,17 +300,15 @@ class DexOutput {
             PositionMapper* pos_mapper,
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-                code_debug_lines,
-            const std::string& method_mapping_path,
-            const std::string& class_mapping_path,
-            const std::string& pg_mapping_path,
-            const std::string& bytecode_offset_path);
+                code_debug_lines);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
-               const ConfigFiles& cfg);
+               const ConfigFiles& conf,
+               const std::string& dex_magic);
   void write();
-  static void check_method_instruction_size_limit(const ConfigFiles& cfg,
+  void metrics();
+  static void check_method_instruction_size_limit(const ConfigFiles& conf,
                                                   int size,
                                                   const char* method_name);
 };

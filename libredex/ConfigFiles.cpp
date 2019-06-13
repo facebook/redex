@@ -15,138 +15,6 @@
 #include "Debug.h"
 #include "DexClass.h"
 
-void JsonWrapper::get(const char* name, int64_t dflt, int64_t& param) const {
-  param = m_config.get(name, (Json::Int64)dflt).asInt();
-}
-
-void JsonWrapper::get(const char* name, size_t dflt, size_t& param) const {
-  param = m_config.get(name, (Json::UInt)dflt).asUInt();
-}
-
-void JsonWrapper::get(const char* name,
-                     const std::string& dflt,
-                     std::string& param) const {
-  param = m_config.get(name, dflt).asString();
-}
-
-const std::string JsonWrapper::get(const char* name,
-                                   const std::string& dflt) const {
-  return m_config.get(name, dflt).asString();
-}
-
-void JsonWrapper::get(const char* name, bool dflt, bool& param) const {
-  auto val = m_config.get(name, dflt);
-
-  // Do some simple type conversions that folly used to do
-  if (val.isBool()) {
-    param = val.asBool();
-    return;
-  } else if (val.isInt()) {
-    auto valInt = val.asInt();
-    if (valInt == 0 || valInt == 1) {
-      param = (val.asInt() != 0);
-      return;
-    }
-  } else if (val.isString()) {
-    auto str = val.asString();
-    std::transform(str.begin(), str.end(), str.begin(),
-                   [](auto c) { return ::tolower(c); });
-    if (str == "0" || str == "false" || str == "off" || str == "no") {
-      param = false;
-      return;
-    } else if (str == "1" || str == "true" || str == "on" || str == "yes") {
-      param = true;
-      return;
-    }
-  }
-  throw std::runtime_error("Cannot convert JSON value to bool: " +
-                           val.asString());
-}
-
-bool JsonWrapper::get(const char* name, bool dflt) const {
-  bool res;
-  get(name, dflt, res);
-  return res;
-}
-
-void JsonWrapper::get(const char* name,
-                     const std::vector<std::string>& dflt,
-                     std::vector<std::string>& param) const {
-  auto it = m_config[name];
-  if (it == Json::nullValue) {
-    param = dflt;
-  } else {
-    param.clear();
-    for (auto const& str : it) {
-      param.emplace_back(str.asString());
-    }
-  }
-}
-
-void JsonWrapper::get(const char* name,
-                     const std::vector<std::string>& dflt,
-                     std::unordered_set<std::string>& param) const {
-  auto it = m_config[name];
-  param.clear();
-  if (it == Json::nullValue) {
-    param.insert(dflt.begin(), dflt.end());
-  } else {
-    for (auto const& str : it) {
-      param.emplace(str.asString());
-    }
-  }
-}
-
-void JsonWrapper::get(
-    const char* name,
-    const std::unordered_map<std::string, std::vector<std::string>>& dflt,
-    std::unordered_map<std::string, std::vector<std::string>>& param) const {
-  auto cfg = m_config[name];
-  param.clear();
-  if (cfg == Json::nullValue) {
-    param = dflt;
-  } else {
-    if (!cfg.isObject()) {
-      throw std::runtime_error("Cannot convert JSON value to object: " +
-                               cfg.asString());
-    }
-    for (auto it = cfg.begin(); it != cfg.end(); ++it) {
-      auto key = it.key();
-      if (!key.isString()) {
-        throw std::runtime_error("Cannot convert JSON value to string: " +
-                                 key.asString());
-      }
-      auto& val = *it;
-      if (!val.isArray()) {
-        throw std::runtime_error("Cannot convert JSON value to array: " +
-                                 val.asString());
-      }
-      for (auto& str : val) {
-        if (!str.isString()) {
-          throw std::runtime_error("Cannot convert JSON value to string: " +
-                                   str.asString());
-        }
-        param[key.asString()].push_back(str.asString());
-      }
-    }
-  }
-}
-
-void JsonWrapper::get(const char* name,
-                     const Json::Value dflt,
-                     Json::Value& param) const {
-  param = m_config.get(name, dflt);
-}
-
-const Json::Value JsonWrapper::get(const char* name,
-                                   const Json::Value dflt) const {
-  return m_config.get(name, dflt);
-}
-
-const Json::Value& JsonWrapper::operator[](const char* name) const {
-  return m_config[name];
-}
-
 ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
@@ -304,4 +172,59 @@ void ConfigFiles::load_method_sorting_whitelisted_substrings() {
       m_method_sorting_whitelisted_substrings.insert(json_element.asString());
     }
   }
+}
+
+void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
+  Json::Value config;
+  m_json.get("inliner", Json::nullValue, config);
+  if (config == Json::nullValue) {
+    m_json.get("MethodInlinePass", Json::nullValue, config);
+  }
+  if (config == Json::nullValue) {
+    fprintf(stderr, "WARNING: No inliner config\n");
+    return;
+  }
+  JsonWrapper jw(config);
+  jw.get("virtual", true, inliner_config->virtual_inline);
+  jw.get("throws", false, inliner_config->throws_inline);
+  jw.get("enforce_method_size_limit",
+         true,
+         inliner_config->enforce_method_size_limit);
+  jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
+  jw.get("multiple_callers", false, inliner_config->multiple_callers);
+  jw.get("inline_small_non_deletables",
+         false,
+         inliner_config->inline_small_non_deletables);
+
+  jw.get("black_list", {}, inliner_config->m_black_list);
+  jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);
+
+  std::vector<std::string> no_inline_annos;
+  jw.get("no_inline_annos", {}, no_inline_annos);
+  for (const auto& type_s : no_inline_annos) {
+    auto type = DexType::get_type(type_s.c_str());
+    if (type != nullptr) {
+      inliner_config->m_no_inline_annos.emplace(type);
+    } else {
+      fprintf(stderr, "WARNING: Cannot find no_inline annotation %s\n",
+              type_s.c_str());
+    }
+  }
+
+  std::vector<std::string> force_inline_annos;
+  jw.get("force_inline_annos", {}, force_inline_annos);
+  for (const auto& type_s : force_inline_annos) {
+    auto type = DexType::get_type(type_s.c_str());
+    if (type != nullptr) {
+      inliner_config->m_force_inline_annos.emplace(type);
+    } else {
+      fprintf(stderr, "WARNING: Cannot find force_inline annotation %s\n",
+              type_s.c_str());
+    }
+  }
+}
+
+void ConfigFiles::load(const Scope& scope) {
+  get_inliner_config();
+  m_inliner_config->populate(scope);
 }

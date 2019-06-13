@@ -48,7 +48,7 @@
  *    happened. The method is effectively unknown
  */
 enum VirtualFlags : uint16_t {
-  // the top method definition (DexMehthod) in a VirtualScope.
+  // the top method definition (DexMethod) in a VirtualScope.
   // This is where the method was first introduced for the virtual scope.
   TOP_DEF =         0x0,
   // the method is an override, it has a parent
@@ -135,7 +135,7 @@ inline bool is_impl_scope(const VirtualScope* scope) {
 
 /**
  * Return true if a VirtualScope is composed by a single non impl method.
- * Effectively if themethod is devirtualizable.
+ * Effectively if the method is devirtualizable.
  */
 inline bool is_non_virtual_scope(const VirtualScope* scope) {
   if (scope->methods[0].second ==
@@ -257,6 +257,8 @@ class ClassScopes {
  public:
   explicit ClassScopes(const Scope& scope);
 
+  const ClassHierarchy& get_parent_to_children() const;
+
   /**
    * Return the vector of VirtualScope for the given type.
    * The vector lifetime is tied to that of the ClassScope as such it should
@@ -301,7 +303,7 @@ class ClassScopes {
         std::vector<const VirtualScope*> intf_scopes;
         TypeSet intfs;
         for (auto& scope : sig_it.second) {
-          assert(type_class(scope.type) != nullptr);
+          redex_assert(type_class(scope.type) != nullptr);
           if (scope.interfaces.empty()) continue;
           intf_scopes.emplace_back(&scope);
           intfs.insert(scope.interfaces.begin(), scope.interfaces.end());

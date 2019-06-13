@@ -34,7 +34,7 @@ namespace {
 void set_type_refs(DexType* intf, SingleImplData& data) {
   for (auto opcode : data.typerefs) {
     TRACE(INTF, 3, "(TREF) %s\n", SHOW(opcode));
-    assert(opcode->get_type() == intf);
+    redex_assert(opcode->get_type() == intf);
     opcode->set_type(data.cls);
     TRACE(INTF, 3, "(TREF) \t=> %s\n", SHOW(opcode));
   }
@@ -183,10 +183,10 @@ struct OptimizationImpl {
  */
 void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     auto f = static_cast<DexField*>(DexField::make_field(
         field->get_class(), field->get_name(), data.cls));
-    assert(f != field);
+    redex_assert(f != field);
     TRACE(INTF, 3, "(FDEF) %s\n", SHOW(field));
     f->set_deobfuscated_name(field->get_deobfuscated_name());
     f->rstate = field->rstate;
@@ -208,12 +208,12 @@ void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
 void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     DexFieldRef* f = DexField::make_field(
         field->get_class(), field->get_name(), data.cls);
     for (const auto opcode : fieldrefs.second) {
       TRACE(INTF, 3, "(FREF) %s\n", SHOW(opcode));
-      assert(f != opcode->get_field());
+      redex_assert(f != opcode->get_field());
       opcode->set_field(f);
       TRACE(INTF, 3, "(FREF) \t=> %s\n", SHOW(opcode));
     }
@@ -221,8 +221,9 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
 }
 
 /**
- * Rewrite all methods sigs by creating new ones. Remove old methods and push
- * the new to the proper class method list.
+ * Change all the method definitions by updating specs.
+ * We will never get collision here since we renamed potential colliding methods
+ * before doing the optimization.
  */
 void OptimizationImpl::set_method_defs(DexType* intf,
                                        SingleImplData& data) {
@@ -230,7 +231,7 @@ void OptimizationImpl::set_method_defs(DexType* intf,
     TRACE(INTF, 3, "(MDEF) %s\n", SHOW(method));
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     TRACE(INTF, 5, "(MDEF) Update method: %s\n", SHOW(method));
-    always_assert(proto != method->get_proto());
+    redex_assert(proto != method->get_proto());
     DexMethodSpec spec;
     spec.proto = proto;
     method->change(spec, false /* rename on collision */,
@@ -309,7 +310,7 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
       new_meth->rstate = meth->rstate;
       TRACE(INTF, 5, "(MITF) created impl method %s\n", SHOW(new_meth));
       setup_method(meth, new_meth);
-      assert(new_meth->is_virtual());
+      redex_assert(new_meth->is_virtual());
       impl->add_method(new_meth);
       TRACE(INTF, 3, "(MITF) moved interface method %s\n", SHOW(new_meth));
     } else {
@@ -324,7 +325,7 @@ void OptimizationImpl::rewrite_interface_methods(DexType* intf,
     auto m = mref_it.first;
     always_assert(m_intf_meth_to_impl_meth.count(m));
     auto new_m = m_intf_meth_to_impl_meth[m];
-    assert(new_m && new_m != m);
+    redex_assert(new_m && new_m != m);
     TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(new_m));
     for (auto mop : mref_it.second) {
       TRACE(INTF, 3, "(MITFOP) %s\n", SHOW(mop));
@@ -384,7 +385,7 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
 EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
                                                      SingleImplData& data) {
   for (const auto field : data.fielddefs) {
-    assert(!single_impls->is_escaped(field->get_class()));
+    redex_assert(!single_impls->is_escaped(field->get_class()));
     auto collision =
         resolve_field(field->get_class(), field->get_name(), data.cls);
     if (collision) return FIELD_COLLISION;
@@ -399,7 +400,7 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
                                                       SingleImplData& data) {
   for (auto method : data.methoddefs) {
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
-    assert(proto != method->get_proto());
+    redex_assert(proto != method->get_proto());
     DexMethodRef* collision =
         DexMethod::get_method(method->get_class(), method->get_name(), proto);
     if (!collision) {

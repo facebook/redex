@@ -10,37 +10,23 @@
 #include <boost/optional.hpp>
 #include <vector>
 
-#include "BaseIRAnalyzer.h"
-#include "ConstantAbstractDomain.h"
-#include "ControlFlow.h"
-#include "DexClass.h"
 #include "IRCode.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace check_casts {
 
 namespace impl {
 
-using register_t = ir_analyzer::register_t;
+using CheckCastReplacements =
+    std::vector<std::pair<MethodItemEntry*, boost::optional<IRInstruction*>>>;
 
-using Domain = sparta::ConstantAbstractDomain<const DexType*>;
+class CheckCastAnalysis {
 
-using Environment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, Domain>;
-
-class CheckCastAnalysis final
-    : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
-  explicit CheckCastAnalysis(cfg::ControlFlowGraph* cfg, DexMethod* method)
-      : ir_analyzer::BaseIRAnalyzer<Environment>(*cfg), m_method(method) {}
-
-  std::unordered_map<IRInstruction*, boost::optional<IRInstruction*>>
-  collect_redundant_checks_replacement();
+  explicit CheckCastAnalysis(DexMethod* method) : m_method(method){};
+  const CheckCastReplacements collect_redundant_checks_replacement();
 
  private:
-  void analyze_instruction(IRInstruction* insn,
-                           Environment* env) const override;
-  const DexMethod* m_method;
+  DexMethod* m_method;
 };
 
 } // namespace impl

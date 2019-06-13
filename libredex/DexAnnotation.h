@@ -12,6 +12,7 @@
 #include <list>
 #include <map>
 #include <sstream>
+#include <unordered_set>
 
 #include "Gatherable.h"
 #include "Show.h"
@@ -317,7 +318,7 @@ class DexEncodedValueAnnotation : public DexEncodedValue {
 
   DexType* type() const { return m_type; }
   void set_type(DexType* type) { m_type = type; }
-  const EncodedAnnotations* annotations() { return m_annotations; }
+  const EncodedAnnotations* annotations() const { return m_annotations; }
 
   void gather_types(std::vector<DexType*>& ltype) const override;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
@@ -379,6 +380,22 @@ class DexAnnotationSet : public Gatherable {
     cntviz = 0;
     for (auto const& da : m_annotations) {
       if (da->runtime_visible()) cntviz++;
+    }
+  }
+
+  /**
+   * Add in annotation missing from other annotation set.
+   */
+  void combine_with(const DexAnnotationSet& other) {
+    std::unordered_set<DexType*> existing_annos_type;
+    for (const auto existing_anno : m_annotations) {
+      existing_annos_type.emplace(existing_anno->type());
+    }
+    auto const& other_annos = other.m_annotations;
+    for (auto const& anno : other_annos) {
+      if (existing_annos_type.count(anno->type()) == 0) {
+        m_annotations.emplace_back(new DexAnnotation(*anno));
+      }
     }
   }
 

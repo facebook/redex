@@ -14,7 +14,7 @@ DexType* get_concrete_type(SingleImpls& single_impls, DexType* type) {
   uint32_t array_level = get_array_level(type);
   if (array_level > 0) {
     auto array_type = get_array_type(type);
-    assert(array_type);
+    redex_assert(array_type);
     lookup_type = array_type;
   }
   const auto& intf_data = single_impls.find(lookup_type);

@@ -122,6 +122,17 @@ class EnumOrdinalAnalyzer
     return false;
   }
 
+  static bool analyze_aput(const EnumOrdinalAnalyzerState& state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env) {
+    if (insn->opcode() == OPCODE_APUT_OBJECT) {
+      // Simply not do further analysis for the aput-object instructions. Maybe
+      // we can improve the analysis in the future.
+      return true;
+    }
+    return false;
+  }
+
   static bool analyze_invoke(const EnumOrdinalAnalyzerState& state,
                              const IRInstruction* insn,
                              ConstantEnvironment* env) {
@@ -148,9 +159,71 @@ class EnumOrdinalAnalyzer
   }
 };
 
+/**
+ * Ordinals should be consecutive and all the static final fields in the enum
+ * type are in the result map.
+ */
+bool validate_result(
+    const DexClass* cls,
+    std::unordered_map<const DexField*, optimize_enums::EnumAttr>*
+        enum_field_to_attrs) {
+  if (enum_field_to_attrs->empty()) {
+    TRACE(ENUM, 2, "\tEmpty result for %s\n", SHOW(cls));
+    return false;
+  }
+  std::vector<bool> ordinals(enum_field_to_attrs->size(), false);
+  bool synth_values_field = false;
+
+  auto enum_field_access = optimize_enums::enum_field_access();
+  auto values_access = optimize_enums::synth_access();
+
+  for (auto field : cls->get_sfields()) {
+    auto access = field->get_access();
+    auto it = enum_field_to_attrs->find(field);
+    if (it != enum_field_to_attrs->end()) {
+      if (!check_required_access_flags(enum_field_access, access)) {
+        TRACE(ENUM, 2, "\tUnexpected access %x on %s\n", access, SHOW(field));
+        return false;
+      }
+      auto ordinal = it->second.ordinal;
+      if (ordinal > ordinals.size()) {
+        TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s\n", SHOW(ordinal),
+              SHOW(field));
+        return false;
+      }
+      ordinals[ordinal] = true;
+    } else {
+      if (check_required_access_flags(enum_field_access, access)) {
+        TRACE(ENUM, 2, "\tEnum value %s is missing in the result\n",
+              SHOW(field));
+        return false;
+      }
+      if (check_required_access_flags(values_access, access)) {
+        if (!synth_values_field) {
+          synth_values_field = true;
+        } else {
+          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s\n",
+                SHOW(cls));
+          return false;
+        }
+      }
+    }
+  }
+  if (std::all_of(ordinals.begin(), ordinals.end(),
+                  [](bool item) { return item; })) {
+    return true;
+  }
+  TRACE(ENUM, 2, "\tEnum %s has some values in the same ordinal\n", SHOW(cls));
+  return false;
+}
+
 } // namespace
 
 namespace optimize_enums {
+
+DexAccessFlags enum_field_access() { return ACC_STATIC | ACC_ENUM; }
+
+DexAccessFlags synth_access() { return ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC; }
 
 std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
     const DexClass* cls) {
@@ -190,8 +263,11 @@ std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
     if (field->get_class() != cls->get_type()) {
       continue;
     }
-    auto ptr = return_env.get_pointee<ConstantObjectDomain>(
-        pair.second.get<AbstractHeapPointer>());
+    auto heap_ptr = pair.second.maybe_get<AbstractHeapPointer>();
+    if (!heap_ptr) {
+      continue;
+    }
+    auto ptr = return_env.get_pointee<ConstantObjectDomain>(*heap_ptr);
     auto ordinal = ptr.get<SignedConstantDomain>(ordinal_field);
     auto ordinal_value = ordinal.get_constant();
     if (!ordinal_value) {
@@ -207,6 +283,9 @@ std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
 
     EnumAttr enum_obj{static_cast<uint32_t>(*ordinal_value), *name_value};
     enum_field_to_attrs.emplace(field, enum_obj);
+  }
+  if (!validate_result(cls, &enum_field_to_attrs)) {
+    enum_field_to_attrs.clear();
   }
   return enum_field_to_attrs;
 }

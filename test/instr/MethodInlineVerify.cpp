@@ -291,47 +291,94 @@ TEST_F(PreVerify, InlineInvokeDirect) {
       noninlinable_invoke_direct->get_method());
   ASSERT_EQ(show(noninlinable->get_proto()), "()V");
 
-  // verify that there are two inlinable() methods in the class. The static
-  // version exists to test that we don't cause a signature collision when we
-  // make the instance method static.
+  // verify that there is one inlinable() method in the class.
   auto dmethods = cls->get_dmethods();
-  ASSERT_EQ(2,
+  ASSERT_EQ(1,
             std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
               return !strcmp("noninlinable", m->get_name()->c_str());
             }));
 }
 
 TEST_F(PostVerify, InlineInvokeDirect) {
+  // verify that the content of hasNoninlinableInvokeDirect has been inlined,
+  // but noninlinable did not get turned into a static method.
   auto cls = find_class_named(
     classes, "Lcom/facebook/redexinline/MethodInlineTest;");
   auto m = find_vmethod_named(*cls, "testInlineInvokeDirect");
   auto noninlinable_invoke_direct =
-      find_invoke(m, DOPCODE_INVOKE_STATIC, "noninlinable$0");
+      find_invoke(m, DOPCODE_INVOKE_DIRECT, "noninlinable");
   EXPECT_NE(nullptr, noninlinable_invoke_direct) << show(m->get_dex_code());
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
   auto noninlinable = static_cast<DexMethod*>(
       noninlinable_invoke_direct->get_method());
-  EXPECT_EQ(show(noninlinable->get_proto()),
-            "(Lcom/facebook/redexinline/MethodInlineTest;)V");
+  EXPECT_EQ(show(noninlinable->get_proto()), "()V");
   EXPECT_EQ(
       noninlinable->get_proto()->get_args()->get_type_list().size(),
       noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
 
+  // verify that there is (still) one direct "noninlinable" method in the class.
   auto dmethods = cls->get_dmethods();
+  ASSERT_EQ(1,
+            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
+              return !strcmp("noninlinable", m->get_name()->c_str());
+            }));
+}
+
+/*
+ * Ensure that testInlineInvokeDirectAcrossClasses() is testing inlined code.
+ */
+
+TEST_F(PreVerify, InlineInvokeDirectCrossClasses) {
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redexinline/MethodInlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineInvokeDirectAcrossClasses");
+  auto invoke =
+      find_invoke(m, DOPCODE_INVOKE_VIRTUAL, "hasNoninlinableInvokeDirect");
+  ASSERT_TRUE(invoke->get_method()->is_def());
+  auto noninlinable_invoke_direct =
+      find_invoke(static_cast<DexMethod*>(invoke->get_method()),
+                  DOPCODE_INVOKE_DIRECT, "noninlinable");
+  ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
+  auto noninlinable =
+      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+  ASSERT_EQ(show(noninlinable->get_proto()), "()V");
+
+  // verify that there are two inlinable() methods in the class. The static
+  // version exists to test that we don't cause a signature collision when we
+  // make the instance method static.
+  auto nested_cls = find_class_named(
+      classes, "Lcom/facebook/redexinline/MethodInlineTest$OtherClass;");
+  auto dmethods = nested_cls->get_dmethods();
+  ASSERT_EQ(2,
+            std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
+              return !strcmp("noninlinable", m->get_name()->c_str());
+            }));
+}
+
+TEST_F(PostVerify, InlineInvokeDirectCrossClasses) {
+  auto cls =
+      find_class_named(classes, "Lcom/facebook/redexinline/MethodInlineTest;");
+  auto m = find_vmethod_named(*cls, "testInlineInvokeDirectAcrossClasses");
+  auto noninlinable_invoke_direct =
+      find_invoke(m, DOPCODE_INVOKE_STATIC, "noninlinable$0");
+  EXPECT_NE(nullptr, noninlinable_invoke_direct) << show(m->get_dex_code());
+  ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
+  auto noninlinable =
+      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+  EXPECT_EQ(show(noninlinable->get_proto()),
+            "(Lcom/facebook/redexinline/MethodInlineTest$OtherClass;)V");
+  EXPECT_EQ(
+      noninlinable->get_proto()->get_args()->get_type_list().size(),
+      noninlinable->get_dex_code()->get_debug_item()->get_param_names().size());
+
+  auto nested_cls = find_class_named(
+      classes, "Lcom/facebook/redexinline/MethodInlineTest$OtherClass;");
+  auto dmethods = nested_cls->get_dmethods();
   // verify that we've replaced the instance noninlinable() method with r$0
   ASSERT_EQ(1,
             std::count_if(dmethods.begin(), dmethods.end(), [](DexMethod* m) {
               return m->get_name()->str() == "noninlinable";
             }));
-
-  DexMethod* check = nullptr;
-  ASSERT_EQ(1,
-            std::count_if(dmethods.begin(), dmethods.end(),
-                          [&check](DexMethod* m) {
-                            check = m;
-                            return m->get_name()->str() == "noninlinable$0";
-                          }))
-      << show(m->get_dex_code());
 }
 
 /*

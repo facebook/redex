@@ -51,7 +51,7 @@ void load_generated_types(const ModelSpec& spec,
   generated.insert(models.begin(), models.end());
   for (const auto& type : spec.gen_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     generated.insert(type);
     if (is_interface(cls)) {
       const auto& impls = type_system.get_implementors(type);
@@ -102,14 +102,13 @@ void print_interface_maps(const TypeToTypeSet& intf_to_classes,
 }
 
 /**
- * trim shapes that have the mergeable type count less or
- * equal to ModelSpec.min_count
+ * trim shapes that have the mergeable type count less than ModelSpec.min_count
  */
 size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
-    if (shape_it.second.types.size() > min_count) {
+    if (shape_it.second.types.size() >= min_count) {
       TRACE(TERA, 7, "Keep shape %s (%ld)\n",
             shape_it.first.to_string().c_str(), shape_it.second.types.size());
       continue;
@@ -126,8 +125,7 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
 }
 
 /**
- * trim groups that have the mergeable types count less or
- * equal to ModelSpec.min_count.
+ * trim groups that have the mergeable types count less than ModelSpec.min_count
  */
 size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
@@ -135,7 +133,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   for (auto& shape_it : shapes) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
-      if (group_it.second.size() > min_count) {
+      if (group_it.second.size() >= min_count) {
         TRACE(TERA, 7, "Keep group (%ld) on %s\n", group_it.second.size(),
               shape_it.first.to_string().c_str());
         continue;
@@ -262,19 +260,19 @@ Model::Model(const Scope& scope,
              const DexStoresVector& stores,
              const ModelSpec& spec,
              const TypeSystem& type_system,
-             ConfigFiles& cfg)
+             ConfigFiles& conf)
     : m_spec(spec), m_type_system(type_system), m_scope(scope) {
   for (const auto root : spec.roots) {
     m_type_system.get_all_children(root, m_types);
   }
-  init(scope, spec, type_system, &cfg);
+  init(scope, spec, type_system, &conf);
   find_non_root_store_mergeables(stores, spec.include_primary_dex);
 }
 
 void Model::init(const Scope& scope,
                  const ModelSpec& spec,
                  const TypeSystem& type_system,
-                 ConfigFiles* cfg) {
+                 ConfigFiles* conf) {
   build_hierarchy(spec.roots);
   for (const auto root : spec.roots) {
     build_interface_map(root, {});
@@ -302,7 +300,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    assert(super != nullptr && super != get_object_type());
+    redex_assert(super != nullptr && super != get_object_type());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -339,12 +337,12 @@ MergerType* Model::build_mergers(const DexType* root) {
   return &merger;
 }
 
-void Model::build_interdex_groups(ConfigFiles* cfg) {
-  if (!cfg) {
+void Model::build_interdex_groups(ConfigFiles* conf) {
+  if (!conf) {
     return;
   }
 
-  const auto& interdex_order = cfg->get_coldstart_classes();
+  const auto& interdex_order = conf->get_coldstart_classes();
   if (interdex_order.size() == 0) {
     // No grouping based on interdex.
     s_num_interdex_groups = 0;
@@ -374,12 +372,6 @@ void Model::build_interdex_groups(ConfigFiles* cfg) {
   // group_id + 1 represents the number of groups (considering the classes
   // outside of the interdex order as a group on its own).
   s_num_interdex_groups = group_id + 1;
-}
-
-MergerType& Model::create_merger(const DexType* type) {
-  auto& merger = m_mergers[type];
-  merger.type = type;
-  return merger;
 }
 
 MergerType& Model::create_dummy_merger(const DexType* type) {
@@ -486,7 +478,8 @@ void Model::create_mergers_helper(
     const TypeSet& group_values,
     const boost::optional<size_t>& dex_num,
     const boost::optional<size_t>& interdex_subgroup_idx,
-    const boost::optional<size_t>& max_mergeables_count) {
+    const boost::optional<size_t>& max_mergeables_count,
+    size_t min_mergeables_count) {
   size_t group_size = group_values.size();
 
   if (max_mergeables_count && group_size > *max_mergeables_count) {
@@ -496,9 +489,10 @@ void Model::create_mergers_helper(
     for (auto it = group_values.begin(); it != group_values.end(); ++it) {
       auto mergeable = *it;
       curr_group.insert(mergeable);
-      if ((curr_group.size() == *max_mergeables_count &&
-           remaining_mergeable_cnt - *max_mergeables_count > 1) ||
-          std::next(it) == group_values.end()) {
+      if (((curr_group.size() == *max_mergeables_count &&
+            remaining_mergeable_cnt - *max_mergeables_count > 1) ||
+           std::next(it) == group_values.end()) &&
+          curr_group.size() >= min_mergeables_count) {
         create_merger_helper(merger_type, shape, group_key, curr_group, dex_num,
                              interdex_subgroup_idx,
                              boost::optional<size_t>(subgroup_cnt++));
@@ -507,7 +501,7 @@ void Model::create_mergers_helper(
       }
     }
     always_assert(curr_group.empty());
-  } else {
+  } else if (group_size >= min_mergeables_count) {
     create_merger_helper(merger_type, shape, group_key, group_values, dex_num,
                          interdex_subgroup_idx, boost::none);
   }
@@ -522,7 +516,7 @@ void Model::create_mergers_helper(
 void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
   for (const auto& type : exclude_types) {
     const auto& cls = type_class(type);
-    assert(cls != nullptr);
+    redex_assert(cls != nullptr);
     if (is_interface(cls)) {
       const auto& impls = m_type_system.get_implementors(type);
       m_excluded.insert(impls.begin(), impls.end());
@@ -1010,11 +1004,12 @@ void Model::flatten_shapes(const MergerType& merger,
 
           create_mergers_helper(merger.type, *shape, *group_key,
                                 new_groups[gindex], boost::none, gindex,
-                                m_spec.max_count);
+                                m_spec.max_count, m_spec.min_count);
         }
       } else {
         create_mergers_helper(merger.type, *shape, *group_key, group_values,
-                              dex_num, boost::none, m_spec.max_count);
+                              dex_num, boost::none, m_spec.max_count,
+                              m_spec.min_count);
       }
     }
   }
@@ -1470,12 +1465,12 @@ void Model::update_model(Model& model) {
 Model Model::build_model(const Scope& scope,
                          const DexStoresVector& stores,
                          const ModelSpec& spec,
-                         ConfigFiles& cfg) {
+                         const TypeSystem& type_system,
+                         ConfigFiles& conf) {
   Timer t("build_model");
-  TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
-  Model model(scope, stores, spec, type_system, cfg);
+  Model model(scope, stores, spec, type_system, conf);
   TRACE(TERA, 3, "Model:\n%s\nBuild Model done\n", model.print().c_str());
 
   update_model(model);
@@ -1505,9 +1500,9 @@ void Model::update_redex_stats(PassManager& mgr) const {
 
 Model Model::build_model(const Scope& scope,
                          const ModelSpec& spec,
-                         const TypeSet& types) {
+                         const TypeSet& types,
+                         const TypeSystem& type_system) {
   Timer t("build_model");
-  TypeSystem type_system(scope);
 
   TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
   Model model(scope, spec, type_system, types);

@@ -44,22 +44,6 @@ std::string get_apk_dir(const Json::Value& config) {
 
 } // namespace
 
-void RedexOptions::serialize(Json::Value& entry_data) const {
-  auto& options = entry_data["redex_options"];
-  options["verify_none_enabled"] = verify_none_enabled;
-  options["is_art_build"] = is_art_build;
-  options["instrument_pass_enabled"] = instrument_pass_enabled;
-  options["min_sdk"] = min_sdk;
-}
-
-void RedexOptions::deserialize(const Json::Value& entry_data) {
-  const auto& options_data = entry_data["redex_options"];
-  verify_none_enabled = options_data["verify_none_enabled"].asBool();
-  is_art_build = options_data["is_art_build"].asBool();
-  instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
-  min_sdk = options_data["min_sdk"].asInt();
-}
-
 std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
   return std::make_unique<redex::ProguardConfiguration>();
 }
@@ -126,20 +110,41 @@ void PassManager::init(const Json::Value& config) {
     m_pass_info[i].total_repeat = pass_repeats.at(pass);
     m_pass_info[i].name = pass->name() + "#" + std::to_string(count + 1);
     m_pass_info[i].metrics[PASS_ORDER_KEY] = i;
+    m_pass_info[i].config = JsonWrapper(config[pass->name()]);
   }
 }
 
+hashing::DexHash PassManager::run_hasher(const char* pass_name,
+                                         const Scope& scope) {
+  TRACE(PM, 2, "Running hasher...\n");
+  Timer t("Hasher");
+  hashing::DexScopeHasher hasher(scope);
+  auto hash = hasher.run();
+  if (pass_name) {
+    // log metric value in a way that fits into JSON number value
+    set_metric("~result~code~hash~",
+               hash.code_hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~registers~hash~",
+               hash.registers_hash & ((((size_t)1) << 52) - 1));
+    set_metric("~result~signature~hash~",
+               hash.signature_hash & ((((size_t)1) << 52) - 1));
+  }
+  auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
+  auto code_hash_string = hashing::hash_to_string(hash.code_hash);
+  auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
+  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s\n",
+        pass_name ? pass_name : "(initial)", registers_hash_string.c_str(),
+        code_hash_string.c_str(), signature_hash_string.c_str());
+  return hash;
+}
+
 void PassManager::run_type_checker(const Scope& scope,
-                                   bool polymorphic_constants,
                                    bool verify_moves,
                                    bool check_no_overwrite_this) {
   TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method);
-    if (polymorphic_constants) {
-      checker.enable_polymorphic_constants();
-    }
     if (verify_moves) {
       checker.verify_moves();
     }
@@ -157,7 +162,7 @@ void PassManager::run_type_checker(const Scope& scope,
   });
 }
 
-void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
@@ -171,30 +176,34 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     std::string seed_filename = seeds_output_file;
     Timer t("Writing seeds file " + seed_filename);
     std::ofstream seeds_file(seed_filename);
-    redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope, false, false);
-  }
-  if (!cfg.get_printseeds().empty()) {
-    Timer t("Writing seeds to file " + cfg.get_printseeds());
-    std::ofstream seeds_file(cfg.get_printseeds());
-    redex::print_seeds(seeds_file, cfg.get_proguard_map(), scope);
-    std::ofstream config_file(cfg.get_printseeds() + ".pro");
-    redex::show_configuration(config_file, scope, *m_pg_config);
-    std::ofstream incoming(cfg.get_printseeds() + ".incoming");
-    redex::print_classes(incoming, cfg.get_proguard_map(), scope);
-    std::ofstream shrinking_file(cfg.get_printseeds() + ".allowshrinking");
-    redex::print_seeds(shrinking_file, cfg.get_proguard_map(), scope, true,
+    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
                        false);
-    std::ofstream obfuscation_file(cfg.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(obfuscation_file, cfg.get_proguard_map(), scope, false,
+  }
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing seeds to file " + conf.get_printseeds());
+    std::ofstream seeds_file(conf.get_printseeds());
+    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope);
+    std::ofstream config_file(conf.get_printseeds() + ".pro");
+    redex::show_configuration(config_file, scope, *m_pg_config);
+    std::ofstream incoming(conf.get_printseeds() + ".incoming");
+    redex::print_classes(incoming, conf.get_proguard_map(), scope);
+    std::ofstream shrinking_file(conf.get_printseeds() + ".allowshrinking");
+    redex::print_seeds(shrinking_file, conf.get_proguard_map(), scope, true,
+                       false);
+    std::ofstream obfuscation_file(conf.get_printseeds() + ".allowobfuscation");
+    redex::print_seeds(obfuscation_file, conf.get_proguard_map(), scope, false,
                        true);
   }
 
   // Enable opt decision logging if specified in config.
   const Json::Value& opt_decisions_args =
-      cfg.get_json_config()["opt_decisions"];
+      conf.get_json_config()["opt_decisions"];
   if (opt_decisions_args.get("enable_logs", false).asBool()) {
     opt_metadata::OptDataMapper::get_instance().enable_logs();
   }
+
+  // Load configurations regarding the scope.
+  conf.load(scope);
 
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
@@ -202,26 +211,32 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
     TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
     m_current_pass_info = &m_pass_info[i];
-    pass->eval_pass(stores, cfg, *this);
+    pass->eval_pass(stores, conf, *this);
     m_current_pass_info = nullptr;
   }
 
+  // Retrieve the hasher's settings.
+  const Json::Value& hasher_args = conf.get_json_config()["hasher"];
+  bool run_hasher_after_each_pass =
+      hasher_args.get("run_after_each_pass", true).asBool();
+
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
-      cfg.get_json_config()["ir_type_checker"];
-  bool run_after_each_pass =
+      conf.get_json_config()["ir_type_checker"];
+  bool run_type_checker_after_each_pass =
       type_checker_args.get("run_after_each_pass", false).asBool();
-  // When verify_none is enabled, it's OK to have polymorphic constants.
-  bool polymorphic_constants =
-      type_checker_args.get("polymorphic_constants", false).asBool() ||
-      get_redex_options().verify_none_enabled;
-  bool verify_moves = type_checker_args.get("verify_moves", false).asBool();
+  bool verify_moves = type_checker_args.get("verify_moves", true).asBool();
   bool check_no_overwrite_this =
       type_checker_args.get("check_no_overwrite_this", false).asBool();
-  std::unordered_set<std::string> trigger_passes;
+  std::unordered_set<std::string> type_checker_trigger_passes;
 
   for (auto& trigger_pass : type_checker_args["run_after_passes"]) {
-    trigger_passes.insert(trigger_pass.asString());
+    type_checker_trigger_passes.insert(trigger_pass.asString());
+  }
+
+  if (run_hasher_after_each_pass) {
+    m_initial_hash =
+        boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
   }
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
@@ -236,35 +251,45 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& cfg) {
               ? boost::make_optional(m_profiler_info->command)
               : boost::none);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
-      pass->run_pass(stores, cfg, *this);
+      pass->run_pass(stores, conf, *this);
     }
 
-    if (run_after_each_pass || trigger_passes.count(pass->name()) > 0) {
+    bool run_hasher = run_hasher_after_each_pass;
+    bool run_type_checker = run_type_checker_after_each_pass ||
+                            type_checker_trigger_passes.count(pass->name()) > 0;
+
+    if (run_hasher || run_type_checker) {
       scope = build_class_scope(it);
-      // It's OK to overwrite the `this` register if we are not yet at the
-      // output phase -- the register allocator can fix it up later.
-      run_type_checker(scope, polymorphic_constants, verify_moves,
-                       /* check_no_overwrite_this */ false);
+      if (run_hasher) {
+        m_current_pass_info->hash = boost::optional<hashing::DexHash>(
+            this->run_hasher(pass->name().c_str(), scope));
+      }
+      if (run_type_checker) {
+        // It's OK to overwrite the `this` register if we are not yet at the
+        // output phase -- the register allocator can fix it up later.
+        this->run_type_checker(scope, verify_moves,
+                               /* check_no_overwrite_this */ false);
+      }
     }
     m_current_pass_info = nullptr;
   }
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, polymorphic_constants, verify_moves,
-                   check_no_overwrite_this);
+  run_type_checker(scope, verify_moves,
+                   get_redex_options().no_overwrite_this());
 
-  if (!cfg.get_printseeds().empty()) {
-    Timer t("Writing outgoing classes to file " + cfg.get_printseeds() +
+  if (!conf.get_printseeds().empty()) {
+    Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
             ".outgoing");
     // Recompute the scope.
     scope = build_class_scope(it);
-    std::ofstream outgoing(cfg.get_printseeds() + ".outgoing");
-    redex::print_classes(outgoing, cfg.get_proguard_map(), scope);
+    std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
+    redex::print_classes(outgoing, conf.get_proguard_map(), scope);
   }
 }
 
-void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
+void PassManager::activate_pass(const char* name, const Json::Value& conf) {
   std::string name_str(name);
 
   // Names may or may not have a "#<id>" suffix to indicate their order in the
@@ -276,7 +301,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& cfg) {
 
       // Retrieving the configuration specific to this particular run
       // of the pass.
-      pass->configure_pass(JsonWrapper(cfg[name_str]));
+      pass->parse_config(JsonWrapper(conf[name_str]));
       return;
     }
   }

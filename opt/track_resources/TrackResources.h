@@ -13,24 +13,22 @@ class TrackResourcesPass : public Pass {
  public:
   TrackResourcesPass() : Pass("TrackResourcesPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("classes_to_track", {}, m_classes_to_track);
-    jw.get("tracked_fields_output", "", m_tracked_fields_output);
+  void bind_config() override {
+    bind("classes_to_track", {}, m_classes_to_track);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  static void find_accessed_fields(Scope& fullscope,
-      ConfigFiles& cfg,
+  static void find_accessed_fields(
+      Scope& fullscope,
+      ConfigFiles& conf,
       std::unordered_set<DexClass*> classes_to_track,
       std::unordered_set<DexField*>& recorded_fields,
       std::unordered_set<std::string>& classes_to_search);
 
   static std::unordered_set<DexClass*> build_tracked_cls_set(
-      const std::vector<std::string>& cls_suffixes,
-      const ProguardMap& pg_map);
+      const std::vector<std::string>& cls_suffixes, const ProguardMap& pg_map);
 
  private:
   std::vector<std::string> m_classes_to_track;
-  std::string m_tracked_fields_output;
 };

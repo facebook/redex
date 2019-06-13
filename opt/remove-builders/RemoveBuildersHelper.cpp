@@ -417,8 +417,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
   }
 
   code->build_cfg(/* editable */ false);
-  auto blocks = cfg::postorder_sort(code->cfg().blocks());
-  std::reverse(blocks.begin(), blocks.end());
+  const auto& blocks = code->cfg().blocks_reverse_post();
 
   auto fields_in = fields_setters(blocks, builder);
 
@@ -612,7 +611,7 @@ IROpcode get_iget_type(DexField* field) {
   case DataType::Double:
     return OPCODE_IGET_WIDE;
   case DataType::Void:
-    assert(false);
+    redex_assert(false);
   }
   not_reached();
 }
@@ -627,8 +626,7 @@ bool params_change_regs(DexMethod* method) {
 
   auto code = method->get_code();
   code->build_cfg(/* editable */ false);
-  auto blocks = cfg::postorder_sort(code->cfg().blocks());
-  std::reverse(blocks.begin(), blocks.end());
+  const auto& blocks = code->cfg().blocks_reverse_post();
   uint16_t regs_size = code->get_registers_size();
   const auto& param_insns =
       InstructionIterable(code->get_param_instructions());

@@ -22,17 +22,13 @@ class FinalInlinePassV2 : public Pass {
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("aggressively_delete", true, m_config.aggressively_delete);
-    jw.get("inline_instance_field", false, m_config.inline_instance_field);
-    std::vector<std::string> temp_config_list;
-    jw.get("black_list_types", {}, temp_config_list);
-    for (const auto& type_s : temp_config_list) {
-      DexType* type = DexType::get_type(type_s.c_str());
-      if (type != nullptr) {
-        m_config.black_list_types.emplace(type);
-      }
-    }
+  void bind_config() override {
+    bind("aggressively_delete", true, m_config.aggressively_delete);
+    bind("inline_instance_field", true, m_config.inline_instance_field);
+    bind("black_list_types",
+         {},
+         m_config.black_list_types,
+         "List of types that this optimization will omit.");
   }
 
   static size_t run(const Scope&, Config config = Config());

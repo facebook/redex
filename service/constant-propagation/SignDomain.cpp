@@ -13,28 +13,26 @@ namespace sign_domain {
 
 /*
  *             ALL
- *            /    \
- *          LEZ    GEZ
- *         /  \   /   \
+ *          /   |    \
+ *       LEZ   NEZ   GEZ
+ *        |  x     x  |
  *       LTZ   EQZ   GTZ
  *         \    |     /
  *            EMPTY
  */
 
-Lattice lattice({Interval::EMPTY,
-                 Interval::LTZ,
-                 Interval::GTZ,
-                 Interval::EQZ,
-                 Interval::LEZ,
-                 Interval::GEZ,
-                 Interval::ALL},
+Lattice lattice({Interval::EMPTY, Interval::LTZ, Interval::GTZ, Interval::EQZ,
+                 Interval::NEZ, Interval::LEZ, Interval::GEZ, Interval::ALL},
                 {{Interval::EMPTY, Interval::LTZ},
                  {Interval::EMPTY, Interval::GTZ},
                  {Interval::EMPTY, Interval::EQZ},
                  {Interval::LTZ, Interval::LEZ},
+                 {Interval::LTZ, Interval::NEZ},
                  {Interval::EQZ, Interval::LEZ},
                  {Interval::GTZ, Interval::GEZ},
+                 {Interval::GTZ, Interval::NEZ},
                  {Interval::EQZ, Interval::GEZ},
+                 {Interval::NEZ, Interval::ALL},
                  {Interval::LEZ, Interval::ALL},
                  {Interval::GEZ, Interval::ALL}});
 
@@ -47,6 +45,9 @@ std::ostream& operator<<(std::ostream& os, Interval interval) {
     os << "LTZ";
     return os;
   case Interval::GTZ:
+    os << "GTZ";
+    return os;
+  case Interval::NEZ:
     os << "GTZ";
     return os;
   case Interval::EQZ:
@@ -95,6 +96,8 @@ bool contains(Interval interval, int64_t point) {
     return point <= 0;
   case Interval::GEZ:
     return point >= 0;
+  case Interval::NEZ:
+    return point != 0;
   case Interval::ALL:
     return true;
   case Interval::SIZE:

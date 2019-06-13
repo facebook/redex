@@ -14,8 +14,8 @@ namespace static_relo_v2 {
 class StaticReloPassV2 : public Pass {
  public:
   StaticReloPassV2() : Pass("StaticReloPassV2") {}
-  static std::unordered_set<DexClass*> gen_candidates(const Scope&);
-  static int run_relocation(const Scope&, std::unordered_set<DexClass*>&);
+  static std::vector<DexClass*> gen_candidates(const Scope&);
+  static int run_relocation(const Scope&, std::vector<DexClass*>&);
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
 } // namespace static_relo_v2

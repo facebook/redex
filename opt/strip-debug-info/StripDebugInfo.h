@@ -15,24 +15,18 @@ class StripDebugInfoPass : public Pass {
  public:
   StripDebugInfoPass() : Pass("StripDebugInfoPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("cls_whitelist", {}, m_config.cls_patterns);
-    jw.get("method_whitelist", {}, m_config.meth_patterns);
-    jw.get("use_whitelist", false, m_config.use_whitelist);
-    jw.get("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
-    jw.get("drop_local_variables", false, m_config.drop_local_variables);
-    jw.get("drop_line_numbers", false, m_config.drop_line_nrs);
-    jw.get("drop_src_files", false, m_config.drop_src_files);
-    jw.get("drop_prologue_end", false, m_config.drop_prologue_end);
-    jw.get("drop_epilogue_begin", false, m_config.drop_epilogue_begin);
-    jw.get("drop_all_dbg_info_if_empty",
-           false,
-           m_config.drop_all_dbg_info_if_empty);
-    jw.get("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
-    jw.get("drop_synth_conservative", false, m_config.drop_synth_conservative);
-    jw.get("drop_line_numbers_preceeding_safe",
-           false,
-           m_config.drop_line_nrs_preceeding_safe);
+  void bind_config() override {
+    bind("drop_all_dbg_info", false, m_config.drop_all_dbg_info);
+    bind("drop_local_variables", true, m_config.drop_local_variables);
+    bind("drop_line_numbers", false, m_config.drop_line_nrs);
+    bind("drop_src_files", true, m_config.drop_src_files);
+    bind("drop_prologue_end", true, m_config.drop_prologue_end);
+    bind("drop_epilogue_begin", true, m_config.drop_epilogue_begin);
+    bind("drop_all_dbg_info_if_empty",
+         true,
+         m_config.drop_all_dbg_info_if_empty);
+    bind("drop_synth_aggressive", false, m_config.drop_synth_aggressive);
+    bind("drop_synth_conservative", false, m_config.drop_synth_conservative);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
@@ -44,9 +38,6 @@ class StripDebugInfoPass : public Pass {
   void set_drop_line_numbers(bool b) { m_config.drop_line_nrs = b; }
 
   struct Config {
-    std::vector<std::string> cls_patterns;
-    std::vector<std::string> meth_patterns;
-    bool use_whitelist{false};
     bool drop_all_dbg_info{false};
     bool drop_local_variables{false};
     bool drop_line_nrs{false};
@@ -56,7 +47,6 @@ class StripDebugInfoPass : public Pass {
     bool drop_all_dbg_info_if_empty{false};
     bool drop_synth_aggressive{false};
     bool drop_synth_conservative{false};
-    bool drop_line_nrs_preceeding_safe{false};
   };
 
  private:
@@ -72,6 +62,7 @@ struct Stats {
   int num_prologue_dropped{0};
   int num_epilogue_dropped{0};
   int num_empty_dropped{0};
+  int num_skipped_due_to_inlining{0};
 
   Stats& operator+=(const Stats& other);
 };
@@ -98,10 +89,6 @@ class StripDebugInfo {
   bool drop_line_numbers() const {
     return m_config.drop_line_nrs || m_config.drop_all_dbg_info;
   }
-  bool drop_line_numbers_preceeding_safe() const {
-    return m_config.drop_line_nrs_preceeding_safe || m_config.drop_all_dbg_info;
-  }
-  bool method_passes_filter(DexMethod* meth) const;
   bool should_remove(const MethodItemEntry& mei, Stats& stats);
   bool should_drop_for_synth(const DexMethod*) const;
 

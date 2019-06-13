@@ -120,7 +120,7 @@ class DexString {
     return len;
   }
 
-  void encode(uint8_t* output) {
+  void encode(uint8_t* output) const {
     output = write_uleb128(output, m_utfsize);
     strcpy((char*)output, c_str());
   }
@@ -205,7 +205,7 @@ class DexType {
     return get_type(DexString::get_string(type_string));
   }
 
-  static DexType* get_type(const std::string &str) {
+  static DexType* get_type(const std::string& str) {
     return get_type(DexString::get_string(str));
   }
 
@@ -219,6 +219,7 @@ class DexType {
   DexString* get_name() const { return m_name; }
   const char* c_str() const { return get_name()->c_str(); }
   const std::string& str() const { return get_name()->str(); }
+  DexProto* get_non_overlapping_proto(DexString*, DexProto*);
 };
 
 /* Non-optimizing DexSpec compliant ordering */
@@ -340,7 +341,7 @@ class DexField : public DexFieldRef {
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno; }
-  DexEncodedValue* get_static_value() { return m_value; }
+  DexEncodedValue* get_static_value() const { return m_value; }
   DexAccessFlags get_access() const {
     always_assert(is_def());
     return m_access;
@@ -386,12 +387,14 @@ class DexField : public DexFieldRef {
   }
 
   void attach_annotation_set(DexAnnotationSet* aset) {
-    if (m_anno == nullptr && m_concrete == false) {
-      m_anno = aset;
-      return;
-    }
-    always_assert_log(false, "attach_annotation_set failed for field %s.%s\n",
-                      m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+    always_assert_type_log(
+        !m_concrete, RedexError::BAD_ANNOTATION, "field %s.%s is concrete\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+    always_assert_type_log(
+        !m_anno, RedexError::BAD_ANNOTATION, "field %s.%s annotation exists\n",
+        m_spec.cls->get_name()->c_str(), m_spec.name->c_str());
+
+    m_anno = aset;
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -434,6 +437,8 @@ class DexTypeList {
   }
 
  public:
+  std::deque<DexType*>::iterator begin() { return m_list.begin(); }
+  std::deque<DexType*>::iterator end() { return m_list.end(); }
   // DexTypeList retrieval/creation
 
   // If the DexTypeList exists, return it, otherwise create it and return it.
@@ -450,15 +455,15 @@ class DexTypeList {
  public:
   const std::deque<DexType*>& get_type_list() const { return m_list; }
 
-  size_t size() const {
-    return get_type_list().size();
-  }
+  size_t size() const { return get_type_list().size(); }
+
+  DexType* at(size_t i) const { return get_type_list().at(i); }
 
   /**
    * Returns size of the encoded typelist in bytes, input
    * pointer must be aligned.
    */
-  int encode(DexOutputIdx* dodx, uint32_t* output);
+  int encode(DexOutputIdx* dodx, uint32_t* output) const;
 
   friend bool operator<(const DexTypeList& a, const DexTypeList& b) {
     auto ita = a.m_list.begin();
@@ -513,16 +518,16 @@ class DexProto {
 
   // If the DexProto exists, return it, otherwise create it and return it.
   // See also get_proto()
-  static DexProto* make_proto(DexType* rtype,
-                              DexTypeList* args,
-                              DexString* shorty) {
+  static DexProto* make_proto(const DexType* rtype,
+                              const DexTypeList* args,
+                              const DexString* shorty) {
     return g_redex->make_proto(rtype, args, shorty);
   }
 
-  static DexProto* make_proto(DexType* rtype, DexTypeList* args);
+  static DexProto* make_proto(const DexType* rtype, const DexTypeList* args);
 
   // Return an existing DexProto or nullptr if one does not exist.
-  static DexProto* get_proto(DexType* rtype, DexTypeList* args) {
+  static DexProto* get_proto(const DexType* rtype, const DexTypeList* args) {
     return g_redex->get_proto(rtype, args);
   }
 
@@ -710,11 +715,11 @@ class DexCode {
     return *m_insns;
   }
   std::vector<DexInstruction*>& get_instructions() {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   const std::vector<DexInstruction*>& get_instructions() const {
-    assert(m_insns);
+    redex_assert(m_insns);
     return *m_insns;
   }
   void set_instructions(std::vector<DexInstruction*>* insns) {
@@ -842,6 +847,10 @@ class DexMethod : public DexMethodRef {
     return g_redex->make_method(type, name, proto);
   }
 
+  static DexMethodRef* make_method(const DexMethodSpec& spec) {
+    return g_redex->make_method(spec.cls, spec.name, spec.proto);
+  }
+
   /**
    * Create a copy of method `that`
    */
@@ -893,6 +902,10 @@ class DexMethod : public DexMethodRef {
                                   DexString* name,
                                   DexProto* proto) {
     return g_redex->get_method(type, name, proto);
+  }
+
+  static DexMethodRef* get_method(const DexMethodSpec& spec) {
+    return g_redex->get_method(spec.cls, spec.name, spec.proto);
   }
 
   static DexString* get_unique_name(DexType* type,
@@ -984,21 +997,47 @@ class DexMethod : public DexMethodRef {
     delete m_anno;
     m_anno = nullptr;
   }
-  void attach_annotation_set(DexAnnotationSet* aset) {
-    if (m_anno == nullptr && m_concrete == false) {
-      m_anno = aset;
-      return;
+
+  /**
+   * Note that this is to combine annotation for two methods that should
+   * have same set of parameters. This is used in vertical merging when
+   * merging parent and child's inherited method. If you want to use this
+   * method you should check if their protos are the same before using this.
+   */
+  void combine_annotations_with(DexMethod* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = new DexAnnotationSet(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
     }
-    always_assert_log(false, "attach_annotation_set failed for method %s\n", SHOW(this));
+    for (auto& pair : other->m_param_anno) {
+      if (m_param_anno.count(pair.first) == 0 ||
+          m_param_anno[pair.first] == nullptr) {
+        m_param_anno.emplace(pair.first, new DexAnnotationSet(*pair.second));
+      } else {
+        m_param_anno[pair.first]->combine_with(*pair.second);
+      }
+    }
+  }
+
+  void add_load_params(size_t num_add_loads);
+  void attach_annotation_set(DexAnnotationSet* aset) {
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", SHOW(this));
+    always_assert_type_log(!m_anno, RedexError::BAD_ANNOTATION,
+                           "method %s annotation exists\n", SHOW(this));
+    m_anno = aset;
   }
   void attach_param_annotation_set(int paramno, DexAnnotationSet* aset) {
-    if (m_param_anno.count(paramno) == 0 && m_concrete == false) {
-      m_param_anno[paramno] = aset;
-      return;
-    }
-    always_assert_log(false, "attach_param_annotation_set failed for param %d "
-                      "to method %s\n",
-                      paramno, SHOW(this));
+    always_assert_type_log(!m_concrete, RedexError::BAD_ANNOTATION,
+                           "method %s is concrete\n", SHOW(this));
+    always_assert_type_log(
+        m_param_anno.count(paramno) == 0, RedexError::BAD_ANNOTATION,
+        "param %d annotation to method %s exists\n", paramno, SHOW(this));
+    m_param_anno[paramno] = aset;
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
@@ -1093,9 +1132,15 @@ class DexClass {
   // Removes the method from this class
   void remove_method(const DexMethod* m);
   const std::vector<DexField*>& get_sfields() const { return m_sfields; }
-  std::vector<DexField*>& get_sfields() { assert(!m_external); return m_sfields; }
+  std::vector<DexField*>& get_sfields() {
+    redex_assert(!m_external);
+    return m_sfields;
+  }
   const std::vector<DexField*>& get_ifields() const { return m_ifields; }
-  std::vector<DexField*>& get_ifields() { assert(!m_external); return m_ifields; }
+  std::vector<DexField*>& get_ifields() {
+    redex_assert(!m_external);
+    return m_ifields;
+  }
   void add_field(DexField* f);
   // Removes the field from this class
   void remove_field(const DexField* f);
@@ -1141,6 +1186,17 @@ class DexClass {
     always_assert_log(
         !m_external, "Unexpected external class %s\n", SHOW(m_self));
     m_super_class = super_class;
+  }
+
+  void combine_annotations_with(DexClass* other) {
+    auto other_anno_set = other->get_anno_set();
+    if (other_anno_set != nullptr) {
+      if (m_anno == nullptr) {
+        m_anno = new DexAnnotationSet(*other->m_anno);
+      } else {
+        m_anno->combine_with(*other->m_anno);
+      }
+    }
   }
 
   void set_interfaces(DexTypeList* intfs) {

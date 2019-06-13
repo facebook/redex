@@ -23,6 +23,7 @@
 #include "DexUtil.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
+#include "InstructionLowering.h"
 #include "Transform.h"
 #include "Util.h"
 
@@ -164,15 +165,6 @@ bool encode_offset(IRList* ir,
 static bool multi_target_compare_case_key(const BranchTarget* a,
                                           const BranchTarget* b) {
   return (a->case_key < b->case_key);
-}
-
-static bool multi_contains_gaps(const std::vector<BranchTarget*>& targets) {
-  int32_t key = targets.front()->case_key;
-  for (auto target : targets) {
-    if (target->case_key != key) return true;
-    key++;
-  }
-  return false;
 }
 
 static void insert_multi_branch_target(IRList* ir,
@@ -616,6 +608,8 @@ void IRCode::clear_cfg() {
   }
 }
 
+bool IRCode::cfg_built() const { return m_cfg != nullptr; }
+
 bool IRCode::editable_cfg_built() const {
   return m_cfg != nullptr && m_cfg->editable();
 }
@@ -890,7 +884,7 @@ bool IRCode::try_sync(DexCode* code) {
     std::sort(targets.begin(), targets.end(), multi_target_compare_case_key);
     always_assert_log(
         !targets.empty(), "need to have targets for %s", SHOW(*multiopcode));
-    if (multi_contains_gaps(targets)) {
+    if (multiopcode->dex_insn->opcode() == DOPCODE_SPARSE_SWITCH) {
       // Emit sparse.
       const size_t count = (targets.size() * 4) + 2;
       auto sparse_payload = std::make_unique<uint16_t[]>(count);
@@ -920,14 +914,28 @@ bool IRCode::try_sync(DexCode* code) {
       addr += count;
     } else {
       // Emit packed.
-      const size_t count = (targets.size() * 2) + 4;
+      std::vector<int32_t> case_keys;
+      case_keys.reserve(targets.size());
+      for (const BranchTarget* t : targets) {
+        case_keys.push_back(t->case_key);
+      }
+      const uint64_t size =
+          instruction_lowering::get_packed_switch_size(case_keys);
+      always_assert(size <= std::numeric_limits<uint16_t>::max());
+      const size_t count = (size * 2) + 4;
       auto packed_payload = std::make_unique<uint16_t[]>(count);
       packed_payload[0] = FOPCODE_PACKED_SWITCH;
-      packed_payload[1] = targets.size();
+      packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
-      *psdata++ = targets.front()->case_key;
+      int32_t next_key = *psdata++ = targets.front()->case_key;
       for (BranchTarget* target : targets) {
+        // Fill in holes with relative offsets that are falling through to the
+        // instruction after the switch instruction
+        for (; next_key != target->case_key; ++next_key) {
+          *psdata++ = 3; // packed-switch statement is three code units
+        }
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
+        ++next_key;
       }
       // Emit align nop
       if (addr & 1) {
@@ -968,7 +976,7 @@ bool IRCode::try_sync(DexCode* code) {
       active_try = &mentry;
       continue;
     }
-    assert(tentry->type == TRY_END);
+    redex_assert(tentry->type == TRY_END);
     auto try_end = &mentry;
     auto try_start = active_try;
     active_try = nullptr;

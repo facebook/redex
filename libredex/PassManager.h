@@ -8,8 +8,10 @@
 #pragma once
 
 #include "ApkManager.h"
+#include "DexHasher.h"
 #include "Pass.h"
 #include "ProguardConfiguration.h"
+#include "RedexOptions.h"
 
 #include <boost/optional.hpp>
 #include <json/json.h>
@@ -17,18 +19,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-struct RedexOptions {
-  bool verify_none_enabled{false};
-  bool is_art_build{false};
-  bool instrument_pass_enabled{false};
-  int32_t min_sdk{0};
-
-  // Encode the struct to entry_data for redex-opt tool.
-  void serialize(Json::Value& entry_data) const;
-  // Decode the entry_data and update the struct.
-  void deserialize(const Json::Value& entry_data);
-};
 
 class PassManager {
  public:
@@ -48,6 +38,8 @@ class PassManager {
     size_t total_repeat;
     std::string name;
     std::unordered_map<std::string, int> metrics;
+    JsonWrapper config;
+    boost::optional<hashing::DexHash> hash;
   };
 
   void run_passes(DexStoresVector&, ConfigFiles&);
@@ -55,6 +47,9 @@ class PassManager {
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
   const std::vector<PassManager::PassInfo>& get_pass_info() const;
+  boost::optional<hashing::DexHash> get_initial_hash() const {
+    return m_initial_hash;
+  }
   const RedexOptions& get_redex_options() const { return m_redex_options; }
 
   // A temporary hack to return the interdex metrics. Will be removed later.
@@ -84,8 +79,9 @@ class PassManager {
 
   void init(const Json::Value& config);
 
+  hashing::DexHash run_hasher(const char* name, const Scope& scope);
+
   static void run_type_checker(const Scope& scope,
-                               bool polymorphic_constants,
                                bool verify_moves,
                                bool check_no_overwrite_this);
 
@@ -111,4 +107,5 @@ class PassManager {
 
   boost::optional<ProfilerInfo> m_profiler_info;
   Pass* m_malloc_profile_pass{nullptr};
+  boost::optional<hashing::DexHash> m_initial_hash;
 };

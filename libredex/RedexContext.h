@@ -39,14 +39,14 @@ struct RedexContext;
 extern RedexContext* g_redex;
 
 struct RedexContext {
-  RedexContext();
+  RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
 
   DexString* make_string(const char* nstr, uint32_t utfsize);
   DexString* get_string(const char* nstr, uint32_t utfsize);
 
-  DexType* make_type(DexString* dstring);
-  DexType* get_type(DexString* dstring);
+  DexType* make_type(const DexString* dstring);
+  DexType* get_type(const DexString* dstring);
 
   /**
    * Change the name of a type, but do not remove the old name from the mapping
@@ -77,11 +77,17 @@ struct RedexContext {
   DexTypeList* make_type_list(std::deque<DexType*>&& p);
   DexTypeList* get_type_list(std::deque<DexType*>&& p);
 
-  DexProto* make_proto(DexType* rtype, DexTypeList* args, DexString* shorty);
-  DexProto* get_proto(DexType* rtype, DexTypeList* args);
+  DexProto* make_proto(const DexType* rtype,
+                       const DexTypeList* args,
+                       const DexString* shorty);
+  DexProto* get_proto(const DexType* rtype, const DexTypeList* args);
 
-  DexMethodRef* make_method(DexType* type, DexString* name, DexProto* proto);
-  DexMethodRef* get_method(DexType* type, DexString* name, DexProto* proto);
+  DexMethodRef* make_method(const DexType* type,
+                            const DexString* name,
+                            const DexProto* proto);
+  DexMethodRef* get_method(const DexType* type,
+                           const DexString* name,
+                           const DexProto* proto);
 
   void erase_method(DexMethodRef*);
   void mutate_method(DexMethodRef* method,
@@ -169,7 +175,7 @@ struct RedexContext {
   ConcurrentLargeStringMap<DexString*> s_string_map;
 
   // DexType
-  ConcurrentMap<DexString*, DexType*> s_type_map;
+  ConcurrentMap<const DexString*, DexType*> s_type_map;
 
   // DexFieldRef
   ConcurrentMap<DexFieldSpec, DexFieldRef*> s_field_map;
@@ -182,7 +188,7 @@ struct RedexContext {
       s_typelist_map;
 
   // DexProto
-  using ProtoKey = std::pair<DexType*, DexTypeList*>;
+  using ProtoKey = std::pair<const DexType*, const DexTypeList*>;
   ConcurrentMap<ProtoKey, DexProto*, boost::hash<ProtoKey>> s_proto_map;
 
   // DexMethod
@@ -202,38 +208,7 @@ struct RedexContext {
       s_keep_reasons;
 
   bool m_record_keep_reasons{false};
-};
-
-class duplicate_class : public std::exception {
- public:
-  duplicate_class(const std::string& class_name,
-                  const std::string& location_1,
-                  const std::string& location_2)
-      : m_class_name(class_name),
-        m_location_1(location_1),
-        m_location_2(location_2),
-        m_msg(make_msg(class_name, location_1, location_2)) {}
-
-  const char* what() const throw() override { return m_msg.c_str(); }
-
-  const std::string m_class_name;
-  const std::string m_location_1;
-  const std::string m_location_2;
-
- private:
-  const std::string m_msg;
-
-  std::string make_msg(const std::string& class_name,
-                       const std::string& location_1,
-                       const std::string& location_2) {
-    std::ostringstream oss;
-    oss << "Found duplicate class in two different files. Class "
-        << m_class_name << "\n"
-        << "  1: " << location_1 << "\n"
-        << "  2: " << location_2 << "\n";
-
-    return oss.str();
-  }
+  bool m_allow_class_duplicates;
 };
 
 // One or more exceptions

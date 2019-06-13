@@ -1011,10 +1011,122 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
             assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(InterproceduralConstantPropagationTest, virtualMethodReturnValue) {
+TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(LFoo;)V"
+     (
+      (load-param-object v0)
+      (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+      (move-result v0) ; Constant value since this virtualMethod is not overridden
+      (if-eqz v0 :label)
+      (const v0 1)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m1);
+
+  auto m2 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.virtualMethod:()I"
+     (
+      (const v0 0)
+      (return v0)
+     )
+    )
+  )");
+  creator.add_method(m2);
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+     (move-result v0)
+     (goto :label)
+     (const v0 1)
+     (:label)
+     (return-void)
+    )
+  )");
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(scope);
+  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:(LFoo;)V"
+     (
+      (load-param-object v0)
+      (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+      (move-result v0) ; Not propagating value because virtualMethod is root
+      (if-eqz v0 :label)
+      (const v0 1)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m1);
+
+  auto m2 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.virtualMethod:()I"
+     (
+      (const v0 0)
+      (return v0)
+     )
+    )
+  )");
+  m2->rstate.set_root();
+  creator.add_method(m2);
+  Scope scope{creator.create()};
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (invoke-virtual (v0) "LFoo;.virtualMethod:()I")
+     (move-result v0)
+     (if-eqz v0 :label)
+     (const v0 1)
+     (:label)
+     (return-void)
+    )
+  )");
+
+  InterproceduralConstantPropagationPass::Config config;
+  config.max_heap_analysis_iterations = 1;
+  InterproceduralConstantPropagationPass(config).run(scope);
+  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+TEST_F(InterproceduralConstantPropagationTest,
+       OverrideVirtualMethodReturnValue) {
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto cls_child_ty = DexType::make_type("LBoo;");
+  ClassCreator child_creator(cls_child_ty);
+  child_creator.set_super(cls_ty);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1041,7 +1153,21 @@ TEST_F(InterproceduralConstantPropagationTest, virtualMethodReturnValue) {
   )");
   creator.add_method(m2);
 
-  Scope scope{creator.create()};
+  auto child_m3 = assembler::method_from_string(R"(
+    (method (public) "LBoo;.virtualMethod:()I"
+     (
+      (const v0 0)
+      (return v0)
+     )
+    )
+  )");
+  child_creator.add_method(child_m3);
+  DexStore store("classes");
+  store.add_classes({creator.create()});
+  store.add_classes({child_creator.create()});
+  std::vector<DexStore> stores;
+  stores.emplace_back(std::move(store));
+  auto scope = build_class_scope(stores);
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto expected = assembler::to_s_expr(m1->get_code());
@@ -1049,7 +1175,6 @@ TEST_F(InterproceduralConstantPropagationTest, virtualMethodReturnValue) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
-
   EXPECT_EQ(assembler::to_s_expr(m1->get_code()), expected);
 }
 

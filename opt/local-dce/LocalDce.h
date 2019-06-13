@@ -55,7 +55,9 @@ class LocalDce {
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
   Stats m_stats;
 
-  bool is_required(IRInstruction* inst,
+  bool is_required(cfg::ControlFlowGraph& cfg,
+                   cfg::Block* b,
+                   IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
   bool is_pure(DexMethodRef* ref, DexMethod* meth);
 };
@@ -64,9 +66,19 @@ class LocalDcePass : public Pass {
  public:
   LocalDcePass() : Pass("LocalDcePass") {}
 
+  bool no_implementor_abstract_is_pure{false};
+
+  void bind_config() override {
+    bind("no_implementor_abstract_is_pure",
+         false,
+         no_implementor_abstract_is_pure);
+  }
+
   static void run(IRCode* code);
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  std::unordered_set<DexMethodRef*> find_no_sideeffect_methods(const Scope&);
 
  private:
   static std::unordered_set<DexMethodRef*> find_pure_methods();

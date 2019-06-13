@@ -571,8 +571,6 @@ DexMethod* create_ctor_or_static_dispatch(
 
   auto cases = get_switch_cases(indices_to_callee, is_ctor(spec));
 
-  // TODO (zwei): better dispatch? E.g., push down invoke-direct to the super
-  // ctor to happen after the switch stmt.
   auto def_block = mb->switch_op(type_tag_loc, cases);
   handle_default_block(spec, indices_to_callee, args, mc, ret_loc, def_block);
   mb->ret(spec.proto->get_rtype(), ret_loc);

@@ -286,7 +286,7 @@ void MethodBlock::sfield_op(IROpcode opcode,
 void MethodBlock::move(Location src, Location& dst) {
   always_assert(src.is_compatible(dst.type));
   auto ch = type_shorty(dst.type);
-  assert(ch != 'V');
+  redex_assert(ch != 'V');
   IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_OBJECT;
@@ -304,7 +304,7 @@ void MethodBlock::move(Location src, Location& dst) {
 void MethodBlock::move_result(Location& dst, DexType* type) {
   always_assert(dst.is_compatible(type));
   auto ch = type_shorty(type);
-  assert(ch != 'V');
+  redex_assert(ch != 'V');
   IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_MOVE_RESULT_OBJECT;
@@ -341,7 +341,7 @@ void MethodBlock::instance_of(Location& obj, Location& dst, DexType* type) {
 
 void MethodBlock::ret(Location loc) {
   auto ch = type_shorty(loc.type);
-  assert(ch != 'V');
+  redex_assert(ch != 'V');
   IROpcode opcode;
   if (ch == 'L')
     opcode = OPCODE_RETURN_OBJECT;
@@ -493,7 +493,7 @@ MethodBlock* MethodBlock::if_else_testz(IROpcode if_op,
 
 MethodBlock* MethodBlock::switch_op(Location test,
                                     std::map<int, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   // Convert to SwitchIndices map.
   std::map<SwitchIndices, MethodBlock*> indices_cases;
@@ -514,7 +514,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
 
 MethodBlock* MethodBlock::switch_op(
     Location test, std::map<SwitchIndices, MethodBlock*>& cases) {
-  auto sw_opcode = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw_opcode = new IRInstruction(OPCODE_SWITCH);
   sw_opcode->set_src(0, test.get_reg());
   return make_switch_block(sw_opcode, cases);
 }
@@ -711,8 +711,8 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
                                            DexProto* proto,
                                            DexMethod* meth,
                                            DexClass* target_cls) {
-  assert(!is_static(meth));
-  assert(!is_init(meth) && !is_clinit(meth));
+  redex_assert(!is_static(meth));
+  redex_assert(!is_init(meth) && !is_clinit(meth));
   auto smeth = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(

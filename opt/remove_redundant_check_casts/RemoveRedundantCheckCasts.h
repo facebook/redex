@@ -7,8 +7,6 @@
 
 #pragma once
 
-#include <unordered_set>
-
 #include "Pass.h"
 
 namespace check_casts {
@@ -17,11 +15,7 @@ class RemoveRedundantCheckCastsPass : public Pass {
  public:
   RemoveRedundantCheckCastsPass() : Pass("RemoveRedundantCheckCastsPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override{};
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  size_t remove_redundant_check_casts(DexMethod* method);
 };
 
 } // namespace check_casts

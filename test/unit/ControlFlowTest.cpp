@@ -553,7 +553,7 @@ TEST(ControlFlow, remove_non_branch) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 
@@ -579,7 +579,7 @@ void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 }
@@ -709,7 +709,7 @@ TEST(ControlFlow, remove_all_but_return) {
 TEST(ControlFlow, remove_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
 
       (:exit)
       (return-void)
@@ -726,7 +726,7 @@ TEST(ControlFlow, remove_switch) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -741,7 +741,7 @@ TEST(ControlFlow, remove_switch) {
 TEST(ControlFlow, remove_switch2) {
   auto code = assembler::ircode_from_string(R"(
     (
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
       (goto :exit)
 
       (:a 0)
@@ -759,7 +759,7 @@ TEST(ControlFlow, remove_switch2) {
 
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SPARSE_SWITCH; });
+  delete_if(cfg, [](IROpcode op) { return op == OPCODE_SWITCH; });
   code->clear_cfg();
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -778,7 +778,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
       (const v0 1)
       (if-eqz v0 :end)
 
-      (sparse-switch v0 (:a :b))
+      (switch v0 (:a :b))
 
       (:b 1)
       (const v0 2)
@@ -803,7 +803,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
       (const v0 1)
       (if-eqz v0 :end)
 
-      (sparse-switch v0 (:b))
+      (switch v0 (:b))
 
       (:b 1)
       (const v0 2)
@@ -907,7 +907,7 @@ TEST(ControlFlow, remove_sget) {
   }
 
   for (auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 
@@ -993,7 +993,7 @@ TEST(ControlFlow, empty_first_block) {
     }
   }
   for (const auto& it : to_delete) {
-    cfg.remove_opcode(it);
+    cfg.remove_insn(it);
   }
   cfg.recompute_registers_size();
 
@@ -1213,6 +1213,27 @@ TEST(ControlFlow, simple_push_back) {
   }
 }
 
+TEST(ControlFlow, simple_push_back_it) {
+  ControlFlowGraph cfg{};
+  Block* entry = cfg.create_block();
+  cfg.set_entry_block(entry);
+
+  std::deque<IRInstruction*> to_insert;
+  for (int i = 0; i < 5; i++) {
+    auto insn = new IRInstruction(OPCODE_CONST);
+    insn->set_literal(i);
+    insn->set_dest(cfg.allocate_temp());
+    to_insert.push_back(insn);
+  }
+  entry->push_back(to_insert.begin(), to_insert.end());
+  cfg.sanity_check();
+  for (Block* b : cfg.blocks()) {
+    for (const auto& mie : ir_list::InstructionIterable(*b)) {
+      always_assert(mie.insn->opcode() == OPCODE_CONST);
+    }
+  }
+}
+
 TEST(ControlFlow, simple_push_front) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
@@ -1222,6 +1243,27 @@ TEST(ControlFlow, simple_push_front) {
   for (Block* b : cfg.blocks()) {
     for (const auto& mie : ir_list::InstructionIterable(*b)) {
       always_assert(mie.insn->opcode() == OPCODE_RETURN_VOID);
+    }
+  }
+}
+
+TEST(ControlFlow, simple_push_front_it) {
+  ControlFlowGraph cfg{};
+  Block* entry = cfg.create_block();
+  cfg.set_entry_block(entry);
+
+  std::deque<IRInstruction*> to_insert;
+  for (int i = 0; i < 5; i++) {
+    auto insn = new IRInstruction(OPCODE_CONST);
+    insn->set_literal(i);
+    insn->set_dest(cfg.allocate_temp());
+    to_insert.push_back(insn);
+  }
+  entry->push_front(to_insert.begin(), to_insert.end());
+  cfg.sanity_check();
+  for (Block* b : cfg.blocks()) {
+    for (const auto& mie : ir_list::InstructionIterable(*b)) {
+      always_assert(mie.insn->opcode() == OPCODE_CONST);
     }
   }
 }
@@ -1274,6 +1316,176 @@ TEST(ControlFlow, insertion) {
       (const v2 2)
       (add-int/lit8 v2 v2 1)
       (goto :exit)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, insertion_it) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (goto :exit)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  IRInstruction add{OPCODE_ADD_INT_LIT8};
+  add.set_literal(1);
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_const(insn->opcode())) {
+      auto new_insn = new IRInstruction(add);
+      new_insn->set_src(0, insn->dest());
+      new_insn->set_dest(insn->dest());
+
+      std::vector<IRInstruction*> to_add{new IRInstruction(*new_insn),
+                                         new IRInstruction(*new_insn)};
+
+      cfg.insert_after(it, to_add.begin(), to_add.end());
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (add-int/lit8 v0 v0 1)
+      (add-int/lit8 v0 v0 1)
+      (if-eqz v0 :true)
+
+      (const v1 1)
+      (add-int/lit8 v1 v1 1)
+      (add-int/lit8 v1 v1 1)
+
+      (:exit)
+      (return-void)
+
+      (:true)
+      (const v2 2)
+      (add-int/lit8 v2 v2 1)
+      (add-int/lit8 v2 v2 1)
+      (goto :exit)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, insertion_after_may_throw) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_aput(insn->opcode())) {
+      auto new_insn = new IRInstruction(*insn);
+      cfg.insert_after(it, new_insn);
+      break;
+    }
+  }
+  code->clear_cfg();
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto insn = it->insn;
+    if (is_aput(insn->opcode())) {
+      std::vector<IRInstruction*> new_insns;
+      auto new_insn = new IRInstruction(OPCODE_DIV_INT);
+      new_insn->set_arg_word_count(2);
+      new_insn->set_src(0, 2);
+      new_insn->set_src(1, 2);
+      new_insns.push_back(new_insn);
+      new_insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      new_insn->set_dest(2);
+      new_insns.push_back(new_insn);
+      cfg.insert_after(it, new_insns);
+      break;
+    }
+  }
+  code->clear_cfg();
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param-object v0)
+      (load-param-object v1)
+      (load-param v2)
+
+      (.try_start foo)
+      (aput-object v0 v1 v2)
+      (div-int v2 v2)
+      (move-result-pseudo v2)
+      (return v1)
+      (.try_end foo)
+
+      (.catch (foo))
+      (const v1 0)
+      (return v1)
     )
   )");
   EXPECT_EQ(assembler::to_string(expected.get()),
@@ -1630,7 +1842,7 @@ TEST(ControlFlow, add_switch) {
   auto entry = cfg.entry_block();
   auto exit_block =
       cfg.split_block(entry->to_cfg_instruction_iterator(*entry->begin()));
-  auto sw = new IRInstruction(OPCODE_PACKED_SWITCH);
+  auto sw = new IRInstruction(OPCODE_SWITCH);
   sw->set_src(0, 0);
   cfg.create_branch(cfg.entry_block(),
                     sw,
@@ -1641,7 +1853,7 @@ TEST(ControlFlow, add_switch) {
   auto expected = assembler::ircode_from_string(R"(
     (
       (load-param v0)
-      (packed-switch v0 (:ten :twenty :thirty :forty))
+      (switch v0 (:ten :twenty :thirty :forty))
       (return v0)
 
       (:forty 3)
@@ -1659,6 +1871,237 @@ TEST(ControlFlow, add_switch) {
       (:ten 0)
       (const v1 10)
       (return v1)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, replace_insn_basic) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 0)
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto new_const = new IRInstruction(OPCODE_CONST);
+      new_const->set_literal(1);
+      new_const->set_dest(0);
+      auto new_const2 = new IRInstruction(OPCODE_CONST);
+      new_const2->set_literal(2);
+      new_const2->set_dest(0);
+      cfg.replace_insns(it, {new_const, new_const2});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v0 1)
+      (const v0 2)
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST(ControlFlow, replace_insn_may_throw) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (const v0 0)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_CONST) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.b:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      move_res->set_dest(0);
+      cfg.replace_insns(it, {sget, move_res});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (move-result-pseudo v0)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_insn_may_throw2) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sput v0 "LFoo;.a:I")
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_SPUT) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.a:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      move_res->set_dest(0);
+      cfg.replace_insns(it, {sget, move_res});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_insn_may_throw3) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.a:I")
+      (move-result-pseudo v0)
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_SGET) {
+      auto sget = new IRInstruction(OPCODE_SGET);
+      sget->set_field(DexField::make_field("LFoo;.b:I"));
+      auto move_res = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO);
+      auto temp = cfg.allocate_temp();
+      move_res->set_dest(temp);
+
+      auto sput = new IRInstruction(OPCODE_SPUT);
+      sput->set_field(DexField::make_field("LFoo;.a:I"));
+      sput->set_src(0, temp);
+      cfg.replace_insns(it, {sget, move_res, sput});
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.try_start a)
+      (sget "LFoo;.b:I")
+      (move-result-pseudo v1)
+      (sput v1 "LFoo;.a:I")
+      (return v0)
+      (.try_end a)
+
+      (.catch (a))
+      (return v0)
+    )
+  )");
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
+}
+
+TEST(ControlFlow, replace_if_with_return) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-gtz v0 :tru)
+
+      (const v1 1)
+      (return v1)
+
+      (:tru)
+      (const v2 2)
+      (return v2)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (is_conditional_branch(it->insn->opcode())) {
+      auto ret = new IRInstruction(OPCODE_RETURN);
+      ret->set_src(0, 0);
+      cfg.replace_insn(it, ret);
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (return v0)
     )
   )");
   EXPECT_EQ(assembler::to_string(expected.get()),

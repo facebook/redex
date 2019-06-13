@@ -19,7 +19,8 @@
 #include "Walkers.h"
 
 namespace {
-
+const std::string MERGE_INTERFACE_MAP_FILENAME =
+    "redex-merge-interface-mappings.txt";
 using DexClassSet = std::set<DexClass*, dexclasses_comparator>;
 
 // List of classes to List of interfaces they implemented
@@ -64,9 +65,9 @@ std::string show(const TypeSet& type_set) {
 
 std::vector<DexClassSet> collect_can_merge(
     const Scope& scope,
+    const TypeSystem& type_system,
     const std::vector<std::vector<DexClass*>>& classes_groups,
     MergeInterfacePass::Metric* metric) {
-  TypeSystem ts(scope);
   std::vector<DexClassSet> interface_set;
   for (const auto& classes_group : classes_groups) {
     // Build the map of interfaces and list of classes that implement
@@ -82,11 +83,13 @@ std::vector<DexClassSet> collect_can_merge(
     }
     for (const auto& cls : ifaces) {
       TRACE(MEINT, 7, "interfaces: %p\n", cls->get_type());
-      const TypeSet& implementors = ts.get_implementors(cls->get_type());
+      const TypeSet& implementors =
+          type_system.get_implementors(cls->get_type());
       TRACE(MEINT, 7, "implementors : ");
       TRACE(MEINT, 7, SHOW(implementors));
       // Need to find common interfaces that implement this interface too.
-      const TypeSet& intf_children = ts.get_interface_children(cls->get_type());
+      const TypeSet& intf_children =
+          type_system.get_interface_children(cls->get_type());
       TRACE(MEINT, 7, "children intfs : ");
       TRACE(MEINT, 7, SHOW(intf_children));
       TypeSet implementors_and_intfs;
@@ -175,8 +178,7 @@ void strip_out_collision(const Scope& scope,
         !type_reference::proto_has_reference_to(proto, mergeables)) {
       return;
     }
-    DexProto* new_proto =
-        type_reference::update_proto_reference(proto, intf_merge_map);
+    DexProto* new_proto = type_reference::get_new_proto(proto, intf_merge_map);
     DexType* type = meth->get_class();
     DexString* name = meth->get_name();
     DexMethodRef* existing_meth = DexMethod::get_method(type, name, new_proto);
@@ -554,9 +556,10 @@ void remove_implements(
 void update_after_merge(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& intf_merge_map,
-    const std::unordered_map<DexMethodRef*, DexMethodRef*>& old_to_new_method) {
-  type_reference::update_method_signature_type_references(scope,
-                                                          intf_merge_map);
+    const std::unordered_map<DexMethodRef*, DexMethodRef*>& old_to_new_method,
+    const ClassHierarchy& ch) {
+  type_reference::update_method_signature_type_references(scope, intf_merge_map,
+                                                          ch);
   type_reference::update_field_type_references(scope, intf_merge_map);
   update_reference_for_code(scope, intf_merge_map, old_to_new_method);
   remove_implements(scope, intf_merge_map);
@@ -598,7 +601,7 @@ void write_interface_merging_mapping_file(
 } // namespace
 
 void MergeInterfacePass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles& cfg,
+                                  ConfigFiles& conf,
                                   PassManager& mgr) {
   // Merging interfaces that are in seperate stores, or merging interfaces that
   // some are in primary dex and some are in secondary dexes will cause
@@ -634,19 +637,22 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
   }
 
   auto scope = build_class_scope(stores);
+  TypeSystem type_system(scope);
 
-  auto can_merge = collect_can_merge(scope, classes_groups, &m_metric);
+  auto can_merge =
+      collect_can_merge(scope, type_system, classes_groups, &m_metric);
   // Remove interfaces that if merged could cause virtual method collision
   strip_out_collision(scope, &can_merge);
   strip_out_dmethod_relo_problem_intf(scope, &can_merge);
   std::unordered_map<DexMethodRef*, DexMethodRef*> old_to_new_method;
   auto intf_merge_map =
       merge_interfaces(can_merge, &m_metric, &old_to_new_method);
-  update_after_merge(scope, intf_merge_map, old_to_new_method);
+  auto& ch = type_system.get_class_scopes().get_parent_to_children();
+  update_after_merge(scope, intf_merge_map, old_to_new_method, ch);
   remove_merged_interfaces(scope, intf_merge_map);
   post_dexen_changes(scope, stores);
   write_interface_merging_mapping_file(
-      intf_merge_map, cfg.metafile(m_merged_interface_mapping_file));
+      intf_merge_map, conf.metafile(MERGE_INTERFACE_MAP_FILENAME));
 
   mgr.set_metric("num_mergeable_interfaces", m_metric.interfaces_to_merge);
   mgr.set_metric("num_created_interfaces", m_metric.interfaces_created);

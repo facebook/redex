@@ -19,9 +19,9 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "DexUtil.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -42,12 +42,10 @@ static bool has_side_effects(IROpcode opc) {
   case OPCODE_RETURN_OBJECT:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
-  case OPCODE_CHECK_CAST:
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_THROW:
   case OPCODE_GOTO:
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
@@ -130,6 +128,45 @@ void update_liveness(const IRInstruction* inst,
   }
 }
 
+ConcurrentSet<DexMethod*> get_no_implementor_abstract_methods(
+    const Scope& scope) {
+  ConcurrentSet<DexMethod*> method_set;
+  ClassScopes cs(scope);
+  TypeSystem ts(scope);
+  // Find non-interface abstract methods that have no implementation.
+  walk::parallel::methods(scope, [&method_set, &cs](DexMethod* method) {
+    DexClass* method_cls = type_class(method->get_class());
+    if (!is_abstract(method) || method->is_external() || method->get_code() ||
+        !method_cls || is_interface(method_cls)) {
+      return;
+    }
+    const auto& virtual_scope = cs.find_virtual_scope(method);
+    if (virtual_scope.methods.size() == 1 && !root(method)) {
+      always_assert_log(virtual_scope.methods[0].first == method,
+                        "LocalDCE: abstract method not in its virtual scope, "
+                        "virtual scope must be problematic");
+      method_set.emplace(method);
+    }
+  });
+
+  // Find methods of interfaces that have no implementor/interface children.
+  walk::parallel::classes(scope, [&method_set, &ts](DexClass* cls) {
+    if (!is_interface(cls) || cls->is_external()) {
+      return;
+    }
+    DexType* cls_type = cls->get_type();
+    if (ts.get_implementors(cls_type).size() == 0 &&
+        ts.get_interface_children(cls_type).size() == 0) {
+      for (auto method : cls->get_vmethods()) {
+        if (is_abstract(method)) {
+          method_set.emplace(method);
+        }
+      }
+    }
+  });
+  return method_set;
+}
+
 } // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -137,7 +174,7 @@ void update_liveness(const IRInstruction* inst,
 void LocalDce::dce(IRCode* code) {
   code->build_cfg(/* editable */ true);
   auto& cfg = code->cfg();
-  auto blocks = cfg::postorder_sort(cfg.blocks());
+  const auto& blocks = cfg.blocks_post();
   auto regs = code->get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : blocks) {
@@ -177,7 +214,7 @@ void LocalDce::dce(IRCode* code) {
         if (it->type != MFLOW_OPCODE) {
           continue;
         }
-        bool required = is_required(it->insn, bliveness);
+        bool required = is_required(cfg, b, it->insn, bliveness);
         if (required) {
           update_liveness(it->insn, bliveness);
         } else {
@@ -210,7 +247,7 @@ void LocalDce::dce(IRCode* code) {
     }
     TRACE(DCE, 2, "DEAD: %s\n", SHOW(it->insn));
     seen.emplace(it->insn);
-    b->remove_opcode(it);
+    b->remove_insn(it);
   }
   auto unreachable_insn_count = cfg.remove_unreachable_blocks();
   cfg.recompute_registers_size();
@@ -227,7 +264,9 @@ void LocalDce::dce(IRCode* code) {
  * An instruction is required (i.e., live) if it has side effects or if its
  * destination register is live.
  */
-bool LocalDce::is_required(IRInstruction* inst,
+bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
+                           cfg::Block* b,
+                           IRInstruction* inst,
                            const boost::dynamic_bitset<>& bliveness) {
   if (has_side_effects(inst->opcode())) {
     if (is_invoke(inst->opcode())) {
@@ -240,6 +279,22 @@ bool LocalDce::is_required(IRInstruction* inst,
         return true;
       }
       return bliveness.test(bliveness.size() - 1);
+    } else if (is_conditional_branch(inst->opcode())) {
+      cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+      cfg::Edge* branch_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_BRANCH);
+      always_assert(goto_edge != nullptr);
+      always_assert(branch_edge != nullptr);
+      return goto_edge->target() != branch_edge->target();
+    } else if (is_switch(inst->opcode())) {
+      cfg::Edge* goto_edge = cfg.get_succ_edge_of_type(b, cfg::EDGE_GOTO);
+      always_assert(goto_edge != nullptr);
+      auto branch_edges = cfg.get_succ_edges_of_type(b, cfg::EDGE_BRANCH);
+      for (cfg::Edge* branch_edge : branch_edges) {
+        if (goto_edge->target() != branch_edge->target()) {
+          return true;
+        }
+      }
+      return false;
     }
     return true;
   } else if (inst->dests_size()) {
@@ -265,7 +320,7 @@ void LocalDcePass::run(IRCode* code) {
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& cfg,
+                            ConfigFiles& /* conf */,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DCE, 1,
@@ -273,8 +328,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
           "provided.\n");
     return;
   }
-  const auto& pure_methods = find_pure_methods();
   auto scope = build_class_scope(stores);
+  const auto& pure_methods = find_no_sideeffect_methods(scope);
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
       [&](DexMethod* m) {
@@ -310,6 +365,20 @@ std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
   std::unordered_set<DexMethodRef*> pure_methods;
   pure_methods.emplace(DexMethod::make_method(
       "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
+  return pure_methods;
+}
+
+std::unordered_set<DexMethodRef*> LocalDcePass::find_no_sideeffect_methods(
+    const Scope& scope) {
+  auto pure_methods = find_pure_methods();
+  if (no_implementor_abstract_is_pure) {
+    // Find abstract methods that have no implementors
+    ConcurrentSet<DexMethod*> concurrent_method_set =
+        get_no_implementor_abstract_methods(scope);
+    for (auto method : concurrent_method_set) {
+      pure_methods.emplace(method);
+    }
+  }
   return pure_methods;
 }
 

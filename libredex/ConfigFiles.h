@@ -15,50 +15,13 @@
 #include <json/json.h>
 
 #include "DexClass.h"
+#include "InlinerConfig.h"
+#include "JsonWrapper.h"
 #include "ProguardMap.h"
 
 class DexType;
 using MethodTuple = std::tuple<DexString*, DexString*, DexString*>;
 using MethodMap = std::map<MethodTuple, DexClass*>;
-
-class JsonWrapper {
- public:
-  explicit JsonWrapper(const Json::Value& cfg) : m_config(cfg) {}
-
-  void get(const char* name, int64_t dflt, int64_t& param) const;
-
-  void get(const char* name, size_t dflt, size_t& param) const;
-
-  void get(const char* name, const std::string& dflt, std::string& param) const;
-
-  const std::string get(const char* name, const std::string& dflt) const;
-
-  void get(const char* name, bool dflt, bool& param) const;
-
-  bool get(const char* name, bool dflt) const;
-
-  void get(const char* name,
-           const std::vector<std::string>& dflt,
-           std::vector<std::string>& param) const;
-
-  void get(const char* name,
-           const std::vector<std::string>& dflt,
-           std::unordered_set<std::string>& param) const;
-
-  void get(
-      const char* name,
-      const std::unordered_map<std::string, std::vector<std::string>>& dflt,
-      std::unordered_map<std::string, std::vector<std::string>>& param) const;
-
-  void get(const char* name, const Json::Value dflt, Json::Value& param) const;
-
-  const Json::Value get(const char* name, const Json::Value dflt) const;
-
-  const Json::Value& operator[](const char* name) const;
-
- private:
-  const Json::Value m_config;
-};
 
 /**
  * ConfigFiles should be a readonly structure
@@ -115,23 +78,11 @@ struct ConfigFiles {
     return m_method_sorting_whitelisted_substrings;
   }
 
-  bool save_move_map() const { return m_move_map; }
-
-  const MethodMap& get_moved_methods_map() const {
-    return m_moved_methods_map;
-  }
-
-  /* DEPRECATED! */
-  void add_moved_methods(MethodTuple mt, DexClass* cls) {
-    m_move_map = true;
-    m_moved_methods_map[mt] = cls;
-  }
-
   std::string metafile(const std::string& basename) const {
     if (basename.empty()) {
       return std::string();
     }
-    return outdir + '/' + basename;
+    return outdir + "/meta/" + basename;
   }
 
   std::string get_outdir() const {
@@ -150,6 +101,24 @@ struct ConfigFiles {
 
   const JsonWrapper& get_json_config() const { return m_json; }
 
+  /**
+   * Get the global inliner config from the "inliner" section. If there is not
+   * such section, will also look up "MethodInlinePass" section for backward
+   * compatibility.
+   */
+  const inliner::InlinerConfig& get_inliner_config() {
+    if (m_inliner_config == nullptr) {
+      m_inliner_config = std::make_unique<inliner::InlinerConfig>();
+      load_inliner_config(m_inliner_config.get());
+    }
+    return *m_inliner_config.get();
+  }
+
+  /**
+   * Load configurations with the initial scope.
+   */
+  void load(const Scope& scope);
+
  private:
   JsonWrapper m_json;
   std::string outdir;
@@ -159,11 +128,10 @@ struct ConfigFiles {
   std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
   void load_method_to_weight();
   void load_method_sorting_whitelisted_substrings();
+  void load_inliner_config(inliner::InlinerConfig*);
 
-  bool m_move_map{false};
   bool m_load_class_lists_attempted{false};
   ProguardMap m_proguard_map;
-  MethodMap m_moved_methods_map;
   std::string m_coldstart_class_filename;
   std::string m_coldstart_method_filename;
   std::string m_profiled_methods_filename;
@@ -180,4 +148,6 @@ struct ConfigFiles {
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;
+  // Global inliner config.
+  std::unique_ptr<inliner::InlinerConfig> m_inliner_config{nullptr};
 };

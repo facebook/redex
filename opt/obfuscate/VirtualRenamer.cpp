@@ -183,7 +183,7 @@ struct VirtualRenamer {
  * Rename a given method with the given name.
  */
 void VirtualRenamer::rename(DexMethodRef* meth, DexString* name) {
-  //assert(meth->is_concrete() && !meth->is_external());
+  // redex_assert(meth->is_concrete() && !meth->is_external());
   DexMethodSpec spec;
   spec.cls = meth->get_class();
   spec.name = name;
@@ -249,7 +249,7 @@ int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
       TRACE(OBFUSCATE, 2, "not concrete %s\n", SHOW(vmeth.first));
     }
   }
-  assert(scope->methods.size() > 0);
+  redex_assert(scope->methods.size() > 0);
   rename_scope_ref(scope->methods[0].first, name);
   return renamed;
 }
@@ -327,7 +327,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
         TRACE(OBFUSCATE, 5, "Got %ld scopes for %s%s\n",
             scopes.size(), SHOW(name), SHOW(proto));
         for (auto& scope : scopes) {
-          assert(type_class(scope->type) != nullptr);
+          redex_assert(type_class(scope->type) != nullptr);
           if (type_class(scope->type)->is_external()) {
             TRACE(OBFUSCATE, 5,
                 "External impl scope %s\n", SHOW(scope->methods[0].first));
@@ -353,9 +353,9 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
         // if any interface method that we are about to rename
         // cannot be renamed give up
         for (const auto& intf : intfs) {
-          assert(type_class(intf) != nullptr);
+          redex_assert(type_class(intf) != nullptr);
           const auto meth = find_method(type_class(intf), name, proto);
-          assert(meth != nullptr);
+          redex_assert(meth != nullptr);
           if (!can_rename(meth)) {
             TRACE(OBFUSCATE, 5, "Cannot rename %s\n", SHOW(meth));
             return;
@@ -371,7 +371,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
         // rename interface method only
         for (const auto& intf : intfs) {
           auto intf_cls = type_class(intf);
-          assert(intf_cls != nullptr);
+          redex_assert(intf_cls != nullptr);
           auto intf_meth =
               find_method(intf_cls, name, proto);
           always_assert_log(intf_meth != nullptr,
@@ -463,7 +463,7 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
         }
       }
       if (top == nullptr || top == callee) return;
-      assert(type_class(top->get_class()) != nullptr);
+      redex_assert(type_class(top->get_class()) != nullptr);
       if (type_class(top->get_class())->is_external()) return;
       // it's a top definition on an internal class, save it
       def_refs[top].insert(callee);

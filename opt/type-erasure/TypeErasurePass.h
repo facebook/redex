@@ -20,7 +20,7 @@ class TypeErasurePass : public Pass {
   TypeErasurePass() : Pass("TypeErasurePass") {}
   explicit TypeErasurePass(const char* name) : Pass(name) {}
 
-  void configure_pass(const JsonWrapper& jw) override;
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  protected:
@@ -37,5 +37,5 @@ class TypeErasurePass : public Pass {
                    Scope& scope,
                    PassManager& mgr,
                    DexStoresVector& stores,
-                   ConfigFiles& cfg);
+                   ConfigFiles& conf);
 };

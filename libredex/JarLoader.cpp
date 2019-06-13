@@ -417,8 +417,12 @@ static bool parse_class(uint8_t* buffer,
 
       // There are still blocking issues in instrumentation test that are
       // blocking. We can make this throw again once they are fixed.
-      // throw duplicate_class(SHOW(self), jar_location,
-      //                      cls->get_location());
+
+      // throw RedexException(RedexError::DUPLICATE_CLASSES,
+      //                      "Found duplicate class in two different files.",
+      //                      {{"class", SHOW(self)},
+      //                       {"dex1", jar_location},
+      //                       {"dex2", cls->get_location()}});
     }
     return true;
   }
@@ -834,8 +838,9 @@ bool load_jar_file(const char* location,
                    Scope* classes,
                    attribute_hook_t attr_hook) {
   boost::iostreams::mapped_file file;
-  file.open(location, boost::iostreams::mapped_file::readonly);
-  if (!file.is_open()) {
+  try {
+    file.open(location, boost::iostreams::mapped_file::readonly);
+  } catch (const std::exception& e) {
     fprintf(stderr, "error: cannot open jar file: %s\n", location);
     return false;
   }

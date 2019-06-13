@@ -19,9 +19,14 @@ class ConstantPropagationPass : public Pass {
 
   ConstantPropagationPass() : Pass("ConstantPropagationPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override;
+  void bind_config() override {
+    bind("replace_moves_with_consts",
+         true,
+         m_config.transform.replace_moves_with_consts);
+  }
+
   void run_pass(DexStoresVector& stores,
-                ConfigFiles& cfg,
+                ConfigFiles& conf,
                 PassManager& mgr) override;
 
  private:

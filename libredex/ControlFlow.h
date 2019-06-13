@@ -228,8 +228,9 @@ class Block final {
 
   bool same_try(const Block* other) const;
 
-  void remove_opcode(const ir_list::InstructionIterator&);
-  void remove_opcode(const IRList::iterator& it);
+  void remove_insn(const InstructionIterator& it);
+  void remove_insn(const ir_list::InstructionIterator& it);
+  void remove_insn(const IRList::iterator& it);
 
   opcode::Branchingness branchingness();
 
@@ -248,9 +249,12 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
-  // If this block has a single outgoing goto edge, return the target.
+  // If this block has a single outgoing edge and it is a goto, return its
+  // target. Otherwise, return nullptr
+  Block* goes_to_only_edge() const;
+  // If this block has an outgoing goto edge, return its target.
   // Otherwise, return nullptr
-  Block* follow_goto() const;
+  Block* goes_to() const;
 
   // TODO?: Should we just always store the throws in index order?
   std::vector<Edge*> get_outgoing_throws_in_order() const;
@@ -268,14 +272,33 @@ class Block final {
   InstructionIterator to_cfg_instruction_iterator(MethodItemEntry& mie);
 
   // These forward to implementations in ControlFlowGraph, See comment there
+  template <class ForwardIt>
+  bool insert_before(const InstructionIterator& position,
+                     const ForwardIt& begin,
+                     const ForwardIt& end);
+
   bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
+
   bool insert_before(const InstructionIterator& position, IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool insert_after(const InstructionIterator& position,
+                    const ForwardIt& begin,
+                    const ForwardIt& end);
+
   bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
+
   bool insert_after(const InstructionIterator& position, IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool push_front(const ForwardIt& begin, const ForwardIt& end);
   bool push_front(const std::vector<IRInstruction*>& insns);
   bool push_front(IRInstruction* insn);
+
+  template <class ForwardIt>
+  bool push_back(const ForwardIt& begin, const ForwardIt& end);
   bool push_back(const std::vector<IRInstruction*>& insns);
   bool push_back(IRInstruction* insn);
 
@@ -333,16 +356,25 @@ class ControlFlowGraph {
    */
   IRList* linearize();
 
-  // TODO: this copies blocks, but it should probably offer a read-only view
-  // into the blocks map instead.
+  // Return the blocks of this CFG in an arbitrary order.
   //
+  // NOTE: this function copies pointers to blocks from m_blocks.
   // If a block is created or destroyed while we're iterating on a copy, the
   // copy is now stale. That stale copy may have a pointer to a deleted block or
   // it may be incomplete (not iterating over the newly creating block).
   //
-  // A read-only view would be better because block creation and destruction
-  // operations don't invalidate std::map iterators.
+  // TODO: We should probably have an API to offer iterators into the blocks map
+  // instead for reads or some mutations since insertion and erasure of elements
+  // stored in std::map will not invalidate the iterators referencing other
+  // elements.
   std::vector<Block*> blocks() const;
+
+  // Return vector of blocks in reverse post order (RPO). If there is a path
+  // from Block A to Block B, then A appears before B in this vector.
+  std::vector<Block*> blocks_reverse_post() const;
+  // Return vector of blocks in post order (PO). If there is a path
+  // from Block A to Block B, then A appears after B in this vector.
+  std::vector<Block*> blocks_post() const;
 
   Block* create_block();
 
@@ -351,10 +383,8 @@ class ControlFlowGraph {
   // outgoing edges
   Block* duplicate_block(Block* original);
 
-  const Block* entry_block() const { return m_entry_block; }
-  const Block* exit_block() const { return m_exit_block; }
-  Block* entry_block() { return m_entry_block; }
-  Block* exit_block() { return m_exit_block; }
+  Block* entry_block() const { return m_entry_block; }
+  Block* exit_block() const { return m_exit_block; }
   void set_entry_block(Block* b) { m_entry_block = b; }
   void set_exit_block(Block* b) { m_exit_block = b; }
 
@@ -391,6 +421,9 @@ class ControlFlowGraph {
     e->src()->m_succs.emplace_back(e);
     e->target()->m_preds.emplace_back(e);
   }
+
+  // copies all edges of a certain type from one block to another
+  void copy_succ_edges(Block* from, Block* to, EdgeType type);
 
   using EdgeSet = std::unordered_set<Edge*>;
 
@@ -507,7 +540,7 @@ class ControlFlowGraph {
   //
   // If `it` points to a branch instruction, remove the corresponding outgoing
   // edges.
-  void remove_opcode(const InstructionIterator& it);
+  void remove_insn(const InstructionIterator& it);
 
   // Insertion Methods (insert_before/after and push_front/back):
   //  * These methods add instructions to the CFG
@@ -529,19 +562,58 @@ class ControlFlowGraph {
   //   false means that iterators are still valid
   bool insert_before(const InstructionIterator& position,
                      const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool insert_before(const InstructionIterator& position,
+                     const ForwardIt& begin,
+                     const ForwardIt& end) {
+    return insert(position, begin, end, /* before */ true);
+  }
   // insert insns after position
   bool insert_after(const InstructionIterator& position,
                     const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool insert_after(const InstructionIterator& position,
+                    const ForwardIt& begin,
+                    const ForwardIt& end) {
+    return insert(position, begin, end, /* before */ false);
+  }
+
   // insert insns at the beginning of block b
   bool push_front(Block* b, const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool push_front(Block* b, const ForwardIt& begin, const ForwardIt& end);
+
   // insert insns at the end of block b
   bool push_back(Block* b, const std::vector<IRInstruction*>& insns);
+
+  template <class ForwardIt>
+  bool push_back(Block* b, const ForwardIt& begin, const ForwardIt& end);
 
   // Convenience functions that add just one instruction.
   bool insert_before(const InstructionIterator& position, IRInstruction* insn);
   bool insert_after(const InstructionIterator& position, IRInstruction* insn);
   bool push_front(Block* b, IRInstruction* insn);
   bool push_back(Block* b, IRInstruction* insn);
+
+  // Replace one IRInstruction with some number of new instructions
+  // * None of the new instructions can be an if or goto
+  // * Returns a boolean indicating whether or not InstructionIterators were
+  //   invalidated (see insertion methods for more details)
+  // * The throw edges of the block that contains `it` are copied and used as
+  //   the throw edges of any new `may_throw` instructions
+  // * If the old instruction has a move-result(-pseudo) it will also be
+  //   removed. When adding instructions that may-throw, you should include
+  //   move-result(-pseudo)s for them.
+  bool replace_insn(const InstructionIterator& it, IRInstruction* insn);
+  template <class ForwardIt>
+  bool replace_insns(const InstructionIterator& it,
+                     const ForwardIt& begin,
+                     const ForwardIt& end);
+  bool replace_insns(const InstructionIterator& it,
+                     const std::vector<IRInstruction*>& insns);
 
   // Create a conditional branch, which consists of:
   // * inserting an `if` instruction at the end of b
@@ -641,6 +713,9 @@ class ControlFlowGraph {
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
 
+  cfg::InstructionIterator primary_instruction_of_move_result(
+      const cfg::InstructionIterator& it);
+
   cfg::InstructionIterator move_result_of(const cfg::InstructionIterator& it);
 
   /*
@@ -650,7 +725,7 @@ class ControlFlowGraph {
 
   // Search all the instructions in this CFG for the given one. Return an
   // iterator to it, or end, if it isn't in the graph.
-  InstructionIterator find_insn(IRInstruction* insn);
+  InstructionIterator find_insn(IRInstruction* insn, Block* hint = nullptr);
 
   // choose an order of blocks for output
   std::vector<Block*> order();
@@ -748,8 +823,10 @@ class ControlFlowGraph {
   // block
   void no_unreferenced_edges() const;
 
+  template <class ForwardIt>
   bool insert(const InstructionIterator& position,
-              const std::vector<IRInstruction*>& insns,
+              const ForwardIt& begin_index,
+              const ForwardIt& end_index,
               bool before);
 
   // remove_..._edge:
@@ -893,6 +970,8 @@ class ControlFlowGraph {
 
   // Return the next unused block identifier
   BlockId next_block_id() const;
+
+  std::vector<Block*> blocks_post_helper(bool reverse) const;
 
   // The memory of all blocks and edges in this graph are owned here
   Blocks m_blocks;
@@ -1083,11 +1162,187 @@ class InstructionIterableImpl {
   bool empty() { return begin() == end(); }
 };
 
-/*
- * Build a postorder sorted vector of blocks from the given CFG. Uses a
- * standard depth-first search with a side table of already-visited nodes.
- */
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg);
+template <class ForwardIt>
+bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
+                                     const ForwardIt& begin,
+                                     const ForwardIt& end) {
+  always_assert(m_editable);
+
+  // Save these values before we insert in case the insertion causes iterator
+  // invalidation.
+  auto orig_block = it.block();
+  auto insn_to_del = it->insn;
+
+  bool invalidated = insert(it, begin, end, true /* before */);
+  if (invalidated) {
+    const auto& found = find_insn(insn_to_del);
+    if (!found.is_end()) {
+      remove_insn(found);
+    }
+    // If find_insn can't find `insn_to_del` it was most likely removed by
+    // `insert`. This happens when a throw or return is added to the block
+    // because the remaining code in the block is removed.
+  } else {
+    remove_insn(it);
+  }
+  return invalidated;
+}
+
+template <class ForwardIt>
+bool ControlFlowGraph::insert(const InstructionIterator& position,
+                              const ForwardIt& begin_index,
+                              const ForwardIt& end_index,
+                              bool before) {
+  // Convert to the before case by moving the position forward one.
+  Block* b = position.block();
+  if (position.unwrap() == b->end()) {
+    always_assert_log(before, "can't insert after the end");
+  }
+  IRList::iterator pos =
+      before ? position.unwrap() : std::next(position.unwrap());
+
+  bool invalidated_its = false;
+  for (auto insns_it = begin_index; insns_it != end_index; insns_it++) {
+    IRInstruction* insn = *insns_it;
+    const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
+    auto op = insn->opcode();
+
+    // Certain types of blocks cannot have instructions added to the end.
+    // Disallow that case here.
+    if (pos == b->end()) {
+      auto existing_last = b->get_last_insn();
+      if (existing_last != b->end()) {
+        // This will abort if someone tries to insert after a returning or
+        // throwing instruction.
+        auto existing_last_op = existing_last->insn->opcode();
+        always_assert_log(!is_branch(existing_last_op) &&
+                              !is_throw(existing_last_op) &&
+                              !is_return(existing_last_op),
+                          "Can't add instructions after %s in Block %d in %s",
+                          SHOW(existing_last->insn), b->id(), SHOW(*this));
+
+        // When inserting after an instruction that may throw, we need to start
+        // a new block. We also copy over all throw-edges. See FIXME below for
+        // a discussion about try-regions in general.
+        if (!throws.empty()) {
+          always_assert_log(!existing_last->insn->has_move_result(),
+                            "Can't add instructions after throwing instruction "
+                            "%s with move-result in Block %d in %s",
+                            SHOW(existing_last->insn), b->id(), SHOW(*this));
+          Block* new_block = create_block();
+          if (opcode::may_throw(op)) {
+            copy_succ_edges(b, new_block, EDGE_THROW);
+          }
+          const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
+          set_edge_source(existing_goto_edge, new_block);
+          add_edge(b, new_block, EDGE_GOTO);
+          // Continue inserting in the new block.
+          b = new_block;
+          pos = new_block->begin();
+        }
+      }
+    }
+
+    always_assert_log(!is_branch(op),
+                      "insert() does not support branch opcodes. Use "
+                      "create_branch() instead");
+
+    IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
+
+    if (is_throw(op) || is_return(op)) {
+      // Throw and return end the block, we must remove all code after them.
+      always_assert(std::next(insns_it) == end_index);
+      for (auto it = pos; it != b->m_entries.end();) {
+        it = b->m_entries.erase_and_dispose(it);
+        invalidated_its = true;
+      }
+      if (is_return(op)) {
+        // This block now ends in a return, it must have no successors.
+        delete_succ_edge_if(
+            b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
+      } else {
+        always_assert(is_throw(op));
+        // The only valid way to leave this block is via a throw edge.
+        delete_succ_edge_if(b, [](const Edge* e) {
+          return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
+        });
+      }
+      // If this created unreachable blocks, they will be removed by simplify.
+    } else if (opcode::may_throw(op) && !throws.empty()) {
+      invalidated_its = true;
+      // FIXME: Copying the outgoing throw edges isn't enough.
+      // When the editable CFG is constructed, we transform the try regions
+      // into throw edges. We only add these edges to blocks that may throw,
+      // thus losing the knowledge of which blocks were originally inside a
+      // try region. If we add a new throwing instruction here. It may be
+      // added to a block that was originally inside a try region, but we lost
+      // that information already.
+      //
+      // Possible Solutions:
+      // * Rework throw representation to regions instead of duplicated edges?
+      // * User gives a block that we want to copy the throw edges from?
+      // * User specifies which throw edges they want and to which blocks?
+
+      // Split the block after the new instruction.
+      // b has become the predecessor of the new split pair
+      Block* succ =
+          split_block(b->to_cfg_instruction_iterator(new_inserted_it));
+
+      if (!succ->empty()) {
+        // Copy the outgoing throw edges of the new block back into the original
+        // block
+        copy_succ_edges(succ, b, EDGE_THROW);
+      }
+
+      // Continue inserting in the successor block.
+      b = succ;
+      pos = succ->begin();
+    }
+  }
+  return invalidated_its;
+}
+
+template <class ForwardIt>
+bool ControlFlowGraph::push_front(Block* b,
+                                  const ForwardIt& begin,
+                                  const ForwardIt& end) {
+  const auto& block_begin = ir_list::InstructionIterable(b).begin();
+  return insert(b->to_cfg_instruction_iterator(block_begin), begin, end,
+                /* before */ true);
+}
+
+template <class ForwardIt>
+bool ControlFlowGraph::push_back(Block* b,
+                                 const ForwardIt& begin,
+                                 const ForwardIt& end) {
+  const auto& block_end = ir_list::InstructionIterable(b).end();
+  return insert(b->to_cfg_instruction_iterator(block_end), begin, end,
+                /* before */ true);
+}
+
+template <class ForwardIt>
+bool Block::insert_before(const InstructionIterator& position,
+                          const ForwardIt& begin,
+                          const ForwardIt& end) {
+  return m_parent->insert_before(position, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::insert_after(const InstructionIterator& position,
+                         const ForwardIt& begin,
+                         const ForwardIt& end) {
+  return m_parent->insert_after(position, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::push_front(const ForwardIt& begin, const ForwardIt& end) {
+  return m_parent->push_front(this, begin, end);
+}
+
+template <class ForwardIt>
+bool Block::push_back(const ForwardIt& begin, const ForwardIt& end) {
+  return m_parent->push_back(this, begin, end);
+}
 
 } // namespace cfg
 

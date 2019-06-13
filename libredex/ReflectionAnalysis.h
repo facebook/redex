@@ -74,22 +74,46 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObjectKind obj_kind;
   DexType* dex_type;
   DexString* dex_string;
+  // Attaching a set of potential dex types.
+  std::unordered_set<DexType*> potential_dex_types;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
   AbstractObject() = default;
 
   explicit AbstractObject(DexString* s)
-      : obj_kind(STRING), dex_type(nullptr), dex_string(s) {}
+      : obj_kind(STRING),
+        dex_type(nullptr),
+        dex_string(s),
+        potential_dex_types() {}
 
   AbstractObject(AbstractObjectKind k, DexType* t)
-      : obj_kind(k), dex_type(t), dex_string(nullptr) {
+      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types() {
+    always_assert(k == OBJECT || k == CLASS);
+  }
+
+  AbstractObject(AbstractObjectKind k,
+                 DexType* t,
+                 std::unordered_set<DexType*> p)
+      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types(p) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
   AbstractObject(AbstractObjectKind k, DexType* t, DexString* s)
-      : obj_kind(k), dex_type(t), dex_string(s) {
+      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types() {
     always_assert(k == FIELD || k == METHOD);
+  }
+
+  AbstractObject(AbstractObjectKind k,
+                 DexType* t,
+                 DexString* s,
+                 std::unordered_set<DexType*> p)
+      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types(p) {
+    always_assert(k == FIELD || k == METHOD);
+  }
+
+  void add_potential_dex_type(DexType* type) {
+    potential_dex_types.insert(type);
   }
 
   void clear() override {}

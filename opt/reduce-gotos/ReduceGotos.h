@@ -14,9 +14,12 @@ class ReduceGotosPass : public Pass {
   struct Stats {
     size_t removed_switches{0};
     size_t reduced_switches{0};
+    size_t replaced_trivial_switches{0};
     size_t remaining_trivial_switches{0};
-    size_t removed_sparse_switch_cases{0};
-    size_t removed_packed_switch_cases{0};
+    size_t remaining_two_case_switches{0};
+    size_t remaining_range_switches{0};
+    size_t remaining_range_switch_cases{0};
+    size_t removed_switch_cases{0};
     size_t replaced_gotos_with_returns{0};
     size_t removed_trailing_moves{0};
     size_t inverted_conditional_branches{0};
@@ -27,4 +30,9 @@ class ReduceGotosPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   static Stats process_code(IRCode*);
+  static void process_code_switches(cfg::ControlFlowGraph&, Stats&);
+  static void process_code_ifs(cfg::ControlFlowGraph&, Stats&);
+
+ private:
+  static void shift_registers(cfg::ControlFlowGraph* cfg, uint16_t* reg);
 };

@@ -36,7 +36,7 @@ uint32_t DexString::length() const {
   return length_of_utf8_string(c_str());
 }
 
-int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) {
+int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   uint16_t* typep = (uint16_t*)(output + 1);
   *output = (uint32_t)m_list.size();
   for (auto const& type : m_list) {
@@ -516,13 +516,13 @@ void DexMethod::set_code(std::unique_ptr<IRCode> code) {
 }
 
 void DexMethod::balloon() {
-  assert(m_code == nullptr);
+  redex_assert(m_code == nullptr);
   m_code = std::make_unique<IRCode>(this);
   m_dex_code.reset();
 }
 
 void DexMethod::sync() {
-  assert(m_dex_code == nullptr);
+  redex_assert(m_dex_code == nullptr);
   m_dex_code = m_code->sync(this);
   m_code.reset();
 }
@@ -539,7 +539,7 @@ DexMethod* DexMethod::make_method_from(DexMethod* that,
                                        DexString* name) {
   auto m = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls, name, that->get_proto()));
-  assert(m != that);
+  redex_assert(m != that);
   if (that->m_anno) {
     m->m_anno = new DexAnnotationSet(*that->m_anno);
   }
@@ -635,13 +635,13 @@ void DexClass::remove_method(const DexMethod* m) {
     erased = true;
     meths.erase(it);
   }
-  assert(erased);
+  redex_assert(erased);
 }
 
 void DexMethod::become_virtual() {
-  assert(!m_virtual);
+  redex_assert(!m_virtual);
   auto cls = type_class(m_spec.cls);
-  assert(!cls->is_external());
+  redex_assert(!cls->is_external());
   cls->remove_method(this);
   m_virtual = true;
   auto& vmethods = cls->get_vmethods();
@@ -717,17 +717,27 @@ void DexClass::load_class_data_item(DexIdx* idx,
     df->make_concrete(access_flags);
     m_ifields.push_back(df);
   }
+
+  std::unordered_set<DexMethod*> method_pointer_cache;
+
   ndex = 0;
   for (uint32_t i = 0; i < dmethod_count; i++) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
+    // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     std::unique_ptr<DexCode> dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), false);
+
+    assert_or_throw(
+        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
+        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+
+    method_pointer_cache.insert(dm);
     m_dmethods.push_back(dm);
   }
   ndex = 0;
@@ -735,12 +745,19 @@ void DexClass::load_class_data_item(DexIdx* idx,
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
+    // Find method in method index, returns same pointer for same method.
     DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
     auto dc = DexCode::get_dex_code(idx, code_off);
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
     dm->make_concrete(access_flags, std::move(dc), true);
+
+    assert_or_throw(
+        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
+        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+
+    method_pointer_cache.insert(dm);
     m_vmethods.push_back(dm);
   }
 }
@@ -781,7 +798,7 @@ void DexClass::remove_field(const DexField* f) {
     erase = true;
     fields.erase(it);
   }
-  assert(erase);
+  redex_assert(erase);
 }
 
 void DexClass::sort_fields() {
@@ -858,7 +875,7 @@ int DexClass::encode(DexOutputIdx* dodx,
                       "\nOffending method: %s",
                       SHOW(this),
                       SHOW(m));
-    assert(!m->is_virtual());
+    redex_assert(!m->is_virtual());
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -877,7 +894,7 @@ int DexClass::encode(DexOutputIdx* dodx,
                       "\nOffending method: %s",
                       SHOW(this),
                       SHOW(m));
-    assert(m->is_virtual());
+    redex_assert(m->is_virtual());
     encdata = write_uleb128(encdata, idx - idxbase);
     idxbase = idx;
     encdata = write_uleb128(encdata, m->get_access());
@@ -923,7 +940,7 @@ void DexClass::load_class_annotations(DexIdx* idx, uint32_t anno_off) {
         DexAnnotationSet* aset = DexAnnotationSet::get_annotation_set(idx, off);
         if (aset != nullptr) {
           method->attach_param_annotation_set(j, aset);
-          assert(method->get_param_anno());
+          redex_assert(method->get_param_anno());
         }
       }
     }
@@ -1034,7 +1051,7 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
-static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
+static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
   std::ostringstream ss;
   ss << type_shorty(rtype);
   if (args != nullptr) {
@@ -1046,7 +1063,7 @@ static DexString* make_shorty(DexType* rtype, DexTypeList* args) {
   return DexString::make_string(type_string);
 }
 
-DexProto* DexProto::make_proto(DexType* rtype, DexTypeList* args) {
+DexProto* DexProto::make_proto(const DexType* rtype, const DexTypeList* args) {
   auto shorty = make_shorty(rtype, args);
   return DexProto::make_proto(rtype, args, shorty);
 }
@@ -1243,6 +1260,47 @@ uint32_t DexCode::size() const {
     }
   }
   return size;
+}
+
+DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
+                                             DexProto* orig_proto) {
+  auto methodref_in_context =
+      DexMethod::get_method(this, method_name, orig_proto);
+  if (!methodref_in_context) {
+    return orig_proto;
+  }
+  std::deque<DexType*> new_arg_list;
+  const auto& type_list = orig_proto->get_args()->get_type_list();
+  auto rtype = orig_proto->get_rtype();
+  for (auto t : type_list) {
+    new_arg_list.push_back(t);
+  }
+  new_arg_list.push_back(get_int_type());
+  DexTypeList* new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+  DexProto* new_proto = DexProto::make_proto(rtype, new_args);
+  methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
+  while (methodref_in_context) {
+    new_arg_list.push_back(get_int_type());
+    new_args = DexTypeList::make_type_list(std::move(new_arg_list));
+    new_proto = DexProto::make_proto(rtype, new_args);
+    methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
+  }
+  return new_proto;
+}
+
+void DexMethod::add_load_params(size_t num_add_loads) {
+  IRCode* code = this->get_code();
+  always_assert_log(code, "Method don't have IRCode\n");
+  auto callee_params = code->get_param_instructions();
+  auto param_ops = InstructionIterable(callee_params);
+  size_t added_params = 0;
+  while (added_params < num_add_loads) {
+    ++added_params;
+    auto temp = code->allocate_temp();
+    IRInstruction* new_param_load = new IRInstruction(IOPCODE_LOAD_PARAM);
+    new_param_load->set_dest(temp);
+    code->insert_before(callee_params.end(), new_param_load);
+  }
 }
 
 void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {

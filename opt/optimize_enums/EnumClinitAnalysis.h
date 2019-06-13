@@ -11,15 +11,28 @@
 
 namespace optimize_enums {
 
+/**
+ * Enum instances are always stored as static fields with ACC_ENUM access flag.
+ * The flag makes it easy to distinguish them from other fields on the enum
+ * class.
+ */
+DexAccessFlags enum_field_access();
+
+/**
+ * Enum synthetic $VALUES field's access flag.
+ */
+DexAccessFlags synth_access();
+
 struct EnumAttr {
   const uint32_t ordinal;
   const DexString* name; // Builtin name for enums.
 };
 
-/*
- * Returns a mapping of enum field -> ordinal value.
+using AttrMap = std::unordered_map<const DexField*, EnumAttr>;
+/**
+ * Returns a mapping of enum field -> ordinal value if success,
+ * otherwise, return an empty map.
  */
-std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
-    const DexClass* cls);
+AttrMap analyze_enum_clinit(const DexClass* cls);
 
 } // namespace optimize_enums

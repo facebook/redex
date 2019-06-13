@@ -94,7 +94,8 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
 
   // First, add all the prologue blocks that forma a linear chain before the
   // case block selection blocks (a switch or an if-else tree) begin.
-  for (cfg::Block* b = cfg->entry_block(); b != nullptr; b = b->follow_goto()) {
+  for (cfg::Block* b = cfg->entry_block(); b != nullptr;
+       b = b->goes_to_only_edge()) {
     m_prologue_blocks.push_back(b);
   }
 

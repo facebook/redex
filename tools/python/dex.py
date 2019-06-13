@@ -562,7 +562,7 @@ class debug_info_op(AutoParser):
         if self.op >= DBG_FIRST_SPECIAL:
             adjusted_opcode = int(self.op) - DBG_FIRST_SPECIAL
             line_offset = DBG_LINE_BASE + (adjusted_opcode % DBG_LINE_RANGE)
-            addr_offset = (adjusted_opcode / DBG_LINE_RANGE)
+            addr_offset = int(adjusted_opcode / DBG_LINE_RANGE)
             setattr(self, 'line_offset', line_offset)
             setattr(self, 'addr_offset', addr_offset)
         setattr(self, 'byte_size', data.tell() - self.get_offset())
@@ -626,7 +626,7 @@ class debug_info_item(AutoParser):
     class row(object):
         def __init__(self):
             self.address = 0
-            self.line = 1
+            self.line = 0
             self.source_file = -1
             self.prologue_end = False
             self.epilogue_begin = False
@@ -1259,6 +1259,15 @@ class DexMethod:
                     insn.decode(code_units)
                     self.insns.append(insn)
         return self.insns
+
+    def is_abstract(self):
+        return (self.encoded_method.access_flags & ACC_ABSTRACT) != 0
+
+    def is_native(self):
+        return (self.encoded_method.access_flags & ACC_NATIVE) != 0
+
+    def is_synthetic(self):
+        return (self.encoded_method.access_flags & ACC_SYNTHETIC) != 0
 
     def dump(self, dump_code=True, dump_debug_info=True, f=sys.stdout):
         if self.is_virtual:

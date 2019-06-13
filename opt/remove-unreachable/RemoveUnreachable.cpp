@@ -9,8 +9,13 @@
 
 #include "PassManager.h"
 
+namespace {
+const std::string UNREACHABLE_SYMBOLS_FILENAME =
+    "redex-unreachable-removed-symbols.txt";
+} // end anonymous namespace
+
 void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& cfg,
+                                     ConfigFiles& conf,
                                      PassManager& pm) {
   // Store names of removed classes and methods
   ConcurrentSet<std::string> removed_symbols;
@@ -22,8 +27,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
           "ProGuard configuration was provided.");
     return;
   }
-  bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0 &&
-                                    !m_unreachable_symbols_file_name.empty();
+  bool output_unreachable_symbols = pm.get_current_pass_info()->repeat == 0;
   int num_ignore_check_strings = 0;
   auto reachables = reachability::compute_reachable_objects(
       stores, m_ignore_sets, &num_ignore_check_strings);
@@ -41,7 +45,7 @@ void RemoveUnreachablePass::run_pass(DexStoresVector& stores,
   pm.incr_metric("methods_removed", before.num_methods - after.num_methods);
 
   if (output_unreachable_symbols) {
-    std::string filepath = cfg.metafile(m_unreachable_symbols_file_name);
+    std::string filepath = conf.metafile(UNREACHABLE_SYMBOLS_FILENAME);
     write_out_removed_symbols(filepath, removed_symbols);
   }
 }

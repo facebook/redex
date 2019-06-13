@@ -87,6 +87,30 @@ bool RootSetMarker::should_mark_cls(const DexClass* cls) {
   return root(cls) || is_canary(cls);
 }
 
+void RootSetMarker::mark_all_as_seed(const Scope& scope) {
+  walk::parallel::classes(scope, [&](const DexClass* cls) {
+    TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(cls));
+    push_seed(cls);
+
+    for (auto const& f : cls->get_ifields()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      push_seed(f);
+    }
+    for (auto const& f : cls->get_sfields()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(f));
+      push_seed(f);
+    }
+    for (auto const& m : cls->get_dmethods()) {
+      TRACE(REACH, 3, "Visiting seed: %s\n", SHOW(m));
+      push_seed(m);
+    }
+    for (auto const& m : cls->get_vmethods()) {
+      TRACE(REACH, 3, "Visiting seed: %s (root)\n", SHOW(m));
+      push_seed(m);
+    }
+  });
+}
+
 /*
  * Initializes the root set by marking and pushing nodes onto the work queue.
  * Also conditionally marks class member seeds.
@@ -146,7 +170,7 @@ void RootSetMarker::push_seed(const DexMethod* method) {
 template <class Seed>
 void RootSetMarker::record_is_seed(Seed* seed) {
   if (m_record_reachability) {
-    assert(seed != nullptr);
+    redex_assert(seed != nullptr);
     m_reachable_objects->record_is_seed(seed);
   }
 }
@@ -298,7 +322,7 @@ References TransitiveClosureMarker::gather(const DexField* field) const {
 void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   auto* type = meth->get_class();
   auto* cls = type_class(type);
-  bool check_strings = true;
+  bool check_strings = m_ignore_sets.keep_class_in_string;
   if (m_ignore_sets.string_literals.count(type)) {
     ++m_worker_state->get_data()->num_ignore_check_strings;
     check_strings = false;
@@ -440,37 +464,18 @@ template <class Parent, class Object>
 void TransitiveClosureMarker::record_reachability(Parent* parent,
                                                   Object* object) {
   if (m_record_reachability) {
-    assert(parent != nullptr && object != nullptr);
+    redex_assert(parent != nullptr && object != nullptr);
     m_reachable_objects->record_reachability(parent, object);
   }
 }
 
-IgnoreSets::IgnoreSets(const JsonWrapper& jw) {
-  auto parse_type_list = [&jw](const char* key,
-                               std::unordered_set<const DexType*>* type_list) {
-    std::vector<std::string> strs;
-    jw.get(key, {}, strs);
-    for (auto s : strs) {
-      auto type = DexType::get_type(s);
-      if (type != nullptr) {
-        type_list->insert(type);
-      }
-    }
-  };
-  parse_type_list("ignore_string_literals", &string_literals);
-  parse_type_list("ignore_string_literal_annos", &string_literal_annos);
-  parse_type_list("ignore_system_annos", &system_annos);
-
-  // To keep the backward compatability of this code, ensure that the
-  // "MemberClasses" annotation is always in system_annos.
-  system_annos.emplace(DexType::get_type("Ldalvik/annotation/MemberClasses;"));
-}
-
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
-    DexStoresVector& stores,
+    const DexStoresVector& stores,
     const IgnoreSets& ignore_sets,
     int* num_ignore_check_strings,
-    bool record_reachability) {
+    bool record_reachability,
+    bool should_mark_all_as_seed,
+    std::unique_ptr<const mog::Graph>* out_method_override_graph) {
   Timer t("Marking");
   auto scope = build_class_scope(stores);
   auto reachable_objects = std::make_unique<ReachableObjects>();
@@ -483,7 +488,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
                                 &cond_marked,
                                 reachable_objects.get(),
                                 &root_set);
-  root_set_marker.mark(scope);
+  if (should_mark_all_as_seed) {
+    root_set_marker.mark_all_as_seed(scope);
+  } else {
+    root_set_marker.mark(scope);
+  }
 
   size_t num_threads = std::max(1u, std::thread::hardware_concurrency() / 2);
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
@@ -508,6 +517,11 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       *num_ignore_check_strings += stats_arr[i].num_ignore_check_strings;
     }
   }
+
+  if (out_method_override_graph) {
+    *out_method_override_graph = std::move(method_override_graph);
+  }
+
   return reachable_objects;
 }
 
@@ -552,7 +566,7 @@ void ReachableObjects::record_reachability(Parent* parent, Object* object) {
 
 template <class Seed>
 void ReachableObjects::record_is_seed(Seed* seed) {
-  assert(seed != nullptr);
+  redex_assert(seed != nullptr);
   const auto& keep_reasons = seed->rstate.keep_reasons();
   m_retainers_of.update(
       ReachableObject(seed),

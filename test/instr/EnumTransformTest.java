@@ -7,6 +7,7 @@
 
 package com.facebook.redextest;
 
+import java.util.Random;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -18,6 +19,10 @@ enum SCORE {
   ONE,
   TWO,
   THREE;
+
+  static final SCORE DEFAULT = ONE;
+  static final SCORE[] array = values();
+  static int number = 0;
 
   public static @Nullable SCORE increase(SCORE score) {
     if (score == null) {
@@ -32,8 +37,6 @@ enum SCORE {
     }
     return null;
   }
-
-  public static int my_ordinal(SCORE score) { return score.ordinal(); }
 }
 
 interface Intf {
@@ -80,27 +83,60 @@ enum PURE_SCORE {
 /* Some enums that are unsafe to be transformed. */
 enum CAST_WHEN_RETURN {
   ONE;
-  public static Enum method() { return ONE; }
+  public static Enum[] method() {
+    CAST_WHEN_RETURN[] array = new CAST_WHEN_RETURN[1];
+    array[0] = ONE;
+    return array;
+  }
 }
-enum CAST_THIS_POINTER { ONE; }
+enum CAST_THIS_POINTER {
+  ONE;
+  public static void cast_this_method() {
+    EnumHelper.inlined_method(CAST_THIS_POINTER.ONE);
+  }
+}
 enum CAST_PARAMETER {
   ONE;
-  public static void method(Object o) {}
+  public static <E extends Enum<E>> void method(Enum<E> o) {}
   public static void method() { method(ONE); }
 }
 enum USED_AS_CLASS_OBJECT {
   ONE;
-  public static void method(Class c) {}
+  public static <T> void method(Class<T> c) {}
   public static void method() { method(USED_AS_CLASS_OBJECT.class); }
 }
 enum CAST_CHECK_CAST { ONE; }
 enum CAST_ISPUT_OBJECT { ONE; }
 enum CAST_APUT_OBJECT { ONE; }
-class EnumHelper {
-  static void inlined_method(Enum e) { int a = e.ordinal(); }
-  public static void cast_this_method() {
-    inlined_method(CAST_THIS_POINTER.ONE);
+
+enum ENUM_TYPE_1 { ONE; }
+enum ENUM_TYPE_2 {
+  ONE,
+  TWO;
+  public static void test_join() {
+    Enum obj = null;
+    Random random = new Random();
+    int pos_rand = random.nextInt() & Integer.MAX_VALUE;
+    int selector = pos_rand % 2;
+    if (selector == 0) {
+      obj = ENUM_TYPE_1.ONE;
+    } else if (selector == 1 || selector == -1) {
+      obj = ENUM_TYPE_2.TWO;
+    } else if (selector > 1) {
+      obj = Enum.valueOf(ENUM_TYPE_1.class, "NotReach");
+    }
+    // obj may be Enum, ENUM_TYPE_1 or ENUM_TYPE_2
+    int res = obj.ordinal();
+    if (selector == 0) {
+      assertThat(res).isEqualTo(0);
+    } else if (selector == 1) {
+      assertThat(res).isEqualTo(1);
+    }
   }
+}
+
+class EnumHelper {
+  static void inlined_method(Enum e) { int a = e.hashCode(); }
 
   class Cache<T> {
     @Nullable T e = (T) null;
@@ -120,12 +156,16 @@ class EnumHelper {
     Object[] array = new Object[10];
     array[0] = CAST_APUT_OBJECT.ONE;
   }
+
+  public static int my_ordinal(SCORE score) { return score.ordinal(); }
+
+  public static <T> T notEscape(T obj) { return obj; }
 }
 
 /* Test cases */
 public class EnumTransformTest {
   @Test
-  public void test_intface() {
+  public void test_interface() {
     C c = new C();
     // Method with the same name but different type of argument.
     assertThat(c.make(SCORE.TWO)).isEqualTo(5);
@@ -175,13 +215,18 @@ public class EnumTransformTest {
   // SCORE.values() is transformed.
   @Test
   public void test_values() {
-    assertThat(SCORE.values().length).isEqualTo(3);
+    SCORE[] values = SCORE.values();
+    assertThat(values.length).isEqualTo(3);
+    assertThat(SCORE.array.length).isEqualTo(3);
+    for (int i = 0; i < 3; i++) {
+      assertThat(values[i].ordinal()).isEqualTo(SCORE.array[i].ordinal());
+    }
   }
 
   // NullPointerException.
   @Test(expected = NullPointerException.class)
   public void test_npe() {
-    int a = SCORE.my_ordinal(null);
+    int a = EnumHelper.my_ordinal(null);
   }
 
   // [isa]get_object, [isa]put_object and new_array instructions are
@@ -249,5 +294,17 @@ public class EnumTransformTest {
   @Test(expected = IllegalArgumentException.class)
   public void test_valueOf_exception() {
     SCORE.valueOf("ZERO");
+  }
+
+  @Test
+  public void test_join_with_multitypes() {
+    ENUM_TYPE_2.test_join();
+  }
+
+  @Test
+  public void test_non_escape_invocation() {
+    SCORE one = SCORE.ONE;
+    SCORE obj = EnumHelper.notEscape(one);
+    assertThat(one.ordinal()).isEqualTo(obj.ordinal());
   }
 }

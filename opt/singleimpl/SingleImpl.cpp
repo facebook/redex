@@ -97,14 +97,17 @@ void collect_single_impl(const TypeToTypes& intfs_to_classes,
 
 const int MAX_PASSES = 8;
 
-void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void SingleImplPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& conf,
+                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
   int max_steps = 0;
   size_t previous_invoke_intf_count = s_invoke_intf_count;
   removed_count = 0;
-  const auto& pg_map = cfg.get_proguard_map();
+  const auto& pg_map = conf.get_proguard_map();
   while (true) {
+    TRACE(INTF, 9, "\tOPTIMIZE ROUND %d\n", max_steps);
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
     TypeSet intfs;
@@ -119,7 +122,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassMan
         std::move(single_impls), ch, scope, m_pass_config);
     if (optimized == 0 || ++max_steps >= MAX_PASSES) break;
     removed_count += optimized;
-    assert(scope_size > scope.size());
+    redex_assert(scope_size > scope.size());
   }
 
   TRACE(INTF, 2, "\ttotal steps %d\n", max_steps);

@@ -27,39 +27,26 @@ class FinalInlinePass : public Pass {
  public:
   FinalInlinePass() : Pass("FinalInlinePass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    std::vector<std::string> temp_config_list;
-    jw.get("black_list_annos", {}, temp_config_list);
-    for (const auto& type_s : temp_config_list) {
-      DexType* type = DexType::get_type(type_s.c_str());
-      if (type != nullptr) {
-        m_config.black_list_annos.emplace_back(type);
-      }
-    }
-
-    temp_config_list.clear();
-    jw.get("black_list_types", {}, temp_config_list);
-    for (const auto& type_s : temp_config_list) {
-      DexType* type = DexType::get_type(type_s.c_str());
-      if (type != nullptr) {
-        m_config.black_list_types.emplace_back(type);
-      }
-    }
-
-    temp_config_list.clear();
-    jw.get("keep_class_member_annos", {}, temp_config_list);
-    for (const auto& type_s : temp_config_list) {
-      DexType* type = DexType::get_type(type_s.c_str());
-      if (type != nullptr) {
-        m_config.keep_class_member_annos.emplace_back(type);
-      }
-    }
-
-    jw.get("keep_class_members", {}, m_config.keep_class_members);
-    jw.get("remove_class_members", {}, m_config.remove_class_members);
-    jw.get(
+  void bind_config() override {
+    bind("black_list_annos",
+         {},
+         m_config.black_list_annos,
+         "List of annotations, which when applied, will cause this "
+         "optimization to omit the annotated element.");
+    bind("black_list_types",
+         {},
+         m_config.black_list_types,
+         "List of types that this optimization will omit.");
+    bind("keep_class_member_annos",
+         {},
+         m_config.keep_class_member_annos,
+         "List of annotations, which when applied, will cause this "
+         "optimization to keep the annotated element.");
+    bind("keep_class_members", {}, m_config.keep_class_members);
+    bind("remove_class_members", {}, m_config.remove_class_members);
+    bind(
         "replace_encodable_clinits", false, m_config.replace_encodable_clinits);
-    jw.get("propagate_static_finals", false, m_config.propagate_static_finals);
+    bind("propagate_static_finals", false, m_config.propagate_static_finals);
   }
 
   static size_t propagate_constants_for_test(Scope& scope,

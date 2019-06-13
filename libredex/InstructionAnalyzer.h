@@ -38,6 +38,7 @@
   X(array_length)     \
   X(new_instance)     \
   X(new_array)        \
+  X(filled_new_array) \
   X(fill_array_data)  \
   X(throw)            \
   X(goto)             \
@@ -335,8 +336,7 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_FILL_ARRAY_DATA:
       return analyze_fill_array_data(
           std::index_sequence_for<Analyzers...>{}, insn, env);
-    case OPCODE_PACKED_SWITCH:
-    case OPCODE_SPARSE_SWITCH:
+    case OPCODE_SWITCH:
       return analyze_switch(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_IGET:
     case OPCODE_IGET_WIDE:
@@ -386,8 +386,10 @@ class InstructionAnalyzerCombiner final {
       return analyze_new_instance(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY:
       return analyze_new_array(
+          std::index_sequence_for<Analyzers...>{}, insn, env);
+    case OPCODE_FILLED_NEW_ARRAY:
+      return analyze_filled_new_array(
           std::index_sequence_for<Analyzers...>{}, insn, env);
     }
   }

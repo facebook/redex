@@ -19,15 +19,19 @@ class ObjectSensitiveDcePass final : public Pass {
  public:
   ObjectSensitiveDcePass() : Pass("ObjectSensitiveDcePass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    std::string s;
-    jw.get("side_effect_summaries", "", s);
-    if (s != "") {
-      m_external_side_effect_summaries_file = s;
-    }
-    jw.get("escape_summaries", "", s);
-    if (s != "") {
-      m_external_escape_summaries_file = s;
+  void bind_config() override {
+    bind("side_effect_summaries", {boost::none},
+         m_external_side_effect_summaries_file, "TODO: Document me!",
+         Configurable::bindflags::optionals::skip_empty_string);
+    bind("escape_summaries", {boost::none}, m_external_escape_summaries_file,
+         "TODO: Document me!",
+         Configurable::bindflags::optionals::skip_empty_string);
+
+    if (!m_external_escape_summaries_file ||
+        !m_external_side_effect_summaries_file) {
+      TRACE(OSDCE, 1,
+            "WARNING: External summary file missing; OSDCE will make "
+            "conservative assumptions about system & third-party code.\n");
     }
   }
 

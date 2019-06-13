@@ -58,7 +58,6 @@ TEST(DedupBlocksTest, useSwitch) {
 
   auto copy_prop = new CopyPropagationPass();
   copy_prop->m_config.static_finals = true;
-  copy_prop->m_config.wide_registers = true;
   std::vector<Pass*> passes = {
     copy_prop
   };

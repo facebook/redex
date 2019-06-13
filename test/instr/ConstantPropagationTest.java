@@ -132,11 +132,19 @@ public class ConstantPropagationTest {
     return 1;
   }
 
+  private int two() {
+    return 2;
+  }
+
+  private int sixteen() {
+    return 16;
+  }
+
   // This test intentionally does not use the same constant literal more than
   // once. The reason is that d8 will load that constant and re-use the
-  // register rather than using a add-int/lit instruction. Currently
-  // ConstantPropagationPass only propagates add-int/lit but not add-int.
-  // TODO: propagate more than just add-int/lit
+  // register rather than using a *-int/lit instruction. Currently
+  // ConstantPropagationPass only propagates *-int/lit but not *-int.
+
   @Test
   public void if_plus_two() {
     int x = one();
@@ -158,7 +166,7 @@ public class ConstantPropagationTest {
   }
 
   @Test
-  public void lit_minus() {
+  public void if_lit_minus() {
     int x = one();
     int y = 5 - x;
     int z;
@@ -168,5 +176,141 @@ public class ConstantPropagationTest {
       z = 0;
     }
     assertThat(z).isEqualTo(42);
+  }
+
+  @Test
+  public void if_multiply_lit_const() {
+    int x = two();
+    int y = 42 * x;
+    int z;
+    if (y == 84) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_multiply_large_lit_const() {
+    int x = two();
+    int y = 32767 * x;
+    int z;
+    if (y == 65534) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_shl_lit_const() {
+    int x = two();
+    int y = x << 2;
+    int z;
+    if (y == 8) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_shr_lit_const() {
+    int x = sixteen();
+    int y = x >> 2;
+    int z;
+    if (y == 4) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_ushr_lit_const() {
+    int x = neg1() * 16;
+    int y = x >>> 5;
+    int z;
+    if (y == 134217727) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_modulo_3() {
+    int x = sixteen();
+    int y = x % 3;
+    int z;
+    if (y == 1) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  private int blue_color_code() {
+    return 0xFF0000FF;
+  }
+
+  @Test
+  public void if_truncating_left_shift() {
+    int x = blue_color_code();
+    int v = x << 8;
+    int z;
+    if (v == 0x0000FF00) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_ushr_neg_val() {
+    int x = blue_color_code();
+    int v = x >>> 8;
+    int z;
+    if (v == 0x00FF0000) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_div_by_zero() {
+    int x = one();
+    int z = 3;
+    try {
+      if (x == 1) {
+        int y = x / 0;
+        z = 0;
+      }
+    } catch (Exception e) {
+      z = 1;
+    }
+    assertThat(z).isEqualTo(1);
+  }
+
+  @Test
+  public void if_div_by_two() {
+    int x = sixteen();
+    int y = x / 2;
+    int z;
+    if (y == 8) {
+      z = 1;
+    } else {
+      z = 0;
+    }
+    assertThat(z).isEqualTo(1);
   }
 }

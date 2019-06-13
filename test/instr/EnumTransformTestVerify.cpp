@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include "EnumClinitAnalysis.h"
 #include "EnumTransformer.h"
 #include "verify/VerifyUtil.h"
 
@@ -19,31 +20,40 @@ struct EnumUtil {
       "Lcom/facebook/redextest/PURE_SCORE;";
   const char* array_name = "array";
   const char* class_name = "Lcom/facebook/redextest/C;";
-  const char* substitute_array_name = "array$RDX$uCTBV1V51xg";
+  const char* substitute_array_name = "array$REDEX$uCTBV1V51xg";
 };
 
+/**
+ * Check if there is any static enum field in the class.
+ */
+bool has_enum_instance(const DexClass* cls) {
+  auto& sfields = cls->get_sfields();
+  return std::any_of(sfields.begin(), sfields.end(), [](DexField* field) {
+    return check_required_access_flags(enum_field_access(),
+                                       field->get_access());
+  });
+}
+
+bool is_enum_class(const DexClass* cls) {
+  return cls->get_super_class() == get_enum_type() &&
+         cls->get_access() & ACC_ENUM && has_enum_instance(cls);
+}
+
 void expect_other_enums(const DexClasses& classes) {
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_WHEN_RETURN;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_THIS_POINTER;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_PARAMETER;"),
-      nullptr);
-  EXPECT_NE(find_class_named(classes,
-                             "Lcom/facebook/redextest/USED_AS_CLASS_OBJECT;"),
-            nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_CHECK_CAST;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_ISPUT_OBJECT;"),
-      nullptr);
-  EXPECT_NE(
-      find_class_named(classes, "Lcom/facebook/redextest/CAST_APUT_OBJECT;"),
-      nullptr);
+  std::vector<std::string> class_names{
+      "Lcom/facebook/redextest/CAST_WHEN_RETURN;",
+      "Lcom/facebook/redextest/CAST_THIS_POINTER;",
+      "Lcom/facebook/redextest/CAST_PARAMETER;",
+      "Lcom/facebook/redextest/USED_AS_CLASS_OBJECT;",
+      "Lcom/facebook/redextest/CAST_CHECK_CAST;",
+      "Lcom/facebook/redextest/CAST_ISPUT_OBJECT;",
+      "Lcom/facebook/redextest/CAST_APUT_OBJECT;",
+      "Lcom/facebook/redextest/ENUM_TYPE_1;",
+      "Lcom/facebook/redextest/ENUM_TYPE_2;"};
+  for (auto& name : class_names) {
+    auto cls = find_class_named(classes, name.c_str());
+    EXPECT_TRUE(is_enum_class(cls));
+  }
 }
 } // namespace
 
@@ -52,9 +62,7 @@ TEST_F(PreVerify, transform) {
   // SCORE enum class
   auto enum_cls = find_class_named(classes, util.enum_score_class_name);
   EXPECT_NE(enum_cls, nullptr);
-  EXPECT_EQ(enum_cls->get_super_class(), get_enum_type());
-  EXPECT_EQ(enum_cls->get_access() & ACC_ENUM, ACC_ENUM);
-  EXPECT_EQ(enum_cls->get_sfields().size(), 4);
+  EXPECT_TRUE(is_enum_class(enum_cls));
   // An SCORE[][] field
   EXPECT_NE(DexField::get_field(DexType::get_type(util.class_name),
                                 DexString::make_string(util.array_name),
@@ -68,7 +76,7 @@ TEST_F(PreVerify, transform) {
   // PURE_SCORE enum class.
   enum_cls = find_class_named(classes, util.enum_pure_score_class_name);
   EXPECT_NE(enum_cls, nullptr);
-  EXPECT_EQ(enum_cls->get_sfields().size(), 4);
+  EXPECT_TRUE(is_enum_class(enum_cls));
   // Other enums
   expect_other_enums(classes);
 }
@@ -78,9 +86,7 @@ TEST_F(PostVerify, transform) {
   // SCORE class is optimized.
   auto enum_cls = find_class_named(classes, util.enum_score_class_name);
   ASSERT_NE(enum_cls, nullptr);
-  EXPECT_EQ(enum_cls->get_super_class(), get_object_type());
-  EXPECT_EQ(enum_cls->get_access() & ACC_ENUM, 0);
-  EXPECT_EQ(enum_cls->get_sfields().size(), 0);
+  EXPECT_FALSE(is_enum_class(enum_cls));
   // EnumUtil
   auto util_cls = find_class_named(classes, "Lredex/$EnumUtils;");
   EXPECT_NE(util_cls, nullptr);

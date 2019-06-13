@@ -15,9 +15,11 @@ class OptimizeEnumsPass : public Pass {
 
  public:
   OptimizeEnumsPass() : Pass("OptimizeEnumsPass") {}
-
-  void configure_pass(const JsonWrapper& jw) override {}
+  void bind_config() override;
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+ private:
+  int m_max_enum_size;
 };
 
 } // namespace optimize_enums

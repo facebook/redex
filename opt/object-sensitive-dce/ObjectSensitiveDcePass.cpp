@@ -163,8 +163,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
             used_vars::get_dead_instructions(*code, used_vars_fp_iter);
         for (auto dead : dead_instructions) {
           // This logging is useful for quantifying what gets removed. E.g. to
-          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log | grep
-          // " L.*$" -Po | sort | uniq -c
+          // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
+          // grep " L.*$" -Po | sort | uniq -c
           TRACE(OSDCE, 3, "DEAD: %s\n", SHOW(dead->insn));
           code->remove_opcode(dead);
         }

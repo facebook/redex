@@ -23,7 +23,8 @@
  *
  */
 
-#define DEX_HEADER_DEXMAGIC "dex\n035"
+#define DEX_HEADER_DEXMAGIC_V35 "dex\n035"
+#define DEX_HEADER_DEXMAGIC_V37 "dex\n037"
 #define ENDIAN_CONSTANT (0x12345678)
 
 #define TYPE_HEADER_ITEM             (0x0000)
@@ -92,6 +93,11 @@ PACKED(struct dex_map_item {
   uint16_t na /* Not used */;
   uint32_t size /* Item count, not byte size */;
   uint32_t offset /* From start of file */;
+});
+
+PACKED(struct dex_map_list {
+  uint32_t size; /* Number of items below */
+  dex_map_item items[];
 });
 
 #define DEX_NO_INDEX (0xffffffff)

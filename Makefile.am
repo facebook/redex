@@ -20,20 +20,24 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt \
 	-I$(top_srcdir)/opt/access-marking \
 	-I$(top_srcdir)/opt/add_redex_txt_to_apk \
-	-I$(top_srcdir)/opt/analysis_ref_graph \
 	-I$(top_srcdir)/opt/annoclasskill \
 	-I$(top_srcdir)/opt/annokill \
 	-I$(top_srcdir)/opt/basic-block \
+	-I$(top_srcdir)/opt/branch-prefix-hoisting \
 	-I$(top_srcdir)/opt/bridge \
 	-I$(top_srcdir)/opt/check_breadcrumbs \
 	-I$(top_srcdir)/opt/class-splitting \
 	-I$(top_srcdir)/opt/constant-propagation \
+	-I$(top_srcdir)/opt/copy-propagation \
+	-I$(top_srcdir)/opt/cse \
 	-I$(top_srcdir)/opt/dedup_blocks \
+	-I$(top_srcdir)/opt/dedup-strings \
 	-I$(top_srcdir)/opt/delinit \
 	-I$(top_srcdir)/opt/delsuper \
 	-I$(top_srcdir)/opt/final_inline \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
+	-I$(top_srcdir)/opt/introduce_switch \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/merge_interface \
@@ -56,8 +60,10 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove_unused_args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
+	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-gotos \
 	-I$(top_srcdir)/opt/result-propagation \
+	-I$(top_srcdir)/opt/stringbuilder-outliner \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
@@ -73,12 +79,16 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/unreferenced_interfaces \
 	-I$(top_srcdir)/opt/unmark_proguard_keep \
 	-I$(top_srcdir)/opt/unterface \
+	-I$(top_srcdir)/opt/up-code-motion \
 	-I$(top_srcdir)/opt/verifier \
+	-I$(top_srcdir)/opt/vertical_merging \
+	-I$(top_srcdir)/opt/virtual_merging \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/method-dedup \
+	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-merger \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
@@ -104,6 +114,7 @@ libredex_la_SOURCES = \
 	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
+	libredex/Configurable.cpp \
 	libredex/Creators.cpp \
 	libredex/ControlFlow.cpp \
 	libredex/Debug.cpp \
@@ -111,6 +122,7 @@ libredex_la_SOURCES = \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
 	libredex/DexEncoding.cpp \
+	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
@@ -119,13 +131,17 @@ libredex_la_SOURCES = \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
+	libredex/DexTypeDomain.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
+	libredex/GlobalConfig.cpp \
 	libredex/HierarchyUtil.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
+	libredex/InitCollisionFinder.cpp \
 	libredex/Inliner.cpp \
+	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
 	libredex/IRAssembler.cpp \
@@ -136,6 +152,7 @@ libredex_la_SOURCES = \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
+	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
@@ -161,6 +178,8 @@ libredex_la_SOURCES = \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
+	libredex/RedexException.cpp \
+	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
@@ -169,7 +188,9 @@ libredex_la_SOURCES = \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
 	libredex/IRTypeChecker.cpp \
+	libredex/TypeInference.cpp \
 	libredex/TypeSystem.cpp \
+	libredex/UnknownVirtuals.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
@@ -207,9 +228,9 @@ redex_all_SOURCES = \
 	libredex/DexAsm.cpp \
 	opt/access-marking/AccessMarking.cpp \
 	opt/add_redex_txt_to_apk/AddRedexTxtToApk.cpp \
-	opt/analysis_ref_graph/ReferenceGraphCreator.cpp \
 	opt/annokill/AnnoKill.cpp \
 	opt/basic-block/BasicBlockProfile.cpp \
+	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
@@ -219,16 +240,20 @@ redex_all_SOURCES = \
 	opt/constant-propagation/IPConstantPropagation.cpp \
 	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
+	opt/cse/CommonSubexpressionElimination.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
+	opt/dedup-strings/DedupStrings.cpp \
 	opt/delinit/DelInit.cpp \
 	opt/delsuper/DelSuper.cpp \
 	opt/final_inline/FinalInline.cpp \
 	opt/final_inline/FinalInlineV2.cpp \
 	opt/instrument/Instrument.cpp \
 	opt/interdex/CrossDexRefMinimizer.cpp \
+	opt/interdex/CrossDexRelocator.cpp \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
+	opt/introduce_switch/IntroduceSwitch.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDce.cpp \
 	opt/merge_interface/MergeInterface.cpp \
@@ -239,6 +264,7 @@ redex_all_SOURCES = \
 	opt/object-sensitive-dce/SideEffectSummary.cpp \
 	opt/object-sensitive-dce/UsedVarsAnalysis.cpp \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
+	opt/optimize_enums/EnumConfig.cpp \
 	opt/optimize_enums/EnumInSwitch.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
@@ -251,6 +277,7 @@ redex_all_SOURCES = \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
 	opt/rebindrefs/ReBindRefs.cpp \
+	opt/rebindrefs/ReBindVRefs.cpp \
 	opt/regalloc/GraphColoring.cpp \
 	opt/regalloc/Interference.cpp \
 	opt/regalloc/RegAlloc.cpp \
@@ -267,14 +294,14 @@ redex_all_SOURCES = \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
 	opt/remove_unused_args/RemoveUnusedArgs.cpp \
-	opt/renameclasses/RenameClasses.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
+	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
-	opt/methodinline/Deleter.cpp \
-	opt/methodinline/MethodInline.cpp \
+	opt/methodinline/MethodInlinePass.cpp \
+	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
@@ -287,6 +314,7 @@ redex_all_SOURCES = \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/string_simplification/StringIterator.cpp \
 	opt/string_simplification/StringSimplification.cpp \
+	opt/stringbuilder-outliner/StringBuilderOutliner.cpp \
 	opt/strip-debug-info/StripDebugInfo.cpp \
 	opt/synth/Synth.cpp \
 	opt/test_cfg/TestCFG.cpp \
@@ -302,7 +330,10 @@ redex_all_SOURCES = \
 	opt/type-erasure/TypeTagUtils.cpp \
 	opt/unreferenced_interfaces/UnreferencedInterfaces.cpp \
 	opt/unmark_proguard_keep/UnmarkProguardKeep.cpp \
+	opt/up-code-motion/UpCodeMotion.cpp \
 	opt/verifier/Verifier.cpp \
+	opt/vertical_merging/VerticalMerging.cpp \
+	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
@@ -316,6 +347,8 @@ redex_all_SOURCES = \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/Deleter.cpp \
+	service/method-inliner/MethodInliner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \

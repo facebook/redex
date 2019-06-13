@@ -12,6 +12,7 @@
 #include "ConstantPropagationTransform.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "Timer.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace constant_propagation {
@@ -85,10 +86,11 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-
+  auto non_true_virtuals = devirtualize(scope);
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
-    auto wps = std::make_unique<WholeProgramState>(scope, *fp_iter);
+    auto wps = std::make_unique<WholeProgramState>(
+        scope, *fp_iter, non_true_virtuals, m_config.field_black_list);
     // If this approximation is not better than the previous one, we are done.
     if (fp_iter->get_whole_program_state().leq(*wps)) {
       break;

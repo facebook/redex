@@ -210,7 +210,7 @@ void type_encoder_fp(uint8_t*& encdata, uint8_t type, uint64_t val) {
     encbytes = 8 - bytes;
     break;
   default:
-    assert(false);
+    redex_assert(false);
   }
   if (val == 0) {
     encbytes = 1;

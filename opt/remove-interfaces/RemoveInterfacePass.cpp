@@ -263,27 +263,17 @@ void remove_interface_references(
     auto new_type = get_replacement_type(type_system, intf, root);
     old_to_new[intf] = const_cast<DexType*>(new_type);
   }
-  update_method_signature_type_references(scope, old_to_new);
+  auto& parent_to_children =
+      type_system.get_class_scopes().get_parent_to_children();
+  update_method_signature_type_references(scope, old_to_new,
+                                          parent_to_children);
   update_field_type_references(scope, old_to_new);
-}
-
-bool has_targets_to_skip(
-    const TypeSystem& type_system,
-    const std::unordered_set<const DexType*>& skip_multiple_targets_roots,
-    const DexType* type) {
-  for (const auto skip_root : skip_multiple_targets_roots) {
-    if (type_system.is_subtype(skip_root, type)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 size_t exclude_unremovables(
     const Scope& scope,
     const DexStoresVector& stores,
     const TypeSystem& type_system,
-    const std::unordered_set<const DexType*>& skip_multiple_targets_roots,
     bool include_primary_dex,
     TypeSet& candidates) {
   size_t count = 0;
@@ -312,30 +302,6 @@ size_t exclude_unremovables(
       candidates.erase(intf);
       count++;
       continue;
-    }
-
-    // There are cases where we cannot construct a valid dispatch because there
-    // are more than one targets in the dispatch belonging to the same type.
-    // Since whenever the type check against the owner type is taken we will
-    // always execute the first target on the type, the latter targets are
-    // short-circuited. This is not possible for javac generated code. However,
-    // other Redex optimizations that manipulates type system could introduce
-    // this problem. Therefore, we make it configrable to skip interfaces that
-    // could produce such a invalid dispatch.
-    if (skip_multiple_targets_roots.empty()) {
-      continue;
-    }
-    size_t num_skip_targets = 0;
-    for (const auto impl : impls) {
-      if (has_targets_to_skip(type_system, skip_multiple_targets_roots, impl)) {
-        num_skip_targets++;
-      }
-    }
-    if (num_skip_targets > 1) {
-      TRACE(RM_INTF, 5, "Excluding %s with %d skipping targets\n", SHOW(intf),
-            num_skip_targets);
-      candidates.erase(intf);
-      count++;
     }
   }
 
@@ -542,8 +508,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
 
   m_total_num_interface += interfaces.size();
   m_num_interface_excluded += exclude_unremovables(
-      scope, stores, type_system, m_skip_multiple_targets_roots,
-      m_include_primary_dex, interfaces);
+      scope, stores, type_system, m_include_primary_dex, interfaces);
 
   TRACE(RM_INTF, 5, "removable interfaces %ld\n", interfaces.size());
   TypeSet removed =
@@ -574,35 +539,14 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   }
 }
 
-void RemoveInterfacePass::configure_pass(const JsonWrapper& jw) {
-  std::vector<std::string> interface_roots;
-  jw.get("interface_roots", {}, interface_roots);
-  for (const auto& type_str : interface_roots) {
-    auto type = DexType::get_type(type_str.c_str());
-    if (type == nullptr) {
-      fprintf(stderr, "No type found for root %s\n", type_str.c_str());
-      continue;
-    }
-    m_interface_roots.emplace(type);
-  }
-  std::vector<std::string> skip_multiple_targets_roots;
-  jw.get("skip_multiple_targets_roots", {}, skip_multiple_targets_roots);
-  for (const auto& type_str : skip_multiple_targets_roots) {
-    auto type = DexType::get_type(type_str.c_str());
-    if (type == nullptr) {
-      fprintf(stderr, "No type found for root %s\n", type_str.c_str());
-      continue;
-    }
-    m_skip_multiple_targets_roots.emplace(type);
-  }
-  jw.get("include_primary_dex", false, m_include_primary_dex);
-  jw.get("keep_debug_info", false, m_keep_debug_info);
-  // Interface dispatch annotation.
-  std::string interface_dispatch_anno_type;
-  jw.get("interface_dispatch_anno", "", interface_dispatch_anno_type);
-  m_interface_dispatch_anno =
-      DexType::get_type(interface_dispatch_anno_type.c_str());
-  always_assert(m_interface_dispatch_anno != nullptr);
+void RemoveInterfacePass::bind_config() {
+  bind("interface_roots", {}, m_interface_roots, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("include_primary_dex", false, m_include_primary_dex);
+  bind("keep_debug_info", false, m_keep_debug_info);
+  bind_required("interface_dispatch_anno", m_interface_dispatch_anno,
+                Configurable::default_doc(),
+                Configurable::bindflags::types::error_if_unresolvable);
 }
 
 void RemoveInterfacePass::run_pass(DexStoresVector& stores,

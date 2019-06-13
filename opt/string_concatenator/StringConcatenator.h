@@ -14,6 +14,4 @@ class StringConcatenatorPass : public Pass {
   StringConcatenatorPass() : Pass("StringConcatenatorPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  void configure_pass(const JsonWrapper&) override {}
 };

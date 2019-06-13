@@ -192,10 +192,10 @@ DexField* resolve_field(
  * If the field is a definition already the field is returned otherwise a
  * lookup in the class hierarchy is performed looking for the definition.
  */
-inline DexField* resolve_field(
-    DexFieldRef* field, FieldSearch search = FieldSearch::Any) {
+inline DexField* resolve_field(const DexFieldRef* field,
+                               FieldSearch search = FieldSearch::Any) {
   if (field->is_def()) {
-    return static_cast<DexField*>(field);
+    return const_cast<DexField*>(static_cast<const DexField*>(field));
   }
   return resolve_field(
       field->get_class(), field->get_name(), field->get_type(), search);

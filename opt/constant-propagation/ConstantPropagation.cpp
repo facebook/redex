@@ -13,12 +13,6 @@
 
 using namespace constant_propagation;
 
-void ConstantPropagationPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("replace_moves_with_consts",
-         true,
-         m_config.transform.replace_moves_with_consts);
-}
-
 void ConstantPropagationPass::run_pass(DexStoresVector& stores,
                                        ConfigFiles&,
                                        PassManager& mgr) {

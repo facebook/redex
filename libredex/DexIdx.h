@@ -10,9 +10,10 @@
 #include <assert.h>
 #include <string>
 
+#include "Debug.h"
 #include "DexDefs.h"
 #include "DexEncoding.h"
-#include "Debug.h"
+#include "RedexException.h"
 
 class DexType;
 class DexTypeList;
@@ -56,7 +57,7 @@ class DexIdx {
     if (m_string_cache[stridx] == nullptr) {
       m_string_cache[stridx] = get_stringidx_fromdex(stridx);
     }
-    assert(m_string_cache[stridx]);
+    redex_assert(m_string_cache[stridx]);
     return m_string_cache[stridx];
   }
 
@@ -69,34 +70,55 @@ class DexIdx {
     if (typeidx == DEX_NO_INDEX) {
       return nullptr;
     }
+
+    always_assert_type_log(
+        typeidx < m_type_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "Type index is out of bound. index: %d, cache size: %d", typeidx,
+        m_type_ids_size);
+
     if (m_type_cache[typeidx] == nullptr) {
       m_type_cache[typeidx] = get_typeidx_fromdex(typeidx);
     }
-    assert(m_type_cache[typeidx]);
+    redex_assert(m_type_cache[typeidx]);
     return m_type_cache[typeidx];
   }
 
   DexFieldRef* get_fieldidx(uint32_t fidx) {
+    always_assert_type_log(
+        fidx < m_field_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "Field index is out of bound. index: %d, cache size: %d", fidx,
+        m_field_ids_size);
+
     if (m_field_cache[fidx] == nullptr) {
       m_field_cache[fidx] = get_fieldidx_fromdex(fidx);
     }
-    assert(m_field_cache[fidx]);
+    redex_assert(m_field_cache[fidx]);
     return m_field_cache[fidx];
   }
 
   DexMethodRef* get_methodidx(uint32_t midx) {
+    always_assert_type_log(
+        midx < m_method_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "Method index is out of bound. index: %d, cache size: %d", midx,
+        m_method_ids_size);
+
     if (m_method_cache[midx] == nullptr) {
       m_method_cache[midx] = get_methodidx_fromdex(midx);
     }
-    assert(m_method_cache[midx]);
+    redex_assert(m_method_cache[midx]);
     return m_method_cache[midx];
   }
 
   DexProto* get_protoidx(uint32_t pidx) {
+    always_assert_type_log(
+        pidx < m_proto_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "Prototype index is out of bound. index: %d, cache size: %d", pidx,
+        m_proto_ids_size);
+
     if (m_proto_cache[pidx] == nullptr) {
       m_proto_cache[pidx] = get_protoidx_fromdex(pidx);
     }
-    assert(m_proto_cache[pidx]);
+    redex_assert(m_proto_cache[pidx]);
     return m_proto_cache[pidx];
   }
 

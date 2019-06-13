@@ -93,7 +93,7 @@ class ConstantArrayDomain final
 
   uint32_t length() const {
     auto len = array_length();
-    assert(len.is_value());
+    redex_assert(len.is_value());
     return *len.get_constant();
   }
 

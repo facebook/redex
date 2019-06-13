@@ -82,7 +82,8 @@ void write_ir_meta(const std::string& output_ir_dir, DexStoresVector& stores) {
  * Write intermediate dex to files.
  * Development usage only
  */
-void write_intermediate_dex(const ConfigFiles& cfg,
+void write_intermediate_dex(const RedexOptions& redex_options,
+                            const ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             DexStoresVector& stores,
                             Json::Value& dex_files) {
@@ -91,7 +92,7 @@ void write_intermediate_dex(const ConfigFiles& cfg,
     Timer t("Instruction lowering");
     instruction_lowering::run(stores);
   }
-  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("", ""));
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing intermediate dexes");
@@ -120,17 +121,19 @@ void write_intermediate_dex(const ConfigFiles& cfg,
       }
       ss << ".dex";
 
-      write_classes_to_dex(ss.str(),
+      write_classes_to_dex(redex_options,
+                           ss.str(),
                            &store.get_dexen()[i],
                            nullptr /* locator_index */,
                            false /* name-based locators */,
                            store_number,
                            i,
-                           cfg,
+                           conf,
                            pos_mapper.get(),
                            nullptr,
                            nullptr,
-                           nullptr /* IODIMetadata* */);
+                           nullptr /* IODIMetadata* */,
+                           stores[0].get_dex_magic());
       auto basename = boost::filesystem::path(ss.str()).filename().string();
       store_files["list"].append(basename);
     }
@@ -197,7 +200,7 @@ Json::Value parse_config(const std::string& config_file) {
 /**
  * Dumping dex, IR meta data and entry file
  */
-void write_all_intermediate(const ConfigFiles& cfg,
+void write_all_intermediate(const ConfigFiles& /* conf */,
                             const std::string& output_ir_dir,
                             const RedexOptions& redex_options,
                             DexStoresVector& stores,
@@ -206,8 +209,8 @@ void write_all_intermediate(const ConfigFiles& cfg,
   redex_options.serialize(entry_data);
   entry_data["dex_list"] = Json::arrayValue;
   write_ir_meta(output_ir_dir, stores);
-  write_intermediate_dex(ConfigFiles(Json::nullValue), output_ir_dir, stores,
-                         entry_data["dex_list"]);
+  write_intermediate_dex(redex_options, ConfigFiles(Json::nullValue),
+                         output_ir_dir, stores, entry_data["dex_list"]);
   write_entry_file(output_ir_dir, entry_data);
 }
 
@@ -232,7 +235,12 @@ void load_all_intermediate(const std::string& input_ir_dir,
 
   init_ir_meta(stores);
   if (!load_ir_meta(input_ir_dir)) {
-    std::cerr << "Load IR meta failed\n";
+    std::string error =
+        "Use default IR meta instead. The process result may be greatly "
+        "different from the result of running whole optimization passes with "
+        "redex-all\n";
+    std::cerr << error;
+    TRACE(MAIN, 1, "%s", error.c_str());
   }
 }
 } // namespace redex

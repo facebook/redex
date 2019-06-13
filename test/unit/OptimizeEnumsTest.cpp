@@ -5,12 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "Creators.h"
+#include "EnumConfig.h"
 #include "EnumInSwitch.h"
 #include "IRAssembler.h"
 #include "SwitchEquivFinder.h"
+
+using namespace testing;
 
 void setup() {
   ClassCreator cc(DexType::make_type("LFoo;"));
@@ -57,7 +61,7 @@ TEST(OptimizeEnums, basic_pos) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v0)
-      (sparse-switch v0 (:case))
+      (switch v0 (:case))
 
       (:case 0)
       (return-void)
@@ -84,7 +88,7 @@ TEST(OptimizeEnums, overwritten) {
       (aget v0 v1)
       (move-result-pseudo v0)
       (const v0 0)
-      (sparse-switch v0 (:case))
+      (switch v0 (:case))
 
       (:case 0)
       (return-void)
@@ -110,7 +114,7 @@ TEST(OptimizeEnums, nested) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v0)
-      (packed-switch v0 (:a))
+      (switch v0 (:a))
 
       (return-void)
 
@@ -121,7 +125,7 @@ TEST(OptimizeEnums, nested) {
 
       (:x)
       (move-result v0)
-      (packed-switch v0 (:b))
+      (switch v0 (:b))
 
       (return-void)
 
@@ -551,7 +555,7 @@ TEST(OptimizeEnums, goto_default) {
       (move-result v1)
       (aget v0 v1)
       (move-result-pseudo v1)
-      (sparse-switch v1 (:a :b))
+      (switch v1 (:a :b))
 
       (:fallthrough)
       (return-void)
@@ -611,4 +615,62 @@ TEST(OptimizeEnums, divergent_leaf_entry_state) {
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
   delete g_redex;
+}
+
+optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
+  auto method = assembler::method_from_string(s_expr);
+  return optimize_enums::calculate_param_summary(method, get_object_type());
+}
+
+TEST(OptimizeEnums, test_param_summary_generating) {
+  auto redex_context = std::make_unique<RedexContext>();
+  g_redex = redex_context.get();
+
+  auto summary = get_summary(R"(
+    (method (static) "LFoo;.upcast_when_return:(Ljava/lang/Enum;)Ljava/lang/Object;"
+      (
+        (load-param-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  EXPECT_EQ(summary.returned_param, boost::none);
+  EXPECT_TRUE(summary.safe_params.empty());
+
+  auto summary2 = get_summary(R"(
+    (method (public) "LFoo;.param_0_is_not_safecast:(Ljava/lang/Enum;Ljava/lang/Object;)V"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (return-void)
+      )
+    )
+  )");
+  EXPECT_EQ(summary2.returned_param, boost::none);
+  EXPECT_THAT(summary2.safe_params, UnorderedElementsAre(1));
+
+  auto summary3 = get_summary(R"(
+    (method () "LFoo;.check_cast:(Ljava/lang/Object;)Ljava/lang/Object;"
+      (
+        (load-param-object v0)
+        (check-cast v0 "Ljava/lang/Enum;")
+        (move-result-pseudo-object v0)
+        (return-object v0)
+      )
+    )
+  )");
+  EXPECT_EQ(summary3.returned_param, boost::none);
+  EXPECT_TRUE(summary3.safe_params.empty());
+
+  auto summary4 = get_summary(R"(
+    (method () "LFoo;.has_invocation:(Ljava/lang/Object;)Ljava/lang/Object;"
+      (
+        (load-param-object v0)
+        (invoke-virtual (v0) "Ljava/lang/Object;.toString:()Ljava/lang/String;")
+        (return-object v0)
+      )
+    )
+  )");
+  EXPECT_EQ(summary4.returned_param, boost::none);
+  EXPECT_TRUE(summary4.safe_params.empty());
 }

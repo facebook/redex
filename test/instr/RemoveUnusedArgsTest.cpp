@@ -25,6 +25,17 @@ void check_callsite_regs(DexMethod* method, int num_args_expected) {
   }
 }
 
+// Checks only the first return, whether it returns a value
+void check_return(DexMethod* method, bool value) {
+  for (const auto& mie : InstructionIterable(method->get_code())) {
+    auto insn = mie.insn;
+    if (is_return(insn->opcode())) {
+      EXPECT_EQ(is_return_value(insn->opcode()), value);
+      break;
+    }
+  }
+}
+
 // Sanity check: three foo constructors are defined
 TEST_F(PreVerify, CtorsDefined) {
   auto foo = find_class_named(classes, "Lcom/facebook/redex/test/instr/Foo;");
@@ -202,11 +213,65 @@ TEST_F(PostVerify, StaticsUnusedArgs) {
       find_class_named(classes, "Lcom/facebook/redex/test/instr/StaticsUser;");
   ASSERT_NE(nullptr, statics_user);
 
-  auto use_static3 = find_vmethod_named(*statics_user, "use_static3");
+  auto use_static3 = find_vmethod_named(*statics_user, "use_static3$uva1$0");
   ASSERT_NE(nullptr, use_static3);
   use_static3->balloon();
 
   check_callsite_regs(use_static3, 1);
+}
+
+// Checks that static method result type doesn't change when result is used
+TEST_F(PreVerify, StaticsUsedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static4 = find_dmethod_named(*statics, "static4_with_result");
+  ASSERT_NE(nullptr, static4);
+
+  ASSERT_FALSE(static4->get_proto()->is_void());
+  static4->balloon();
+  check_return(static4, true /* value */);
+}
+
+TEST_F(PostVerify, StaticsUsedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static4 = find_dmethod_named(*statics, "static4_with_result");
+  ASSERT_NE(nullptr, static4);
+
+  ASSERT_FALSE(static4->get_proto()->is_void());
+  static4->balloon();
+  check_return(static4, true /* value */);
+}
+
+// Check static method result removal for unused results
+TEST_F(PreVerify, StaticsUnusedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static5 = find_dmethod_named(*statics, "static5_with_result");
+  ASSERT_NE(nullptr, static5);
+
+  ASSERT_FALSE(static5->get_proto()->is_void());
+  static5->balloon();
+  check_return(static5, true /* value */);
+}
+
+TEST_F(PostVerify, StaticsUnusedResult) {
+  auto statics =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/Statics;");
+  ASSERT_NE(nullptr, statics);
+
+  auto static5 = find_dmethod_named(*statics, "static5_with_result");
+  ASSERT_NE(nullptr, static5);
+
+  ASSERT_TRUE(static5->get_proto()->is_void());
+  static5->balloon();
+  check_return(static5, false /* value */);
 }
 
 // Check overloaded name mangling upon collision
@@ -273,7 +338,7 @@ TEST_F(PostVerify, PrivatesUsedArgs) {
 }
 
 // Check nonvirtual method arg removal for unused args
-TEST_F(PreVerify, PublicNonVirtualsUsedArgs) {
+TEST_F(PreVerify, PublicNonVirtualsUnusedArgs) {
   auto non_virtuals =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
@@ -294,7 +359,14 @@ TEST_F(PreVerify, PublicNonVirtualsUsedArgs) {
   check_callsite_regs(use_non_virtual1, 2);
 }
 
-TEST_F(PostVerify, NonVirtualsUsedArgs) {
+TEST_F(PostVerify, NonVirtualsUnusedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual1 = find_vmethod_named(*non_virtuals, "non_virtual1$uva0$0");
+  ASSERT_NE(nullptr, non_virtual1);
+
   auto non_virtuals_user = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
   ASSERT_NE(nullptr, non_virtuals_user);
@@ -304,13 +376,11 @@ TEST_F(PostVerify, NonVirtualsUsedArgs) {
   ASSERT_NE(nullptr, use_non_virtual1);
   use_non_virtual1->balloon();
 
-  // Unsupported use-case. Should keep the original 2 arguments, even though one
-  // is technically unused.
-  check_callsite_regs(use_non_virtual1, 2);
+  check_callsite_regs(use_non_virtual1, 1);
 }
 
 // Check protected method arg removal for unused args
-TEST_F(PreVerify, ProtectedNonVirtualsUsedArgs) {
+TEST_F(PreVerify, ProtectedNonVirtualsUnusedArgs) {
   auto non_virtuals =
       find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
   ASSERT_NE(nullptr, non_virtuals);
@@ -330,7 +400,14 @@ TEST_F(PreVerify, ProtectedNonVirtualsUsedArgs) {
   check_callsite_regs(use_non_virtual2, 2);
 }
 
-TEST_F(PostVerify, ProtectedNonVirtualsUsedArgs) {
+TEST_F(PostVerify, ProtectedNonVirtualsUnusedArgs) {
+  auto non_virtuals =
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/NonVirtuals;");
+  ASSERT_NE(nullptr, non_virtuals);
+
+  auto non_virtual2 = find_vmethod_named(*non_virtuals, "non_virtual2$uva0$0");
+  ASSERT_NE(nullptr, non_virtual2);
+
   auto non_virtuals_user = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/NonVirtualsUser;");
   ASSERT_NE(nullptr, non_virtuals_user);
@@ -340,9 +417,7 @@ TEST_F(PostVerify, ProtectedNonVirtualsUsedArgs) {
   ASSERT_NE(nullptr, use_non_virtual2);
   use_non_virtual2->balloon();
 
-  // Unsupported use-case. Should keep the original 2 arguments, even though one
-  // is technically unused.
-  check_callsite_regs(use_non_virtual2, 2);
+  check_callsite_regs(use_non_virtual2, 1);
 }
 
 } // namespace

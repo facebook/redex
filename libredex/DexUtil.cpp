@@ -18,6 +18,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Resolver.h"
+#include "UnknownVirtuals.h"
 
 DexType* get_object_type() {
   return DexType::make_type("Ljava/lang/Object;");
@@ -384,7 +385,7 @@ bool passes_args_through(IRInstruction* insn,
   return insn->srcs_size() + ignore == param_count;
 }
 
-Scope build_class_scope(DexStoresVector& stores) {
+Scope build_class_scope(const DexStoresVector& stores) {
   return build_class_scope(DexStoreClassesIterator(stores));
 }
 
@@ -393,14 +394,14 @@ void post_dexen_changes(const Scope& v, DexStoresVector& stores) {
   post_dexen_changes(v, iter);
 }
 
-void load_root_dexen(
-  DexStore& store,
-  const std::string& dexen_dir_str,
-  bool balloon,
-  bool verbose) {
+void load_root_dexen(DexStore& store,
+                     const std::string& dexen_dir_str,
+                     bool balloon,
+                     bool verbose,
+                     bool support_dex_v37) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
-  assert(fs::is_directory(dexen_dir_path));
+  redex_assert(fs::is_directory(dexen_dir_path));
 
   // Discover dex files
   auto end = fs::directory_iterator();
@@ -450,7 +451,8 @@ void load_root_dexen(
       TRACE(MAIN, 1, "Loading %s\n", dex.string().c_str());
     }
     // N.B. throaway stats for now
-    DexClasses classes = load_classes_from_dex(dex.string().c_str(), balloon);
+    DexClasses classes =
+        load_classes_from_dex(dex.string().c_str(), balloon, support_dex_v37);
     store.add_classes(std::move(classes));
   }
 }
@@ -500,6 +502,16 @@ dex_stats_t&
   lhs.num_type_lists += rhs.num_type_lists;
   lhs.num_bytes += rhs.num_bytes;
   lhs.num_instructions += rhs.num_instructions;
+  lhs.num_unique_types += rhs.num_unique_types;
+  lhs.num_unique_protos += rhs.num_unique_protos;
+  lhs.num_unique_strings += rhs.num_unique_strings;
+  lhs.num_unique_method_refs += rhs.num_unique_method_refs;
+  lhs.num_unique_field_refs += rhs.num_unique_field_refs;
+  lhs.types_total_size += rhs.types_total_size;
+  lhs.protos_total_size += rhs.protos_total_size;
+  lhs.strings_total_size += rhs.strings_total_size;
+  lhs.method_refs_total_size += rhs.method_refs_total_size;
+  lhs.field_refs_total_size += rhs.field_refs_total_size;
   lhs.num_dbg_items += rhs.num_dbg_items;
   lhs.dbg_total_size += rhs.dbg_total_size;
   return lhs;
@@ -528,11 +540,11 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
-void change_visibility(DexMethod* method) {
+void change_visibility(DexMethod* method, DexType* scope) {
   auto code = method->get_code();
   always_assert(code != nullptr);
 
-  editable_cfg_adapter::iterate(code, [](MethodItemEntry& mie) {
+  editable_cfg_adapter::iterate(code, [scope](MethodItemEntry& mie) {
     auto insn = mie.insn;
 
     if (insn->has_field()) {
@@ -556,7 +568,8 @@ void change_visibility(DexMethod* method) {
       }
       auto current_method = resolve_method(
           insn->get_method(), opcode_to_search(insn));
-      if (current_method != nullptr && current_method->is_concrete()) {
+      if (current_method != nullptr && current_method->is_concrete() &&
+          (scope == nullptr || current_method->get_class() != scope)) {
         set_public(current_method);
         set_public(type_class(current_method->get_class()));
         // FIXME no point in rewriting opcodes in the method
@@ -588,26 +601,41 @@ void change_visibility(DexMethod* method) {
 
 // Check that visibility / accessibility changes to the current method
 // won't need to change a referenced method into a virtual or static one.
-bool no_changes_when_relocating_method(const DexMethod* method) {
+bool gather_invoked_methods_that_prevent_relocation(
+    const DexMethod* method,
+    std::unordered_set<DexMethodRef*>* methods_preventing_relocation) {
   auto code = method->get_code();
   always_assert(code);
 
+  bool can_relocate = true;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_INVOKE_DIRECT) {
-      auto meth = resolve_method(insn->get_method(), MethodSearch::Direct);
-      if (!meth) {
-        return false;
+    auto opcode = insn->opcode();
+    if (is_invoke(opcode)) {
+      auto meth = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (!meth && opcode == OPCODE_INVOKE_VIRTUAL &&
+          unknown_virtuals::is_method_known_to_be_public(insn->get_method())) {
+        continue;
       }
-
-      always_assert(meth->is_def());
-      if (!is_init(meth)) {
-        return false;
+      if (meth) {
+        always_assert(meth->is_def());
+        if (meth->is_external() && !is_public(meth)) {
+          meth = nullptr;
+        } else if (opcode == OPCODE_INVOKE_DIRECT && !is_init(meth)) {
+          meth = nullptr;
+        }
+      }
+      if (!meth) {
+        can_relocate = false;
+        if (!methods_preventing_relocation) {
+          break;
+        }
+        methods_preventing_relocation->emplace(insn->get_method());
       }
     }
   }
 
-  return true;
+  return can_relocate;
 }
 
 bool no_invoke_super(const DexMethod* method) {
@@ -625,7 +653,7 @@ bool no_invoke_super(const DexMethod* method) {
 }
 
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
-  if (!no_changes_when_relocating_method(method)) {
+  if (!gather_invoked_methods_that_prevent_relocation(method)) {
     return false;
   }
 

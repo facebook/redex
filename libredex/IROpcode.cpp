@@ -372,9 +372,8 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case DOPCODE_GOTO_32:
     return OPCODE_GOTO;
   case DOPCODE_PACKED_SWITCH:
-    return OPCODE_PACKED_SWITCH;
   case DOPCODE_SPARSE_SWITCH:
-    return OPCODE_SPARSE_SWITCH;
+    return OPCODE_SWITCH;
   case DOPCODE_CONST_WIDE:
     return OPCODE_CONST_WIDE;
   case DOPCODE_IGET:
@@ -738,9 +737,7 @@ DexOpcode to_dex_opcode(IROpcode op) {
     return DOPCODE_CONST;
   case OPCODE_FILL_ARRAY_DATA:
     return DOPCODE_FILL_ARRAY_DATA;
-  case OPCODE_PACKED_SWITCH:
-    return DOPCODE_PACKED_SWITCH;
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     return DOPCODE_SPARSE_SWITCH;
   case OPCODE_CONST_WIDE:
     return DOPCODE_CONST_WIDE;
@@ -951,8 +948,7 @@ Branchingness branchingness(IROpcode op) {
     return BRANCH_THROW;
   case OPCODE_GOTO:
     return BRANCH_GOTO;
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     return BRANCH_SWITCH;
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
@@ -1015,6 +1011,28 @@ bool is_move_result_pseudo(IROpcode op) {
 
 bool is_move_result_or_move_result_pseudo(IROpcode op) {
   return is_move_result(op) || is_move_result_pseudo(op);
+}
+
+bool is_commutative(IROpcode opcode) {
+  switch (opcode) {
+  case OPCODE_AND_INT:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_INT:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_INT:
+  case OPCODE_XOR_LONG:
+  case OPCODE_ADD_INT:
+  case OPCODE_ADD_LONG:
+  case OPCODE_ADD_FLOAT:
+  case OPCODE_ADD_DOUBLE:
+  case OPCODE_MUL_INT:
+  case OPCODE_MUL_LONG:
+  case OPCODE_MUL_FLOAT:
+  case OPCODE_MUL_DOUBLE:
+    return true;
+  default:
+    return false;
+  }
 }
 
 IROpcode load_param_to_move(IROpcode op) {
@@ -1356,8 +1374,7 @@ bool dest_is_object(IROpcode op) {
   case OPCODE_CONST:
     return false;
   case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_WIDE:

@@ -122,8 +122,8 @@ void update_code_type_refs(
         if (meth_def == nullptr) {
           auto intf_def = resolve_method(meth_ref, MethodSearch::Interface);
           always_assert(insn->opcode() == OPCODE_INVOKE_VIRTUAL && intf_def);
-          auto new_proto = type_reference::update_proto_reference(
-              proto, mergeable_to_merger);
+          auto new_proto =
+              type_reference::get_new_proto(proto, mergeable_to_merger);
           DexMethodSpec spec;
           spec.proto = new_proto;
           meth_ref->change(spec,
@@ -339,6 +339,7 @@ void update_instance_of_no_type_tag(
 
 void update_refs_to_mergeable_types(
     const Scope& scope,
+    const ClassHierarchy& parent_to_children,
     const std::vector<const MergerType*>& mergers,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     const TypeTags& type_tags,
@@ -350,6 +351,7 @@ void update_refs_to_mergeable_types(
   type_reference::update_method_signature_type_references(
       scope,
       mergeable_to_merger,
+      parent_to_children,
       boost::optional<std::unordered_map<DexMethod*, std::string>&>(
           method_debug_map));
   type_reference::update_field_type_references(scope, mergeable_to_merger);
@@ -497,9 +499,11 @@ void write_out_type_mapping(
     auto merger = pair.second;
     out << SHOW(mergeable) << " -> " << SHOW(merger) << std::endl;
 
-    for (auto& symbol_map : method_dedup_map.at(mergeable)) {
-      out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
-          << std::endl;
+    if (method_dedup_map.count(mergeable)) {
+      for (auto& symbol_map : method_dedup_map.at(mergeable)) {
+        out << "  " << symbol_map.first << " -> " << SHOW(symbol_map.second)
+            << std::endl;
+      }
     }
   }
   out << std::endl;
@@ -617,7 +621,10 @@ std::vector<DexClass*> ModelMerger::merge_model(
                                              input_has_type_tag,
                                              model_spec.generate_type_tag());
   std::unordered_map<DexMethod*, std::string> method_debug_map;
+  auto parent_to_children =
+      model.get_type_system().get_class_scopes().get_parent_to_children();
   update_refs_to_mergeable_types(scope,
+                                 parent_to_children,
                                  to_materialize,
                                  mergeable_to_merger,
                                  type_tags,

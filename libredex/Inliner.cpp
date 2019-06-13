@@ -7,7 +7,6 @@
 
 #include "Inliner.h"
 
-#include "AnnoUtils.h"
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ControlFlow.h"
@@ -18,6 +17,7 @@
 #include "OptData.h"
 #include "Resolver.h"
 #include "Transform.h"
+#include "UnknownVirtuals.h"
 #include "Walkers.h"
 
 using namespace opt_metadata;
@@ -43,26 +43,11 @@ DEBUG_ONLY bool method_breakup(
     for (auto callee : group) {
       callee->get_access() & ACC_STATIC ? stat++ : inst++;
     }
-    TRACE(SINL, 5, "%ld callers %ld: instance %ld, static %ld\n",
-        i, group.size(), inst, stat);
+    TRACE(INLINE, 5, "%ld callers %ld: instance %ld, static %ld\n", i,
+          group.size(), inst, stat);
   }
   return true;
 }
-
-// add any type on which an access is allowed and safe without accessibility
-// issues
-const char* safe_types_on_refs[] = {
-    "Ljava/lang/Object;",
-    "Ljava/lang/String;",
-    "Ljava/lang/Enum;",
-    "Ljava/lang/StringBuilder;",
-    "Ljava/lang/Boolean;",
-    "Ljava/lang/Class;",
-    "Ljava/lang/Long;",
-    "Ljava/lang/Integer;",
-    "Landroid/os/Bundle;",
-    "Ljava/nio/ByteBuffer;"
-};
 
 /*
  * This is the maximum size of method that Dex bytecode can encode.
@@ -81,91 +66,6 @@ constexpr uint64_t HARD_MAX_INSTRUCTION_SIZE = 1L << 32;
 constexpr uint32_t SOFT_MAX_INSTRUCTION_SIZE = 1 << 15;
 constexpr uint32_t INSTRUCTION_BUFFER = 1 << 12;
 
-/**
- * Use this cache once the optimization is invoked to make sure
- * all caches are filled and usable.
- */
-struct DexTypeCache {
-  std::vector<DexType*> cache;
-
-  DexTypeCache() {
-    for (auto const safe_type : safe_types_on_refs) {
-      auto type = DexType::get_type(safe_type);
-      if (type != nullptr) {
-        cache.push_back(type);
-      }
-    }
-  }
-
-  bool has_type(DexType* type) {
-    for (auto cached_type : cache) {
-      if (cached_type == type) return true;
-    }
-    return false;
-  }
-};
-
-/**
- * If the type is a known final type or a well known type with no protected
- * methods the invocation is ok and can be optimized.
- * The problem here is that we don't have knowledge of all the types known
- * to the app and so we cannot determine whether the method was public or
- * protected. When public the optimization holds otherwise it's not always
- * possible to optimize and we conservatively give up.
- */
-bool type_ok(DexType* type) {
-  static DexTypeCache* cache = new DexTypeCache();
-  return cache->has_type(type);
-}
-
-/**
- * If the method is a known public method over a known public class
- * the optimization is safe.
- * Following is a short list of safe methods that are called with frequency
- * and are optimizable.
- */
-bool method_ok(DexType* type, DexMethodRef* meth) {
-  auto meth_name = meth->get_name()->c_str();
-  static auto view = DexType::get_type("Landroid/view/View;");
-  if (view == type) {
-    if (strcmp(meth_name, "getContext") == 0) return true;
-    if (strcmp(meth_name, "findViewById") == 0) return true;
-    if (strcmp(meth_name, "setVisibility") == 0) return true;
-    return false;
-  }
-  static auto il = DexType::get_type(
-      "Lcom/google/common/collect/ImmutableList;");
-  static auto al = DexType::get_type("Ljava/util/ArrayList;");
-  if (il == type || al == type) {
-    if (strcmp(meth_name, "get") == 0) return true;
-    if (strcmp(meth_name, "isEmpty") == 0) return true;
-    if (strcmp(meth_name, "size") == 0) return true;
-    if (strcmp(meth_name, "add") == 0) return true;
-    return false;
-  }
-  static auto ctx = DexType::get_type("Landroid/content/Context;");
-  if (ctx == type) {
-    if (strcmp(meth_name, "getResources") == 0) return true;
-    return false;
-  }
-  static auto resrc = DexType::get_type("Landroid/content/res/Resources;");
-  if (resrc == type) {
-    if (strcmp(meth_name, "getString") == 0) return true;
-    return false;
-  }
-  static auto linf = DexType::get_type("Landroid/view/LayoutInflater;");
-  if (linf == type) {
-    if (strcmp(meth_name, "inflate") == 0) return true;
-    return false;
-  }
-  static auto vg = DexType::get_type("Landroid/view/ViewGroup;");
-  if (vg == type) {
-    if (strcmp(meth_name, "getContext") == 0) return true;
-    return false;
-  }
-  return false;
-}
-
 } // namespace
 
 MultiMethodInliner::MultiMethodInliner(
@@ -173,22 +73,57 @@ MultiMethodInliner::MultiMethodInliner(
     DexStoresVector& stores,
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
-    const Config& config)
+    const inliner::InlinerConfig& config,
+    MultiMethodInlinerMode mode /* default is InterDex */)
     : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
-  // walk every opcode in scope looking for calls to inlinable candidates
-  // and build a map of callers to callees and the reverse callees to callers
-  walk::opcodes(scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod* meth, IRInstruction* insn) {
-                  if (is_invoke(insn->opcode())) {
-                    auto callee =
-                        resolver(insn->get_method(), opcode_to_search(insn));
-                    if (callee != nullptr && callee->is_concrete() &&
-                        candidates.find(callee) != candidates.end()) {
-                      callee_caller[callee].push_back(meth);
-                      caller_callee[meth].push_back(callee);
+  // Walk every opcode in scope looking for calls to inlinable candidates and
+  // build a map of callers to callees and the reverse callees to callers. If
+  // intra_dex is false, we build the map for all the candidates. If intra_dex
+  // is true, we properly exclude methods who have callers being located in
+  // another dex from the candidates.
+  if (mode == IntraDex) {
+    std::unordered_set<DexMethod*> candidate_callees(candidates.begin(),
+                                                     candidates.end());
+    XDexRefs x_dex(stores);
+    walk::opcodes(scope, [](DexMethod* caller) { return true; },
+                  [&](DexMethod* caller, IRInstruction* insn) {
+                    if (is_invoke(insn->opcode())) {
+                      auto callee =
+                          resolver(insn->get_method(), opcode_to_search(insn));
+                      if (callee != nullptr && callee->is_concrete() &&
+                          candidate_callees.count(callee)) {
+                        if (x_dex.cross_dex_ref(caller, callee)) {
+                          candidate_callees.erase(callee);
+                          if (callee_caller.count(callee)) {
+                            callee_caller.erase(callee);
+                          }
+                        } else {
+                          callee_caller[callee].push_back(caller);
+                        }
+                      }
                     }
-                  }
-                });
+                  });
+    for (auto& pair : callee_caller) {
+      DexMethod* callee = const_cast<DexMethod*>(pair.first);
+      const auto& callers = pair.second;
+      for (auto caller : callers) {
+        caller_callee[caller].push_back(callee);
+      }
+    }
+  } else if (mode == InterDex) {
+    walk::opcodes(scope, [](DexMethod* caller) { return true; },
+                  [&](DexMethod* caller, IRInstruction* insn) {
+                    if (is_invoke(insn->opcode())) {
+                      auto callee =
+                          resolver(insn->get_method(), opcode_to_search(insn));
+                      if (callee != nullptr && callee->is_concrete() &&
+                          candidates.count(callee)) {
+                        callee_caller[callee].push_back(caller);
+                        caller_callee[caller].push_back(callee);
+                      }
+                    }
+                  });
+  }
 }
 
 void MultiMethodInliner::inline_methods() {
@@ -356,7 +291,7 @@ void MultiMethodInliner::inline_inlinables(
 
     TRACE(MMINL, 6, "checking visibility usage of members in %s\n",
           SHOW(callee));
-    change_visibility(callee_method);
+    change_visibility(callee_method, caller_method->get_class());
     info.calls_inlined++;
     inlined.insert(callee_method);
   }
@@ -375,54 +310,69 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
   if (cross_store_reference(callee)) {
-    log_nopt(INL_CROSS_STORE_REFS, caller, insn);
+    if (insn) {
+      log_nopt(INL_CROSS_STORE_REFS, caller, insn);
+    }
     return false;
   }
   if (is_blacklisted(callee)) {
-    log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    if (insn) {
+      log_nopt(INL_BLACKLISTED_CALLEE, callee);
+    }
     return false;
   }
   if (caller_is_blacklisted(caller)) {
-    log_nopt(INL_BLACKLISTED_CALLER, caller);
+    if (insn) {
+      log_nopt(INL_BLACKLISTED_CALLER, caller);
+    }
     return false;
   }
   if (has_external_catch(callee)) {
-    log_nopt(INL_EXTERN_CATCH, callee);
+    if (insn) {
+      log_nopt(INL_EXTERN_CATCH, callee);
+    }
     return false;
   }
-  if (cannot_inline_opcodes(caller, callee, insn)) {
+  std::vector<DexMethod*> make_static;
+  if (cannot_inline_opcodes(caller, callee, insn, &make_static)) {
     return false;
   }
-  if (has_any_annotation(callee, m_config.force_inline)) {
-    return true;
-  }
-  if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
-    log_nopt(INL_TOO_BIG, caller, insn);
-    return false;
+  if (!callee->rstate.force_inline()) {
+    if (caller_too_large(caller->get_class(), estimated_insn_size, callee)) {
+      if (insn) {
+        log_nopt(INL_TOO_BIG, caller, insn);
+      }
+      return false;
+    }
+
+    // Don't inline code into a method that doesn't have the same (or higher)
+    // required API. We don't want to bring API specific code into a class where
+    // it's not supported.
+    int32_t callee_api = api::LevelChecker::get_method_level(callee);
+    if (callee_api != api::LevelChecker::get_min_level() &&
+        callee_api > api::LevelChecker::get_method_level(caller)) {
+      // check callee_api against the minimum and short-circuit because most
+      // methods don't have a required api and we want that to be fast.
+      if (insn) {
+        log_nopt(INL_REQUIRES_API, caller, insn);
+      }
+      TRACE(MMINL, 4,
+            "Refusing to inline %s\n"
+            "              into %s\n because of API boundaries.",
+            show_deobfuscated(callee).c_str(),
+            show_deobfuscated(caller).c_str());
+      return false;
+    }
+
+    if (callee->rstate.dont_inline()) {
+      return false;
+    }
   }
 
-  // Don't inline code into a method that doesn't have the same (or higher)
-  // required API. We don't want to bring API specific code into a class where
-  // it's not supported.
-  int32_t callee_api = api::LevelChecker::get_method_level(callee);
-  if (callee_api != api::LevelChecker::get_min_level() &&
-      callee_api > api::LevelChecker::get_method_level(caller)) {
-    // check callee_api against the minimum and short-circuit because most
-    // methods don't have a required api and we want that to be fast.
-    log_nopt(INL_REQUIRES_API, caller, insn);
-    TRACE(MMINL, 4,
-          "Refusing to inline %s\n"
-          "              into %s\n because of API boundaries.",
-          show_deobfuscated(callee).c_str(), show_deobfuscated(caller).c_str());
-    return false;
-  }
-
-  DexClass* cls = type_class(callee->get_class());
-  if (has_any_annotation(cls, m_config.no_inline) ||
-      has_any_annotation(callee, m_config.no_inline)) {
-    return false;
-  }
-
+  // Only now, when we'll indicating that the method inlinable, we'll record the
+  // fact that we'll have to make some methods static.
+  std::copy(make_static.begin(), make_static.end(),
+            std::inserter(m_make_static, m_make_static.end()));
   return true;
 }
 
@@ -433,12 +383,12 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
  */
 bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
   auto cls = type_class(callee->get_class());
-  // Enums are all blacklisted
-  if (is_enum(cls)) {
+  // Enums' kept methods are all blacklisted
+  if (is_enum(cls) && root(callee)) {
     return true;
   }
   while (cls != nullptr) {
-    if (m_config.black_list.count(cls->get_type())) {
+    if (m_config.get_black_list().count(cls->get_type())) {
       info.blacklisted++;
       return true;
     }
@@ -489,7 +439,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 
 bool MultiMethodInliner::should_inline(const DexMethod* caller,
                                        const DexMethod* callee) const {
-  if (has_any_annotation(callee, m_config.force_inline)) {
+  if (callee->rstate.force_inline()) {
     return true;
   }
   if (too_many_callers(callee)) {
@@ -517,15 +467,20 @@ static size_t count_important_opcodes(const IRCode* code) {
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
-  auto caller_count = callee_caller.at(callee).size();
+  const auto& callers = callee_caller.at(callee);
+  auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
-  if (!m_opcode_counts.count(callee)) {
-    m_opcode_counts[callee] = count_important_opcodes(callee->get_code());
+  auto opcode_counts_it = m_opcode_counts.find(callee);
+  size_t code_size;
+  if (opcode_counts_it != m_opcode_counts.end()) {
+    code_size = opcode_counts_it->second;
+  } else {
+    m_opcode_counts[callee] = code_size =
+        count_important_opcodes(callee->get_code());
   }
-  auto code_size = m_opcode_counts.at(callee);
 
-  if (!can_delete(callee)) {
+  if (root(callee)) {
     if (m_config.inline_small_non_deletables) {
       return code_size > CODE_SIZE_ANY_CALLERS;
     } else {
@@ -536,22 +491,40 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
   if (caller_count == 1) {
     return false;
   }
+
+  auto callers_in_same_class_it = m_callers_in_same_class.find(callee);
+  bool have_all_callers_same_class;
+  if (callers_in_same_class_it != m_callers_in_same_class.end()) {
+    have_all_callers_same_class = callers_in_same_class_it->second;
+  } else {
+    auto callee_class = callee->get_class();
+    have_all_callers_same_class = true;
+    for (auto caller : callers) {
+      if (caller->get_class() != callee_class) {
+        have_all_callers_same_class = false;
+        break;
+      }
+    }
+    m_callers_in_same_class.emplace(callee, have_all_callers_same_class);
+  }
+
+  unsigned long locality_advantage = have_all_callers_same_class ? 2 : 0;
   if (m_config.multiple_callers) {
     switch (caller_count) {
     case 2:
-      return code_size > CODE_SIZE_2_CALLERS;
+      return code_size > CODE_SIZE_2_CALLERS + locality_advantage;
     case 3:
-      return code_size > CODE_SIZE_3_CALLERS;
+      return code_size > CODE_SIZE_3_CALLERS + locality_advantage;
     default:
       break;
     }
   }
-  return code_size > CODE_SIZE_ANY_CALLERS;
+  return code_size > CODE_SIZE_ANY_CALLERS + locality_advantage;
 }
 
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
   auto cls = caller->get_class();
-  if (m_config.caller_black_list.count(cls)) {
+  if (m_config.get_caller_black_list().count(cls)) {
     info.blacklisted++;
     return true;
   }
@@ -582,35 +555,45 @@ bool MultiMethodInliner::has_external_catch(const DexMethod* callee) {
 /**
  * Analyze opcodes in the callee to see if they are problematic for inlining.
  */
-bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
-                                               const DexMethod* callee,
-                                               const IRInstruction* invk_insn) {
+bool MultiMethodInliner::cannot_inline_opcodes(
+    const DexMethod* caller,
+    const DexMethod* callee,
+    const IRInstruction* invk_insn,
+    std::vector<DexMethod*>* make_static) {
   int ret_count = 0;
   bool can_inline = true;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {
         auto insn = mie.insn;
-        if (create_vmethod(insn)) {
-          log_nopt(INL_CREATE_VMETH, caller, invk_insn);
-          can_inline = false;
-          return editable_cfg_adapter::LOOP_BREAK;
-        }
-        if (nonrelocatable_invoke_super(insn, callee, caller)) {
-          log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+        if (create_vmethod(insn, callee, caller, make_static)) {
+          if (invk_insn) {
+            log_nopt(INL_CREATE_VMETH, caller, invk_insn);
+          }
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
         }
         // if the caller and callee are in the same class, we don't have to
-        // worry about unknown virtuals -- private / protected methods will
-        // remain accessible
+        // worry about invoke supers, or unknown virtuals -- private / protected
+        // methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
+          if (nonrelocatable_invoke_super(insn)) {
+            if (invk_insn) {
+              log_nopt(INL_HAS_INVOKE_SUPER, caller, invk_insn);
+            }
+            can_inline = false;
+            return editable_cfg_adapter::LOOP_BREAK;
+          }
           if (unknown_virtual(insn)) {
-            log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+            if (invk_insn) {
+              log_nopt(INL_UNKNOWN_VIRTUAL, caller, invk_insn);
+            }
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
           if (unknown_field(insn)) {
-            log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+            if (invk_insn) {
+              log_nopt(INL_UNKNOWN_FIELD, caller, invk_insn);
+            }
             can_inline = false;
             return editable_cfg_adapter::LOOP_BREAK;
           }
@@ -638,7 +621,9 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
   // The CFG inliner can handle multiple return callees.
   if (ret_count > 1 && !m_config.use_cfg_inliner) {
     info.multi_ret++;
-    log_nopt(INL_MULTIPLE_RETURNS, callee);
+    if (invk_insn) {
+      log_nopt(INL_MULTIPLE_RETURNS, callee);
+    }
     can_inline = false;
   }
   return !can_inline;
@@ -651,7 +636,10 @@ bool MultiMethodInliner::cannot_inline_opcodes(const DexMethod* caller,
  * referenced by a callee is visible and accessible in the caller context.
  * This step would not be needed if we changed all private instance to static.
  */
-bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
+bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
+                                        const DexMethod* callee,
+                                        const DexMethod* caller,
+                                        std::vector<DexMethod*>* make_static) {
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method = resolver(insn->get_method(), MethodSearch::Direct);
@@ -660,6 +648,10 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       return true;
     }
     always_assert(method->is_def());
+    if (caller->get_class() == callee->get_class()) {
+      // No need to give up here, or make it static. Visibility is just fine.
+      return false;
+    }
     if (is_init(method)) {
       if (!method->is_concrete() && !is_public(method)) {
         info.non_pub_ctor++;
@@ -669,7 +661,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
       return false;
     }
     if (!is_native(method) && !has_keep(method)) {
-      m_make_static.insert(method);
+      make_static->push_back(method);
     } else {
       info.need_vmethod++;
       return true;
@@ -680,16 +672,11 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn) {
 
 /**
  * Return true if a callee contains an invoke super to a different method
- * in the hierarchy, and the callee and caller are in different classes.
+ * in the hierarchy.
  * Inlining an invoke_super off its class hierarchy would break the verifier.
  */
-bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn,
-                                                     const DexMethod* callee,
-                                                     const DexMethod* caller) {
+bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-    if (callee->get_class() == caller->get_class()) {
-      return false;
-    }
     info.invoke_super++;
     return true;
   }
@@ -708,23 +695,12 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
     auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
-      // if it's not known to redex but it's a common java/android API method
-      if (method_ok(method->get_class(), method)) {
+      info.unresolved_methods++;
+      if (unknown_virtuals::is_method_known_to_be_public(method)) {
+        info.known_public_methods++;
         return false;
       }
-      auto type = method->get_class();
-      if (type_ok(type)) return false;
 
-      // the method ref is bound to a type known to redex but the method does
-      // not exist in the hierarchy known to redex. Essentially the method
-      // is from an external type i.e. A.equals(Object)
-      auto cls = type_class(type);
-      while (cls != nullptr) {
-        type = cls->get_super_class();
-        cls = type_class(type);
-      }
-      if (type_ok(type)) return false;
-      if (method_ok(type, method)) return false;
       info.escaped_virtual++;
       return true;
     }

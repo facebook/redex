@@ -58,6 +58,15 @@ bool inline_with_cfg(DexMethod* caller_method,
 } // namespace inliner
 
 /**
+ * What kind of caller-callee relationships the inliner should consider.
+ */
+enum MultiMethodInlinerMode {
+  None,
+  InterDex,
+  IntraDex,
+};
+
+/**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
  * to find and inline all calls to candidate.
@@ -68,25 +77,18 @@ bool inline_with_cfg(DexMethod* caller_method,
  */
 class MultiMethodInliner {
  public:
-  struct Config {
-    bool throws_inline;
-    bool enforce_method_size_limit{true};
-    bool multiple_callers{false};
-    bool inline_small_non_deletables{false};
-    bool use_cfg_inliner{false};
-    std::unordered_set<DexType*> black_list;
-    std::unordered_set<DexType*> caller_black_list;
-    std::unordered_set<DexType*> whitelist_no_method_limit;
-    std::unordered_set<DexType*> no_inline;
-    std::unordered_set<DexType*> force_inline;
-  };
-
+  /**
+   * We can do global inlining before InterDexPass, but after InterDexPass, we
+   * can only inline methods within each dex. Set intra_dex to true if
+   * inlining is needed after InterDex.
+   */
   MultiMethodInliner(
       const std::vector<DexClass*>& scope,
       DexStoresVector& stores,
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
-      const Config& config);
+      const inliner::InlinerConfig& config,
+      MultiMethodInlinerMode mode = InterDex);
 
   ~MultiMethodInliner() {
     invoke_direct_to_static();
@@ -117,6 +119,16 @@ class MultiMethodInliner {
   void inline_callees(DexMethod* caller,
                       const std::unordered_set<IRInstruction*>& insns);
 
+  /**
+   * Return true if the callee is inlinable into the caller.
+   * The predicates below define the constraints for inlining.
+   * Providing an instrucion is optional, and only used for logging.
+   */
+  bool is_inlinable(DexMethod* caller,
+                    DexMethod* callee,
+                    const IRInstruction* insn,
+                    size_t estimated_insn_size);
+
  private:
   /**
    * Inline all callees into caller.
@@ -131,15 +143,6 @@ class MultiMethodInliner {
   void inline_inlinables(
       DexMethod* caller,
       const std::vector<std::pair<DexMethod*, IRList::iterator>>& inlinables);
-
-  /**
-   * Return true if the callee is inlinable into the caller.
-   * The predicates below define the constraints for inlining.
-   */
-  bool is_inlinable(DexMethod* caller,
-                    DexMethod* callee,
-                    const IRInstruction* insn,
-                    size_t estimated_insn_size);
 
   /**
    * Return true if the method is related to enum (java.lang.Enum and derived).
@@ -160,25 +163,29 @@ class MultiMethodInliner {
    * Return true if the callee contains certain opcodes that are difficult
    * or impossible to inline.
    * Some of the opcodes are defined by the methods below.
+   * When returning false, some methods might have been added to make_static.
    */
   bool cannot_inline_opcodes(const DexMethod* caller,
                              const DexMethod* callee,
-                             const IRInstruction* invk_insn);
+                             const IRInstruction* invk_insn,
+                             std::vector<DexMethod*>* make_static);
 
   /**
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
+   * When returning false, a method might have been added to make_static.
    */
-  bool create_vmethod(IRInstruction* insn);
+  bool create_vmethod(IRInstruction* insn,
+                      const DexMethod* callee,
+                      const DexMethod* caller,
+                      std::vector<DexMethod*>* make_static);
 
   /**
    * Return true if a callee contains an invoke super to a different method
-   * in the hierarchy, and the callee and caller are in different classes.
+   * in the hierarchy.
    * invoke-super can only exist within the class the call lives in.
    */
-  bool nonrelocatable_invoke_super(IRInstruction* insn,
-                                   const DexMethod* callee,
-                                   const DexMethod* caller);
+  bool nonrelocatable_invoke_super(IRInstruction* insn);
 
   /**
    * Return true if the callee contains a call to an unknown virtual method.
@@ -233,7 +240,7 @@ class MultiMethodInliner {
    * This method does *not* need to return a subset of is_inlinable. We will
    * only inline callsites that pass both should_inline and is_inlinable.
    *
-   * Note that this filter  will only be applied  when inlining is initiated via
+   * Note that this filter will only be applied when inlining is initiated via
    * a call to `inline_methods()`, but not if `inline_callees()` is invoked
    * directly.
    */
@@ -274,7 +281,8 @@ class MultiMethodInliner {
   // Maps from callee to callers and reverse map from caller to callees.
   // Those are used to perform bottom up inlining.
   //
-  std::unordered_map<const DexMethod*, std::vector<DexMethod*>> callee_caller;
+  std::map<const DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
+      callee_caller;
   // this map is ordered in order that we inline our methods in a repeatable
   // fashion so as to create reproducible binaries
   std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
@@ -283,6 +291,9 @@ class MultiMethodInliner {
   // Cache of the opcode counts of each method after all its eligible callsites
   // have been inlined.
   mutable std::unordered_map<const DexMethod*, size_t> m_opcode_counts;
+
+  // Cache of whether all callers of a callee are in the same class.
+  mutable std::unordered_map<const DexMethod*, bool> m_callers_in_same_class;
 
  private:
   /**
@@ -299,6 +310,8 @@ class MultiMethodInliner {
     size_t invoke_super{0};
     size_t write_over_ins{0};
     size_t escaped_virtual{0};
+    size_t known_public_methods{0};
+    size_t unresolved_methods{0};
     size_t non_pub_virtual{0};
     size_t escaped_field{0};
     size_t non_pub_field{0};
@@ -310,7 +323,7 @@ class MultiMethodInliner {
 
   const std::vector<DexClass*>& m_scope;
 
-  const Config& m_config;
+  const inliner::InlinerConfig& m_config;
 
   std::unordered_set<DexMethod*> m_make_static;
 

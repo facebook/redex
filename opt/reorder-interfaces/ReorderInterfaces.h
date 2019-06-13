@@ -13,7 +13,5 @@ class ReorderInterfacesPass : public Pass {
  public:
   ReorderInterfacesPass() : Pass("ReorderInterfacesPass") {}
 
-  void configure_pass(const JsonWrapper& /* unused */) override {}
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

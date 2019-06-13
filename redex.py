@@ -348,82 +348,6 @@ def create_output_apk(extracted_apk_dir, output_apk_path, sign, keystore,
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
 
 
-def merge_proguard_maps(
-        redex_rename_map_path,
-        input_apk_path,
-        apk_output_path,
-        dex_dir,
-        pg_file):
-    log('running merge proguard step')
-    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
-    log('redex map is at ' + str(redex_rename_map_path))
-    log('pg map is at ' + str(pg_file))
-    assert os.path.isfile(redex_rename_map_path)
-    redex_pg_file = "redex-class-rename-map.txt"
-    output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_file)
-    # If -dontobfuscate is set, proguard won't produce a mapping file, but
-    # buck will create an empty mapping.txt. Check for this case.
-    if pg_file and os.path.getsize(pg_file) > 0:
-        update_proguard_mapping_file(
-            pg_file,
-            redex_rename_map_path,
-            output_file)
-        log('merging proguard map with redex class rename map')
-        log('pg mapping file input is ' + str(pg_file))
-        log('wrote redex pg format mapping file to ' + str(output_file))
-    else:
-        log('no proguard map file found')
-        shutil.move(redex_rename_map_path, output_file)
-
-
-def update_proguard_mapping_file(pg_map, redex_map, output_file):
-    with open(pg_map, 'r') as pg_map,\
-            open(redex_map, 'r') as redex_map,\
-            open(output_file, 'w') as output:
-        cls_regex = re.compile(r'^(.*) -> (.*):')
-        redex_dict = {}
-        for line in redex_map:
-            match_obj = cls_regex.match(line)
-            if match_obj:
-                unmangled = match_obj.group(1)
-                mangled = match_obj.group(2)
-                redex_dict[unmangled] = mangled
-        for line in pg_map:
-            match_obj = cls_regex.match(line)
-            if match_obj:
-                unmangled = match_obj.group(1)
-                mangled = match_obj.group(2)
-                new_mapping = line.rstrip()
-                if unmangled in redex_dict:
-                    out_mangled = redex_dict.pop(unmangled)
-                    new_mapping = unmangled + ' -> ' + out_mangled + ':'
-                    print(new_mapping, file=output)
-                else:
-                    print(line.rstrip(), file=output)
-            else:
-                print(line.rstrip(), file=output)
-        for unmangled, mangled in redex_dict.items():
-            print('%s -> %s:' % (unmangled, mangled), file=output)
-
-
-def overwrite_proguard_maps(
-        redex_rename_map_path,
-        apk_output_path,
-        dex_dir,
-        pg_file):
-    log('running overwrite proguard step')
-    redex_rename_map_path = join(dex_dir, redex_rename_map_path)
-    log('redex map is at ' + str(redex_rename_map_path))
-    log('pg map is at ' + str(pg_file))
-    assert os.path.isfile(redex_rename_map_path)
-    redex_pg_file = "redex-class-rename-map.txt"
-    output_dir = os.path.dirname(apk_output_path)
-    output_file = join(output_dir, redex_pg_file)
-    log('wrote redex pg format mapping file to ' + str(output_file))
-    shutil.move(redex_rename_map_path, output_file)
-
-
 def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):
     output_dir = os.path.dirname(apk_output_path)
     output_path = os.path.join(output_dir, out_name)
@@ -586,8 +510,34 @@ def ensure_libs_dir(libs_dir, sub_dir):
         return libs_dir
 
 
+def get_file_ext(file_name):
+    return os.path.splitext(file_name)[1]
+
+
+def get_dex_file_path(args, extracted_apk_dir):
+    # base on file extension check if input is
+    # an apk file (".apk") or an Android bundle file (".aab")
+    # TODO: support loadable modules (at this point only
+    # very basic support is provided - in case of Android bundles
+    # "regular" apk file content is moved to the "base"
+    # sub-directory of the bundle archive)
+    if get_file_ext(args.input_apk) == ".aab":
+        return join(extracted_apk_dir, "base", "dex")
+    else:
+        return extracted_apk_dir
+
+
 def prepare_redex(args):
     debug_mode = args.unpack_only or args.debug
+
+    # avoid accidentally mixing up file formats since we now support
+    # both apk files and Android bundle files
+    if not args.unpack_only:
+        assert get_file_ext(args.input_apk) == get_file_ext(args.out),\
+            "Input file extension (\"" +\
+            get_file_ext(args.input_apk) +\
+            "\") should be the same as output file extension (\"" +\
+            get_file_ext(args.out) + "\")"
 
     extracted_apk_dir = None
     dex_dir = None
@@ -649,13 +599,15 @@ def prepare_redex(args):
     log('Extracting apk...')
     unzip_apk(args.input_apk, extracted_apk_dir)
 
-    dex_mode = unpacker.detect_secondary_dex_mode(extracted_apk_dir)
+    dex_file_path = get_dex_file_path(args, extracted_apk_dir)
+
+    dex_mode = unpacker.detect_secondary_dex_mode(dex_file_path)
     log('Detected dex mode ' + str(type(dex_mode).__name__))
     if not dex_dir:
         dex_dir = make_temp_dir('.redex_dexen', debug_mode)
 
     log('Unpacking dex files')
-    dex_mode.unpackage(extracted_apk_dir, dex_dir)
+    dex_mode.unpackage(dex_file_path, dex_dir)
 
     log('Detecting Application Modules')
     application_modules = unpacker.ApplicationModule.detect(extracted_apk_dir)
@@ -777,7 +729,7 @@ def finalize_redex(state):
     log("Emit Name Based Locator Strings: %s" % have_name_based_locators)
 
     state.dex_mode.repackage(
-        state.extracted_apk_dir, state.dex_dir, have_locators, have_name_based_locators, fast_repackage=state.args.dev
+        get_dex_file_path(state.args, state.extracted_apk_dir), state.dex_dir, have_locators, have_name_based_locators, fast_repackage=state.args.dev
     )
 
     locator_store_id = 1
@@ -797,89 +749,12 @@ def finalize_redex(state):
         timer() - repack_start_time))
 
     meta_file_dir = join(state.dex_dir, "meta/")
-    # newer version of redex-all will put meta files in meta/
-    if not os.path.isdir(meta_file_dir):
-        meta_file_dir = state.dex_dir
+    assert os.path.isdir(meta_file_dir), "meta dir %s does not exist" % meta_file_dir
 
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'redex-line-number-map', 'line number map', 'redex-line-number-map')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'redex-line-number-map-v2',
-                         'line number map v2', 'redex-line-number-map-v2')
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'redex-stats.txt', 'stats', 'redex-stats.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'filename_mappings.txt',
-                         'src strings map', 'redex-src-strings-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'outliner-artifacts.bin',
-                         'outliner artifacts', 'redex-outliner-artifacts.bin')
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'method_mapping.txt', 'method id map', 'redex-method-id-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'class_mapping.txt', 'class id map', 'redex-class-id-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'bytecode_offset_map.txt',
-                         'bytecode offset map', 'redex-bytecode-offset-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'coldstart_fields_in_R_classes.txt',
-                         'resources accessed during coldstart', 'redex-tracked-coldstart-resources.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'class_dependencies.txt', 'stats', 'redex-class-dependencies.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-optres-mapping.json',
-                         'resid map after optres pass', 'redex-resid-optres-mapping.json')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-dedup-mapping.json',
-                         'resid map after dedup pass', 'redex-resid-dedup-mapping.json')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'resid-splitres-mapping.json',
-                         'resid map after split pass', 'redex-resid-splitres-mapping.json')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'type-erasure-mappings.txt',
-                         'class map after type erasure pass', 'redex-type-erasure-mappings.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'instrument-metadata.txt',
-                         'metadata file for instrumentation', 'redex-instrument-metadata.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'cleanup-removed-classes.txt',
-                         'cleanup removed classes', 'redex-cleanup-removed-classes.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'unreachable-removed-symbols.txt',
-                         'unreachable removed symbols', 'redex-unreachable-removed-symbols.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out,
-                         'opt-decisions.json', 'opt info', 'redex-opt-decisions.json')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'redex-debug-line-map-v2',
-                         'debug method id map', 'redex-debug-line-map-v2')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'class-method-info-map.txt',
-                         'class method info map', 'redex-class-method-info-map.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'cfp-unsafe-references.txt',
-                         'cfp unsafe references', 'redex-cfp-unsafe-references.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'merge-interface-mappings.txt',
-                         'merged interface to merger interface', 'redex-merge-interface-mappings.txt')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'reachability-graph',
-                         'reachability graph', 'redex-reachability-graph')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'method-override-graph',
-                         'method override graph', 'redex-method-override-graph')
-    copy_file_to_out_dir(meta_file_dir, state.args.out, 'iodi-metadata',
-                         'iodi metadata', 'iodi-metadata')
-    copy_all_file_to_out_dir(meta_file_dir, state.args.out, 'redex-*', 'other redex generated artifacts')
+    copy_all_file_to_out_dir(meta_file_dir, state.args.out, "*", "all redex generated artifacts")
+
     copy_all_file_to_out_dir(
         state.dex_dir, state.args.out, '*.dot', 'approximate shape graphs')
-
-    # check if redex-all generated the final mapping
-    pg_map_path = join(os.path.dirname(state.args.out), "redex-class-rename-map.txt")
-    print("pg_map is %s" % pg_map_path, file=sys.stderr)
-    if os.path.isfile(pg_map_path):
-        # no need to merge or overwrite, we are done
-        return
-
-    if state.config_dict.get('proguard_map_output', '') != '':
-        if state.config_dict.get('proguard_map_output_strategy', 'merge') == 'overwrite':
-            overwrite_proguard_maps(
-                state.config_dict['proguard_map_output'],
-                state.args.out,
-                meta_file_dir,
-                state.args.proguard_map)
-        else:
-            merge_proguard_maps(
-                state.config_dict['proguard_map_output'],
-                state.args.input_apk,
-                state.args.out,
-                meta_file_dir,
-                state.args.proguard_map)
-    else:
-        passes_list = state.config_dict.get('redex', {}).get('passes', [])
-        assert 'RenameClassesPass' not in passes_list and\
-            'RenameClassesPassV2' not in passes_list, "outdir is %s" % state.args.out
 
 
 def run_redex(args):

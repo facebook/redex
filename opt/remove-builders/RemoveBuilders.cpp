@@ -47,8 +47,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   auto regs_size = code->get_registers_size();
   auto this_cls = method->get_class();
   code->build_cfg(/* editable */ false);
-  auto blocks = cfg::postorder_sort(code->cfg().blocks());
-  std::reverse(blocks.begin(), blocks.end());
+  const auto& blocks = code->cfg().blocks_reverse_post();
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
       [&](IRList::iterator it, TaintedRegs* tregs) {
         auto* insn = it->insn;
@@ -215,8 +214,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 
   auto code = method->get_code();
   code->build_cfg(/* editable */ false);
-  auto blocks = cfg::postorder_sort(code->cfg().blocks());
-  std::reverse(blocks.begin(), blocks.end());
+  const auto& blocks = code->cfg().blocks_reverse_post();
   auto regs_size = method->get_code()->get_registers_size();
   auto taint_map = get_tainted_regs(regs_size, blocks, builder);
   return tainted_reg_escapes(
@@ -224,7 +222,7 @@ bool RemoveBuildersPass::escapes_stack(DexType* builder, DexMethod* method) {
 }
 
 void RemoveBuildersPass::run_pass(DexStoresVector& stores,
-                                  ConfigFiles& cfg,
+                                  ConfigFiles& conf,
                                   PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(BUILDERS,
@@ -329,7 +327,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   std::unordered_set<DexClass*> kept_builders =
       get_builders_with_subclasses(scope);
 
-  BuilderTransform b_transform(scope, stores, false);
+  BuilderTransform b_transform(conf.get_inliner_config(), scope, stores, false);
 
   // Inline non init methods.
   std::unordered_set<DexClass*> removed_builders;

@@ -19,7 +19,7 @@ std::string extract_suffix(std::string class_name) {
 }
 
 std::string redex::dexdump_name_to_dot_name(const std::string& dexdump_name) {
-  assert(!dexdump_name.empty());
+  redex_assert(!dexdump_name.empty());
   std::string s;
   for (const char& ch : dexdump_name.substr(1)) {
     if (ch == '/') {
@@ -35,7 +35,7 @@ std::string redex::dexdump_name_to_dot_name(const std::string& dexdump_name) {
 }
 
 std::string type_descriptor_to_java(const std::string& descriptor) {
-  assert(!descriptor.empty());
+  redex_assert(!descriptor.empty());
   if (descriptor[0] == '[') {
     return type_descriptor_to_java(descriptor.substr(1)) + "[]";
   }
@@ -86,13 +86,13 @@ std::string extract_member_name(std::string qualified) {
 // types, array types or class types. For example [[A; -> [[Lcom.wombat.Numbat;
 std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
                                         const std::string& desc) {
-  assert(!desc.empty());
+  redex_assert(!desc.empty());
   std::string deob;
   size_t i = 0;
   while (i < desc.size()) {
     if (desc[i] == 'L') {
       auto colon = desc.find(";");
-      assert(colon != std::string::npos);
+      redex_assert(colon != std::string::npos);
       auto class_type = desc.substr(i, colon + 1);
       auto deob_class = pg_map.deobfuscate_class(class_type);
       if (deob_class.empty()) {

@@ -505,7 +505,7 @@ void Breadcrumbs::check_opcodes() {
 }
 
 void CheckBreadcrumbsPass::run_pass(DexStoresVector& stores,
-                                    ConfigFiles& cfg,
+                                    ConfigFiles& /* conf */,
                                     PassManager& mgr) {
   auto scope = build_class_scope(stores);
   Breadcrumbs bc(scope, stores, reject_illegal_refs_root_store);

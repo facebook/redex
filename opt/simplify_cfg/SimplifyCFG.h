@@ -14,6 +14,4 @@ class SimplifyCFGPass : public Pass {
   SimplifyCFGPass() : Pass("SimplifyCFGPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  void configure_pass(const JsonWrapper& jw) override {}
 };

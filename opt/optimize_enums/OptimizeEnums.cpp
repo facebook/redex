@@ -8,8 +8,7 @@
 #include "OptimizeEnums.h"
 
 #include "ClassAssemblingUtils.h"
-#include "ConcurrentContainers.h"
-#include "DexClass.h"
+#include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
@@ -44,7 +43,7 @@ constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES_REMOVED =
     "num_lookup_tables_replaced";
 constexpr const char* METRIC_NUM_ENUM_CLASSES = "num_candidate_enum_classes";
-constexpr const char* METRIC_NUM_ENUM_OBJS = "num_enum_objs";
+constexpr const char* METRIC_NUM_ENUM_OBJS = "num_erased_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
 constexpr const char* METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES =
     "num_switch_equiv_finder_failures";
@@ -237,47 +236,10 @@ DexMethod* get_java_enum_ctor() {
   return java_enum_ctors.at(0);
 }
 
-/**
- * Based on https://docs.oracle.com/javase/7/docs/api/java/lang/Enum.html,
- * when we replace enums with Integer object, we consider the enums that
- * only have following method invocations are safe.
- *
- *   INVOKE_DIRECT <init>:(Ljava/lang/String;I)V // <init> may be override
- *   INVOKE_VIRTUAL equals:(Ljava/lang/Object;)Z
- *   INVOKE_VIRTUAL compareTo:(Ljava/lang/Enum;)I
- *   INVOKE_VIRTUAL ordinal:()I
- *   INVOKE_VIRTUAL toString:()Ljava/lang/String;
- *   INVOKE_VIRTUAL name:()Ljava/lang/String;
- *   INVOKE_STATIC values:()[LE;
- *   INVOKE_STATIC valueOf:(Ljava/lang/String;)LE;
- *   TODO(fengliu): hashCode ?
- * Unsafe methods :
- *   user defined constructors
- */
-std::unordered_map<DexString*, DexProto*> get_safe_enum_methods() {
-  std::unordered_map<DexString*, DexProto*> methods;
-  // It's Okay if keys and values are nullptr
-  methods[DexString::get_string("<init>")] = DexProto::make_proto(
-      get_void_type(),
-      DexTypeList::make_type_list({get_string_type(), get_int_type()}));
-  methods[DexString::get_string("equals")] = DexProto::make_proto(
-      get_boolean_type(), DexTypeList::make_type_list({get_object_type()}));
-  methods[DexString::get_string("compareTo")] = DexProto::make_proto(
-      get_int_type(), DexTypeList::make_type_list({get_enum_type()}));
-  methods[DexString::get_string("ordinal")] =
-      DexProto::make_proto(get_int_type(), DexTypeList::make_type_list({}));
-  methods[DexString::get_string("toString")] =
-      DexProto::make_proto(get_string_type(), DexTypeList::make_type_list({}));
-  methods[DexString::get_string("name")] =
-      DexProto::make_proto(get_string_type(), DexTypeList::make_type_list({}));
-  // values() and valueOf(String) are considered separately.
-  return methods;
-}
-
 class OptimizeEnums {
  public:
-  OptimizeEnums(DexStoresVector& stores, ConfigFiles& cfg)
-      : m_stores(stores), m_pg_map(cfg.get_proguard_map()) {
+  OptimizeEnums(DexStoresVector& stores, ConfigFiles& conf)
+      : m_stores(stores), m_pg_map(conf.get_proguard_map()) {
     m_scope = build_class_scope(stores);
     m_java_enum_ctor = get_java_enum_ctor();
   }
@@ -335,79 +297,53 @@ class OptimizeEnums {
   /**
    * Replace enum with Boxed Integer object
    */
-  void replace_enum_with_int() {
-    const ConcurrentSet<DexType*>& candidate_enums = collect_simple_enums();
+  void replace_enum_with_int(int max_enum_size) {
+    if (max_enum_size <= 0) {
+      return;
+    }
+    optimize_enums::Config config(max_enum_size);
+    calculate_param_summaries(m_scope, &config.param_summary_map);
+
+    walk::classes(m_scope, [this, &config](DexClass* cls) {
+      if (!is_simple_enum(cls) || !only_one_static_synth_field(cls)) {
+        return;
+      }
+      config.candidate_enums.insert(cls->get_type());
+    });
+
+    optimize_enums::reject_unsafe_enums(m_scope, &config);
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        candidate_enums, &m_stores, &m_stats.num_int_objs);
-    m_stats.num_enum_classes = candidate_enums.size();
+        config, &m_stores, &m_stats.num_int_objs);
+    m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
  private:
   /**
-   * Reject enums which are invoked through unsupported method.
+   * There is usually one synthetic static field in enum class, typically named
+   * "$VALUES", but also may be renamed.
+   * Return true if there is only one static synthetic field in the class,
+   * otherwise return false.
    */
-  void reject_unsafe_invocation(ConcurrentSet<DexType*>* enum_set) {
-    const std::unordered_map<DexString*, DexProto*> safe_methods =
-        get_safe_enum_methods();
-    // invoke-static LE;.values:()[LE; is not allowed in the first version
-    const DexString* values_method = DexString::get_string("values");
-    // invoke-static LE;.valueOf(Ljava / lang / String;) LE; is not allowed
-    const DexString* valueof_method = DexString::get_string("valueOf");
-
-    ConcurrentSet<DexType*> rejected_enums;
-
-    walk::parallel::methods(m_scope, [&](DexMethod* method) {
-      if (!method->get_code()) {
-        return;
-      }
-      for (const auto& mie : InstructionIterable(method->get_code())) {
-        if (mie.insn->has_method()) {
-          DexMethodRef* called_method_ref = mie.insn->get_method();
-          DexType* clazz = called_method_ref->get_class();
-          DexProto* proto = called_method_ref->get_proto();
-          // If the invoked method is from candidate enums, detect if the
-          // invocation is allowed or not
-          if (clazz != nullptr && enum_set->count(clazz) &&
-              !rejected_enums.count(clazz)) {
-            if (safe_methods.count(called_method_ref->get_name())) {
-              if (proto != safe_methods.at(called_method_ref->get_name())) {
-                rejected_enums.insert(clazz);
-              }
-            } else if (called_method_ref->get_name() == values_method) {
-              // Only values:()[LE; is acceptable.
-              if (proto->get_args()->size()) {
-                rejected_enums.insert(clazz);
-              }
-            } else if (mie.insn->opcode() != OPCODE_INVOKE_STATIC) {
-              // None static invocation on enums are not allowed.
-              rejected_enums.insert(clazz);
-            }
-            // Invocation on static methods are allowed.
-          }
+  bool only_one_static_synth_field(DexClass* cls) {
+    DexField* synth_field = nullptr;
+    auto synth_access = optimize_enums::synth_access();
+    for (auto field : cls->get_sfields()) {
+      if (check_required_access_flags(synth_access, field->get_access())) {
+        if (synth_field) {
+          TRACE(ENUM, 2, "Multiple synthetic fields %s %s\n", SHOW(synth_field),
+                SHOW(field));
+          return false;
         }
+        synth_field = field;
       }
-    });
-    for (DexType* type : rejected_enums) {
-      enum_set->erase(type);
     }
+    if (!synth_field) {
+      TRACE(ENUM, 2, "No synthetic field found on %s\n", SHOW(cls));
+      return false;
+    }
+    return true;
   }
 
-  ConcurrentSet<DexType*> collect_simple_enums() {
-    ConcurrentSet<DexType*> enum_set;
-    walk::classes(m_scope, [&](DexClass* cls) {
-      if (is_simple_enum(cls)) {
-        enum_set.insert(cls->get_type());
-      }
-    });
-    reject_unsafe_invocation(&enum_set);
-    optimize_enums::reject_unsafe_enums(m_scope, &enum_set);
-    return enum_set;
-  }
-
-  /**
-   * TODO(fengliu) : Some enums with cached values should be optimized.
-   * But we simply ignore them in the first version.
-   */
   static bool is_simple_enum(const DexClass* cls) {
     if (!is_enum(cls) || cls->is_external() || !is_final(cls) ||
         !can_delete(cls) || cls->get_interfaces()->size() > 0 ||
@@ -420,20 +356,7 @@ class OptimizeEnums {
         return false;
       }
     }
-
-    // No other kinds of static fields
-    const DexType* array_of_enum = make_array_type(cls->get_type());
-    always_assert(array_of_enum != nullptr);
-    const DexString* values_str = DexString::get_string("$VALUES");
-    for (const DexField* field : cls->get_sfields()) {
-      if (field->get_type() == array_of_enum) {
-        if (field->get_name() != values_str) {
-          return false;
-        }
-      } else if (field->get_type() != cls->get_type()) {
-        return false;
-      }
-    }
+    // Static fields are allowed.
     return true;
   }
 
@@ -445,11 +368,14 @@ class OptimizeEnums {
    *  return-void
    */
   static bool is_simple_enum_constructor(const DexMethod* method) {
-    const auto& args = method->get_proto()->get_args()->get_type_list();
-    if (args.size() < 2) {
+    if (!is_private(method)) {
       return false;
     }
-    // First two arguments should always be string and int.
+    const auto& args = method->get_proto()->get_args()->get_type_list();
+    if (args.size() != 2) {
+      return false;
+    }
+    // The two arguments should always be string and int.
     {
       auto it = args.begin();
       if (*it != get_string_type()) {
@@ -716,7 +642,7 @@ class OptimizeEnums {
     // Remove the switch statement so we can rebuild it with the correct case
     // keys. This removes all edges to the if-else blocks and the blocks will
     // eventually be removed by cfg.simplify()
-    cfg.remove_opcode(*info.branch);
+    cfg.remove_insn(*info.branch);
 
     cfg::Block* fallthrough = nullptr;
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
@@ -789,8 +715,8 @@ class OptimizeEnums {
     // D8 made?  It would probably be better to build a more general purpose
     // switch -> if-else converter pass and run it after this pass.
     if (cases.size() > 1) {
-      // Dex Lowering will convert this to packed if that would be better
-      IRInstruction* new_switch = new IRInstruction(OPCODE_SPARSE_SWITCH);
+      // Dex Lowering will decide if packed or sparse would be better
+      IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
       new_switch->set_src(0, new_ordinal_reg);
       cfg.create_branch(branch_block, new_switch, fallthrough, cases);
     } else if (cases.size() == 1) {
@@ -901,12 +827,18 @@ class OptimizeEnums {
 
 namespace optimize_enums {
 
+void OptimizeEnumsPass::bind_config() {
+  bind("max_enum_size", 100, m_max_enum_size,
+       "The maximum number of enum field substitutions that are generated and "
+       "stored in primary dex.");
+}
+
 void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
-                                 ConfigFiles& cfg,
+                                 ConfigFiles& conf,
                                  PassManager& mgr) {
-  OptimizeEnums opt_enums(stores, cfg);
+  OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
-  opt_enums.replace_enum_with_int();
+  opt_enums.replace_enum_with_int(m_max_enum_size);
   opt_enums.stats(mgr);
 }
 

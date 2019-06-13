@@ -49,6 +49,16 @@ TEST_F(LocalPointersTest, domainOperations) {
   EXPECT_FALSE(joined_env.may_have_escaped(insn3));
 }
 
+ptrs::InvokeToSummaryMap mark_all_invokes_as_non_escaping(const IRCode& code) {
+  ptrs::InvokeToSummaryMap invoke_to_summary_map;
+  for (const auto& mie : InstructionIterable(code)) {
+    if (is_invoke(mie.insn->opcode())) {
+      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
+    }
+  }
+  return invoke_to_summary_map;
+}
+
 TEST_F(LocalPointersTest, simple) {
   auto code = assembler::ircode_from_string(R"(
     (
@@ -66,12 +76,7 @@ TEST_F(LocalPointersTest, simple) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ptrs::InvokeToSummaryMap invoke_to_summary_map;
-  for (const auto& mie : InstructionIterable(code.get())) {
-    if (is_invoke(mie.insn->opcode())) {
-      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
-    }
-  }
+  auto invoke_to_summary_map = mark_all_invokes_as_non_escaping(*code);
   ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
@@ -111,12 +116,7 @@ TEST_F(LocalPointersTest, aliasEscape) {
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
 
-  ptrs::InvokeToSummaryMap invoke_to_summary_map;
-  for (const auto& mie : InstructionIterable(code.get())) {
-    if (is_invoke(mie.insn->opcode())) {
-      invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
-    }
-  }
+  auto invoke_to_summary_map = mark_all_invokes_as_non_escaping(*code);
   ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
   fp_iter.run(ptrs::Environment());
 
@@ -134,13 +134,43 @@ TEST_F(LocalPointersTest, aliasEscape) {
   }
 }
 
+TEST_F(LocalPointersTest, filledNewArrayEscape) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (new-instance "LFoo;")
+     (move-result-pseudo-object v0)
+     (invoke-direct (v0) "LFoo;.<init>:()V")
+     (filled-new-array (v0) "[LFoo;")
+     (move-result-pseudo-object v1)
+     (return-object v1)
+    )
+  )");
+
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+
+  auto invoke_to_summary_map = mark_all_invokes_as_non_escaping(*code);
+  ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
+  fp_iter.run(ptrs::Environment());
+
+  auto exit_env = fp_iter.get_exit_state_at(cfg.exit_block());
+  auto foo_ptr_set = exit_env.get_pointers(0);
+  EXPECT_EQ(foo_ptr_set.size(), 1);
+  auto foo_ptr = *foo_ptr_set.elements().begin();
+  EXPECT_EQ(*foo_ptr,
+            *(IRInstruction(OPCODE_NEW_INSTANCE)
+                  .set_type(DexType::get_type("LFoo;"))));
+  EXPECT_TRUE(exit_env.may_have_escaped(foo_ptr));
+}
+
 TEST_F(LocalPointersTest, generateEscapeSummary) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param-object v0)
      (load-param-object v1)
      (sput-object v1 "LFoo;.bar:LFoo;")
-     (return v0)
+     (return-object v0)
     )
   )");
 
@@ -199,6 +229,33 @@ TEST_F(LocalPointersTest, generateEscapeSummary2) {
   EXPECT_THAT(summary_copy.escaping_parameters, UnorderedElementsAre());
 }
 
+TEST_F(LocalPointersTest, collectExitingPointersWithThrow) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (throw v0)
+    )
+  )");
+
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
+  ptrs::FixpointIterator fp_iter(cfg);
+  fp_iter.run(ptrs::Environment());
+
+  ptrs::PointerSet returned_ptrs;
+  ptrs::PointerSet thrown_ptrs;
+  ptrs::collect_exiting_pointers(fp_iter, *code, &returned_ptrs, &thrown_ptrs);
+  EXPECT_EQ(returned_ptrs, ptrs::PointerSet::bottom());
+  EXPECT_THAT(thrown_ptrs.elements(),
+              UnorderedElementsAre(Pointee(
+                  *(IRInstruction(IOPCODE_LOAD_PARAM_OBJECT)).set_dest(0))));
+
+  auto summary = ptrs::get_escape_summary(fp_iter, *code);
+  EXPECT_EQ(summary.returned_parameters, ptrs::ParamSet::bottom());
+  EXPECT_THAT(summary.escaping_parameters, UnorderedElementsAre(0));
+}
+
 /*
  * Given the following code snippet:
  *
@@ -230,13 +287,7 @@ TEST_F(LocalPointersTest, returnFreshValue) {
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
-    ptrs::InvokeToSummaryMap invoke_to_summary_map;
-    for (const auto& mie : InstructionIterable(code.get())) {
-      if (is_invoke(mie.insn->opcode())) {
-        invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
-      }
-    }
-
+    auto invoke_to_summary_map = mark_all_invokes_as_non_escaping(*code);
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 
@@ -303,13 +354,7 @@ TEST_F(LocalPointersTest, returnEscapedValue) {
     auto& cfg = code->cfg();
     cfg.calculate_exit_block();
 
-    ptrs::InvokeToSummaryMap invoke_to_summary_map;
-    for (const auto& mie : InstructionIterable(code.get())) {
-      if (is_invoke(mie.insn->opcode())) {
-        invoke_to_summary_map.emplace(mie.insn, ptrs::EscapeSummary({}));
-      }
-    }
-
+    auto invoke_to_summary_map = mark_all_invokes_as_non_escaping(*code);
     ptrs::FixpointIterator fp_iter(cfg, invoke_to_summary_map);
     fp_iter.run(ptrs::Environment());
 

@@ -957,8 +957,12 @@ void parse(std::vector<unique_ptr<Token>>::iterator it,
 
     // Skip unknown token.
     if ((*it)->is_command()) {
-      cerr << "Unimplemented command (skipping): " << (*it)->show()
-           << " at line " << (*it)->line << endl;
+      auto cmd = static_cast<Command*>(it->get());
+      // It is benign to drop -dontnote
+      if (cmd->name() != "dontnote") {
+        cerr << "Unimplemented command (skipping): " << cmd->show()
+             << " at line " << (*it)->line << endl;
+      }
     } else {
       cerr << "Unexpected token " << (*it)->show() << " at line " << (*it)->line
            << endl;

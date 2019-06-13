@@ -320,10 +320,65 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
 bool ReturnParamResolver::returns_receiver(const DexMethodRef* method) const {
   // Hard-coded very special knowledge about certain framework methods
 
-  // StringBuilder methods with result type StringBuilder return the receiver
-  if (method->get_class() == m_string_builder_type &&
-      method->get_proto()->get_rtype() == method->get_class()) {
-    return true;
+  DexType* cls = method->get_class();
+
+  // these framework classes implement the "Appendable" interface, with the
+  // formal return type being the exact class type
+  if (cls == m_char_buffer_type || cls == m_print_stream_type ||
+      cls == m_print_writer_type || cls == m_string_buffer_type ||
+      cls == m_string_builder_type || cls == m_string_writer_type ||
+      cls == m_writer_type) {
+    if (method->get_name() == DexString::make_string("append")) {
+      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      return true;
+    }
+  }
+
+  if (cls == m_byte_buffer_type || cls == m_char_buffer_type ||
+      cls == m_double_buffer_type || cls == m_float_buffer_type ||
+      cls == m_int_buffer_type || cls == m_long_buffer_type ||
+      cls == m_short_buffer_type) {
+    auto name = method->get_name();
+    if (name == DexString::make_string("compact") ||
+        name == DexString::make_string("put")) {
+      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      return true;
+    }
+  }
+
+  if (cls == m_byte_buffer_type) {
+    auto name = method->get_name();
+    if (name == DexString::make_string("putChar") ||
+        name == DexString::make_string("putDouble") ||
+        name == DexString::make_string("putFloat") ||
+        name == DexString::make_string("putInt") ||
+        name == DexString::make_string("putLong") ||
+        name == DexString::make_string("putShort")) {
+      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      return true;
+    }
+  }
+
+  if (cls == m_print_stream_type || cls == m_print_writer_type) {
+    auto name = method->get_name();
+    if (name == DexString::make_string("format") ||
+        name == DexString::make_string("printf")) {
+      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      return true;
+    }
+  }
+
+  if (cls == m_string_buffer_type || cls == m_string_builder_type) {
+    auto name = method->get_name();
+    if (name == DexString::make_string("appendCodePoint") ||
+        name == DexString::make_string("delete") ||
+        name == DexString::make_string("deleteCharAt") ||
+        name == DexString::make_string("insert") ||
+        name == DexString::make_string("replace") ||
+        name == DexString::make_string("reverse")) {
+      always_assert(method->get_proto()->get_rtype() == method->get_class());
+      return true;
+    }
   }
 
   if (method == m_string_to_string_method) {
@@ -416,7 +471,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
 }
 
 void ResultPropagationPass::run_pass(DexStoresVector& stores,
-                                     ConfigFiles& cfg,
+                                     ConfigFiles& /* conf */,
                                      PassManager& mgr) {
   const auto scope = build_class_scope(stores);
   const auto method_override_graph = method_override_graph::build_graph(scope);

@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "DexClass.h"
+#include "DexLoader.h"
 #include "PassRegistry.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
@@ -105,17 +106,25 @@ int main(int argc, char* argv[]) {
   DexStoresVector stores;
 
   redex::load_all_intermediate(args.input_ir_dir, stores, &entry_data);
+
+  // Set input dex magic to the first DexStore from the first dex file
+  if (stores.size() > 0) {
+    auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
+                          entry_data["dex_list"][0]["list"][0].asString();
+    stores[0].set_dex_magic(load_dex_magic_from_dex(first_dex_path.c_str()));
+  }
+
   args.redex_options.deserialize(entry_data);
 
   Json::Value config_data = process_entry_data(entry_data, args);
-  ConfigFiles cfg(std::move(config_data), args.output_ir_dir);
+  ConfigFiles conf(std::move(config_data), args.output_ir_dir);
 
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, config_data, args.redex_options);
   manager.set_testing_mode();
-  manager.run_passes(stores, cfg);
+  manager.run_passes(stores, conf);
 
-  redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
+  redex::write_all_intermediate(conf, args.output_ir_dir, args.redex_options,
                                 stores, entry_data);
 
   delete g_redex;

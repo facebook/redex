@@ -10,6 +10,13 @@ package com.facebook.redextest;
 import org.junit.Test;
 import static org.fest.assertions.api.Assertions.assertThat;
 
+interface I_0 {
+  // I_0 and I_1 should not be optimized at the same time.
+  I_1 get();
+}
+
+abstract class Impl_0 implements I_0 {}
+
 interface I_1 {
   // The interface contains a method which reference the interface itself.
   public I_1 get();

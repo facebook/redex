@@ -5,16 +5,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#pragma once
 #include <limits>
 
 #include "BaseIRAnalyzer.h"
-#include "ConcurrentContainers.h"
 #include "ControlFlow.h"
-#include "DexClass.h"
+#include "EnumConfig.h"
+#include "DexUtil.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 
 namespace optimize_enums {
+
+/**
+ * Return whether the method is
+ * LEnumSubtype;.valueOf:(Ljava/lang/String;)LEnumSubtype;
+ */
+bool is_enum_valueof(const DexMethodRef* method);
+
+/**
+ * Return whether the method is LEnumSubtype;.values:()[LEnumSubtype;
+ */
+bool is_enum_values(const DexMethodRef* method);
 
 using Register = ir_analyzer::register_t;
 
@@ -27,15 +39,22 @@ using EnumTypeEnvironment =
 class EnumFixpointIterator final
     : public ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment> {
  public:
-  explicit EnumFixpointIterator(const cfg::ControlFlowGraph& cfg)
-      : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg) {}
+  explicit EnumFixpointIterator(const cfg::ControlFlowGraph& cfg,
+                                const Config& config)
+      : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg),
+        m_config(config) {}
 
   void analyze_instruction(IRInstruction* insn,
                            EnumTypeEnvironment* env) const override;
 
   static EnumTypeEnvironment gen_env(const DexMethod* method);
+
+ private:
+  const Config& m_config;
+
+  const DexType* ENUM_TYPE = get_enum_type();
+  const DexType* OBJECT_TYPE = get_object_type();
 };
 
-void reject_unsafe_enums(const std::vector<DexClass*>& classes,
-                         ConcurrentSet<DexType*>* candidate_enums);
+void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);
 } // namespace optimize_enums

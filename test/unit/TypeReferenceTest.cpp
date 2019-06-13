@@ -52,7 +52,7 @@ struct TypeReferenceTest : public testing::Test {
   }
 };
 
-TEST_F(TypeReferenceTest, update_proto_reference) {
+TEST_F(TypeReferenceTest, get_new_proto) {
   auto empty_list = DexTypeList::make_type_list({});
 
   // ()V => ()V

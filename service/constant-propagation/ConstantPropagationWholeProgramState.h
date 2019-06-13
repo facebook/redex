@@ -44,7 +44,10 @@ class WholeProgramState {
   // By default, the field and method partitions are initialized to Bottom.
   WholeProgramState() = default;
 
-  WholeProgramState(const Scope&, const interprocedural::FixpointIterator&);
+  WholeProgramState(const Scope&,
+                    const interprocedural::FixpointIterator&,
+                    const std::vector<DexMethod*>&,
+                    const std::unordered_set<const DexType*>&);
 
   /*
    * If we only have knowledge of the constant values in a single class --

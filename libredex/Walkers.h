@@ -18,6 +18,7 @@
 #include "EditableCfgAdapter.h"
 #include "IRCode.h"
 #include "Match.h"
+#include "VirtualScope.h"
 #include "WorkQueue.h"
 
 /**
@@ -42,6 +43,7 @@ class walk {
   using CodeWalkerFn = const std::function<void(DexMethod*, IRCode&)>&;
   using InsnWalkerFn = const std::function<void(DexMethod*, IRInstruction*)>&;
   using AnnotationWalkerFn = const std::function<void(DexAnnotation*)>&;
+  using VirtualScopeWalkerFn = const std::function<void(const VirtualScope*)>&;
   using MatchingInBlockWalkerFn = const std::function<void(
       DexMethod*, cfg::Block*, const std::vector<IRInstruction*>&)>&;
 
@@ -555,6 +557,17 @@ class walk {
           },
           num_threads);
       run_all(wq, classes);
+    }
+
+    /**
+     * Call `walker` on all given virtual scopes in parallel.
+     */
+    template <class VirtualScopes>
+    static void virtual_scopes(const VirtualScopes& virtual_scopes,
+                               VirtualScopeWalkerFn walker,
+                               size_t num_threads = default_num_threads()) {
+      auto wq = workqueue_foreach<const VirtualScope*>(walker, num_threads);
+      run_all(wq, virtual_scopes);
     }
 
     /**

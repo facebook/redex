@@ -9,7 +9,7 @@
  * This pass splits out static methods with weight 0
  * in the cold-start dexes.
  * The approach here is a new interdex plugin. This enables...
- * - only treating classes that end up in the primary / cold-start dexes;
+ * - only treating classes that end up in the non-primary cold-start dexes;
  * - accounting for extra classes, which is important to determine when a dex
  *   is full.
  *
@@ -54,13 +54,11 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
       : m_target_class_size_threshold(target_class_size_threshold),
         m_mgr(mgr) {}
 
-  void configure(const Scope& scope, ConfigFiles& cfg) override {
-    m_method_to_weight = &cfg.get_method_to_weight();
+  void configure(const Scope& scope, ConfigFiles& conf) override {
+    m_method_to_weight = &conf.get_method_to_weight();
     m_method_sorting_whitelisted_substrings =
-        &cfg.get_method_sorting_whitelisted_substrings();
+        &conf.get_method_sorting_whitelisted_substrings();
   };
-
-  bool should_skip_class(const DexClass* clazz) override { return false; }
 
   void gather_refs(const interdex::DexInfo& dex_info,
                    const DexClass* cls,
@@ -73,9 +71,12 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     // be relocated. If so, we make sure that we account for possibly needed
     // extra target classes.
 
-    // We are only going to relocate perf-critical classes.
+    // We are only going to relocate perf-critical classes, i.e. classes in
+    // cold-start dexes that are not in the primary dex. (Reshuffling methods
+    // in the primary dex may cause issues as it may cause references to
+    // secondary dexes to be inspected by the VM too early.)
     always_assert(!dex_info.mixed_mode || dex_info.coldstart);
-    if (!(dex_info.primary || dex_info.coldstart)) {
+    if (!dex_info.coldstart || dex_info.primary) {
       return;
     }
 
@@ -278,8 +279,8 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
   bool can_relocate(const DexMethod* m) {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
         !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
-        !no_changes_when_relocating_method(m) || !no_invoke_super(m) ||
-        m->rstate.is_generated()) {
+        !gather_invoked_methods_that_prevent_relocation(m) ||
+        !no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }
     return is_static(m) && !is_clinit(m);
@@ -289,11 +290,6 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 };
 
 } // namespace
-
-void ClassSplittingPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("relocated_methods_per_target_class", 64,
-         m_relocated_methods_per_target_class);
-}
 
 void ClassSplittingPass::run_pass(DexStoresVector&,
                                   ConfigFiles&,

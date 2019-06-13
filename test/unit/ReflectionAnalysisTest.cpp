@@ -200,3 +200,30 @@ IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v2 {1, CLASS{LFoo;}(REFLECTION)}\n\
 INVOKE_VIRTUAL v1, v2, Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field; {1, CLASS{LFoo;}(REFLECTION)}\n\
 MOVE_RESULT_OBJECT v4 {1, CLASS{LFoo;}(REFLECTION);4294967294, FIELD{LFoo;:bar}}\n");
 }
+
+TEST_F(ReflectionAnalysisTest, instanceOf) {
+  auto insns = assembler::ircode_from_string(R"(
+    (
+      (instance-of v6 "LFoo;")
+      (move-result-pseudo v0)
+      (invoke-virtual (v6) "Ljava/lang/Object;.getClass:()Ljava/lang/Class;")
+      (move-result-object v2)
+      (const-string "bar")
+      (move-result-pseudo-object v3)
+      (invoke-virtual (v2 v3) "Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field;")
+      (move-result-object v4)
+    )
+  )");
+  add_code(insns);
+  ReflectionAnalysis analysis(m_method);
+  EXPECT_TRUE(analysis.has_found_reflection());
+  std::cout << "reflection sites: "
+            << to_string(analysis.get_reflection_sites()) << std::endl;
+  EXPECT_EQ(
+      to_string(analysis.get_reflection_sites()),
+      "MOVE_RESULT_OBJECT v2 {4294967294, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION)}\n\
+CONST_STRING \"bar\" {2, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION);4294967294, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION)}\n\
+IOPCODE_MOVE_RESULT_PSEUDO_OBJECT v3 {2, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION)}\n\
+INVOKE_VIRTUAL v2, v3, Ljava/lang/Class;.getField:(Ljava/lang/String;)Ljava/lang/reflect/Field; {2, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION)}\n\
+MOVE_RESULT_OBJECT v4 {2, CLASS{Ljava/lang/Object;(LFoo;)}(REFLECTION);4294967294, FIELD{Ljava/lang/Object;(LFoo;):bar}}\n");
+}

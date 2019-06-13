@@ -19,6 +19,8 @@
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+
 #ifdef _MSC_VER
 #include <io.h>
 #else
@@ -32,8 +34,10 @@
 #include "CommentFilter.h"
 #include "Debug.h"
 #include "DexClass.h"
+#include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "GlobalConfig.h"
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
@@ -52,6 +56,14 @@
 #include "Warning.h"
 
 namespace {
+
+// Do *not* change these values. Many services will break.
+constexpr const char* LINE_NUMBER_MAP = "redex-line-number-map-v2";
+constexpr const char* DEBUG_LINE_MAP = "redex-debug-line-map-v2";
+constexpr const char* IODI_METADATA = "iodi-metadata";
+constexpr const char* OPT_DECISIONS = "redex-opt-decisions.json";
+constexpr const char* CLASS_METHOD_INFO_MAP = "redex-class-method-info-map.txt";
+
 const std::string k_usage_header = "usage: redex-all [options...] dex-files...";
 
 void print_usage() {
@@ -80,6 +92,10 @@ UNUSED void dump_args(const Arguments& args) {
   std::cout << "art_build: " << args.redex_options.is_art_build << std::endl;
   std::cout << "enable_instrument_pass: "
             << args.redex_options.instrument_pass_enabled << std::endl;
+  std::cout << "min_sdk: " << args.redex_options.min_sdk << std::endl;
+  std::cout << "debug_info_kind: "
+            << debug_info_kind_to_string(args.redex_options.debug_info_kind)
+            << std::endl;
   std::cout << "jar_paths: " << std::endl;
   for (const auto& e : args.jar_paths) {
     std::cout << "  " << e << std::endl;
@@ -94,6 +110,8 @@ UNUSED void dump_args(const Arguments& args) {
   }
   std::cout << "config: " << std::endl;
   std::cout << args.config << std::endl;
+  std::cout << "arch: " << std::endl;
+  std::cout << args.redex_options.arch << std::endl;
 }
 
 Json::Value parse_json_value(const std::string& value_string) {
@@ -151,6 +169,40 @@ Json::Value default_config() {
   return cfg;
 }
 
+Json::Value reflect_config(const Configurable::Reflection& cr) {
+  Json::Value params = Json::arrayValue;
+  int params_idx = 0;
+  for (auto& entry : cr.params) {
+    Json::Value param;
+    param["name"] = entry.first;
+    param["doc"] = entry.second.doc;
+    param["is_required"] = entry.second.is_required;
+    param["bindflags"] = static_cast<Json::UInt64>(entry.second.bindflags);
+    switch (entry.second.type) {
+    case Configurable::ReflectionParam::Type::PRIMITIVE:
+      param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
+          entry.second.variant);
+      break;
+    case Configurable::ReflectionParam::Type::COMPOSITE:
+      param["type"] = reflect_config(
+          std::get<Configurable::ReflectionParam::Type::COMPOSITE>(
+              entry.second.variant));
+      break;
+    default:
+      always_assert_log(false,
+                        "Invalid Configurable::ReflectionParam::Type: %d",
+                        entry.second.type);
+      break;
+    }
+    params[params_idx++] = param;
+  }
+  Json::Value reflected_config;
+  reflected_config["name"] = cr.name;
+  reflected_config["doc"] = cr.doc;
+  reflected_config["params"] = params;
+  return reflected_config;
+}
+
 Arguments parse_args(int argc, char* argv[]) {
   Arguments args;
   args.out_dir = ".";
@@ -159,6 +211,8 @@ Arguments parse_args(int argc, char* argv[]) {
   namespace po = boost::program_options;
   po::options_description od(k_usage_header);
   od.add_options()("help,h", "print this help message");
+  od.add_options()("reflect-config",
+                   "print a reflection of the config and exit");
   od.add_options()("apkdir,a",
                    // We allow overwrites to most of the options but will take
                    // only the last one.
@@ -204,7 +258,7 @@ Arguments parse_args(int argc, char* argv[]) {
   od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
-      "Ignored");
+      "Architecture; one of arm/arm64/thumb2/x86_64/x86/mips/mips64");
   od.add_options()("enable-instrument-pass",
                    po::bool_switch(&args.redex_options.instrument_pass_enabled)
                        ->default_value(false),
@@ -264,6 +318,25 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
+  // --reflect-config handling must be next
+  if (vm.count("reflect-config")) {
+    Json::Value reflected_config;
+
+    GlobalConfig gc;
+    reflected_config["global"] = reflect_config(gc.reflect());
+
+    Json::Value pass_configs = Json::arrayValue;
+    const auto& passes = PassRegistry::get().get_passes();
+    for (size_t i = 0; i < passes.size(); ++i) {
+      auto& pass = passes[i];
+      pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
+    }
+    reflected_config["passes"] = pass_configs;
+    Json::StyledStreamWriter writer;
+    writer.write(std::cout, reflected_config);
+    exit(EXIT_SUCCESS);
+  }
+
   if (vm.count("show-passes")) {
     const auto& passes = PassRegistry::get().get_passes();
     std::cout << "Registered passes: " << passes.size() << std::endl;
@@ -312,6 +385,17 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
+  std::string metafiles = args.out_dir + "/meta/";
+  int status = mkdir(metafiles.c_str(), 0755);
+  if (status != 0) {
+    // Attention: errno may get changed by syscalls or lib functions.
+    // Saving before printing is a conventional way of using errno.
+    int errsv = errno;
+    std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
+              << std::endl;
+    exit(EXIT_FAILURE);
+  }
+
   if (vm.count("proguard-config")) {
     args.proguard_config_paths =
         vm["proguard-config"].as<std::vector<std::string>>();
@@ -348,7 +432,11 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   if (vm.count("arch")) {
-    take_last(vm["arch"]);
+    std::string arch = take_last(vm["arch"]);
+    args.redex_options.arch = parse_architecture(arch);
+    if (args.redex_options.arch == Architecture::UNKNOWN) {
+      std::cerr << "warning: cannot architecture " << arch << std::endl;
+    }
   }
 
   if (vm.count("-S")) {
@@ -366,6 +454,9 @@ Arguments parse_args(int argc, char* argv[]) {
       }
     }
   }
+
+  args.redex_options.debug_info_kind =
+      parse_debug_info_kind(args.config.get("debug_info_kind", "").asString());
 
   // Development usage only
   if (vm.count("stop-pass")) {
@@ -424,6 +515,18 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_bytes"] = stats.num_bytes;
   val["num_instructions"] = stats.num_instructions;
 
+  val["num_unique_types"] = stats.num_unique_types;
+  val["num_unique_protos"] = stats.num_unique_protos;
+  val["num_unique_strings"] = stats.num_unique_strings;
+  val["num_unique_method_refs"] = stats.num_unique_method_refs;
+  val["num_unique_field_refs"] = stats.num_unique_field_refs;
+
+  val["types_total_size"] = stats.types_total_size;
+  val["protos_total_size"] = stats.protos_total_size;
+  val["strings_total_size"] = stats.strings_total_size;
+  val["method_refs_total_size"] = stats.method_refs_total_size;
+  val["field_refs_total_size"] = stats.field_refs_total_size;
+
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
   return val;
@@ -440,6 +543,29 @@ Json::Value get_pass_stats(const PassManager& mgr) {
       pass[pass_metric.first] = pass_metric.second;
     }
     all[pass_info.name] = pass;
+  }
+  return all;
+}
+
+Json::Value get_pass_hashes(const PassManager& mgr) {
+  Json::Value all(Json::ValueType::objectValue);
+  auto initial_hash = mgr.get_initial_hash();
+  if (initial_hash) {
+    all["(initial)-registers"] =
+        hashing::hash_to_string(initial_hash->registers_hash);
+    all["(initial)-code"] = hashing::hash_to_string(initial_hash->code_hash);
+    all["(initial)-signature"] =
+        hashing::hash_to_string(initial_hash->signature_hash);
+  }
+  for (const auto& pass_info : mgr.get_pass_info()) {
+    auto hash = pass_info.hash;
+    if (hash) {
+      all[pass_info.name + "-registers"] =
+          hashing::hash_to_string(hash->registers_hash);
+      all[pass_info.name + "-code"] = hashing::hash_to_string(hash->code_hash);
+      all[pass_info.name + "-signature"] =
+          hashing::hash_to_string(hash->signature_hash);
+    }
   }
   return all;
 }
@@ -461,17 +587,10 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
 }
 
 Json::Value get_times() {
-  using ms = std::chrono::milliseconds;
-  using std::chrono::duration_cast;
   Json::Value list(Json::arrayValue);
-  for (const auto& event : Timer::get_times()) {
+  for (auto t : Timer::get_times()) {
     Json::Value element;
-    element["event"] = event.name;
-    element["depth"] = event.depth;
-    element["start"] = static_cast<Json::Int64>(
-        duration_cast<ms>(event.start.time_since_epoch()).count());
-    element["end"] = static_cast<Json::Int64>(
-        duration_cast<ms>(event.end.time_since_epoch()).count());
+    element[t.first] = std::round(t.second * 10) / 10.0;
     list.append(element);
   }
   return list;
@@ -494,54 +613,17 @@ Json::Value get_output_stats(
   d["total_stats"] = get_stats(stats);
   d["dexes_stats"] = get_detailed_stats(dexes_stats);
   d["pass_stats"] = get_pass_stats(mgr);
+  d["pass_hashes"] = get_pass_hashes(mgr);
   d["lowering_stats"] = get_lowering_stats(instruction_lowering_stats);
   return d;
 }
 
-void output_moved_methods_map(const char* path, const ConfigFiles& cfg) {
-  // print out moved methods map
-  if (cfg.save_move_map() && strcmp(path, "")) {
-    FILE* fd = fopen(path, "w");
-    if (fd == nullptr) {
-      perror("Error opening method move file");
-      return;
-    }
-    auto const& move_map = cfg.get_moved_methods_map();
-    std::string dummy = "dummy";
-    for (const auto& it : move_map) {
-      MethodTuple mt = it.first;
-      auto cls_name = std::get<0>(mt);
-      auto meth_name = std::get<1>(mt);
-      auto src_file = std::get<2>(mt);
-      auto ren_to_cls_name = it.second->get_type()->get_name()->c_str();
-      const char* src_string;
-      if (src_file != nullptr) {
-        src_string = src_file->c_str();
-      } else {
-        src_string = dummy.c_str();
-      }
-      fprintf(fd,
-              "%s %s (%s) -> %s \n",
-              cls_name->c_str(),
-              meth_name->c_str(),
-              src_string,
-              ren_to_cls_name);
-    }
-    fclose(fd);
-  } else {
-    TRACE(MAIN, 1, "No method move map data structure!\n");
-  }
-}
-
 void write_debug_line_mapping(
-    const std::string& debug_line_mapping_filename_v2,
+    const std::string& debug_line_map_filename,
     const std::unordered_map<DexMethod*, uint64_t>& method_to_id,
     const std::unordered_map<DexCode*, std::vector<DebugLineItem>>&
         code_debug_lines,
     DexStoresVector& stores) {
-  if (debug_line_mapping_filename_v2.empty()) {
-    return;
-  }
   /*
    * Binary file format:
    * magic number 0xfaceb000 (4 byte)
@@ -564,7 +646,7 @@ void write_debug_line_mapping(
   // method-id => offset info, so set the start of offset to be after that.
   int binary_offset =
       3 * bit_32_size + (bit_64_size + 2 * bit_32_size) * num_method;
-  std::ofstream ofs(debug_line_mapping_filename_v2.c_str(),
+  std::ofstream ofs(debug_line_map_filename.c_str(),
                     std::ofstream::out | std::ofstream::trunc);
   uint32_t magic = 0xfaceb000; // serves as endianess check
   ofs.write((const char*)&magic, bit_32_size);
@@ -603,10 +685,24 @@ void write_debug_line_mapping(
   ofs << line_out.str();
 }
 
+const std::string get_dex_magic(std::vector<std::string>& dex_files) {
+  always_assert_log(dex_files.size() > 0, "APK contains no dex file\n");
+  // Get dex magic from the first dex file since all dex magic
+  // should be consistent within one APK.
+  return load_dex_magic_from_dex(dex_files[0].c_str());
+}
+
+static void assert_dex_magic_consistency(const std::string& source,
+                                         const std::string& target) {
+  always_assert_log(source.compare(target) == 0,
+                    "APK contains dex file of different versions: %s vs %s\n",
+                    source.c_str(), target.c_str());
+}
+
 /**
  * Pre processing steps: load dex and configurations
  */
-void redex_frontend(ConfigFiles& cfg, /* input */
+void redex_frontend(ConfigFiles& conf, /* input */
                     Arguments& args, /* inout */
                     redex::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
@@ -634,6 +730,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   }
 
   DexStore root_store("classes");
+  // Only set dex magic to root DexStore since all dex magic
+  // should be consistent within one APK.
+  root_store.set_dex_magic(get_dex_magic(args.dex_files));
   stores.emplace_back(std::move(root_store));
 
   {
@@ -643,6 +742,8 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     for (const auto& filename : args.dex_files) {
       if (filename.size() >= 5 &&
           filename.compare(filename.size() - 4, 4, ".dex") == 0) {
+        assert_dex_magic_consistency(stores[0].get_dex_magic(),
+                                     load_dex_magic_from_dex(filename.c_str()));
         dex_stats_t dex_stats;
         DexClasses classes =
             load_classes_from_dex(filename.c_str(), &dex_stats);
@@ -654,6 +755,9 @@ void redex_frontend(ConfigFiles& cfg, /* input */
         store_metadata.parse(filename);
         DexStore store(store_metadata);
         for (const auto& file_path : store_metadata.get_files()) {
+          assert_dex_magic_consistency(
+              stores[0].get_dex_magic(),
+              load_dex_magic_from_dex(file_path.c_str()));
           dex_stats_t dex_stats;
           DexClasses classes =
               load_classes_from_dex(file_path.c_str(), &dex_stats);
@@ -672,7 +776,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   args.entry_data["jars"] = Json::arrayValue;
   if (!library_jars.empty()) {
     Timer t("Load library jars");
-    const JsonWrapper& json_cfg = cfg.get_json_config();
+    const JsonWrapper& json_cfg = conf.get_json_config();
     read_dup_class_whitelist(json_cfg);
 
     for (const auto& library_jar : library_jars) {
@@ -697,7 +801,7 @@ void redex_frontend(ConfigFiles& cfg, /* input */
   {
     Timer t("Deobfuscating dex elements");
     for (auto& store : stores) {
-      apply_deobfuscated_names(store.get_dexen(), cfg.get_proguard_map());
+      apply_deobfuscated_names(store.get_dexen(), conf.get_proguard_map());
     }
   }
   DexStoreClassesIterator it(stores);
@@ -706,22 +810,22 @@ void redex_frontend(ConfigFiles& cfg, /* input */
     Timer t("Processing proguard rules");
 
     bool keep_all_annotation_classes;
-    cfg.get_json_config().get("keep_all_annotation_classes", true,
-                              keep_all_annotation_classes);
-    process_proguard_rules(cfg.get_proguard_map(), scope, external_classes,
+    conf.get_json_config().get("keep_all_annotation_classes", true,
+                               keep_all_annotation_classes);
+    process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
                            pg_config, keep_all_annotation_classes);
   }
   {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
-    redex::process_no_optimizations_rules(cfg.get_no_optimizations_annos(),
+    redex::process_no_optimizations_rules(conf.get_no_optimizations_annos(),
                                           scope);
   }
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, cfg.get_json_config(),
-                           cfg.get_no_optimizations_annos());
+    init_reachable_classes(scope, conf.get_json_config(),
+                           conf.get_no_optimizations_annos());
   }
 }
 
@@ -730,21 +834,23 @@ void redex_frontend(ConfigFiles& cfg, /* input */
  */
 void redex_backend(const PassManager& manager,
                    const std::string& output_dir,
-                   const ConfigFiles& cfg,
+                   const ConfigFiles& conf,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
+  const RedexOptions& redex_options = manager.get_redex_options();
+
   instruction_lowering::Stats instruction_lowering_stats;
   {
     bool lower_with_cfg = true;
-    cfg.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
+    conf.get_json_config().get("lower_with_cfg", true, lower_with_cfg);
     Timer t("Instruction lowering");
     instruction_lowering_stats =
         instruction_lowering::run(stores, lower_with_cfg);
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
-  const JsonWrapper& json_cfg = cfg.get_json_config();
+  const JsonWrapper& json_cfg = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
   bool emit_name_based_locators = false;
@@ -761,36 +867,25 @@ void redex_backend(const PassManager& manager,
   dex_stats_t output_totals;
   std::vector<dex_stats_t> output_dexes_stats;
 
-  auto pos_output =
-      cfg.metafile(json_cfg.get("line_number_map", std::string()));
-  auto pos_output_v2 =
-      cfg.metafile(json_cfg.get("line_number_map_v2", std::string()));
-  auto debug_line_mapping_filename_v2 =
-      cfg.metafile(json_cfg.get("debug_line_method_map_v2", std::string()));
-  auto iodi_metadata_filename =
-      cfg.metafile(json_cfg.get("iodi_metadata", std::string()));
+  const std::string& line_number_map_filename = conf.metafile(LINE_NUMBER_MAP);
+  const std::string& debug_line_map_filename = conf.metafile(DEBUG_LINE_MAP);
+  const std::string& iodi_metadata_filename = conf.metafile(IODI_METADATA);
+
+  auto dik = redex_options.debug_info_kind;
+  bool needs_addresses = dik == DebugInfoKind::NoPositions || is_iodi(dik);
   bool iodi_enable_overloaded_methods =
       json_cfg.get("iodi_enable_overloaded_methods", false);
-  if ((debug_line_mapping_filename_v2.empty() || pos_output_v2.empty()) &&
-      !iodi_metadata_filename.empty()) {
-    fprintf(stderr,
-            "[WARNING] IODI will not be used because it requires"
-            " debug_line_method_map_v2 and line_number_map_v2 to be set"
-            " (these artifacts are required for leaveraging iodi_metadata)!\n");
-    iodi_metadata_filename = "";
-  } else if (!iodi_metadata_filename.empty()) {
-    TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
-          iodi_enable_overloaded_methods ? "yes" : "no");
-  }
 
-  std::unique_ptr<PositionMapper> pos_mapper(
-      PositionMapper::make(pos_output, pos_output_v2));
+  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
+        iodi_enable_overloaded_methods ? "yes" : "no");
+
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
+      dik == DebugInfoKind::NoCustomSymbolication ? ""
+                                                  : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);
-  bool needs_method_to_id = !iodi_metadata_filename.empty() ||
-                            !debug_line_mapping_filename_v2.empty();
-  if (!iodi_metadata_filename.empty()) {
+  if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
   }
@@ -812,24 +907,26 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
-      auto this_dex_stats = write_classes_to_dex(
-          ss.str(),
-          &store.get_dexen()[i],
-          locator_index,
-          emit_name_based_locators,
-          store_number,
-          i,
-          cfg,
-          pos_mapper.get(),
-          needs_method_to_id ? &method_to_id : nullptr,
-          debug_line_mapping_filename_v2.empty() ? nullptr : &code_debug_lines,
-          iodi_metadata_filename.empty() ? nullptr : &iodi_metadata);
+      auto this_dex_stats =
+          write_classes_to_dex(redex_options,
+                               ss.str(),
+                               &store.get_dexen()[i],
+                               locator_index,
+                               emit_name_based_locators,
+                               store_number,
+                               i,
+                               conf,
+                               pos_mapper.get(),
+                               needs_addresses ? &method_to_id : nullptr,
+                               needs_addresses ? &code_debug_lines : nullptr,
+                               is_iodi(dik) ? &iodi_metadata : nullptr,
+                               stores[0].get_dex_magic());
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
 
-  if (!iodi_metadata_filename.empty()) {
+  if (is_iodi(dik)) {
     Timer t("Compute IODI caller metadata");
     iodi_metadata.mark_callers();
   }
@@ -837,10 +934,9 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing opt decisions data");
     const Json::Value& opt_decisions_args =
-        cfg.get_json_config()["opt_decisions"];
+        conf.get_json_config()["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
-      auto opt_decisions_output_path = cfg.metafile(
-          opt_decisions_args.get("output_file_name", "").asString());
+      auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
       Json::StyledStreamWriter writer;
@@ -854,14 +950,17 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing stats");
     auto method_move_map =
-        cfg.metafile(json_cfg.get("method_move_map", std::string()));
-    write_debug_line_mapping(debug_line_mapping_filename_v2, method_to_id,
-                             code_debug_lines, stores);
-    iodi_metadata.write(iodi_metadata_filename, method_to_id);
+        conf.metafile(json_cfg.get("method_move_map", std::string()));
+    if (needs_addresses) {
+      write_debug_line_mapping(debug_line_map_filename, method_to_id,
+                               code_debug_lines, stores);
+    }
+    if (is_iodi(dik)) {
+      iodi_metadata.write(iodi_metadata_filename, method_to_id);
+    }
     pos_mapper->write_map();
     stats["output_stats"] = get_output_stats(
         output_totals, output_dexes_stats, manager, instruction_lowering_stats);
-    output_moved_methods_map(method_move_map.c_str(), cfg);
     print_warning_summary();
   }
 }
@@ -914,7 +1013,7 @@ void dump_class_method_info_map(const std::string file_path,
       ofs << "I,DEXLOC," << dexloc_map[dexloc] << "," << dexloc << std::endl;
     }
 
-    assert(!class_map.count(cls));
+    redex_assert(!class_map.count(cls));
     const int cls_idx = (class_map[cls] = class_map.size());
     ofs << "C," << cls_idx << "," << show(cls) << "," << show_deobfuscated(cls)
         << "," << (cls->get_dmethods().size() + cls->get_vmethods().size())
@@ -939,7 +1038,7 @@ int main(int argc, char* argv[]) {
   signal(SIGBUS, crash_backtrace_handler);
 #endif
 
-  std::string timings_output_path;
+  std::string stats_output_path;
   Json::Value stats;
   {
     Timer redex_all_main_timer("redex-all main()");
@@ -963,61 +1062,52 @@ int main(int argc, char* argv[]) {
 
     auto pg_config = std::make_unique<redex::ProguardConfiguration>();
     DexStoresVector stores;
-    ConfigFiles cfg(args.config, args.out_dir);
+    ConfigFiles conf(args.config, args.out_dir);
 
     std::string apk_dir;
-    cfg.get_json_config().get("apk_dir", "", apk_dir);
+    conf.get_json_config().get("apk_dir", "", apk_dir);
     const std::string& manifest_filename = apk_dir + "/AndroidManifest.xml";
     boost::optional<int32_t> maybe_sdk = get_min_sdk(manifest_filename);
     if (maybe_sdk != boost::none) {
       args.redex_options.min_sdk = *maybe_sdk;
     }
 
-    redex_frontend(cfg, args, *pg_config, stores, stats);
+    redex_frontend(conf, args, *pg_config, stores, stats);
 
     auto const& passes = PassRegistry::get().get_passes();
     PassManager manager(passes, std::move(pg_config), args.config,
                         args.redex_options);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, cfg);
+      manager.run_passes(stores, conf);
     }
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
-      redex_backend(manager, args.out_dir, cfg, stores, stats);
-      if (!args.config.get("class_method_info_map", "").empty()) {
-        dump_class_method_info_map(
-            cfg.metafile(
-                args.config.get("class_method_info_map", "").asString()),
-            stores);
+      redex_backend(manager, args.out_dir, conf, stores, stats);
+      if (args.config.get("emit_class_method_info_map", false).asBool()) {
+        dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
+                                   stores);
       }
     } else {
-      redex::write_all_intermediate(cfg, args.output_ir_dir, args.redex_options,
-                                    stores, args.entry_data);
+      redex::write_all_intermediate(conf, args.output_ir_dir,
+                                    args.redex_options, stores,
+                                    args.entry_data);
     }
 
-    std::string stats_output_path = cfg.metafile(
+    stats_output_path = conf.metafile(
         args.config.get("stats_output", "redex-stats.txt").asString());
-    {
-      std::ofstream out(stats_output_path);
-      Json::StyledStreamWriter writer;
-      writer.write(out, stats);
-    }
-
-    timings_output_path =
-        cfg.metafile(args.config.get("timings_output", "").asString());
     {
       Timer t("Freeing global memory");
       delete g_redex;
     }
   }
-
   // now that all the timers are done running, we can collect the data
+  stats["output_stats"]["time_stats"] = get_times();
+  Json::StyledStreamWriter writer;
   {
-    std::ofstream out(timings_output_path);
-    Json::StyledStreamWriter writer;
-    writer.write(out, get_times());
+    std::ofstream out(stats_output_path);
+    writer.write(out, stats);
   }
 
   TRACE(MAIN, 1, "Done.\n");

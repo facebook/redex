@@ -284,10 +284,11 @@ bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
  * Change the visibility of members accessed in a method.
- * We make everything public but we could be more precise and only
- * relax visibility as needed.
+ * We make everything public, except if a scope argument is given; then accessed
+ * members in the same scope will not be made public (We could be more precise
+ * and walks the inheritance hierarchy as needed.)
  */
-void change_visibility(DexMethod* method);
+void change_visibility(DexMethod* method, DexType* scope = nullptr);
 
 /**
  * NOTE: Only relocates the method. Doesn't check the correctness here,
@@ -298,10 +299,13 @@ void relocate_method(DexMethod* method, DexType* to_type);
 
 /**
  * Checks if a method can be relocated, i.e. if it doesn't require any changes
- * to the referenced methods (none of the referenced methods would need to
- * change into a virtual / static method).
+ * to invoked direct methods (none of the invoked direct methods would need to
+ * change into a public virtual / static method) or framework protected methods.
+ * Any problematic invoked methods are added to the optionally supplied set.
  */
-bool no_changes_when_relocating_method(const DexMethod* method);
+bool gather_invoked_methods_that_prevent_relocation(
+    const DexMethod* method,
+    std::unordered_set<DexMethodRef*>* methods_preventing_relocation = nullptr);
 
 /**
  * Check that the method contains no invoke-super instruction; this is a
@@ -311,7 +315,8 @@ bool no_changes_when_relocating_method(const DexMethod* method);
 bool no_invoke_super(const DexMethod* method);
 
 /**
- * Relocates the method only if relocate_method_if_no_changes returns true.
+ * Relocates the method only if
+ * gather_invoked_methods_that_prevent_relocation returns true.
  * It also updates the visibility of the accessed members.
  */
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type);
@@ -363,7 +368,7 @@ Scope build_class_scope(const T& dexen) {
   }
   return v;
 };
-Scope build_class_scope(DexStoresVector& stores);
+Scope build_class_scope(const DexStoresVector& stores);
 
 /**
  * Posts the changes made to the Scope& object to the
@@ -397,11 +402,11 @@ void post_dexen_changes(const Scope& v, T& dexen) {
 };
 void post_dexen_changes(const Scope& v, DexStoresVector& stores);
 
-void load_root_dexen(
-  DexStore& store,
-  const std::string& dexen_dir_str,
-  bool balloon = false,
-  bool verbose = true);
+void load_root_dexen(DexStore& store,
+                     const std::string& dexen_dir_str,
+                     bool balloon = false,
+                     bool verbose = true,
+                     bool support_dex_v37 = false);
 
 /**
  * Creates a generated store based on the given classes.
@@ -465,6 +470,18 @@ struct dex_stats_t {
   int num_type_lists = 0;
   int num_bytes = 0;
   int num_instructions = 0;
+
+  int num_unique_strings = 0;
+  int num_unique_types = 0;
+  int num_unique_protos = 0;
+  int num_unique_method_refs = 0;
+  int num_unique_field_refs = 0;
+
+  int strings_total_size = 0;
+  int types_total_size = 0;
+  int protos_total_size = 0;
+  int method_refs_total_size = 0;
+  int field_refs_total_size = 0;
 
   int num_dbg_items = 0;
   int dbg_total_size = 0;

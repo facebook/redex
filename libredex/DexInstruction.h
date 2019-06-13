@@ -62,7 +62,7 @@ class DexInstruction : public Gatherable {
       : Gatherable(), m_opcode(op), m_count(count_from_opcode()) {}
 
   DexInstruction(DexOpcode opcode, uint16_t arg) : DexInstruction(opcode) {
-    assert(m_count == 1);
+    redex_assert(m_count == 1);
     m_arg[0] = arg;
   }
 
@@ -361,8 +361,7 @@ inline bool writes_result_register(IROpcode op) {
 
 inline bool is_branch(IROpcode op) {
   switch (op) {
-  case OPCODE_PACKED_SWITCH:
-  case OPCODE_SPARSE_SWITCH:
+  case OPCODE_SWITCH:
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
   case OPCODE_IF_LT:
@@ -406,9 +405,7 @@ inline bool is_goto(IROpcode op) {
   return op == OPCODE_GOTO;
 }
 
-inline bool is_switch(IROpcode op) {
-  return op == OPCODE_PACKED_SWITCH || op == OPCODE_SPARSE_SWITCH;
-}
+inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
 
 inline bool is_literal_const(IROpcode op) {
   return op >= OPCODE_CONST && op <= OPCODE_CONST_WIDE;
@@ -423,3 +420,11 @@ inline bool is_monitor(IROpcode op) {
 }
 
 inline bool is_instance_of(IROpcode op) { return op == OPCODE_INSTANCE_OF; }
+
+inline bool is_div_int_lit(IROpcode op) {
+  return op == OPCODE_DIV_INT_LIT16 || op == OPCODE_DIV_INT_LIT8;
+}
+
+inline bool is_rem_int_lit(IROpcode op) {
+  return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
+}

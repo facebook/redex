@@ -15,11 +15,11 @@ class SynthPass : public Pass {
  public:
   SynthPass() : Pass("SynthPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("max_passes", 5, m_pass_config.max_passes);
-    jw.get("synth_only", false, m_pass_config.synth_only);
-    jw.get("remove_pub", true, m_pass_config.remove_pub);
-    jw.get("remove_constructors", true, m_pass_config.remove_constructors);
+  void bind_config() override {
+    bind("max_passes", {5}, m_pass_config.max_passes);
+    bind("synth_only", false, m_pass_config.synth_only);
+    bind("remove_pub", true, m_pass_config.remove_pub);
+    bind("remove_constructors", true, m_pass_config.remove_constructors);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

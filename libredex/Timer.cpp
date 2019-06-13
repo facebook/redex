@@ -9,7 +9,7 @@
 
 #include "Trace.h"
 
-uint16_t Timer::s_indent = 0;
+unsigned Timer::s_indent = 0;
 std::mutex Timer::s_lock;
 Timer::times_t Timer::s_times;
 
@@ -27,6 +27,6 @@ Timer::~Timer() {
 
   {
     std::lock_guard<std::mutex> guard(s_lock);
-    s_times.emplace_back(std::move(m_msg), s_indent, m_start, end);
+    s_times.push_back({std::move(m_msg), duration_s});
   }
 }

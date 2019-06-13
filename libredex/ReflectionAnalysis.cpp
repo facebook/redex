@@ -26,10 +26,26 @@
 using namespace sparta;
 
 std::ostream& operator<<(std::ostream& out,
+                         const std::unordered_set<DexType*>& x) {
+  if (x.empty()) {
+    return out;
+  }
+  out << "(";
+  for (auto i = x.begin(); i != x.end(); ++i) {
+    out << SHOW(*i);
+    if (std::next(i) != x.end()) {
+      out << ",";
+    }
+  }
+  out << ")";
+  return out;
+}
+
+std::ostream& operator<<(std::ostream& out,
                          const reflection::AbstractObject& x) {
   switch (x.obj_kind) {
   case reflection::OBJECT: {
-    out << "OBJECT{" << SHOW(x.dex_type) << "}";
+    out << "OBJECT{" << SHOW(x.dex_type) << x.potential_dex_types << "}";
     break;
   }
   case reflection::STRING: {
@@ -44,15 +60,17 @@ std::ostream& operator<<(std::ostream& out,
     break;
   }
   case reflection::CLASS: {
-    out << "CLASS{" << SHOW(x.dex_type) << "}";
+    out << "CLASS{" << SHOW(x.dex_type) << x.potential_dex_types << "}";
     break;
   }
   case reflection::FIELD: {
-    out << "FIELD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
+    out << "FIELD{" << SHOW(x.dex_type) << x.potential_dex_types << ":"
+        << SHOW(x.dex_string) << "}";
     break;
   }
   case reflection::METHOD: {
-    out << "METHOD{" << SHOW(x.dex_type) << ":" << SHOW(x.dex_string) << "}";
+    out << "METHOD{" << SHOW(x.dex_type) << x.potential_dex_types << ":"
+        << SHOW(x.dex_string) << "}";
     break;
   }
   }
@@ -96,14 +114,17 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
   switch (x.obj_kind) {
   case OBJECT:
   case CLASS: {
-    return x.dex_type == y.dex_type;
+    return x.dex_type == y.dex_type &&
+           x.potential_dex_types == y.potential_dex_types;
   }
   case STRING: {
     return x.dex_string == y.dex_string;
   }
   case FIELD:
   case METHOD: {
-    return x.dex_type == y.dex_type && x.dex_string == y.dex_string;
+    return x.dex_type == y.dex_type &&
+           x.potential_dex_types == y.potential_dex_types &&
+           x.dex_string == y.dex_string;
   }
   }
 }
@@ -157,6 +178,7 @@ sparta::AbstractValueKind AbstractObject::join_with(
   case AbstractObjectKind::CLASS:
     // Be conservative and drop the type info
     dex_type = nullptr;
+    potential_dex_types.clear();
     break;
   case AbstractObjectKind::STRING:
     // Be conservative and drop the string info
@@ -167,6 +189,7 @@ sparta::AbstractValueKind AbstractObject::join_with(
     // Be conservative and drop the field and method info
     dex_type = nullptr;
     dex_string = nullptr;
+    potential_dex_types.clear();
     break;
   }
   return sparta::AbstractValueKind::Value;
@@ -360,7 +383,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_CHECK_CAST: {
       const auto aobj = current_state->get_abstract_obj(insn->src(0));
-      current_state->set_abstract_obj(RESULT_REGISTER, aobj);
+      current_state->set_abstract_obj(
+          RESULT_REGISTER,
+          AbstractObjectDomain(
+              AbstractObject(AbstractObjectKind::OBJECT, insn->get_type())));
       const auto obj = aobj.get_object();
       if (obj && obj->obj_kind == AbstractObjectKind::CLASS) {
         current_state->set_class_source(
@@ -371,6 +397,27 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       // following the check-cast becomes unreachable, which corresponds to
       // _|_ in the abstract domain. Any abstract state is a sound
       // approximation of _|_.
+      break;
+    }
+    case OPCODE_INSTANCE_OF: {
+      const auto aobj = current_state->get_abstract_obj(insn->src(0));
+      auto obj = aobj.get_object();
+      // Append the referenced type here to the potential dex types list.
+      // Doing this increases the type information we have at the reflection
+      // site. It's up to the user of the analysis  how to interpret this
+      // information.
+      if (obj && (obj->obj_kind == AbstractObjectKind::OBJECT) &&
+          obj->dex_type) {
+        auto dex_type = insn->get_type();
+        if (obj->dex_type != dex_type) {
+          obj->potential_dex_types.insert(dex_type);
+          current_state->set_abstract_obj(
+              insn->src(0),
+              AbstractObjectDomain(AbstractObject(
+                  obj->obj_kind, obj->dex_type, obj->potential_dex_types)));
+        }
+      }
+
       break;
     }
     case OPCODE_AGET_OBJECT: {
@@ -551,8 +598,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(
-                AbstractObject(AbstractObjectKind::CLASS, receiver.dex_type)));
+            AbstractObjectDomain(AbstractObject(AbstractObjectKind::CLASS,
+                                                receiver.dex_type,
+                                                receiver.potential_dex_types)));
         current_state->set_class_source(
             RESULT_REGISTER,
             ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
@@ -587,14 +635,22 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
+      } else if (callee == m_get_fields || callee == m_get_declared_fields) {
+        element_kind = FIELD;
+        element_name = DexString::get_string("");
+      } else if (callee == m_get_methods || callee == m_get_declared_methods) {
+        element_kind = METHOD;
+        element_name = DexString::get_string("");
       }
       if (element_name == nullptr) {
         break;
       }
       current_state->set_abstract_obj(
           RESULT_REGISTER,
-          AbstractObjectDomain(
-              AbstractObject(element_kind, receiver.dex_type, element_name)));
+          AbstractObjectDomain(AbstractObject(element_kind,
+                                              receiver.dex_type,
+                                              element_name,
+                                              receiver.potential_dex_types)));
       return;
     }
     case FIELD:
@@ -644,6 +700,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredMethod",
                              {"Ljava/lang/String;", "[Ljava/lang/Class;"},
                              "Ljava/lang/reflect/Method;")};
+  DexMethodRef* m_get_methods{DexMethod::make_method(
+      "Ljava/lang/Class;", "getMethods", {}, "[Ljava/lang/reflect/Method;")};
+  DexMethodRef* m_get_declared_methods{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredMethods",
+                             {},
+                             "[Ljava/lang/reflect/Method;")};
   DexMethodRef* m_get_constructor{
       DexMethod::make_method("Ljava/lang/Class;",
                              "getConstructor",
@@ -681,6 +744,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredField",
                              {"Ljava/lang/String;"},
                              "Ljava/lang/reflect/Field;")};
+  DexMethodRef* m_get_fields{DexMethod::make_method(
+      "Ljava/lang/Class;", "getFields", {}, "[Ljava/lang/reflect/Field;")};
+  DexMethodRef* m_get_declared_fields{
+      DexMethod::make_method("Ljava/lang/Class;",
+                             "getDeclaredFields",
+                             {},
+                             "[Ljava/lang/reflect/Field;")};
   DexMethodRef* m_get_method_name{DexMethod::make_method(
       "Ljava/lang/reflect/Method;", "getName", {}, "Ljava/lang/String;")};
   DexMethodRef* m_get_field_name{DexMethod::make_method(

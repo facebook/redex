@@ -335,11 +335,20 @@ constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
 CodeItemEmit::CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci)
     : method(meth), code(c), code_item(ci) {}
 
+namespace {
+// DO NOT CHANGE THESE VALUES! Many services will break if you do.
+constexpr const char* METHOD_MAPPING = "redex-method-id-map.txt";
+constexpr const char* CLASS_MAPPING = "redex-class-id-map.txt";
+constexpr const char* BYTECODE_OFFSET_MAPPING = "redex-bytecode-offset-map.txt";
+constexpr const char* REDEX_PG_MAPPING = "redex-class-rename-map.txt";
+} // namespace
+
 DexOutput::DexOutput(
     const char* path,
     DexClasses* classes,
     LocatorIndex* locator_index,
     bool emit_name_based_locators,
+    bool normal_primary_dex,
     size_t store_number,
     size_t dex_number,
     DebugInfoKind debug_info_kind,
@@ -347,11 +356,7 @@ DexOutput::DexOutput(
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::string& method_mapping_filename,
-    const std::string& class_mapping_filename,
-    const std::string& pg_mapping_filename,
-    const std::string& bytecode_offset_filename)
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
@@ -364,14 +369,15 @@ DexOutput::DexOutput(
   m_pos_mapper = pos_mapper;
   m_method_to_id = method_to_id;
   m_code_debug_lines = code_debug_lines;
-  m_method_mapping_filename = method_mapping_filename;
-  m_class_mapping_filename = class_mapping_filename;
-  m_pg_mapping_filename = pg_mapping_filename;
-  m_bytecode_offset_filename = bytecode_offset_filename;
+  m_method_mapping_filename = config_files.metafile(METHOD_MAPPING);
+  m_class_mapping_filename = config_files.metafile(CLASS_MAPPING);
+  m_pg_mapping_filename = config_files.metafile(REDEX_PG_MAPPING);
+  m_bytecode_offset_filename = config_files.metafile(BYTECODE_OFFSET_MAPPING);
   m_store_number = store_number;
   m_dex_number = dex_number;
   m_locator_index = locator_index;
   m_emit_name_based_locators = emit_name_based_locators;
+  m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
 }
 
@@ -828,13 +834,13 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
   insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
 }
 
-void DexOutput::check_method_instruction_size_limit(const ConfigFiles& cfg,
+void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
                                                     int size,
                                                     const char* method_name) {
   always_assert_log(size >= 0, "Size of method cannot be negative: %d\n", size);
 
   uint32_t instruction_size_bitwidth_limit =
-      cfg.get_instruction_size_bitwidth_limit();
+      conf.get_instruction_size_bitwidth_limit();
 
   if (instruction_size_bitwidth_limit) {
     uint64_t hard_instruction_size_limit = 1L
@@ -1176,8 +1182,8 @@ uint32_t emit_instruction_offset_debug_info(
   // We need this to calculate the size of normal debug programs for each
   // method. Hopefully no debug program is > 128k. Its ok to increase this
   // in the future.
-  constexpr int tmpSize = 128 * 1024;
-  uint8_t* tmp = (uint8_t*)malloc(tmpSize);
+  constexpr int TMP_SIZE = 128 * 1024;
+  uint8_t* tmp = (uint8_t*)malloc(TMP_SIZE);
   for (auto& it : code_items) {
     DexCode* dc = it.code;
     const auto dbg_item = dc->get_debug_item();
@@ -1193,7 +1199,7 @@ uint32_t emit_instruction_offset_debug_info(
         dbg_item, dc, it.code_item, pos_mapper, code_debug_map);
     int debug_size =
         emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
-    always_assert_log(debug_size < tmpSize, "Tmp buffer overrun");
+    always_assert_log(debug_size < TMP_SIZE, "Tmp buffer overrun");
     method_to_debug_meta.emplace(method, std::move(metadata));
     if (!iodi_metadata.can_safely_use_iodi(method)) {
       continue;
@@ -1377,8 +1383,8 @@ uint32_t emit_instruction_offset_debug_info(
     // we need to understand how IODI gets its win:
     //
     // The win is calculated as the total usual debug info size minus the size
-    // of debug info when IODI is enabled. This means, when allowing the methods
-    // that IODI is enabled for be an input:
+    // of debug info when IODI is enabled. Thus, given a set of methods for
+    // which IODI is enabled we have the following formula:
     //
     // win(IODI_methods) = normal_debug_size(all methods)
     //        - (IODI_debug_size(IODI_methods)
@@ -1394,7 +1400,7 @@ uint32_t emit_instruction_offset_debug_info(
     //                      -----
     //                  i in arities(M)
     //   or, in plain english, add together the size of a debug program for
-    //   each arity i. Fixing an arity i, the size is calulcated as the max
+    //   each arity i. Fixing an arity i, the size is calculated as the max
     //   length of a method with arity i with some constant padding added
     //   (the header of the dbg program)
     //
@@ -1426,7 +1432,7 @@ uint32_t emit_instruction_offset_debug_info(
     // win_delta_1 = len(m_1) - len(m_2) - normal_debug_size(m_1)
     // where m_2 is the next biggest method.
     //
-    // We can continue to calulcate more win_deltas if we were to remove the
+    // We can continue to calculate more win_deltas if we were to remove the
     // subsequent biggest methods:
     //
     // win_delta_i = len(m_1) - len(m_{i+1})
@@ -1437,7 +1443,7 @@ uint32_t emit_instruction_offset_debug_info(
     // Since there is no regularity condition on normal_debug_size(m) the
     // max of win_delta_i may occur for any i (indeed there may be an esoteric
     // case where all the debug programs are tiny but all the methods are
-    // pretty large and thus its best to not use any IODI programs).
+    // pretty large and thus it's best to not use any IODI programs).
     //
     // Note, the above assumes win(IM) > 0 at some point, but that may not be
     // true. In order to verify that using IODI is useful we need to verify that
@@ -1678,8 +1684,10 @@ static void fix_jumbos(DexClasses* classes, DexOutputIdx* dodx) {
   walk::methods(*classes, [&](DexMethod* m) { fix_method_jumbos(m, dodx); });
 }
 
-void DexOutput::init_header_offsets() {
-  memcpy(hdr.magic, DEX_HEADER_DEXMAGIC, sizeof(hdr.magic));
+void DexOutput::init_header_offsets(const std::string& dex_magic) {
+  always_assert_log(dex_magic.length() > 0,
+                    "Invalid dex magic from input APK\n");
+  memcpy(hdr.magic, dex_magic.c_str(), sizeof(hdr.magic));
   insert_map_item(TYPE_HEADER_ITEM, 1, 0);
 
   m_offset = hdr.header_size = sizeof(dex_header);
@@ -1750,7 +1758,7 @@ void write_method_mapping(
   uint8_t* dex_signature,
   std::unordered_map<DexMethod*, uint64_t>* method_to_id
 ) {
-  if (filename.empty()) return;
+  always_assert(!filename.empty());
   FILE* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open method mapping file %s: %s\n",
              filename.c_str(),
@@ -1838,7 +1846,7 @@ void write_class_mapping(
   const size_t class_defs_size,
   uint8_t* dex_signature
 ) {
-  if (filename.empty()) return;
+  always_assert(!filename.empty());
   FILE* fd = fopen(filename.c_str(), "a");
 
   for (uint32_t idx = 0; idx < class_defs_size; idx++) {
@@ -2038,23 +2046,17 @@ void write_bytecode_offset_mapping(
 } // namespace
 
 void DexOutput::write_symbol_files() {
-  write_method_mapping(
-    m_method_mapping_filename,
-    dodx,
-    m_classes,
-    hdr.signature,
-    m_method_to_id
-  );
-  write_class_mapping(
-    m_class_mapping_filename,
-    m_classes,
-    hdr.class_defs_size,
-    hdr.signature
-  );
-  write_pg_mapping(
-    m_pg_mapping_filename,
-    m_classes
-  );
+  if (m_debug_info_kind != DebugInfoKind::NoCustomSymbolication) {
+    write_method_mapping(m_method_mapping_filename,
+                         dodx,
+                         m_classes,
+                         hdr.signature,
+                         m_method_to_id);
+    write_class_mapping(m_class_mapping_filename, m_classes,
+                        hdr.class_defs_size, hdr.signature);
+    // XXX: should write_bytecode_offset_mapping be included here too?
+  }
+  write_pg_mapping(m_pg_mapping_filename, m_classes);
   write_bytecode_offset_mapping(m_bytecode_offset_filename,
                                 m_method_bytecode_offsets);
 }
@@ -2071,17 +2073,18 @@ void GatheredTypes::set_method_to_weight(
 
 void DexOutput::prepare(SortMode string_mode,
                         const std::vector<SortMode>& code_mode,
-                        const ConfigFiles& cfg) {
+                        const ConfigFiles& conf,
+                        const std::string& dex_magic) {
 
   if (std::find(code_mode.begin(), code_mode.end(),
                 SortMode::METHOD_PROFILED_ORDER) != code_mode.end()) {
-    m_gtypes->set_method_to_weight(cfg.get_method_to_weight());
+    m_gtypes->set_method_to_weight(conf.get_method_to_weight());
     m_gtypes->set_method_sorting_whitelisted_substrings(
-        cfg.get_method_sorting_whitelisted_substrings());
+        conf.get_method_sorting_whitelisted_substrings());
   }
 
   fix_jumbos(m_classes, dodx);
-  init_header_offsets();
+  init_header_offsets(dex_magic);
   generate_static_values();
   generate_typelist_data();
   generate_string_data(string_mode);
@@ -2115,6 +2118,73 @@ void DexOutput::write() {
   write_symbol_files();
 }
 
+class UniqueReferences {
+ public:
+  std::unordered_set<DexString*> strings;
+  std::unordered_set<DexType*> types;
+  std::unordered_set<DexProto*> protos;
+  std::unordered_set<DexFieldRef*> fields;
+  std::unordered_set<DexMethodRef*> methods;
+  int total_strings_size{0};
+  int total_types_size{0};
+  int total_protos_size{0};
+  int total_fields_size{0};
+  int total_methods_size{0};
+  int dexes{0};
+};
+UniqueReferences s_unique_references;
+
+void DexOutput::metrics() {
+  if (s_unique_references.dexes++ == 1 && !m_normal_primary_dex) {
+    // clear out info from first (primary) dex
+    s_unique_references.strings.clear();
+    s_unique_references.types.clear();
+    s_unique_references.protos.clear();
+    s_unique_references.fields.clear();
+    s_unique_references.methods.clear();
+    s_unique_references.total_strings_size = 0;
+    s_unique_references.total_types_size = 0;
+    s_unique_references.total_protos_size = 0;
+    s_unique_references.total_fields_size = 0;
+    s_unique_references.total_methods_size = 0;
+  }
+
+  for (auto& p : dodx->string_to_idx()) {
+    s_unique_references.strings.insert(p.first);
+  }
+  m_stats.num_unique_strings = s_unique_references.strings.size();
+  s_unique_references.total_strings_size += dodx->string_to_idx().size();
+  m_stats.strings_total_size = s_unique_references.total_strings_size;
+
+  for (auto& p : dodx->type_to_idx()) {
+    s_unique_references.types.insert(p.first);
+  }
+  m_stats.num_unique_types = s_unique_references.types.size();
+  s_unique_references.total_types_size += dodx->type_to_idx().size();
+  m_stats.types_total_size = s_unique_references.total_types_size;
+
+  for (auto& p : dodx->proto_to_idx()) {
+    s_unique_references.protos.insert(p.first);
+  }
+  m_stats.num_unique_protos = s_unique_references.protos.size();
+  s_unique_references.total_protos_size += dodx->proto_to_idx().size();
+  m_stats.protos_total_size = s_unique_references.total_protos_size;
+
+  for (auto& p : dodx->field_to_idx()) {
+    s_unique_references.fields.insert(p.first);
+  }
+  m_stats.num_unique_field_refs = s_unique_references.fields.size();
+  s_unique_references.total_fields_size += dodx->field_to_idx().size();
+  m_stats.field_refs_total_size = s_unique_references.total_fields_size;
+
+  for (auto& p : dodx->method_to_idx()) {
+    s_unique_references.methods.insert(p.first);
+  }
+  m_stats.num_unique_method_refs = s_unique_references.methods.size();
+  s_unique_references.total_methods_size += dodx->method_to_idx().size();
+  m_stats.method_refs_total_size = s_unique_references.total_methods_size;
+}
+
 static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   if (sort_bytecode == "class_order") {
     return SortMode::CLASS_ORDER;
@@ -2127,45 +2197,22 @@ static SortMode make_sort_bytecode(const std::string& sort_bytecode) {
   }
 }
 
-static DebugInfoKind deserialize_debug_info_kind(std::string raw_kind) {
-  if (raw_kind == "no_positions") {
-    return DebugInfoKind::NoPositions;
-  } else if (raw_kind == "iodi") {
-    return DebugInfoKind::InstructionOffsets;
-  } else if (raw_kind == "iodi_per_arity") {
-    return DebugInfoKind::InstructionOffsetsPerArity;
-  } else {
-    always_assert_log(raw_kind == "normal" || raw_kind == "",
-                      "Unknown debug info kind. Supported kinds are \"normal\","
-                      " \"no_positions\", \"iodi\", \"iodi_per_arity\".");
-    return DebugInfoKind::Normal;
-  }
-}
-
 dex_stats_t write_classes_to_dex(
-    std::string filename,
+    const RedexOptions& redex_options,
+    const std::string& filename,
     DexClasses* classes,
     LocatorIndex* locator_index,
     bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
-    const ConfigFiles& cfg,
+    const ConfigFiles& conf,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    IODIMetadata* iodi_metadata) {
-  const JsonWrapper& json_cfg = cfg.get_json_config();
-  auto method_mapping_filename =
-      cfg.metafile(json_cfg.get("method_mapping", std::string()));
-  auto class_mapping_filename =
-      cfg.metafile(json_cfg.get("class_mapping", std::string()));
-  auto pg_mapping_filename =
-      cfg.metafile(json_cfg.get("proguard_map_output", std::string()));
-  auto bytecode_offset_filename =
-      cfg.metafile(json_cfg.get("bytecode_offset_map", std::string()));
+    IODIMetadata* iodi_metadata,
+    const std::string& dex_magic) {
+  const JsonWrapper& json_cfg = conf.get_json_config();
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
-  DebugInfoKind debug_info_kind = deserialize_debug_info_kind(
-      json_cfg.get("debug_info_kind", std::string()));
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
     string_sort_mode = SortMode::CLASS_STRINGS;
@@ -2173,6 +2220,9 @@ dex_stats_t write_classes_to_dex(
     string_sort_mode = SortMode::CLASS_ORDER;
   }
 
+  auto interdex_config = json_cfg.get("InterDexPass", Json::Value());
+  auto normal_primary_dex =
+      interdex_config.get("normal_primary_dex", false).asBool();
   auto sort_bytecode_cfg = json_cfg.get("bytecode_sort_mode", Json::Value());
   std::vector<SortMode> code_sort_mode;
 
@@ -2193,21 +2243,19 @@ dex_stats_t write_classes_to_dex(
                              classes,
                              locator_index,
                              emit_name_based_locators,
+                             normal_primary_dex,
                              store_number,
                              dex_number,
-                             debug_info_kind,
+                             redex_options.debug_info_kind,
                              iodi_metadata,
-                             cfg,
+                             conf,
                              pos_mapper,
                              method_to_id,
-                             code_debug_lines,
-                             method_mapping_filename,
-                             class_mapping_filename,
-                             pg_mapping_filename,
-                             bytecode_offset_filename);
+                             code_debug_lines);
 
-  dout.prepare(string_sort_mode, code_sort_mode, cfg);
+  dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();
+  dout.metrics();
   return dout.m_stats;
 }
 

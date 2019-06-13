@@ -16,6 +16,10 @@ bool load(const std::string& input_dir);
 
 class IRMetaIO {
  public:
+  struct bit_rstate_t {
+    ReferencedState::InnerStruct inner_struct;
+    uint16_t m_keep_count;
+  };
   static void serialize_rstate(const ReferencedState& rstate,
                                std::ofstream& ostrm);
   static void deserialize_rstate(const char** _ptr, ReferencedState& rstate);
@@ -26,16 +30,20 @@ class IRMetaIO {
   template <typename T>
   static bool is_default_meta(const T* obj) {
     return obj->get_deobfuscated_name() == show(obj) &&
-           !obj->rstate.m_by_type && !obj->rstate.m_by_string &&
-           !obj->rstate.m_by_resources && !obj->rstate.m_is_serde &&
-           !obj->rstate.m_mix_mode && !obj->rstate.m_keep &&
-           !obj->rstate.m_assumenosideeffects &&
-           !obj->rstate.m_blanket_keepnames &&
-           !obj->rstate.m_whyareyoukeeping &&
-           !obj->rstate.m_set_allowshrinking &&
-           !obj->rstate.m_unset_allowshrinking &&
-           !obj->rstate.m_set_allowobfuscation &&
-           !obj->rstate.m_unset_allowobfuscation && !obj->rstate.m_keep_name &&
+           !obj->rstate.inner_struct.m_by_type &&
+           !obj->rstate.inner_struct.m_by_string &&
+           !obj->rstate.inner_struct.m_by_resources &&
+           !obj->rstate.inner_struct.m_is_serde &&
+           !obj->rstate.inner_struct.m_mix_mode &&
+           !obj->rstate.inner_struct.m_keep &&
+           !obj->rstate.inner_struct.m_assumenosideeffects &&
+           !obj->rstate.inner_struct.m_blanket_keepnames &&
+           !obj->rstate.inner_struct.m_whyareyoukeeping &&
+           !obj->rstate.inner_struct.m_set_allowshrinking &&
+           !obj->rstate.inner_struct.m_unset_allowshrinking &&
+           !obj->rstate.inner_struct.m_set_allowobfuscation &&
+           !obj->rstate.inner_struct.m_unset_allowobfuscation &&
+           !obj->rstate.inner_struct.m_keep_name &&
            !obj->rstate.m_keep_count.load();
   }
 };

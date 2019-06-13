@@ -165,6 +165,7 @@ class IRCode {
   // if the cfg was editable, linearize it back into m_ir_list
   void clear_cfg();
 
+  bool cfg_built() const;
   bool editable_cfg_built() const;
 
   /* Generate DexCode from IRCode */

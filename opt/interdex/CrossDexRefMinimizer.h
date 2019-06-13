@@ -24,21 +24,26 @@ namespace interdex {
 // other classes left that also have those *refs.
 // Generally, a higher count increases the effectiveness of cross-dex-reference
 // minimization, but also causes it to use more memory and run slower.
-constexpr size_t INFREQUENT_REFS_COUNT = 6;
+constexpr uint64_t INFREQUENT_REFS_COUNT = 6;
 
 using PrioritizedDexClasses = MutablePriorityQueue<DexClass*, uint64_t>;
 struct CrossDexRefMinimizerStats {
-  size_t classes{0};
-  size_t resets{0};
-  size_t reprioritizations{0};
+  uint64_t classes{0};
+  uint64_t resets{0};
+  uint64_t reprioritizations{0};
   std::vector<std::pair<DexClass*, uint64_t>> worst_classes;
 };
 
 struct CrossDexRefMinimizerConfig {
-  size_t method_ref_weight;
-  size_t field_ref_weight;
-  size_t type_ref_weight;
-  size_t string_ref_weight;
+  uint64_t method_ref_weight;
+  uint64_t field_ref_weight;
+  uint64_t type_ref_weight;
+  uint64_t string_ref_weight;
+
+  uint64_t method_seed_weight;
+  uint64_t field_seed_weight;
+  uint64_t type_seed_weight;
+  uint64_t string_seed_weight;
 };
 
 // Helper class that maintains a set of dex classes with associated priorities
@@ -82,6 +87,7 @@ class CrossDexRefMinimizer {
     std::vector<std::pair<void*, uint32_t>> refs;
     uint64_t refs_weight;
     uint64_t applied_refs_weight;
+    uint64_t seed_weight{0};
     ClassInfo(uint32_t i)
         : index(i),
           infrequent_refs_weight(),
@@ -100,18 +106,32 @@ class CrossDexRefMinimizer {
     std::array<int32_t, INFREQUENT_REFS_COUNT> infrequent_refs_weight{};
     int64_t applied_refs_weight{0};
   };
+
   void reprioritize(
       const std::unordered_map<DexClass*, ClassInfoDelta>& affected_classes);
   DexClass* worst(bool generated);
 
+  std::unordered_map<void*, size_t> m_ref_counts;
+  size_t m_max_ref_count{0};
+
+  void gather_refs(DexClass* cls,
+                   std::vector<DexMethodRef*>& method_refs,
+                   std::vector<DexFieldRef*>& field_refs,
+                   std::vector<DexType*>& types,
+                   std::vector<DexString*>& strings);
+
  public:
   CrossDexRefMinimizer(const CrossDexRefMinimizerConfig& config)
       : m_config(config) {}
+  // Gather frequency counts; must be called for relevant classes before
+  // inserting them
+  void sample(DexClass* cls);
+  // Ignore a class reference when computing weights
+  void ignore(DexClass* cls);
   void insert(DexClass* cls);
   bool empty() const;
   DexClass* front() const;
-  // "Worst" in the sense of having the biggest (adjusted) unapplied refs
-  // weight.
+  // "Worst" in the sense of having highest seed weight.
   DexClass* worst();
   // "Erasing" a class applies its refs, updating
   // the priorities of all remaining classes.
@@ -120,7 +140,7 @@ class CrossDexRefMinimizer {
   // This function returns the number of applied refs.
   void erase(DexClass* cls, bool emitted, bool reset);
   const CrossDexRefMinimizerConfig& get_config() const { return m_config; }
-  const CrossDexRefMinimizerStats stats() const { return m_stats; }
+  const CrossDexRefMinimizerStats& stats() const { return m_stats; }
 };
 
 } // namespace interdex

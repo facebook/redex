@@ -15,29 +15,14 @@ class PrintMembersPass : public Pass {
  public:
   PrintMembersPass() : Pass("PrintMembersPass") {}
 
-  void configure_pass(const JsonWrapper& jw) override {
-    jw.get("show_code", false, m_config.show_code);
-    jw.get("show_sfields", true, m_config.show_sfields);
-    jw.get("show_ifields", true, m_config.show_ifields);
-
-    std::vector<std::string> classes;
-    jw.get("only_these_classes", {}, classes);
-    for (std::string& name : classes) {
-      DexClass* c =
-          type_class(DexType::get_type(DexString::get_string(name.c_str())));
-      if (c != nullptr) {
-        m_config.only_these_classes.insert(c);
-      }
-    }
-
-    std::vector<std::string> methods;
-    jw.get("only_these_methods", {}, methods);
-    for (std::string& name : methods) {
-      DexMethodRef* m = DexMethod::get_method(name);
-      if (m != nullptr && m->is_def()) {
-        m_config.only_these_methods.insert(static_cast<DexMethod*>(m));
-      }
-    }
+  void bind_config() override {
+    bind("show_code", false, m_config.show_code);
+    bind("show_sfields", true, m_config.show_sfields);
+    bind("show_ifields", true, m_config.show_ifields);
+    bind("only_these_classes", {}, m_config.only_these_classes,
+         "Only print these classes");
+    bind("only_these_methods", {}, m_config.only_these_methods,
+         "Only print these methods");
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

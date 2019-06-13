@@ -13,9 +13,13 @@ class ClassSplittingPass : public Pass {
  public:
   ClassSplittingPass() : Pass("ClassSplittingPass") {}
 
-  void configure_pass(const JsonWrapper&) override;
+  void bind_config() override {
+    bind("relocated_methods_per_target_class", 64U,
+         m_relocated_methods_per_target_class);
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  size_t m_relocated_methods_per_target_class;
+  unsigned int m_relocated_methods_per_target_class;
 };

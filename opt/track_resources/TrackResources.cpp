@@ -25,6 +25,9 @@
 
 namespace {
 
+const std::string TRACKED_RESOURCES_FILE_NAME =
+    "redex-tracked-coldstart-resources.txt";
+
 std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cls_list) {
   std::unordered_set<std::string> cls_set;
   for (auto& cls : cls_list) {
@@ -80,8 +83,9 @@ void check_if_tracked_sget(DexMethod* src_method,
 
 }
 
-void TrackResourcesPass::find_accessed_fields(Scope& fullscope,
-    ConfigFiles& cfg,
+void TrackResourcesPass::find_accessed_fields(
+    Scope& fullscope,
+    ConfigFiles& conf,
     std::unordered_set<DexClass*> classes_to_track,
     std::unordered_set<DexField*>& recorded_fields,
     std::unordered_set<std::string>& classes_to_search) {
@@ -136,15 +140,18 @@ std::unordered_set<DexClass*> TrackResourcesPass::build_tracked_cls_set(
   return tracked_classes;
 }
 
-void TrackResourcesPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void TrackResourcesPass::run_pass(DexStoresVector& stores,
+                                  ConfigFiles& conf,
+                                  PassManager& mgr) {
   std::unordered_set<DexField*> recorded_fields;
-  const auto& pg_map = cfg.get_proguard_map();
+  const auto& pg_map = conf.get_proguard_map();
   auto tracked_classes = build_tracked_cls_set(m_classes_to_track, pg_map);
   auto scope = build_class_scope(stores);
-  auto coldstart_cls_map = build_cls_set(cfg.get_coldstart_classes());
-  find_accessed_fields(scope, cfg, tracked_classes, recorded_fields, coldstart_cls_map);
-  m_tracked_fields_output = cfg.metafile(m_tracked_fields_output);
-  write_found_fields(m_tracked_fields_output, recorded_fields);
+  auto coldstart_cls_map = build_cls_set(conf.get_coldstart_classes());
+  find_accessed_fields(scope, conf, tracked_classes, recorded_fields,
+                       coldstart_cls_map);
+  auto tracked_res = conf.metafile(TRACKED_RESOURCES_FILE_NAME);
+  write_found_fields(tracked_res, recorded_fields);
 }
 
 static TrackResourcesPass s_pass;

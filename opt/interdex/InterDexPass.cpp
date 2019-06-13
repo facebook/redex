@@ -114,47 +114,69 @@ void treat_generated_stores(DexStoresVector& stores,
 
 namespace interdex {
 
-void InterDexPass::configure_pass(const JsonWrapper& jw) {
-  jw.get("static_prune", false, m_static_prune);
-  jw.get("emit_canaries", true, m_emit_canaries);
-  jw.get("normal_primary_dex", false, m_normal_primary_dex);
-  jw.get("linear_alloc_limit", 11600 * 1024, m_linear_alloc_limit);
-  jw.get("scroll_classes_file", "", m_mixed_mode_classes_file);
-
-  jw.get("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
-  jw.get("can_touch_coldstart_extended_cls", false,
-         m_can_touch_coldstart_extended_cls);
-  always_assert_log(
-      !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
-      "can_touch_coldstart_extended_cls needs to be true, when we can touch "
-      "coldstart classes. Please set can_touch_coldstart_extended_cls "
-      "to true\n");
-
-  std::vector<std::string> mixed_mode_dexes;
-  jw.get("mixed_mode_dexes", {}, mixed_mode_dexes);
-  m_mixed_mode_dex_statuses = get_mixed_mode_dex_statuses(mixed_mode_dexes);
+void InterDexPass::bind_config() {
+  bind("static_prune", false, m_static_prune);
+  bind("emit_canaries", true, m_emit_canaries);
+  bind("normal_primary_dex", false, m_normal_primary_dex);
+  bind("linear_alloc_limit", {11600 * 1024}, m_linear_alloc_limit);
+  bind("scroll_classes_file", "", m_mixed_mode_classes_file);
 
   // Default to maximum number of type refs per dex, as allowed by Android.
   // Notes: This flag was added to work around a bug in AOSP described in
   //        https://phabricator.internmc.facebook.com/P60294798 and for this
   //        it should be set to 1 << 15.
-  jw.get("type_refs_limit", 1 << 16, m_type_refs_limit);
+  bind("type_refs_limit", {1 << 16}, m_type_refs_limit);
 
-  jw.get("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
-  jw.get("minimize_cross_dex_refs_method_ref_weight", 100,
-         m_minimize_cross_dex_refs_config.method_ref_weight);
-  jw.get("minimize_cross_dex_refs_field_ref_weight", 90,
-         m_minimize_cross_dex_refs_config.field_ref_weight);
-  jw.get("minimize_cross_dex_refs_type_ref_weight", 100,
-         m_minimize_cross_dex_refs_config.type_ref_weight);
-  jw.get("minimize_cross_dex_refs_string_ref_weight", 90,
-         m_minimize_cross_dex_refs_config.string_ref_weight);
+  bind("minimize_cross_dex_refs", false, m_minimize_cross_dex_refs);
+  bind("minimize_cross_dex_refs_method_ref_weight", {100},
+       m_minimize_cross_dex_refs_config.method_ref_weight);
+  bind("minimize_cross_dex_refs_field_ref_weight", {90},
+       m_minimize_cross_dex_refs_config.field_ref_weight);
+  bind("minimize_cross_dex_refs_type_ref_weight", {100},
+       m_minimize_cross_dex_refs_config.type_ref_weight);
+  bind("minimize_cross_dex_refs_string_ref_weight", {90},
+       m_minimize_cross_dex_refs_config.string_ref_weight);
+  bind("minimize_cross_dex_refs_method_seed_weight", {100},
+       m_minimize_cross_dex_refs_config.method_seed_weight);
+  bind("minimize_cross_dex_refs_field_seed_weight", {20},
+       m_minimize_cross_dex_refs_config.field_seed_weight);
+  bind("minimize_cross_dex_refs_type_ref_weight", {30},
+       m_minimize_cross_dex_refs_config.type_seed_weight);
+  bind("minimize_cross_dex_refs_string_ref_weight", {20},
+       m_minimize_cross_dex_refs_config.string_seed_weight);
+  bind("minimize_cross_dex_refs_relocate_static_methods", false,
+       m_cross_dex_relocator_config.relocate_static_methods);
+  bind("minimize_cross_dex_refs_relocate_non_static_direct_methods", false,
+       m_cross_dex_relocator_config.relocate_non_static_direct_methods);
+  bind("minimize_cross_dex_refs_relocate_virtual_methods", false,
+       m_cross_dex_relocator_config.relocate_virtual_methods);
+
+  // The actual number of relocated methods per class tends to be just a
+  // fraction of this number, as relocated methods get re-relocated back into
+  // their original class when they end up in the same dex.
+  bind("max_relocated_methods_per_class", {200},
+       m_cross_dex_relocator_config.max_relocated_methods_per_class);
+
+  bind("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
+  bind("can_touch_coldstart_extended_cls", false,
+       m_can_touch_coldstart_extended_cls);
+
+  std::vector<std::string> mixed_mode_dexes;
+  bind("mixed_mode_dexes", {}, mixed_mode_dexes);
+
+  after_configuration([this, mixed_mode_dexes] {
+    always_assert_log(
+        !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
+        "can_touch_coldstart_extended_cls needs to be true, when we can touch "
+        "coldstart classes. Please set can_touch_coldstart_extended_cls "
+        "to true\n");
+    m_mixed_mode_dex_statuses = get_mixed_mode_dex_statuses(mixed_mode_dexes);
+  });
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
                             DexClassesVector& dexen,
-                            Scope& original_scope,
-                            ConfigFiles& cfg,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   // Setup all external plugins.
   InterDexRegistry* registry = static_cast<InterDexRegistry*>(
@@ -162,16 +184,18 @@ void InterDexPass::run_pass(DexStoresVector& stores,
 
   auto plugins = registry->create_plugins();
   size_t reserve_mrefs = 0;
+  auto original_scope = build_class_scope(stores);
   for (const auto& plugin : plugins) {
-    plugin->configure(original_scope, cfg);
+    plugin->configure(original_scope, conf);
     reserve_mrefs += plugin->reserve_mrefs();
   }
 
-  InterDex interdex(dexen, mgr.apk_manager(), cfg, plugins,
+  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, m_emit_scroll_set_marker,
                     m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_minimize_cross_dex_refs_config, reserve_mrefs);
+                    m_minimize_cross_dex_refs_config,
+                    m_cross_dex_relocator_config, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.
   // Otherwise, we check if we have a list of pre-defined classes.
@@ -195,6 +219,7 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   dexen = interdex.take_outdex();
 
   auto final_scope = build_class_scope(stores);
+  interdex.cleanup(final_scope);
   for (const auto& plugin : plugins) {
     plugin->cleanup(final_scope);
   }
@@ -217,10 +242,28 @@ void InterDexPass::run_pass(DexStoresVector& stores,
         METRIC_REORDER_CLASSES_WORST + std::to_string(i) + "_" + SHOW(p.first);
     mgr.set_metric(metric, p.second);
   }
+
+  const auto cross_dex_relocator_stats =
+      interdex.get_cross_dex_relocator_stats();
+  mgr.set_metric(METRIC_CLASSES_ADDED_FOR_RELOCATED_METHODS,
+                 cross_dex_relocator_stats.classes_added_for_relocated_methods);
+  mgr.set_metric(METRIC_RELOCATABLE_STATIC_METHODS,
+                 cross_dex_relocator_stats.relocatable_static_methods);
+  mgr.set_metric(
+      METRIC_RELOCATABLE_NON_STATIC_DIRECT_METHODS,
+      cross_dex_relocator_stats.relocatable_non_static_direct_methods);
+  mgr.set_metric(METRIC_RELOCATABLE_VIRTUAL_METHODS,
+                 cross_dex_relocator_stats.relocatable_virtual_methods);
+  mgr.set_metric(METRIC_RELOCATED_STATIC_METHODS,
+                 cross_dex_relocator_stats.relocated_static_methods);
+  mgr.set_metric(METRIC_RELOCATED_NON_STATIC_DIRECT_METHODS,
+                 cross_dex_relocator_stats.relocated_non_static_direct_methods);
+  mgr.set_metric(METRIC_RELOCATED_VIRTUAL_METHODS,
+                 cross_dex_relocator_stats.relocated_virtual_methods);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& cfg,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(
@@ -229,11 +272,9 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     return;
   }
 
-  auto original_scope = build_class_scope(stores);
-
   for (auto& store : stores) {
     if (store.is_root_store()) {
-      run_pass(stores, store.get_dexen(), original_scope, cfg, mgr);
+      run_pass(stores, store.get_dexen(), conf, mgr);
     }
   }
 }

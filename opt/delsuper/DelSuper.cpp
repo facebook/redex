@@ -102,7 +102,7 @@ private:
   bool do_invoke_meth_args_pass_through(
     const DexMethod* meth,
     const IRInstruction* insn) {
-    assert(insn->opcode() == OPCODE_INVOKE_SUPER);
+    redex_assert(insn->opcode() == OPCODE_INVOKE_SUPER);
     size_t src_idx{0};
     for (const auto& mie : InstructionIterable(
              meth->get_code()->get_param_instructions())) {
@@ -371,7 +371,9 @@ public:
 
 }
 
-void DelSuperPass::run_pass(DexStoresVector& stores, ConfigFiles& cfg, PassManager& mgr) {
+void DelSuperPass::run_pass(DexStoresVector& stores,
+                            ConfigFiles& /* conf */,
+                            PassManager& mgr) {
   const auto& scope = build_class_scope(stores);
   DelSuper(scope).run(/* do_delete = */true, mgr);
 }

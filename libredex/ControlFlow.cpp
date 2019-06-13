@@ -177,18 +177,25 @@ bool Block::same_try(const Block* other) const {
   return m_parent->blocks_are_in_same_try(this, other);
 }
 
-void Block::remove_opcode(const ir_list::InstructionIterator& it) {
+void Block::remove_insn(const InstructionIterator& it) {
   always_assert(m_parent->editable());
-  m_parent->remove_opcode(cfg::InstructionIterator(*m_parent, this, it));
+  m_parent->remove_insn(it);
 }
 
-void Block::remove_opcode(const IRList::iterator& it) {
+void Block::remove_insn(const ir_list::InstructionIterator& it) {
   always_assert(m_parent->editable());
-  remove_opcode(ir_list::InstructionIterator(it, end()));
+  remove_insn(to_cfg_instruction_iterator(it));
+}
+
+void Block::remove_insn(const IRList::iterator& it) {
+  always_assert(m_parent->editable());
+  remove_insn(to_cfg_instruction_iterator(it));
 }
 
 opcode::Branchingness Block::branchingness() {
-  always_assert(m_parent->editable());
+  // TODO (cnli): put back 'always_assert(m_parent->editable());'
+  // once ModelMethodMerger::sink_common_ctor_to_return_block update
+  // to editable CFG.
   const auto& last = get_last_insn();
 
   if (succs().empty() ||
@@ -310,7 +317,15 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
-Block* Block::follow_goto() const {
+Block* Block::goes_to() const {
+  const Edge* e = m_parent->get_succ_edge_of_type(this, EDGE_GOTO);
+  if (e != nullptr) {
+    return e->target();
+  }
+  return nullptr;
+}
+
+Block* Block::goes_to_only_edge() const {
   const auto& s = succs();
   if (s.size() == 1) {
     const auto& e = s[0];
@@ -1100,6 +1115,29 @@ void ControlFlowGraph::gather_methods(
   }
 }
 
+cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
+    const cfg::InstructionIterator& it) {
+  auto move_result_insn = it->insn;
+  always_assert(
+      opcode::is_move_result_or_move_result_pseudo(move_result_insn->opcode()));
+  auto block = const_cast<Block*>(it.block());
+  if (block->get_first_insn()->insn == move_result_insn) {
+    auto& preds = block->preds();
+    always_assert(preds.size() == 1);
+    auto previous_block = preds.front()->src();
+    auto res = previous_block->to_cfg_instruction_iterator(
+        previous_block->get_last_insn());
+    auto insn = res->insn;
+    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    return res;
+  } else {
+    auto res = std::prev(it.unwrap());
+    auto insn = res->insn;
+    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    return block->to_cfg_instruction_iterator(res);
+  }
+}
+
 cfg::InstructionIterator ControlFlowGraph::move_result_of(
     const cfg::InstructionIterator& it) {
   auto next_insn = std::next(it);
@@ -1108,17 +1146,16 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
     // The easy case where the move result is in the same block
     auto op = next_insn->insn->opcode();
     if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+      always_assert(primary_instruction_of_move_result(next_insn) == it);
       return next_insn;
     }
-  }
-  auto goto_edge = get_succ_edge_of_type(it.block(), EDGE_GOTO);
-  if (goto_edge != nullptr) {
-    auto next_block = goto_edge->target();
-    if (next_block->starts_with_move_result()) {
-      return cfg::InstructionIterator(
-          *this, next_block,
-          ir_list::InstructionIterator(next_block->get_first_insn(),
-                                       next_block->end()));
+  } else {
+    auto next_block = it.block()->goes_to();
+    if (next_block != nullptr && next_block->starts_with_move_result()) {
+      next_insn =
+          next_block->to_cfg_instruction_iterator(next_block->get_first_insn());
+      always_assert(primary_instruction_of_move_result(next_insn) == it);
+      return next_insn;
     }
   }
   return end;
@@ -1180,7 +1217,17 @@ void ControlFlowGraph::deep_copy(ControlFlowGraph* new_cfg) const {
   }
 }
 
-InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle) {
+InstructionIterator ControlFlowGraph::find_insn(IRInstruction* needle,
+                                                Block* hint) {
+  if (hint != nullptr) {
+    auto ii = ir_list::InstructionIterable(hint);
+    for (auto it = ii.begin(); it != ii.end(); ++it) {
+      if (it->insn == needle) {
+        return hint->to_cfg_instruction_iterator(it);
+      }
+    }
+  }
+
   auto iterable = InstructionIterable(*this);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {
     if (it->insn == needle) {
@@ -1569,6 +1616,54 @@ std::vector<Block*> ControlFlowGraph::blocks() const {
   return result;
 }
 
+// Uses a standard depth-first search ith a side table of already-visited nodes.
+std::vector<Block*> ControlFlowGraph::blocks_post_helper(bool reverse) const {
+  std::stack<Block*> stack;
+  for (const auto& entry : m_blocks) {
+    // include unreachable blocks too
+    Block* b = entry.second;
+    if (b != entry_block() && b->preds().empty()) {
+      stack.push(b);
+    }
+  }
+  stack.push(entry_block());
+
+  std::vector<Block*> postorder;
+  postorder.reserve(m_blocks.size());
+  std::unordered_set<Block*> visited;
+  visited.reserve(m_blocks.size());
+  while (!stack.empty()) {
+    const auto& curr = stack.top();
+    visited.insert(curr);
+    bool all_succs_visited = [&] {
+      for (auto const& s : curr->succs()) {
+        if (!visited.count(s->target())) {
+          stack.push(s->target());
+          return false;
+        }
+      }
+      return true;
+    }();
+    if (all_succs_visited) {
+      redex_assert(curr == stack.top());
+      postorder.push_back(curr);
+      stack.pop();
+    }
+  }
+  if (reverse) {
+    std::reverse(postorder.begin(), postorder.end());
+  }
+  return postorder;
+}
+
+std::vector<Block*> ControlFlowGraph::blocks_reverse_post() const {
+  return blocks_post_helper(true);
+}
+
+std::vector<Block*> ControlFlowGraph::blocks_post() const {
+  return blocks_post_helper(false);
+}
+
 ControlFlowGraph::~ControlFlowGraph() {
   for (const auto& entry : m_blocks) {
     Block* b = entry.second;
@@ -1819,18 +1914,24 @@ Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
   // new_block will be the successor
   Block* new_block = create_block();
   const IRList::iterator& raw_it = it.unwrap();
-  always_assert(raw_it != old_block->get_last_insn());
 
-  // move the rest of the instructions after the callsite into the new block
+  // move the rest of the instructions after the split point into the new block
   new_block->m_entries.splice_selection(new_block->begin(),
                                         old_block->m_entries, std::next(raw_it),
                                         old_block->end());
-  // make the outgoing edges come from the new block
+
+  // make the outgoing edges come from the new block...
   std::vector<Edge*> to_move(old_block->succs().begin(),
                              old_block->succs().end());
   for (auto e : to_move) {
+    // ... except if we didn't move the branching/throwing instruction; in that
+    // case, just rewire the goto, as we are going to create a new one
+    if (new_block->empty() && e->type() != EDGE_GOTO) {
+      continue;
+    }
     set_edge_source(e, new_block);
   }
+
   // connect the halves of the block we just split up
   add_edge(old_block, new_block, EDGE_GOTO);
   return new_block;
@@ -1919,7 +2020,16 @@ bool ControlFlowGraph::blocks_are_in_same_try(const Block* b1,
   return true;
 }
 
-void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
+bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
+                                     const std::vector<IRInstruction*>& insns) {
+  return replace_insns(it, insns.begin(), insns.end());
+}
+bool ControlFlowGraph::replace_insn(const InstructionIterator& it,
+                                    IRInstruction* insn) {
+  return replace_insns(it, {insn});
+}
+
+void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   always_assert(m_editable);
 
   MethodItemEntry& mie = *it;
@@ -1949,8 +2059,10 @@ void ControlFlowGraph::remove_opcode(const InstructionIterator& it) {
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
-      auto goto_edge = get_succ_edge_of_type(block, EDGE_GOTO);
-      auto move_result_block = goto_edge->target();
+      auto move_result_block = block->goes_to();
+      always_assert_log(move_result_block != nullptr,
+                        "Cannot follow goto of B%u in %s", block->id(),
+                        SHOW(*this));
       auto first_it = move_result_block->get_first_insn();
       always_assert(first_it != move_result_block->end());
       always_assert_log(opcode::is_move_result_pseudo(first_it->insn->opcode()),
@@ -2041,121 +2153,34 @@ void ControlFlowGraph::create_branch(
   }
 }
 
-bool ControlFlowGraph::insert(const InstructionIterator& position,
-                              const std::vector<IRInstruction*>& insns,
-                              bool before) {
-  // Convert to the before case by moving the position forward one.
-  Block* b = position.block();
-  if (position.unwrap() == b->end()) {
-    always_assert_log(before, "can't insert after the end");
+void ControlFlowGraph::copy_succ_edges(Block* from, Block* to, EdgeType type) {
+  const auto& edges = get_succ_edges_of_type(from, type);
+
+  for (const Edge* e : edges) {
+    Edge* copy = new Edge(*e);
+    copy->m_src = to;
+    add_edge(copy);
   }
-  IRList::iterator pos =
-      before ? position.unwrap() : std::next(position.unwrap());
-
-  bool invalidated_its = false;
-  for (auto insn : insns) {
-    const auto& throws = get_succ_edges_of_type(b, EDGE_THROW);
-
-    // Certain types of blocks cannot have instructions added to the end.
-    // Disallow that case here.
-    if (pos == b->end()) {
-      auto existing_last = b->get_last_insn();
-      if (existing_last != b->end()) {
-        // TODO? Currently, this will abort if someone tries to insert after a
-        // may_throw that has a catch in this method. Maybe instead we should
-        // insert after the move-result in the goto successor block. That's
-        // probably what the user meant to do anyway.
-        auto last_op = existing_last->insn->opcode();
-        always_assert_log(!is_branch(last_op) && !is_throw(last_op) &&
-                              !is_return(last_op) && throws.empty(),
-                          "Can't add instructions after %s in Block %d in %s",
-                          SHOW(existing_last->insn), b->id(), SHOW(*this));
-      }
-    }
-
-    auto op = insn->opcode();
-    always_assert_log(!is_branch(op),
-                      "insert() does not support branch opcodes. Use "
-                      "create_branch() instead");
-
-    IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-
-    if (is_throw(op) || is_return(op)) {
-      // Throw and return end the block, we must remove all code after them.
-      always_assert(insn == insns.back());
-      for (auto it = pos; it != b->m_entries.end();) {
-        it = b->m_entries.erase_and_dispose(it);
-        invalidated_its = true;
-      }
-      if (is_return(op)) {
-        // This block now ends in a return, it must have no successors.
-        delete_succ_edges(b);
-      } else {
-        always_assert(is_throw(op));
-        // The only valid way to leave this block is via a throw edge.
-        delete_succ_edge_if(b, [](const Edge* e) {
-          return !(e->type() == EDGE_THROW || e->type() == EDGE_GHOST);
-        });
-      }
-      // If this created unreachable blocks, they will be removed by simplify.
-    } else if (opcode::may_throw(op)) {
-      if (!throws.empty()) {
-        invalidated_its = true;
-        // FIXME: Copying the outgoing throw edges isn't enough.
-        // When the editable CFG is constructed, we transform the try regions
-        // into throw edges. We only add these edges to blocks that may throw,
-        // thus losing the knowledge of which blocks were originally inside a
-        // try region. If we add a new throwing instruction here. It may be
-        // added to a block that was originally inside a try region, but we lost
-        // that information already.
-        //
-        // Possible Solutions:
-        // * Rework throw representation to regions instead of duplicated edges?
-        // * User gives a block that we want to copy the throw edges from?
-        // * User specifies which throw edges they want and to which blocks?
-
-        // Split the block after the new instruction.
-        // b has become the predecessor of the new split pair
-        Block* succ =
-            split_block(b->to_cfg_instruction_iterator(new_inserted_it));
-
-        // Copy the outgoing throw edges of the original block into the block
-        // that now ends with the new instruction
-        for (const Edge* e : throws) {
-          Edge* copy = new Edge(*e);
-          copy->m_src = b;
-          add_edge(copy);
-        }
-        // Continue inserting in the successor block.
-        b = succ;
-        pos = succ->begin();
-      }
-    }
-  }
-  return invalidated_its;
 }
 
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,
                                      const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns, /* before */ true);
+  return insert_before(position, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::insert_after(const InstructionIterator& position,
                                     const std::vector<IRInstruction*>& insns) {
-  return insert(position, insns, /* before */ false);
+  return insert_after(position, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::push_front(Block* b,
                                   const std::vector<IRInstruction*>& insns) {
-  const auto& begin = ir_list::InstructionIterable(b).begin();
-  return insert(b->to_cfg_instruction_iterator(begin), insns,
-                /* before */ true);
+  return push_front(b, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::push_back(Block* b,
                                  const std::vector<IRInstruction*>& insns) {
-  const auto& end = ir_list::InstructionIterable(b).end();
-  return insert(b->to_cfg_instruction_iterator(end), insns, /* before */ true);
+  return push_back(b, insns.begin(), insns.end());
 }
 
 bool ControlFlowGraph::insert_before(const InstructionIterator& position,
@@ -2220,37 +2245,6 @@ std::ostream& ControlFlowGraph::write_dot_format(std::ostream& o) const {
   return o;
 }
 
-std::vector<Block*> postorder_sort(const std::vector<Block*>& cfg) {
-  std::vector<Block*> postorder;
-  std::vector<Block*> stack;
-  std::unordered_set<Block*> visited;
-  for (size_t i = 1; i < cfg.size(); i++) {
-    if (cfg[i]->preds().empty()) {
-      stack.push_back(cfg[i]);
-    }
-  }
-  stack.push_back(cfg[0]);
-  while (!stack.empty()) {
-    auto const& curr = stack.back();
-    visited.insert(curr);
-    bool all_succs_visited = [&] {
-      for (auto const& s : curr->succs()) {
-        if (!visited.count(s->target())) {
-          stack.push_back(s->target());
-          return false;
-        }
-      }
-      return true;
-    }();
-    if (all_succs_visited) {
-      assert(curr == stack.back());
-      postorder.push_back(curr);
-      stack.pop_back();
-    }
-  }
-  return postorder;
-}
-
 Block* ControlFlowGraph::idom_intersect(
     const std::unordered_map<Block*, DominatorInfo>& postorder_dominator,
     Block* block1,
@@ -2277,7 +2271,7 @@ std::unordered_map<Block*, DominatorInfo>
 ControlFlowGraph::immediate_dominators() const {
   // Get postorder of blocks and create map of block to postorder number.
   std::unordered_map<Block*, DominatorInfo> postorder_dominator;
-  auto postorder_blocks = postorder_sort(blocks());
+  const auto& postorder_blocks = blocks_post();
   for (size_t i = 0; i < postorder_blocks.size(); ++i) {
     postorder_dominator[postorder_blocks[i]].postorder = i;
   }
