@@ -39,7 +39,8 @@ void print(std::ostream& output,
 // construct an unordered map here.
 template <typename V>
 size_t read(std::istream& input,
-            std::unordered_map<const DexMethodRef*, V>* map) {
+            std::unordered_map<const DexMethodRef*, V>* map,
+            bool no_load_external = true) {
   sparta::s_expr_istream s_expr_input(input);
   size_t load_count{0};
   while (s_expr_input.good()) {
@@ -63,7 +64,7 @@ size_t read(std::istream& input,
     // implicitly defined due to inheriting from another method, like how
     // ArrayList.equals() inherits from Object.equals()).
     auto cls = type_class(dex_method->get_class());
-    if (cls == nullptr || !cls->is_external()) {
+    if (cls == nullptr || (no_load_external && !cls->is_external())) {
       TRACE(LIB, 1, "Found a summary for non-external method '%s', ignoring",
             SHOW(dex_method));
       continue;
