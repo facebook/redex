@@ -246,7 +246,10 @@ class DexOutput {
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
-  void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
+  void insert_map_item(uint16_t typeidx,
+                       uint32_t size,
+                       uint32_t offset,
+                       uint32_t bytes);
   void generate_string_data(SortMode mode = SortMode::DEFAULT);
   void generate_type_data();
   void generate_proto_data();

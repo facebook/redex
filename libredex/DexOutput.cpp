@@ -389,7 +389,8 @@ DexOutput::~DexOutput() {
 
 void DexOutput::insert_map_item(uint16_t maptype,
                                 uint32_t size,
-                                uint32_t offset) {
+                                uint32_t offset,
+                                uint32_t /* bytes */) {
   if (size == 0) return;
   dex_map_item item{};
   item.type = maptype;
@@ -496,8 +497,8 @@ void DexOutput::generate_string_data(SortMode mode) {
   }
 
   size_t nrstr = string_order.size() + locators;
+  const uint32_t str_data_start = m_offset;
 
-  insert_map_item(TYPE_STRING_DATA_ITEM, (uint32_t)nrstr, m_offset);
   for (DexString* str : string_order) {
     // Emit lookup acceleration string if requested
     std::unique_ptr<Locator> locator = locator_for_descriptor(type_names, str);
@@ -524,6 +525,9 @@ void DexOutput::generate_string_data(SortMode mode) {
     m_offset += str->get_entry_size();
     m_stats.num_strings++;
   }
+
+  insert_map_item(TYPE_STRING_DATA_ITEM, (uint32_t)nrstr, str_data_start,
+                  m_offset - str_data_start);
 
   if (m_locator_index != nullptr || m_emit_name_based_locators) {
     TRACE(LOC, 2, "Used %u bytes for %u locator strings", locator_size,
@@ -636,7 +640,8 @@ void DexOutput::generate_typelist_data() {
     m_offset += size;
     m_stats.num_type_lists++;
   }
-  insert_map_item(TYPE_TYPE_LIST, (uint32_t) num_tls, tl_start);
+  insert_map_item(TYPE_TYPE_LIST, (uint32_t)num_tls, tl_start,
+                  m_offset - tl_start);
 }
 
 void DexOutput::generate_proto_data() {
@@ -751,7 +756,8 @@ void DexOutput::generate_class_data_items() {
     m_cdi_offsets[clz] = m_offset;
     m_offset += size;
   }
-  insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t) m_cdi_offsets.size(), cdi_start);
+  insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t)m_cdi_offsets.size(),
+                  cdi_start, m_offset - cdi_start);
 }
 
 static void sync_all(const Scope& scope) {
@@ -831,7 +837,8 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
   }
-  insert_map_item(TYPE_CODE_ITEM, (uint32_t) m_code_item_emits.size(), ci_start);
+  insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
+                  m_offset - ci_start);
 }
 
 void DexOutput::check_method_instruction_size_limit(const ConfigFiles& conf,
@@ -881,7 +888,8 @@ void DexOutput::generate_static_values() {
     }
   }
   if (m_static_values.size()) {
-    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t) enc_arrays.size(), sv_start);
+    insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t)enc_arrays.size(),
+                    sv_start, m_offset - sv_start);
   }
 }
 
@@ -913,7 +921,8 @@ void DexOutput::unique_annotations(annomap_t& annomap,
     annocnt++;
   }
   if (annocnt) {
-    insert_map_item(TYPE_ANNOTATION_ITEM, annocnt, mentry_offset);
+    insert_map_item(TYPE_ANNOTATION_ITEM, annocnt, mentry_offset,
+                    m_offset - mentry_offset);
   }
   m_stats.num_annotations += annocnt;
 }
@@ -942,7 +951,8 @@ void DexOutput::unique_asets(annomap_t& annomap,
     asetcnt++;
   }
   if (asetcnt) {
-    insert_map_item(TYPE_ANNOTATION_SET_ITEM, asetcnt, mentry_offset);
+    insert_map_item(TYPE_ANNOTATION_SET_ITEM, asetcnt, mentry_offset,
+                    m_offset - mentry_offset);
   }
 }
 
@@ -976,7 +986,8 @@ void DexOutput::unique_xrefs(asetmap_t& asetmap,
     xrefcnt++;
   }
   if (xrefcnt) {
-    insert_map_item(TYPE_ANNOTATION_SET_REF_LIST, xrefcnt, mentry_offset);
+    insert_map_item(TYPE_ANNOTATION_SET_REF_LIST, xrefcnt, mentry_offset,
+                    m_offset - mentry_offset);
   }
 }
 
@@ -1005,7 +1016,8 @@ void DexOutput::unique_adirs(asetmap_t& asetmap,
     adircnt++;
   }
   if (adircnt) {
-    insert_map_item(TYPE_ANNOTATIONS_DIR_ITEM, adircnt, mentry_offset);
+    insert_map_item(TYPE_ANNOTATIONS_DIR_ITEM, adircnt, mentry_offset,
+                    m_offset - mentry_offset);
   }
 }
 
@@ -1632,7 +1644,8 @@ void DexOutput::generate_debug_items() {
     }
   }
   if (emit_positions) {
-    insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start);
+    insert_map_item(TYPE_DEBUG_INFO_ITEM, dbgcount, dbg_start,
+                    m_offset - dbg_start);
   }
   m_stats.num_dbg_items += dbgcount;
   m_stats.dbg_total_size += m_offset - dbg_start;
@@ -1642,7 +1655,8 @@ void DexOutput::generate_map() {
   align_output();
   uint32_t* mapout = (uint32_t*)(m_output + m_offset);
   hdr.map_off = m_offset;
-  insert_map_item(TYPE_MAP_LIST, 1, m_offset);
+  insert_map_item(TYPE_MAP_LIST, 1, m_offset,
+                  sizeof(uint32_t) + m_map_items.size() * sizeof(dex_map_item));
   *mapout = (uint32_t) m_map_items.size();
   dex_map_item* map = (dex_map_item*)(mapout + 1);
   for (auto const& mit : m_map_items) {
@@ -1691,42 +1705,55 @@ void DexOutput::init_header_offsets(const std::string& dex_magic) {
   always_assert_log(dex_magic.length() > 0,
                     "Invalid dex magic from input APK\n");
   memcpy(hdr.magic, dex_magic.c_str(), sizeof(hdr.magic));
-  insert_map_item(TYPE_HEADER_ITEM, 1, 0);
+  uint32_t total_hdr_size = sizeof(dex_header);
+  insert_map_item(TYPE_HEADER_ITEM, 1, 0, total_hdr_size);
 
-  m_offset = hdr.header_size = sizeof(dex_header);
+  m_offset = hdr.header_size = total_hdr_size;
   hdr.endian_tag = ENDIAN_CONSTANT;
   /* Link section was never used */
   hdr.link_size = hdr.link_off = 0;
   hdr.string_ids_size = (uint32_t) dodx->stringsize();
   hdr.string_ids_off = hdr.string_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t) dodx->stringsize(), m_offset);
+  uint32_t total_string_size = dodx->stringsize() * sizeof(dex_string_id);
+  insert_map_item(TYPE_STRING_ID_ITEM, (uint32_t)dodx->stringsize(), m_offset,
+                  total_string_size);
 
-  m_offset += dodx->stringsize() * sizeof(dex_string_id);
+  m_offset += total_string_size;
   hdr.type_ids_size = (uint32_t) dodx->typesize();
   hdr.type_ids_off = hdr.type_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t) dodx->typesize(), m_offset);
+  uint32_t total_type_size = dodx->typesize() * sizeof(dex_type_id);
+  insert_map_item(TYPE_TYPE_ID_ITEM, (uint32_t)dodx->typesize(), m_offset,
+                  total_type_size);
 
-  m_offset += dodx->typesize() * sizeof(dex_type_id);
+  m_offset += total_type_size;
   hdr.proto_ids_size = (uint32_t) dodx->protosize();
   hdr.proto_ids_off = hdr.proto_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t) dodx->protosize(), m_offset);
+  uint32_t total_proto_size = dodx->protosize() * sizeof(dex_proto_id);
+  insert_map_item(TYPE_PROTO_ID_ITEM, (uint32_t)dodx->protosize(), m_offset,
+                  total_proto_size);
 
-  m_offset += dodx->protosize() * sizeof(dex_proto_id);
+  m_offset += total_proto_size;
   hdr.field_ids_size = (uint32_t) dodx->fieldsize();
   hdr.field_ids_off = hdr.field_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t) dodx->fieldsize(), m_offset);
+  uint32_t total_field_size = dodx->fieldsize() * sizeof(dex_field_id);
+  insert_map_item(TYPE_FIELD_ID_ITEM, (uint32_t)dodx->fieldsize(), m_offset,
+                  total_field_size);
 
-  m_offset += dodx->fieldsize() * sizeof(dex_field_id);
+  m_offset += total_field_size;
   hdr.method_ids_size = (uint32_t) dodx->methodsize();
   hdr.method_ids_off = hdr.method_ids_size ? m_offset : 0;
-  insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t) dodx->methodsize(), m_offset);
+  uint32_t total_method_size = dodx->methodsize() * sizeof(dex_method_id);
+  insert_map_item(TYPE_METHOD_ID_ITEM, (uint32_t)dodx->methodsize(), m_offset,
+                  total_method_size);
 
-  m_offset += dodx->methodsize() * sizeof(dex_method_id);
+  m_offset += total_method_size;
   hdr.class_defs_size = (uint32_t) m_classes->size();
   hdr.class_defs_off = hdr.class_defs_size ? m_offset : 0;
-  insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t) m_classes->size(), m_offset);
+  uint32_t total_class_size = m_classes->size() * sizeof(dex_class_def);
+  insert_map_item(TYPE_CLASS_DEF_ITEM, (uint32_t)m_classes->size(), m_offset,
+                  total_class_size);
 
-  m_offset += m_classes->size() * sizeof(dex_class_def);
+  m_offset += total_class_size;
   hdr.data_off = m_offset;
   /* Todo... */
   hdr.map_off = 0;
