@@ -2248,7 +2248,8 @@ class OatFile_124 : public OatFile {
     auto key_value_store = KeyValueStore(
         buf.slice(header.size()).truncate(header.key_value_store_size));
 
-    auto rest = buf.slice(header.size() + header.key_value_store_size);
+    // auto rest = buf.slice(header.size() + header.key_value_store_size);
+    auto rest = buf.slice(header.oat_dex_files_offset);
     DexFileListingType dfl(header.dex_file_count, rest);
 
     auto dex_file_name = dexes[0].filename;
