@@ -391,6 +391,31 @@ void ReduceArrayLiterals::patch() {
     auto type = new_array_insn->get_type();
     auto element_type = get_array_component_type(type);
 
+    if (m_min_sdk < 24) {
+      // See T45708995.
+      //
+      // There seems to be an issue with the filled-new-array instruction on
+      // Android 5 and 6.
+      //
+      // We see crashes in
+      //   bool art::interpreter::DoFilledNewArray<true, false, false>(
+      //     art::Instruction const*, art::ShadowFrame const&, art::Thread*,
+      //     art::JValue*) (libart.so :)
+      // and
+      //   bool art::interpreter::DoFilledNewArray<false, false, false>(
+      //     art::Instruction const*, art::ShadowFrame const&, art::Thread*,
+      //     art::JValue*) (libart.so :)
+      //
+      // The actual cause, and whether it affects all kinds of arrays, is not
+      // clear and needs further investigation.
+      // For the time being, we play it safe, and don't do the transformation.
+      //
+      // TODO: Find true root cause, and make this exception more targetted.
+      m_stats.remaining_buggy_arrays++;
+      m_stats.remaining_buggy_array_elements += aput_insns.size();
+      continue;
+    }
+
     if (is_wide_type(element_type)) {
       // TODO: Consider using an annotation-based scheme.
       m_stats.remaining_wide_arrays++;
