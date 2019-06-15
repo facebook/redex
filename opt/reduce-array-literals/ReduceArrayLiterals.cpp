@@ -423,27 +423,6 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (m_min_sdk < 24 && aput_insns.size() > 5) {
-      // See T45708995.
-      //
-      // There seems to be an issue with the /range version of the
-      // filled-new-array instruction on Android 5 and 6.
-      //
-      // We see crashes in
-      // bool art::interpreter::DoFilledNewArray<true, false, false>(
-      //   art::Instruction const*, art::ShadowFrame const&, art::Thread*,
-      //   art::JValue*) (libart.so :)
-      //
-      // The actual cause, and whether it affects all kinds of arrays, is not
-      // clear and needs further investigation.
-      // For the time being, we play it safe, and don't do the transformation.
-      //
-      // TODO: Find true root cause, and make this exception more targetted.
-      m_stats.remaining_buggy_arrays++;
-      m_stats.remaining_buggy_array_elements += aput_insns.size();
-      continue;
-    }
-
     if (m_min_sdk < 21 && is_array(element_type)) {
       // The Dalvik verifier had a bug for this case:
       // It retrieves the "element class" to check if the elements are of the
