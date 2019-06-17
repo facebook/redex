@@ -257,6 +257,16 @@ void mark_reachable_by_classname(DexClass* dclass) {
   }
 }
 
+void mark_reachable_by_string(DexMethod* method) {
+  if (method == nullptr) {
+    return;
+  }
+  if (auto cls = type_class_internal(method->get_class())) {
+    cls->rstate.ref_by_string();
+  }
+  method->rstate.ref_by_string();
+}
+
 void mark_reachable_by_classname(DexType* dtype) {
   mark_reachable_by_classname(type_class_internal(dtype));
 }
@@ -642,6 +652,7 @@ void init_permanently_reachable_classes(
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
   bool legacy_reflection_reachability;
+  bool analyze_native_lib_reachability;
 
   config.get("apk_dir", "", apk_dir);
   config.get("keep_packages", {}, reflected_package_names);
@@ -652,6 +663,8 @@ void init_permanently_reachable_classes(
   config.get("legacy_reflection_reachability", false,
              legacy_reflection_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
+  config.get("analyze_native_lib_reachability", true,
+             analyze_native_lib_reachability);
 
   if (legacy_reflection_reachability) {
     auto match = std::make_tuple(
@@ -709,12 +722,14 @@ void init_permanently_reachable_classes(
       analyze_reachable_from_xml_layouts(scope, apk_dir);
     }
 
-    // Classnames present in native libraries (lib/*/*.so)
-    for (std::string classname : get_native_classes(apk_dir)) {
-      auto type = DexType::get_type(classname.c_str());
-      if (type == nullptr) continue;
-      TRACE(PGR, 3, "native_lib: %s", classname.c_str());
-      mark_reachable_by_classname(type);
+    if (analyze_native_lib_reachability) {
+      // Classnames present in native libraries (lib/*/*.so)
+      for (std::string classname : get_native_classes(apk_dir)) {
+        auto type = DexType::get_type(classname.c_str());
+        if (type == nullptr) continue;
+        TRACE(PGR, 3, "native_lib: %s", classname.c_str());
+        mark_reachable_by_classname(type);
+      }
     }
   }
 
@@ -761,7 +776,7 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
                [&](DexMethod* meth) {
                  if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
                    TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
-                   mark_reachable_by_classname(meth->get_class());
+                   mark_reachable_by_string(meth);
                  }
                });
 }
