@@ -78,7 +78,7 @@ DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                     const DexString* name,
                                     const DexProto* proto) {
   DexMethod* top_impl = nullptr;
-  while (cls) {
+  while (cls && !cls->is_external()) {
     for (const auto& cls_meth : cls->get_vmethods()) {
       if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
         auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
