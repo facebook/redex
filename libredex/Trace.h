@@ -86,6 +86,7 @@
   TM(REG)            \
   TM(RELO)           \
   TM(RENAME)         \
+  TM(RESO)           \
   TM(RG)             \
   TM(RME)            \
   TM(RMGOTO)         \

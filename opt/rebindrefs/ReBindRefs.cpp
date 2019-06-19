@@ -106,52 +106,38 @@ DexMethod* bind_to_visible_ancestor(const DexClass* cls,
 struct Rebinder {
   Rebinder(Scope& scope, PassManager& mgr) : m_scope(scope), m_pass_mgr(mgr) {}
 
+  bool is_resolved(IRInstruction* insn) {
+    always_assert(insn->has_method());
+    auto mref = insn->get_method();
+    if (mref->is_def()) {
+      return true;
+    }
+    auto real_ref = resolve_method(mref, opcode_to_search(insn));
+    if (!real_ref || real_ref == mref || real_ref->is_external()) {
+      return true;
+    }
+    return false;
+  }
+
   void rewrite_refs() {
     walk::opcodes(m_scope,
                   [](DexMethod*) { return true; },
                   [&](DexMethod* m, IRInstruction* insn) {
                     bool top_ancestor = false;
                     switch (insn->opcode()) {
-                    case OPCODE_INVOKE_VIRTUAL:
-                      top_ancestor = true;
-                      // fallthrough
+                    case OPCODE_INVOKE_VIRTUAL: {
+                      rebind_invoke_virtual(insn);
+                      break;
+                    }
                     case OPCODE_INVOKE_SUPER:
                     case OPCODE_INVOKE_INTERFACE:
-                    case OPCODE_INVOKE_STATIC:
-                      rebind_method(insn, opcode_to_search(insn), top_ancestor);
+                    case OPCODE_INVOKE_STATIC: {
+                      always_assert_log(
+                          is_resolved(insn),
+                          "[rebind] Unresolved method reference in %s\n",
+                          SHOW(insn));
                       break;
-                    case OPCODE_SGET:
-                    case OPCODE_SGET_WIDE:
-                    case OPCODE_SGET_OBJECT:
-                    case OPCODE_SGET_BOOLEAN:
-                    case OPCODE_SGET_BYTE:
-                    case OPCODE_SGET_CHAR:
-                    case OPCODE_SGET_SHORT:
-                    case OPCODE_SPUT:
-                    case OPCODE_SPUT_WIDE:
-                    case OPCODE_SPUT_OBJECT:
-                    case OPCODE_SPUT_BOOLEAN:
-                    case OPCODE_SPUT_BYTE:
-                    case OPCODE_SPUT_CHAR:
-                    case OPCODE_SPUT_SHORT:
-                      rebind_field(insn, FieldSearch::Static);
-                      break;
-                    case OPCODE_IGET:
-                    case OPCODE_IGET_WIDE:
-                    case OPCODE_IGET_OBJECT:
-                    case OPCODE_IGET_BOOLEAN:
-                    case OPCODE_IGET_BYTE:
-                    case OPCODE_IGET_CHAR:
-                    case OPCODE_IGET_SHORT:
-                    case OPCODE_IPUT:
-                    case OPCODE_IPUT_WIDE:
-                    case OPCODE_IPUT_OBJECT:
-                    case OPCODE_IPUT_BOOLEAN:
-                    case OPCODE_IPUT_BYTE:
-                    case OPCODE_IPUT_CHAR:
-                    case OPCODE_IPUT_SHORT:
-                      rebind_field(insn, FieldSearch::Instance);
-                      break;
+                    }
                     default:
                       break;
                     }
@@ -159,7 +145,6 @@ struct Rebinder {
   }
 
   void print_stats() {
-    m_frefs.print("field_refs", &m_pass_mgr);
     m_mrefs.print("method_refs", &m_pass_mgr);
     m_array_clone_refs.print("array_clone", nullptr);
     m_equals_refs.print("equals", nullptr);
@@ -200,32 +185,26 @@ struct Rebinder {
     }
   };
 
-  void rebind_method(IRInstruction* mop,
-                     MethodSearch search,
-                     bool top_ancestor) {
+  void rebind_invoke_virtual(IRInstruction* mop) {
     const auto mref = mop->get_method();
-    if (search == MethodSearch::Virtual && top_ancestor) {
-      auto mtype = mref->get_class();
-      if (is_array_clone(mref, mtype)) {
-        rebind_method_opcode(mop, mref, rebind_array_clone(mref));
-        return;
-      }
-      // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
-      // and possibly any smart handling of String
-      static auto str = DexType::make_type("Ljava/lang/String;");
-      if (mtype == str) return;
-      auto real_ref = rebind_object_methods(mref);
-      if (real_ref) {
-        rebind_method_opcode(mop, mref, real_ref);
-        return;
-      }
-      auto cls = type_class(mtype);
-      real_ref =
-          bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
+    auto mtype = mref->get_class();
+    if (is_array_clone(mref, mtype)) {
+      rebind_method_opcode(mop, mref, rebind_array_clone(mref));
+      return;
+    }
+    // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
+    // and possibly any smart handling of String
+    static auto str = DexType::make_type("Ljava/lang/String;");
+    if (mtype == str) return;
+    auto real_ref = rebind_object_methods(mref);
+    if (real_ref) {
       rebind_method_opcode(mop, mref, real_ref);
       return;
     }
-    rebind_method_opcode(mop, mref, resolve_method(mref, search));
+    auto cls = type_class(mtype);
+    real_ref =
+        bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
+    rebind_method_opcode(mop, mref, real_ref);
   }
 
   void rebind_method_opcode(IRInstruction* mop,
@@ -269,26 +248,9 @@ struct Rebinder {
     return nullptr;
   }
 
-  void rebind_field(IRInstruction* insn, FieldSearch field_search) {
-    const auto fref = insn->get_field();
-    const auto real_ref = resolve_field(fref, field_search);
-    if (real_ref && real_ref != fref) {
-      auto cls = type_class(real_ref->get_class());
-      always_assert(cls != nullptr);
-      if (!is_public(cls)) {
-        if (cls->is_external()) return;
-        set_public(cls);
-      }
-      TRACE(BIND, 2, "Rebinding %s\n\t=>%s", SHOW(fref), SHOW(real_ref));
-      insn->set_field(real_ref);
-      m_frefs.insert(fref, real_ref);
-    }
-  }
-
   Scope& m_scope;
   PassManager& m_pass_mgr;
 
-  RefStats<DexFieldRef*> m_frefs;
   RefStats<DexMethodRef*> m_mrefs;
   RefStats<DexMethodRef*> m_array_clone_refs;
   RefStats<DexMethodRef*> m_equals_refs;
