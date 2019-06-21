@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-# @lint-ignore-every PYTHON3COMPATIMPORTS1
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
