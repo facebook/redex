@@ -36,6 +36,10 @@ uint32_t DexString::length() const {
   return length_of_utf8_string(c_str());
 }
 
+int32_t DexString::java_hashcode() const {
+  return java_hashcode_of_utf8_string(c_str());
+}
+
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   uint16_t* typep = (uint16_t*)(output + 1);
   *output = (uint32_t)m_list.size();

@@ -105,6 +105,8 @@ enum class Literal {
   Compare_Strings_A_B,
   // Directive: Write the length of string A as a 16-bit integer.
   Length_String_A,
+  // Directive: Write the hashCode of string A as a 32-bit integer.
+  HashCode_String_A,
   // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
   Mul_Div_To_Shift_Log2,
 };
@@ -649,6 +651,11 @@ struct Matcher {
           replace->set_literal(a->length());
           break;
         }
+        case Literal::HashCode_String_A: {
+          auto a = matched_strings.at(String::A);
+          replace->set_literal(static_cast<int64_t>(a->java_hashcode()));
+          break;
+        }
         case Literal::A: {
           auto a = matched_literals.at(Literal::A);
           replace->set_literal(a);
@@ -772,6 +779,13 @@ DexPattern invoke_String_length(Register instance) {
           {instance},
           {},
           DexMethod::make_method(LjavaString, "length", "I", {})};
+};
+
+DexPattern invoke_String_hashCode(Register instance) {
+  return {{OPCODE_INVOKE_VIRTUAL},
+          {instance},
+          {},
+          DexMethod::make_method(LjavaString, "hashCode", "I", {})};
 };
 
 DexPattern const_string(String string) {
@@ -917,6 +931,17 @@ static const std::vector<Pattern>& get_string_patterns() {
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
         const_literal(OPCODE_CONST, Register::B, Literal::Length_String_A)}},
+
+      // Evaluate the hashCode of a String at compile time.
+      // "stringA".hashCode() ==> hashcode_of_stringA
+      {"CompileTime_StringHashCode",
+        {const_string(String::A),
+         move_result_pseudo_object(Register::A),
+         invoke_String_hashCode(Register::A),
+         move_result(Register::B)},
+        {const_string(String::A), // maybe dead
+         move_result_pseudo_object(Register::A),
+         const_literal(OPCODE_CONST, Register::B, Literal::HashCode_String_A)}},
 
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing

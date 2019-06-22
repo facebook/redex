@@ -76,6 +76,8 @@ class DexString {
   // UTF-aware length
   uint32_t length() const;
 
+  int32_t java_hashcode() const;
+
   // DexString retrieval/creation
 
   // If the DexString exists, return it, otherwise create it and return it.
