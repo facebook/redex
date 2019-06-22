@@ -135,6 +135,17 @@ void remove_referenced(const Scope& scope,
           check_type(insn->get_type(), metric.insn_refs);
           return;
         }
+
+        std::vector<DexType*> types_in_insn;
+        if (insn->has_field()) {
+          insn->get_field()->gather_types_shallow(types_in_insn);
+        } else if (insn->has_method()) {
+          insn->get_method()->gather_types_shallow(types_in_insn);
+        }
+        for (const auto type : types_in_insn) {
+          check_type(type, metric.insn_refs);
+        }
+
         if (!insn->has_method()) return;
         const auto opcode = insn->opcode();
         DexMethod* meth = nullptr;
