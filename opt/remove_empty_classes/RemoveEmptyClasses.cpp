@@ -82,13 +82,11 @@ void process_code(std::unordered_set<const DexType*>* class_references,
       TRACE(EMPTY, 4, "Adding type from code to keep list: %s",
             typ->get_name()->c_str());
       class_references->insert(typ);
-    }
-    if (opcode->has_field()) {
+    } else if (opcode->has_field()) {
       auto const& field = opcode->get_field();
       class_references->insert(array_base_type(field->get_class()));
       class_references->insert(array_base_type(field->get_type()));
-    }
-    if (opcode->has_method()) {
+    } else if (opcode->has_method()) {
       auto const& m = opcode->get_method();
       process_proto(class_references, m);
     }
@@ -110,6 +108,7 @@ size_t remove_empty_classes(Scope& classes) {
   walk::annotations(classes, [&](DexAnnotation* annotation)
     { process_annotation(&class_references, annotation); });
 
+  // Check the method protos and all the code.
   walk::code(classes,
             [](DexMethod*) { return true; },
             [&](DexMethod* meth, IRCode& code)
@@ -122,6 +121,11 @@ size_t remove_empty_classes(Scope& classes) {
     DexType* s = cls->get_super_class();
     class_references.insert(s);
   }
+
+  // Ennumerate fields.
+  walk::fields(classes, [&class_references](DexField* field) {
+    class_references.insert(array_base_type(field->get_type()));
+  });
 
   TRACE(EMPTY, 3, "About to erase classes.");
   classes.erase(remove_if(classes.begin(), classes.end(),
