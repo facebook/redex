@@ -73,7 +73,6 @@ void process_proto(std::unordered_set<const DexType*>* class_references,
 void process_code(std::unordered_set<const DexType*>* class_references,
                   DexMethod* meth,
                   IRCode& code) {
-  process_proto(class_references, meth);
   // Types referenced in code.
   for (auto const& mie : InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
@@ -109,10 +108,14 @@ size_t remove_empty_classes(Scope& classes) {
     { process_annotation(&class_references, annotation); });
 
   // Check the method protos and all the code.
-  walk::code(classes,
-            [](DexMethod*) { return true; },
-            [&](DexMethod* meth, IRCode& code)
-               { process_code(&class_references, meth, code); });
+  walk::methods(classes, [&class_references](DexMethod* meth) {
+    process_proto(&class_references, meth);
+    auto code = meth->get_code();
+    if (!code) {
+      return;
+    }
+    process_code(&class_references, meth, *code);
+  });
 
   size_t classes_before_size = classes.size();
 
