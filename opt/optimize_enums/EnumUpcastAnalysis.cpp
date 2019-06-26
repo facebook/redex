@@ -293,7 +293,7 @@ class EnumUpcastDetector {
    *  # Other virtual invocations on candidate enum object that are considered
    *    safe.
    *  INVOKE_VIRTUAL ordinal:()I
-   *  TODO(fengliu): hashCode ?
+   *  INVOKE_VIRTUAL hashCode:()I
    */
   void process_virtual_invocation(
       const IRInstruction* insn,
@@ -323,6 +323,7 @@ class EnumUpcastDetector {
         }
         return;
       } else if (signatures_match(method, ENUM_TOSTRING_METHOD) ||
+                 signatures_match(method, ENUM_HASHCODE_METHOD) ||
                  signatures_match(method, ENUM_NAME_METHOD) ||
                  signatures_match(method, ENUM_ORDINAL_METHOD)) {
         if (this_types.size() > 1) {
@@ -451,6 +452,8 @@ class EnumUpcastDetector {
       DexMethod::make_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I");
   const DexMethodRef* ENUM_TOSTRING_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
+  const DexMethodRef* ENUM_HASHCODE_METHOD =
+      DexMethod::make_method("Ljava/lang/Enum;.hashCode:()I");
   const DexMethodRef* ENUM_NAME_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
   const DexMethodRef* ENUM_ORDINAL_METHOD =

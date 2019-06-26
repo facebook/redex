@@ -297,6 +297,13 @@ public class EnumTransformTest {
   }
 
   @Test
+  public void test_hashCode() {
+    SCORE.ONE.hashCode();
+    SCORE.TWO.hashCode();
+    SCORE.THREE.hashCode();
+  }
+
+  @Test
   public void test_valueOf() {
     String name = SCORE.ONE.name();
     SCORE s = SCORE.valueOf(name);

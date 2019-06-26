@@ -37,6 +37,8 @@
  *  -- invoke-virtual LCandidateEnum;.toString:()String or
  *     invoke-virtual LCandidateEnum;.name:()String =>
  *                    LCandidateEnum;.redex$OE$toString:(Integer)String
+ *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
+ *                    LCandidateEnum;.redex$OE$hashCode:(Integer)I
  *  -- invoke-static LCandidateEnum;.valueOf:(String)LCandidateEnum; =>
  *                   LCandidateEnum;.redex$OE$valueOf:(String)Integer
  * 3. Clean the static fileds of candidate enums and update these enum classes
@@ -82,6 +84,7 @@ struct EnumUtil {
 
   DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
   DexString* REDEX_TOSTRING = DexString::make_string("redex$OE$toString");
+  DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
   DexString* REDEX_STRING_VALUEOF =
       DexString::make_string("redex$OE$String_valueOf");
   DexString* REDEX_VALUEOF = DexString::make_string("redex$OE$valueOf");
@@ -92,6 +95,7 @@ struct EnumUtil {
   const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
 
   const DexType* ENUM_TYPE = get_enum_type();
+  DexType* INT_TYPE = get_int_type();
   DexType* INTEGER_TYPE = get_integer_type();
   DexType* OBJECT_TYPE = get_object_type();
   DexType* STRING_TYPE = get_string_type();
@@ -108,6 +112,8 @@ struct EnumUtil {
       DexMethod::make_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I");
   const DexMethodRef* ENUM_TOSTRING_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
+  const DexMethodRef* ENUM_HASHCODE_METHOD =
+      DexMethod::make_method("Ljava/lang/Enum;.hashCode:()I");
   const DexMethodRef* ENUM_NAME_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
   const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
@@ -115,6 +121,8 @@ struct EnumUtil {
   const DexMethodRef* STRINGBUILDER_APPEND_OBJ_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
+  DexMethodRef* STRING_HASHCODE_METHOD =
+      DexMethod::make_method("Ljava/lang/String;.hashCode:()I");
   DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
       "StringBuilder;");
@@ -210,6 +218,27 @@ struct EnumUtil {
     auto proto = DexProto::make_proto(
         STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto method = DexMethod::make_method(enum_type, REDEX_TOSTRING, proto);
+    return method;
+  }
+
+  /**
+   * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I, a
+   * substitute for LCandidateEnum;.hashCode:()I.
+   * Store the method ref at the same time.
+   */
+  DexMethodRef* add_substitute_of_hashcode(DexType* enum_type) {
+    auto method = get_substitute_of_hashcode(enum_type);
+    m_substitute_methods.insert(method);
+    return method;
+  }
+
+  /**
+   * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I
+   */
+  DexMethodRef* get_substitute_of_hashcode(DexType* enum_type) {
+    auto proto = DexProto::make_proto(
+        INT_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
+    auto method = DexMethod::make_method(enum_type, REDEX_HASHCODE, proto);
     return method;
   }
 
@@ -422,6 +451,8 @@ class CodeTransformer final {
       } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD) ||
                  signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
         update_invoke_tostring(env, mie);
+      } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
+        update_invoke_hashcode(env, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
         update_invoke_stringbuilder_append(env, mie);
       }
@@ -565,6 +596,34 @@ class CodeTransformer final {
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
         mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
+  }
+
+  /**
+   * If v0 is a candidate enum,
+   * invoke-virtual v0 LCandidateEnum;.hashCode:()I =>
+   *    invoke-static v0 LCandidateEnum;.redex$OE$hashCode:(Integer)I
+   */
+  void update_invoke_hashcode(const optimize_enums::EnumTypeEnvironment& env,
+                              MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    auto container = insn->get_method()->get_class();
+    if (container != m_enum_util->OBJECT_TYPE &&
+        container != m_enum_util->ENUM_TYPE &&
+        m_enum_attrs.count(container) == 0) {
+      return;
+    }
+    auto src_reg = insn->src(0);
+    DexType* candidate_type = extract_candidate_enum_type(env.get(src_reg));
+    if (m_enum_attrs.count(container)) {
+      always_assert(candidate_type == nullptr || candidate_type == container);
+      candidate_type = container;
+    } else if (!candidate_type) {
+      return;
+    }
+    auto helper_method =
+        m_enum_util->add_substitute_of_hashcode(candidate_type);
+    m_replacements.push_back(InsnReplacement(
+        mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}})));
   }
 
   /**
@@ -802,6 +861,8 @@ class EnumTransformer final {
     for (auto ref : methods) {
       if (ref->get_name() == m_enum_util->REDEX_TOSTRING) {
         create_tostring_method(ref);
+      } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {
+        create_hashcode_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_VALUEOF) {
         create_valueof_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_STRING_VALUEOF) {
@@ -950,6 +1011,46 @@ class EnumTransformer final {
     // Arbitrarily choose the first case block.
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
+    cfg.recompute_registers_size();
+    code->clear_cfg();
+  }
+
+  /**
+   * Substitute for LCandidateEnum:.hashCode()
+   *
+   * Since `Enum.hashCode()` is not in the Java spec so that different JVMs
+   * may have different implementations and since hashcodes are usually
+   * only used as keys to hash maps we can choose one implementation.
+   * https://android.googlesource.com/platform/libcore/+/9edf43dfcc35c761d97eb9156ac4254152ddbc55/libdvm/src/main/java/java/lang/Enum.java#118
+   *
+   *
+   * public static int redex$OE$hashCode(Integer obj) {
+   *   String name = redex$OE$toString(obj);
+   *   return obj.intValue() + name.hashCode();
+   * }
+   */
+  void create_hashcode_method(DexMethodRef* ref) {
+    MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+    auto method = mc.create();
+    auto cls = type_class(ref->get_class());
+    cls->add_method(method);
+    auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    auto entry = cfg.entry_block();
+    auto tostring_method =
+        m_enum_util->get_substitute_of_tostring(ref->get_class());
+    entry->push_back({
+        dasm(OPCODE_INVOKE_STATIC, tostring_method, {0_v}),
+        dasm(OPCODE_MOVE_RESULT_OBJECT, {1_v}),
+        dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_HASHCODE_METHOD, {1_v}),
+        dasm(OPCODE_MOVE_RESULT, {1_v}),
+        dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->INTEGER_INTVALUE_METHOD,
+             {0_v}),
+        dasm(OPCODE_MOVE_RESULT, {2_v}),
+        dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}),
+        dasm(OPCODE_RETURN, {1_v}),
+    });
     cfg.recompute_registers_size();
     code->clear_cfg();
   }
