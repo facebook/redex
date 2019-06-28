@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "ApiLevelChecker.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -78,7 +79,7 @@ DexMethod* bind_to_visible_ancestor(const DexClass* cls,
                                     const DexString* name,
                                     const DexProto* proto) {
   DexMethod* top_impl = nullptr;
-  while (cls && !cls->is_external()) {
+  while (cls) {
     for (const auto& cls_meth : cls->get_vmethods()) {
       if (name == cls_meth->get_name() && proto == cls_meth->get_proto()) {
         auto curr_vis = cls_meth->get_access() & VISIBILITY_MASK;
@@ -104,12 +105,15 @@ DexMethod* bind_to_visible_ancestor(const DexClass* cls,
 }
 
 struct Rebinder {
-  Rebinder(Scope& scope, PassManager& mgr) : m_scope(scope), m_pass_mgr(mgr) {}
+  Rebinder(Scope& scope, PassManager& mgr, bool rebind_to_external)
+      : m_scope(scope),
+        m_pass_mgr(mgr),
+        m_rebind_to_external(rebind_to_external) {}
 
   bool is_resolved(IRInstruction* insn) {
     always_assert(insn->has_method());
     auto mref = insn->get_method();
-    if (mref->is_def()) {
+    if (mref->is_def() || references_external(mref)) {
       return true;
     }
     auto real_ref = resolve_method(mref, opcode_to_search(insn));
@@ -201,6 +205,13 @@ struct Rebinder {
       rebind_method_opcode(mop, mref, real_ref);
       return;
     }
+    // Similar to the conditions we have in ResolveRefs, if the existing ref is
+    // external already we don't rebind to the top. We are likely going to screw
+    // up delicated logic in Android support library or Android x that handles
+    // different OS versions.
+    if (references_external(mref)) {
+      return;
+    }
     auto cls = type_class(mtype);
     real_ref =
         bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
@@ -210,13 +221,29 @@ struct Rebinder {
   void rebind_method_opcode(IRInstruction* mop,
                             DexMethodRef* mref,
                             DexMethodRef* real_ref) {
-    if (!real_ref || real_ref == mref || real_ref->is_external()) {
+    if (!real_ref || real_ref == mref) {
+      return;
+    }
+    if (!m_rebind_to_external && real_ref->is_external()) {
+      return;
+    }
+    // If the top def is an Android SDK type, we give up.
+    // We know that the original method ref is internal thanks to the
+    // references_external check above. It's risky to rebind it to the Android
+    // SDK type. We may rebind it to a class that only exists in the OS version
+    // we are compiling against but does not in older OS versions. It's safe to
+    // avoid the complication.
+    if (api::is_android_sdk_type(real_ref->get_class())) {
+      return;
+    }
+    auto cls = type_class(real_ref->get_class());
+    // Bail out if the def is non public external
+    if (cls && cls->is_external() && !is_public(cls)) {
       return;
     }
     TRACE(BIND, 2, "Rebinding %s\n\t=>%s", SHOW(mref), SHOW(real_ref));
     m_mrefs.insert(mref, real_ref);
     mop->set_method(real_ref);
-    auto cls = type_class(real_ref->get_class());
     if (cls != nullptr && !is_public(cls)) {
       set_public(cls);
     }
@@ -250,6 +277,7 @@ struct Rebinder {
 
   Scope& m_scope;
   PassManager& m_pass_mgr;
+  bool m_rebind_to_external;
 
   RefStats<DexMethodRef*> m_mrefs;
   RefStats<DexMethodRef*> m_array_clone_refs;
@@ -264,7 +292,7 @@ void ReBindRefsPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& /* conf */,
                               PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  Rebinder rb(scope, mgr);
+  Rebinder rb(scope, mgr, m_rebind_to_external);
   rb.rewrite_refs();
   rb.print_stats();
 }

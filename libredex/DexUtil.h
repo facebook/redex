@@ -456,6 +456,8 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   return false;
 }
 
+bool references_external(DexMethodRef* mref);
+
 struct dex_stats_t {
   int num_types = 0;
   int num_classes = 0;

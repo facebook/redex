@@ -29,4 +29,12 @@ class ResolveRefsPass : public Pass {
   ResolveRefsPass() : Pass("ResolveRefsPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  void bind_config() override {
+    // Allowing resolving method ref to an external one.
+    bind("resolve_to_external", true, m_resolve_to_external);
+  }
+
+ private:
+  bool m_resolve_to_external;
 };

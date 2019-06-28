@@ -6,6 +6,10 @@
  */
 
 #include "ApiLevelChecker.h"
+
+#include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/predicate.hpp>
+
 #include "Walkers.h"
 
 namespace api {
@@ -119,6 +123,12 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
 int32_t LevelChecker::get_min_level() {
   always_assert_log(s_has_been_init, "must call init first");
   return s_min_level;
+}
+
+bool is_android_sdk_type(const DexType* type) {
+  std::string android_sdk_prefix = "Landroid/";
+  const std::string& name = type->str();
+  return boost::starts_with(name, android_sdk_prefix);
 }
 
 } // namespace api

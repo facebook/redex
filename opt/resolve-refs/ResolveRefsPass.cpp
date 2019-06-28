@@ -25,17 +25,32 @@ struct RefStats {
   }
 };
 
-void resolve_method_refs(IRInstruction* insn, RefStats& stats) {
+void resolve_method_refs(IRInstruction* insn,
+                         RefStats& stats,
+                         bool resolve_to_external) {
   always_assert(insn->has_method());
   auto mref = insn->get_method();
   auto mdef = resolve_method(mref, opcode_to_search(insn));
-  if (!mdef || mdef == mref || mdef->is_external()) {
+  if (!mdef || mdef == mref) {
+    return;
+  }
+  if (!resolve_to_external && mdef->is_external()) {
+    return;
+  }
+  // If the existing ref is external already we don't touch it. We are likely
+  // going to screw up delicated logic in Android support library or Android x
+  // that handles different OS versions.
+  if (references_external(mref)) {
+    return;
+  }
+  auto cls = type_class(mdef->get_class());
+  // Bail out if the def is non public external
+  if (cls && cls->is_external() && !is_public(cls)) {
     return;
   }
   TRACE(RESO, 2, "Resolving %s\n\t=>%s\n", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.mref_count++;
-  auto cls = type_class(mdef->get_class());
   if (cls != nullptr && !is_public(cls)) {
     set_public(cls);
   }
@@ -62,7 +77,9 @@ void resolve_field_refs(IRInstruction* insn,
   }
 }
 
-void resolve_refs(const Scope& scope, RefStats& stats) {
+void resolve_refs(const Scope& scope,
+                  RefStats& stats,
+                  bool resolve_to_external) {
   walk::opcodes(scope,
                 [](DexMethod*) { return true; },
                 [&](DexMethod* /* m */, IRInstruction* insn) {
@@ -71,7 +88,7 @@ void resolve_refs(const Scope& scope, RefStats& stats) {
                   case OPCODE_INVOKE_SUPER:
                   case OPCODE_INVOKE_INTERFACE:
                   case OPCODE_INVOKE_STATIC:
-                    resolve_method_refs(insn, stats);
+                    resolve_method_refs(insn, stats, resolve_to_external);
                     break;
                   case OPCODE_SGET:
                   case OPCODE_SGET_WIDE:
@@ -118,7 +135,7 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   RefStats stats;
-  resolve_refs(scope, stats);
+  resolve_refs(scope, stats, m_resolve_to_external);
   stats.print(&mgr);
 }
 

@@ -665,3 +665,14 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
 
   return true;
 }
+
+bool references_external(DexMethodRef* mref) {
+  if (mref->is_external()) {
+    return true;
+  }
+  auto ref_cls = type_class(mref->get_class());
+  if (ref_cls && ref_cls->is_external()) {
+    return true;
+  }
+  return false;
+}
