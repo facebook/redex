@@ -227,6 +227,9 @@ struct EnumUtil {
    * Store the method ref at the same time.
    */
   DexMethodRef* add_substitute_of_hashcode(DexType* enum_type) {
+    // `redex$OE$hashCode()` uses `redex$OE$toString()` so we better make sure
+    // the method exists.
+    add_substitute_of_tostring(enum_type);
     auto method = get_substitute_of_hashcode(enum_type);
     m_substitute_methods.insert(method);
     return method;
@@ -826,35 +829,36 @@ class EnumTransformer final {
   uint32_t get_enum_objs_count() { return m_enum_objs; }
 
  private:
+  /**
+   * Go through all instructions and check that all the methods, fields, and
+   * types they reference actually exist.
+   */
   void sanity_check(Scope& scope) {
-    // Only when trace level is 9.
-    if (traceEnabled(ENUM, 9)) {
-      walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
-        for (auto& mie : InstructionIterable(code)) {
-          auto insn = mie.insn;
-          if (insn->has_method()) {
-            auto method_ref = insn->get_method();
-            auto container = method_ref->get_class();
-            if (m_enum_attrs.count(container)) {
-              always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
-                                SHOW(insn), SHOW(method));
-            }
-          } else if (insn->has_field()) {
-            auto field_ref = insn->get_field();
-            auto container = field_ref->get_class();
-            if (m_enum_attrs.count(container)) {
-              always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
-                                SHOW(insn), SHOW(method));
-            }
-          } else if (insn->has_type()) {
-            auto type_ref = insn->get_type();
-            always_assert_log(!m_enum_attrs.count(type_ref),
-                              "Invalid insn %s in %s\n", SHOW(insn),
-                              SHOW(method));
+    walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
+      for (auto& mie : InstructionIterable(code)) {
+        auto insn = mie.insn;
+        if (insn->has_method()) {
+          auto method_ref = insn->get_method();
+          auto container = method_ref->get_class();
+          if (m_enum_attrs.count(container)) {
+            always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
+                              SHOW(insn), SHOW(method));
           }
+        } else if (insn->has_field()) {
+          auto field_ref = insn->get_field();
+          auto container = field_ref->get_class();
+          if (m_enum_attrs.count(container)) {
+            always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
+                              SHOW(insn), SHOW(method));
+          }
+        } else if (insn->has_type()) {
+          auto type_ref = insn->get_type();
+          always_assert_log(!m_enum_attrs.count(type_ref),
+                            "Invalid insn %s in %s\n", SHOW(insn),
+                            SHOW(method));
         }
-      });
-    }
+      }
+    });
   }
 
   void create_substitute_methods(const ConcurrentSet<DexMethodRef*>& methods) {

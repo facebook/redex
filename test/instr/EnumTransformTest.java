@@ -296,11 +296,16 @@ public class EnumTransformTest {
     c.i_score.toString();
   }
 
+  enum COUNT { ONE, TWO };
+
   @Test
   public void test_hashCode() {
     SCORE.ONE.hashCode();
     SCORE.TWO.hashCode();
     SCORE.THREE.hashCode();
+    // Test an enum that doesn't directly call `Enum.toString()`.
+    COUNT.ONE.hashCode();
+    COUNT.TWO.hashCode();
   }
 
   @Test
