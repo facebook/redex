@@ -587,7 +587,8 @@ class OptimizeEnums {
     auto invoke_ordinal = (*info.invoke)->insn;
     auto invoke_type = invoke_ordinal->get_method()->get_class();
     auto invoke_cls = type_class(invoke_type);
-    if (!invoke_cls || !is_enum(invoke_cls)) {
+    if (!invoke_cls ||
+        (invoke_type != get_enum_type() && !is_enum(invoke_cls))) {
       return false;
     }
 
@@ -598,7 +599,7 @@ class OptimizeEnums {
 
     // Check the current enum corresponds.
     auto current_enum = lookup_table_to_enum.at(lookup_table);
-    if (current_enum != invoke_type) {
+    if (invoke_type != get_enum_type() && current_enum != invoke_type) {
       return false;
     }
     return true;
