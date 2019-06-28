@@ -67,12 +67,26 @@ class SymbolMaps(object):
     @staticmethod
     def get_class_map(mapping_filename):
         mapping = {}
+        current_class = None
         with open(mapping_filename) as f:
             for line in f:
-                if " -> " in line and line[0] != " ":
+                if " -> " in line:
                     original, _sep, new = line.partition(" -> ")
-                    new = new.strip()[:-1]
-                    mapping[new] = original
+                    if line[0] != " ":
+                        new = new.strip()[:-1]
+                        # tuple(original class name, mapping of method names in this class)
+                        mapping[new] = (original, {})
+                        current_class = new
+                    else:
+                        if current_class is None:
+                            logging.error(
+                                "The method " + original
+                                + " , obfuscated as " + new
+                                + " does not belong to any class!"
+                            )
+                        original = original.strip()
+                        if "(" in original and original[len(original) - 1] == ")":
+                            mapping[current_class][1][new.strip()] = original.split()[-1].split("(")[0]
         return mapping
 
 

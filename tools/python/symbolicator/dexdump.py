@@ -36,7 +36,7 @@ class DexdumpSymbolicator(object):
         m = matchobj.group("class")
         cls = m.replace("/", ".")
         if cls in self.symbol_maps.class_map:
-            return "L%s;" % self.symbol_maps.class_map[cls].replace(".", "/")
+            return "L%s;" % self.symbol_maps.class_map[cls][0].replace(".", "/")
         return "L%s;" % m
 
     def line_replacer(self, matchobj):
@@ -46,6 +46,19 @@ class DexdumpSymbolicator(object):
             self.symbol_maps.line_map.get_stack(lineno - 1),
         )
         return matchobj.group("prefix") + ", ".join(positions)
+
+    def method_replacer(self, matchobj):
+        m = matchobj.group(0)
+        if self.current_class is not None:
+            cls = self.current_class.replace("/", ".")
+            if cls in self.symbol_maps.class_map:
+                if self.reading_methods:
+                    left, _sep, right = m.partition(": ")
+                    method_name = matchobj.group("method")
+                    if method_name in self.symbol_maps.class_map[cls][1]:
+                        return left + _sep + self.symbol_maps.class_map[cls][1][method_name]
+
+        return m
 
     def reset_state(self):
         self.current_class = None
@@ -70,12 +83,10 @@ class DexdumpSymbolicator(object):
                 match = self.METHOD_REGEX.search(line)
                 if match is not None:
                     current_method = match.group("method")
+                    line = self.METHOD_REGEX.sub(self.method_replacer, line)
                     qualified_method = (
                         self.current_class.replace("/", ".") + "." + current_method
                     )
-                    # We should try to symbolicate this method name, but that requires
-                    # changing the rename map parser so that I'll leave that for a later
-                    # patch
                     iodi_map = self.symbol_maps.iodi_metadata.collision_free
                     if qualified_method in iodi_map:
                         self.current_method_id = iodi_map[qualified_method]
