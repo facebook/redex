@@ -76,8 +76,7 @@ TEST_F(BoxedBooleanTest, booleanValue) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(BoxedBooleanTest, valueOf) {
@@ -113,6 +112,5 @@ TEST_F(BoxedBooleanTest, valueOf) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }

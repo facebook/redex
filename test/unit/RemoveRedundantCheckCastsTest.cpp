@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "RemoveRedundantCheckCasts.h"
+
 #include <gtest/gtest.h>
 #include <iterator>
 
@@ -13,7 +15,7 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "RemoveRedundantCheckCasts.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
 
 namespace {
@@ -153,8 +155,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
@@ -180,8 +181,7 @@ TEST_F(RemoveRedundantCheckCastsTest, castingZero) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
@@ -209,8 +209,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
@@ -238,8 +237,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
@@ -269,8 +267,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
@@ -299,8 +296,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
@@ -329,8 +325,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
@@ -380,8 +375,7 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
@@ -431,6 +425,5 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }

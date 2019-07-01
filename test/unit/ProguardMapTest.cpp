@@ -12,6 +12,7 @@
 #include <sstream>
 
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
 using ::testing::AllOf;
 using ::testing::Pointee;
@@ -250,9 +251,7 @@ TEST(ProguardMapTest, DeobfuscateFrameWithRelocation) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 
   delete g_redex;
 }
@@ -289,9 +288,7 @@ TEST(ProguardMapTest, DeobfuscateFramesWithInlining) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 
   delete g_redex;
 }
@@ -327,9 +324,7 @@ TEST(ProguardMapTest, DeobfuscateFramesWithoutLineRange) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 
   delete g_redex;
 }

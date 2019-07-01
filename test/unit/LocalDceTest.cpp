@@ -13,6 +13,7 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "LocalDce.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
 
 struct LocalDceTryTest : testing::Test {
@@ -253,8 +254,7 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_EQ(assembler::to_s_expr(ircode),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
@@ -298,8 +298,7 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_EQ(assembler::to_s_expr(ircode),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
 TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
@@ -336,8 +335,7 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_EQ(assembler::to_s_expr(ircode),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(ircode, expected_code.get());
 }
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
@@ -375,6 +373,5 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_EQ(assembler::to_s_expr(ircode),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(ircode, expected_code.get());
 }

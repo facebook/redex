@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "RedexTest.h"
 
 namespace cfg {
 
@@ -421,12 +422,7 @@ TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
   input_code->build_cfg(/* editable */ true);
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(input_code.get()))
-      << "expected:\n"
-      << show(expected_code) << "\n"
-      << "actual:\n"
-      << show(input_code) << "\n";
+  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
 }
 
 TEST(ControlFlow, infinite) {
@@ -444,12 +440,7 @@ TEST(ControlFlow, infinite) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(input_code.get()))
-      << "expected:\n"
-      << show(expected_code) << "\n"
-      << "actual:\n"
-      << show(input_code) << "\n";
+  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
 }
 
 TEST(ControlFlow, infinite2) {
@@ -467,12 +458,7 @@ TEST(ControlFlow, infinite2) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(input_code.get()))
-      << "expected:\n"
-      << show(expected_code) << "\n"
-      << "actual:\n"
-      << show(input_code) << "\n";
+  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
 }
 
 TEST(ControlFlow, unreachable) {
@@ -495,12 +481,7 @@ TEST(ControlFlow, unreachable) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(input_code.get()))
-      << "expected:\n"
-      << show(expected_code) << "\n"
-      << "actual:\n"
-      << show(input_code) << "\n";
+  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
 }
 
 TEST(ControlFlow, unreachable2) {
@@ -524,12 +505,7 @@ TEST(ControlFlow, unreachable2) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(input_code.get()))
-      << "expected:\n"
-      << show(expected_code) << "\n"
-      << "actual:\n"
-      << show(input_code) << "\n";
+  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
 }
 
 TEST(ControlFlow, remove_non_branch) {
@@ -565,8 +541,7 @@ TEST(ControlFlow, remove_non_branch) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
@@ -618,8 +593,7 @@ TEST(ControlFlow, remove_non_branch_with_loop) {
      (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_branch) {
@@ -646,8 +620,7 @@ TEST(ControlFlow, remove_branch) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_branch_with_loop) {
@@ -675,8 +648,7 @@ TEST(ControlFlow, remove_branch_with_loop) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_all_but_return) {
@@ -702,8 +674,7 @@ TEST(ControlFlow, remove_all_but_return) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_switch) {
@@ -734,8 +705,7 @@ TEST(ControlFlow, remove_switch) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_switch2) {
@@ -767,8 +737,7 @@ TEST(ControlFlow, remove_switch2) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_pred_edge_if) {
@@ -815,8 +784,7 @@ TEST(ControlFlow, remove_pred_edge_if) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, cleanup_after_deleting_branch) {
@@ -848,8 +816,7 @@ TEST(ControlFlow, cleanup_after_deleting_branch) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, cleanup_after_deleting_goto) {
@@ -882,8 +849,7 @@ TEST(ControlFlow, cleanup_after_deleting_goto) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
 TEST(ControlFlow, remove_sget) {
@@ -918,8 +884,7 @@ TEST(ControlFlow, remove_sget) {
       (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
-            assembler::to_s_expr(code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
   delete g_redex;
 }
 
@@ -1194,8 +1159,7 @@ TEST(ControlFlow, line_numbers) {
       (goto :exit)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 
   delete g_redex;
 }
@@ -1318,8 +1282,7 @@ TEST(ControlFlow, insertion) {
       (goto :exit)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, insertion_it) {
@@ -1379,8 +1342,7 @@ TEST(ControlFlow, insertion_it) {
       (goto :exit)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, insertion_after_may_throw) {
@@ -1429,8 +1391,7 @@ TEST(ControlFlow, insertion_after_may_throw) {
       (return v1)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
@@ -1488,8 +1449,7 @@ TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
       (return v1)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, add_sget) {
@@ -1544,8 +1504,7 @@ TEST(ControlFlow, add_sget) {
       (goto :exit)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -1586,8 +1545,7 @@ TEST(ControlFlow, add_return) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -1642,8 +1600,7 @@ TEST(ControlFlow, add_throw) {
       (return v1)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -1695,8 +1652,7 @@ TEST(ControlFlow, add_branch) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 Block* create_ret_const_block(ControlFlowGraph& cfg, uint64_t lit) {
@@ -1763,8 +1719,7 @@ TEST(ControlFlow, add_branch_null_goto_block) {
       (return v2)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, add_branch_redirect_goto_block) {
@@ -1820,8 +1775,7 @@ TEST(ControlFlow, add_branch_redirect_goto_block) {
       (return v1)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, add_switch) {
@@ -1873,8 +1827,7 @@ TEST(ControlFlow, add_switch) {
       (return v1)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, replace_insn_basic) {
@@ -1911,8 +1864,7 @@ TEST(ControlFlow, replace_insn_basic) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }
 
 TEST(ControlFlow, replace_insn_may_throw) {
@@ -1962,8 +1914,7 @@ TEST(ControlFlow, replace_insn_may_throw) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -2010,8 +1961,7 @@ TEST(ControlFlow, replace_insn_may_throw2) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -2065,8 +2015,7 @@ TEST(ControlFlow, replace_insn_may_throw3) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
   delete g_redex;
 }
 
@@ -2104,6 +2053,5 @@ TEST(ControlFlow, replace_if_with_return) {
       (return v0)
     )
   )");
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(code.get()));
+  EXPECT_CODE_EQ(expected.get(), code.get());
 }

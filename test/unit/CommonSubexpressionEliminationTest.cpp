@@ -73,9 +73,7 @@ void test(const Scope& scope,
             method_barriers_stats.inlined_barriers_iterations)
       << assembler::to_string(code.get()).c_str();
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected.get()))
-      << assembler::to_string(code.get()).c_str();
+  EXPECT_CODE_EQ(code.get(), expected.get());
 };
 
 TEST_F(CommonSubexpressionEliminationTest, simple) {

@@ -93,8 +93,7 @@ TEST_F(UsedVarsTest, simple) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(UsedVarsTest, join) {
@@ -147,8 +146,7 @@ TEST_F(UsedVarsTest, join) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(UsedVarsTest, noDeleteInit) {

@@ -9,6 +9,7 @@
 
 #include "CopyPropagationPass.h"
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
 using namespace copy_propagation_impl;
 
@@ -37,8 +38,7 @@ TEST(CopyPropagationTest, simple) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, deleteRepeatedMove) {
@@ -72,8 +72,7 @@ TEST(CopyPropagationTest, deleteRepeatedMove) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, noRemapRange) {
@@ -105,8 +104,7 @@ TEST(CopyPropagationTest, noRemapRange) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 
   delete g_redex;
 }
@@ -129,8 +127,7 @@ TEST(CopyPropagationTest, deleteSelfMove) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, representative) {
@@ -157,8 +154,7 @@ TEST(CopyPropagationTest, representative) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
   delete g_redex;
 }
 
@@ -186,8 +182,7 @@ TEST(CopyPropagationTest, verifyEnabled) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, cliqueAliasing) {
@@ -213,8 +208,7 @@ TEST(CopyPropagationTest, cliqueAliasing) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, loopNoChange) {
@@ -252,8 +246,7 @@ TEST(CopyPropagationTest, loopNoChange) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, branchNoChange) {
@@ -293,8 +286,7 @@ TEST(CopyPropagationTest, branchNoChange) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, intersect1) {
@@ -333,8 +325,7 @@ TEST(CopyPropagationTest, intersect1) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, intersect2) {
@@ -363,8 +354,7 @@ TEST(CopyPropagationTest, intersect2) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, wide) {
@@ -386,8 +376,7 @@ TEST(CopyPropagationTest, wide) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, wideClobber) {
@@ -412,8 +401,7 @@ TEST(CopyPropagationTest, wideClobber) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, wideClobberWideTrue) {
@@ -438,8 +426,7 @@ TEST(CopyPropagationTest, wideClobberWideTrue) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, repWide) {
@@ -468,8 +455,7 @@ TEST(CopyPropagationTest, repWide) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 // whichRep and whichRep2 make sure that we deterministically choose the
@@ -498,8 +484,7 @@ TEST(CopyPropagationTest, whichRep) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, whichRep2) {
@@ -564,8 +549,7 @@ TEST(CopyPropagationTest, whichRepPreserve) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST(CopyPropagationTest, wideInvokeSources) {
@@ -588,8 +572,7 @@ TEST(CopyPropagationTest, wideInvokeSources) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 
   delete g_redex;
 }

@@ -36,8 +36,7 @@ void test(const std::string& code_str,
   EXPECT_EQ(expected_clobbered_registers, stats.clobbered_registers);
 
   printf("%s\n", assembler::to_string(code.get()).c_str());
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected.get()));
+  EXPECT_CODE_EQ(code.get(), expected.get());
 };
 
 TEST_F(UpCodeMotionTest, basic) {

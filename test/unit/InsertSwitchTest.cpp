@@ -14,6 +14,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IntroduceSwitch.h"
+#include "RedexTest.h"
 
 struct InsertSwitchTest : testing::Test {
   DexMethod* m_method;
@@ -101,8 +102,7 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(m_method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), m_method->get_code());
 }
 
 // Code:    if r==i A else if r==i+10 B else if r==i+2 C
@@ -175,8 +175,7 @@ TEST_F(InsertSwitchTest, simplifySparseSwitch) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(m_method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), m_method->get_code());
 }
 
 // Code:    if r==i A else if r==i+10 B

@@ -102,8 +102,7 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(expected_code.get(), code.get());
   EXPECT_EQ(code->get_registers_size(), 3);
 }
 
@@ -153,8 +152,7 @@ TEST_F(RegAllocTest, LiveRange) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_string(code.get()),
-            assembler::to_string(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
   EXPECT_EQ(code->get_registers_size(), 6);
 }
 
@@ -186,8 +184,7 @@ TEST_F(RegAllocTest, WidthAwareLiveRange) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
   EXPECT_EQ(code->get_registers_size(), 5);
 }
 
@@ -403,8 +400,7 @@ TEST_F(RegAllocTest, Coalesce) {
      (return v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, MoveWideCoalesce) {
@@ -439,8 +435,7 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
      (return-wide v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, NoCoalesceWide) {
@@ -632,8 +627,7 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 /*
@@ -726,8 +720,7 @@ TEST_F(RegAllocTest, Spill) {
      (return v7)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
@@ -769,8 +762,7 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
      (return-void)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, ContainmentGraph) {
@@ -823,8 +815,7 @@ TEST_F(RegAllocTest, ContainmentGraph) {
      (return v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
 }
@@ -912,8 +903,7 @@ TEST_F(RegAllocTest, Split) {
      (return v3)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, ParamFirstUse) {
@@ -961,8 +951,7 @@ TEST_F(RegAllocTest, ParamFirstUse) {
      (return v3)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(RegAllocTest, NoOverwriteThis) {
@@ -997,7 +986,5 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
      (return-object v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()))
-      << show(method->get_code());
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }

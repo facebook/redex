@@ -118,8 +118,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
      (const v0 2)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
@@ -162,8 +161,7 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
      (const v0 2)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {

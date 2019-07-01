@@ -10,6 +10,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
+#include "RedexTest.h"
 
 TEST(DexPositionTest, multiplePositionBeforeOpcode) {
   g_redex = new RedexContext();
@@ -41,8 +42,7 @@ TEST(DexPositionTest, multiplePositionBeforeOpcode) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 
   delete g_redex;
 }
@@ -79,8 +79,7 @@ TEST(DexPositionTest, consecutiveIdenticalPositions) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 
   delete g_redex;
 }

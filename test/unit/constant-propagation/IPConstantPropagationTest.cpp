@@ -79,8 +79,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
-            assembler::to_s_expr(expected_code2.get()));
+  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {
@@ -205,8 +204,7 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(m3->get_code()),
-            assembler::to_s_expr(expected_code3.get()));
+  EXPECT_CODE_EQ(m3->get_code(), expected_code3.get());
 }
 
 // We had a bug where an invoke instruction inside an unreachable block of code
@@ -333,8 +331,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
@@ -376,8 +373,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
@@ -415,8 +411,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
@@ -453,8 +448,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertField) {
@@ -500,8 +494,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
@@ -549,8 +542,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
@@ -593,8 +585,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
@@ -639,8 +630,7 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantField) {
@@ -697,8 +687,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
-            assembler::to_s_expr(expected_code2.get()));
+  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
@@ -877,8 +866,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
      )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(clinit->get_code()),
-            assembler::to_s_expr(expected_clinit_code.get()));
+  EXPECT_CODE_EQ(clinit->get_code(), expected_clinit_code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -888,8 +876,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(m->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
@@ -1007,8 +994,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
@@ -1060,8 +1046,7 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
-  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
@@ -1114,8 +1099,7 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
-  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
@@ -1242,8 +1226,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 }
 
 TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {

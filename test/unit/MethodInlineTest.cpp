@@ -32,8 +32,7 @@ void test_inliner(const std::string& caller_str,
 
   auto expected = assembler::ircode_from_string(expected_str);
 
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(caller.get()));
+  EXPECT_CODE_EQ(expected.get(), caller.get());
 }
 
 DexClass* create_a_class(const char* description) {

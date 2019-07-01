@@ -17,6 +17,7 @@
 #include "IRInstruction.h"
 #include "PassManager.h"
 #include "Peephole.h"
+#include "RedexTest.h"
 
 // Helper to hold a list of instructions
 struct IRInstructionList {
@@ -443,8 +444,7 @@ static void sputget_peep_hole_test(const std::string& field_desc,
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 
   delete g_redex;
 }
@@ -825,8 +825,7 @@ static void aputget_peep_hole_test(const std::string& code_str,
 
   auto expected_code = assembler::ircode_from_string(expected_str);
 
-  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
 
   delete g_redex;
 }
