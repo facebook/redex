@@ -293,7 +293,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
           }
           graph.add_edge(insn->dest(), reg);
         }
-        // We add interference edges between the wide src and dest operands of
+        // We add interference edges between the dest and wide src operands of
         // an instruction even if the srcs are not live-out. This avoids
         // allocations like `xor-long v1, v0, v9`, where v1 and v0 overlap --
         // even though this is not a verification error, we have observed bugs
@@ -303,11 +303,9 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
         // can remove move-wide opcodes and/or use /2addr encodings.  As such,
         // we insert a specially marked edge that coalescing ignores but
         // coloring respects.
-        if (insn->dest_is_wide()) {
-          for (size_t i = 0; i < insn->srcs_size(); ++i) {
-            if (insn->src_is_wide(i)) {
-              graph.add_coalesceable_edge(insn->dest(), insn->src(i));
-            }
+        for (size_t i = 0; i < insn->srcs_size(); ++i) {
+          if (insn->src_is_wide(i)) {
+            graph.add_coalesceable_edge(insn->dest(), insn->src(i));
           }
         }
       }

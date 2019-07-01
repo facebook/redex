@@ -470,6 +470,35 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   EXPECT_EQ(assembler::to_s_expr(code.get()), original_code_s_expr);
 }
 
+TEST_F(RegAllocTest, NoOverlapWideSrcs) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Z"
+     (
+      (const-wide v0 0)
+      (const-wide v2 0)
+      (cmp-long v1 v0 v2)
+      (return v1)
+     )
+    )
+)");
+  method->get_code()->set_registers_size(4);
+
+  graph_coloring::Allocator::Config config;
+  RegAllocPass::allocate(config, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const-wide v3 0)
+     (const-wide v1 0)
+     ; dest register here must not overlap the high registers of the wide input values
+     (cmp-long v0 v3 v1)
+     (return v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+}
+
 static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
   std::vector<reg_t> vec;
   while (!stack.empty()) {
