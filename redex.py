@@ -567,7 +567,7 @@ def prepare_redex(args):
     log('Using config ' + (config if config is not None else '(default)'))
     log('Using binary ' + (binary if binary is not None else '(default)'))
 
-    if config is None:
+    if args.unpack_only or config is None:
         config_dict = {}
     else:
         with open(config) as config_file:
