@@ -700,10 +700,10 @@ TEST_F(RegAllocTest, Spill) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
-    {0, 16},
-    {1, 16},
-    {2, 256},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+      {0, 16},
+      {1, 16},
+      {2, 256},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
@@ -753,9 +753,9 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
-    {0, 16},
-    {1, 0},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+      {0, 16},
+      {1, 0},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
@@ -966,31 +966,24 @@ TEST_F(RegAllocTest, ParamFirstUse) {
 }
 
 TEST_F(RegAllocTest, NoOverwriteThis) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(I)LFoo;"));
-  method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
-
-  method->set_code(assembler::ircode_from_string(R"(
-    (
-     (load-param-object v0)
-     (load-param v1)
-     (if-eqz v1 :true-label)
-     (sget-object "LFoo;.foo:LFoo;")
-     (move-result-object v0)
-     (:true-label)
-     (return-object v0)
+  auto method = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:(I)LFoo;"
+     (
+      (load-param-object v0)
+      (load-param v1)
+      (if-eqz v1 :true-label)
+      (sget-object "LFoo;.foo:LFoo;")
+      (move-result-object v0)
+      (:true-label)
+      (return-object v0)
+     )
     )
-)"));
-  auto code = method->get_code();
-  code->set_registers_size(2);
-  code->build_cfg(/* editable */ false);
-  auto& cfg = code->cfg();
-  cfg.calculate_exit_block();
+)");
+  method->get_code()->set_registers_size(2);
 
   graph_coloring::Allocator::Config config;
   config.no_overwrite_this = true;
-  graph_coloring::Allocator allocator(config);
-  allocator.allocate(method);
+  RegAllocPass::allocate(config, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1004,7 +997,7 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
      (return-object v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code),
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
             assembler::to_s_expr(expected_code.get()))
-      << show(code);
+      << show(method->get_code());
 }
