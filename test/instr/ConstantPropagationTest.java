@@ -313,4 +313,20 @@ public class ConstantPropagationTest {
     }
     assertThat(z).isEqualTo(1);
   }
+
+  @Test
+  public void if_switch() {
+    int x = sixteen();
+    int y = x / 2;
+    int z;
+    switch (y) {
+    case 8:
+      z = 1;
+      break;
+    default:
+      z = 0;
+      break;
+    }
+    assertThat(z).isEqualTo(1);
+  }
 }

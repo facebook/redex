@@ -24,6 +24,7 @@ class Transform final {
  public:
   struct Config {
     bool replace_moves_with_consts{true};
+    bool remove_dead_switch{true};
     const DexType* class_under_init{nullptr};
     Config() {}
   };
@@ -64,8 +65,13 @@ class Transform final {
                                const WholeProgramState& wps,
                                IRList::iterator);
 
+  void remove_dead_switch(const ConstantEnvironment&,
+                          cfg::ControlFlowGraph&,
+                          cfg::Block*);
+
   void eliminate_dead_branch(const intraprocedural::FixpointIterator&,
                              const ConstantEnvironment&,
+                             cfg::ControlFlowGraph&,
                              cfg::Block*);
 
   const Config m_config;

@@ -44,6 +44,332 @@ TEST(ConstantPropagation, JumpToImmediateNext) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+// A typical case where a non-default block is uniquely reachable.
+TEST(ConstantPropagation, Switch1) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (switch v0 (:b :c))
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (:c 3) ; unreachable
+     (const v1 300)
+     (return v1)
+  )
+
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (goto :b)
+
+     (const v1 100)
+     (return v1)
+
+     (:b) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// Default block also has a unreachable label.
+TEST(ConstantPropagation, Switch2) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (switch v0 (:a :b :c))
+
+     (:a 0) ; default or unreachable
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (:c 3) ; unreachable
+     (const v1 300)
+     (return v1)
+  )
+
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (goto :b)
+
+     (const v1 100)
+     (return v1)
+
+     (:b) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// Multiple unreachables labels fall into a block
+TEST(ConstantPropagation, Switch3) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (switch v0 (:b :c :d))
+
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (:c 3) ; unreachable
+     (:d 4) ; unreachable
+     (const v1 300)
+     (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (goto :b)
+
+     (const v1 100)
+     (return v1)
+
+     (:b) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// When reachable and unreachable fall into a same block
+TEST(ConstantPropagation, Switch4) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (switch v0 (:b :c :d))
+
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; reachable
+     (:c 3) ; unreachable
+     (const v1 200)
+     (return v1)
+
+     (:d 4) ; unreachable
+     (const v1 300)
+     (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 1)
+     (goto :b)
+
+     (const v1 100)
+     (return v1)
+
+     (:b) ; reachable
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// Except default block, all are unreachable
+// Switch is just deleted.
+TEST(ConstantPropagation, Switch5) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 3)
+     (switch v0 (:b :d))
+
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; unreachable
+     (const v1 200)
+     (return v1)
+
+     (:d 4) ; unreachable
+     (const v1 300)
+     (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 3)
+
+     (const v1 100)
+     (return v1)
+
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// Except default block with a switch target, all are unreachable.
+// Switch is just deleted.
+TEST(ConstantPropagation, Switch6) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+     (const v0 2)
+     (switch v0 (:a :b :d))
+
+     (:a 2)
+     (const v1 100)
+     (return v1)
+
+     (:b 1) ; unreachable
+     (const v1 200)
+     (return v1)
+
+     (:d 4) ; unreachable
+     (const v1 300)
+     (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+     (const v0 2)
+
+     (const v1 100)
+     (return v1)
+
+     (const v1 200)
+     (return v1)
+
+     (const v1 300)
+     (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// A uniquely non-default case with constant.
+TEST(ConstantPropagation, Switch7) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (switch v0 (:b))
+      ; unreachable
+      (const v1 100)
+      (return v1)
+
+      (:b 1) ; reachable
+      (const v1 200)
+      (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 1)
+      (goto :b)
+      ; unreachable
+      (const v1 100)
+      (return v1)
+
+      (:b) ; reachable
+      (const v1 200)
+      (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
+// A uniquely non-default case with non-constant.
+// Do not optimize this since default is reachable.
+TEST(ConstantPropagation, Switch8) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (switch v0 (:b))
+      ; reachable
+      (const v1 100)
+      (return v1)
+
+      (:b 1) ; reachable
+      (const v1 200)
+      (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (switch v0 (:b))
+      ; reachable
+      (const v1 100)
+      (return v1)
+
+      (:b 1) ; reachable
+      (const v1 200)
+      (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, WhiteBox1) {
   auto code = assembler::ircode_from_string(R"( (
      (load-param v0)

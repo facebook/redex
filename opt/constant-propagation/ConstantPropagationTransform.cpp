@@ -136,6 +136,102 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   }
 }
 
+void Transform::remove_dead_switch(const ConstantEnvironment& env,
+                                   cfg::ControlFlowGraph& cfg,
+                                   cfg::Block* block) {
+
+  if (!m_config.remove_dead_switch) {
+    return;
+  }
+
+  // TODO: The cfg for constant propagation is assumed to be non-editable.
+  // Once the editable cfg is used, the following optimization logic should be
+  // simpler.
+  if (cfg.editable()) {
+    return;
+  }
+
+  auto insn_it = block->get_last_insn();
+  always_assert(insn_it != block->end());
+  auto* insn = insn_it->insn;
+  always_assert(is_switch(insn->opcode()));
+
+  // Find successor blocks and a default block for switch
+  std::unordered_set<cfg::Block*> succs;
+  cfg::Block* def_block = nullptr;
+  for (auto& edge : block->succs()) {
+    auto type = edge->type();
+    auto target = edge->target();
+    if (type == cfg::EDGE_GOTO) {
+      always_assert(def_block == nullptr);
+      def_block = target;
+    } else {
+      always_assert(type == cfg::EDGE_BRANCH);
+    }
+    succs.insert(edge->target());
+  }
+  always_assert(def_block != nullptr);
+
+  auto is_switch_label = [=](MethodItemEntry& mie) {
+    return (mie.type == MFLOW_TARGET && mie.target->type == BRANCH_MULTI &&
+            mie.target->src->insn == insn);
+  };
+
+  // Find a non-default block which is uniquely reachable with a constant.
+  cfg::Block* reachable = nullptr;
+  auto eval_switch = env.get(insn->src(0));
+  // If switch value is not constant, do not optimize switch directly.
+  bool should_optimize = !eval_switch.is_top();
+  for (auto succ : succs) {
+    for (auto& mie : *succ) {
+      if (is_switch_label(mie)) {
+        auto eval_case =
+            eval_switch.meet(SignedConstantDomain(mie.target->case_key));
+        if (eval_case.is_bottom() || def_block == succ) {
+          // Unreachable label or any switch targeted label in default block is
+          // simply removed.
+          mie.type = MFLOW_FALLTHROUGH;
+          delete mie.target;
+        } else {
+          if (reachable != nullptr) {
+            should_optimize = false;
+          } else {
+            reachable = succ;
+          }
+        }
+      }
+    }
+  }
+
+  if (!should_optimize) {
+    return;
+  }
+  ++m_stats.branches_removed;
+
+  if (reachable == nullptr) {
+    // remove switch, which falls back to default block.
+    m_deletes.emplace_back(insn_it);
+  } else {
+    // Replace switch to a goto for a unique reachable block
+    m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
+    // Change the first label in reachable for the goto.
+    bool hasChanged = false;
+    for (auto& mie : *reachable) {
+      if (is_switch_label(mie)) {
+        if (!hasChanged) {
+          mie.target->type = BRANCH_SIMPLE;
+          hasChanged = true;
+        } else {
+          // From the second targets, just become a nop, if any.
+          mie.type = MFLOW_FALLTHROUGH;
+          delete mie.target;
+        }
+      }
+    }
+    always_assert(hasChanged);
+  }
+}
+
 /*
  * If the last instruction in a basic block is an if-* instruction, determine
  * whether it is dead (i.e. whether the branch always taken or never taken).
@@ -144,18 +240,27 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
 void Transform::eliminate_dead_branch(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
+    cfg::ControlFlowGraph& cfg,
     cfg::Block* block) {
   auto insn_it = block->get_last_insn();
   if (insn_it == block->end()) {
     return;
   }
   auto* insn = insn_it->insn;
+  if (is_switch(insn->opcode())) {
+    remove_dead_switch(env, cfg, block);
+    return;
+  }
+
   if (!is_conditional_branch(insn->opcode())) {
     return;
   }
-  always_assert_log(block->succs().size() == 2, "actually %d\n%s",
-                    block->succs().size(), SHOW(InstructionIterable(*block)));
-  for (auto& edge : block->succs()) {
+
+  const auto& succs = cfg.get_succ_edges_if(
+      block, [](const cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; });
+  always_assert_log(succs.size() == 2, "actually %d\n%s", succs.size(),
+                    SHOW(InstructionIterable(*block)));
+  for (auto& edge : succs) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
@@ -209,7 +314,7 @@ Transform::Stats Transform::apply(
       intra_cp.analyze_instruction(mie.insn, &env);
       simplify_instruction(env, wps, code->iterator_to(mie));
     }
-    eliminate_dead_branch(intra_cp, env, block);
+    eliminate_dead_branch(intra_cp, env, cfg, block);
   }
   apply_changes(code);
   return m_stats;
