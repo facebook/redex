@@ -956,14 +956,20 @@ SharedState::SharedState() {
     const std::string& s(safe_method_name);
     auto method_ref = DexMethod::get_method(s);
     if (method_ref == nullptr) {
-      fprintf(stderr, "[CSE]: Could not find safe method %s\n", s.c_str());
+      TRACE(CSE, 1, "[CSE]: Could not find safe method %s", s.c_str());
     } else {
-      always_assert(method_ref->is_def());
-      always_assert(method_ref->is_external());
-      always_assert(!is_interface(type_class(method_ref->get_class())));
-      auto method = static_cast<DexMethod*>(method_ref);
-      always_assert(!is_abstract(method));
-      m_safe_methods.insert(method);
+      if (method_ref->is_def()) {
+        always_assert(method_ref->is_external());
+        always_assert(!is_interface(type_class(method_ref->get_class())));
+        auto method = static_cast<DexMethod*>(method_ref);
+        always_assert(!is_abstract(method));
+      } else {
+        // Referenced but not defined safe method, we still can mark it as
+        // "safe" because we don't check the body of safe methods anyway.
+        TRACE(CSE, 1, "[CSE]: Referenced but not defined safe method %s",
+              SHOW(method_ref));
+      }
+      m_safe_methods.insert(method_ref);
     }
   }
 

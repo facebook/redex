@@ -118,7 +118,7 @@ class SharedState {
   bool is_invoke_a_barrier(
       const IRInstruction* insn,
       const std::unordered_set<Location, LocationHasher>& read_locations);
-  std::unordered_set<const DexMethod*> m_safe_methods;
+  std::unordered_set<const DexMethodRef*> m_safe_methods;
   std::unordered_set<DexType*> m_safe_types;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*,
