@@ -6,6 +6,7 @@
  */
 
 #if __ANDROID__
+#include <museum/5.0.0/bionic/libc/android/legacy_stdlib_inlines.h>
 #include <museum/5.0.0/bionic/libc/ctype.h>
 #include <museum/5.0.0/bionic/libc/errno.h>
 #include <museum/5.0.0/bionic/libc/locale.h>
@@ -15,7 +16,8 @@
 #include <museum/5.0.0/bionic/libc/sys/stat.h>
 #include <museum/5.0.0/bionic/libc/wchar.h>
 #include <museum/5.0.0/bionic/libc/wctype.h>
-#endif
+#include <museum/5.0.0/external/libcxx/support/android/locale_bionic.h>
+#endif // __ANDROID__
 
 #include "elf-writer.h"
 #include "OatmealUtil.h"
