@@ -23,7 +23,7 @@ class ConstantPropagationPass : public Pass {
     bind("replace_moves_with_consts",
          true,
          m_config.transform.replace_moves_with_consts);
-    bind("remove_dead_switch", true, m_config.transform.remove_dead_switch);
+    bind("remove_dead_switch", false, m_config.transform.remove_dead_switch);
   }
 
   void run_pass(DexStoresVector& stores,
