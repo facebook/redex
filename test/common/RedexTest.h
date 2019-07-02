@@ -26,10 +26,23 @@ struct RedexTest : public testing::Test {
  * This is a macro instead of a function so that the error messages will contain
  * the right line numbers.
  */
-#define EXPECT_CODE_EQ(a, b)                                    \
-  do {                                                          \
-    EXPECT_EQ(assembler::to_string(a), assembler::to_string(b)) \
-        << "\nExpected:\n"                                      \
-        << show(a) << "\nto be equal to:\n"                     \
-        << show(b);                                             \
+#define EXPECT_CODE_EQ(a, b)                                          \
+  do {                                                                \
+    IRCode* aCode = a;                                                \
+    IRCode* bCode = b;                                                \
+    std::string aStr = assembler::to_string(aCode);                   \
+    std::string bStr = assembler::to_string(bCode);                   \
+    if (aStr == bStr) {                                               \
+      SUCCEED();                                                      \
+    } else {                                                          \
+      auto p = std::mismatch(aStr.begin(), aStr.end(), bStr.begin()); \
+      FAIL() << '\n'                                                  \
+             << "S-expressions failed to match: \n"                   \
+             << aStr << '\n'                                          \
+             << bStr << '\n'                                          \
+             << std::string(p.first - aStr.begin(), '.') + "^\n"      \
+             << "\nExpected:\n"                                       \
+             << show(aCode) << "\nto be equal to:\n"                  \
+             << show(bCode);                                          \
+    }                                                                 \
   } while (0);
