@@ -322,6 +322,8 @@ DexAccessFlags process_access_modifier(token type, bool* is_access_flag) {
     return ACC_ENUM;
   case token::staticToken:
     return ACC_STATIC;
+  case token::volatileToken:
+    return ACC_VOLATILE;
   case token::native:
     return ACC_NATIVE;
   case token::protectedToken:
@@ -345,6 +347,7 @@ bool is_negation_or_class_access_modifier(token type) {
   case token::synthetic:
   case token::native:
   case token::staticToken:
+  case token::volatileToken:
   case token::transient:
   case token::annotation:
     return true;
