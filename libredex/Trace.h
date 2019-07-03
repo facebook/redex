@@ -81,6 +81,7 @@
   TM(REDEX)          \
   TM(REACH)          \
   TM(REACH_DUMP)     \
+  TM(CHECKRECURSION) \
   TM(REFU)           \
   TM(REFL)           \
   TM(REG)            \

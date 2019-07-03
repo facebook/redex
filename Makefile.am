@@ -234,6 +234,7 @@ redex_all_SOURCES = \
 	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
+	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
