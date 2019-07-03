@@ -370,6 +370,32 @@ TEST(ConstantPropagation, Switch8) {
             assembler::to_s_expr(expected_code.get()));
 }
 
+// Remove dead switch if no non-default block exists.
+TEST(ConstantPropagation, Switch9) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (switch v0  (:a :b))
+      (:b 1) ; reachable
+      (:a 2) ;
+      (const v1 200)
+      (return v1)
+    )
+)");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 200)
+      (return v1)
+    )
+)");
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+}
+
 TEST(ConstantPropagation, WhiteBox1) {
   auto code = assembler::ircode_from_string(R"( (
      (load-param v0)

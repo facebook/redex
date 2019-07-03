@@ -180,8 +180,8 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
   // Find a non-default block which is uniquely reachable with a constant.
   cfg::Block* reachable = nullptr;
   auto eval_switch = env.get(insn->src(0));
-  // If switch value is not constant, do not optimize switch directly.
-  bool should_optimize = !eval_switch.is_top();
+  // If switch value is not constant, do not replace the switch by a goto.
+  bool should_goto = !eval_switch.is_top();
   for (auto succ : succs) {
     for (auto& mie : *succ) {
       if (is_switch_label(mie)) {
@@ -194,7 +194,7 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
           delete mie.target;
         } else {
           if (reachable != nullptr) {
-            should_optimize = false;
+            should_goto = false;
           } else {
             reachable = succ;
           }
@@ -203,33 +203,35 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
     }
   }
 
-  if (!should_optimize) {
+  // When non-default blocks are unreachable, simply remove the switch.
+  if (reachable == nullptr) {
+    m_deletes.emplace_back(insn_it);
+    ++m_stats.branches_removed;
+    return;
+  }
+
+  if (!should_goto) {
     return;
   }
   ++m_stats.branches_removed;
 
-  if (reachable == nullptr) {
-    // remove switch, which falls back to default block.
-    m_deletes.emplace_back(insn_it);
-  } else {
-    // Replace switch to a goto for a unique reachable block
-    m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
-    // Change the first label in reachable for the goto.
-    bool hasChanged = false;
-    for (auto& mie : *reachable) {
-      if (is_switch_label(mie)) {
-        if (!hasChanged) {
-          mie.target->type = BRANCH_SIMPLE;
-          hasChanged = true;
-        } else {
-          // From the second targets, just become a nop, if any.
-          mie.type = MFLOW_FALLTHROUGH;
-          delete mie.target;
-        }
+  // Replace the switch by a goto to the uniquely reachable block
+  m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
+  // Change the first label for the goto.
+  bool has_changed = false;
+  for (auto& mie : *reachable) {
+    if (is_switch_label(mie)) {
+      if (!has_changed) {
+        mie.target->type = BRANCH_SIMPLE;
+        has_changed = true;
+      } else {
+        // From the second targets, just become a nop, if any.
+        mie.type = MFLOW_FALLTHROUGH;
+        delete mie.target;
       }
     }
-    always_assert(hasChanged);
   }
+  always_assert(has_changed);
 }
 
 /*
