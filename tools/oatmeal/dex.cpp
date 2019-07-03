@@ -635,9 +635,10 @@ void quicken_dex(const char* location,
           canary_name = std::move(class_name);
         }
 
-        load_class_data_item(map->begin() + cdef->class_data_offset,
-                             code_item_offset);
-        class_data_offset[cdef->class_data_offset] = 0;
+        if (cdef->class_data_offset) {
+          load_class_data_item(map->begin() + cdef->class_data_offset,
+                               code_item_offset);
+        }
       }
       if (code_item_offset.count(i) != 0) {
 #ifdef DEBUG_LOG
@@ -701,7 +702,6 @@ void print_dex_opcodes(const uint8_t* begin, const size_t size) {
 void stream::stream_dex(const uint8_t* begin, const size_t size, InsnWalkerFn insn_walker, CodeItemWalkerFn code_item_walker) {
   auto dh = reinterpret_cast<const dex_header*>(begin);
   auto class_defs_off = dh->class_defs_off;
-  std::unordered_map<uint32_t, uint32_t> class_data_offset;
   std::unordered_map<uint32_t, uint32_t> code_item_offset;
   {
     std::string canary_name;
@@ -736,7 +736,6 @@ void stream::stream_dex(const uint8_t* begin, const size_t size, InsnWalkerFn in
 
         load_class_data_item(begin + cdef->class_data_offset,
                              code_item_offset);
-        class_data_offset[cdef->class_data_offset] = 0;
       }
       if (code_item_offset.count(i) != 0) {
         #ifdef DEBUG_LOG

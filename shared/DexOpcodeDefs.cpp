@@ -64,6 +64,9 @@ DexOpcode quicken(DexOpcode opcode) {
     return DOPCODE_IPUT_SHORT_QUICK;
 
   default:
-    throw std::invalid_argument("Can't quicken opcode.");
+    std::ostringstream msg;
+    msg << std::string("Can't quicken opcode: ") << std::hex
+        << (uint16_t)opcode;
+    throw std::invalid_argument(msg.str());
   }
 }
