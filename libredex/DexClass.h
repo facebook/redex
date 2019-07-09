@@ -340,6 +340,15 @@ class DexField : public DexFieldRef {
    * Make a field using a full descriptor: Lcls;.name:type
    */
   static DexFieldRef* make_field(const std::string&);
+  static DexString* get_unique_name(DexType* container,
+                                    DexString* name,
+                                    DexType* type) {
+    auto ret = name;
+    for (uint32_t i = 0; get_field(container, ret, type); i++) {
+      ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
+    }
+    return ret;
+  }
 
  public:
   DexAnnotationSet* get_anno_set() const { return m_anno; }
@@ -902,20 +911,11 @@ class DexMethod : public DexMethodRef {
   static DexString* get_unique_name(DexType* type,
                                     DexString* name,
                                     DexProto* proto) {
-    if (!DexMethod::get_method(type, name, proto)) {
-      return name;
+    auto ret = name;
+    for (uint32_t i = 0; get_method(type, ret, proto); i++) {
+      ret = DexString::make_string(name->str() + "r$" + std::to_string(i));
     }
-    DexString* res = DexString::make_string(name->c_str());
-    uint32_t i = 0;
-    while (true) {
-      auto temp =
-          DexString::make_string(res->str() + "r$" + std::to_string(i++));
-      if (!DexMethod::get_method(type, temp, proto)) {
-        res = temp;
-        break;
-      }
-    }
-    return res;
+    return ret;
   }
 
  public:
