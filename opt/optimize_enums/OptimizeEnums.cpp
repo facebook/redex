@@ -8,6 +8,7 @@
 #include "OptimizeEnums.h"
 
 #include "ClassAssemblingUtils.h"
+#include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
 #include "EnumTransformer.h"
@@ -47,6 +48,10 @@ constexpr const char* METRIC_NUM_ENUM_OBJS = "num_erased_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
 constexpr const char* METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES =
     "num_switch_equiv_finder_failures";
+constexpr const char* METRIC_NUM_CANDIDATE_GENERATED_METHODS =
+    "num_candidate_generated_enum_methods";
+constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
+    "num_removed_generated_enum_methods";
 
 /**
  * Get the instruction containing the constructor call. It can either
@@ -292,6 +297,10 @@ class OptimizeEnums {
     report(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
     report(METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES,
            m_stats.num_switch_equiv_finder_failures);
+    report(METRIC_NUM_CANDIDATE_GENERATED_METHODS,
+           m_stats.num_candidate_generated_methods);
+    report(METRIC_NUM_REMOVED_GENERATED_METHODS,
+           m_stats.num_removed_generated_methods);
   }
 
   /**
@@ -320,6 +329,36 @@ class OptimizeEnums {
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
+  }
+
+  /**
+   * Remove the static methods `valueOf()` and `values()` when safe.
+   */
+  void remove_enum_generated_methods() {
+    optimize_enums::EnumAnalyzeGeneratedMethods analyzer;
+
+    auto should_consider_enum = [](DexClass* cls) {
+      // Only consider enums that are final, not external, and do not have
+      // interfaces.
+      return is_enum(cls) && !cls->is_external() && is_final(cls) &&
+             can_delete(cls) && cls->get_interfaces()->size() == 0;
+    };
+
+    // TODO: Make parallel
+    walk::classes(m_scope, [&should_consider_enum, &analyzer](DexClass* cls) {
+      if (should_consider_enum(cls)) {
+        auto& dmethods = cls->get_dmethods();
+        auto valueof_mit = std::find_if(dmethods.begin(), dmethods.end(),
+                                        optimize_enums::is_enum_valueof);
+        auto values_mit = std::find_if(dmethods.begin(), dmethods.end(),
+                                       optimize_enums::is_enum_values);
+        analyzer.consider_enum_type(cls, *valueof_mit, *values_mit);
+      }
+    });
+
+    m_stats.num_candidate_generated_methods =
+        analyzer.num_candidate_enum_methods();
+    m_stats.num_removed_generated_methods = analyzer.transform_code(m_scope);
   }
 
  private:
@@ -821,6 +860,8 @@ class OptimizeEnums {
     size_t num_enum_objs{0};
     size_t num_int_objs{0};
     size_t num_switch_equiv_finder_failures{0};
+    size_t num_candidate_generated_methods{0};
+    size_t num_removed_generated_methods{0};
   };
   Stats m_stats;
 
@@ -845,6 +886,7 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   opt_enums.replace_enum_with_int(m_max_enum_size);
+  opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
 }
 

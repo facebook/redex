@@ -268,6 +268,7 @@ redex_all_SOURCES = \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumConfig.cpp \
 	opt/optimize_enums/EnumInSwitch.cpp \
+	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
