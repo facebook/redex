@@ -83,24 +83,57 @@ void DedupStrings::run(DexStoresVector& stores) {
 std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
   // For dex, let's find an existing class into which we can add our
   // $const$string factory method.
-  // We'd prefer one without a class initializer.
 
   std::vector<DexClass*> host_classes;
   for (auto& classes : dexen) {
     DexClass* host_cls = nullptr;
+    size_t min_size = std::numeric_limits<size_t>::max();
     for (auto cls : classes) {
-      // Non-root classes shouldn't participate in reflection, and so adding
-      // things to them should be benign.
-      if (!root(cls) && is_public(cls) && !cls->is_external() &&
-          !is_interface(cls)) {
-        if (host_cls == nullptr) {
-          host_cls = cls;
-        }
-        if (!cls->get_clinit()) {
-          // Stop here if we found a suitable class without a class initializer
-          host_cls = cls;
-          break;
-        }
+      if (!is_public(cls) || cls->is_external() || is_interface(cls)) {
+        // We cannot add anything to non-public, external, or interface classes.
+        continue;
+      }
+      if (root(cls)) {
+        // Root classes may participate in reflection, and thus we shouldn't
+        // add anything to them.
+        continue;
+      }
+      if (cls->get_clinit()) {
+        // We do not want to trigger a clinit.
+        continue;
+      }
+      if (cls->get_super_class() != get_object_type() ||
+          cls->get_interfaces()->get_type_list().size() > 0) {
+        // Classes that derived from another class, or implement interfaces,
+        // may trigger additional class loads, which is undesirable, or even
+        // fatal when any of the (framework) classes do not exist on a
+        // particular Android OS version.
+        continue;
+      }
+      const auto* annos = cls->get_anno_set();
+      if (annos && annos->size() > 0) {
+        // Annotations might indicate API-level restrictions.
+        continue;
+      }
+      auto has_non_trivial_type = [](DexField* f) -> bool {
+        auto t = f->get_type();
+        return !is_primitive(t) && t != get_object_type();
+      };
+      auto& ifields = cls->get_ifields();
+      auto& sfields = cls->get_ifields();
+      if (std::any_of(ifields.begin(), ifields.end(), has_non_trivial_type) ||
+          std::any_of(sfields.begin(), sfields.end(), has_non_trivial_type)) {
+        // We don't want classes that have fields of non-trivial types as
+        // such types might get loaded during class initialization.
+        continue;
+      }
+      // Pick "smallest" class according to some metric; to minimize change of
+      // unforeseen interactions, and to make class selection more stable.
+      size_t size = cls->get_vmethods().size() + cls->get_dmethods().size() +
+                    cls->get_sfields().size();
+      if (size < min_size) {
+        min_size = size;
+        host_cls = cls;
       }
     }
 
