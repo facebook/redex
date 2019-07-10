@@ -301,15 +301,15 @@ TEST(CFGInliner, multi_return_object) {
       (new-instance "LFoo;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-
-      (:exit)
-      (return-object v0)
+      (goto :exit)
 
       (:true)
       (new-instance "LBar;")
       (move-result-pseudo-object v1)
       (move-object v0 v1)
-      (goto :exit)
+
+      (:exit)
+      (return-object v0)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -355,13 +355,13 @@ TEST(CFGInliner, both_multi_block) {
       (if-ge v3 v4 :true)
 
       (move v2 v4)
-
-      (:exit)
-      (return-void)
+      (goto :exit)
 
       (:true)
       (move v2 v3)
-      (goto :exit)
+
+      (:exit)
+      (return-void)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);
@@ -429,7 +429,7 @@ TEST(CFGInliner, try_catch_simple) {
   const auto& caller_str = R"(
     (
       (.try_start a)
-      (const v0 0)
+      (iget v0 "LCls;.bar:I")
       (invoke-static () "LCls;.foo:()V")
       (return v0)
       (.try_end a)
@@ -448,7 +448,7 @@ TEST(CFGInliner, try_catch_simple) {
   const auto& expected_str = R"(
     (
       (.try_start a)
-      (const v0 0)
+      (iget v0 "LCls;.bar:I")
       (const v2 0)
       (throw v2)
       (.try_end a)
@@ -465,7 +465,7 @@ TEST(CFGInliner, try_catch_with_return_reg) {
   const auto& caller_str = R"(
     (
       (.try_start a)
-      (const v0 0)
+      (iget v0 "LCls;.bar:I")
       (invoke-static () "LCls;.foo:()I")
       (.try_end a)
       (move-result v0)
@@ -485,7 +485,7 @@ TEST(CFGInliner, try_catch_with_return_reg) {
   const auto& expected_str = R"(
     (
       (.try_start a)
-      (const v0 0)
+      (iget v0 "LCls;.bar:I")
       (const v2 0)
       (throw v2)
       (.try_end a)
@@ -762,6 +762,28 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
 
       (:end_callee)
       (return v0)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}
+
+TEST(CFGInliner, inf_loop) {
+  const auto& caller_str = R"(
+    (
+      (:lbl)
+      (invoke-static () "LCls;.foo:()I")
+      (goto :lbl)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (return-void)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (:lbl)
+      (goto :lbl)
     )
   )";
   test_inliner(caller_str, callee_str, expected_str);

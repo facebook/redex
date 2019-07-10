@@ -54,8 +54,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     if (first == after_callee->end() || first->type != MFLOW_POSITION) {
       // but don't add if there's already a position at the front of this
       // block
-      after_callee->m_entries.push_front(
-          *(new MethodItemEntry(std::make_unique<DexPosition>(*callsite_dbg_pos))));
+      after_callee->m_entries.push_front(*(new MethodItemEntry(
+          std::make_unique<DexPosition>(*callsite_dbg_pos))));
     }
   }
 
@@ -180,23 +180,14 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
   cfg->delete_succ_edge_if(
       callsite, [](const Edge* e) { return e->type() == EDGE_GOTO; });
 
-  auto connect = [&cfg](std::vector<Block*> preds, Block* succ) {
+  auto connect = [&cfg](const std::vector<Block*>& preds, Block* succ) {
     for (Block* pred : preds) {
-      TRACE(CFG, 4, "connecting %d, %d in %s", pred->id(), succ->id(), SHOW(*cfg));
+      TRACE(CFG, 4, "connecting %d, %d in %s", pred->id(), succ->id(),
+            SHOW(*cfg));
       cfg->add_edge(pred, succ, EDGE_GOTO);
-      // If this is the only connecting edge, we can merge these blocks into one
-      if (preds.size() == 1 && succ->preds().size() == 1 &&
-          cfg->blocks_are_in_same_try(pred, succ)) {
-        // FIXME: this is annoying because it destroys the succ block
-        // (invalidating any iterators into it). Maybe it would be better to do
-        // this during cfg.simplify at the very end?
-        cfg->merge_blocks(pred, succ);
-      }
     }
   };
 
-  // We must connect the return first because merge_blocks may delete the
-  // successor
   // TODO: tail call optimization (if after_callsite is just a return)
   connect(callee_exits, after_callsite);
   connect({callsite}, callee_entry);
@@ -402,9 +393,17 @@ DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
 
   // while there's a single predecessor, follow that edge
   const auto& cfg = callsite.cfg();
+  std::unordered_set<Block*> visited;
   std::function<DexPosition*(Block*)> check_prev_block;
-  check_prev_block = [&check_prev_block, &search_block,
-                      &cfg](Block* b) -> DexPosition* {
+  check_prev_block = [&cfg, &visited, &check_prev_block,
+                      &search_block](Block* b) -> DexPosition* {
+    // Check for an infinite loop
+    const auto& pair = visited.insert(b);
+    bool already_there = !pair.second;
+    if (already_there) {
+      return nullptr;
+    }
+
     const auto& reverse_gotos = cfg.get_pred_edges_of_type(b, EDGE_GOTO);
     if (b->preds().size() == 1 && !reverse_gotos.empty()) {
       Block* prev_block = reverse_gotos[0]->src();

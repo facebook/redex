@@ -80,10 +80,20 @@ bool cannot_throw(cfg::Block* b) {
 }
 
 /*
- * Return true if the block does not contain any instruction.
+ * Return true if the block does not contain anything we need.
  */
-bool is_effectively_empty(cfg::Block* b) {
-  return b->get_first_insn() == b->end();
+bool is_effectively_empty(
+    cfg::Block* b, const std::unordered_set<DexPosition*>& keep_positions) {
+  if (b->get_first_insn() != b->end()) {
+    return false;
+  }
+  for (const auto& mie : *b) {
+    if (mie.type == MFLOW_POSITION &&
+        keep_positions.count(mie.pos.get()) != 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /*
@@ -622,8 +632,7 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     auto next = std::next(it);
     Block* next_b = next->second;
     if (fallthrough && next != m_blocks.end()) {
-      TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(),
-            next_b->id());
+      TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(), next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
     }
   }
@@ -794,10 +803,19 @@ void ControlFlowGraph::remove_dangling_parents(
 }
 void ControlFlowGraph::remove_empty_blocks() {
   always_assert(editable());
+  std::unordered_set<DexPosition*> keep_positions;
+  for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
+    Block* b = it->second;
+    for (auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+        keep_positions.insert(mie.pos->parent);
+      }
+    }
+  }
   std::unordered_set<DexPosition*> deleted_positions;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
-    if (!is_effectively_empty(b) || b == exit_block()) {
+    if (!is_effectively_empty(b, keep_positions) || b == exit_block()) {
       ++it;
       continue;
     }
