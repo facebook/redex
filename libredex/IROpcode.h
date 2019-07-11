@@ -264,6 +264,8 @@ bool is_move(IROpcode);
 
 bool is_commutative(IROpcode opcode);
 
+bool is_cmp(IROpcode opcode);
+
 IROpcode load_param_to_move(IROpcode);
 
 IROpcode invert_conditional_branch(IROpcode op);

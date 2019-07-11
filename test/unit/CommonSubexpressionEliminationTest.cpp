@@ -1267,3 +1267,17 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
   )";
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }
+
+TEST_F(CommonSubexpressionEliminationTest, cmp) {
+  // See T46241704. We do not want to deduplicate cmp instructions.
+  auto code_str = R"(
+    (
+      (const-wide v0 0)
+      (const-wide v2 0)
+      (cmp-long v4 v0 v2)
+      (cmp-long v5 v0 v2)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+}

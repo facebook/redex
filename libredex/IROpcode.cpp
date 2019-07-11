@@ -1035,6 +1035,10 @@ bool is_commutative(IROpcode opcode) {
   }
 }
 
+bool is_cmp(IROpcode opcode) {
+  return opcode >= OPCODE_CMPL_FLOAT && opcode <= OPCODE_CMP_LONG;
+}
+
 IROpcode load_param_to_move(IROpcode op) {
   switch (op) {
   case IOPCODE_LOAD_PARAM:

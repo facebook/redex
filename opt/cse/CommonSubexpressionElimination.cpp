@@ -1350,6 +1350,13 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       if (opcode::is_load_param(earlier_opcode)) {
         continue;
       }
+      if (opcode::is_cmp(opcode) || opcode::is_cmp(earlier_opcode)) {
+        // See T46241704. We never de-duplicate cmp instructions due to an
+        // apparent bug in various Dalvik (and ART?) versions. Also see this
+        // documentation in the r8 source code:
+        // https://r8.googlesource.com/r8/+/2638db4d3465d785a6a740cf09969cab96099cff/src/main/java/com/android/tools/r8/utils/InternalOptions.java#604
+        continue;
+      }
 
       m_forward.emplace_back((Forward){earlier_insn, insn});
     }
