@@ -1250,6 +1250,7 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
       (move-result-pseudo-object v0)
       (array-length v0)
       (move-result-pseudo v0)
+      (return v0)
     )
   )";
   auto expected_str = R"(
@@ -1261,6 +1262,7 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
       (array-length v0)
       (move-result-pseudo v0)
       (move v0 v1)
+      (return v0)
     )
   )";
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);

@@ -137,7 +137,10 @@ class CommonSubexpressionElimination {
   /*
    * Patch code based on analysis results.
    */
-  bool patch(bool is_static, DexType* declaring_type, DexTypeList* args);
+  bool patch(bool is_static,
+             DexType* declaring_type,
+             DexTypeList* args,
+             bool runtime_assertions = false);
 
  private:
   // CSE is finding instances where the result (in the dest register) of an
@@ -151,6 +154,12 @@ class CommonSubexpressionElimination {
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
+
+  void insert_runtime_assertions(
+      bool is_static,
+      DexType* declaring_type,
+      DexTypeList* args,
+      const std::vector<std::pair<Forward, IRInstruction*>>& to_check);
 };
 
 } // namespace cse_impl
@@ -166,4 +175,5 @@ class CommonSubexpressionEliminationPass : public Pass {
  private:
   int64_t m_max_iterations;
   bool m_debug;
+  bool m_runtime_assertions;
 };

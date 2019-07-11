@@ -70,6 +70,7 @@
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
+#include "TypeInference.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
 
@@ -1365,7 +1366,8 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
 
 bool CommonSubexpressionElimination::patch(bool is_static,
                                            DexType* declaring_type,
-                                           DexTypeList* args) {
+                                           DexTypeList* args,
+                                           bool runtime_assertions) {
   if (m_forward.size() == 0) {
     return false;
   }
@@ -1429,6 +1431,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
   // insert moves to use the forwarded value
 
+  std::vector<std::pair<Forward, IRInstruction*>> to_check;
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
     auto& q = temps.at(earlier_insn);
@@ -1439,6 +1442,11 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     IRInstruction* move_insn = new IRInstruction(move_opcode);
     move_insn->set_src(0, temp_reg)->set_dest(insn->dest());
     m_cfg.insert_after(it, move_insn);
+
+    if (runtime_assertions) {
+      to_check.emplace_back(f, move_insn);
+    }
+
     TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
           SHOW(insn), temp_reg);
 
@@ -1470,16 +1478,140 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     }
   }
 
+  if (runtime_assertions) {
+    insert_runtime_assertions(is_static, declaring_type, args, to_check);
+  }
+
   TRACE(CSE, 5, "[CSE] after:\n%s", SHOW(m_cfg));
 
   m_stats.instructions_eliminated += m_forward.size();
   return true;
 }
 
+void CommonSubexpressionElimination::insert_runtime_assertions(
+    bool is_static,
+    DexType* declaring_type,
+    DexTypeList* args,
+    const std::vector<std::pair<Forward, IRInstruction*>>& to_check) {
+  // For every instruction that CSE will effectively eliminate, we insert
+  // code like the following:
+  //
+  // OLD_CODE:
+  //    first-instruction r0
+  //    redundant-instruction r1
+  //  NEW_ASSERTION_CODE:
+  //    if-ne r0, r1, THROW
+  //  CSE_CODE:
+  //    move r1, r0 // <= to realize CSE; without the NEW_ASSERTION_CODE,
+  //                //    the redundant-instruction would be eliminated by DCE.
+  //    ...
+  //  THROW:
+  //    const r2, 0
+  //    throw r2
+  //
+  // The new throw instruction would throw a NullPointerException when the
+  // redundant instruction didn't actually produce the same result as the
+  // first instruction.
+  //
+  // TODO: Consider throwing a custom exception, possibly created by code
+  // sitting behind an auxiliary method call to keep the code size distortion
+  // small which may influence other optimizations. See
+  // ConstantPropagationAssertHandler for inspiration.
+  //
+  // Note: Somehow inserting assertions seems to trip up the OptimizeEnumsPass
+  // (it fails while running Redex).
+  // TODO: Investigate why. Until then, disable that pass to test CSE.
+
+  // If the original block had a throw-edge, then the new block that throws an
+  // exception needs to have a corresponding throw-edge. As we split blocks to
+  // insert conditional branches, and splitting blocks removes throw-edges from
+  // the original block, we need to make sure that we track what throw-edges as\
+  // needed. (All this is to appease the Android verifier in the presence of
+  // monitor instructions.)
+  std::unordered_map<cfg::Block*, std::vector<cfg::Edge*>> outgoing_throws;
+  for (auto b : m_cfg.blocks()) {
+    outgoing_throws.emplace(b, b->get_outgoing_throws_in_order());
+  }
+
+  // We need type inference information to generate the right kinds of
+  // conditional branches.
+  type_inference::TypeInference type_inference(m_cfg);
+  type_inference.run(is_static, declaring_type, args);
+  auto& type_environments = type_inference.get_type_environments();
+
+  for (auto& p : to_check) {
+    auto& f = p.first;
+    IRInstruction* earlier_insn = f.earlier_insn;
+    IRInstruction* insn = f.insn;
+    auto move_insn = p.second;
+
+    auto& type_environment = type_environments.at(insn);
+    auto temp = move_insn->src(0);
+    auto type = type_environment.get_type(temp);
+    always_assert(!type.is_top());
+    always_assert(!type.is_bottom());
+    TRACE(CSE, 6, "[CSE] to check: %s => %s - r%u: %s", SHOW(earlier_insn),
+          SHOW(insn), temp, SHOW(type.element()));
+    always_assert(type.element() != CONST2);
+    always_assert(type.element() != LONG2);
+    always_assert(type.element() != DOUBLE2);
+    always_assert(type.element() != SCALAR2);
+    if (type.element() != ZERO && type.element() != CONST &&
+        type.element() != INT && type.element() != REFERENCE &&
+        type.element() != LONG1) {
+      // TODO: Handle floats and doubles via Float.floatToIntBits and
+      // Double.doubleToLongBits to deal with NaN.
+      // TODO: Improve TypeInference so that we never have to deal with
+      // SCALAR* values where we don't know if it's a int/float or long/double.
+      continue;
+    }
+
+    auto it = m_cfg.find_insn(insn);
+    auto old_block = it.block();
+    auto new_block = m_cfg.split_block(it);
+    outgoing_throws.emplace(new_block, outgoing_throws.at(old_block));
+
+    auto throw_block = m_cfg.create_block();
+    auto null_reg = m_cfg.allocate_temp();
+    IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
+    const_insn->set_literal(0);
+    const_insn->set_dest(null_reg);
+    throw_block->push_back(const_insn);
+    IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
+    throw_insn->set_src(0, null_reg);
+    throw_block->push_back(throw_insn);
+
+    for (auto e : outgoing_throws.at(old_block)) {
+      auto throw_info = e->throw_info();
+      m_cfg.add_edge(throw_block, e->target(), throw_info->catch_type,
+                     throw_info->index);
+    }
+
+    if (type.element() == LONG1) {
+      auto cmp_reg = m_cfg.allocate_temp();
+      IRInstruction* cmp_insn = new IRInstruction(OPCODE_CMP_LONG);
+      cmp_insn->set_dest(cmp_reg);
+      cmp_insn->set_src(0, move_insn->dest());
+      cmp_insn->set_src(1, move_insn->src(0));
+      old_block->push_back(cmp_insn);
+
+      IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NEZ);
+      if_insn->set_src(0, cmp_reg);
+      m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
+    } else {
+      IRInstruction* if_insn = new IRInstruction(OPCODE_IF_NE);
+      if_insn->set_src(0, move_insn->dest());
+      if_insn->set_src(1, move_insn->src(0));
+      m_cfg.create_branch(old_block, if_insn, new_block, throw_block);
+    }
+  }
+}
+
 } // namespace cse_impl
 
 void CommonSubexpressionEliminationPass::bind_config() {
   bind("debug", false, m_debug);
+  bind("runtime_assertions", false, m_runtime_assertions);
   // The default value 77 is somewhat arbitrary. In practice, the fixed-point
   // computation terminates after fewer iterations.
   int64_t default_max_iterations = 77;
@@ -1506,8 +1638,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
         always_assert(code->editable_cfg_built());
         CommonSubexpressionElimination cse(&shared_state, code->cfg());
-        bool any_changes = cse.patch(is_static(method), method->get_class(),
-                                     method->get_proto()->get_args());
+        bool any_changes =
+            cse.patch(is_static(method), method->get_class(),
+                      method->get_proto()->get_args(), m_runtime_assertions);
         code->clear_cfg();
         if (any_changes) {
           // TODO: CopyPropagation and LocalDce will separately construct
