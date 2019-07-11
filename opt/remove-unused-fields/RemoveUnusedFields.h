@@ -11,21 +11,29 @@
 
 /*
  * This pass identifies fields that are never read from and deletes all writes
- * to them. It relies on RemoveUnreachablePass running afterward to remove the
+ * to them. Similarly, all fields that are never written to and do not have
+ * a non-zero static value get all of their read instructions replaced by
+ * const 0 instructions.
+ *
+ * This pass relies on RemoveUnreachablePass running afterward to remove the
  * definitions of those fields entirely.
  *
  * Possible future work: This could be extended to eliminate fields that are
  * only used in non-escaping contexts.
+ *
+ * NOTE: Removing writes to fields may affect the life-time of an object, if all
+ * other references to it are weak. Thus, this is a somewhat unsafe, or at least
+ * potentially behavior altering optimization.
  */
-namespace remove_unread_fields {
+namespace remove_unused_fields {
 
 class PassImpl : public Pass {
  public:
-  PassImpl() : Pass("RemoveUnreadFieldsPass") {}
+  PassImpl() : Pass("RemoveUnusedFieldsPass") {}
 
   void run_pass(DexStoresVector& stores,
                 ConfigFiles& conf,
                 PassManager& mgr) override;
 };
 
-} // namespace remove_unread_fields
+} // namespace remove_unused_fields

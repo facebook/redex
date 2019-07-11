@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "RemoveUnreadFields.h"
+#include "RemoveUnusedFields.h"
 
 #include "DexClass.h"
 #include "FieldOpTracker.h"
@@ -13,7 +13,7 @@
 #include "Resolver.h"
 #include "Walkers.h"
 
-namespace remove_unread_fields {
+namespace remove_unused_fields {
 
 bool can_remove(DexField* field) {
   // XXX(jezng): why is can_rename not a subset of can_delete?
@@ -60,8 +60,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
   mgr.set_metric("unread_fields", unread_fields);
   mgr.set_metric("unwritten_fields", unwritten_fields);
 
-  // Replace reads to written fields with appropriate const-0 instructions, and
-  // remove the writes to unread fields.
+  // Replace reads to unwritten fields with appropriate const-0 instructions,
+  // and remove the writes to unread fields.
   const auto& const_field_stats = field_stats;
   walk::parallel::code(
       scope, [&const_field_stats](const DexMethod*, IRCode& code) {
@@ -112,4 +112,4 @@ void PassImpl::run_pass(DexStoresVector& stores,
 
 static PassImpl s_pass;
 
-} // namespace remove_unread_fields
+} // namespace remove_unused_fields

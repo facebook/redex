@@ -20,7 +20,7 @@
 /*
  * This pass tries to identify writes to registers and objects that never get
  * read from. Modeling dead object field writes is particularly useful in
- * conjunction with RemoveUnreadFieldsPass. Suppose we have an unused field
+ * conjunction with RemoveUnusedFieldsPass. Suppose we have an unused field
  * Foo.x:
  *
  *   new-instance v0 LFoo;
