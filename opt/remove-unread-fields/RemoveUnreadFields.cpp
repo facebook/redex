@@ -21,14 +21,21 @@ bool can_remove(DexField* field) {
          can_rename(field);
 }
 
+bool has_non_zero_static_value(DexField* field) {
+  auto ev = field->get_static_value();
+  return ev != nullptr && !ev->is_zero();
+}
+
 void PassImpl::run_pass(DexStoresVector& stores,
                         ConfigFiles& conf,
                         PassManager& mgr) {
 
   auto scope = build_class_scope(stores);
-  field_op_tracker::FieldStatsMap field_stats = field_op_tracker::analyze(scope);
+  field_op_tracker::FieldStatsMap field_stats =
+      field_op_tracker::analyze(scope);
 
   uint32_t unread_fields = 0;
+  uint32_t unwritten_fields = 0;
   for (auto& pair : field_stats) {
     auto* field = pair.first;
     auto& stats = pair.second;
@@ -40,19 +47,32 @@ void PassImpl::run_pass(DexStoresVector& stores,
           stats.reads_outside_init,
           stats.writes,
           is_synthetic(field));
-    if (stats.reads == 0 && can_remove(field)) {
-      ++unread_fields;
+    if (can_remove(field)) {
+      if (stats.reads == 0) {
+        ++unread_fields;
+      } else if (stats.writes == 0 && !has_non_zero_static_value(field)) {
+        ++unwritten_fields;
+      }
     }
   }
   TRACE(RMUF, 2, "unread_fields %u", unread_fields);
+  TRACE(RMUF, 2, "unwritten_fields %u", unwritten_fields);
   mgr.set_metric("unread_fields", unread_fields);
+  mgr.set_metric("unwritten_fields", unwritten_fields);
 
-  // Remove the writes to unread fields.
+  // Replace reads to written fields with appropriate const-0 instructions, and
+  // remove the writes to unread fields.
   const auto& const_field_stats = field_stats;
   walk::parallel::code(
       scope, [&const_field_stats](const DexMethod*, IRCode& code) {
-        for (auto& mie : InstructionIterable(code)) {
-          auto insn = mie.insn;
+        code.build_cfg(/* editable = true*/);
+        auto& cfg = code.cfg();
+        auto iterable = cfg::InstructionIterable(cfg);
+        std::vector<cfg::InstructionIterator> to_replace;
+        std::vector<cfg::InstructionIterator> to_remove;
+        for (auto insn_it = iterable.begin(); insn_it != iterable.end();
+             ++insn_it) {
+          auto* insn = insn_it->insn;
           if (!insn->has_field()) {
             continue;
           }
@@ -65,10 +85,28 @@ void PassImpl::run_pass(DexStoresVector& stores,
             continue;
           }
           if (it->second.reads == 0) {
+            always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-            code.remove_opcode(code.iterator_to(mie));
+            to_remove.push_back(insn_it);
+          } else if (it->second.writes == 0 &&
+                     !has_non_zero_static_value(field)) {
+            always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
+            TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
+            to_replace.push_back(insn_it);
           }
         }
+        for (auto insn_it : to_replace) {
+          auto move_result = cfg.move_result_of(insn_it)->insn;
+          IRInstruction* const0 = new IRInstruction(
+              move_result->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
+          const0->set_dest(move_result->dest())->set_literal(0);
+          auto invalidated = cfg.replace_insn(insn_it, const0);
+          always_assert(!invalidated);
+        }
+        for (auto insn_it : to_remove) {
+          cfg.remove_insn(insn_it);
+        }
+        code.clear_cfg();
       });
 }
 
