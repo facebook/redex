@@ -34,6 +34,8 @@ void PassImpl::run_pass(DexStoresVector& stores,
   field_op_tracker::FieldStatsMap field_stats =
       field_op_tracker::analyze(scope);
 
+  auto remove_unread_fields = m_remove_unread_fields;
+  auto remove_unwritten_fields = m_remove_unwritten_fields;
   uint32_t unread_fields = 0;
   uint32_t unwritten_fields = 0;
   for (auto& pair : field_stats) {
@@ -48,9 +50,10 @@ void PassImpl::run_pass(DexStoresVector& stores,
           stats.writes,
           is_synthetic(field));
     if (can_remove(field)) {
-      if (stats.reads == 0) {
+      if (remove_unread_fields && stats.reads == 0) {
         ++unread_fields;
-      } else if (stats.writes == 0 && !has_non_zero_static_value(field)) {
+      } else if (remove_unwritten_fields && stats.writes == 0 &&
+                 !has_non_zero_static_value(field)) {
         ++unwritten_fields;
       }
     }
@@ -64,7 +67,9 @@ void PassImpl::run_pass(DexStoresVector& stores,
   // and remove the writes to unread fields.
   const auto& const_field_stats = field_stats;
   walk::parallel::code(
-      scope, [&const_field_stats](const DexMethod*, IRCode& code) {
+      scope,
+      [&const_field_stats, remove_unread_fields, remove_unwritten_fields](
+          const DexMethod*, IRCode& code) {
         code.build_cfg(/* editable = true*/);
         auto& cfg = code.cfg();
         auto iterable = cfg::InstructionIterable(cfg);
@@ -84,11 +89,11 @@ void PassImpl::run_pass(DexStoresVector& stores,
           if (it == const_field_stats.end()) {
             continue;
           }
-          if (it->second.reads == 0) {
+          if (remove_unread_fields && it->second.reads == 0) {
             always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
             to_remove.push_back(insn_it);
-          } else if (it->second.writes == 0 &&
+          } else if (remove_unwritten_fields && it->second.writes == 0 &&
                      !has_non_zero_static_value(field)) {
             always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
             TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
