@@ -253,6 +253,13 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
+    walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
+                                                       IRCode& code) {
+      // Ensure that pass authors deconstructed the editable CFG at the end of
+      // their pass. Currently, passes assume the incoming code will be in
+      // IRCode form
+      always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
+    });
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = run_type_checker_after_each_pass ||

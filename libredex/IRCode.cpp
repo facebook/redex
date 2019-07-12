@@ -1015,3 +1015,45 @@ bool IRCode::try_sync(DexCode* code) {
             });
   return true;
 }
+
+void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_catch_types(ltype);
+  } else {
+    m_ir_list->gather_catch_types(ltype);
+  }
+  if (m_dbg) m_dbg->gather_types(ltype);
+}
+
+void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_strings(lstring);
+  } else {
+    m_ir_list->gather_strings(lstring);
+  }
+  if (m_dbg) m_dbg->gather_strings(lstring);
+}
+
+void IRCode::gather_types(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_types(ltype);
+  } else {
+    m_ir_list->gather_types(ltype);
+  }
+}
+
+void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_fields(lfield);
+  } else {
+    m_ir_list->gather_fields(lfield);
+  }
+}
+
+void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_methods(lmethod);
+  } else {
+    m_ir_list->gather_methods(lmethod);
+  }
+}

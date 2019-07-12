@@ -297,7 +297,7 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   auto outline_helper_code = outline_helper_method->get_code();
   EXPECT_CODE_EQ(expected_outlined_code.get(), outline_helper_code);
 
-  outline_helper_code->build_cfg();
+  outline_helper_code->build_cfg(false);
   auto& outline_helper_cfg = outline_helper_code->cfg();
   outline_helper_cfg.calculate_exit_block();
 

@@ -44,53 +44,54 @@ TEST_F(PreVerify, ConstantPropagation) {
     IRCode* code = new IRCode(meth);
     ASSERT_NE(code, nullptr);
     code->build_cfg(/* editable */ true);
+    auto& cfg = code->cfg();
     bool has_if = false;
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s", SHOW(meth));
-      TRACE(CONSTP, 1, "%s", SHOW(code));
+      TRACE(CONSTP, 1, "%s", SHOW(cfg));
     }
 
     if (meth->get_name()->str().find("overflow") == std::string::npos) {
-      EXPECT_EQ(1, count_ifs(code->cfg()));
+      EXPECT_EQ(1, count_ifs(cfg));
     }
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_ADD_INT_LIT8));
     }
     if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_RSUB_INT_LIT8));
     }
     if (meth->get_name()->str().find("multiply_lit_const") !=
         std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_MUL_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_MUL_INT_LIT8));
     }
     if (meth->get_name()->str().find("multiply_large_lit_const") !=
         std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_MUL_INT_LIT16));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_MUL_INT_LIT16));
     }
     if (meth->get_name()->str().find("shl_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_SHL_INT_LIT8));
     }
     if (meth->get_name()->str().find("if_shr_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_SHR_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_SHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("ushr_lit_const") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_USHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("modulo_3") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_REM_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_REM_INT_LIT8));
     }
     if (meth->get_name()->str().find("truncating_left_shift") !=
         std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_SHL_INT_LIT8));
     }
     if (meth->get_name()->str().find("ushr_neg_val") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_USHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("div_by_zero") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_DIV_INT));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_DIV_INT));
     }
     if (meth->get_name()->str().find("div_by_two") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_DIV_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_DIV_INT_LIT8));
     }
     code->clear_cfg();
   }
@@ -107,54 +108,55 @@ TEST_F(PostVerify, ConstantPropagation) {
     IRCode* code = new IRCode(meth);
     EXPECT_NE(code, nullptr);
     code->build_cfg(/* editable */ true);
+    auto& cfg = code->cfg();
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
       TRACE(CONSTP, 1, "%s", SHOW(meth));
-      TRACE(CONSTP, 1, "%s", SHOW(code));
+      TRACE(CONSTP, 1, "%s", SHOW(cfg));
     }
 
     EXPECT_EQ(0, count_ifs(code->cfg()));
     if (meth->get_name()->str().find("overflow") != std::string::npos) {
       // make sure we don't fold overflow at compile time
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_ADD_INT_LIT8));
     }
     if (meth->get_name()->str().find("plus_one") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_ADD_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_ADD_INT_LIT8));
     }
     if (meth->get_name()->str().find("lit_minus") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_RSUB_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_RSUB_INT_LIT8));
     }
     if (meth->get_name()->str().find("multiply_lit_const") !=
         std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_MUL_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_MUL_INT_LIT8));
     }
     if (meth->get_name()->str().find("multiply_large_lit_const") !=
         std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_MUL_INT_LIT16));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_MUL_INT_LIT16));
     }
     if (meth->get_name()->str().find("shl_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_SHL_INT_LIT8));
     }
     if (meth->get_name()->str().find("if_shr_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_SHR_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_SHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("ushr_lit_const") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_USHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("modulo_3") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_REM_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_REM_INT_LIT8));
     }
     if (meth->get_name()->str().find("truncating_left_shift") !=
         std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_SHL_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_SHL_INT_LIT8));
     }
     if (meth->get_name()->str().find("ushr_neg_val") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_USHR_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_USHR_INT_LIT8));
     }
     if (meth->get_name()->str().find("div_by_zero") != std::string::npos) {
-      EXPECT_EQ(1, count_ops(code->cfg(), OPCODE_DIV_INT));
+      EXPECT_EQ(1, count_ops(cfg, OPCODE_DIV_INT));
     }
     if (meth->get_name()->str().find("div_by_two") != std::string::npos) {
-      EXPECT_EQ(0, count_ops(code->cfg(), OPCODE_DIV_INT_LIT8));
+      EXPECT_EQ(0, count_ops(cfg, OPCODE_DIV_INT_LIT8));
     }
     code->clear_cfg();
   }
