@@ -17,9 +17,11 @@ class DexdumpSymbolicator(object):
 
     LINE_REGEX = re.compile(r"(?P<prefix>0x[0-9a-f]+ line=)(?P<lineno>\d+)")
 
+    # METHOD_CLS_HDR_REGEX captures both method and field headers in a class
     METHOD_CLS_HDR_REGEX = re.compile(
         r"#\d+\s+:\s+\(in L(?P<class>[A-Za-z][0-9A-Za-z]*\/[0-9A-Za-z_$\/]+);\)"
     )
+    # METHOD_REGEX captures both method and field names in a class
     METHOD_REGEX = re.compile(r"name\s+:\s+\'(?P<method>[<A-Za-z][>A-Za-z0-9_$]*)\'")
 
     CLS_CHUNK_HDR_REGEX = re.compile(r"  [A-Z]")
@@ -36,7 +38,7 @@ class DexdumpSymbolicator(object):
         m = matchobj.group("class")
         cls = m.replace("/", ".")
         if cls in self.symbol_maps.class_map:
-            return "L%s;" % self.symbol_maps.class_map[cls][0].replace(".", "/")
+            return "L%s;" % self.symbol_maps.class_map[cls].origin_class.replace(".", "/")
         return "L%s;" % m
 
     def line_replacer(self, matchobj):
@@ -52,12 +54,15 @@ class DexdumpSymbolicator(object):
         if self.current_class is not None:
             cls = self.current_class.replace("/", ".")
             if cls in self.symbol_maps.class_map:
+                left, _sep, right = m.partition(": ")
                 if self.reading_methods:
-                    left, _sep, right = m.partition(": ")
                     method_name = matchobj.group("method")
-                    if method_name in self.symbol_maps.class_map[cls][1]:
-                        return left + _sep + self.symbol_maps.class_map[cls][1][method_name]
-
+                    if method_name in self.symbol_maps.class_map[cls].method_mapping:
+                        return left + _sep + self.symbol_maps.class_map[cls].method_mapping[method_name]
+                else:
+                    field_name = matchobj.group("method")
+                    if field_name in self.symbol_maps.class_map[cls].field_mapping:
+                        return left + _sep + self.symbol_maps.class_map[cls].field_mapping[field_name]
         return m
 
     def reset_state(self):

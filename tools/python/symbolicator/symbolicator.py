@@ -9,6 +9,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 import argparse
+import collections
 import io
 import logging
 import os
@@ -74,19 +75,24 @@ class SymbolMaps(object):
                     original, _sep, new = line.partition(" -> ")
                     if line[0] != " ":
                         new = new.strip()[:-1]
-                        # tuple(original class name, mapping of method names in this class)
-                        mapping[new] = (original, {})
+                        ClassMemberMapping = collections.namedtuple(
+                            'ClassMemberMapping',
+                            ['origin_class', 'method_mapping', 'field_mapping']
+                        )
+                        mapping[new] = ClassMemberMapping(original, {}, {})
                         current_class = new
                     else:
                         if current_class is None:
                             logging.error(
-                                "The method " + original
+                                "The member " + original
                                 + " , obfuscated as " + new
                                 + " does not belong to any class!"
                             )
                         original = original.strip()
                         if "(" in original and original[len(original) - 1] == ")":
-                            mapping[current_class][1][new.strip()] = original.split()[-1].split("(")[0]
+                            mapping[current_class].method_mapping[new.strip()] = original.split()[-1].split("(")[0]
+                        else:
+                            mapping[current_class].field_mapping[new.strip()] = original.split()[-1]
         return mapping
 
 
