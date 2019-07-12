@@ -200,7 +200,7 @@ Json::Value parse_config(const std::string& config_file) {
 /**
  * Dumping dex, IR meta data and entry file
  */
-void write_all_intermediate(const ConfigFiles& /* conf */,
+void write_all_intermediate(const ConfigFiles& conf,
                             const std::string& output_ir_dir,
                             const RedexOptions& redex_options,
                             DexStoresVector& stores,
@@ -209,8 +209,8 @@ void write_all_intermediate(const ConfigFiles& /* conf */,
   redex_options.serialize(entry_data);
   entry_data["dex_list"] = Json::arrayValue;
   write_ir_meta(output_ir_dir, stores);
-  write_intermediate_dex(redex_options, ConfigFiles(Json::nullValue),
-                         output_ir_dir, stores, entry_data["dex_list"]);
+  write_intermediate_dex(redex_options, conf, output_ir_dir, stores,
+                         entry_data["dex_list"]);
   write_entry_file(output_ir_dir, entry_data);
 }
 
