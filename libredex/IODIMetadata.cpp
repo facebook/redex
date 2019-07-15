@@ -316,6 +316,14 @@ void IODIMetadata::write(
   if (iodi_metadata_filename.empty()) {
     return;
   }
+  std::ofstream ofs(iodi_metadata_filename.c_str(),
+                    std::ofstream::out | std::ofstream::trunc);
+  write(ofs, method_to_id);
+}
+
+void IODIMetadata::write(
+    std::ostream& ofs,
+    const std::unordered_map<DexMethod*, uint64_t>& method_to_id) {
   /*
    * Binary file format
    * {
@@ -348,21 +356,21 @@ void IODIMetadata::write(
    *  pc: uint16_t
    * }
    */
-  if (iodi_metadata_filename.empty()) {
-    return;
-  }
-  std::ofstream ofs(iodi_metadata_filename.c_str(),
-                    std::ofstream::out | std::ofstream::trunc);
   struct __attribute__((__packed__)) Header {
     uint32_t magic;
     uint32_t version;
     uint32_t single_count;
     uint32_t dup_count;
+  } header = {
+      .magic = 0xfaceb001,
+      .version = 1,
+      .single_count = 0,
+      .dup_count = 0,
   };
-  ofs.seekp(sizeof(Header));
+  ofs.write((const char*)&header, sizeof(Header));
+
   uint32_t single_count = 0;
   uint32_t dup_count = 0;
-
   std::ostringstream dofs;
   struct __attribute__((__packed__)) SingleEntryHeader {
     uint16_t klen;
@@ -454,11 +462,8 @@ void IODIMetadata::write(
   ofs << dofs.str();
   // Rewind and write the header now that we know single/dup counts
   ofs.seekp(0);
-  Header header = {.magic = 0xfaceb001,
-                   .version = 1,
-                   // Will rewrite the header later
-                   .single_count = single_count,
-                   .dup_count = dup_count};
+  header.single_count = single_count;
+  header.dup_count = dup_count;
   ofs.write((const char*)&header, sizeof(Header));
   TRACE(IODI, 1,
         "[IODI] Emitted %u singles, %u duplicates, ignored %u duplicates."
