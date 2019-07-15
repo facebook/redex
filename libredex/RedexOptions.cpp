@@ -69,8 +69,6 @@ DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
     return DebugInfoKind::NoPositions;
   } else if (raw_kind == "iodi") {
     return DebugInfoKind::InstructionOffsets;
-  } else if (raw_kind == "iodi_per_arity") {
-    return DebugInfoKind::InstructionOffsetsPerArity;
   } else {
     std::ostringstream os;
     bool first{true};
@@ -97,14 +95,11 @@ std::string debug_info_kind_to_string(const DebugInfoKind& kind) {
     return "no_positions";
   case DebugInfoKind::InstructionOffsets:
     return "iodi";
-  case DebugInfoKind::InstructionOffsetsPerArity:
-    return "iodi_per_arity";
   case DebugInfoKind::Size:
     always_assert_log(false, "DebugInfoKind::Size should not be used");
   }
 }
 
 bool is_iodi(const DebugInfoKind& kind) {
-  return kind == DebugInfoKind::InstructionOffsets ||
-         kind == DebugInfoKind::InstructionOffsetsPerArity;
+  return kind == DebugInfoKind::InstructionOffsets;
 }

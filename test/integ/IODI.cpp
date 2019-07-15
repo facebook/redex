@@ -53,7 +53,7 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make("tmp"));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata(false);
+  IODIMetadata iodi_metadata;
   iodi_metadata.mark_methods(stores);
 
   Json::Value conf_obj = Json::nullValue;
@@ -71,7 +71,7 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
                    false, /* normal_primary_dex */
                    0,
                    0,
-                   DebugInfoKind::InstructionOffsetsPerArity,
+                   DebugInfoKind::InstructionOffsets,
                    &iodi_metadata,
                    dummy_cfg,
                    pos_mapper.get(),

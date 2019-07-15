@@ -92,7 +92,7 @@ class DexdumpSymbolicator(object):
                     qualified_method = (
                         self.current_class.replace("/", ".") + "." + current_method
                     )
-                    iodi_map = self.symbol_maps.iodi_metadata.collision_free
+                    iodi_map = self.symbol_maps.iodi_metadata.entries
                     if qualified_method in iodi_map:
                         self.current_method_id = iodi_map[qualified_method]
                 elif self.current_method_id is not None:

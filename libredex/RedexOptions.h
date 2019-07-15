@@ -24,11 +24,9 @@ enum class DebugInfoKind : uint32_t {
   PerMethodDebug,
   // This will cause us not to emit a debug_info_item for any method.
   NoPositions,
-  // This will cause us not to emit single debug_info_item per dex.
-  InstructionOffsets,
   // This will cause us to emit just a few debug_info_items per dex, one for
   // each method parameter arity.
-  InstructionOffsetsPerArity,
+  InstructionOffsets,
   Size,
 };
 

@@ -876,18 +876,13 @@ void redex_backend(const PassManager& manager,
 
   auto dik = redex_options.debug_info_kind;
   bool needs_addresses = dik == DebugInfoKind::NoPositions || is_iodi(dik);
-  bool iodi_enable_overloaded_methods =
-      json_cfg.get("iodi_enable_overloaded_methods", false);
-
-  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s",
-        iodi_enable_overloaded_methods ? "yes" : "no");
 
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
       dik == DebugInfoKind::NoCustomSymbolication ? ""
                                                   : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);
+  IODIMetadata iodi_metadata;
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -927,11 +922,6 @@ void redex_backend(const PassManager& manager,
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
-  }
-
-  if (is_iodi(dik)) {
-    Timer t("Compute IODI caller metadata");
-    iodi_metadata.mark_callers();
   }
 
   {

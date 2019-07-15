@@ -59,7 +59,7 @@ class SymbolMaps(object):
             self.iodi_metadata = IODIMetadata(symbol_files.iodi_metadata)
             logging.info(
                 "Unpacked "
-                + str(len(self.iodi_metadata.collision_free))
+                + str(len(self.iodi_metadata.entries))
                 + " methods from iodi metadata"
             )
         else:

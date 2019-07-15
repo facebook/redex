@@ -1160,7 +1160,6 @@ inline std::unique_ptr<DexDebugInstruction> create_line_entry(int8_t line,
 
 uint32_t emit_instruction_offset_debug_info(
     DexOutputIdx* dodx,
-    bool per_arity,
     PositionMapper* pos_mapper,
     std::vector<CodeItemEmit>& code_items,
     IODIMetadata& iodi_metadata,
@@ -1177,9 +1176,6 @@ uint32_t emit_instruction_offset_debug_info(
   // 3) Tie all code items back to debug program emitted in (2) and emit
   //    any normal debug info for any methods that can't use IODI (either due
   //    to being too big or being unsupported)
-  //
-  // If per_arity is false then all the "of N params" are replaced with a
-  // calculated max param size.
   struct MethodKey {
     const DexMethod* method;
     uint32_t size;
@@ -1199,7 +1195,6 @@ uint32_t emit_instruction_offset_debug_info(
   using DebugSize = uint32_t;
   using DebugMethodMap = std::map<MethodKey, DebugSize, Compare>;
   // 1)
-  uint32_t max_param = 0;
   std::map<uint32_t, DebugMethodMap> param_to_sizes;
   std::unordered_map<const DexMethod*, DebugMetadata> method_to_debug_meta;
   // We need this to calculate the size of normal debug programs for each
@@ -1215,13 +1210,12 @@ uint32_t emit_instruction_offset_debug_info(
     }
     dex_code_item* dci = it.code_item;
     DexMethod* method = it.method;
-    uint32_t real_param_size = method->get_proto()->get_args()->size();
+    uint32_t param_size = method->get_proto()->get_args()->size();
     // We still want to fill in pos_mapper and code_debug_map, so run the
     // usual code to emit debug info. We cache this and use it later if
     // it turns out we want to emit normal debug info for a given method.
-    DebugMetadata metadata =
-        calculate_debug_metadata(dbg_item, dc, it.code_item, pos_mapper,
-                                 real_param_size, code_debug_map);
+    DebugMetadata metadata = calculate_debug_metadata(
+        dbg_item, dc, it.code_item, pos_mapper, param_size, code_debug_map);
 
     int debug_size =
         emit_debug_info_for_metadata(dodx, metadata, tmp, 0, false);
@@ -1230,21 +1224,17 @@ uint32_t emit_instruction_offset_debug_info(
     if (!iodi_metadata.can_safely_use_iodi(method)) {
       continue;
     }
-    uint32_t param_size = per_arity ? real_param_size : 0;
     auto res = param_to_sizes[param_size].emplace(MethodKey{method, dc->size()},
                                                   debug_size);
     always_assert_log(res.second, "Failed to insert %s, %d pair", SHOW(method),
                       dc->size());
-    if (real_param_size > max_param) {
-      max_param = real_param_size;
-    }
   }
   free((void*)tmp);
   // 2)
   std::unordered_map<uint32_t, std::map<uint32_t, uint32_t>> param_size_to_oset;
   uint32_t initial_offset = offset;
   for (auto& pts : param_to_sizes) {
-    auto param_size = per_arity ? pts.first : max_param;
+    auto param_size = pts.first;
     // 2.1) We determine the methods to use IODI we go through two filtering
     // phases:
     //   2.1.1) Filter out methods that will cause an OOM in dexlayout on
@@ -1588,8 +1578,7 @@ uint32_t emit_instruction_offset_debug_info(
     if (iodi_metadata.can_safely_use_iodi(method)) {
       // Here we sanity check to make sure that all IODI programs are at least
       // as long as they need to be.
-      uint32_t param_size =
-          per_arity ? it.method->get_proto()->get_args()->size() : max_param;
+      uint32_t param_size = it.method->get_proto()->get_args()->size();
       auto size_offset_it = param_size_to_oset.find(param_size);
       always_assert_log(size_offset_it != size_offset_end,
                         "Expected to find param to offset: %s", SHOW(method));
@@ -1619,14 +1608,10 @@ uint32_t emit_instruction_offset_debug_info(
 void DexOutput::generate_debug_items() {
   uint32_t dbg_start = m_offset;
   int dbgcount = 0;
-  bool per_arity =
-      m_debug_info_kind == DebugInfoKind::InstructionOffsetsPerArity;
   bool emit_positions = m_debug_info_kind != DebugInfoKind::NoPositions;
-  bool use_iodi =
-      m_debug_info_kind == DebugInfoKind::InstructionOffsets || per_arity;
+  bool use_iodi = m_debug_info_kind == DebugInfoKind::InstructionOffsets;
   if (use_iodi && m_iodi_metadata) {
     m_offset += emit_instruction_offset_debug_info(dodx,
-                                                   per_arity,
                                                    m_pos_mapper,
                                                    m_code_item_emits,
                                                    *m_iodi_metadata,

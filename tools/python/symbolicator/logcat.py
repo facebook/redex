@@ -33,7 +33,7 @@ class LogcatSymbolicator(object):
         lineno = int(matchobj.group("lineno"))
         cls = matchobj.group("class")
         if self.symbol_maps.iodi_metadata is not None:
-            iodi_map = self.symbol_maps.iodi_metadata.collision_free
+            iodi_map = self.symbol_maps.iodi_metadata.entries
             qualified_name = cls + "." + matchobj.group("method")
             if qualified_name in iodi_map:
                 method_id = iodi_map[qualified_name]
