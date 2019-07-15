@@ -211,6 +211,8 @@ struct CodeItemEmit {
   CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci);
 };
 
+struct DexOutputTestHelper;
+
 class DexOutput {
  public:
   dex_stats_t m_stats;
@@ -288,6 +290,8 @@ class DexOutput {
   void emit_name_based_locators();
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
+
+  friend struct DexOutputTestHelper;
 
  public:
   DexOutput(const char* path,
