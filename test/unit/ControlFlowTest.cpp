@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
@@ -22,6 +23,7 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
 } // namespace cfg
 
 using namespace cfg;
+using namespace dex_asm;
 
 TEST(ControlFlow, findExitBlocks) {
   {
@@ -1649,6 +1651,35 @@ TEST(ControlFlow, add_branch) {
 
       (:tru)
       (const v0 1)
+      (return v0)
+    )
+  )");
+  EXPECT_CODE_EQ(expected.get(), code.get());
+}
+
+/**
+ * Construct new code but keeping param loading instructions.
+ */
+TEST(ControlFlow, test_first_non_param_loading_insn) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (return v1)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+  auto entry_block = cfg.entry_block();
+
+  auto it = entry_block->get_first_non_param_loading_insn();
+  auto non_param = entry_block->to_cfg_instruction_iterator(it);
+  entry_block->insert_before(non_param, {dasm(OPCODE_RETURN, {0_v})});
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
       (return v0)
     )
   )");

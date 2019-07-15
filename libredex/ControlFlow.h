@@ -245,6 +245,9 @@ class Block final {
   IRList::iterator get_last_insn();
   // return an iterator to the first MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_first_insn();
+  // return an iterator to the first non-param-loading MFLOW_OPCODE, or end() if
+  // there are none.
+  IRList::iterator get_first_non_param_loading_insn();
 
   // including move-result-pseudo
   bool starts_with_move_result();

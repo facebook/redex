@@ -316,6 +316,18 @@ IRList::iterator Block::get_first_insn() {
   return end();
 }
 
+IRList::iterator Block::get_first_non_param_loading_insn() {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (!opcode::is_load_param(it->insn->opcode())) {
+      return it;
+    }
+  }
+  return end();
+}
+
 bool Block::starts_with_move_result() {
   auto first_it = get_first_insn();
   if (first_it != end()) {
