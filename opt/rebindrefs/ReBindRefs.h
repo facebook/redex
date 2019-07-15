@@ -32,7 +32,7 @@ class ReBindRefsPass : public Pass {
 
   void bind_config() override {
     // Allowing resolving method ref to an external one.
-    bind("rebind_to_external", true, m_rebind_to_external);
+    bind("rebind_to_external", false, m_rebind_to_external);
   }
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

@@ -32,7 +32,7 @@ class ResolveRefsPass : public Pass {
 
   void bind_config() override {
     // Allowing resolving method ref to an external one.
-    bind("resolve_to_external", true, m_resolve_to_external);
+    bind("resolve_to_external", false, m_resolve_to_external);
   }
 
  private:
