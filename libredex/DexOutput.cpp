@@ -1520,7 +1520,9 @@ uint32_t emit_instruction_offset_debug_info(
     // infra about these large methods
     size_t num_big = 0;
     for (auto big = sizes.begin(); big != best_iter; big++) {
-      iodi_metadata.mark_method_huge(big->first.method, big->first.size);
+      iodi_metadata.mark_method_huge(big->first.method);
+      TRACE(IODI, 3, "[IODI] %s is too large to benefit from IODI: %u vs %u",
+            SHOW(big->first.method), big->first.size, big->second);
       num_big += 1;
     }
     size_t num_small_enough = sizes.size() - num_big;
@@ -1553,8 +1555,8 @@ uint32_t emit_instruction_offset_debug_info(
     auto& size_to_offset = param_size_to_oset[param_size];
     for (auto& bucket : buckets) {
       auto bucket_size = bucket.first;
-      TRACE(IODI, 3, "  - %u methods in bucket size %u", bucket.second,
-            bucket_size);
+      TRACE(IODI, 3, "  - %u methods in bucket size %u @ %lu", bucket.second,
+            bucket_size, offset);
       size_to_offset.emplace(bucket_size, offset);
       std::vector<std::unique_ptr<DexDebugInstruction>> dbgops;
       if (bucket_size > 0) {

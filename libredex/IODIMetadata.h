@@ -128,7 +128,7 @@ class IODIMetadata {
 
   // This is called while lowering to dex to note that a method has been
   // determined to be too big for a given dex.
-  void mark_method_huge(const DexMethod* method, uint32_t size);
+  void mark_method_huge(const DexMethod* method);
 
   // Returns whether we can symbolicate using IODI for the given method.
   bool can_safely_use_iodi(const DexMethod* method) const;

@@ -112,10 +112,8 @@ void IODIMetadata::mark_methods(DexStoresVector& scope) {
   }
 }
 
-void IODIMetadata::mark_method_huge(const DexMethod* method, uint32_t size) {
+void IODIMetadata::mark_method_huge(const DexMethod* method) {
   m_huge_methods.insert(method);
-  TRACE(IODI, 3, "[IODI] %s is too large to benefit from IODI: %u",
-        SHOW(method), size);
 }
 
 // Returns whether we can symbolicate using IODI for the given method.
