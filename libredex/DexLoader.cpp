@@ -37,6 +37,7 @@ class DexLoader {
   DexClasses load_dex(const char* location,
                       dex_stats_t* stats,
                       bool support_dex_v37);
+  DexClasses load_dex(const dex_header* hdr, dex_stats_t* stats);
   void load_dex_class(int num);
   void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
 };
@@ -61,6 +62,10 @@ static void validate_dex_header(const dex_header* dh,
     "Reported size in header (%z) does not match file size (%u)\n",
     dexsize,
     dh->file_size);
+  auto off = (uint64_t)dh->class_defs_off;
+  auto limit = off + dh->class_defs_size * sizeof(dex_class_def);
+  always_assert_log(off < dexsize, "class_defs_off out of range");
+  always_assert_log(limit <= dexsize, "invalid class_defs_size");
 }
 
 struct class_load_work {
@@ -94,6 +99,9 @@ static std::vector<std::exception_ptr> exc_reducer(
 }
 
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
+  if (!stats) {
+    return;
+  }
   stats->num_types += dh->type_ids_size;
   stats->num_classes += dh->class_defs_size;
   stats->num_method_refs += dh->method_ids_size;
@@ -297,18 +305,19 @@ const dex_header* DexLoader::get_dex_header(const char* location) {
 DexClasses DexLoader::load_dex(const char* location,
                                dex_stats_t* stats,
                                bool support_dex_v37) {
-  auto dh = get_dex_header(location);
+  const dex_header* dh = get_dex_header(location);
   validate_dex_header(dh, m_file.size(), support_dex_v37);
+  return load_dex(dh, stats);
+}
+
+DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
   m_idx = new DexIdx(dh);
   auto off = (uint64_t)dh->class_defs_off;
-  auto limit = off + dh->class_defs_size * sizeof(dex_class_def);
-  always_assert_log(off < m_file.size(), "class_defs_off out of range");
-  always_assert_log(limit <= m_file.size(), "invalid class_defs_size");
   m_class_defs =
-      reinterpret_cast<const dex_class_def*>(m_file.const_data() + off);
+      reinterpret_cast<const dex_class_def*>((const uint8_t*)dh + off);
   DexClasses classes(dh->class_defs_size);
   m_classes = &classes;
 
@@ -361,6 +370,17 @@ DexClasses load_classes_from_dex(const char* location,
   TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
   auto classes = dl.load_dex(location, stats, support_dex_v37);
+  if (balloon) {
+    balloon_all(classes);
+  }
+  return classes;
+}
+
+DexClasses load_classes_from_dex(const dex_header* dh,
+                                 const char* location,
+                                 bool balloon) {
+  DexLoader dl(location);
+  auto classes = dl.load_dex(dh, nullptr);
   if (balloon) {
     balloon_all(classes);
   }
