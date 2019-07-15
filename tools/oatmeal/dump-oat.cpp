@@ -38,6 +38,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <sys/stat.h>
 #include <vector>
 
 #define PACK __attribute__((packed))
