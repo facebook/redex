@@ -139,8 +139,10 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
   return entries;
 }
 
-DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
+DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
+    : m_source_checksum(idx->get_checksum()), m_source_offset(offset) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
+  const uint8_t* base_encdata = encdata;
   uint32_t line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
   while (paramcount--) {
@@ -157,6 +159,7 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
     insns.emplace_back(dbgp);
   }
   m_dbg_entries = eval_debug_instructions(this, insns, line_start);
+  m_on_disk_size = encdata - base_encdata;
 }
 
 uint32_t DexDebugItem::get_line_start() const {

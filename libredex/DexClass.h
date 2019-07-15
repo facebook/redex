@@ -616,6 +616,9 @@ struct DexDebugEntry final {
 
 class DexDebugItem {
   std::vector<DexDebugEntry> m_dbg_entries;
+  uint32_t m_on_disk_size{0};
+  uint32_t m_source_checksum{0};
+  uint32_t m_source_offset{0};
   DexDebugItem(DexIdx* idx, uint32_t offset);
 
  public:
@@ -626,10 +629,14 @@ class DexDebugItem {
 
  public:
   std::vector<DexDebugEntry>& get_entries() { return m_dbg_entries; }
+  const auto& get_entries() const { return m_dbg_entries; }
   void set_entries(std::vector<DexDebugEntry> dbg_entries) {
     m_dbg_entries.swap(dbg_entries);
   }
   uint32_t get_line_start() const;
+  uint32_t get_on_disk_size() const { return m_on_disk_size; }
+  uint32_t get_source_checksum() const { return m_source_checksum; }
+  uint32_t get_source_offset() const { return m_source_offset; }
   void bind_positions(DexMethod* method, DexString* file);
 
   /* Returns number of bytes encoded, *output has no alignment requirements */
