@@ -1790,13 +1790,54 @@ void DexOutput::finalize_header() {
 
 namespace {
 
-void write_method_mapping(
-  const std::string& filename,
-  const DexOutputIdx* dodx,
-  const DexClasses* classes,
-  uint8_t* dex_signature,
-  std::unordered_map<DexMethod*, uint64_t>* method_to_id
-) {
+void compute_method_to_id_map(
+    DexOutputIdx* dodx,
+    const DexClasses* classes,
+    uint8_t* dex_signature,
+    std::unordered_map<DexMethod*, uint64_t>* method_to_id) {
+  if (!method_to_id) {
+    return;
+  }
+
+  std::unordered_set<DexClass*> dex_classes(classes->begin(), classes->end());
+  for (auto& it : dodx->method_to_idx()) {
+    auto method = it.first;
+    auto idx = it.second;
+
+    auto const& typecls = method->get_class();
+    auto const& cls = type_class(typecls);
+    if (dex_classes.count(cls) == 0) {
+      continue;
+    }
+
+    auto resolved_method = [&]() -> DexMethodRef* {
+      if (cls) {
+        auto resm = resolve_method(method,
+                                   is_interface(cls) ? MethodSearch::Interface
+                                                     : MethodSearch::Any);
+        if (resm) return resm;
+      }
+      return method;
+    }();
+
+    // Turns out, the checksum can change on-device. (damn you dexopt)
+    // The signature, however, is never recomputed. Let's log the top 4 bytes,
+    // in little-endian (since that's faster to compute on-device).
+    uint32_t signature = *reinterpret_cast<uint32_t*>(dex_signature);
+
+    if (resolved_method == method) {
+      // Not recording it if method reference is not referring to
+      // concrete method, otherwise will have key overlapped.
+      auto dexmethod = static_cast<DexMethod*>(resolved_method);
+      (*method_to_id)[dexmethod] = ((uint64_t)idx << 32) | (uint64_t)signature;
+    }
+  }
+}
+
+void write_method_mapping(const std::string& filename,
+                          const DexOutputIdx* dodx,
+                          const DexClasses* classes,
+                          uint8_t* dex_signature) {
   always_assert(!filename.empty());
   FILE* fd = fopen(filename.c_str(), "a");
   assert_log(fd, "Can't open method mapping file %s: %s\n",
@@ -1853,22 +1894,10 @@ void write_method_mapping(
     auto end = deobf_method.rfind(':');
     auto deobf_method_name = deobf_method.substr(begin, end-begin);
 
-    //
     // Turns out, the checksum can change on-device. (damn you dexopt)
     // The signature, however, is never recomputed. Let's log the top 4 bytes,
     // in little-endian (since that's faster to compute on-device).
-    //
     uint32_t signature = *reinterpret_cast<uint32_t*>(dex_signature);
-
-    if (method_to_id != nullptr) {
-      if (resolved_method == method) {
-        // Not recording it if method reference is not referring to
-        // concrete method, otherwise will have key overlapped.
-        auto dexmethod = static_cast<DexMethod*>(resolved_method);
-        (*method_to_id)[dexmethod] =
-            ((uint64_t)idx << 32) | (uint64_t)signature;
-      }
-    }
 
     fprintf(fd, "%u %u %s %s\n",
             idx,
@@ -2086,11 +2115,8 @@ void write_bytecode_offset_mapping(
 
 void DexOutput::write_symbol_files() {
   if (m_debug_info_kind != DebugInfoKind::NoCustomSymbolication) {
-    write_method_mapping(m_method_mapping_filename,
-                         dodx,
-                         m_classes,
-                         hdr.signature,
-                         m_method_to_id);
+    write_method_mapping(m_method_mapping_filename, dodx, m_classes,
+                         hdr.signature);
     write_class_mapping(m_class_mapping_filename, m_classes,
                         hdr.class_defs_size, hdr.signature);
     // XXX: should write_bytecode_offset_mapping be included here too?
@@ -2139,6 +2165,7 @@ void DexOutput::prepare(SortMode string_mode,
   generate_map();
   align_output();
   finalize_header();
+  compute_method_to_id_map(dodx, m_classes, hdr.signature, m_method_to_id);
 }
 
 void DexOutput::write() {
