@@ -110,19 +110,6 @@ struct Rebinder {
         m_pass_mgr(mgr),
         m_rebind_to_external(rebind_to_external) {}
 
-  bool is_resolved(IRInstruction* insn) {
-    always_assert(insn->has_method());
-    auto mref = insn->get_method();
-    if (mref->is_def() || references_external(mref)) {
-      return true;
-    }
-    auto real_ref = resolve_method(mref, opcode_to_search(insn));
-    if (!real_ref || real_ref == mref || real_ref->is_external()) {
-      return true;
-    }
-    return false;
-  }
-
   void rewrite_refs() {
     walk::opcodes(m_scope,
                   [](DexMethod*) { return true; },
@@ -136,10 +123,7 @@ struct Rebinder {
                     case OPCODE_INVOKE_SUPER:
                     case OPCODE_INVOKE_INTERFACE:
                     case OPCODE_INVOKE_STATIC: {
-                      always_assert_log(
-                          is_resolved(insn),
-                          "[rebind] Unresolved method reference in %s\n",
-                          SHOW(insn));
+                      // Do nothing for now.
                       break;
                     }
                     default:
