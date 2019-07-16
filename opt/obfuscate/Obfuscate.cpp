@@ -205,6 +205,7 @@ void obfuscate(Scope& scope,
 
       // Make sure to bind the new names otherwise not all generators will
       // assign names to the members
+      field_name_generator.bind_names();
       static_name_generator.bind_names();
     }
 
@@ -237,6 +238,8 @@ void obfuscate(Scope& scope,
               method_name_manager,
               true),
           method_name_manager);
+
+      simple_name_gen.bind_names();
     }
   }
   field_name_manager.print_elements();

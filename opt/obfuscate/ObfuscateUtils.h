@@ -320,65 +320,206 @@ public:
   }
 };
 
+// We define various "biased" comparators: We re-order fields and methods
+// to place those which are "similar" close to each other, e.g. sharing the
+// same static value/proto/type/access.
+// This increases compressibility of associated metadata structures.
+// The re-ordering happens before renaming, after which all tables are again in
+// sorted-by-renamed-names order, while the underlying items got reshuffled.
+struct proto_access_biased_dexmethods_comparator {
+  bool operator()(const DexMethod* a, const DexMethod* b) const {
+    // First checking proto, then access, yields the biggest compressed wins
+    // for many apps.
+    if (a->get_proto() != b->get_proto()) {
+      return compare_dexprotos(a->get_proto(), b->get_proto());
+    }
+    if (a->get_access() != b->get_access()) {
+      return a->get_access() < b->get_access();
+    }
+    return compare_dexmethods(a, b);
+  }
+};
+
 class MethodNameGenerator : public SimpleNameGenerator<DexMethod*> {
-public:
+ private:
+  // Use ordered maps here to get deterministic names, and to sort for best
+  // compressibility
+  std::map<DexMethod*,
+           DexMethodWrapper*,
+           proto_access_biased_dexmethods_comparator>
+      methods;
+
+ public:
   MethodNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
       std::unordered_set<std::string>& used_ids) :
     SimpleNameGenerator<DexMethod*>(ids_to_avoid, used_ids) { }
 
   void find_new_name(DexMethodWrapper* wrap) override {
-    if (wrap->is_modified()) return;
-    do {
-      std::string new_name(this->next_name());
-      wrap->set_name(new_name);
-      this->used_ids.insert(new_name);
-      TRACE(OBFUSCATE, 3,
-            "\tTrying method name %s for %s",
+    DexMethod* method = wrap->get();
+    methods.emplace(method, wrap);
+  }
+
+  void bind_names() override {
+    for (auto p : methods) {
+      auto wrap = p.second;
+      if (wrap->is_modified()) return;
+      do {
+        std::string new_name(this->next_name());
+        wrap->set_name(new_name);
+        this->used_ids.insert(new_name);
+        TRACE(OBFUSCATE, 3,
+              "\tTrying method name %s for %s",
+              wrap->get_name(),
+              SHOW(wrap->get()));
+      } while (DexMethod::get_method(
+          wrap->get()->get_class(),
+          DexString::make_string(wrap->get_name()),
+          wrap->get()->get_proto()) != nullptr);
+      TRACE(OBFUSCATE,
+            2,
+            "\tIntending to rename method %s (%s) to %s ids to avoid %d",
+            SHOW(wrap->get()),
+            SHOW(wrap->get()->get_name()),
             wrap->get_name(),
-            SHOW(wrap->get()));
-    } while (DexMethod::get_method(
-        wrap->get()->get_class(),
-        DexString::make_string(wrap->get_name()),
-        wrap->get()->get_proto()) != nullptr);
-    TRACE(OBFUSCATE,
-          2,
-          "\tIntending to rename method %s (%s) to %s ids to avoid %d",
-          SHOW(wrap->get()),
-          SHOW(wrap->get()->get_name()),
-          wrap->get_name(),
-          this->ids_to_avoid.size());
-    // Keep spinning on a name until you find one that isn't used at all
+            this->ids_to_avoid.size());
+      // Keep spinning on a name until you find one that isn't used at all
+    }
+  }
+};
+
+struct access_type_biased_dexfields_comparator {
+  bool operator()(const DexField* a, const DexField* b) const {
+    // First checking access, then type, yields the biggest compressed wins
+    // for many apps.
+    if (a->get_access() != b->get_access()) {
+      return a->get_access() < b->get_access();
+    }
+    if (a->get_type() != b->get_type()) {
+      return compare_dextypes(a->get_type(), b->get_type());
+    }
+    return compare_dexfields(a, b);
+  }
+};
+
+// We sort static fields according to their static values. This reduces the
+// number of needed encoded static values for static fields, and it increases
+// the compressibility of associated metadata structures.
+struct static_value_biased_dexfields_comparator {
+  bool operator()(const DexField* a, const DexField* b) const {
+    auto eva = a->get_static_value();
+    auto evb = b->get_static_value();
+    always_assert(eva);
+    always_assert(evb);
+    always_assert(!eva->is_zero());
+    always_assert(!evb->is_zero());
+    // We are biasing the comparator to the static value --- its type,
+    // and then its actual value. If the type/value is indistinguishtable,
+    // we still fall back to a more basic comparator at the very end of this
+    // function, so that different fields are still properly distinguished.
+    if (eva->evtype() != evb->evtype()) {
+      return eva->evtype() < evb->evtype();
+    }
+    switch (eva->evtype()) {
+    case DEVT_STRING: {
+      auto evastring = static_cast<DexEncodedValueString*>(eva)->string();
+      auto evbstring = static_cast<DexEncodedValueString*>(evb)->string();
+      if (evastring != evbstring) {
+        return compare_dexstrings(evastring, evbstring);
+      }
+      break;
+    }
+    case DEVT_TYPE: {
+      auto evatype = static_cast<DexEncodedValueType*>(eva)->type();
+      auto evbtype = static_cast<DexEncodedValueType*>(evb)->type();
+      if (evatype != evbtype) {
+        return compare_dextypes(evatype, evbtype);
+      }
+      break;
+    }
+    case DEVT_FIELD: {
+      auto evafield = static_cast<DexEncodedValueField*>(eva)->field();
+      auto evbfield = static_cast<DexEncodedValueField*>(evb)->field();
+      if (evafield != evbfield) {
+        return compare_dexfields(evafield, evbfield);
+      }
+      break;
+    }
+    case DEVT_METHOD: {
+      auto evamethod = static_cast<DexEncodedValueMethod*>(eva)->method();
+      auto evbmethod = static_cast<DexEncodedValueMethod*>(evb)->method();
+      if (evamethod != evbmethod) {
+        return compare_dexmethods(evamethod, evbmethod);
+      }
+      break;
+    }
+    case DEVT_ARRAY: {
+      auto evaarray = static_cast<DexEncodedValueArray*>(eva);
+      auto evbarray = static_cast<DexEncodedValueArray*>(evb);
+      if (evaarray->is_static_val() != evbarray->is_static_val()) {
+        return evaarray->is_static_val() < evbarray->is_static_val();
+      }
+      auto evavalues = evaarray->evalues();
+      auto evbvalues = evbarray->evalues();
+      if (evavalues->size() != evbvalues->size()) {
+        return evavalues->size() < evbvalues->size();
+      }
+      // TODO: deep-inspect array, but likely little impact
+      break;
+    }
+    case DEVT_ANNOTATION:
+      // TODO: deep-inspect this, but doesn't seem to occur in practice
+      break;
+    default:
+      if (eva->value() != evb->value()) {
+        return eva->value() < evb->value();
+      }
+    }
+    return access_type_biased_dexfields_comparator()(a, b);
   }
 };
 
 class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
+ private:
+  // Use ordered maps here to get deterministic names, and to sort for best
+  // compressibility
+  std::map<DexField*, DexFieldWrapper*, access_type_biased_dexfields_comparator>
+      fields;
+
  public:
   FieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
       std::unordered_set<std::string>& used_ids) :
     SimpleNameGenerator<DexField*>(ids_to_avoid, used_ids) { }
 
   void find_new_name(DexFieldWrapper* wrap) override {
-    if (wrap->is_modified()) return;
-    do {
-      std::string new_name(this->next_name());
-      wrap->set_name(new_name);
-      this->used_ids.insert(new_name);
-      TRACE(OBFUSCATE, 2,
-            "\tTrying field name %s for %s",
-            wrap->get_name(),
-            SHOW(wrap->get()));
-    } while (DexField::get_field(
-        wrap->get()->get_class(),
-        DexString::make_string(wrap->get_name()),
-        wrap->get()->get_type()) != nullptr);
-    // Keep spinning on a name until you find one that isn't used at all
-    TRACE(OBFUSCATE,
-          2,
-          "\tIntending to rename elem %s (%s) (renamable %s) to %s",
-          SHOW(wrap->get()),
-          SHOW(wrap->get()->get_name()),
-          should_rename_elem(wrap->get()) ? "true" : "false",
-          wrap->get_name());
+    DexField* field = wrap->get();
+    fields.emplace(field, wrap);
+  }
+
+  void bind_names() override {
+    for (auto p : fields) {
+      auto wrap = p.second;
+      if (wrap->is_modified()) return;
+      do {
+        std::string new_name(this->next_name());
+        wrap->set_name(new_name);
+        this->used_ids.insert(new_name);
+        TRACE(OBFUSCATE, 2,
+              "\tTrying field name %s for %s",
+              wrap->get_name(),
+              SHOW(wrap->get()));
+      } while (DexField::get_field(
+          wrap->get()->get_class(),
+          DexString::make_string(wrap->get_name()),
+          wrap->get()->get_type()) != nullptr);
+      // Keep spinning on a name until you find one that isn't used at all
+      TRACE(OBFUSCATE,
+            2,
+            "\tIntending to rename elem %s (%s) (renamable %s) to %s",
+            SHOW(wrap->get()),
+            SHOW(wrap->get()->get_name()),
+            should_rename_elem(wrap->get()) ? "true" : "false",
+            wrap->get_name());
+    }
   }
 };
 
@@ -387,10 +528,14 @@ class FieldNameGenerator : public SimpleNameGenerator<DexField*> {
 // (for proper writing of dexes)
 class StaticFieldNameGenerator : public NameGenerator<DexField*> {
  private:
-  // Use ordered maps here to get deterministic names
-  std::map<DexField*, DexFieldWrapper*, dexfields_comparator> fields;
-  std::map<DexField*, DexFieldWrapper*, dexfields_comparator>
+  // Use ordered maps here to get deterministic names, and to sort for best
+  // compressibility
+  std::
+      map<DexField*, DexFieldWrapper*, static_value_biased_dexfields_comparator>
+          fields;
+  std::map<DexField*, DexFieldWrapper*, access_type_biased_dexfields_comparator>
       static_final_null_fields;
+
  public:
   StaticFieldNameGenerator(const std::unordered_set<std::string>& ids_to_avoid,
       std::unordered_set<std::string>& used_ids) :
@@ -398,7 +543,8 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
 
   void find_new_name(DexFieldWrapper* wrap) override {
     DexField* field = wrap->get();
-    if (field->get_static_value() == nullptr) {
+    auto ev = field->get_static_value();
+    if (ev == nullptr || ev->is_zero()) {
       static_final_null_fields.emplace(field, wrap);
     } else {
       fields.emplace(field, wrap);
