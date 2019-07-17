@@ -14,14 +14,16 @@ using namespace optimize_enums;
 
 namespace {
 
-const char* enum_season_name = "Lcom/facebook/redextest/Season;";
 const char* enum_usesvalueof_name = "Lcom/facebook/redextest/UsesValueOf;";
 const char* enum_usesvaluesmethod_name =
     "Lcom/facebook/redextest/UsesValuesMethod;";
+const char* enum_usesnothing_name = "Lcom/facebook/redextest/UsesNothing;";
 const char* enum_captured_name = "Lcom/facebook/redextest/Captured;";
 const char* enum_usedastypeclass_name =
     "Lcom/facebook/redextest/UsedAsTypeClass;";
 const char* enum_upcasted_name = "Lcom/facebook/redextest/Upcasted;";
+const char* enum_upcastedtoserializable_name =
+    "Lcom/facebook/redextest/UpcastedToSerializable;";
 
 bool has_valueof_method(DexType* enum_type) {
   auto proto = DexProto::get_proto(
@@ -45,45 +47,34 @@ bool has_values_field(DexType* enum_type) {
 }
 } // namespace
 
-TEST_F(PreVerify, transform) {
-  // Season class
-  auto enum_cls = find_class_named(classes, enum_season_name);
+/**
+ * Test that the generated methods `valueOf()` and `values()` are removed if
+ * safe.
+ */
+TEST_F(PostVerify, transform) {
+  // UsesValueOf class
+  auto enum_cls = find_class_named(classes, enum_usesvalueof_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
   EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_method(enum_cls->get_type()));
-  EXPECT_TRUE(has_values_field(enum_cls->get_type()));
-}
-
-/**
- * Test that the generated methods `valueOf()` and `values()` and the
- * generated field `$VALUES` are removed if safe.
- */
-TEST_F(PostVerify, transform) {
-  // Season class
-  auto enum_cls = find_class_named(classes, enum_season_name);
-  ASSERT_NE(enum_cls, nullptr);
-  // Season is removed completely thanks to `replace_enum_with_int`.
-  EXPECT_FALSE(is_enum(enum_cls));
-  EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
-  EXPECT_FALSE(has_values_method(enum_cls->get_type()));
-  EXPECT_FALSE(has_values_field(enum_cls->get_type()));
-
-  // UsesValueOf class
-  enum_cls = find_class_named(classes, enum_usesvalueof_name);
-  ASSERT_NE(enum_cls, nullptr);
-  EXPECT_TRUE(is_enum(enum_cls));
-  EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));
-  EXPECT_FALSE(has_values_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_field(enum_cls->get_type()));
 
   // UsesValuesMethod class
   enum_cls = find_class_named(classes, enum_usesvaluesmethod_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
-  EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
+  // EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_field(enum_cls->get_type()));
+
+  // UsesNothing class
+  enum_cls = find_class_named(classes, enum_usesnothing_name);
+  ASSERT_NE(enum_cls, nullptr);
+  EXPECT_TRUE(is_enum(enum_cls));
+  // EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
+  // EXPECT_FALSE(has_values_method(enum_cls->get_type()));
+  // EXPECT_FALSE(has_values_field(enum_cls->get_type()));
 
   // Captured class
   enum_cls = find_class_named(classes, enum_captured_name);
@@ -103,6 +94,14 @@ TEST_F(PostVerify, transform) {
 
   // Upcasted class
   enum_cls = find_class_named(classes, enum_upcasted_name);
+  ASSERT_NE(enum_cls, nullptr);
+  EXPECT_TRUE(is_enum(enum_cls));
+  EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));
+  EXPECT_TRUE(has_values_method(enum_cls->get_type()));
+  EXPECT_TRUE(has_values_field(enum_cls->get_type()));
+
+  // UpcastedToSerializable class
+  enum_cls = find_class_named(classes, enum_upcastedtoserializable_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
   EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));

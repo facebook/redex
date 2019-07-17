@@ -344,17 +344,20 @@ class OptimizeEnums {
              can_delete(cls) && cls->get_interfaces()->size() == 0;
     };
 
-    // TODO: Make parallel
-    walk::classes(m_scope, [&should_consider_enum, &analyzer](DexClass* cls) {
-      if (should_consider_enum(cls)) {
-        auto& dmethods = cls->get_dmethods();
-        auto valueof_mit = std::find_if(dmethods.begin(), dmethods.end(),
-                                        optimize_enums::is_enum_valueof);
-        auto values_mit = std::find_if(dmethods.begin(), dmethods.end(),
-                                       optimize_enums::is_enum_values);
-        analyzer.consider_enum_type(cls, *valueof_mit, *values_mit);
-      }
-    });
+    walk::parallel::classes(
+        m_scope, [&should_consider_enum, &analyzer](DexClass* cls) {
+          if (should_consider_enum(cls)) {
+            auto& dmethods = cls->get_dmethods();
+            auto valueof_mit = std::find_if(dmethods.begin(), dmethods.end(),
+                                            optimize_enums::is_enum_valueof);
+            auto values_mit = std::find_if(dmethods.begin(), dmethods.end(),
+                                           optimize_enums::is_enum_values);
+            if (valueof_mit != dmethods.end() && values_mit != dmethods.end()) {
+              analyzer.consider_enum_type(cls->get_type(), *valueof_mit,
+                                          *values_mit);
+            }
+          }
+        });
 
     m_stats.num_candidate_generated_methods =
         analyzer.num_candidate_enum_methods();

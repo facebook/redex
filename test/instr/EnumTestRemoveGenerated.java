@@ -11,23 +11,46 @@ import static org.fest.assertions.api.Assertions.assertThat;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
 import androidx.annotation.Nullable;
+import java.io.Serializable;
 
-enum Season { FALL, WINTER, SPRING, SUMMER }
-enum UsesValueOf { ONE, TWO }
-enum UsesValuesMethod { ONE, TWO }
-enum Captured { ONE, TWO }
-enum UsedAsTypeClass { ONE, TWO }
-enum Upcasted { ONE, TWO }
+enum UsesValueOf {
+  ONE, TWO;
+  public int otherField; /* prevent replace_enum_with_int */
+}
+enum UsesValuesMethod {
+  ONE, TWO;
+  public int otherField;
+}
+enum UsesNothing {
+  ONE, TWO;
+  public int otherField;
+}
+enum Captured {
+  ONE, TWO;
+  public int otherField;
+}
+enum UsedAsTypeClass {
+  ONE, TWO;
+  public int otherField;
+}
+enum Upcasted {
+  ONE, TWO;
+  public int otherField;
+}
+enum UpcastedToSerializable {
+  ONE, TWO;
+  public int otherField;
+}
 
  /* Test cases */
 public class EnumTestRemoveGenerated {
 
   private class CapturingClass {
-      Season s;
+      UsesValuesMethod s;
       Object obj;
 
-      // `Season` escapes as original type.
-      public void capture_as_self(Season arg) {
+      // `UsesValuesMethod` escapes as original type.
+      public void capture_as_self(UsesValuesMethod arg) {
         this.s = arg;
       }
 
@@ -37,9 +60,9 @@ public class EnumTestRemoveGenerated {
       }
   };
 
-  // `Season` is upcasted and used as type `Class`, but it does not escape
+  // `UsesValues` is upcasted and used as type `Class`, but it does not escape
   // the method.
-  private boolean upcast_locally(Season s) {
+  private boolean upcast_locally(UsesValuesMethod s) {
     switch ((int) (Math.random() * 2)) {
       case 0:
         return (Enum) s == null;
@@ -60,26 +83,34 @@ public class EnumTestRemoveGenerated {
     return s;
   }
 
+  private boolean upcast_to_serializable(Serializable s) {
+    return s == null;
+  }
+
   @Test
   public void generated_methods() {
     CapturingClass capturingClass = new CapturingClass();
-
-    upcast_locally(Season.SPRING);
-    capturingClass.capture_as_self(Season.FALL);
-
+    capturingClass.capture_as_self(UsesValuesMethod.ONE);
     capturingClass.capture_as_object(Captured.ONE);
+    upcast_locally(UsesValuesMethod.ONE);
     use_as_type_class(UsedAsTypeClass.ONE);
     return_type_enum(Upcasted.ONE);
+    upcast_to_serializable(UpcastedToSerializable.ONE);
 
-    assertThat(UsesValueOf.valueOf("ONE")).isEqualTo(UsesValueOf.ONE);
-    assertThat(UsesValuesMethod.values()).isEqualTo(
-      new UsesValuesMethod[]{UsesValuesMethod.ONE, UsesValuesMethod.TWO});
+    UsesValueOf.valueOf("ONE");
+    UsesValuesMethod.values();
 
-    assertThat(Season.FALL.ordinal()).isEqualTo(0);
-    assertThat(UsesValueOf.ONE.ordinal()).isEqualTo(0);
-    assertThat(UsesValuesMethod.ONE.ordinal()).isEqualTo(0);
-    assertThat(Captured.ONE.ordinal()).isEqualTo(0);
-    assertThat(UsedAsTypeClass.ONE.ordinal()).isEqualTo(0);
-    assertThat(Upcasted.ONE.ordinal()).isEqualTo(0);
+    int a = UsesValueOf.ONE.ordinal();
+    a = UsesValuesMethod.ONE.ordinal();
+    a = UsesNothing.ONE.ordinal();
+    a = Captured.TWO.ordinal();
+    a = UsedAsTypeClass.ONE.ordinal();
+    a = Upcasted.ONE.ordinal();
+    a = UpcastedToSerializable.TWO.ordinal();
+    a = UsesValuesMethod.ONE.compareTo(UsesValuesMethod.TWO);
+    a = UsesValuesMethod.TWO.hashCode();
+    boolean b = UsesValuesMethod.ONE.equals(UsesValuesMethod.TWO);
+    String s = UsesValuesMethod.TWO.name();
+    s = UsesValuesMethod.TWO.toString();
   }
 }
