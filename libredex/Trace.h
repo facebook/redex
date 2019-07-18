@@ -31,6 +31,7 @@
   TM(CPG)            \
   TM(CS)             \
   TM(CSE)            \
+  TM(CU)             \
   TM(CUSTOMSORT)     \
   TM(DBGSTRIP)       \
   TM(DC)             \

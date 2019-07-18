@@ -78,17 +78,19 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
     auto env = m_reaching_definitions.get_entry_state_at(block);
     for (auto& mie : InstructionIterable(block)) {
       IRInstruction* insn = mie.insn;
-      for (size_t i = 0; i < insn->srcs_size(); i++) {
-        auto src = insn->src(i);
+      for (size_t src_index = 0; src_index < insn->srcs_size(); src_index++) {
+        auto src = insn->src(src_index);
         auto defs = env.get(src);
         if (!defs.is_top() && !defs.is_bottom()) {
           for (auto def : defs.elements()) {
             auto def_opcode = def->opcode();
             if (def_opcode == OPCODE_CONST || def_opcode == OPCODE_CONST_WIDE) {
-              m_constant_uses[def].emplace_back(insn, i);
+              m_constant_uses[def].emplace_back(insn, src_index);
               auto opcode = insn->opcode();
-              need_type_inference |=
-                  (opcode == OPCODE_APUT || OPCODE_APUT_WIDE);
+              if (src_index == 0 &&
+                  (opcode == OPCODE_APUT || OPCODE_APUT_WIDE)) {
+                need_type_inference = true;
+              }
             }
           }
         }
@@ -97,6 +99,8 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
     }
   }
 
+  TRACE(CU, 2, "[CU] ConstantUses(%s) need_type_inference:%u", SHOW(method),
+        need_type_inference);
   if (need_type_inference && method) {
     m_type_inference.reset(new type_inference::TypeInference(cfg));
     m_type_inference->run(method);
@@ -122,6 +126,11 @@ TypeDemand ConstantUses::get_constant_type_demand(IRInstruction* insn) const {
       break;
     }
   }
+  TRACE(CU, 4, "[CU] type demand of {%s}: %u (%s %s %s %s %s)", SHOW(insn),
+        type_demand, type_demand & Int ? "Int" : "",
+        type_demand & Float ? "Float" : "",
+        type_demand & Object ? "Object" : "", type_demand & Long ? "Long" : "",
+        type_demand & Double ? "Double" : "");
   return type_demand;
 }
 
@@ -304,6 +313,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_SHR_LONG:
   case OPCODE_USHR_LONG:
     if (src_index == 0) return TypeDemand::Long;
+    always_assert(src_index == 1);
     return TypeDemand::Int;
 
   case OPCODE_IF_EQ:
@@ -330,6 +340,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_AGET_WIDE:
   case OPCODE_AGET_OBJECT:
     if (src_index == 0) return TypeDemand::Object;
+    always_assert(src_index == 1);
     return TypeDemand::Int;
 
   case OPCODE_APUT:
@@ -341,6 +352,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_APUT_OBJECT:
     if (src_index == 1) return TypeDemand::Object;
     if (src_index == 2) return TypeDemand::Int;
+    always_assert(src_index == 0);
     switch (insn->opcode()) {
     case OPCODE_APUT:
     case OPCODE_APUT_WIDE: {
@@ -348,6 +360,8 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
         auto& type_environments = m_type_inference->get_type_environments();
         auto& type_environment = type_environments.at(insn);
         auto dex_type = type_environment.get_dex_type(insn->src(1));
+        TRACE(CU, 3, "[CU] aput(-wide) instruction array type: %s",
+              dex_type ? SHOW(dex_type) : "(unknown dex type)");
         if (dex_type && is_array(*dex_type)) {
           auto type_demand =
               get_type_demand(get_array_component_type(*dex_type));
@@ -361,6 +375,10 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
                          type_demand == TypeDemand::Double));
           return type_demand;
         }
+      } else {
+        TRACE(CU, 3,
+              "[CU] aput(-wide) instruction encountered {%s}, but type "
+              "inference is unavailable");
       }
       return TypeDemand::Error;
     }
@@ -384,6 +402,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_IPUT_WIDE:
   case OPCODE_IPUT_OBJECT:
     if (src_index == 1) return TypeDemand::Object;
+    always_assert(src_index == 0);
     return get_type_demand(insn->get_field()->get_type());
 
   case OPCODE_SPUT:
