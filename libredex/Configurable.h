@@ -24,41 +24,42 @@ class DexClass;
 class DexMethod;
 class DexType;
 
+// clang-format off
 /**
  * HOWTO Use Configurable
  *
  * // Derive from Configurable
  * class MyConfigurablePass : public Configurable {
- * public:
- *  // Override get_config_name to give your class a human readable name for
- * reflection std::string get_config_name() override { return
- * "MyConfigurablePass";
- *  }
- *  // Override get_config_doc to provide a docoumentation string explaining the
- *  // overall purpose of the Configurable (e.g. your pass)
- *  std::string get_config_doc() override {
- *    return "Shrink the app by doing xyz"
- *  };
- *  // Override bind_config to declare all the parameters on your Configurable
- *  void bind_config() override {
- *    // Bind the parameter named "param_name" to param_field, with a default
- *    // value of default_param_value, should the parameter be absent when
- * parsing
- *    // the config. The 4th parameter is a help string explaining the purpose
- * of the
- *    // Configurable parameter.
- *    //
- *    // bind() can bind any type that has intrinsic support (see
- *    // DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file), or
- * any
- *    // type itself which derives from Configurable.
- *    bind("para_name", default_param_value, &param_field, "Help doc explaining
- * param");
- *  }
- * private:
- *  param_type_t param_field;
- * }
+ *  public:
+ *   // Override get_config_name to give your class a human readable name for
+ *   // reflection
+ *   std::string get_config_name() override { return "MyConfigurablePass"; }
+ *
+ *   // Override get_config_doc to provide a docoumentation string explaining
+ *   // the overall purpose of the Configurable (e.g. your pass)
+ *   std::string get_config_doc() override {
+ *     return "Shrink the app by doing xyz"
+ *   };
+ *
+ *   // Override bind_config to declare all the parameters on your Configurable
+ *   void bind_config() override {
+ *     // Bind the parameter named "param_name" to param_field, with a default
+ *     // value of default_param_value, should the parameter be absent when
+ *     // parsing the config. The 4th parameter is a help string explaining the
+ *     // purpose of the Configurable parameter.
+ *     //
+ *     // bind() can bind any type that has intrinsic support (see
+ *     // DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file), or
+ *     // any type itself which derives from Configurable.
+ *     bind("para_name", default_param_value, &param_field,
+ *          "Help doc explaining param");
+ *   }
+ *
+ *  private:
+ *    param_type_t param_field;
+ * };
  */
+// clang-format on
 class Configurable {
  public:
   // Binding flags
@@ -139,7 +140,7 @@ class Configurable {
 
     enum Type {
       /**
-       *  Primtives are types we support intrinsically, e.g. scalars or arrays
+       * Primitives are types we support intrinsically, e.g. scalars or arrays
        * of scalars. The primitives we support are defined by
        * DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file. */
       PRIMITIVE = 0,
@@ -221,7 +222,7 @@ class Configurable {
     m_after_configuration = after_configuration_fn;
   }
 
-  /** 
+  /**
    * Default behavior for all json -> data type coercions. this template
    * handles the case for composites (e.g. all Configurables). Primitives
    * will have specializations provided in Configurable.cpp
@@ -238,7 +239,7 @@ class Configurable {
     return t;
   }
 
-  /** 
+  /**
    * Default behavior for all parameter reflections. this template
    * handles the case for composites (e.g. all Configurables). Primitives
    * will have specializations provided in Configurable.cpp
