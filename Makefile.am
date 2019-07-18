@@ -346,6 +346,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
+	service/dataflow/ConstantUses.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \

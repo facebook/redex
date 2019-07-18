@@ -732,7 +732,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
+    const auto& arg_types =
+        dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
     always_assert(insn->arg_word_count() == expected_args);

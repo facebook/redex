@@ -176,9 +176,144 @@ TEST(CopyPropagationTest, verifyEnabled) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (int-to-float v1 v0) ; use v0 as float
+      (int-to-float v1 v0) ; use v0 as int
       (const v0 0) ; DON'T delete this. Verifier needs it
-      (float-to-int v1 v0) ; use v0 as int
+      (float-to-int v1 v0) ; use v0 as float
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST(CopyPropagationTest, consts_safe_by_constant_uses) {
+  // even with verify-none being disabled, the following is safe
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (int-to-float v1 v0) ; use v0 as int
+      (const v0 0)
+      (int-to-double v1 v0) ; use v0 as int
+    )
+)");
+  code->set_registers_size(2);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (int-to-float v1 v0) ; use v0 as int
+      (int-to-double v1 v0) ; use v0 as int
+    )
+)");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+TEST(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
+  g_redex = new RedexContext();
+
+  // even with verify-none being disabled, the following is safe
+
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
+      (const v0 0)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v1)
+      (const v0 0)
+      (const v2 0) ; can be deleted
+      (aput v0 v1 v2)
+      (const v0 0) ; can be deleted
+      (int-to-double v1 v0)
+     )
+    )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(3);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (new-array v0 "[I")
+      (move-result-pseudo-object v1)
+      (const v2 0) ; dead, and local-dce would delete later
+      (aput v0 v1 v0)
+      (int-to-double v1 v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+
+  delete g_redex;
+}
+
+TEST(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
+  g_redex = new RedexContext();
+
+  // the following is not safe, and shall not be fully optimized
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
+      (const v0 0)
+      (new-array v0 "[F") ; array of float
+      (move-result-pseudo-object v1)
+      (const v0 0) ; used as float
+      (const v2 0) ; used as int
+      (aput v0 v1 v2)
+      (const v0 0) ; used as int
+      (int-to-double v1 v0)
+     )
+    )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(3);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (new-array v0 "[F") ; array of float
+      (move-result-pseudo-object v1)
+      (const v0 0) ; used as float
+      (const v2 0) ; used as int
+      (aput v0 v1 v2)
+      (const v0 0) ; used as int, redundant with v2!
+      (int-to-double v1 v2)
+      )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+
+  delete g_redex;
+}
+
+TEST(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
+  // even with verify-none being disabled, the following is safe
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (const-wide v0 0)
+      (long-to-float v2 v0) ; use v0 as long
+      (const-wide v0 0)
+      (long-to-double v2 v0) ; use v0 as long
+    )
+)");
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const-wide v0 0)
+      (long-to-float v2 v0) ; use v0 as long
+      (long-to-double v2 v0) ; use v0 as long
     )
 )");
 

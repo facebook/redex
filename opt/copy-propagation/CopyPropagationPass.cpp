@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "AliasedRegisters.h"
+#include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -46,7 +47,9 @@ using namespace sparta;
 // with a different value. Any move between registers that are already aliased
 // is unneccesary. Eliminate them.
 //
-// It can also do the same thing with constant loads, if enabled by the config.
+// It can also do the same thing with constant loads, if generally enabled by
+// the config, or if selectively enabled when deemed safe by our own
+// constant-uses analysis.
 //
 // This optimization can also replace source registers with a representative
 // register (a whole alias group has a single representative). The reason is
@@ -72,20 +75,40 @@ struct RegisterPair {
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
+  cfg::ControlFlowGraph& m_cfg;
+  DexMethod* m_method;
   const CopyPropagationPass::Config& m_config;
   const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
+  mutable std::unique_ptr<constant_uses::ConstantUses> m_constant_uses;
 
   AliasFixpointIterator(
       cfg::ControlFlowGraph& cfg,
+      DexMethod* method,
       const CopyPropagationPass::Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
       Stats& stats)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
+        m_cfg(cfg),
+        m_method(method),
         m_config(config),
         m_range_set(range_set),
         m_stats(stats) {}
+
+  constant_uses::TypeDemand get_constant_type_demand(
+      IRInstruction* insn) const {
+    if (m_config.eliminate_const_literals) {
+      return constant_uses::TypeDemand::None;
+    }
+    if (m_config.eliminate_const_literals_with_same_type_demands) {
+      if (!m_constant_uses) {
+        m_constant_uses.reset(new constant_uses::ConstantUses(m_cfg, m_method));
+      }
+      return m_constant_uses->get_constant_type_demand(insn);
+    }
+    return constant_uses::TypeDemand::Error;
+  }
 
   // An instruction can be removed if we know the source and destination are
   // aliases.
@@ -302,15 +325,22 @@ class AliasFixpointIterator final
         source.upper = Value::create_register(RESULT_REGISTER + 1);
       }
       break;
-    case OPCODE_CONST:
-      if (m_config.eliminate_const_literals) {
-        source.lower = Value::create_literal(insn->get_literal());
+    case OPCODE_CONST: {
+      auto type_demand = get_constant_type_demand(insn);
+      if (type_demand != constant_uses::TypeDemand::Error) {
+        source.lower = Value::create_literal(insn->get_literal(), type_demand);
       }
       break;
+    }
     case OPCODE_CONST_WIDE:
-      if (m_config.eliminate_const_literals && m_config.wide_registers) {
-        source.lower = Value::create_literal(insn->get_literal());
-        source.upper = Value::create_literal_upper(insn->get_literal());
+      if (m_config.wide_registers) {
+        auto type_demand = get_constant_type_demand(insn);
+        if (type_demand != constant_uses::TypeDemand::Error) {
+          source.lower =
+              Value::create_literal(insn->get_literal(), type_demand);
+          source.upper =
+              Value::create_literal_upper(insn->get_literal(), type_demand);
+        }
       }
       break;
     case OPCODE_CONST_STRING: {
@@ -455,7 +485,8 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
-  AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);
+  AliasFixpointIterator fixpoint(
+      code->cfg(), method, m_config, range_set, stats);
 
   fixpoint.run(AliasDomain());
   for (auto block : blocks) {

@@ -20,6 +20,7 @@
 #include <limits>
 
 #include "AbstractDomain.h"
+#include "ConstantUses.h"
 #include "DexClass.h"
 
 namespace aliased_registers {
@@ -29,7 +30,7 @@ const Register RESULT_REGISTER = std::numeric_limits<Register>::max() - 1;
 
 class Value {
  public:
-  enum class Kind {
+  enum class Kind : uint8_t {
     REGISTER,
     CONST_LITERAL,
     CONST_LITERAL_UPPER,
@@ -42,6 +43,7 @@ class Value {
 
  private:
   Kind m_kind;
+  constant_uses::TypeDemand m_type_demand;
 
   union {
     Register m_reg;
@@ -58,10 +60,11 @@ class Value {
     m_kind = k;
     m_reg = r;
   }
-  explicit Value(Kind k, int64_t l) {
+  explicit Value(Kind k, int64_t l, constant_uses::TypeDemand td) {
     always_assert(k == Kind::CONST_LITERAL || k == Kind::CONST_LITERAL_UPPER);
     m_kind = k;
     m_literal = l;
+    m_type_demand = td;
   }
   explicit Value(Kind k, DexField* f) {
     always_assert(k == Kind::STATIC_FINAL || k == Kind::STATIC_FINAL_UPPER);
@@ -72,13 +75,13 @@ class Value {
  public:
   static Value create_register(Register r) { return Value{Kind::REGISTER, r}; }
 
-  static Value create_literal(int64_t l) {
-    return Value{Kind::CONST_LITERAL, l};
+  static Value create_literal(int64_t l, constant_uses::TypeDemand td) {
+    return Value{Kind::CONST_LITERAL, l, td};
   }
 
   // The upper half of a wide pair
-  static Value create_literal_upper(int64_t l) {
-    return Value{Kind::CONST_LITERAL_UPPER, l};
+  static Value create_literal_upper(int64_t l, constant_uses::TypeDemand td) {
+    return Value{Kind::CONST_LITERAL_UPPER, l, td};
   }
 
   static Value create_field(DexField* f) {
@@ -107,9 +110,11 @@ class Value {
     case Kind::REGISTER:
       return m_reg == other.m_reg;
     case Kind::CONST_LITERAL:
-      return m_literal == other.m_literal;
+      return m_literal == other.m_literal &&
+             m_type_demand == other.m_type_demand;
     case Kind::CONST_LITERAL_UPPER:
-      return m_literal == other.m_literal;
+      return m_literal == other.m_literal &&
+             m_type_demand == other.m_type_demand;
     case Kind::CONST_STRING:
       return m_str == other.m_str;
     case Kind::CONST_TYPE:
