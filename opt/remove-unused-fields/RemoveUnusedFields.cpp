@@ -45,6 +45,10 @@ class RemoveUnusedFields final {
   }
 
  private:
+  bool is_whitelisted(DexField* field) const {
+    return !m_config.whitelist || m_config.whitelist->count(field) != 0;
+  }
+
   void analyze() {
     field_op_tracker::FieldStatsMap field_stats =
         field_op_tracker::analyze(m_scope);
@@ -59,7 +63,7 @@ class RemoveUnusedFields final {
             stats.reads_outside_init,
             stats.writes,
             is_synthetic(field));
-      if (can_remove(field)) {
+      if (can_remove(field) && is_whitelisted(field)) {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
         } else if (m_config.remove_unwritten_fields && stats.writes == 0 &&
@@ -130,6 +134,20 @@ void PassImpl::run_pass(DexStoresVector& stores,
   RemoveUnusedFields rmuf(m_config, scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
+
+  if (m_export_removed) {
+    std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),
+                                                rmuf.unread_fields().end());
+    removed_fields.insert(removed_fields.end(),
+                          rmuf.unwritten_fields().begin(),
+                          rmuf.unwritten_fields().end());
+    sort_unique(removed_fields, compare_dexfields);
+    auto path = conf.metafile(REMOVED_FIELDS_FILENAME);
+    std::ofstream ofs(path, std::ofstream::out | std::ofstream::trunc);
+    for (auto* field : removed_fields) {
+      ofs << show_deobfuscated(field) << "\n";
+    }
+  }
 }
 
 static PassImpl s_pass;
