@@ -27,13 +27,18 @@
  */
 namespace remove_unused_fields {
 
+struct Config {
+  bool remove_unread_fields;
+  bool remove_unwritten_fields;
+};
+
 class PassImpl : public Pass {
  public:
   PassImpl() : Pass("RemoveUnusedFieldsPass") {}
 
   void bind_config() override {
-    bind("remove_unread_fields", true, m_remove_unread_fields);
-    bind("remove_unwritten_fields", false, m_remove_unwritten_fields);
+    bind("remove_unread_fields", true, m_config.remove_unread_fields);
+    bind("remove_unwritten_fields", false, m_config.remove_unwritten_fields);
   }
 
   void run_pass(DexStoresVector& stores,
@@ -41,8 +46,7 @@ class PassImpl : public Pass {
                 PassManager& mgr) override;
 
  private:
-  bool m_remove_unread_fields;
-  bool m_remove_unwritten_fields;
+  Config m_config;
 };
 
 } // namespace remove_unused_fields
