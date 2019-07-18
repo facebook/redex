@@ -6,9 +6,9 @@
  */
 
 #include <algorithm>
-#include <cstring>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <cstring>
 #include <gtest/gtest.h>
 #include <sstream>
 
@@ -16,10 +16,20 @@
 #include "VerifyUtil.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
-  auto it = std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls){
-    return !strcmp(name, cls->get_name()->c_str());
-  });
+  auto it =
+      std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
+        return !strcmp(name, cls->get_name()->c_str());
+      });
   return it == classes.end() ? nullptr : *it;
+}
+
+DexField* find_ifield_named(const DexClass& cls, const char* name) {
+  auto fields = cls.get_ifields();
+  auto it =
+      std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
+        return strcmp(name, f->get_name()->c_str()) == 0;
+      });
+  return it == fields.end() ? nullptr : *it;
 }
 
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {

@@ -45,6 +45,10 @@ class RemoveUnusedFields final {
   }
 
  private:
+  bool is_blacklisted(const DexType* type) const {
+    return m_config.blacklist_types.count(type) != 0;
+  }
+
   bool is_whitelisted(DexField* field) const {
     return !m_config.whitelist || m_config.whitelist->count(field) != 0;
   }
@@ -63,7 +67,8 @@ class RemoveUnusedFields final {
             stats.reads_outside_init,
             stats.writes,
             is_synthetic(field));
-      if (can_remove(field) && is_whitelisted(field)) {
+      if (can_remove(field) && !is_blacklisted(field->get_type()) &&
+          is_whitelisted(field)) {
         if (m_config.remove_unread_fields && stats.reads == 0) {
           m_unread_fields.emplace(field);
         } else if (m_config.remove_unwritten_fields && stats.writes == 0 &&
