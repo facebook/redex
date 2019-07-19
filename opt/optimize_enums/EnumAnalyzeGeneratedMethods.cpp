@@ -209,7 +209,10 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
   case OPCODE_INVOKE_VIRTUAL: {
     const DexMethodRef* get_declaring_class_method = DexMethod::get_method(
         "Ljava/lang/Enum;.getDeclaringClass:()Ljava/lang/Class;");
-    if (signatures_match(callee_ref, get_declaring_class_method)) {
+    const DexMethodRef* get_class_method = DexMethod::get_method(
+        "Ljava/lang/Object;.getClass:()Ljava/lang/Class;");
+    if (signatures_match(callee_ref, get_declaring_class_method) ||
+        signatures_match(callee_ref, get_class_method)) {
       const EnumTypes possible_types = env->get(insn->src(0));
       for (const DexType* type : possible_types.elements()) {
         if (m_candidate_types.count(type)) {
