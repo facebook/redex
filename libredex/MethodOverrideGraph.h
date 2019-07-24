@@ -25,7 +25,18 @@ class Graph;
  * :method itself.
  */
 std::unordered_set<const DexMethod*> get_overriding_methods(
-    const Graph& graph, const DexMethod* method);
+    const Graph& graph,
+    const DexMethod* method,
+    bool include_interfaces = false);
+
+/*
+ * Returns all the methods that are overridden by :method. The set does *not*
+ * include the :method itself.
+ */
+std::unordered_set<const DexMethod*> get_overridden_methods(
+    const Graph& graph,
+    const DexMethod* method,
+    bool include_interfaces = false);
 
 /*
  * Slow-ish; users should build the graph once and cache it somewhere.
@@ -37,6 +48,7 @@ std::unique_ptr<const Graph> build_graph(const Scope&);
  * Node's method.
  */
 struct Node {
+  std::unordered_set<const DexMethod*> parents;
   std::unordered_set<const DexMethod*> children;
 };
 

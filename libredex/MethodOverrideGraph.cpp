@@ -218,6 +218,10 @@ void Graph::add_edge(const DexMethod* overridden, const DexMethod* overriding) {
                  [&](const DexMethod*, Node& node, bool /* exists */) {
                    node.children.insert(overriding);
                  });
+  m_nodes.update(overriding,
+                 [&](const DexMethod*, Node& node, bool /* exists */) {
+                   node.parents.insert(overridden);
+                 });
 }
 
 void Graph::dump(std::ostream& os) const {
@@ -244,7 +248,7 @@ std::unique_ptr<const Graph> build_graph(const Scope& scope) {
 }
 
 std::unordered_set<const DexMethod*> get_overriding_methods(
-    const Graph& graph, const DexMethod* method) {
+    const Graph& graph, const DexMethod* method, bool include_interfaces) {
   std::unordered_set<const DexMethod*> overrides;
   std::unordered_set<const DexMethod*> visited;
   std::function<void(const DexMethod*, const Node&)> visit =
@@ -255,7 +259,7 @@ std::unordered_set<const DexMethod*> get_overriding_methods(
         visited.emplace(current);
         for (const auto* child : node.children) {
           auto child_cls = type_class(child->get_class());
-          if (!is_interface(child_cls)) {
+          if (include_interfaces || !is_interface(child_cls)) {
             overrides.emplace(child);
           }
           visit(child, graph.get_node(child));
@@ -263,6 +267,28 @@ std::unordered_set<const DexMethod*> get_overriding_methods(
       };
   visit(method, graph.get_node(method));
   return overrides;
+}
+
+std::unordered_set<const DexMethod*> get_overridden_methods(
+    const Graph& graph, const DexMethod* method, bool include_interfaces) {
+  std::unordered_set<const DexMethod*> overridden;
+  std::unordered_set<const DexMethod*> visited;
+  std::function<void(const DexMethod*, const Node&)> visit =
+      [&](const DexMethod* current, const Node& node) {
+        if (visited.count(current)) {
+          return;
+        }
+        visited.emplace(current);
+        for (const auto* parent : node.parents) {
+          auto parent_cls = type_class(parent->get_class());
+          if (include_interfaces || !is_interface(parent_cls)) {
+            overridden.emplace(parent);
+          }
+          visit(parent, graph.get_node(parent));
+        }
+      };
+  visit(method, graph.get_node(method));
+  return overridden;
 }
 
 } // namespace method_override_graph
