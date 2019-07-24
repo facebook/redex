@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <boost/noncopyable.hpp>
 #include <boost/optional.hpp>
 #include <map>
 #include <set>
@@ -164,3 +165,31 @@ std::unordered_set<uint32_t> get_js_resources(
 std::unordered_set<uint32_t> get_resources_by_name_prefix(
     const std::vector<std::string>& prefixes,
     const std::map<std::string, std::vector<uint32_t>>& name_to_ids);
+
+const int TYPE_INDEX_BIT_SHIFT = 16;
+
+class ResourcesArscFile {
+ public:
+  ResourcesArscFile(const ResourcesArscFile&) = delete;
+  ResourcesArscFile& operator=(const ResourcesArscFile&) = delete;
+
+  android::ResTable res_table;
+  android::SortedVector<uint32_t> sorted_res_ids;
+  std::map<uint32_t, std::string> id_to_name;
+  std::map<std::string, std::vector<uint32_t>> name_to_ids;
+
+  explicit ResourcesArscFile(const std::string& path);
+  void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
+  std::unordered_set<uint32_t> get_types_by_name(
+      const std::unordered_set<std::string>& type_names);
+  size_t serialize();
+  ~ResourcesArscFile();
+
+  size_t get_length() { return m_arsc_len; }
+
+ private:
+  bool m_file_closed = false;
+  int m_arsc_fd;
+  size_t m_arsc_len;
+  void* m_arsc_ptr;
+};
