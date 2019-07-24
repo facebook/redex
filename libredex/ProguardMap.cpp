@@ -44,7 +44,10 @@ std::string convert_field(const std::string &cls,
     const std::string &type,
     const std::string &name) {
   std::ostringstream ss;
-  ss << cls << "." << name << ":" << type;
+  ss << cls << "." << name;
+  if (!type.empty()) {
+    ss << ":" << type;
+  }
   return ss.str();
 }
 
@@ -179,11 +182,12 @@ std::string ProguardMap::deobfuscate_class(const std::string& cls) const {
 }
 
 std::string ProguardMap::deobfuscate_field(const std::string& field) const {
-  return find_or_same(field, m_obfFieldMap);
+  return find_or_same(find_or_same(field, m_obfFieldMap), m_obfUntypedFieldMap);
 }
 
 std::string ProguardMap::deobfuscate_method(const std::string& method) const {
-  return find_or_same(method, m_obfMethodMap);
+  return find_or_same(find_or_same(method, m_obfMethodMap),
+                      m_obfUntypedMethodMap);
 }
 
 std::vector<ProguardMap::Frame> ProguardMap::deobfuscate_frame(
@@ -275,6 +279,7 @@ bool ProguardMap::parse_field(const std::string& line) {
   auto ctype = convert_type(type);
   auto xtype = translate_type(ctype, *this);
   auto pgnew = convert_field(m_currNewClass, xtype, newname);
+  auto pgnew_notype = convert_field(m_currNewClass, "", newname);
   auto pgold = convert_field(m_currClass, ctype, fieldname);
   // Record interfaces that are coalesced by Proguard.
   if (ctype[0] == 'L' && is_maybe_proguard_generated_member(fieldname)) {
@@ -286,6 +291,7 @@ bool ProguardMap::parse_field(const std::string& line) {
   }
   m_fieldMap[pgold] = pgnew;
   m_obfFieldMap[pgnew] = pgold;
+  m_obfUntypedFieldMap[pgnew_notype] = pgold;
   return true;
 }
 
@@ -334,8 +340,10 @@ bool ProguardMap::parse_method(const std::string& line) {
   auto new_rtype = translate_type(old_rtype, *this);
   auto pgold = convert_method(classname, old_rtype, methodname, old_args);
   auto pgnew = convert_method(m_currNewClass, new_rtype, newname, new_args);
+  auto pgnew_no_rtype = convert_method(m_currNewClass, "", newname, new_args);
   m_methodMap[pgold] = pgnew;
   m_obfMethodMap[pgnew] = pgold;
+  m_obfUntypedMethodMap[pgnew_no_rtype] = pgold;
   lines->original_name = pgold;
   m_obfMethodLinesMap[pg_impl::lines_key(pgnew)].push_back(std::move(lines));
   return true;

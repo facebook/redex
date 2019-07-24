@@ -123,6 +123,15 @@ struct ProguardMap {
   std::unordered_map<std::string, std::string> m_obfClassMap;
   std::unordered_map<std::string, std::string> m_obfFieldMap;
   std::unordered_map<std::string, std::string> m_obfMethodMap;
+
+  // Field map for reflection analysis when type is unknown
+  // Stores Lcom/facebook/Class;.field -> original name without class name
+  std::unordered_map<std::string, std::string> m_obfUntypedFieldMap;
+
+  // Method map for reflection analysis when return type is unknown
+  // Stores Lcom/facebook/Class;.method(II) -> original name without class name
+  std::unordered_map<std::string, std::string> m_obfUntypedMethodMap;
+
   std::unordered_map<std::string, ProguardLineRangeVector> m_obfMethodLinesMap;
 
   // Interfaces that are (most likely) coalesced by Proguard.
