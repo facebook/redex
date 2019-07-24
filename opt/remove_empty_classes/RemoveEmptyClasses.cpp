@@ -17,6 +17,13 @@
 constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
   "num_empty_classes_removed";
 
+void remove_clinit_if_trivial(DexClass* cls) {
+  DexMethod* clinit = cls->get_clinit();
+  if (clinit && is_trivial_clinit(clinit)) {
+    cls->remove_method(clinit);
+  }
+}
+
 bool is_empty_class(DexClass* cls,
                     std::unordered_set<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
@@ -119,8 +126,9 @@ size_t remove_empty_classes(Scope& classes) {
 
   size_t classes_before_size = classes.size();
 
-  // Ennumerate super classes.
+  // Ennumerate super classes and remove trivial clinit if the class has any.
   for (auto& cls : classes) {
+    remove_clinit_if_trivial(cls);
     DexType* s = cls->get_super_class();
     class_references.insert(s);
   }

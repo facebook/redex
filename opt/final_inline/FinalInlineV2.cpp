@@ -155,15 +155,6 @@ using CombinedInitAnalyzer =
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
                                 cp::PrimitiveAnalyzer>;
-
-// A trivial clinit should only contain a return-void instruction.
-bool is_trivial_clinit(const DexMethod* method) {
-  auto ii = InstructionIterable(method->get_code());
-  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
-    return mie.insn->opcode() != OPCODE_RETURN_VOID;
-  });
-}
-
 /*
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
  * no such encoding is known.

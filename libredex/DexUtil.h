@@ -161,6 +161,12 @@ char type_shorty(const DexType* type);
 bool has_hierarchy_in_scope(DexClass* cls);
 
 /**
+ * Return true if the clinit is Trivial.
+ * A trivial clinit should only contain a return-void instruction.
+ */
+bool is_trivial_clinit(const DexMethod* method);
+
+/**
  * Basic datatypes used by bytecode.
  */
 enum class DataType : uint8_t {
