@@ -429,6 +429,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
+      current_state->set_concrete_type(insn->dest(), DexTypeDomain::top());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));
