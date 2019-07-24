@@ -14,7 +14,7 @@
 #include "ClassHierarchy.h"
 #include <list>
 
-constexpr int kMaxIdentChar (52);
+constexpr int kMaxIdentChar(10 + 26 + 26);
 
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
@@ -238,11 +238,18 @@ class NameGenerator {
 protected:
   int ctr{1};
   inline char get_ident(int num) {
+    if (num < 10) {
+      return '0' + num;
+    }
+    num -= 10;
+
     if (num < 26) {
       return 'A' + num;
-    } else {//if (num >= 26 && num < 52){
-      return 'a' + num - 26;
     }
+    num -= 26;
+
+    always_assert(num < 26);
+    return 'a' + num;
   }
 
   // Set of ids to avoid (these ids were marked as do not rename and we cannot
@@ -253,14 +260,19 @@ protected:
   // Gets the next name that is not in the used_ids set
   std::string next_name() {
     std::string res = "";
-    int max_ident = 26 + 26;
     do {
       int ctr_cpy = ctr;
       res.clear();
       while (ctr_cpy > 0) {
-        res += get_ident(ctr_cpy % max_ident);
-        ctr_cpy /= max_ident;
-        max_ident = kMaxIdentChar;
+        res += get_ident(ctr_cpy % kMaxIdentChar);
+        ctr_cpy /= kMaxIdentChar;
+      }
+      std::reverse(res.begin(), res.end());
+      if (res.size() == 1) {
+        // Small ids will be very scattered around in the string table;
+        // ensure that they end up in a dense string space by putting them in a
+        // reasonably unique "namespace".
+        res = "$$$" + res;
       }
       ctr += 1;
       TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s",
