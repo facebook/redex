@@ -11,6 +11,51 @@
 #include "Walkers.h"
 #include "DexClass.h"
 
+namespace obfuscate_utils {
+static inline char get_ident_52(int num) {
+  if (num < 26) {
+    return 'A' + num;
+  }
+  num -= 26;
+
+  always_assert(num < 26);
+  return 'a' + num;
+}
+
+static inline char get_ident_62(int num) {
+  if (num < 10) {
+    return '0' + num;
+  }
+  num -= 10;
+
+  return get_ident_52(num);
+}
+
+void compute_identifier(int value, std::string* res) {
+  always_assert(res);
+  always_assert(res->size() == 0);
+
+  // We don't want leading digits, as that causes sorting issues with
+  // <clinit> and <init>.
+  // Also, ensure that identifiers are at least 3 digits long, so that the
+  // most frequent identifiers are lexicographically sorted, occupying likely
+  // consecutive string ids, which is best for compression.
+  while (value >= 52 || res->size() < 2) {
+    res->append(1, get_ident_62(value % 62));
+    value /= 62;
+  }
+  res->append(1, get_ident_52(value % 52));
+  std::reverse(res->begin(), res->end());
+  if (res->size() > 3) {
+    // rare in practice; we put those after all other 3-character identifiers
+    // so that they don't interfere with the order of 3-character identifiers
+    res->insert(0, "zzz");
+    TRACE(OBFUSCATE, 1, "Long identifier: %s", res->c_str());
+  }
+  always_assert(res->size() >= 3);
+}
+} // namespace obfuscate_utils
+
 DexFieldManager new_dex_field_manager() {
   return DexFieldManager(
       [](DexField*& f) -> FieldNameWrapper* { return new FieldNameWrapper(f); },
