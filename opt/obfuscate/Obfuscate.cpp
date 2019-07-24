@@ -148,7 +148,8 @@ void obfuscate(Scope& scope,
   std::unordered_map<const DexClass*, int> next_dmethod_seeds;
   for (DexClass* cls : scope) {
     always_assert_log(!cls->is_external(),
-        "Shouldn't rename members of external classes. %s", SHOW(cls));
+                      "Shouldn't rename members of external classes. %s",
+                      SHOW(cls));
     // Checks to short-circuit expensive name-gathering logic (code is still
     // correct w/o this, but does unnecessary work)
     bool operate_on_ifields =
@@ -232,13 +233,12 @@ void obfuscate(Scope& scope,
       // Obfu private methods
       m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false, ch);
 
-      obfuscate_elems(
-          MethodRenamingContext(cls->get_dmethods(),
-              m_ob_state.ids_to_avoid,
-              simple_name_gen,
-              method_name_manager,
-              true),
-          method_name_manager);
+      obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
+                                            m_ob_state.ids_to_avoid,
+                                            simple_name_gen,
+                                            method_name_manager,
+                                            true),
+                      method_name_manager);
 
       simple_name_gen.bind_names();
       auto next_ctr = simple_name_gen.next_ctr();
@@ -270,15 +270,13 @@ void obfuscate(Scope& scope,
   debug_logging(scope);
 
   TRACE(OBFUSCATE, 1,
-      "%s: %ld\n%s: %ld\n"
-      "%s: %ld\n%s: %ld\n"
-      "%s: %ld\n%s: %ld",
-      METRIC_FIELD_TOTAL, stats.fields_total,
-      METRIC_FIELD_RENAMED, stats.fields_renamed,
-      METRIC_DMETHODS_TOTAL, stats.dmethods_total,
-      METRIC_DMETHODS_RENAMED, stats.dmethods_renamed,
-      METRIC_VMETHODS_TOTAL, stats.vmethods_total,
-      METRIC_VMETHODS_RENAMED, stats.vmethods_renamed);
+        "%s: %ld\n%s: %ld\n"
+        "%s: %ld\n%s: %ld\n"
+        "%s: %ld\n%s: %ld",
+        METRIC_FIELD_TOTAL, stats.fields_total, METRIC_FIELD_RENAMED,
+        stats.fields_renamed, METRIC_DMETHODS_TOTAL, stats.dmethods_total,
+        METRIC_DMETHODS_RENAMED, stats.dmethods_renamed, METRIC_VMETHODS_TOTAL,
+        stats.vmethods_total, METRIC_VMETHODS_RENAMED, stats.vmethods_renamed);
 }
 
 void ObfuscatePass::run_pass(DexStoresVector& stores,

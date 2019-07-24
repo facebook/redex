@@ -6,13 +6,13 @@
  */
 
 #include "VirtualRenamer.h"
-#include "DexClass.h"
-#include "VirtualScope.h"
-#include "DexUtil.h"
 #include "DexAccess.h"
+#include "DexClass.h"
+#include "DexUtil.h"
 #include "ObfuscateUtils.h"
 #include "Resolver.h"
 #include "Trace.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 #include <map>
@@ -299,9 +299,8 @@ bool VirtualRenamer::usable_name(
  * lead to any collision for all defs or refs.
  * * Update 'seed' *
  */
-DexString* VirtualRenamer::get_unescaped_name(
-    const VirtualScope* scope,
-    int& seed) const {
+DexString* VirtualRenamer::get_unescaped_name(const VirtualScope* scope,
+                                              int& seed) const {
   seed = std::max(seed, get_next_virtualscope_seeds(scope));
   auto name = get_name(seed++);
   while (!usable_name(name, scope)) {
@@ -316,8 +315,7 @@ DexString* VirtualRenamer::get_unescaped_name(
  * * Update 'seed' *
  */
 DexString* VirtualRenamer::get_unescaped_name(
-    std::vector<const VirtualScope*> scopes,
-    int& seed) const {
+    std::vector<const VirtualScope*> scopes, int& seed) const {
   // advance seed as necessary, skipping over dmethods
   for (const auto& scope : scopes) {
     seed = std::max(seed, get_next_virtualscope_seeds(scope));
@@ -445,8 +443,7 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
           SHOW(type));
     for (auto& scope : scopes_copy) {
       if (!can_rename_scope(scope)) {
-        TRACE(OBFUSCATE, 5,
-            "Cannot rename %s", SHOW(scope->methods[0].first));
+        TRACE(OBFUSCATE, 5, "Cannot rename %s", SHOW(scope->methods[0].first));
         continue;
       }
       if (is_impl_scope(scope)) {

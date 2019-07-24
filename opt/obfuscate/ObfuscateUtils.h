@@ -7,11 +7,11 @@
 
 #pragma once
 
+#include "ClassHierarchy.h"
+#include "DexAccess.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "DexAccess.h"
 #include "ReachableClasses.h"
-#include "ClassHierarchy.h"
 #include <list>
 
 namespace obfuscate_utils {
@@ -237,7 +237,7 @@ public:
  */
 template <class T>
 class NameGenerator {
-protected:
+ protected:
   int ctr{0};
 
   // Set of ids to avoid (these ids were marked as do not rename and we cannot
@@ -252,7 +252,7 @@ protected:
       res.clear();
       obfuscate_utils::compute_identifier(ctr++, &res);
       TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s",
-          res.c_str());
+            res.c_str());
     } while (ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
     return res;
   }
@@ -562,9 +562,9 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
       this->used_ids.insert(new_name);
       DexField* field = wrap->get();
       TRACE(OBFUSCATE, 3,
-          "\tIntending to rename static null field (%s) %s:%s to %s",
-          SHOW(field->get_type()), SHOW(field->get_class()),
-          SHOW(field->get_name()), new_name.c_str());
+            "\tIntending to rename static null field (%s) %s:%s to %s",
+            SHOW(field->get_type()), SHOW(field->get_class()),
+            SHOW(field->get_name()), new_name.c_str());
     }
   }
 };
