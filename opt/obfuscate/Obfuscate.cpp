@@ -145,6 +145,7 @@ void obfuscate(Scope& scope,
   DexFieldManager field_name_manager(new_dex_field_manager());
   DexMethodManager method_name_manager = new_dex_method_manager();
 
+  std::unordered_map<const DexClass*, int> next_dmethod_seeds;
   for (DexClass* cls : scope) {
     always_assert_log(!cls->is_external(),
         "Shouldn't rename members of external classes. %s", SHOW(cls));
@@ -237,6 +238,11 @@ void obfuscate(Scope& scope,
               method_name_manager,
               true),
           method_name_manager);
+
+      auto next_ctr = simple_name_gen.next_ctr();
+      if (next_ctr) {
+        next_dmethod_seeds.emplace(cls, simple_name_gen.next_ctr());
+      }
     }
   }
   field_name_manager.print_elements();
@@ -256,14 +262,15 @@ void obfuscate(Scope& scope,
   stats.fields_renamed = field_name_manager.commit_renamings_to_dex();
   stats.dmethods_renamed = method_name_manager.commit_renamings_to_dex();
 
-  stats.vmethods_renamed = rename_virtuals(scope, avoid_colliding_debug_name);
+  stats.vmethods_renamed =
+      rename_virtuals(scope, avoid_colliding_debug_name, next_dmethod_seeds);
 
   debug_logging(scope);
 
   TRACE(OBFUSCATE, 1,
       "%s: %ld\n%s: %ld\n"
       "%s: %ld\n%s: %ld\n"
-      "%s: %ld\n%s: %ld\n",
+      "%s: %ld\n%s: %ld",
       METRIC_FIELD_TOTAL, stats.fields_total,
       METRIC_FIELD_RENAMED, stats.fields_renamed,
       METRIC_DMETHODS_TOTAL, stats.dmethods_total,

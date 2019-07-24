@@ -14,7 +14,9 @@
 #include "ClassHierarchy.h"
 #include <list>
 
-constexpr int kMaxIdentChar(10 + 26 + 26);
+namespace obfuscate_utils {
+void compute_identifier(int value, std::string* res);
+} // namespace obfuscate_utils
 
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
@@ -236,21 +238,7 @@ public:
 template <class T>
 class NameGenerator {
 protected:
-  int ctr{1};
-  inline char get_ident(int num) {
-    if (num < 10) {
-      return '0' + num;
-    }
-    num -= 10;
-
-    if (num < 26) {
-      return 'A' + num;
-    }
-    num -= 26;
-
-    always_assert(num < 26);
-    return 'a' + num;
-  }
+  int ctr{0};
 
   // Set of ids to avoid (these ids were marked as do not rename and we cannot
   // conflict with)
@@ -261,21 +249,9 @@ protected:
   std::string next_name() {
     std::string res = "";
     do {
-      int ctr_cpy = ctr;
       res.clear();
-      while (ctr_cpy > 0) {
-        res += get_ident(ctr_cpy % kMaxIdentChar);
-        ctr_cpy /= kMaxIdentChar;
-      }
-      std::reverse(res.begin(), res.end());
-      if (res.size() == 1) {
-        // Small ids will be very scattered around in the string table;
-        // ensure that they end up in a dense string space by putting them in a
-        // reasonably unique "namespace".
-        res = "$$$" + res;
-      }
-      ctr += 1;
-      TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s\n",
+      obfuscate_utils::compute_identifier(ctr++, &res);
+      TRACE(OBFUSCATE, 4, "NameGenerator looking for a name, trying: %s",
           res.c_str());
     } while (ids_to_avoid.count(res) > 0 || used_ids.count(res) > 0);
     return res;
@@ -295,10 +271,7 @@ public:
   // renamed and we can start actually renaming things
   virtual void bind_names() {}
 
-  virtual void reset() {
-    TRACE(OBFUSCATE, 3, "Resetting generator\n");
-    ctr = 1;
-  }
+  int next_ctr() { return ctr; }
 };
 
 // Simple name generators just immediately bind the next name to the element
@@ -447,12 +420,6 @@ class StaticFieldNameGenerator : public NameGenerator<DexField*> {
           SHOW(field->get_type()), SHOW(field->get_class()),
           SHOW(field->get_name()), new_name.c_str());
     }
-  }
-
-  void reset() override {
-    NameGenerator<DexField*>::reset();
-    fields.clear();
-    static_final_null_fields.clear();
   }
 };
 

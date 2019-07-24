@@ -10,6 +10,7 @@
 #include "VirtualScope.h"
 #include "DexUtil.h"
 #include "DexAccess.h"
+#include "ObfuscateUtils.h"
 #include "Resolver.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -114,35 +115,26 @@ using RefsMap =
 const std::string prefix = "";
 
 DexString* get_name(int seed) {
-  std::string name = prefix;
-
-  const auto append = [&](int value) {
-    always_assert_log(value >= 0 && value < 52, "value = %d, seed = %d", value,
-                      seed);
-    if (value < 26) {
-      name += ('A' + value);
-    } else {
-      name += ('a' + value - 26);
-    }
-  };
-
-  while (seed >= 52) {
-    append(seed % 52);
-    seed = (seed / 52) - 1;
+  std::string name;
+  obfuscate_utils::compute_identifier(seed, &name);
+  if (prefix.size()) {
+    name = prefix + name;
   }
-  append(seed);
   return DexString::make_string(name);
 }
 
 struct VirtualRenamer {
-  VirtualRenamer(const ClassScopes& class_scopes,
-                 const RefsMap& def_refs,
-                 std::unordered_map<std::string, uint32_t>* elms,
-                 std::unordered_map<const DexType*, std::string>* cache)
+  VirtualRenamer(
+      const ClassScopes& class_scopes,
+      const RefsMap& def_refs,
+      std::unordered_map<std::string, uint32_t>* elms,
+      std::unordered_map<const DexType*, std::string>* cache,
+      const std::unordered_map<const DexClass*, int>& next_dmethod_seeds)
       : class_scopes(class_scopes),
         def_refs(def_refs),
         stack_trace_elements(elms),
-        external_name_cache(cache) {}
+        external_name_cache(cache),
+        next_dmethod_seeds(next_dmethod_seeds) {}
 
   int rename_virtual_scopes(const DexType* type, int& seed);
   int rename_interface_scopes(int& seed);
@@ -160,6 +152,8 @@ struct VirtualRenamer {
   std::unordered_map<std::string, uint32_t>* stack_trace_elements;
   // Note these entries contain trailing periods
   std::unordered_map<const DexType*, std::string>* external_name_cache;
+  const std::unordered_map<const DexClass*, int>& next_dmethod_seeds;
+  mutable std::unordered_map<const VirtualScope*, int> next_virtualscope_seeds;
 
  private:
   const std::string& get_prefix(const DexType* type) const {
@@ -167,6 +161,24 @@ struct VirtualRenamer {
     auto iter = external_name_cache->find(type);
     always_assert(iter != external_name_cache->end());
     return iter->second;
+  }
+
+  // Retrieves the next seed that won't overlap with dmethods, considering all
+  // classes participating in the given virtual scope
+  int get_next_virtualscope_seeds(const VirtualScope* scope) const {
+    auto it = next_virtualscope_seeds.find(scope);
+    if (it != next_virtualscope_seeds.end()) {
+      return it->second;
+    }
+    int seed = 0;
+    for (auto& m : scope->methods) {
+      auto it2 = next_dmethod_seeds.find(type_class(m.first->get_class()));
+      if (it2 != next_dmethod_seeds.end()) {
+        seed = std::max(seed, it2->second);
+      }
+    }
+    next_virtualscope_seeds.emplace(scope, seed);
+    return seed;
   }
 
   void rename(DexMethodRef* meth, DexString* name);
@@ -290,6 +302,7 @@ bool VirtualRenamer::usable_name(
 DexString* VirtualRenamer::get_unescaped_name(
     const VirtualScope* scope,
     int& seed) const {
+  seed = std::max(seed, get_next_virtualscope_seeds(scope));
   auto name = get_name(seed++);
   while (!usable_name(name, scope)) {
     name = get_name(seed++);
@@ -305,6 +318,10 @@ DexString* VirtualRenamer::get_unescaped_name(
 DexString* VirtualRenamer::get_unescaped_name(
     std::vector<const VirtualScope*> scopes,
     int& seed) const {
+  // advance seed as necessary, skipping over dmethods
+  for (const auto& scope : scopes) {
+    seed = std::max(seed, get_next_virtualscope_seeds(scope));
+  }
   while (true) {
     auto name = get_name(seed++);
     for (const auto& scope : scopes) {
@@ -397,11 +414,36 @@ int VirtualRenamer::rename_virtual_scopes(const DexType* type, int& seed) {
   // object or external classes are not renamable, move
   // to the children
   if (cls != nullptr && !cls->is_external()) {
-    const auto& scopes = class_scopes.get(type);
+    auto scopes_copy = class_scopes.get(type);
+    std::sort(scopes_copy.begin(), scopes_copy.end(),
+              [&](const VirtualScope* a, const VirtualScope* b) {
+                // prefer scopes which have extra seed values available
+                auto a_seed = std::max(seed, get_next_virtualscope_seeds(a));
+                auto b_seed = std::max(seed, get_next_virtualscope_seeds(b));
+                if (a_seed != b_seed) {
+                  return a_seed < b_seed;
+                }
+                auto a_method = a->methods[0].first;
+                auto b_method = b->methods[0].first;
+                // then sort by scopes...
+                if (a_method->get_proto() != b_method->get_proto()) {
+                  return dexprotos_comparator()(a_method->get_proto(),
+                                                b_method->get_proto());
+                }
+                // then by access...
+                auto a_access = a_method->is_def() ? a_method->get_access() : 0;
+                auto b_access = b_method->is_def() ? b_method->get_access() : 0;
+                if (a_access != b_access) {
+                  return a_access < b_access;
+                }
+                // otherwise, by root methods
+                return dexmethods_comparator()(a_method, b_method);
+              });
     // rename all scopes at this level that are not interface
     // and can be renamed
-    TRACE(OBFUSCATE, 5, "Found %ld scopes in %s\n", scopes.size(), SHOW(type));
-    for (auto& scope : scopes) {
+    TRACE(OBFUSCATE, 5, "Found %ld scopes in %s", scopes_copy.size(),
+          SHOW(type));
+    for (auto& scope : scopes_copy) {
       if (!can_rename_scope(scope)) {
         TRACE(OBFUSCATE, 5,
             "Cannot rename %s\n", SHOW(scope->methods[0].first));
@@ -475,7 +517,10 @@ void collect_refs(Scope& scope, RefsMap& def_refs) {
 /**
  * Rename virtual methods.
  */
-size_t rename_virtuals(Scope& classes, bool avoid_stack_trace_collision) {
+size_t rename_virtuals(
+    Scope& classes,
+    bool avoid_stack_trace_collision,
+    const std::unordered_map<const DexClass*, int>& next_dmethod_seeds) {
   // build a ClassScope a RefsMap and a VirtualRenamer
   ClassScopes class_scopes(classes);
   scope_info(class_scopes);
@@ -505,7 +550,8 @@ size_t rename_virtuals(Scope& classes, bool avoid_stack_trace_collision) {
                     def_refs,
                     avoid_stack_trace_collision ? &stack_trace_elements
                                                 : nullptr,
-                    avoid_stack_trace_collision ? &external_cache : nullptr);
+                    avoid_stack_trace_collision ? &external_cache : nullptr,
+                    next_dmethod_seeds);
 
   // rename virtual only first
   const auto obj_t = get_object_type();
