@@ -1271,6 +1271,31 @@ std::unordered_set<uint32_t> ResourcesArscFile::get_types_by_name(
   return type_ids;
 }
 
+std::vector<std::string> ResourcesArscFile::get_resource_strings_by_name(
+    const std::string& res_name) {
+  std::vector<std::string> ret;
+  auto it = name_to_ids.find(res_name);
+  if (it != name_to_ids.end()) {
+    ret.reserve(it->second.size());
+    for (uint32_t id : it->second) {
+      android::Res_value res_value;
+      res_table.getResource(id, &res_value);
+
+      // just in case there's a reference
+      res_table.resolveReference(&res_value, 0);
+      size_t len = 0;
+
+      // aapt is using 0, so why not?
+      const char16_t* str =
+          res_table.getTableStringBlock(0)->stringAt(res_value.data, &len);
+      if (str) {
+        ret.push_back(android::String8(str, len).string());
+      }
+    }
+  }
+  return ret;
+}
+
 ResourcesArscFile::~ResourcesArscFile() {
   if (!m_file_closed) {
     unmap_and_close(m_arsc_fd, m_arsc_ptr, m_arsc_len);

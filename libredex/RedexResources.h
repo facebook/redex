@@ -179,6 +179,8 @@ class ResourcesArscFile {
   std::map<std::string, std::vector<uint32_t>> name_to_ids;
 
   explicit ResourcesArscFile(const std::string& path);
+  std::vector<std::string> get_resource_strings_by_name(
+      const std::string& res_name);
   void remap_ids(const std::map<uint32_t, uint32_t>& old_to_remapped_ids);
   std::unordered_set<uint32_t> get_types_by_name(
       const std::unordered_set<std::string>& type_names);
