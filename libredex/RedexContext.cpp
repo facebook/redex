@@ -273,6 +273,7 @@ void RedexContext::erase_method(DexMethodRef* method) {
   s_method_map.erase(method->m_spec);
 }
 
+// TODO: Need a better interface.
 void RedexContext::mutate_method(DexMethodRef* method,
                                  const DexMethodSpec& new_spec,
                                  bool rename_on_collision,
@@ -293,7 +294,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
         show(r.name) != "<init>" && show(r.name) != "<clinit>",
         "you should not rename constructor on a collision, %s.%s:%s exists",
         SHOW(r.cls), SHOW(r.name), SHOW(r.proto));
-    if (new_spec.cls == nullptr) {
+    if (new_spec.cls == nullptr || new_spec.cls == old_spec.cls) {
       // Either method prototype or name is going to be changed, and we hit a
       // collision. Make an unique name: "name$[0-9]+". But in case of <clinit>,
       // libdex rejects a name like "<clinit>$1". See:
@@ -315,7 +316,7 @@ void RedexContext::mutate_method(DexMethodRef* method,
         r.name = DexString::make_string((prefix + std::to_string(i++)).c_str());
       } while (s_method_map.count(r));
     } else {
-      // We are about to change its class. Use a better name to remeber its
+      // We are about to change its class. Use a better name to remember its
       // original source class on a collision. Tokenize the class name into
       // parts, and use them until no more collison.
       //
@@ -344,10 +345,10 @@ void RedexContext::mutate_method(DexMethodRef* method,
           break;
         }
       }
-      // By this time, it should be no collision anymore.
     }
   }
 
+  // We might still miss name collision cases. As of now, let's just assert.
   if (s_method_map.count(r)) {
     auto& m = *s_method_map.find(r)->second;
     always_assert_log(!s_method_map.count(r),
