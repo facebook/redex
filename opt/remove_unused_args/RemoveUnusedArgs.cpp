@@ -228,7 +228,7 @@ bool RemoveArgs::update_method_signature(
     name = DexString::make_string(ss.str());
   }
 
-  DexMethodSpec spec(method->get_class(), name, updated_proto);
+  DexMethodSpec spec(nullptr, name, updated_proto);
   method->change(spec,
                  true /* rename on collision */,
                  true /* update deobfuscated name */);
