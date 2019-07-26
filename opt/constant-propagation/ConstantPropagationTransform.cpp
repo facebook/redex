@@ -95,7 +95,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
     auto op = primary_insn->opcode();
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
-        is_rem_int_lit(op)) {
+        is_rem_int_lit(op) || is_instance_of(op)) {
       replace_with_const(env, it);
     }
     break;
