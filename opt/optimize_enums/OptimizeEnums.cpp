@@ -14,6 +14,7 @@
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
+#include "MethodOverrideGraph.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
@@ -38,6 +39,7 @@ namespace {
 
 using GeneratedSwitchCases =
     std::unordered_map<DexField*, std::unordered_map<size_t, DexField*>>;
+namespace mog = method_override_graph;
 
 constexpr const char* METRIC_NUM_SYNTHETIC_CLASSES = "num_synthetic_classes";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
@@ -312,12 +314,42 @@ class OptimizeEnums {
     }
     optimize_enums::Config config(max_enum_size);
     calculate_param_summaries(m_scope, &config.param_summary_map);
+    auto method_override_graph = mog::build_graph(m_scope);
 
-    walk::classes(m_scope, [this, &config](DexClass* cls) {
-      if (!is_simple_enum(cls) || !only_one_static_synth_field(cls)) {
-        return;
+    /**
+     * An enum is safe if it not external, has no interfaces, has no instance
+     * fields (TODO), has no user defined true-virtual methods, and has only
+     * simple enum constructors. Static fields and non-true-virtual methods are
+     * safe.
+     */
+    auto is_safe_enum = [this, &method_override_graph](const DexClass* cls) {
+      if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
+          can_delete(cls) && cls->get_interfaces()->size() == 0 &&
+          cls->get_ifields().size() == 0 && only_one_static_synth_field(cls)) {
+
+        for (const auto& method : cls->get_dmethods()) {
+          if (is_init(method) && !is_simple_enum_constructor(method)) {
+            return false;
+          }
+        }
+
+        const auto& vmethods = cls->get_vmethods();
+        bool has_only_non_true_virtual_methods = std::all_of(
+            vmethods.begin(), vmethods.end(), [&](DexMethod* method) {
+              return can_rename(method) &&
+                     mog::get_true_virtuals(*method_override_graph, method,
+                                            /*include_interfaces=*/true)
+                         .empty();
+            });
+        return has_only_non_true_virtual_methods;
       }
-      config.candidate_enums.insert(cls->get_type());
+      return false;
+    };
+
+    walk::parallel::classes(m_scope, [&config, is_safe_enum](DexClass* cls) {
+      if (is_safe_enum(cls)) {
+        config.candidate_enums.insert(cls->get_type());
+      }
     });
 
     optimize_enums::reject_unsafe_enums(m_scope, &config);
@@ -327,7 +359,8 @@ class OptimizeEnums {
       }
     }
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        config, &m_stores, &m_stats.num_int_objs);
+        config, &m_stores, std::move(method_override_graph),
+        &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
   }
 
@@ -371,7 +404,7 @@ class OptimizeEnums {
    * Return true if there is only one static synthetic field in the class,
    * otherwise return false.
    */
-  bool only_one_static_synth_field(DexClass* cls) {
+  bool only_one_static_synth_field(const DexClass* cls) {
     DexField* synth_field = nullptr;
     auto synth_access = optimize_enums::synth_access();
     for (auto field : cls->get_sfields()) {
@@ -388,22 +421,6 @@ class OptimizeEnums {
       TRACE(ENUM, 2, "No synthetic field found on %s", SHOW(cls));
       return false;
     }
-    return true;
-  }
-
-  static bool is_simple_enum(const DexClass* cls) {
-    if (!is_enum(cls) || cls->is_external() || !is_final(cls) ||
-        !can_delete(cls) || cls->get_interfaces()->size() > 0 ||
-        !cls->get_ifields().empty() || !cls->get_vmethods().empty()) {
-      return false;
-    }
-    // Examine the constructors' instructions.
-    for (const DexMethod* method : cls->get_dmethods()) {
-      if (is_init(method) && !is_simple_enum_constructor(method)) {
-        return false;
-      }
-    }
-    // Static fields are allowed.
     return true;
   }
 

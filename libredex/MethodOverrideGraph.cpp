@@ -291,4 +291,12 @@ std::unordered_set<const DexMethod*> get_overridden_methods(
   return overridden;
 }
 
+std::unordered_set<const DexMethod*> get_true_virtuals(
+    const Graph& graph, const DexMethod* method, bool include_interfaces) {
+  auto overriding = get_overriding_methods(graph, method, include_interfaces);
+  auto overridden = get_overridden_methods(graph, method, include_interfaces);
+  overriding.insert(overridden.begin(), overridden.end());
+  return overriding;
+}
+
 } // namespace method_override_graph

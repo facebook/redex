@@ -9,9 +9,11 @@
 #include "DexClass.h"
 #include "DexStore.h"
 #include "EnumConfig.h"
+#include "MethodOverrideGraph.h"
 
 namespace optimize_enums {
 int transform_enums(const Config& config,
                     DexStoresVector* stores,
+                    std::unique_ptr<const method_override_graph::Graph> graph,
                     size_t* num_int_objs);
 } // namespace optimize_enums

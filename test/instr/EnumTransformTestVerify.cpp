@@ -41,6 +41,7 @@ bool is_enum_class(const DexClass* cls) {
 
 void expect_other_enums(const DexClasses& classes) {
   std::vector<std::string> class_names{
+      "Lcom/facebook/redextest/HAS_TRUE_VIRTUAL;",
       "Lcom/facebook/redextest/CAST_WHEN_RETURN;",
       "Lcom/facebook/redextest/CAST_THIS_POINTER;",
       "Lcom/facebook/redextest/CAST_PARAMETER;",

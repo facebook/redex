@@ -37,6 +37,11 @@ enum SCORE {
     }
     return null;
   }
+
+  // Non-true-virtual methods are safe.
+  public boolean is_max() {
+    return this == THREE;
+  }
 }
 
 interface Intf {
@@ -81,6 +86,13 @@ enum PURE_SCORE {
 }
 
 /* Some enums that are unsafe to be transformed. */
+enum HAS_TRUE_VIRTUAL {
+  ONE;
+  // True-virtual methods are not safe.
+  public String toString() {
+    return "I am a search bar!";
+  }
+}
 enum CAST_WHEN_RETURN {
   ONE;
   public static Enum[] method() {
@@ -334,5 +346,10 @@ public class EnumTransformTest {
     SCORE one = SCORE.ONE;
     SCORE obj = EnumHelper.notEscape(one);
     assertThat(one.ordinal()).isEqualTo(obj.ordinal());
+  }
+
+  @Test
+  public void virtual_method() {
+    assertThat(SCORE.THREE.is_max()).isEqualTo(true);
   }
 }

@@ -39,6 +39,15 @@ std::unordered_set<const DexMethod*> get_overridden_methods(
     bool include_interfaces = false);
 
 /*
+ * Returns all the methods that override or are overridden by :method. The set
+ * does *not* include the :method itself.
+ */
+std::unordered_set<const DexMethod*> get_true_virtuals(
+    const Graph& graph,
+    const DexMethod* method,
+    bool include_interfaces = false);
+
+/*
  * Slow-ish; users should build the graph once and cache it somewhere.
  */
 std::unique_ptr<const Graph> build_graph(const Scope&);

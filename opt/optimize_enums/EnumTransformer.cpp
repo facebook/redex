@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumUpcastAnalysis.h"
+#include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
 #include "TypeReference.h"
@@ -41,6 +42,10 @@
  *                    LCandidateEnum;.redex$OE$hashCode:(Integer)I
  *  -- invoke-static LCandidateEnum;.valueOf:(String)LCandidateEnum; =>
  *                   LCandidateEnum;.redex$OE$valueOf:(String)Integer
+ *  We also make all non-true-virtual methods static (those are virtual methods
+ *  that do not override and are not overridden by `Object`, `Enum`, or
+ *  interface methods) and keep them in their original class while also changing
+ *  their invocations to static.
  * 3. Clean the static fileds of candidate enums and update these enum classes
  * to inherit Object instead of Enum.
  * 4. Update specs of methods and fields based on name mangling.
@@ -49,6 +54,7 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
+namespace mog = method_override_graph;
 using EnumAttrMap =
     std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
 namespace ptrs = local_pointers;
@@ -78,7 +84,12 @@ struct EnumUtil {
   // later.
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
+  // Store non-true-virtual methods that will be made static later.
+  ConcurrentSet<DexMethod*> m_non_true_virtual_methods;
+
   DexMethodRef* m_values_method_ref = nullptr;
+
+  std::unique_ptr<const mog::Graph> m_method_override_graph;
 
   const Config& m_config;
 
@@ -141,7 +152,11 @@ struct EnumUtil {
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
 
-  explicit EnumUtil(const Config& config) : m_config(config) {}
+  explicit EnumUtil(const Config& config,
+                    std::unique_ptr<const mog::Graph> graph)
+      : m_config(config) {
+    m_method_override_graph = std::move(graph);
+  }
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
     DexClass* cls = make_enumutils_class(fields_count);
@@ -458,6 +473,18 @@ class CodeTransformer final {
         update_invoke_hashcode(env, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
         update_invoke_stringbuilder_append(env, mie);
+      } else {
+        auto resolved_method = resolve_method(method, MethodSearch::Virtual);
+        // Matches all non-true-virtual `SubEnum` methods (virtual methods that
+        // do not override and are not overridden by any `Enum`, `Object`, or
+        // interface methods).
+        if (m_enum_util->m_config.candidate_enums.count(method->get_class()) &&
+            mog::get_true_virtuals(*m_enum_util->m_method_override_graph,
+                                   resolved_method,
+                                   /*include_interfaces=*/true)
+                .empty()) {
+          update_invoke_user_method(mie, resolved_method);
+        }
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
@@ -715,6 +742,13 @@ class CodeTransformer final {
     m_replacements.push_back(InsnReplacement(mie, new_insn));
   }
 
+  void update_invoke_user_method(MethodItemEntry* mie, DexMethod* method) {
+    m_enum_util->m_non_true_virtual_methods.insert(method);
+    auto new_insn =
+        (new IRInstruction(*mie->insn))->set_opcode(OPCODE_INVOKE_STATIC);
+    m_replacements.push_back(InsnReplacement(mie, new_insn));
+  }
+
   /**
    * Return nullptr if the types contain none of the candidate enums,
    * return the candidate type if types only contain one candidate enum and do
@@ -762,9 +796,11 @@ class EnumTransformer final {
   /**
    * EnumTransformer constructor. Analyze <clinit> of candidate enums.
    */
-  EnumTransformer(const Config& config, DexStoresVector* stores)
+  EnumTransformer(const Config& config,
+                  DexStoresVector* stores,
+                  std::unique_ptr<const mog::Graph> graph)
       : m_stores(*stores), m_int_objs(0) {
-    m_enum_util = std::make_unique<EnumUtil>(config);
+    m_enum_util = std::make_unique<EnumUtil>(config, std::move(graph));
     for (auto it = config.candidate_enums.begin();
          it != config.candidate_enums.end();
          ++it) {
@@ -813,6 +849,9 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
+    for (DexMethod* method : m_enum_util->m_non_true_virtual_methods) {
+      mutators::make_static(method);
+    }
     post_update_enum_classes(scope);
     // Update all methods and fields references by replacing the candidate enum
     // types with Integer type.
@@ -1206,12 +1245,13 @@ namespace optimize_enums {
  */
 int transform_enums(const Config& config,
                     DexStoresVector* stores,
+                    std::unique_ptr<const mog::Graph> graph,
                     size_t* num_int_objs) {
   if (!config.candidate_enums.size()) {
     return 0;
   }
 
-  EnumTransformer transformer(config, stores);
+  EnumTransformer transformer(config, stores, std::move(graph));
   transformer.run();
   *num_int_objs = transformer.get_int_objs_count();
   return transformer.get_enum_objs_count();

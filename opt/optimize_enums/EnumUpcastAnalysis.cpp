@@ -355,13 +355,6 @@ class EnumUpcastDetector {
     auto method = insn->get_method();
     auto proto = method->get_proto();
     auto container = method->get_class();
-    // Other non-static invocations on candidate enum classes are considered
-    // unsafe to optimize.
-    if (insn->opcode() != OPCODE_INVOKE_STATIC &&
-        m_candidate_enums->count_unsafe(container)) {
-      reject(insn, container, rejected_enums,
-             UNSAFE_INVOCATION_ON_CANDIDATE_ENUM);
-    }
     // Check the type of arguments.
     const std::deque<DexType*>& args = proto->get_args()->get_type_list();
     always_assert(args.size() == insn->srcs_size() ||
@@ -610,19 +603,6 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   auto candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
-  // When do static analysis, simply skip some javac-generated methods for enum
-  // types : <init>, values(), valueOf(String)
-  auto is_generated_enum_method = [&](const DexMethod* method) -> bool {
-    auto& args = method->get_proto()->get_args()->get_type_list();
-    return candidate_enums->count_unsafe(method->get_class()) &&
-           !rejected_enums.count(method->get_class()) &&
-           (is_init(method) ||
-            // values()
-            is_enum_values(method) ||
-            // valueOf(String)
-            is_enum_valueof(method));
-  };
-
   walk::parallel::fields(classes, [candidate_enums,
                                    &rejected_enums](DexField* field) {
     if (can_rename(field)) {
@@ -642,8 +622,12 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   });
 
   walk::parallel::methods(classes, [&](DexMethod* method) {
-    // Skip generated enum methods
-    if (is_generated_enum_method(method)) {
+    // When doing static analysis, simply skip some javac-generated enum methods
+    // <init>, values(), and valueOf(String).
+    if (candidate_enums->count(method->get_class()) &&
+        !rejected_enums.count(method->get_class()) &&
+        (is_init(method) || is_enum_values(method) ||
+         is_enum_valueof(method))) {
       return;
     }
 
@@ -655,6 +639,9 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
         if (candidate_enums->count_unsafe(elem_type)) {
           rejected_enums.insert(elem_type);
         }
+      }
+      if (!is_static(method) && candidate_enums->count(method->get_class())) {
+        rejected_enums.insert(method->get_class());
       }
     }
 
