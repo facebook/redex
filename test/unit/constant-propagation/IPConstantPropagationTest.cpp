@@ -72,6 +72,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
     (
      (load-param v0)
      (load-param v1)
+     (const v1 0)
      (goto :label)
      (const v0 0)
      (:label)
@@ -80,6 +81,68 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
   )");
 
   EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
+}
+
+TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
+  // Let bar() be the only method calling baz(ILjava/lang/String;)V, passing it
+  // a constant argument. baz() should be optimized for constant arguments.
+
+  Scope scope;
+  auto cls_ty = DexType::make_type("LFoo;");
+  ClassCreator creator(cls_ty);
+  creator.set_super(get_object_type());
+
+  auto m1 = assembler::method_from_string(R"(
+    (method (public) "LFoo;.bar:()V"
+     (
+      (load-param v0) ; the `this` argument
+      (const v1 0)
+      (const-string "hello")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v0 v1 v2) "LFoo;.baz:(ILjava/lang/String;)V")
+      (return-void)
+     )
+    )
+  )");
+  m1->rstate.set_root();
+  creator.add_method(m1);
+
+  auto m2 = assembler::method_from_string(R"(
+    (method (private) "LFoo;.baz:(ILjava/lang/String;)V"
+     (
+      (load-param v0) ; the `this` argument
+      (load-param v1)
+      (load-param-object v2)
+      (if-eqz v1 :label)
+      (const v0 0)
+      (:label)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(m2);
+
+  auto cls = creator.create();
+  scope.push_back(cls);
+  InterproceduralConstantPropagationPass().run(scope);
+
+  auto expected_code2 = assembler::ircode_from_string(R"(
+    (
+     (load-param v0)
+     (load-param v1)
+     (load-param-object v2)
+     (const v1 0)
+     (const-string "hello")
+     (move-result-pseudo-object v2)
+     (goto :label)
+     (const v0 0)
+     (:label)
+     (return-void)
+    )
+  )");
+
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
+            assembler::to_s_expr(expected_code2.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantArgument) {

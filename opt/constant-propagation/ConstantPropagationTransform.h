@@ -32,11 +32,13 @@ class Transform final {
   struct Stats {
     size_t branches_removed{0};
     size_t materialized_consts{0};
+    size_t added_param_const{0};
     Stats operator+(const Stats& that) const {
       Stats result;
       result.branches_removed = branches_removed + that.branches_removed;
       result.materialized_consts =
           materialized_consts + that.materialized_consts;
+      result.added_param_const = added_param_const + that.added_param_const;
       return result;
     }
   };
@@ -60,6 +62,7 @@ class Transform final {
                             IRList::iterator);
 
   void replace_with_const(const ConstantEnvironment&, IRList::iterator);
+  void generate_const_param(const ConstantEnvironment&, IRList::iterator);
 
   void eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
@@ -77,6 +80,7 @@ class Transform final {
   const Config m_config;
   std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
       m_replacements;
+  std::vector<IRInstruction*> m_added_param_values;
   std::vector<IRList::iterator> m_deletes;
   Stats m_stats;
 };

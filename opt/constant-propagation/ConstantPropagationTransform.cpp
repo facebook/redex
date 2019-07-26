@@ -34,6 +34,25 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   ++m_stats.materialized_consts;
 }
 
+/*
+ * Add an const after load param section for a known value load_param.
+ * This will depend on future run of RemoveUnusedArgs pass to get the win of
+ * removing not used arguments.
+ */
+void Transform::generate_const_param(const ConstantEnvironment& env,
+                                     IRList::iterator it) {
+  auto* insn = it->insn;
+  auto value = env.get(insn->dest());
+  auto replacement =
+      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
+  if (replacement.size() == 0) {
+    return;
+  }
+  m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
+                              replacement.end());
+  ++m_stats.added_param_const;
+}
+
 void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
                                         const WholeProgramState& wps,
                                         IRList::iterator it) {
@@ -83,6 +102,12 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      IRList::iterator it) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
+  case IOPCODE_LOAD_PARAM:
+  case IOPCODE_LOAD_PARAM_OBJECT:
+  case IOPCODE_LOAD_PARAM_WIDE: {
+    generate_const_param(env, it);
+    break;
+  }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
@@ -296,6 +321,10 @@ void Transform::apply_changes(IRCode* code) {
   for (auto it : m_deletes) {
     TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
     code->remove_opcode(it);
+  }
+  auto params = code->get_param_instructions();
+  for (auto insn : m_added_param_values) {
+    code->insert_before(params.end(), insn);
   }
 }
 

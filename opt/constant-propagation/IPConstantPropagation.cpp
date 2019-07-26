@@ -23,6 +23,7 @@ using CombinedAnalyzer = InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
                                                      WholeProgramAwareAnalyzer,
                                                      EnumFieldAnalyzer,
                                                      BoxedBooleanAnalyzer,
+                                                     StringAnalyzer,
                                                      PrimitiveAnalyzer>;
 
 std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
@@ -54,6 +55,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
                        &wps,
                        EnumFieldAnalyzerState(),
                        BoxedBooleanAnalyzerState(),
+                       nullptr,
                        nullptr));
   intra_cp->run(env);
 
@@ -186,6 +188,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   run(scope);
   mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
   mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);
+  mgr.incr_metric("added_param_const", m_transform_stats.added_param_const);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
 }
