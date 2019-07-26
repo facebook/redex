@@ -41,6 +41,7 @@
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
 #include "JarLoader.h"
+#include "MonitorCount.h"
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
@@ -820,6 +821,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     // this will change rstate of methods
     redex::process_no_optimizations_rules(conf.get_no_optimizations_annos(),
                                           scope);
+    monitor_count::mark_sketchy_methods_with_no_optimize(scope);
   }
   {
     Timer t("Initializing reachable classes");

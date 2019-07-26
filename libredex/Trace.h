@@ -65,6 +65,7 @@
   TM(METH_MERGER)    \
   TM(MMINL)          \
   TM(MMODE)          \
+  TM(MONITOR)        \
   TM(MORTIROLO)      \
   TM(MTRANS)         \
   TM(OBFUSCATE)      \
