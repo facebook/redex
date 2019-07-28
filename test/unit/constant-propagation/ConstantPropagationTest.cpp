@@ -334,7 +334,7 @@ TEST(ConstantPropagation, Switch6) {
 }
 
 // A uniquely non-default case with constant.
-TEST(ConstantPropagation, Switch7) {
+TEST(ConstantPropagation, SwitchOnExactConstant) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
@@ -366,6 +366,31 @@ TEST(ConstantPropagation, Switch7) {
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected_code.get()));
+}
+
+TEST(ConstantPropagation, SwitchOnInterval) {
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (if-gez v0 :a)
+      (const v0 0)
+      (:a)
+      ; at this point, we know v0 is >= 0
+
+      (switch v0 (:b))
+      ; reachable
+      (const v1 100)
+      (return v1)
+      (:b 1) ; reachable
+      (const v1 200)
+      (return v1)
+    )
+)");
+
+  auto original = assembler::to_s_expr(code.get());
+  do_const_prop(code.get());
+
+  EXPECT_EQ(assembler::to_s_expr(code.get()), original) << show(code.get());
 }
 
 // A uniquely non-default case with non-constant.

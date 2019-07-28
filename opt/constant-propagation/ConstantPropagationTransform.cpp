@@ -204,9 +204,10 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
 
   // Find a non-default block which is uniquely reachable with a constant.
   cfg::Block* reachable = nullptr;
-  auto eval_switch = env.get(insn->src(0));
-  // If switch value is not constant, do not replace the switch by a goto.
-  bool should_goto = !eval_switch.is_top();
+  auto eval_switch = env.get<SignedConstantDomain>(insn->src(0));
+  // If switch value is not an exact constant, do not replace the switch by a
+  // goto.
+  bool should_goto = eval_switch.constant_domain().is_value();
   for (auto succ : succs) {
     for (auto& mie : *succ) {
       if (is_switch_label(mie)) {
