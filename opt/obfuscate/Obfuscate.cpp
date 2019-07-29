@@ -142,7 +142,7 @@ void obfuscate(Scope& scope,
   get_totals(scope, stats);
   ClassHierarchy ch = build_type_hierarchy(scope);
 
-  DexFieldManager field_name_manager(new_dex_field_manager());
+  DexFieldManager field_name_manager = new_dex_field_manager();
   DexMethodManager method_name_manager = new_dex_method_manager();
 
   std::unordered_map<const DexClass*, int> next_dmethod_seeds;
@@ -160,96 +160,55 @@ void obfuscate(Scope& scope,
         contains_renamable_elem(cls->get_dmethods(), method_name_manager);
     if (operate_on_ifields || operate_on_sfields) {
       FieldObfuscationState f_ob_state;
-      FieldNameGenerator field_name_generator(
-          f_ob_state.ids_to_avoid, f_ob_state.used_ids);
-      StaticFieldNameGenerator static_name_generator(
-          f_ob_state.ids_to_avoid, f_ob_state.used_ids);
+      FieldNameGenerator field_name_generator(f_ob_state.ids_to_avoid,
+                                              f_ob_state.used_ids);
 
       TRACE(OBFUSCATE, 3, "Renaming the fields of class %s",
-          SHOW(cls->get_name()));
+            SHOW(cls->get_name()));
 
-      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, true, ch);
+      f_ob_state.populate_ids_to_avoid(cls, field_name_manager,
+                                       /* unused */ ch);
 
-      // Keep this for all public ids in the class (they shouldn't conflict)
       if (operate_on_ifields) {
         obfuscate_elems(
-            FieldRenamingContext(cls->get_ifields(),
-                f_ob_state.ids_to_avoid,
-                field_name_generator, false),
+            FieldRenamingContext(cls->get_ifields(), field_name_generator),
             field_name_manager);
       }
       if (operate_on_sfields) {
         obfuscate_elems(
-            FieldRenamingContext(cls->get_sfields(),
-                f_ob_state.ids_to_avoid,
-                static_name_generator, false),
-            field_name_manager);
-      }
-
-      // Obfu private fields
-      f_ob_state.populate_ids_to_avoid(cls, field_name_manager, false, ch);
-
-      // Keep this for all public ids in the class (they shouldn't conflict)
-      if (operate_on_ifields) {
-        obfuscate_elems(
-            FieldRenamingContext(cls->get_ifields(),
-            f_ob_state.ids_to_avoid,
-            field_name_generator, true),
-        field_name_manager);
-      }
-      if (operate_on_sfields) {
-        obfuscate_elems(
-            FieldRenamingContext(cls->get_sfields(),
-                f_ob_state.ids_to_avoid,
-                static_name_generator, true),
+            FieldRenamingContext(cls->get_sfields(), field_name_generator),
             field_name_manager);
       }
 
       // Make sure to bind the new names otherwise not all generators will
       // assign names to the members
       field_name_generator.bind_names();
-      static_name_generator.bind_names();
     }
 
     // =========== Obfuscate Methods Below ==========
     if (operate_on_dmethods) {
       MethodObfuscationState m_ob_state;
-      MethodNameGenerator simple_name_gen(m_ob_state.ids_to_avoid,
-          m_ob_state.used_ids);
+      MethodNameGenerator direct_method_name_gen(m_ob_state.ids_to_avoid,
+                                                 m_ob_state.used_ids);
 
       TRACE(OBFUSCATE, 3, "Renaming the methods of class %s",
-                SHOW(cls->get_name()));
-      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, true, ch);
-
-      // Keep this for all public ids in the class (they shouldn't conflict)
-      obfuscate_elems(
-          MethodRenamingContext(cls->get_dmethods(),
-              m_ob_state.ids_to_avoid,
-              simple_name_gen,
-              method_name_manager,
-              false),
-          method_name_manager);
-
-      // Obfu private methods
-      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, false, ch);
+            SHOW(cls->get_name()));
+      m_ob_state.populate_ids_to_avoid(cls, method_name_manager, ch);
 
       obfuscate_elems(MethodRenamingContext(cls->get_dmethods(),
-                                            m_ob_state.ids_to_avoid,
-                                            simple_name_gen,
-                                            method_name_manager,
-                                            true),
+                                            direct_method_name_gen,
+                                            method_name_manager),
                       method_name_manager);
 
-      simple_name_gen.bind_names();
-      auto next_ctr = simple_name_gen.next_ctr();
+      direct_method_name_gen.bind_names();
+      auto next_ctr = direct_method_name_gen.next_ctr();
       if (next_ctr) {
-        next_dmethod_seeds.emplace(cls, simple_name_gen.next_ctr());
+        next_dmethod_seeds.emplace(cls, direct_method_name_gen.next_ctr());
       }
     }
   }
   field_name_manager.print_elements();
   method_name_manager.print_elements();
-
 
   TRACE(OBFUSCATE, 3, "Finished picking new names");
 
