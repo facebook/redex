@@ -395,8 +395,12 @@ void VirtualMerging::merge_methods() {
       std::function<uint32_t()> allocate_wide_temp;
       std::function<void()> cleanup;
       IRCode* overridden_code;
+      // We make the method public to avoid visibility issues. We could be more
+      // conservative (i.e. taking the strongest visibility control that
+      // encompasses the original pair) but I'm not sure it's worth the effort.
+      set_public(overridden_method);
       if (is_abstract(overridden_method)) {
-        // We'll make the abstract make be not abstract, and give it a new
+        // We'll make the abstract method be not abstract, and give it a new
         // method body.
         // It starts out with just load-param instructions as needed, and then
         // we'll add an invoke-virtual instruction that will get inlined.
@@ -434,7 +438,7 @@ void VirtualMerging::merge_methods() {
         cleanup = [&]() { overridden_code->build_cfg(/* editable */ true); };
       } else {
         // We are dealing with a non-abstract method. In this case, we'll first
-        // insert an if-instruction to decide whether to run the overridden
+        // insert an if-instruction to decide whether to run the overriding
         // method that we'll inline, or whether to jump to the old method body.
         overridden_code = overridden_method->get_code();
         always_assert(overridden_code);
