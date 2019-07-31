@@ -19,13 +19,17 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
       m_proguard_map(config.get("proguard_map", "").asString()),
-      m_coldstart_class_filename(
-          config.get("coldstart_classes", "").asString()),
       m_coldstart_method_filename(
           config.get("coldstart_methods", "").asString()),
       m_profiled_methods_filename(
           config.get("profiled_methods_file", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()) {
+
+  m_coldstart_class_filename = config.get("coldstart_classes", "").asString();
+  if (m_coldstart_class_filename.empty()) {
+    m_coldstart_class_filename =
+        config.get("default_coldstart_classes", "").asString();
+  }
 
   if (m_profiled_methods_filename != "") {
     load_method_to_weight();
