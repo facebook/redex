@@ -50,6 +50,10 @@ class DexInstruction : public Gatherable {
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
   DexInstruction(const uint16_t* opcodes, int count) : Gatherable() {
+    always_assert_log(count <= MAX_ARG_COUNT,
+                      "arg count %d exceeded the limit of %d",
+                      count,
+                      MAX_ARG_COUNT);
     m_opcode = *opcodes++;
     m_count = count;
     for (int i = 0; i < count; i++) {
