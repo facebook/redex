@@ -272,7 +272,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
     for (auto insn : insns_to_hoist) {
-      if (opcode::is_move_result_pseudo(insn.opcode())) {
+      if (opcode::is_move_result_or_move_result_pseudo(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
         continue;
       }
