@@ -101,6 +101,18 @@ class FieldAnalyzer final
       break;
     }
 
+    case OPCODE_SPUT_OBJECT: {
+      auto field = resolve_field(insn->get_field(), FieldSearch::Static);
+      if (!field) {
+        default_case();
+        break;
+      }
+
+      if (field->get_class() == m_generated_cls->get_type() || is_enum(field)) {
+        env->set(insn->src(0), DexFieldConstantDomain(field));
+      }
+      break;
+    }
     case OPCODE_SGET_OBJECT: {
       auto field = resolve_field(insn->get_field(), FieldSearch::Static);
       if (!field) {
