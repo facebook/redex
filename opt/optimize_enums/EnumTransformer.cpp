@@ -388,13 +388,45 @@ struct EnumUtil {
 };
 
 struct InsnReplacement {
-  MethodItemEntry* original_mie;
+  cfg::InstructionIterator original_insn;
   std::vector<IRInstruction*> replacements;
 
-  InsnReplacement(MethodItemEntry* mie, IRInstruction* new_insn)
-      : original_mie(mie), replacements{new_insn} {}
-  InsnReplacement(MethodItemEntry* mie, std::vector<IRInstruction*>& insns)
-      : original_mie(mie), replacements(std::move(insns)) {}
+  InsnReplacement(cfg::ControlFlowGraph& cfg,
+                  cfg::Block* block,
+                  MethodItemEntry* mie,
+                  IRInstruction* new_insn,
+                  boost::optional<IROpcode> opcode = boost::none)
+      : original_insn(block->to_cfg_instruction_iterator(*mie)),
+        replacements{new_insn} {
+    push_back_move_result(cfg, mie, opcode);
+  }
+  InsnReplacement(cfg::ControlFlowGraph& cfg,
+                  cfg::Block* block,
+                  MethodItemEntry* mie,
+                  std::vector<IRInstruction*>& new_insns,
+                  boost::optional<IROpcode> opcode = boost::none)
+      : original_insn(block->to_cfg_instruction_iterator(*mie)),
+        replacements(std::move(new_insns)) {
+    push_back_move_result(cfg, mie, opcode);
+  }
+
+ private:
+  /**
+   * If the original instruction was paired with a `move-result`, create a new
+   * one with the same destination register (and possibly the same opcode)
+   * because the original one will be removed.
+   */
+  void push_back_move_result(cfg::ControlFlowGraph& cfg,
+                             MethodItemEntry* mie,
+                             boost::optional<IROpcode> opcode) {
+    always_assert(mie->insn->has_move_result());
+    auto move_insn_it = cfg.move_result_of(original_insn);
+    if (!move_insn_it.is_end()) {
+      auto& move_insn = move_insn_it.unwrap()->insn;
+      replacements.push_back(dasm(opcode ? *opcode : move_insn->opcode(),
+                                  {{VREG, move_insn->dest()}}));
+    }
+  }
 };
 
 /**
@@ -422,57 +454,50 @@ class CodeTransformer final {
       for (auto it = block->begin(); it != block->end(); ++it) {
         if (it->type == MFLOW_OPCODE) {
           engine.analyze_instruction(it->insn, &env);
-          update_instructions(env, block, &(*it));
+          update_instructions(env, cfg, block, &(*it));
         }
       }
     }
 
-    code->clear_cfg();
     // We could not insert invoke-kind instructions to editable cfg when we
     // iterate the cfg. If we're inside a try region, inserting invoke-kind will
     // split the block and insert a move-result in the new goto successor block,
     // thus invalidating iterators into the CFG. See the comment on the
     // insertion methods in ControlFlow.h for more details.
-    // TODO: We can use editable cfg API to upate the code when the APIs are
-    // ready, see T42743620.
     for (const auto& info : m_replacements) {
-      auto mie = info.original_mie;
-      auto iterator = code->iterator_to(*mie);
-      always_assert(iterator != code->end());
-      for (auto new_insn : info.replacements) {
-        code->insert_before(iterator, new_insn);
-      }
-      delete mie->insn;
-      mie->type = MFLOW_FALLTHROUGH;
-      mie->insn = nullptr;
-      code->erase(iterator);
+      cfg.replace_insns(info.original_insn, info.replacements);
     }
+    code->clear_cfg();
   }
 
  private:
   void update_instructions(const optimize_enums::EnumTypeEnvironment& env,
+                           cfg::ControlFlowGraph& cfg,
                            cfg::Block* block,
                            MethodItemEntry* mie) {
     auto insn = mie->insn;
     switch (insn->opcode()) {
     case OPCODE_SGET_OBJECT:
-      update_sget_object(env, mie);
+      update_sget_object(env, cfg, block, mie);
       break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
       if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
-        update_invoke_virtual(env, mie, m_enum_util->INTEGER_INTVALUE_METHOD);
+        update_invoke_virtual(env, cfg, block, mie,
+                              m_enum_util->INTEGER_INTVALUE_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_EQUALS_METHOD)) {
-        update_invoke_virtual(env, mie, m_enum_util->INTEGER_EQUALS_METHOD);
+        update_invoke_virtual(env, cfg, block, mie,
+                              m_enum_util->INTEGER_EQUALS_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
-        update_invoke_virtual(env, mie, m_enum_util->INTEGER_COMPARETO_METHOD);
+        update_invoke_virtual(env, cfg, block, mie,
+                              m_enum_util->INTEGER_COMPARETO_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD) ||
                  signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
-        update_invoke_tostring(env, mie);
+        update_invoke_tostring(env, cfg, block, mie);
       } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
-        update_invoke_hashcode(env, mie);
+        update_invoke_hashcode(env, cfg, block, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
-        update_invoke_stringbuilder_append(env, mie);
+        update_invoke_stringbuilder_append(env, cfg, block, mie);
       } else {
         auto resolved_method = resolve_method(method, MethodSearch::Virtual);
         // Matches all non-true-virtual `SubEnum` methods (virtual methods that
@@ -483,18 +508,18 @@ class CodeTransformer final {
                                    resolved_method,
                                    /*include_interfaces=*/true)
                 .empty()) {
-          update_invoke_user_method(mie, resolved_method);
+          update_invoke_user_method(cfg, block, mie, resolved_method);
         }
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
       if (method == m_enum_util->STRING_VALUEOF_METHOD) {
-        update_invoke_string_valueof(env, mie);
+        update_invoke_string_valueof(env, cfg, block, mie);
       } else if (is_enum_values(method)) {
-        update_invoke_values(env, block, mie);
+        update_invoke_values(env, cfg, block, mie);
       } else if (is_enum_valueof(method)) {
-        update_invoke_valueof(env, mie);
+        update_invoke_valueof(env, cfg, block, mie);
       }
     } break;
     case OPCODE_NEW_ARRAY: {
@@ -510,9 +535,10 @@ class CodeTransformer final {
         DexType* candidate_type =
             extract_candidate_enum_type(env.get(insn->src(0)));
         always_assert(candidate_type == type);
-        m_replacements.push_back(InsnReplacement(
-            mie, dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
-                      {{VREG, insn->src(0)}})));
+        m_replacements.push_back(
+            InsnReplacement(cfg, block, mie,
+                            dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
+                                 {{VREG, insn->src(0)}})));
       } else if (type == m_enum_util->ENUM_TYPE) {
         always_assert(!extract_candidate_enum_type(env.get(insn->src(0))));
       }
@@ -534,6 +560,8 @@ class CodeTransformer final {
    *   sget-object LEnumUtils;.f?:Integer
    */
   void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
+                          cfg::ControlFlowGraph& cfg,
+                          cfg::Block* block,
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto field = static_cast<DexField*>(insn->get_field());
@@ -547,7 +575,7 @@ class CodeTransformer final {
     auto ord = enum_attrs.at(field).ordinal;
     auto new_field = m_enum_util->m_fields[ord];
     auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
-    m_replacements.push_back(InsnReplacement(mie, new_insn));
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
   /**
@@ -557,6 +585,7 @@ class CodeTransformer final {
    *   invoke-static vn LEnumUtils;.values:(I)[Integer
    */
   void update_invoke_values(const optimize_enums::EnumTypeEnvironment&,
+                            cfg::ControlFlowGraph& cfg,
                             cfg::Block* block,
                             MethodItemEntry* mie) {
     auto insn = mie->insn;
@@ -574,7 +603,7 @@ class CodeTransformer final {
       new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
                                m_enum_util->m_values_method_ref,
                                {{VREG, reg}}));
-      m_replacements.push_back(InsnReplacement(mie, new_insns));
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
     }
   }
 
@@ -584,6 +613,8 @@ class CodeTransformer final {
    *   invoke-static v0 LCandidateEnum;.redex$OE$valueOf:(String)Integer
    */
   void update_invoke_valueof(const optimize_enums::EnumTypeEnvironment&,
+                             cfg::ControlFlowGraph& cfg,
+                             cfg::Block* block,
                              MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
@@ -593,7 +624,8 @@ class CodeTransformer final {
     auto valueof_method = m_enum_util->add_substitute_of_valueof(container);
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
-        mie, dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
   }
 
   /**
@@ -606,6 +638,8 @@ class CodeTransformer final {
    * same when LCandidateEnum; is a candidate enum.
    */
   void update_invoke_tostring(const optimize_enums::EnumTypeEnvironment& env,
+                              cfg::ControlFlowGraph& cfg,
+                              cfg::Block* block,
                               MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
@@ -625,7 +659,8 @@ class CodeTransformer final {
         m_enum_util->add_substitute_of_tostring(candidate_type);
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
-        mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
   }
 
   /**
@@ -634,6 +669,8 @@ class CodeTransformer final {
    *    invoke-static v0 LCandidateEnum;.redex$OE$hashCode:(Integer)I
    */
   void update_invoke_hashcode(const optimize_enums::EnumTypeEnvironment& env,
+                              cfg::ControlFlowGraph& cfg,
+                              cfg::Block* block,
                               MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
@@ -653,7 +690,8 @@ class CodeTransformer final {
     auto helper_method =
         m_enum_util->add_substitute_of_hashcode(candidate_type);
     m_replacements.push_back(InsnReplacement(
-        mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}})));
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}})));
   }
 
   /**
@@ -663,7 +701,10 @@ class CodeTransformer final {
    *   invoke-static v0 LCandidateEnum;.redex$OE$String_valueOf:(Integer)String
    */
   void update_invoke_string_valueof(
-      const optimize_enums::EnumTypeEnvironment& env, MethodItemEntry* mie) {
+      const optimize_enums::EnumTypeEnvironment& env,
+      cfg::ControlFlowGraph& cfg,
+      cfg::Block* block,
+      MethodItemEntry* mie) {
     auto insn = mie->insn;
     DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(0)));
@@ -673,8 +714,9 @@ class CodeTransformer final {
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
     m_replacements.push_back(
-        InsnReplacement(mie, dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
-                                  {{VREG, insn->src(0)}})));
+        InsnReplacement(cfg, block, mie,
+                        dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
+                             {{VREG, insn->src(0)}})));
   }
 
   /**
@@ -686,7 +728,10 @@ class CodeTransformer final {
    *   invoke-virtual v0 vn LStringBuilder;.append:(String)LStringBuilder;
    */
   void update_invoke_stringbuilder_append(
-      const optimize_enums::EnumTypeEnvironment& env, MethodItemEntry* mie) {
+      const optimize_enums::EnumTypeEnvironment& env,
+      cfg::ControlFlowGraph& cfg,
+      cfg::Block* block,
+      MethodItemEntry* mie) {
     auto insn = mie->insn;
     DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(1)));
@@ -695,8 +740,8 @@ class CodeTransformer final {
     }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
-    auto reg0 = mie->insn->src(0);
-    auto reg1 = mie->insn->src(1);
+    auto reg0 = insn->src(0);
+    auto reg1 = insn->src(1);
     auto str_reg = allocate_temp();
     std::vector<IRInstruction*> new_insns{
         dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg1}}),
@@ -704,13 +749,13 @@ class CodeTransformer final {
         dasm(OPCODE_INVOKE_VIRTUAL,
              m_enum_util->STRINGBUILDER_APPEND_STR_METHOD,
              {{VREG, reg0}, {VREG, str_reg}})};
-    m_replacements.push_back(InsnReplacement(mie, new_insns));
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
   }
 
   /**
    * If v0 is a candidate enum,
    * invoke-virtual v0 LCandidateEnum;.ordinal:()I =>
-   * invoke-virtual v0 Integer.intValue(),
+   * invoke-virtual v0 Integer.intValue()I,
    *
    * invoke-virtual v0, v1 LCandidateEnum;.equals:(Ljava/lang/Object;)Z =>
    * invoke-virtual v0, v1 Integer.equals(Ljava/lang/Object;)Z,
@@ -719,6 +764,8 @@ class CodeTransformer final {
    * invoke-virtual v0, v1 Integer.compareTo(Ljava/lang/Integer;)I
    */
   void update_invoke_virtual(const optimize_enums::EnumTypeEnvironment& env,
+                             cfg::ControlFlowGraph& cfg,
+                             cfg::Block* block,
                              MethodItemEntry* mie,
                              DexMethodRef* integer_meth) {
     auto insn = mie->insn;
@@ -739,14 +786,17 @@ class CodeTransformer final {
     for (size_t id = 0; id < insn->srcs_size(); ++id) {
       new_insn->set_src(id, insn->src(id));
     }
-    m_replacements.push_back(InsnReplacement(mie, new_insn));
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
-  void update_invoke_user_method(MethodItemEntry* mie, DexMethod* method) {
+  void update_invoke_user_method(cfg::ControlFlowGraph& cfg,
+                                 cfg::Block* block,
+                                 MethodItemEntry* mie,
+                                 DexMethod* method) {
     m_enum_util->m_non_true_virtual_methods.insert(method);
     auto new_insn =
         (new IRInstruction(*mie->insn))->set_opcode(OPCODE_INVOKE_STATIC);
-    m_replacements.push_back(InsnReplacement(mie, new_insn));
+    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
   /**
@@ -849,8 +899,8 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    for (DexMethod* method : m_enum_util->m_non_true_virtual_methods) {
-      mutators::make_static(method);
+    for (DexMethod* vmethod : m_enum_util->m_non_true_virtual_methods) {
+      mutators::make_static(vmethod);
     }
     post_update_enum_classes(scope);
     // Update all methods and fields references by replacing the candidate enum
