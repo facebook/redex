@@ -2050,6 +2050,39 @@ TEST(ControlFlow, replace_insn_may_throw3) {
   delete g_redex;
 }
 
+TEST(ControlFlow, replace_insn_invoke) {
+  g_redex = new RedexContext();
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (invoke-virtual (v0) "LFoo;.bar:()I")
+      (move-result v0)
+      (return v0)
+    )
+  )");
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
+
+  auto ii = cfg::InstructionIterable(cfg);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    if (it->insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
+      cfg.replace_insn(it, dasm(OPCODE_NOP));
+      break;
+    }
+  }
+  code->clear_cfg();
+
+  auto expected = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (nop)
+      (return v0)
+    )
+  )");
+  EXPECT_CODE_EQ(expected.get(), code.get());
+  delete g_redex;
+}
+
 TEST(ControlFlow, replace_if_with_return) {
   auto code = assembler::ircode_from_string(R"(
     (
