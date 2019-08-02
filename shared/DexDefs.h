@@ -167,6 +167,6 @@ enum DexDebugItemOpcodeValues : uint8_t {
 };
 
 constexpr int32_t DBG_FIRST_SPECIAL = 0x0a;
-constexpr int32_t DBG_LAST_SPECIAL = 0x0a;
+constexpr int32_t DBG_LAST_SPECIAL = 0xff;
 constexpr int32_t DBG_LINE_BASE = -4;
 constexpr int32_t DBG_LINE_RANGE = 15;

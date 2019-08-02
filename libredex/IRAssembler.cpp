@@ -267,6 +267,93 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   return insn;
 }
 
+std::string string_from_s_expr(const s_expr& arg) {
+  std::string arg_str;
+  s_patn(&arg_str).must_match(arg, "Expecting a string for " + arg.str());
+  return arg_str;
+}
+
+template <typename T>
+T integer_from_s_expr(const s_expr& arg) {
+  std::istringstream in(string_from_s_expr(arg));
+  T num;
+  in >> num;
+  // Check if there are bytes left in the string.
+  always_assert_log(in.rdbuf()->in_avail() == 0,
+                    "Found unexpected non-integers for %s",
+                    arg.str().c_str());
+  return num;
+}
+
+std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
+  std::string opcode;
+  s_expr tail;
+  s_patn({s_patn(&opcode)}, tail)
+      .must_match(e, "Expecting at least one opcode for .dbg instruction");
+  auto check_arg_num = [&](const s_expr& tail, uint32_t n) {
+    always_assert_log(tail.size() == n,
+                      "Expecting %d arguments for opcode %s",
+                      n,
+                      opcode.c_str());
+  };
+
+  if (opcode == "DBG_END_SEQUENCE") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_END_SEQUENCE);
+  } else if (opcode == "DBG_ADVANCE_PC") {
+    check_arg_num(tail, 1);
+    uint32_t addr_diff = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_ADVANCE_PC, addr_diff);
+  } else if (opcode == "DBG_ADVANCE_LINE") {
+    check_arg_num(tail, 1);
+    int32_t line_diff = integer_from_s_expr<int32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_ADVANCE_LINE, line_diff);
+  } else if (opcode == "DBG_START_LOCAL") {
+    check_arg_num(tail, 3);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
+    return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
+                                                      type_idx);
+  } else if (opcode == "DBG_START_LOCAL_EXTENDED") {
+    check_arg_num(tail, 4);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
+    DexString* sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
+    return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
+                                                      type_idx, sig_idx);
+  } else if (opcode == "DBG_END_LOCAL") {
+    check_arg_num(tail, 1);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_END_LOCAL, register_num);
+  } else if (opcode == "DBG_RESTART_LOCAL") {
+    check_arg_num(tail, 1);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_RESTART_LOCAL,
+                                                 register_num);
+  } else if (opcode == "DBG_SET_PROLOGUE_END") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_SET_PROLOGUE_END);
+  } else if (opcode == "DBG_SET_EPILOGUE_BEGIN") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_SET_EPILOGUE_BEGIN);
+  } else if (opcode == "DBG_SET_FILE") {
+    check_arg_num(tail, 1);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[0]));
+    return std::make_unique<DexDebugOpcodeSetFile>(name_idx);
+  } else {
+    always_assert_log(opcode == "EMIT", "Unknown opcode: %s", opcode.c_str());
+    check_arg_num(tail, 1);
+    uint32_t special_opcode = integer_from_s_expr<uint32_t>(tail[0]);
+    always_assert_log(special_opcode >= DBG_FIRST_SPECIAL &&
+                          special_opcode <= DBG_LAST_SPECIAL,
+                      "Special opcode value (%d) is out of range.",
+                      special_opcode);
+    return std::make_unique<DexDebugInstruction>(special_opcode);
+  }
+}
+
 std::unique_ptr<DexPosition> position_from_s_expr(
     const s_expr& e,
     const std::unordered_map<std::string, DexPosition*>& positions) {
@@ -620,6 +707,10 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         }
         code->push_back(*catch_marker);
 
+      } else if (keyword == ".dbg") {
+        auto dbg_insn = debug_info_from_s_expr(tail);
+        always_assert(dbg_insn != nullptr);
+        code->push_back(std::move(dbg_insn));
       } else if (keyword[0] == ':') {
         const auto& label = keyword;
         always_assert_log(

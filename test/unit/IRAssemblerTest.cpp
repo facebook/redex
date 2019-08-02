@@ -580,3 +580,98 @@ TEST_F(IRAssemblerTest, posWithGreatGrandparent) {
   EXPECT_EQ(pos3->line, 442);
   EXPECT_EQ(*pos3->parent->parent->parent, *pos0);
 }
+
+std::vector<DexDebugInstruction*> get_debug_info(
+    const std::unique_ptr<IRCode>& code) {
+  std::vector<DexDebugInstruction*> debug_info;
+  for (const auto& mie : *code) {
+    if (mie.type == MFLOW_DEBUG) {
+      debug_info.push_back(mie.dbgop.get());
+    }
+  }
+  return debug_info;
+}
+
+TEST_F(IRAssemblerTest, dbgInstFromSExpr) {
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (.dbg DBG_SET_FILE "foo.java")
+      (.dbg DBG_SET_EPILOGUE_BEGIN)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (.dbg DBG_RESTART_LOCAL 1)
+      (.dbg DBG_END_LOCAL 2)
+      (.dbg DBG_START_LOCAL_EXTENDED 3 "name" "Ljava/lang/Objects;" "sig")
+      (.dbg DBG_START_LOCAL 4 "name" "Ljava/lang/Objects;")
+      (.dbg DBG_ADVANCE_LINE 5)
+      (.dbg DBG_ADVANCE_PC 6)
+      (.dbg DBG_END_SEQUENCE)
+      (.dbg EMIT 10)
+      (const v0 42)
+      (return v0)
+    )
+  )");
+
+  // TODO (T45979630) Ensure serialization works as expected
+  // Ensure deserialization works as expected
+  EXPECT_EQ(code->count_opcodes(), 2);
+  auto debug_info = get_debug_info(code);
+  EXPECT_EQ(debug_info.size(), 11);
+
+  auto dbg0 = debug_info[0];
+  EXPECT_EQ(dbg0->opcode(), DBG_SET_FILE);
+  auto dbg0_ = dynamic_cast<DexDebugOpcodeSetFile*>(dbg0);
+  EXPECT_NE(dbg0_, nullptr);
+  EXPECT_EQ(dbg0_->file()->str(), "foo.java");
+
+  auto dbg1 = debug_info[1];
+  EXPECT_EQ(dbg1->opcode(), DBG_SET_EPILOGUE_BEGIN);
+  EXPECT_EQ(dbg1->uvalue(), DEX_NO_INDEX);
+
+  auto dbg2 = debug_info[2];
+  EXPECT_EQ(dbg2->opcode(), DBG_SET_PROLOGUE_END);
+  EXPECT_EQ(dbg2->uvalue(), DEX_NO_INDEX);
+
+  auto dbg3 = debug_info[3];
+  EXPECT_EQ(dbg3->opcode(), DBG_RESTART_LOCAL);
+  EXPECT_EQ(dbg3->uvalue(), 1);
+
+  auto dbg4 = debug_info[4];
+  EXPECT_EQ(dbg4->opcode(), DBG_END_LOCAL);
+  EXPECT_EQ(dbg4->uvalue(), 2);
+
+  auto dbg5 = debug_info[5];
+  EXPECT_EQ(dbg5->opcode(), DBG_START_LOCAL_EXTENDED);
+  auto dbg5_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg5);
+  EXPECT_NE(dbg5_, nullptr);
+  EXPECT_EQ(dbg5_->name()->str(), "name");
+  EXPECT_EQ(dbg5_->type()->str(), "Ljava/lang/Objects;");
+  EXPECT_EQ(dbg5_->sig()->str(), "sig");
+
+  auto dbg6 = debug_info[6];
+  EXPECT_EQ(dbg6->opcode(), DBG_START_LOCAL);
+  auto dbg6_ = dynamic_cast<DexDebugOpcodeStartLocal*>(dbg6);
+  EXPECT_NE(dbg6_, nullptr);
+  EXPECT_EQ(dbg6_->name()->str(), "name");
+  EXPECT_EQ(dbg6_->type()->str(), "Ljava/lang/Objects;");
+  EXPECT_EQ(dbg6_->sig(), nullptr);
+
+  auto dbg7 = debug_info[7];
+  EXPECT_EQ(dbg7->opcode(), DBG_ADVANCE_LINE);
+  EXPECT_EQ(dbg7->value(), 5);
+
+  auto dbg8 = debug_info[8];
+  EXPECT_EQ(dbg8->opcode(), DBG_ADVANCE_PC);
+  EXPECT_EQ(dbg8->uvalue(), 6);
+
+  auto dbg9 = debug_info[9];
+  EXPECT_EQ(dbg9->opcode(), DBG_END_SEQUENCE);
+  EXPECT_EQ(dbg9->uvalue(), DEX_NO_INDEX);
+
+  auto dbg10 = debug_info[10];
+  EXPECT_EQ(dbg10->opcode(), DBG_FIRST_SPECIAL);
+  EXPECT_EQ(dbg10->uvalue(), DEX_NO_INDEX);
+}
