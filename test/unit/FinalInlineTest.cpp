@@ -15,6 +15,7 @@
 #include "DexInstruction.h"
 #include "DexUtil.h"
 #include "FinalInline.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "Resolver.h"
@@ -481,4 +482,49 @@ TEST_F(ConstPropTest, multiLevelWithSiblings) {
       grandchild2, "CONST_CHAR", m_char_type, static_cast<uint64_t>('a'));
   expect_field_eq(
       grandchild2, "CONST_BOOL", m_bool_type, static_cast<uint64_t>(0));
+}
+
+/**
+ * For clinit that have sput-sget pair but also have branch instruction, we
+ * should not propagate field value.
+ */
+TEST_F(ConstPropTest, ClinitWithGoto) {
+  auto boo = create_class("LBoo;");
+  add_concrete_field(boo, "CONST_INT", m_int_type, static_cast<uint64_t>(1));
+
+  auto type = DexType::make_type(DexString::make_string("LFoo;"));
+  ClassCreator creator(type);
+  creator.set_super(get_object_type());
+  auto foo = creator.create();
+
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.bar:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+  foo->add_field(field);
+
+  auto clinit =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.<clinit>:()V"));
+  clinit->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
+  clinit->set_code(assembler::ircode_from_string(R"(
+     (
+      (sget "LBoo;.CONST_INT:I")
+      (move-result-pseudo v0)
+      (if-gez v0 :jump)
+      (sget "LBoo;.CONST_INT:I")
+      (move-result-pseudo v0)
+      (:label)
+      (sput v0 "LFoo;.bar:I") ; This will not have CONST_INT's value, but 10
+      (return-void)
+      (:jump)
+      (const v0 10) ; This is the value stored in bar
+      (goto :label)
+     )
+  )"));
+  foo->add_method(clinit);
+
+  auto original = assembler::to_s_expr(foo->get_clinit()->get_code());
+
+  Scope classes = {boo, foo};
+  FinalInlinePass::propagate_constants_for_test(
+      classes, /*string*/ true, /*wide*/ true);
+  EXPECT_EQ(assembler::to_s_expr(foo->get_clinit()->get_code()), original);
 }
