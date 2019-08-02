@@ -6907,8 +6907,20 @@ void ResTable::getTypeNamesForPackage(
     Vector<String8>* typeNames) const
 {
     const PackageGroup* pg = mPackageGroups[packageIndex];
-    const TypeList& typeList = pg->types[0];
-    const Type* typeConfigs = typeList[0];
+    Type* typeConfigs = nullptr;
+    // Find the first non-empty TypeList in the bucket array. Note that some
+    // intermediate states of the file might have some odd configurations.
+    for (size_t i = 0; i < pg->types.size(); ++i) {
+      const TypeList& typeList = pg->types[i];
+      if (typeList.size() > 0) {
+        typeConfigs = typeList[0];
+        break;
+      }
+    }
+    if (typeConfigs == nullptr) {
+      ALOGE("Unable to find any type names in the package.");
+      return;
+    }
     const Package* pkg = typeConfigs->package;
     for (size_t index = 0; index < pkg->typeStrings.size(); ++index) {
         String8 str8 = pkg->typeStrings.string8ObjectAt(index);
