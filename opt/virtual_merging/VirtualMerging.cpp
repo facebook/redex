@@ -412,7 +412,7 @@ void VirtualMerging::merge_methods() {
         // we'll add an invoke-virtual instruction that will get inlined.
         m_stats.unabstracted_methods++;
         overridden_method->make_concrete(
-            (DexAccessFlags)(overridden_method->get_access() & !ACC_ABSTRACT),
+            (DexAccessFlags)(overridden_method->get_access() & ~ACC_ABSTRACT),
             std::make_unique<IRCode>(),
             true /* is_virtual */);
         overridden_code = overridden_method->get_code();
