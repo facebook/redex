@@ -557,6 +557,14 @@ class FinalInlineImpl {
     auto ii = InstructionIterable(code);
     auto end = ii.end();
     for (auto it = ii.begin(); it != end; ++it) {
+      // Check the code, bail out if there is branch instruction in clinit
+      // because that may make the following pattern matching problematic.
+      // We have control flow analysis in FinalInlineV2.
+      if (is_branch(it->insn->opcode())) {
+        return;
+      }
+    }
+    for (auto it = ii.begin(); it != end; ++it) {
       // Check for sget from static final
       if (!it->insn->has_field()) {
         continue;
