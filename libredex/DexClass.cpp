@@ -1054,15 +1054,14 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
-  std::ostringstream ss;
-  ss << type_shorty(rtype);
+  std::string s;
+  s.push_back(type_shorty(rtype));
   if (args != nullptr) {
     for (auto arg : args->get_type_list()) {
-      ss << type_shorty(arg);
+      s.push_back(type_shorty(arg));
     }
   }
-  auto type_string = ss.str();
-  return DexString::make_string(type_string);
+  return DexString::make_string(s);
 }
 
 DexProto* DexProto::make_proto(const DexType* rtype, const DexTypeList* args) {
