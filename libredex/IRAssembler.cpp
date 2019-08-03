@@ -499,6 +499,73 @@ s_expr create_catch_expr(const MethodItemEntry* mie,
   return s_expr(result);
 }
 
+s_expr create_dbg_expr(const MethodItemEntry* mie) {
+  std::vector<s_expr> result;
+  result.emplace_back(".dbg");
+  const DexDebugInstruction* dbg = mie->dbgop.get();
+  uint32_t op = dbg->opcode();
+  switch (op) {
+  case DBG_END_SEQUENCE:
+    result.emplace_back("DBG_END_SEQUENCE");
+    break;
+  case DBG_ADVANCE_PC:
+    result.emplace_back("DBG_ADVANCE_PC");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_ADVANCE_LINE:
+    result.emplace_back("DBG_ADVANCE_LINE");
+    result.emplace_back(std::to_string(dbg->value()));
+    break;
+  case DBG_START_LOCAL: {
+    result.emplace_back("DBG_START_LOCAL");
+    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    always_assert(start_local != nullptr);
+    result.emplace_back(std::to_string(start_local->uvalue()));
+    result.emplace_back(start_local->name()->str());
+    result.emplace_back(start_local->type()->str());
+    break;
+  }
+  case DBG_START_LOCAL_EXTENDED: {
+    result.emplace_back("DBG_START_LOCAL_EXTENDED");
+    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    always_assert(start_local != nullptr);
+    result.emplace_back(std::to_string(start_local->uvalue()));
+    result.emplace_back(start_local->name()->str());
+    result.emplace_back(start_local->type()->str());
+    result.emplace_back(start_local->sig()->str());
+    break;
+  }
+  case DBG_END_LOCAL:
+    result.emplace_back("DBG_END_LOCAL");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_RESTART_LOCAL:
+    result.emplace_back("DBG_RESTART_LOCAL");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_SET_PROLOGUE_END:
+    result.emplace_back("DBG_SET_PROLOGUE_END");
+    break;
+  case DBG_SET_EPILOGUE_BEGIN:
+    result.emplace_back("DBG_SET_EPILOGUE_BEGIN");
+    break;
+  case DBG_SET_FILE: {
+    result.emplace_back("DBG_SET_FILE");
+    auto set_file = dynamic_cast<const DexDebugOpcodeSetFile*>(dbg);
+    always_assert(set_file != nullptr);
+    result.emplace_back(set_file->file()->str());
+    break;
+  }
+  default:
+    always_assert_log(DBG_FIRST_SPECIAL <= op && op <= DBG_LAST_SPECIAL,
+                      "Special opcode (%d) is out of range");
+    result.emplace_back("EMIT");
+    result.emplace_back(std::to_string(dbg->opcode()));
+    break;
+  }
+  return s_expr(result);
+}
+
 } // namespace
 
 namespace assembler {
@@ -565,7 +632,8 @@ s_expr to_s_expr(const IRCode* code) {
         exprs.emplace_back(create_catch_expr(&*it, catch_names));
         break;
       case MFLOW_DEBUG:
-        always_assert_log(false, "Not yet implemented");
+        exprs.emplace_back(create_dbg_expr(&*it));
+        break;
       case MFLOW_POSITION:
         for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
           exprs.push_back(e);

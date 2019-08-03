@@ -592,7 +592,7 @@ std::vector<DexDebugInstruction*> get_debug_info(
   return debug_info;
 }
 
-TEST_F(IRAssemblerTest, dbgInstFromSExpr) {
+TEST_F(IRAssemblerTest, dexDebugInstruction) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -615,7 +615,10 @@ TEST_F(IRAssemblerTest, dbgInstFromSExpr) {
     )
   )");
 
-  // TODO (T45979630) Ensure serialization works as expected
+  // Ensure serialization works as expected
+  auto s = assembler::to_string(code.get());
+  EXPECT_EQ(s, assembler::to_string(assembler::ircode_from_string(s).get()));
+
   // Ensure deserialization works as expected
   EXPECT_EQ(code->count_opcodes(), 2);
   auto debug_info = get_debug_info(code);
