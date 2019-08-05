@@ -24,6 +24,8 @@ const char* enum_usedastypeclass_name =
 const char* enum_upcasted_name = "Lcom/facebook/redextest/Upcasted;";
 const char* enum_upcastedtoserializable_name =
     "Lcom/facebook/redextest/UpcastedToSerializable;";
+const char* enum_instancefieldofserializable_name =
+    "Lcom/facebook/redextest/InstanceFieldOfSerializable;";
 
 bool has_valueof_method(DexType* enum_type) {
   auto proto = DexProto::get_proto(
@@ -102,6 +104,14 @@ TEST_F(PostVerify, transform) {
 
   // UpcastedToSerializable class
   enum_cls = find_class_named(classes, enum_upcastedtoserializable_name);
+  ASSERT_NE(enum_cls, nullptr);
+  EXPECT_TRUE(is_enum(enum_cls));
+  EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));
+  EXPECT_TRUE(has_values_method(enum_cls->get_type()));
+  EXPECT_TRUE(has_values_field(enum_cls->get_type()));
+
+  // InstanceOfSerializable class
+  enum_cls = find_class_named(classes, enum_instancefieldofserializable_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
   EXPECT_TRUE(has_valueof_method(enum_cls->get_type()));

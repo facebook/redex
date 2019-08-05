@@ -41,9 +41,21 @@ enum UpcastedToSerializable {
   ONE, TWO;
   public int otherField;
 }
+enum InstanceFieldOfSerializable {
+  ONE, TWO;
+  public int otherField;
+}
 
  /* Test cases */
 public class EnumTestRemoveGenerated {
+
+  private class ImplementsSerializable implements Serializable {
+    InstanceFieldOfSerializable field;
+  }
+  private class DoesNotImplementSerializable {
+    UsesValuesMethod field0;
+    UsesNothing field1;
+  }
 
   private class CapturingClass {
       UsesValuesMethod s;
@@ -112,5 +124,6 @@ public class EnumTestRemoveGenerated {
     boolean b = UsesValuesMethod.ONE.equals(UsesValuesMethod.TWO);
     String s = UsesValuesMethod.TWO.name();
     s = UsesValuesMethod.TWO.toString();
+    s = InstanceFieldOfSerializable.ONE.toString();
   }
 }
