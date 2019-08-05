@@ -119,13 +119,15 @@ void remove_interface(DexType* intf, SingleImplData& data) {
   };
 
   collect_interfaces(cls);
-  collect_interfaces(type_class(intf));
+  auto intf_cls = type_class(intf);
+  collect_interfaces(intf_cls);
 
   std::deque<DexType*> revisited_intfs;
   std::copy(
       new_intfs.begin(), new_intfs.end(), std::back_inserter(revisited_intfs));
   std::sort(revisited_intfs.begin(), revisited_intfs.end(), compare_dextypes);
   cls->set_interfaces(DexTypeList::make_type_list(std::move(revisited_intfs)));
+  cls->combine_annotations_with(intf_cls);
   TRACE(INTF, 3, "(REMI)\t=> %s", SHOW(cls));
 }
 
