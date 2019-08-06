@@ -497,7 +497,7 @@ public:
 
     void setToEmpty();
     void serialize(Vector<char>& cVec);
-    status_t setTo(const void* data, size_t size, bool copyData=false);
+    status_t setTo(const void* data, size_t size, bool copyData=true);
 
     status_t getError() const;
 
