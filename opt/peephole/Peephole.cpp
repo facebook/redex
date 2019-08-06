@@ -1794,7 +1794,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
             mgr, config.disabled_peepholes));
         return helpers.back().get();
       },
-      std::thread::hardware_concurrency() / 2);
+      redex_parallel::default_num_threads());
   for (auto* cls : scope) {
     wq.add_item(cls);
   }

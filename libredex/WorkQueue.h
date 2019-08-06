@@ -18,6 +18,16 @@
 #include <queue>
 #include <random>
 
+namespace redex_parallel {
+/**
+ * Redex uses the number of physical cores.
+ */
+static inline unsigned int default_num_threads() {
+  unsigned int threads = boost::thread::physical_concurrency();
+  return std::max(1u, threads);
+}
+} // namespace redex_parallel
+
 namespace workqueue_impl {
 
 /**
@@ -47,9 +57,7 @@ class WorkerState {
  public:
   WorkerState(size_t id, const Data& initial) : m_id(id), m_data(initial) {}
 
-  Data& get_data() {
-    return m_data;
-  }
+  Data& get_data() { return m_data; }
 
   /*
    * Add more items to the queue of the currently-running worker. When a
@@ -61,9 +69,7 @@ class WorkerState {
     m_queue.push(task);
   }
 
-  size_t worker_id() const {
-    return m_id;
-  }
+  size_t worker_id() const { return m_id; }
 
  private:
   boost::optional<Input> pop_task() {
@@ -114,9 +120,7 @@ class WorkQueue {
 
   void add_item(Input task);
 
-  void set_mapper(Mapper mapper) {
-    m_mapper = mapper;
-  }
+  void set_mapper(Mapper mapper) { m_mapper = mapper; }
 
   void set_reducer(std::function<Output(Output&, Output)> reducer) {
     m_reducer = reducer;
@@ -148,9 +152,9 @@ WorkQueue<Input, Data, Output>::WorkQueue(
  */
 template <class Input>
 WorkQueue<Input, std::nullptr_t /* Data */, std::nullptr_t /*Output*/>
-workqueue_foreach(const std::function<void(Input)>& func,
-                  unsigned int num_threads =
-                      std::max(1u, boost::thread::hardware_concurrency())) {
+workqueue_foreach(
+    const std::function<void(Input)>& func,
+    unsigned int num_threads = redex_parallel::default_num_threads()) {
   using Data = std::nullptr_t;
   using Output = std::nullptr_t;
   return WorkQueue<Input, Data, Output>(
@@ -171,8 +175,7 @@ template <class Input, class Output>
 WorkQueue<Input, std::nullptr_t /* Data */, Output> workqueue_mapreduce(
     const std::function<Output(Input)>& mapper,
     const std::function<Output(Output, Output)>& reducer,
-    unsigned int num_threads =
-        std::max(1u, boost::thread::hardware_concurrency())) {
+    unsigned int num_threads = redex_parallel::default_num_threads()) {
   using Data = std::nullptr_t;
   return WorkQueue<Input, std::nullptr_t, Output>(
       [mapper](WorkerState<Input, Data, Output>*, Input a) -> Output {

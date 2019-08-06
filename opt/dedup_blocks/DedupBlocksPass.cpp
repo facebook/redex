@@ -239,7 +239,7 @@ class DedupBlocksImpl {
 
           code.clear_cfg();
         },
-        m_config.debug ? 1 : walk::parallel::default_num_threads());
+        m_config.debug ? 1 : redex_parallel::default_num_threads());
     report_stats();
   }
 

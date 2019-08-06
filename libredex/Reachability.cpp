@@ -494,7 +494,7 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
     root_set_marker.mark(scope);
   }
 
-  size_t num_threads = std::max(1u, std::thread::hardware_concurrency() / 2);
+  size_t num_threads = redex_parallel::default_num_threads();
   auto stats_arr = std::make_unique<Stats[]>(num_threads);
   MarkWorkQueue work_queue(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {

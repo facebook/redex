@@ -443,7 +443,7 @@ Stats CopyPropagation::run(Scope scope) {
       },
       [](Output a, Output b) { return a + b; },
       Output(),
-      m_config.debug ? 1 : walk::parallel::default_num_threads());
+      m_config.debug ? 1 : redex_parallel::default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
