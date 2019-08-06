@@ -617,6 +617,16 @@ std::ostream& operator<<(std::ostream& o, const DexType& type) {
   return o;
 }
 
+inline std::string show(DexString* p) {
+  if (!p) return "";
+  return p->str();
+}
+
+inline std::string show(DexType* p) {
+  if (!p) return "";
+  return p->get_name()->str();
+}
+
 // This format must match the proguard map format because it's used to look up
 // in the proguard map
 std::string show(const DexFieldRef* p) {
