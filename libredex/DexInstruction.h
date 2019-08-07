@@ -11,6 +11,7 @@
 #include <cstring>
 #include <list>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 #include "Debug.h"
@@ -275,6 +276,27 @@ class DexOpcodeData : public DexInstruction {
   // This size refers to just the length of the data array
   const uint16_t data_size() { return m_data_count; }
 };
+
+// helper function to create fill-array-data-payload according to
+// https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
+template <typename IntType>
+DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
+  static_assert(std::is_integral<IntType>::value,
+                "fill-array-data-payload can only contain integral values.");
+  int width = sizeof(IntType);
+  size_t total_copy_size = vec.size() * width;
+  // one "code unit" is a 2 byte word
+  int total_used_code_units =
+      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4;
+  std::vector<uint16_t> data(total_used_code_units);
+  uint16_t* ptr = data.data();
+  ptr[0] = FOPCODE_FILLED_ARRAY; // header
+  ptr[1] = width;
+  *(uint32_t*)(ptr + 2) = vec.size();
+  uint8_t* data_bytes = (uint8_t*)(ptr + 4);
+  memcpy(data_bytes, (void*)vec.data(), total_copy_size);
+  return new DexOpcodeData(data);
+}
 
 /**
  * Return a copy of the instruction passed in.
