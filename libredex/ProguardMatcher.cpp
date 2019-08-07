@@ -37,11 +37,19 @@ std::unique_ptr<boost::regex> make_rx(const std::string& s,
   return std::make_unique<boost::regex>(rx);
 }
 
+std::string get_deobfuscated_name(const DexType* type) {
+  auto cls = type_class(type);
+  if (cls == nullptr) {
+    return type->c_str();
+  }
+  return cls->get_deobfuscated_name();
+}
+
 bool match_annotation_rx(const DexClass* cls, const boost::regex& annorx) {
   const auto* annos = cls->get_anno_set();
   if (!annos) return false;
   for (const auto& anno : annos->get_annotations()) {
-    if (boost::regex_match(anno->type()->c_str(), annorx)) {
+    if (boost::regex_match(get_deobfuscated_name(anno->type()), annorx)) {
       return true;
     }
   }
@@ -375,13 +383,15 @@ template <class DexMember>
 bool KeepRuleMatcher::has_annotation(const DexMember* member,
                                      const std::string& annotation) const {
   auto annos = member->get_anno_set();
-  if (annos != nullptr) {
-    auto annotation_regex = proguard_parser::form_type_regex(annotation);
-    const boost::regex& annotation_matcher = register_matcher(annotation_regex);
-    for (const auto& anno : annos->get_annotations()) {
-      if (boost::regex_match(anno->type()->c_str(), annotation_matcher)) {
-        return true;
-      }
+  if (annos == nullptr) {
+    return false;
+  }
+  auto annotation_regex = proguard_parser::form_type_regex(annotation);
+  const boost::regex& annotation_matcher = register_matcher(annotation_regex);
+  for (const auto& anno : annos->get_annotations()) {
+    if (boost::regex_match(get_deobfuscated_name(anno->type()),
+                           annotation_matcher)) {
+      return true;
     }
   }
   return false;
