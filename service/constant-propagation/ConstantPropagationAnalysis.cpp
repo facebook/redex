@@ -93,10 +93,11 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 namespace constant_propagation {
 
 static void set_escaped(reg_t reg, ConstantEnvironment* env) {
-  auto ptr_opt = env->get<AbstractHeapPointer>(reg).get_constant();
-  if (ptr_opt) {
-    env->mutate_heap(
-        [&](ConstantHeap* heap) { heap->set(*ptr_opt, HeapValue::top()); });
+  if (auto ptr_opt = env->get(reg).maybe_get<AbstractHeapPointer>()) {
+    if (auto ptr_value = ptr_opt->get_constant()) {
+      env->mutate_heap(
+          [&](ConstantHeap* heap) { heap->set(*ptr_value, HeapValue::top()); });
+    }
   }
 }
 
