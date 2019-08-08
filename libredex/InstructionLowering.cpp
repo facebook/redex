@@ -8,9 +8,6 @@
 #include "InstructionLowering.h"
 #include "Walkers.h"
 
-#include "boost/algorithm/string/join.hpp"
-#include "boost/range/adaptors.hpp"
-
 namespace instruction_lowering {
 
 /*
@@ -180,6 +177,12 @@ DexOpcode select_binop_lit_opcode(const IRInstruction* insn) {
   }
 }
 
+static DexOpcode convert_3to2addr(DexOpcode op) {
+  always_assert(op >= DOPCODE_ADD_INT && op <= DOPCODE_REM_DOUBLE);
+  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
+  return static_cast<DexOpcode>(op + offset);
+}
+
 bool try_2addr_conversion(MethodItemEntry* mie) {
   auto* insn = mie->dex_insn;
   auto op = insn->opcode();
@@ -208,10 +211,12 @@ bool try_2addr_conversion(MethodItemEntry* mie) {
 
 using namespace impl;
 
+namespace {
+
 /*
  * Checks that the load-param opcodes are consistent with the method prototype.
  */
-static void check_load_params(DexMethod* method) {
+void check_load_params(DexMethod* method) {
   auto* code = method->get_code();
   auto params = code->get_param_instructions();
   auto param_ops = InstructionIterable(params);
@@ -271,7 +276,7 @@ static void check_load_params(DexMethod* method) {
   }
 }
 
-static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
+DexInstruction* create_dex_instruction(const IRInstruction* insn) {
   auto op = opcode::to_dex_opcode(insn->opcode());
   switch (opcode::ref(insn->opcode())) {
   case opcode::Ref::None:
@@ -294,7 +299,7 @@ static DexInstruction* create_dex_instruction(const IRInstruction* insn) {
 // instructions in isolation -- it only removes them when the caller calls it
 // with the associated 'primary' prefix instruction -- so we use this function
 // specifically for this purpose.
-static void remove_move_result_pseudo(IRList::iterator it) {
+void remove_move_result_pseudo(IRList::iterator it) {
   always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
   delete it->insn;
   it->insn = nullptr;
@@ -305,9 +310,7 @@ static void remove_move_result_pseudo(IRList::iterator it) {
  * Returns the number of DexInstructions added during lowering (not including
  * the check-cast).
  */
-static size_t lower_check_cast(DexMethod*,
-                               IRCode* code,
-                               IRList::iterator* it_) {
+size_t lower_check_cast(DexMethod*, IRCode* code, IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   size_t extra_instructions{0};
@@ -335,9 +338,8 @@ static size_t lower_check_cast(DexMethod*,
   return extra_instructions;
 }
 
-static void lower_fill_array_data(DexMethod*,
-                                  IRCode* code,
-                                  IRList::iterator it) {
+void lower_fill_array_data(DexMethod*, IRCode* code, IRList::iterator* it_) {
+  auto& it = *it_;
   const auto* insn = it->insn;
   auto* dex_insn = new DexInstruction(DOPCODE_FILL_ARRAY_DATA);
   dex_insn->set_src(0, insn->src(0));
@@ -347,21 +349,32 @@ static void lower_fill_array_data(DexMethod*,
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_to_range_instruction(DexMethod* method,
-                                       IRCode* code,
-                                       IRList::iterator* it_) {
-  using boost::adaptors::transformed;
-  using boost::algorithm::join;
+/*
+ * Necessary condition for an instruction to be converted to /range form
+ */
+bool has_contiguous_srcs(const IRInstruction* insn) {
+  if (insn->srcs_size() == 0) {
+    return true;
+  }
+  auto last = insn->src(0);
+  for (size_t i = 1; i < insn->srcs_size(); ++i) {
+    if (insn->src(i) - last != 1) {
+      return false;
+    }
+    last = insn->src(i);
+  }
+  return true;
+}
+
+void lower_to_range_instruction(DexMethod* method,
+                                IRCode* code,
+                                IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   always_assert_log(
       has_contiguous_srcs(insn),
-      "Instruction %s has non-contiguous srcs (%s) in method "
-      "%s.\nContext:\n%s\n",
+      "Instruction %s has non-contiguous srcs in method %s.\nContext:\n%s\n",
       SHOW(insn),
-      join(insn->srcs() | transformed((std::string(*)(int))std::to_string),
-           ", ")
-          .c_str(),
       SHOW(method),
       SHOW_CONTEXT(code, insn));
   auto* dex_insn = create_dex_instruction(insn);
@@ -371,9 +384,7 @@ static void lower_to_range_instruction(DexMethod* method,
   it->replace_ir_with_dex(dex_insn);
 }
 
-static void lower_simple_instruction(DexMethod*,
-                                     IRCode*,
-                                     IRList::iterator* it_) {
+void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
   auto& it = *it_;
   const auto* insn = it->insn;
   auto op = insn->opcode();
@@ -408,6 +419,8 @@ static void lower_simple_instruction(DexMethod*,
     remove_move_result_pseudo(++it);
   }
 }
+
+} // namespace
 
 Stats lower(DexMethod* method, bool lower_with_cfg) {
   Stats stats;
@@ -451,7 +464,7 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
     } else if (op == OPCODE_CHECK_CAST) {
       stats.move_for_check_cast += lower_check_cast(method, code, &it);
     } else if (op == OPCODE_FILL_ARRAY_DATA) {
-      lower_fill_array_data(method, code, it);
+      lower_fill_array_data(method, code, &it);
     } else if (needs_range_conversion(insn)) {
       lower_to_range_instruction(method, code, &it);
     } else {

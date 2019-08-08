@@ -132,23 +132,26 @@ class IRInstruction final {
   uint16_t size() const;
 
   bool operator==(const IRInstruction&) const;
-  bool operator!=(const IRInstruction& that) const {
-    return !(*this == that);
-  }
+
+  bool operator!=(const IRInstruction& that) const { return !(*this == that); }
 
   bool has_string() const {
     return opcode::ref(m_opcode) == opcode::Ref::String;
   }
+
   bool has_type() const { return opcode::ref(m_opcode) == opcode::Ref::Type; }
-  bool has_field() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Field;
-  }
+
+  bool has_field() const { return opcode::ref(m_opcode) == opcode::Ref::Field; }
+
   bool has_method() const {
     return opcode::ref(m_opcode) == opcode::Ref::Method;
   }
+
   bool has_literal() const {
     return opcode::ref(m_opcode) == opcode::Ref::Literal;
   }
+
+  bool has_data() const { return opcode::ref(m_opcode) == opcode::Ref::Data; }
 
   /*
    * Number of registers used.
@@ -282,10 +285,6 @@ class IRInstruction final {
     return this;
   }
 
-  bool has_data() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Data;
-  }
-
   DexOpcodeData* get_data() const {
     always_assert(has_data());
     return m_data;
@@ -342,19 +341,8 @@ class IRInstruction final {
  */
 bit_width_t required_bit_width(uint16_t v);
 
-inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
-
-/*
- * Necessary condition for an instruction to be converted to /range form
- */
-bool has_contiguous_srcs(const IRInstruction*);
-
 /*
  * Whether instruction must be converted to /range form in order to encode it
  * as a DexInstruction
  */
 bool needs_range_conversion(const IRInstruction*);
-
-DexOpcode convert_2to3addr(DexOpcode op);
-
-DexOpcode convert_3to2addr(DexOpcode op);

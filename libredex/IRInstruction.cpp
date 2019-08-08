@@ -10,18 +10,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
-DexOpcode convert_2to3addr(DexOpcode op) {
-  always_assert(op >= DOPCODE_ADD_INT_2ADDR && op <= DOPCODE_REM_DOUBLE_2ADDR);
-  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
-  return (DexOpcode)(op - offset);
-}
-
-DexOpcode convert_3to2addr(DexOpcode op) {
-  always_assert(op >= DOPCODE_ADD_INT && op <= DOPCODE_REM_DOUBLE);
-  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
-  return (DexOpcode)(op + offset);
-}
-
 IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
   m_srcs.resize(opcode_impl::min_srcs_size(op));
 }
@@ -195,12 +183,12 @@ void IRInstruction::denormalize_registers() {
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     std::vector<uint16_t> srcs;
-    size_t args_idx {0};
-    size_t srcs_idx {0};
+    size_t args_idx{0};
+    size_t srcs_idx{0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       srcs.push_back(src(srcs_idx++));
     }
-    bool has_wide {false};
+    bool has_wide{false};
     for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
       if (is_wide_type(args.at(args_idx))) {
@@ -215,25 +203,11 @@ void IRInstruction::denormalize_registers() {
 }
 
 bit_width_t required_bit_width(uint16_t v) {
-  bit_width_t result {1};
+  bit_width_t result{1};
   while (v >>= 1) {
     ++result;
   }
   return result;
-}
-
-bool has_contiguous_srcs(const IRInstruction* insn) {
-  if (insn->srcs_size() == 0) {
-    return true;
-  }
-  auto last = insn->src(0);
-  for (size_t i = 1; i < insn->srcs_size(); ++i) {
-    if (insn->src(i) - last != 1) {
-      return false;
-    }
-    last = insn->src(i);
-  }
-  return true;
 }
 
 bool needs_range_conversion(const IRInstruction* insn) {

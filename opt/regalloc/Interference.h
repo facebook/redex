@@ -13,13 +13,15 @@
 #include <unordered_set>
 #include <vector>
 
-#include "Liveness.h"
 #include "IRCode.h"
+#include "Liveness.h"
 #include "RegisterType.h"
 
 namespace regalloc {
 
 using reg_t = uint16_t;
+
+inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
 
 /*
  * Tracks which instructions that can be encoded in range form should take
@@ -67,8 +69,7 @@ struct OrderedPair {
   T first;
   T second;
 
-  OrderedPair(T u, T v)
-      : first(std::min(u, v)), second(std::max(u, v)) {}
+  OrderedPair(T u, T v) : first(std::min(u, v)), second(std::max(u, v)) {}
 
   bool operator==(const OrderedPair& that) const {
     return first == that.first && second == that.second;
@@ -148,13 +149,7 @@ class Node {
 
   const std::vector<reg_t>& adjacent() const { return m_adjacent; }
 
-  enum Property {
-    PARAM,
-    RANGE,
-    SPILL,
-    ACTIVE,
-    PROPS_SIZE
-  };
+  enum Property { PARAM, RANGE, SPILL, ACTIVE, PROPS_SIZE };
 
  private:
   uint32_t m_weight{0};
@@ -305,6 +300,6 @@ inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
       fixpoint_iter, code, initial_regs, range_set);
 }
 
-} // interference
+} // namespace interference
 
 } // namespace regalloc
