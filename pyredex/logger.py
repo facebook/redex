@@ -3,18 +3,17 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
 import sys
 
+
 trace = None
 trace_fp = None
 
-ALL = '__ALL__'
+ALL = "__ALL__"
+
 
 def parse_trace_string(trace):
     """
@@ -25,9 +24,9 @@ def parse_trace_string(trace):
     if not trace:
         return {}
     rv = {}
-    for t in trace.split(','):
+    for t in trace.split(","):
         try:
-            module, level = t.split(':')
+            module, level = t.split(":")
             rv[module] = int(level)
         except ValueError:
             rv[ALL] = int(t)
@@ -38,8 +37,8 @@ def get_trace():
     global trace
     if trace is not None:
         return trace
-    if 'TRACE' in os.environ:
-        trace = parse_trace_string(os.environ['TRACE'])
+    if "TRACE" in os.environ:
+        trace = parse_trace_string(os.environ["TRACE"])
     else:
         trace = {}
     return trace
@@ -47,7 +46,7 @@ def get_trace():
 
 def get_log_level():
     trace = get_trace()
-    return max(trace.get('REDEX', 0), trace.get(ALL, 0))
+    return max(trace.get("REDEX", 0), trace.get(ALL, 0))
 
 
 def strip_trace_tag(env):
@@ -55,15 +54,15 @@ def strip_trace_tag(env):
     Remove the "REDEX:N" component from the trace string
     """
     try:
-        trace = parse_trace_string(env['TRACE'])
-        trace.pop('REDEX')
+        trace = parse_trace_string(env["TRACE"])
+        trace.pop("REDEX")
         if ALL in trace:
             trace_str = str(trace[ALL])
             trace.pop(ALL)
         else:
-            trace_str = ''
-        trace_str += ','.join(k + ':' + str(v) for k, v in trace.items())
-        env['TRACE'] = trace_str
+            trace_str = ""
+        trace_str += ",".join(k + ":" + str(v) for k, v in trace.items())
+        env["TRACE"] = trace_str
     except KeyError:
         pass
 
@@ -73,9 +72,9 @@ def get_trace_file():
     if trace_fp is not None:
         return trace_fp
 
-    trace_file = os.environ.get('TRACEFILE')
+    trace_file = os.environ.get("TRACEFILE")
     if trace_file:
-        trace_fp = open(trace_file, 'w')
+        trace_fp = open(trace_file, "w")
     else:
         trace_fp = sys.stderr
     return trace_fp
@@ -95,7 +94,7 @@ def update_trace_file(env):
     """
     trace_fp = get_trace_file()
     if trace_fp is not sys.stderr:
-        env['TRACEFILE'] = str(trace_fp.fileno())
+        env["TRACEFILE"] = str(trace_fp.fileno())
 
 
 def setup_trace_for_child(env):
