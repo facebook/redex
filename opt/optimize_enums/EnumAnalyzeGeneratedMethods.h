@@ -42,8 +42,8 @@ class EnumAnalyzeGeneratedMethods {
    * optimization.
    */
   void consider_enum_type(DexType* type,
-                          DexMethod* valueof_method,
-                          DexMethod* values_method) {
+                          const DexMethod* valueof_method,
+                          const DexMethod* values_method) {
     always_assert(!m_candidate_types.count(type));
     // TODO: Share `m_config` with `optimize_enums::replace_enum_with_int`
     m_config.candidate_enums.insert(type);
@@ -66,7 +66,7 @@ class EnumAnalyzeGeneratedMethods {
 
  private:
   Config m_config;
-  ConcurrentSet<DexMethod*> m_candidate_methods;
+  ConcurrentSet<const DexMethod*> m_candidate_methods;
   ConcurrentSet<const DexType*> m_candidate_types;
 
   void process_method(const EnumFixpointIterator& engine,

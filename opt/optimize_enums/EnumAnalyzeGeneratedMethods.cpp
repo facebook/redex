@@ -6,45 +6,8 @@
  */
 
 #include "EnumAnalyzeGeneratedMethods.h"
-#include "DexAsm.h" /* rewrite_method_to_throw_error */
 
 using namespace optimize_enums;
-
-/**
- * This is used just to make sure that the generated methods can be removed.
- *
- * foo(...) {
- *   throw RuntimeException("...");
- * }
- */
-void rewrite_method_to_throw_error(DexMethod* method,
-                                   const std::string& enum_name) {
-  using namespace dex_asm;
-  auto code = method->get_code();
-  code->build_cfg();
-  auto& cfg = code->cfg();
-  auto entry = cfg.entry_block();
-  auto first_non_param_insn = entry->to_cfg_instruction_iterator(
-      entry->get_first_non_param_loading_insn());
-  static DexType* error_type =
-      DexType::get_type("Ljava/lang/RuntimeException;");
-  static DexMethodRef* error_constructor_method = DexMethod::get_method(
-      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V");
-  always_assert(error_type && error_constructor_method);
-  entry->insert_before(
-      first_non_param_insn,
-      {dasm(OPCODE_NEW_INSTANCE, error_type, {}),
-       dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
-       dasm(OPCODE_CONST_STRING,
-            DexString::make_string(method->get_simple_deobfuscated_name() +
-                                   " removed from " + enum_name)),
-       dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {3_v}),
-       dasm(OPCODE_INVOKE_DIRECT, error_constructor_method, {2_v, 3_v}),
-       dasm(OPCODE_THROW, {2_v})});
-  cfg.recompute_registers_size();
-  // Unreached blocks will be deleted.
-  code->clear_cfg();
-}
 
 size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {
 
@@ -70,8 +33,7 @@ size_t EnumAnalyzeGeneratedMethods::transform_code(const Scope& scope) {
       always_assert(candidate_class);
       TRACE(ENUM, 4, "safe to remove method %s from %s", SHOW(candidate_method),
             SHOW(candidate_class));
-      // candidate_class->remove_method(candidate_method);
-      rewrite_method_to_throw_error(candidate_method, candidate_type->str());
+      candidate_class->remove_method(candidate_method);
       num_removed_methods++;
     }
   }

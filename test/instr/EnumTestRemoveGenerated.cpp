@@ -66,7 +66,7 @@ TEST_F(PostVerify, transform) {
   enum_cls = find_class_named(classes, enum_usesvaluesmethod_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
-  // EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
+  EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_method(enum_cls->get_type()));
   EXPECT_TRUE(has_values_field(enum_cls->get_type()));
 
@@ -74,9 +74,9 @@ TEST_F(PostVerify, transform) {
   enum_cls = find_class_named(classes, enum_usesnothing_name);
   ASSERT_NE(enum_cls, nullptr);
   EXPECT_TRUE(is_enum(enum_cls));
-  // EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
-  // EXPECT_FALSE(has_values_method(enum_cls->get_type()));
-  // EXPECT_FALSE(has_values_field(enum_cls->get_type()));
+  EXPECT_FALSE(has_valueof_method(enum_cls->get_type()));
+  EXPECT_FALSE(has_values_method(enum_cls->get_type()));
+  EXPECT_FALSE(has_values_field(enum_cls->get_type()));
 
   // Captured class
   enum_cls = find_class_named(classes, enum_captured_name);
