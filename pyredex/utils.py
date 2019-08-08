@@ -11,13 +11,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
-
 from os.path import join
+
 
 temp_dirs = []
 
 
-def abs_glob(directory, pattern='*'):
+def abs_glob(directory, pattern="*"):
     """
     Returns all files that match the specified glob inside a directory.
     Returns absolute paths. Does not return files that start with '.'
@@ -26,7 +26,7 @@ def abs_glob(directory, pattern='*'):
         yield join(directory, result)
 
 
-def make_temp_dir(name='', debug=False):
+def make_temp_dir(name="", debug=False):
     """ Make a temporary directory which will be automatically deleted """
     global temp_dirs
     directory = tempfile.mkdtemp(name)
@@ -45,20 +45,31 @@ def sign_apk(keystore, keypass, keyalias, apk):
     try:
         subprocess.check_call(
             [
-                'jarsigner', '-sigalg', 'SHA1withRSA', '-digestalg', 'SHA1',
-                '-keystore', keystore, '-storepass', keypass, apk, keyalias
+                "jarsigner",
+                "-sigalg",
+                "SHA1withRSA",
+                "-digestalg",
+                "SHA1",
+                "-keystore",
+                keystore,
+                "-storepass",
+                keypass,
+                apk,
+                keyalias,
             ],
-            stdout=sys.stderr
+            stdout=sys.stderr,
         )
     except OSError as e:
         # Future migration note: In Python 3, this will throw a
         # FileNotFoundError instead. We could also use shutil.which().
         if e.errno == errno.ENOENT:
-            FAIL_COLOR = '\033[91m'
-            END_COLOR = '\033[0m'
+            FAIL_COLOR = "\033[91m"
+            END_COLOR = "\033[0m"
             print(
-                ('{}Failed to execute jarsigner: please check if jarsigner '
-                 'is on your $PATH.{}').format(FAIL_COLOR, END_COLOR),
+                (
+                    "{}Failed to execute jarsigner: please check if jarsigner "
+                    "is on your $PATH.{}"
+                ).format(FAIL_COLOR, END_COLOR),
                 file=sys.stderr,
             )
         raise
@@ -69,7 +80,7 @@ def remove_comments_from_line(l):
     for idx, c in enumerate(l):
         if c == "\\" and not found_backslash:
             found_backslash = True
-        elif c == "\"" and not found_backslash:
+        elif c == '"' and not found_backslash:
             found_backslash = False
             in_quote = not in_quote
         elif c == "#" and not in_quote:
