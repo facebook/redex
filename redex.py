@@ -59,7 +59,7 @@ per_file_compression = {}
 
 
 def find_android_build_tools():
-    VERSION_REGEXP = "\d+\.\d+(\.\d+)$"
+    VERSION_REGEXP = r"\d+\.\d+(\.\d+)$"
     android_home = os.environ["ANDROID_SDK"]
     build_tools = join(android_home, "build-tools")
     version = max(
@@ -252,7 +252,7 @@ def run_redex_binary(state):
 
 
 def extract_dex_number(dexfilename):
-    m = re.search("(classes|.*-)(\d+)", basename(dexfilename))
+    m = re.search(r"(classes|.*-)(\d+)", basename(dexfilename))
     if m is None:
         raise Exception("Bad secondary dex name: " + dexfilename)
     return int(m.group(2))
