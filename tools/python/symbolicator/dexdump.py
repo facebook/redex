@@ -13,7 +13,7 @@ import sys
 
 class DexdumpSymbolicator(object):
 
-    CLASS_REGEX = re.compile(r"\bL(?P<class>[A-Za-z][0-9A-Za-z_$]*\/[0-9A-Za-z_$\/]+);")
+    CLASS_REGEX = re.compile(r"L(?P<class>[A-Za-z][0-9A-Za-z_$]*\/[0-9A-Za-z_$\/]+);")
 
     LINE_REGEX = re.compile(r"(?P<prefix>0x[0-9a-f]+ line=)(?P<lineno>\d+)")
 
