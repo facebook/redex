@@ -66,6 +66,18 @@ void check_dont_merge_list(
     // removable).
     if (find_parent->second != STRICT && can_delete(child_cls) &&
         can_rename_if_ignoring_blanket_keepnames(child_cls)) {
+      if (is_abstract(child_cls)) {
+        for (auto method : child_cls->get_vmethods()) {
+          if (method->get_code()) {
+            return;
+          }
+        }
+        for (auto method : child_cls->get_dmethods()) {
+          if (method->get_code()) {
+            return;
+          }
+        }
+      }
       (*mergeable_to_merger)[child_cls] = parent_cls;
     }
   }
