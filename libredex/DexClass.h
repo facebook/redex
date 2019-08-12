@@ -391,6 +391,17 @@ class DexField : public DexFieldRef {
     return m_deobfuscated_name;
   }
 
+  void set_value(DexEncodedValue* v) {
+    always_assert_log(
+        m_concrete,
+        "Field needs to be concrete to be attached an encoded value.");
+    always_assert_log(
+        v,
+        "Encoded value can't be nullptr. Use DexEncodedValue::zero_for_type() "
+        "to obtain a default value.");
+    m_value = v;
+  }
+
   void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
   void clear_annotations() {
     delete m_anno;
