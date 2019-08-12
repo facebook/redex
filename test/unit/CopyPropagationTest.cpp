@@ -320,6 +320,57 @@ TEST(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST(CopyPropagationTest, if_constraints_with_constant_uses) {
+  g_redex = new RedexContext();
+
+  // if-eq and if-ne require that *both* of their incoming registers agree on
+  // either being an object reference, or an integer.
+  // This provides for further refinement of constant uses, allowing to
+  // copy-propagate in more cases (but also disallowing in others).
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()V"
+     (
+       (const v0 0)
+       (const v2 0)
+       (new-array v2 "[I")
+       (move-result-pseudo-object v1)
+       (if-eq v0 v1 :somewhere)
+
+       (const v4 0)
+       (move-object v3 v4) ; can be rewritten to refer to v0 instead of v4
+       (return-object v3) ; can be rewritten to refer to v0 instead of v3
+
+       (:somewhere)
+       (return-object v1)
+     )
+    )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(4);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (const v2 0)
+      (new-array v2 "[I")
+      (move-result-pseudo-object v1)
+      (if-eq v0 v1 :somewhere)
+
+      (const v4 0)
+      (move-object v3 v0)
+      (return-object v0)
+
+      (:somewhere)
+      (return-object v1)
+    )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
 TEST(CopyPropagationTest, cliqueAliasing) {
   auto code = assembler::ircode_from_string(R"(
     (

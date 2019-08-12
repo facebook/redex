@@ -318,6 +318,33 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
 
   case OPCODE_IF_EQ:
   case OPCODE_IF_NE:
+    if (m_type_inference) {
+      auto& type_environments = m_type_inference->get_type_environments();
+      auto& type_environment = type_environments.at(insn);
+      auto t1 = type_environment.get_type(insn->src(0));
+      auto t2 = type_environment.get_type(insn->src(1));
+      if (!t1.is_top() && !t1.is_bottom() && !t2.is_top() && !t2.is_bottom()) {
+        if (t1.element() == REFERENCE || t2.element() == REFERENCE) {
+          return TypeDemand::Object;
+        }
+        t1.meet_with(type_inference::TypeDomain(SCALAR));
+        t2.meet_with(type_inference::TypeDomain(SCALAR));
+        if (!t1.is_top() && !t1.is_bottom() && !t2.is_top() &&
+            !t2.is_bottom()) {
+          if (t1.element() == SCALAR || t2.element() == SCALAR) {
+            return TypeDemand::Int;
+          }
+        }
+        return TypeDemand::IntOrObject;
+      }
+    } else {
+      TRACE(CU, 3,
+            "[CU] if-eq or if-ne instruction encountered {%s}, but type "
+            "inference is unavailable",
+            SHOW(insn));
+    }
+    return TypeDemand::Error;
+
   case OPCODE_IF_EQZ:
   case OPCODE_IF_NEZ:
   case OPCODE_IF_LTZ:
@@ -378,7 +405,8 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
       } else {
         TRACE(CU, 3,
               "[CU] aput(-wide) instruction encountered {%s}, but type "
-              "inference is unavailable");
+              "inference is unavailable",
+              SHOW(insn));
       }
       return TypeDemand::Error;
     }
