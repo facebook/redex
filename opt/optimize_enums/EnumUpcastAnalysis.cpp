@@ -598,6 +598,65 @@ EnumTypeEnvironment EnumFixpointIterator::gen_env(const DexMethod* method) {
   return env;
 }
 
+/**
+ * Reject enums that would cause constructors to have prototypes that would
+ * become identical.
+ */
+void reject_enums_for_colliding_constructors(
+    const std::vector<DexClass*>& classes,
+    ConcurrentSet<DexType*>* candidate_enums) {
+  ConcurrentSet<DexType*> rejected_enums;
+
+  walk::parallel::classes(classes, [&](DexClass* cls) {
+    const auto& ctors = cls->get_ctors();
+    if (ctors.size() <= 1) {
+      return;
+    }
+    std::unordered_set<DexTypeList*> modified_params_lists;
+    for (auto ctor : ctors) {
+      std::unordered_set<DexType*> transforming_enums;
+      auto param_types = ctor->get_proto()->get_args()->get_type_list();
+      for (size_t i = 0; i < param_types.size(); i++) {
+        auto base_type =
+            const_cast<DexType*>(get_array_type_or_self(param_types[i]));
+        if (candidate_enums->count(base_type)) {
+          transforming_enums.insert(base_type);
+          param_types[i] = make_array_type(get_integer_type(),
+                                           get_array_level(param_types[i]));
+        }
+      }
+      auto new_params = DexTypeList::make_type_list(std::move(param_types));
+      if (modified_params_lists.count(new_params)) {
+        for (auto enum_type : transforming_enums) {
+          TRACE(ENUM, 4,
+                "Reject %s because it would create a method prototype "
+                "collision for %s",
+                SHOW(enum_type), SHOW(ctor));
+          rejected_enums.insert(enum_type);
+        }
+      } else {
+        auto new_proto = DexProto::make_proto(get_void_type(), new_params);
+        if (DexMethod::get_method(ctor->get_class(), ctor->get_name(),
+                                  new_proto) != nullptr) {
+          for (auto enum_type : transforming_enums) {
+            TRACE(ENUM, 4,
+                  "Reject %s because it would create a method prototype "
+                  "collision for %s",
+                  SHOW(enum_type), SHOW(ctor));
+            rejected_enums.insert(enum_type);
+          }
+        } else {
+          modified_params_lists.insert(new_params);
+        }
+      }
+    }
+  });
+
+  for (DexType* type : rejected_enums) {
+    candidate_enums->erase(type);
+  }
+}
+
 void reject_unsafe_enums(const std::vector<DexClass*>& classes,
                          Config* config) {
   auto candidate_enums = &config->candidate_enums;
@@ -664,6 +723,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   for (DexType* type : rejected_enums) {
     candidate_enums->erase(type);
   }
+
+  reject_enums_for_colliding_constructors(classes, candidate_enums);
 }
 
 bool is_enum_valueof(const DexMethodRef* method) {

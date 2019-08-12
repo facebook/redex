@@ -41,6 +41,7 @@ bool is_enum_class(const DexClass* cls) {
 
 void expect_other_enums(const DexClasses& classes) {
   std::vector<std::string> class_names{
+      "Lcom/facebook/redextest/USED_IN_UNSAFE_CONSTRUCTOR;",
       "Lcom/facebook/redextest/HAS_TRUE_VIRTUAL;",
       "Lcom/facebook/redextest/CAST_WHEN_RETURN;",
       "Lcom/facebook/redextest/CAST_THIS_POINTER;",
@@ -53,6 +54,7 @@ void expect_other_enums(const DexClasses& classes) {
       "Lcom/facebook/redextest/ENUM_TYPE_2;"};
   for (auto& name : class_names) {
     auto cls = find_class_named(classes, name.c_str());
+    EXPECT_NE(cls, nullptr);
     EXPECT_TRUE(is_enum_class(cls));
   }
 }

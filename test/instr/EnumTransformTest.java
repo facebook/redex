@@ -86,6 +86,13 @@ enum PURE_SCORE {
 }
 
 /* Some enums that are unsafe to be transformed. */
+enum USED_IN_UNSAFE_CONSTRUCTOR {
+  ONE;
+}
+class HasUnsafeConstructor {
+  HasUnsafeConstructor(USED_IN_UNSAFE_CONSTRUCTOR[] e) {}
+  HasUnsafeConstructor(Integer[] e) {}
+}
 enum HAS_TRUE_VIRTUAL {
   ONE;
   // True-virtual methods are not safe.
