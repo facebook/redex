@@ -24,14 +24,25 @@ using namespace opt_metadata;
 
 namespace {
 
-const size_t CODE_SIZE_2_CALLERS = 7;
-const size_t CODE_SIZE_3_CALLERS = 5;
-// count of instructions that define a method as inlinable always
-const size_t CODE_SIZE_ANY_CALLERS = 2;
+// The following costs are in terms of code-units (2 bytes).
 
-// the max number of callers we care to track explicitly, after that we
-// group all callees/callers count in the same bucket
-const int MAX_COUNT = 10;
+// Inlining methods that belong to different classes might lead to worse
+// cross-dex-ref minimization results. We account for this.
+const size_t COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES = 2;
+
+// Typical overhead of calling a method with a result. This isn't just the
+// overhead of the invoke instruction itself, but possibly some setup and
+// consumption of result.
+const size_t COST_INVOKE_WITH_RESULT = 5;
+
+// Typical overhead of calling a method without a result.
+const size_t COST_INVOKE_WITHOUT_RESULT = 3;
+
+// Overhead of having a method and its metadata.
+const size_t COST_METHOD = 32;
+
+// Overhead of single extra argument for methods with many arguments
+const size_t COST_METHOD_ARG = 6;
 
 DEBUG_ONLY bool method_breakup(
     std::vector<std::vector<DexMethod*>>& calls_group) {
@@ -75,7 +86,11 @@ MultiMethodInliner::MultiMethodInliner(
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const inliner::InlinerConfig& config,
     MultiMethodInlinerMode mode /* default is InterDex */)
-    : resolver(resolve_fn), xstores(stores), m_scope(scope), m_config(config) {
+    : resolver(resolve_fn),
+      xstores(stores),
+      m_scope(scope),
+      m_config(config),
+      m_mode(mode) {
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers. If
   // intra_dex is false, we build the map for all the candidates. If intra_dex
@@ -450,20 +465,109 @@ bool MultiMethodInliner::should_inline(const DexMethod* caller,
 }
 
 /*
- * Ignore internal opcodes because they do not take up any space in the final
- * dex file. Ignore move opcodes with the hope that RegAlloc will eliminate
- * most of them.
+ * Estimate additional costs if an instruction takes many source registers.
  */
-static size_t count_important_opcodes(const IRCode* code) {
-  size_t count{0};
+static size_t get_inlined_regs_cost(size_t regs) {
+  size_t cost{0};
+  if (regs > 3) {
+    if (regs > 5) {
+      // invoke with many args will likely need extra moves
+      cost += regs;
+    } else {
+      cost += regs / 2;
+    }
+  }
+  return cost;
+}
+
+/*
+ * Try to estimate number of code units (2 bytes each) of an instruction.
+ * - Ignore internal opcodes because they do not take up any space in the final
+ *   dex file.
+ * - Ignore move opcodes with the hope that RegAlloc will eliminate most of
+ *   them.
+ * - Remove return opcodes, as they will disappear when gluing things together.
+ */
+static size_t get_inlined_cost(IRInstruction* insn) {
+  auto op = insn->opcode();
+  size_t cost{0};
+  if (!opcode::is_internal(op) && !opcode::is_move(op) && !is_return(op)) {
+    cost++;
+    auto regs =
+        insn->srcs_size() +
+        ((insn->dests_size() || insn->has_move_result_pseudo()) ? 1 : 0);
+    cost += get_inlined_regs_cost(regs);
+    if (op == OPCODE_MOVE_EXCEPTION) {
+      cost += 8; // accounting for book-keeping overhead of throw-blocks
+    } else if (insn->has_method() || insn->has_field() || insn->has_type() ||
+               insn->has_string() || is_conditional_branch(op)) {
+      cost++;
+    } else if (insn->has_data()) {
+      cost += 4 + insn->get_data()->size();
+    } else if (insn->has_literal()) {
+      auto lit = insn->get_literal();
+      if (lit < -2147483648 || lit > 2147483647) {
+        cost += 4;
+      } else if (lit < -32768 || lit > 32767) {
+        cost += 2;
+      } else if (is_const(op) && (lit < -8 || lit > 7)) {
+        cost++;
+      } else if (!is_const(op) && (lit < -128 || lit > 127)) {
+        cost++;
+      }
+    }
+  }
+  TRACE(INLINE, 5, "  %u: %s", cost, SHOW(insn));
+  return cost;
+}
+
+/*
+ * Try to estimate number of code units (2 bytes each) of code. Also take
+ * into account costs arising from control-flow overhead
+ */
+static size_t get_inlined_cost(const IRCode* code) {
+  size_t cumulative_cost{0};
+  size_t returns{0};
   editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
-    auto op = mie.insn->opcode();
-    if (!opcode::is_internal(op) && !opcode::is_move(op)) {
-      ++count;
+    auto insn = mie.insn;
+    cumulative_cost += get_inlined_cost(insn);
+    if (is_return(insn->opcode())) {
+      returns++;
     }
     return editable_cfg_adapter::LOOP_CONTINUE;
   });
-  return count;
+  if (code->editable_cfg_built()) {
+    auto blocks = code->cfg().blocks();
+    for (size_t i = 0; i < blocks.size(); ++i) {
+      const auto& block = blocks.at(i);
+      size_t cost{0};
+      switch (block->branchingness()) {
+      case opcode::Branchingness::BRANCH_GOTO: {
+        auto target = block->goes_to_only_edge();
+        always_assert(target != nullptr);
+        if (i == blocks.size() - 1 || blocks.at(i + 1) != target) {
+          // we have a non-fallthrough goto edge
+          cost = 1;
+          TRACE(INLINE, 5, "  %u: BRANCH_GOTO", cost);
+        }
+        break;
+      }
+      case opcode::Branchingness::BRANCH_SWITCH:
+        cost = 4 + 3 * block->succs().size();
+        TRACE(INLINE, 5, "  %u: BRANCH_SWITCH", cost);
+        break;
+      default:
+        break;
+      }
+      cumulative_cost += cost;
+    }
+  }
+  if (returns > 1) {
+    // if there's more than one return, gotos will get introduced to merge
+    // control flow
+    cumulative_cost += returns - 1;
+  }
+  return cumulative_cost;
 }
 
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
@@ -471,55 +575,89 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
-  auto opcode_counts_it = m_opcode_counts.find(callee);
-  size_t code_size;
-  if (opcode_counts_it != m_opcode_counts.end()) {
-    code_size = opcode_counts_it->second;
+  // 1. Determine costs of inlining
+
+  auto inlined_cost_it = m_inlined_costs.find(callee);
+  size_t inlined_cost;
+  if (inlined_cost_it != m_inlined_costs.end()) {
+    inlined_cost = inlined_cost_it->second;
   } else {
-    m_opcode_counts[callee] = code_size =
-        count_important_opcodes(callee->get_code());
+    TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
+    m_inlined_costs[callee] = inlined_cost =
+        get_inlined_cost(callee->get_code());
   }
+  if (m_mode != IntraDex) {
+    auto callers_in_same_class_it = m_callers_in_same_class.find(callee);
+    bool have_all_callers_same_class;
+    if (callers_in_same_class_it != m_callers_in_same_class.end()) {
+      have_all_callers_same_class = callers_in_same_class_it->second;
+    } else {
+      auto callee_class = callee->get_class();
+      have_all_callers_same_class = true;
+      for (auto caller : callers) {
+        if (caller->get_class() != callee_class) {
+          have_all_callers_same_class = false;
+          break;
+        }
+      }
+      m_callers_in_same_class.emplace(callee, have_all_callers_same_class);
+    }
+
+    if (!have_all_callers_same_class) {
+      // Inlining methods into different classes might lead to worse
+      // cross-dex-ref minimization results.
+      inlined_cost += COST_INTER_DEX_SOME_CALLERS_DIFFERENT_CLASSES;
+    }
+  }
+
+  // 2. Determine costs of keeping the invoke instruction
+
+  size_t invoke_cost = callee->get_proto()->is_void()
+                           ? COST_INVOKE_WITHOUT_RESULT
+                           : COST_INVOKE_WITH_RESULT;
+  invoke_cost += get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+  TRACE(INLINE, 3,
+        "[too_many_callers] %u calls to %s; cost: inlined %u, invoke %u",
+        caller_count, SHOW(callee), inlined_cost, invoke_cost);
+
+  // 3. Assess whether we should not inline
 
   if (root(callee)) {
     if (m_config.inline_small_non_deletables) {
-      return code_size > CODE_SIZE_ANY_CALLERS;
+      // Let's just consider this particular inlining opportunity
+      return inlined_cost > invoke_cost;
     } else {
       return true;
     }
   }
 
+  // non-root methods that are only ever called once should always be inlined,
+  // as the method can be removed afterwards
   if (caller_count == 1) {
     return false;
   }
 
-  auto callers_in_same_class_it = m_callers_in_same_class.find(callee);
-  bool have_all_callers_same_class;
-  if (callers_in_same_class_it != m_callers_in_same_class.end()) {
-    have_all_callers_same_class = callers_in_same_class_it->second;
-  } else {
-    auto callee_class = callee->get_class();
-    have_all_callers_same_class = true;
-    for (auto caller : callers) {
-      if (caller->get_class() != callee_class) {
-        have_all_callers_same_class = false;
-        break;
-      }
-    }
-    m_callers_in_same_class.emplace(callee, have_all_callers_same_class);
+  // Let's just consider this particular inlining opportunity
+  if (inlined_cost <= invoke_cost) {
+    return false;
   }
 
-  unsigned long locality_advantage = have_all_callers_same_class ? 2 : 0;
   if (m_config.multiple_callers) {
-    switch (caller_count) {
-    case 2:
-      return code_size > CODE_SIZE_2_CALLERS + locality_advantage;
-    case 3:
-      return code_size > CODE_SIZE_3_CALLERS + locality_advantage;
-    default:
-      break;
-    }
+    // Methods with many arguments are more costly to keep around (more likely
+    // to need custom proto)
+    size_t method_cost = COST_METHOD;
+    method_cost +=
+        COST_METHOD_ARG *
+        get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+
+    // If we inline invocations to this method everywhere, we could delete the
+    // method. Is this worth it, given the number of callsites and costs
+    // involved?
+    return inlined_cost * caller_count >
+           invoke_cost * caller_count + method_cost;
   }
-  return code_size > CODE_SIZE_ANY_CALLERS + locality_advantage;
+
+  return true;
 }
 
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {

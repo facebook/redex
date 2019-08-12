@@ -197,7 +197,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
-         false,
+         true,
          inliner_config->inline_small_non_deletables);
 
   jw.get("black_list", {}, inliner_config->m_black_list);
