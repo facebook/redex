@@ -39,6 +39,8 @@ struct PostVerify : public RedexTest {
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);
 DexField* find_ifield_named(const DexClass& cls, const char* name);
+DexField* find_sfield_named(const DexClass& cls, const char* name);
+DexField* find_field_named(const DexClass& cls, const char* name);
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_method_named(const DexClass& cls, const char* name);

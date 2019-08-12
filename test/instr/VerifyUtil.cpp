@@ -32,6 +32,23 @@ DexField* find_ifield_named(const DexClass& cls, const char* name) {
   return it == fields.end() ? nullptr : *it;
 }
 
+DexField* find_sfield_named(const DexClass& cls, const char* name) {
+  auto fields = cls.get_sfields();
+  auto it =
+      std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
+        return strcmp(name, f->get_name()->c_str()) == 0;
+      });
+  return it == fields.end() ? nullptr : *it;
+}
+
+DexField* find_field_named(const DexClass& cls, const char* name) {
+  auto ret = find_ifield_named(cls, name);
+  if (ret) {
+    return ret;
+  }
+  return find_sfield_named(cls, name);
+}
+
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
   auto vmethods = cls.get_vmethods();
   auto it =
