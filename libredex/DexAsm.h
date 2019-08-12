@@ -25,14 +25,16 @@ enum OperandTag {
 
 struct Operand {
   OperandTag tag;
-  uint64_t v;
+  int64_t v;
 };
 
-inline Operand operator "" _v(unsigned long long v) {
-  return {VREG, v};
+inline Operand operator"" _v(unsigned long long v) {
+  return {VREG, static_cast<int64_t>(v)};
 }
 
-inline Operand operator"" _L(unsigned long long v) { return {LITERAL, v}; }
+inline Operand operator"" _L(unsigned long long v) {
+  return {LITERAL, static_cast<int64_t>(v)};
+}
 
 IRInstruction* dasm(IROpcode opcode, std::initializer_list<Operand> = {});
 IRInstruction* dasm(IROpcode opcode,

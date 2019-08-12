@@ -599,7 +599,8 @@ class CodeTransformer final {
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
       new_insns.push_back(
-          dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL, enum_size}}));
+          dasm(OPCODE_CONST,
+               {{VREG, reg}, {LITERAL, static_cast<int64_t>(enum_size)}}));
       new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
                                m_enum_util->m_values_method_ref,
                                {{VREG, reg}}));

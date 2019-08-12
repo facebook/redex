@@ -75,9 +75,8 @@ static IRInstructionList op_lit(IROpcode opcode,
   return IRInstructionList{
       dasm(OPCODE_CONST, {0_v, 42_L}),
       dasm(opcode,
-           {Operand{VREG, dst_reg},
-            0_v,
-            Operand{LITERAL, static_cast<uint64_t>(literal)}}),
+           {Operand{VREG, dst_reg}, 0_v,
+            Operand{LITERAL, static_cast<int64_t>(literal)}}),
   };
 }
 
@@ -88,7 +87,7 @@ static IRInstructionList op_lit_move_result_pseudo(IROpcode opcode,
   // note: args to dasm() go as dst, src, literal
   return IRInstructionList{
       dasm(OPCODE_CONST, {0_v, 42_L}),
-      dasm(opcode, {0_v, Operand{LITERAL, static_cast<uint64_t>(literal)}}),
+      dasm(opcode, {0_v, Operand{LITERAL, static_cast<int64_t>(literal)}}),
       dasm(IOPCODE_MOVE_RESULT_PSEUDO, {Operand{VREG, dst_reg}})};
 }
 

@@ -186,9 +186,10 @@ void Outliner::run_pass(DexStoresVector& stores,
                 SHOW(invoke_direct),
                 SHOW(throwex));
 
-          auto const_int_extype = dasm(OPCODE_CONST,
-                                       {{VREG, new_instance_result->dest()},
-                                        {LITERAL, outlined_throws.size()}});
+          auto const_int_extype =
+              dasm(OPCODE_CONST,
+                   {{VREG, new_instance_result->dest()},
+                    {LITERAL, static_cast<int64_t>(outlined_throws.size())}});
           IRInstruction* invoke_static =
               make_invoke(dispatch_method, new_instance_result->dest());
 
