@@ -47,7 +47,9 @@ void get_interfaces(TypeSet& interfaces, DexClass* cls) {
   for (const auto& intf : intfs) {
     interfaces.insert(intf);
     const auto intf_cls = type_class(intf);
-    get_super_interfaces(interfaces, intf_cls);
+    if (intf_cls != nullptr) {
+      get_super_interfaces(interfaces, intf_cls);
+    }
   }
   const auto super = type_class(cls->get_super_class());
   if (super != nullptr) {
