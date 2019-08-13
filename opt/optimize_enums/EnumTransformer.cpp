@@ -423,7 +423,7 @@ struct InsnReplacement {
   void push_back_move_result(cfg::ControlFlowGraph& cfg,
                              MethodItemEntry* mie,
                              boost::optional<IROpcode> opcode) {
-    always_assert(mie->insn->has_move_result());
+    always_assert(mie->insn->has_move_result_any());
     auto move_insn_it = cfg.move_result_of(original_insn);
     if (!move_insn_it.is_end()) {
       auto& move_insn = move_insn_it.unwrap()->insn;

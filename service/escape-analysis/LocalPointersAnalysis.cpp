@@ -339,11 +339,11 @@ void default_instruction_handler(const IRInstruction* insn,
     env->set_pointers(insn->dest(), env->get_pointers(insn->src(0)));
   } else if (op == OPCODE_CHECK_CAST) {
     env->set_pointers(RESULT_REGISTER, env->get_pointers(insn->src(0)));
-  } else if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
+  } else if (opcode::is_move_result_any(op)) {
     env->set_pointers(insn->dest(), env->get_pointers(RESULT_REGISTER));
   } else if (insn->dests_size()) {
     analyze_dest(insn, insn->dest(), env);
-  } else if (insn->has_move_result()) {
+  } else if (insn->has_move_result_any()) {
     analyze_dest(insn, RESULT_REGISTER, env);
   }
 }

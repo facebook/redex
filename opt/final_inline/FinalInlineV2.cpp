@@ -431,7 +431,7 @@ class ThisObjectAnalysis final
     auto default_case = [&]() {
       if (insn->dests_size()) {
         env->set(insn->dest(), ThisDomain(false));
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, ThisDomain(false));
       }
     };

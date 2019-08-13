@@ -73,7 +73,7 @@ class FieldAnalyzer final
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, DexFieldConstantDomain::top());
         }
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, DexFieldConstantDomain::top());
       }
     };
@@ -237,7 +237,7 @@ class ConstAnalyzer final
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, UInt32ConstantDomain::top());
         }
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, UInt32ConstantDomain::top());
       }
     };

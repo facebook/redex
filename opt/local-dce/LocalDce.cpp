@@ -123,7 +123,7 @@ void update_liveness(const IRInstruction* inst,
   }
   // The source of a `move-result` is the return value of the prior call,
   // which is encoded as the max position in the bitvector.
-  if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
+  if (opcode::is_move_result_any(op)) {
     bliveness.set(bliveness.size() - 1);
   }
 }

@@ -256,9 +256,13 @@ bool is_internal(IROpcode);
 
 bool is_load_param(IROpcode);
 
+inline bool is_move_result(IROpcode op) {
+  return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
+}
+
 bool is_move_result_pseudo(IROpcode);
 
-bool is_move_result_or_move_result_pseudo(IROpcode op);
+bool is_move_result_any(IROpcode op);
 
 bool is_move(IROpcode);
 

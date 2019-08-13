@@ -1009,8 +1009,8 @@ bool is_move_result_pseudo(IROpcode op) {
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
 }
 
-bool is_move_result_or_move_result_pseudo(IROpcode op) {
-  return is_move_result(op) || is_move_result_pseudo(op);
+bool is_move_result_any(IROpcode op) {
+  return opcode::is_move_result(op) || is_move_result_pseudo(op);
 }
 
 bool is_commutative(IROpcode opcode) {

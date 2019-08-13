@@ -210,7 +210,7 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
 
     if (common_insn && is_insn_eligible(*common_insn)) {
       IRInstruction only_insn = *common_insn;
-      if (only_insn.has_move_result()) {
+      if (only_insn.has_move_result_any()) {
         // need to check, for all succ blocks, the associated move-result must:
         // 1. be in the same block
         // 2. be identical
@@ -272,7 +272,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
     for (auto insn : insns_to_hoist) {
-      if (opcode::is_move_result_or_move_result_pseudo(insn.opcode())) {
+      if (opcode::is_move_result_any(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
         continue;
       }

@@ -84,7 +84,7 @@ void RemoveArgs::gather_results_used() {
           const auto next = std::next(it);
           always_assert(next != ii.end());
           const auto peek = next->insn;
-          if (!is_move_result(peek->opcode())) {
+          if (!opcode::is_move_result(peek->opcode())) {
             continue;
           }
           auto method_ref = insn->get_method();

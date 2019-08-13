@@ -194,7 +194,7 @@ DexMethod* trivial_method_wrapper(DexMethod* m, const ClassHierarchy& ch) {
   ++it;
   if (it == end) return nullptr;
 
-  if (is_move_result(it->insn->opcode())) {
+  if (opcode::is_move_result(it->insn->opcode())) {
     ++it;
     if (it == end) return nullptr;
     if (!is_return_value(it->insn->opcode())) return nullptr;
@@ -550,7 +550,7 @@ void replace_wrappers(const ClassHierarchy& ch,
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!is_move_result(move_result->opcode())) {
+        if (!opcode::is_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
         }
@@ -580,7 +580,7 @@ void replace_wrappers(const ClassHierarchy& ch,
       if (found_get != ssms.getters.end()) {
         auto next_it = std::next(it);
         auto const move_result = next_it->insn;
-        if (!is_move_result(move_result->opcode())) {
+        if (!opcode::is_move_result(move_result->opcode())) {
           ssms.keepers.emplace(callee);
           continue;
         }

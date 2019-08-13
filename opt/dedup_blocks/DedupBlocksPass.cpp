@@ -620,7 +620,7 @@ class DedupBlocksImpl {
           fwd_it_next++;
           if (fwd_it_next != fwd_it_end) {
             auto opcode = fwd_it_next->insn->opcode();
-            if (opcode::is_move_result_or_move_result_pseudo(opcode)) {
+            if (opcode::is_move_result_any(opcode)) {
               fwd_it = fwd_it_next;
               continue;
             }
@@ -732,7 +732,7 @@ class DedupBlocksImpl {
   static bool begins_with_move_result(cfg::Block* block) {
     const auto& first_mie = *block->get_first_insn();
     auto first_op = first_mie.insn->opcode();
-    return is_move_result(first_op) || opcode::is_move_result_pseudo(first_op);
+    return opcode::is_move_result_any(first_op);
   }
 
   // Deal with a verification error like this
@@ -813,16 +813,15 @@ class DedupBlocksImpl {
         }
         auto def = *defs.elements().begin();
         auto def_opcode = def->opcode();
-        always_assert(
-            opcode::is_move_result_or_move_result_pseudo(def_opcode) ||
-            opcode::is_load_param(def_opcode));
+        always_assert(opcode::is_move_result_any(def_opcode) ||
+                      opcode::is_load_param(def_opcode));
         // Log def instruction if...
         // - it is not an earlier instruction from the current block, or
         // - (it is from the current block and) it's the leading move (pseudo)
         //   result instruction in the current block, which implies that the
         //   instruction actually creating this result is from another block
         if (!block_insns.count(def) ||
-            (opcode::is_move_result_or_move_result_pseudo(def_opcode) &&
+            (opcode::is_move_result_any(def_opcode) &&
              block->get_first_insn()->insn == def)) {
           res.push_back(def);
         } else {

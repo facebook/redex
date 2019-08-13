@@ -1228,7 +1228,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         // a new block. We also copy over all throw-edges. See FIXME below for
         // a discussion about try-regions in general.
         if (!throws.empty()) {
-          always_assert_log(!existing_last->insn->has_move_result(),
+          always_assert_log(!existing_last->insn->has_move_result_any(),
                             "Can't add instructions after throwing instruction "
                             "%s with move-result in Block %d in %s",
                             SHOW(existing_last->insn), b->id(), SHOW(*this));

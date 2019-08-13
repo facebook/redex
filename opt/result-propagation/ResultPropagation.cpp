@@ -135,7 +135,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
       if (insn->dests_size()) {
         set_current_state_at(insn->dest(), insn->dest_is_wide(),
                              ParamDomain::top());
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         current_state->set(RESULT_REGISTER, ParamDomain::top());
       }
     };
@@ -426,7 +426,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       continue;
     }
     const auto peek = next->insn;
-    if (!is_move_result(peek->opcode())) {
+    if (!opcode::is_move_result(peek->opcode())) {
       continue;
     }
     // do we know the invoked method always returns a particular parameter?

@@ -273,7 +273,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       }
       // We need to invalidate RESULT_REGISTER if the instruction writes into
       // this register.
-      if (insn->has_move_result()) {
+      if (insn->has_move_result_any()) {
         current_state->set(RESULT_REGISTER, AbstractAccessPathDomain::top());
       }
     }

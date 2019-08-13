@@ -167,7 +167,7 @@ class AliasFixpointIterator final
 
       // Result register can only be used by move-result(-pseudo).
       // Clear it after the move-result(-pseudo) has been processed
-      if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+      if (opcode::is_move_result_any(op)) {
         aliases.break_alias(Value::create_register(RESULT_REGISTER));
         if (insn->dest_is_wide()) {
           aliases.break_alias(Value::create_register(RESULT_REGISTER + 1));
@@ -281,9 +281,7 @@ class AliasFixpointIterator final
       // It's easier to check the following move-result for the width of the
       // RESULT_REGISTER
       auto next = std::next(it);
-      if (next != end &&
-          (is_move_result(next->insn->opcode()) ||
-           opcode::is_move_result_pseudo(next->insn->opcode())) &&
+      if (next != end && opcode::is_move_result_any(next->insn->opcode()) &&
           next->insn->dest_is_wide()) {
         dest.upper = Value::create_register(RESULT_REGISTER + 1);
       }

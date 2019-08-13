@@ -56,7 +56,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
   }
   if (insn->dests_size()) {
     used_vars->remove(insn->dest());
-  } else if (insn->has_move_result()) {
+  } else if (insn->has_move_result_any()) {
     used_vars->remove(RESULT_REGISTER);
   }
   if (required) {
@@ -84,7 +84,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
         }
       }
     }
-    if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
+    if (opcode::is_move_result_any(op)) {
       used_vars->add(RESULT_REGISTER);
     }
   }
@@ -209,7 +209,7 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
   default: {
     if (insn->dests_size()) {
       return used_vars.contains(insn->dest());
-    } else if (insn->has_move_result()) {
+    } else if (insn->has_move_result_any()) {
       return used_vars.contains(RESULT_REGISTER);
     }
     return true;

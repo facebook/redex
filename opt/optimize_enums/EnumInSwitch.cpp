@@ -56,7 +56,7 @@ void analyze_default(cfg::InstructionIterator it, Environment* env) {
       env->set(insn->dest() + 1, Domain::top());
     }
   }
-  if (insn->has_move_result()) {
+  if (insn->has_move_result_any()) {
     env->set(RESULT_REGISTER, Domain::top());
   }
 }

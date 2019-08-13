@@ -488,7 +488,7 @@ namespace optimize_enums {
  */
 void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
                                                EnumTypeEnvironment* env) const {
-  const bool use_result = insn->has_move_result();
+  const bool use_result = insn->has_move_result_any();
   if (use_result || insn->dests_size() > 0) {
     Register dest = use_result ? RESULT_REGISTER : insn->dest();
 

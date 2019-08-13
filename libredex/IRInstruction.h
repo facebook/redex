@@ -164,7 +164,7 @@ class IRInstruction final {
     return opcode_impl::has_move_result_pseudo(m_opcode);
   }
 
-  bool has_move_result() const {
+  bool has_move_result_any() const {
     return has_method() || has_move_result_pseudo() ||
            m_opcode == OPCODE_FILLED_NEW_ARRAY;
   }

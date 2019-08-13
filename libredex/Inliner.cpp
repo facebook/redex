@@ -1276,8 +1276,9 @@ void inline_method(IRCode* caller_code,
   // find the move-result after the invoke, if any. Must be the first
   // instruction after the invoke
   auto move_res = pos;
-  while (move_res++ != caller_code->end() && move_res->type != MFLOW_OPCODE);
-  if (!is_move_result(move_res->insn->opcode())) {
+  while (move_res++ != caller_code->end() && move_res->type != MFLOW_OPCODE)
+    ;
+  if (!opcode::is_move_result(move_res->insn->opcode())) {
     move_res = caller_code->end();
   }
 

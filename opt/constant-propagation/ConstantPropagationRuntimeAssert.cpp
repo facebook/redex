@@ -194,7 +194,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   };
   auto cst = wps.get_return_value(callee);
   if (cst.is_bottom()) {
-    if (is_move_result(std::next(it)->insn->opcode())) {
+    if (opcode::is_move_result(std::next(it)->insn->opcode())) {
       ++it;
     }
     it.reset(insert_assertion(it.unwrap()));
@@ -202,7 +202,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   }
 
   ++it;
-  if (!is_move_result(it->insn->opcode())) {
+  if (!opcode::is_move_result(it->insn->opcode())) {
     return it;
   }
   auto reg = it->insn->dest();

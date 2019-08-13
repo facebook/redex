@@ -59,7 +59,7 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
   auto invoke = it->insn;
   ++it;
 
-  if (is_move_result(it->insn->opcode())) {
+  if (opcode::is_move_result(it->insn->opcode())) {
     ++it;
   }
   if (!is_return(it->insn->opcode())) {

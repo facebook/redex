@@ -59,7 +59,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, ConstantValue::top());
         }
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, ConstantValue::top());
       }
     };

@@ -442,7 +442,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // If we get here, reset destination.
       if (insn->dests_size()) {
         ValueIdDomain domain;
-        if (opcode::is_move_result_or_move_result_pseudo(opcode)) {
+        if (opcode::is_move_result_any(opcode)) {
           domain = current_state->get_ref_env().get(RESULT_REGISTER);
         } else {
           domain = get_value_id_domain(insn, current_state);
@@ -458,7 +458,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
           }
         }
         set_current_state_at(insn->dest(), insn->dest_is_wide(), domain);
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         ValueIdDomain domain = get_value_id_domain(insn, current_state);
         current_state->mutate_ref_env(
             [&](RefEnvironment* env) { env->set(RESULT_REGISTER, domain); });
@@ -1450,7 +1450,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     TRACE(CSE, 4, "[CSE] forwarding %s to %s via v%u", SHOW(earlier_insn),
           SHOW(insn), temp_reg);
 
-    if (opcode::is_move_result_or_move_result_pseudo(insn->opcode())) {
+    if (opcode::is_move_result_any(insn->opcode())) {
       insn = m_cfg.primary_instruction_of_move_result(it)->insn;
     }
     m_stats.eliminated_opcodes[insn->opcode()]++;

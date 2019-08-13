@@ -240,7 +240,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       if (insn->dests_size()) {
         set_current_state_at(insn->dest(), insn->dest_is_wide(),
                              TrackedDomain(make_other()));
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         current_state->set(RESULT_REGISTER, TrackedDomain(make_other()));
       }
     };

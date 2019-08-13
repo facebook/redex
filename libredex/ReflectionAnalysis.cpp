@@ -732,7 +732,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                IRInstruction* insn,
                                DexType* type) const {
-    auto dest_reg = insn->has_move_result() ? RESULT_REGISTER : insn->dest();
+    auto dest_reg =
+        insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
     if (type == get_class_type()) {
       // We don't have precise type information to which the Class obj refers
       // to.
@@ -805,7 +806,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     // We need to invalidate RESULT_REGISTER if the instruction writes into
     // this register.
-    if (insn->has_move_result()) {
+    if (insn->has_move_result_any()) {
       current_state->set_abstract_obj(RESULT_REGISTER,
                                       AbstractObjectDomain::top());
     }

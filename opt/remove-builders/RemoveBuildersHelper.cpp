@@ -962,7 +962,7 @@ void transfer_object_reach(DexType* obj,
   auto op = insn->opcode();
   if (is_move(op)) {
     regs[insn->dest()] = regs[insn->src(0)];
-  } else if (is_move_result(op)) {
+  } else if (opcode::is_move_result(op)) {
     regs[insn->dest()] = regs[regs_size];
   } else if (writes_result_register(op)) {
     if (is_invoke(op)) {

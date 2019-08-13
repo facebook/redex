@@ -209,7 +209,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
   if (insn->dests_size()) {
     TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
-  } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+  } else if (insn->has_move_result_any()) {
     TRACE(CONSTP, 5, "Clearing result register");
     env->set(RESULT_REGISTER, ConstantValue::top());
   }

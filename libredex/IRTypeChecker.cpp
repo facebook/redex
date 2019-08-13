@@ -252,7 +252,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
 
     // The instruction immediately before a move-result instruction must be
     // either an invoke-* or a filled-new-array instruction.
-    if (is_move_result(op)) {
+    if (opcode::is_move_result(op)) {
       auto prev = it;
       while (prev != code->begin()) {
         --prev;

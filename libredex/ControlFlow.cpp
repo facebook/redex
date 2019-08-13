@@ -104,8 +104,7 @@ IRList::iterator insn_before_position(cfg::Block* b) {
   for (auto it = b->begin(); it != b->end(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       auto op = it->insn->opcode();
-      if (!is_move_result(op) && !opcode::is_move_result_pseudo(op) &&
-          !is_goto(op)) {
+      if (!opcode::is_move_result_any(op) && !is_goto(op)) {
         return it;
       }
     } else if (it->type == MFLOW_POSITION) {
@@ -332,7 +331,7 @@ bool Block::starts_with_move_result() {
   auto first_it = get_first_insn();
   if (first_it != end()) {
     auto first_op = first_it->insn->opcode();
-    if (is_move_result(first_op) || opcode::is_move_result_pseudo(first_op)) {
+    if (opcode::is_move_result_any(first_op)) {
       return true;
     }
   }
@@ -1148,8 +1147,7 @@ void ControlFlowGraph::gather_methods(
 cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) {
   auto move_result_insn = it->insn;
-  always_assert(
-      opcode::is_move_result_or_move_result_pseudo(move_result_insn->opcode()));
+  always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
   auto block = const_cast<Block*>(it.block());
   if (block->get_first_insn()->insn == move_result_insn) {
     auto& preds = block->preds();
@@ -1158,12 +1156,12 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     auto res = previous_block->to_cfg_instruction_iterator(
         previous_block->get_last_insn());
     auto insn = res->insn;
-    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    always_assert(insn->has_move_result_any());
     return res;
   } else {
     auto res = std::prev(it.unwrap());
     auto insn = res->insn;
-    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    always_assert(insn->has_move_result_any());
     return block->to_cfg_instruction_iterator(res);
   }
 }
@@ -1175,7 +1173,7 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
   if (next_insn != end && it.block() == next_insn.block()) {
     // The easy case where the move result is in the same block
     auto op = next_insn->insn->opcode();
-    if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+    if (opcode::is_move_result_any(op)) {
       always_assert(primary_instruction_of_move_result(next_insn) == it);
       return next_insn;
     }
@@ -2080,7 +2078,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
     free_edges(remove_succ_edge_if(
         block, [](const Edge* e) { return e->type() == EDGE_BRANCH; },
         /* cleanup */ false));
-  } else if (insn->has_move_result()) {
+  } else if (insn->has_move_result_any()) {
     // delete the move-result(-pseudo) too
     if (insn == last_it->insn) {
       // The move-result(-pseudo) is in the next (runtime) block.
@@ -2095,8 +2093,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
                         SHOW(*this));
       auto first_it = move_result_block->get_first_insn();
       if (first_it != move_result_block->end() &&
-          opcode::is_move_result_or_move_result_pseudo(
-              first_it->insn->opcode())) {
+          opcode::is_move_result_any(first_it->insn->opcode())) {
         // We can safely delete this move-result(-pseudo) because it cannot be
         // the move-result(-pseudo) of more than one primary instruction. A CFG
         // with multiple edges to a block beginning with a move-result(-pseudo)
@@ -2111,8 +2108,7 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
       // This occurs when we're not in a try region.
       auto mrp_it = std::next(it);
       always_assert(mrp_it.block() == block);
-      if (opcode::is_move_result_or_move_result_pseudo(
-              mrp_it->insn->opcode())) {
+      if (opcode::is_move_result_any(mrp_it->insn->opcode())) {
         block->m_entries.erase_and_dispose(mrp_it.unwrap());
       }
     }
