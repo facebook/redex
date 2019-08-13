@@ -399,9 +399,81 @@ void DexOutput::insert_map_item(uint16_t maptype,
   m_map_items.emplace_back(item);
 
   switch (maptype) {
+  case TYPE_STRING_ID_ITEM:
+    m_stats.string_id_count += size;
+    m_stats.string_id_bytes += bytes;
+    break;
+  case TYPE_TYPE_ID_ITEM:
+    m_stats.type_id_count += size;
+    m_stats.type_id_bytes += bytes;
+    break;
+  case TYPE_PROTO_ID_ITEM:
+    m_stats.proto_id_count += size;
+    m_stats.proto_id_bytes += bytes;
+    break;
+  case TYPE_FIELD_ID_ITEM:
+    m_stats.field_id_count += size;
+    m_stats.field_id_bytes += bytes;
+    break;
+  case TYPE_METHOD_ID_ITEM:
+    m_stats.method_id_count += size;
+    m_stats.method_id_bytes += bytes;
+    break;
+  case TYPE_CLASS_DEF_ITEM:
+    m_stats.class_def_count += size;
+    m_stats.class_def_bytes += bytes;
+    break;
+  case TYPE_CALL_SITE_ID_ITEM:
+    m_stats.call_site_id_count += size;
+    m_stats.call_site_id_bytes += bytes;
+    break;
+  case TYPE_METHOD_HANDLE_ITEM:
+    m_stats.method_handle_count += size;
+    m_stats.method_handle_bytes += bytes;
+    break;
+  case TYPE_MAP_LIST:
+    m_stats.map_list_count += size;
+    m_stats.map_list_bytes += bytes;
+    break;
+  case TYPE_TYPE_LIST:
+    m_stats.type_list_count += size;
+    m_stats.type_list_bytes += bytes;
+    break;
+  case TYPE_ANNOTATION_SET_REF_LIST:
+    m_stats.annotation_set_ref_list_count += size;
+    m_stats.annotation_set_ref_list_bytes += bytes;
+    break;
+  case TYPE_ANNOTATION_SET_ITEM:
+    m_stats.annotation_set_count += size;
+    m_stats.annotation_set_bytes += bytes;
+    break;
+  case TYPE_CLASS_DATA_ITEM:
+    m_stats.class_data_count += size;
+    m_stats.class_data_count += bytes;
+    break;
+  case TYPE_CODE_ITEM:
+    m_stats.code_count += size;
+    m_stats.code_bytes += bytes;
+    break;
   case TYPE_STRING_DATA_ITEM:
     m_stats.string_data_count += size;
     m_stats.string_data_bytes += bytes;
+    break;
+  case TYPE_DEBUG_INFO_ITEM:
+    m_stats.debug_info_count += size;
+    m_stats.debug_info_bytes += bytes;
+    break;
+  case TYPE_ANNOTATION_ITEM:
+    m_stats.annotation_count += size;
+    m_stats.annotation_bytes += bytes;
+    break;
+  case TYPE_ENCODED_ARRAY_ITEM:
+    m_stats.encoded_array_count += size;
+    m_stats.encoded_array_bytes += bytes;
+    break;
+  case TYPE_ANNOTATIONS_DIR_ITEM:
+    m_stats.annotations_directory_count += size;
+    m_stats.annotations_directory_bytes += bytes;
     break;
   }
 }
