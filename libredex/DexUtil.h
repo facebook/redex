@@ -494,8 +494,63 @@ struct dex_stats_t {
   int num_dbg_items = 0;
   int dbg_total_size = 0;
 
-  int map_list_num_strings = 0;
-  int map_list_strings_bytes = 0;
+  /* Stats collected from the Map List section of a Dex. */
+  int string_id_count = 0;
+  int string_id_bytes = 0;
+
+  int type_id_count = 0;
+  int type_id_bytes = 0;
+
+  int proto_id_count = 0;
+  int proto_id_bytes = 0;
+
+  int field_id_count = 0;
+  int field_id_bytes = 0;
+
+  int method_id_count = 0;
+  int method_id_bytes = 0;
+
+  int class_def_count = 0;
+  int class_def_bytes = 0;
+
+  int call_site_id_count = 0;
+  int call_site_id_bytes = 0;
+
+  int method_handle_count = 0;
+  int method_handle_bytes = 0;
+
+  int map_list_count = 0;
+  int map_list_bytes = 0;
+
+  int type_list_count = 0;
+  int type_list_bytes = 0;
+
+  int annotation_set_ref_list_count = 0;
+  int annotation_set_ref_list_bytes = 0;
+
+  int annotation_set_count = 0;
+  int annotation_set_bytes = 0;
+
+  int class_data_count = 0;
+  int class_data_bytes = 0;
+
+  int code_count = 0;
+  int code_bytes = 0;
+
+  int string_data_count = 0;
+  int string_data_bytes = 0;
+
+  int debug_info_count = 0;
+  int debug_info_bytes = 0;
+
+  int annotation_count = 0;
+  int annotation_bytes = 0;
+
+  int encoded_array_count = 0;
+  int encoded_array_bytes = 0;
+
+  int annotations_directory_count = 0;
+  int annotations_directory_bytes = 0;
 };
 
 dex_stats_t&

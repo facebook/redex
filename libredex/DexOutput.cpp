@@ -400,8 +400,8 @@ void DexOutput::insert_map_item(uint16_t maptype,
 
   switch (maptype) {
   case TYPE_STRING_DATA_ITEM:
-    m_stats.map_list_num_strings += size;
-    m_stats.map_list_strings_bytes += bytes;
+    m_stats.string_data_count += size;
+    m_stats.string_data_bytes += bytes;
     break;
   }
 }

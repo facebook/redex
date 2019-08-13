@@ -201,7 +201,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
     switch (item.type) {
     case TYPE_STRING_DATA_ITEM:
-      stats->map_list_num_strings += item.size;
+      stats->string_data_count += item.size;
 
       for (uint32_t j = 0; j < item.size; j++) {
         // Skip data that encodes the number of UTF-16 code units.
@@ -215,7 +215,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
         }
       }
 
-      stats->map_list_strings_bytes += encdata - initial_encdata;
+      stats->string_data_bytes += encdata - initial_encdata;
       break;
     case TYPE_DEBUG_INFO_ITEM:
       stats->num_dbg_items += item.size;

@@ -523,8 +523,46 @@ dex_stats_t&
   lhs.field_refs_total_size += rhs.field_refs_total_size;
   lhs.num_dbg_items += rhs.num_dbg_items;
   lhs.dbg_total_size += rhs.dbg_total_size;
-  lhs.map_list_num_strings += rhs.map_list_num_strings;
-  lhs.map_list_strings_bytes += rhs.map_list_strings_bytes;
+
+  lhs.string_id_count += rhs.string_id_count;
+  lhs.string_id_bytes += rhs.string_id_bytes;
+  lhs.type_id_count += rhs.type_id_count;
+  lhs.type_id_bytes += rhs.type_id_bytes;
+  lhs.proto_id_count += rhs.proto_id_count;
+  lhs.proto_id_bytes += rhs.proto_id_bytes;
+  lhs.field_id_count += rhs.field_id_count;
+  lhs.field_id_bytes += rhs.field_id_bytes;
+  lhs.method_id_count += rhs.method_id_count;
+  lhs.method_id_bytes += rhs.method_id_bytes;
+  lhs.class_def_count += rhs.class_def_count;
+  lhs.class_def_bytes += rhs.class_def_bytes;
+  lhs.call_site_id_count += rhs.call_site_id_count;
+  lhs.call_site_id_bytes += rhs.call_site_id_bytes;
+  lhs.method_handle_count += rhs.method_handle_count;
+  lhs.method_handle_bytes += rhs.method_handle_bytes;
+  lhs.map_list_count += rhs.map_list_count;
+  lhs.map_list_bytes += rhs.map_list_bytes;
+  lhs.type_list_count += rhs.type_list_count;
+  lhs.type_list_bytes += rhs.type_list_bytes;
+  lhs.annotation_set_ref_list_count += rhs.annotation_set_ref_list_count;
+  lhs.annotation_set_ref_list_bytes += rhs.annotation_set_ref_list_bytes;
+  lhs.annotation_set_count += rhs.annotation_set_count;
+  lhs.annotation_set_bytes += rhs.annotation_set_bytes;
+  lhs.class_data_count += rhs.class_data_count;
+  lhs.class_data_bytes += rhs.class_data_bytes;
+  lhs.code_count += rhs.code_count;
+  lhs.code_bytes += rhs.code_bytes;
+  lhs.string_data_count += rhs.string_data_count;
+  lhs.string_data_bytes += rhs.string_data_bytes;
+  lhs.debug_info_count += rhs.debug_info_count;
+  lhs.debug_info_bytes += rhs.debug_info_bytes;
+  lhs.annotation_count += rhs.annotation_count;
+  lhs.annotation_bytes += rhs.annotation_bytes;
+  lhs.encoded_array_count += rhs.encoded_array_count;
+  lhs.encoded_array_bytes += rhs.encoded_array_bytes;
+  lhs.annotations_directory_count += rhs.annotations_directory_count;
+  lhs.annotations_directory_bytes += rhs.annotations_directory_bytes;
+
   return lhs;
 }
 

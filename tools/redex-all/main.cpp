@@ -531,8 +531,45 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
 
-  val["map_list_num_strings"] = stats.map_list_num_strings;
-  val["map_list_strings_bytes"] = stats.map_list_strings_bytes;
+  val["string_id_count"] = stats.string_id_count;
+  val["string_id_bytes"] = stats.string_id_bytes;
+  val["type_id_count"] = stats.type_id_count;
+  val["type_id_bytes"] = stats.type_id_bytes;
+  val["proto_id_count"] = stats.proto_id_count;
+  val["proto_id_bytes"] = stats.proto_id_bytes;
+  val["field_id_count"] = stats.field_id_count;
+  val["field_id_bytes"] = stats.field_id_bytes;
+  val["method_id_count"] = stats.method_id_count;
+  val["method_id_bytes"] = stats.method_id_bytes;
+  val["class_def_count"] = stats.class_def_count;
+  val["class_def_bytes"] = stats.class_def_bytes;
+  val["call_site_id_count"] = stats.call_site_id_count;
+  val["call_site_id_bytes"] = stats.call_site_id_bytes;
+  val["method_handle_count"] = stats.method_handle_count;
+  val["method_handle_bytes"] = stats.method_handle_bytes;
+  val["map_list_count"] = stats.map_list_count;
+  val["map_list_bytes"] = stats.map_list_bytes;
+  val["type_list_count"] = stats.type_list_count;
+  val["type_list_bytes"] = stats.type_list_bytes;
+  val["annotation_set_ref_list_count"] = stats.annotation_set_ref_list_count;
+  val["annotation_set_ref_list_bytes"] = stats.annotation_set_ref_list_bytes;
+  val["annotation_set_count"] = stats.annotation_set_count;
+  val["annotation_set_bytes"] = stats.annotation_set_bytes;
+  val["class_data_count"] = stats.class_data_count;
+  val["class_data_bytes"] = stats.class_data_bytes;
+  val["code_count"] = stats.code_count;
+  val["code_bytes"] = stats.code_bytes;
+  val["string_data_count"] = stats.string_data_count;
+  val["string_data_bytes"] = stats.string_data_bytes;
+  val["debug_info_count"] = stats.debug_info_count;
+  val["debug_info_bytes"] = stats.debug_info_bytes;
+  val["annotation_count"] = stats.annotation_count;
+  val["annotation_bytes"] = stats.annotation_bytes;
+  val["encoded_array_count"] = stats.encoded_array_count;
+  val["encoded_array_bytes"] = stats.encoded_array_bytes;
+  val["annotations_directory_count"] = stats.annotations_directory_count;
+  val["annotations_directory_bytes"] = stats.annotations_directory_bytes;
+
   return val;
 }
 
