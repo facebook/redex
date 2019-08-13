@@ -16,13 +16,26 @@ import static org.fest.assertions.api.Assertions.assertThat;
 // being casted to other types. It will be transformed to a class with only
 // static methods by OptimizeEnumsPass.
 enum SCORE {
-  ONE,
-  TWO,
-  THREE;
+  ONE(11, "UNO"),
+  TWO(12, "DOS"),
+  THREE(13, null);
+
+  SCORE(int data, String str) {
+    myOtherField = str;
+    myField = data;
+    scoreToWin = 101;
+    constantString = "IDoNotChange";
+  }
 
   static final SCORE DEFAULT = ONE;
   static final SCORE[] array = values();
   static int number = 0;
+
+  // Primitive or String instance fields are (usually) safe.
+  int myField;
+  String myOtherField;
+  int scoreToWin;
+  String constantString;
 
   public static @Nullable SCORE increase(SCORE score) {
     if (score == null) {
@@ -92,6 +105,16 @@ enum USED_IN_UNSAFE_CONSTRUCTOR {
 class HasUnsafeConstructor {
   HasUnsafeConstructor(USED_IN_UNSAFE_CONSTRUCTOR[] e) {}
   HasUnsafeConstructor(Integer[] e) {}
+}
+enum MODIFIES_INSTANCE_FIELD {
+  ONE(1234);
+  int myField;
+  MODIFIES_INSTANCE_FIELD(int data) {
+    myField = data;
+  }
+  public void modify() {
+    myField++;
+  }
 }
 enum HAS_TRUE_VIRTUAL {
   ONE;
@@ -358,5 +381,15 @@ public class EnumTransformTest {
   @Test
   public void virtual_method() {
     assertThat(SCORE.THREE.is_max()).isEqualTo(true);
+  }
+
+  @Test
+  public void instance_fields() {
+    assertThat(SCORE.ONE.myOtherField).isEqualTo("UNO");
+    assertThat(SCORE.TWO.myOtherField).isEqualTo("DOS");
+    assertThat(SCORE.THREE.myOtherField).isEqualTo(null);
+    assertThat(SCORE.ONE.myField).isEqualTo(11);
+    assertThat(SCORE.TWO.myField).isEqualTo(12);
+    assertThat(SCORE.THREE.myField).isEqualTo(13);
   }
 }

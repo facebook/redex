@@ -15,14 +15,24 @@
 #include "JarLoader.h"
 #include "RedexTest.h"
 
-constexpr const char* ENUM_A = "Lcom/facebook/redextest/EnumA;";
-constexpr const char* ENUM_B = "Lcom/facebook/redextest/EnumB;";
+constexpr const char* ENUM_SAFE = "Lcom/facebook/redextest/EnumSafe;";
+constexpr const char* ENUM_SAFE_A =
+    "Lcom/facebook/redextest/EnumSafe;.A:Lcom/facebook/redextest/EnumSafe;";
+constexpr const char* ENUM_SAFE_B =
+    "Lcom/facebook/redextest/EnumSafe;.B:Lcom/facebook/redextest/EnumSafe;";
+constexpr const char* ENUM_SAFE_NAME =
+    "Lcom/facebook/redextest/EnumSafe;.name:Ljava/lang/String;";
+constexpr const char* ENUM_SAFE_VALUE =
+    "Lcom/facebook/redextest/EnumSafe;.value:I";
+constexpr const char* ENUM_SAFE_IS_USEFUL =
+    "Lcom/facebook/redextest/EnumSafe;.isUseful:Z";
 
 /*
  * Check that analyze_enum_clinit returns the correct enum field -> ordinal and
  * name mapping.
  */
 TEST_F(RedexTest, OrdinalAnalysis) {
+  using namespace optimize_enums;
   always_assert(load_class_file(std::getenv("enum_class_file")));
 
   auto dexfile = std::getenv("dexfile");
@@ -33,26 +43,50 @@ TEST_F(RedexTest, OrdinalAnalysis) {
   root_store.add_classes(load_classes_from_dex(dexfile));
   auto scope = build_class_scope(root_store.get_dexen());
 
-  auto enumA = type_class(DexType::get_type(ENUM_A));
-  auto enum_field_to_attrs = optimize_enums::analyze_enum_clinit(enumA);
-  auto enumA_zero = static_cast<DexField*>(
-      DexField::get_field("Lcom/facebook/redextest/EnumA;.TYPE_A_0:Lcom/"
-                          "facebook/redextest/EnumA;"));
-  auto enumA_one = static_cast<DexField*>(
-      DexField::get_field("Lcom/facebook/redextest/EnumA;.TYPE_A_1:Lcom/"
-                          "facebook/redextest/EnumA;"));
-  auto enumA_two = static_cast<DexField*>(
-      DexField::get_field("Lcom/facebook/redextest/EnumA;.TYPE_A_2:Lcom/"
-                          "facebook/redextest/EnumA;"));
-  auto& attrs_zero = enum_field_to_attrs.at(enumA_zero);
-  EXPECT_EQ(attrs_zero.ordinal, 0);
-  EXPECT_EQ(attrs_zero.name, DexString::get_string("TYPE_A_0"));
+  // EnumSafe
+  auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));
+  EnumFieldMap ifield_map;
+  auto attrs = analyze_enum_clinit(enum_cls, &ifield_map);
 
-  auto& attrs_one = enum_field_to_attrs.at(enumA_one);
-  EXPECT_EQ(attrs_one.ordinal, 1);
-  EXPECT_EQ(attrs_one.name, DexString::get_string("TYPE_A_1"));
+  EXPECT_EQ(attrs.size(), 2);
+  EXPECT_EQ(ifield_map.size(), 3);
 
-  auto& attrs_two = enum_field_to_attrs.at(enumA_two);
-  EXPECT_EQ(attrs_two.ordinal, 2);
-  EXPECT_EQ(attrs_two.name, DexString::get_string("TYPE_A_2"));
+  auto field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_A));
+  ASSERT_EQ(attrs.count(field), 1);
+  EXPECT_EQ(attrs[field].ordinal, 0);
+  EXPECT_EQ(attrs[field].name, DexString::make_string("A"));
+
+  field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_B));
+  ASSERT_EQ(attrs.count(field), 1);
+  EXPECT_EQ(attrs[field].ordinal, 1);
+  EXPECT_EQ(attrs[field].name, DexString::make_string("B"));
+
+  auto ifield = DexField::get_field(ENUM_SAFE_NAME);
+  ASSERT_EQ(ifield_map.count(ifield), 1);
+  ASSERT_EQ(ifield_map[ifield].size(), 2);
+  EXPECT_EQ(ifield_map[ifield][0].string_value, DexString::make_string("zero"));
+  EXPECT_EQ(ifield_map[ifield][1].string_value, nullptr);
+
+  ifield = DexField::get_field(ENUM_SAFE_VALUE);
+  ASSERT_EQ(ifield_map.count(ifield), 1);
+  ASSERT_EQ(ifield_map[ifield].size(), 2);
+  EXPECT_EQ(ifield_map[ifield][0].primitive_value, 0);
+  EXPECT_EQ(ifield_map[ifield][1].primitive_value, 1);
+
+  ifield = DexField::get_field(ENUM_SAFE_IS_USEFUL);
+  ASSERT_EQ(ifield_map.count(ifield), 1);
+  ASSERT_EQ(ifield_map[ifield].size(), 2);
+  EXPECT_EQ(ifield_map[ifield][0].primitive_value, 1);
+  EXPECT_EQ(ifield_map[ifield][1].primitive_value, 1);
+
+  // These enums should not be optimized.
+  for (const char* enum_name : {"Lcom/facebook/redextest/EnumUnsafe1;",
+                                "Lcom/facebook/redextest/EnumUnsafe2;"}) {
+    enum_cls = type_class(DexType::get_type(enum_name));
+    ifield_map.clear();
+    attrs = analyze_enum_clinit(enum_cls, &ifield_map);
+
+    EXPECT_TRUE(attrs.empty());
+    EXPECT_TRUE(ifield_map.empty());
+  }
 }

@@ -24,15 +24,29 @@ DexAccessFlags enum_field_access();
 DexAccessFlags synth_access();
 
 struct EnumAttr {
-  const uint32_t ordinal;
+  uint32_t ordinal;
   const DexString* name; // Builtin name for enums.
 };
 
 using AttrMap = std::unordered_map<const DexField*, EnumAttr>;
+
+union EnumFieldValue {
+  int64_t primitive_value;
+  const DexString* string_value;
+};
+/**
+ * Maps enum ordinals to values for a particular instance field.
+ */
+using EnumFieldValueMap = std::map<uint64_t, EnumFieldValue>;
+/**
+ * Maps enum instance fields to their value map for a particular enum.
+ */
+using EnumFieldMap = std::unordered_map<DexFieldRef*, EnumFieldValueMap>;
+
 /**
  * Returns a mapping of enum field -> ordinal value if success,
  * otherwise, return an empty map.
  */
-AttrMap analyze_enum_clinit(const DexClass* cls);
+AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map);
 
 } // namespace optimize_enums

@@ -65,6 +65,7 @@ enum Reason {
   CAST_APUT_OBJECT = 7,
   MULTI_ENUM_TYPES = 8,
   UNSAFE_INVOCATION_ON_CANDIDATE_ENUM = 9,
+  IFIELD_SET_OUTSIDE_INIT = 10,
 };
 
 /**
@@ -131,15 +132,19 @@ class EnumUpcastDetector {
     case OPCODE_APUT_OBJECT:
       process_aput_object(insn, env, rejected_enums);
       break;
-    case OPCODE_IGET_OBJECT:
-      // Candidate enums do not contain any instance field.
-      always_assert(
-          !m_candidate_enums->count_unsafe(insn->get_field()->get_class()));
-      break;
     case OPCODE_IPUT_OBJECT:
-      always_assert(
-          !m_candidate_enums->count_unsafe(insn->get_field()->get_class()));
       process_isput_object(insn, env, rejected_enums);
+      reject(insn, insn->get_field()->get_class(), rejected_enums,
+             IFIELD_SET_OUTSIDE_INIT);
+      break;
+    case OPCODE_IPUT:
+    case OPCODE_IPUT_WIDE:
+    case OPCODE_IPUT_BOOLEAN:
+    case OPCODE_IPUT_BYTE:
+    case OPCODE_IPUT_CHAR:
+    case OPCODE_IPUT_SHORT:
+      reject(insn, insn->get_field()->get_class(), rejected_enums,
+             IFIELD_SET_OUTSIDE_INIT);
       break;
     case OPCODE_SPUT_OBJECT:
       process_isput_object(insn, env, rejected_enums);
@@ -683,8 +688,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   walk::parallel::methods(classes, [&](DexMethod* method) {
     // When doing static analysis, simply skip some javac-generated enum methods
     // <init>, values(), and valueOf(String).
-    if (candidate_enums->count(method->get_class()) &&
-        !rejected_enums.count(method->get_class()) &&
+    if (candidate_enums->count_unsafe(method->get_class()) &&
+        !rejected_enums.count_unsafe(method->get_class()) &&
         (is_init(method) || is_enum_values(method) ||
          is_enum_valueof(method))) {
       return;
@@ -699,7 +704,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
           rejected_enums.insert(elem_type);
         }
       }
-      if (!is_static(method) && candidate_enums->count(method->get_class())) {
+      if (!is_static(method) &&
+          candidate_enums->count_unsafe(method->get_class())) {
         rejected_enums.insert(method->get_class());
       }
     }

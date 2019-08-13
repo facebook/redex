@@ -67,6 +67,13 @@ DexField* get_enum_name_field() {
 }
 
 struct EnumOrdinalAnalyzerState {
+  /* implicit */ EnumOrdinalAnalyzerState(const DexType* clinit_class)
+      : clinit_class(clinit_class) {
+    auto& fields = type_class(clinit_class)->get_ifields();
+    enum_instance_fields =
+        std::unordered_set<DexField*>(fields.begin(), fields.end());
+  }
+
   const DexMethod* enum_ordinal_init{get_enum_ctor()};
 
   const DexField* enum_ordinal_field{get_ordinal_field()};
@@ -78,8 +85,8 @@ struct EnumOrdinalAnalyzerState {
   // The Enum class whose <clinit> we are currently analyzing.
   const DexType* clinit_class;
 
-  /* implicit */ EnumOrdinalAnalyzerState(const DexType* clinit_class)
-      : clinit_class(clinit_class) {}
+  // The instance fields of the enum whose <clinit> we are analyzing.
+  std::unordered_set<DexField*> enum_instance_fields;
 };
 
 class EnumOrdinalAnalyzer;
@@ -106,6 +113,20 @@ class EnumOrdinalAnalyzer
     }
     env->new_heap_value(RESULT_REGISTER, insn, ConstantObjectDomain());
     return true;
+  }
+
+  static bool analyze_iput(const EnumOrdinalAnalyzerState& state,
+                           const IRInstruction* insn,
+                           ConstantEnvironment* env) {
+    auto field = resolve_field(insn->get_field());
+    if (field == nullptr) {
+      return false;
+    }
+    if (state.enum_instance_fields.count(field)) {
+      env->set_object_field(insn->src(1), field, env->get(insn->src(0)));
+      return true;
+    }
+    return false;
   }
 
   static bool analyze_sput(const EnumOrdinalAnalyzerState& state,
@@ -225,8 +246,7 @@ DexAccessFlags enum_field_access() { return ACC_STATIC | ACC_ENUM; }
 
 DexAccessFlags synth_access() { return ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC; }
 
-std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
-    const DexClass* cls) {
+AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
   always_assert(is_enum(cls));
 
   auto* code = cls->get_clinit()->get_code();
@@ -252,7 +272,7 @@ std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
     }
   }
 
-  std::unordered_map<const DexField*, EnumAttr> enum_field_to_attrs;
+  AttrMap enum_field_to_attrs;
   if (!return_env.get_field_environment().is_value()) {
     return enum_field_to_attrs;
   }
@@ -283,9 +303,46 @@ std::unordered_map<const DexField*, EnumAttr> analyze_enum_clinit(
 
     EnumAttr enum_obj{static_cast<uint32_t>(*ordinal_value), *name_value};
     enum_field_to_attrs.emplace(field, enum_obj);
+
+    for (auto* enum_ifield : cls->get_ifields()) {
+      EnumFieldValue& ifield_value = (*ifield_map)[enum_ifield][*ordinal_value];
+      auto env_value = ptr.get(enum_ifield);
+      if (enum_ifield->get_type() == get_string_type()) {
+        if (auto string_ptr = env_value.maybe_get<SignedConstantDomain>()) {
+          if (auto string_ptr_value = string_ptr->get_constant()) {
+            always_assert(*string_ptr_value == 0);
+            // The `Ljava/lang/String` value is a `null` constant.
+            ifield_value.string_value = nullptr;
+            continue;
+          }
+        } else if (auto string_value = env_value.maybe_get<StringDomain>()) {
+          if (auto string_const = string_value->get_constant()) {
+            ifield_value.string_value = *string_const;
+            continue;
+          }
+        }
+      } else { // `enum_ifield` is a primitive type
+        if (auto primitive_value =
+                env_value.maybe_get<SignedConstantDomain>()) {
+          if (auto primitive_const = primitive_value->get_constant()) {
+            ifield_value.primitive_value = *primitive_const;
+            continue;
+          }
+        }
+      }
+
+      TRACE(ENUM, 9,
+            "Reject enum %s because we could not find constant value of "
+            "instance field %s",
+            SHOW(cls), SHOW(enum_ifield));
+      enum_field_to_attrs.clear();
+      ifield_map->clear();
+      return enum_field_to_attrs;
+    }
   }
   if (!validate_result(cls, &enum_field_to_attrs)) {
     enum_field_to_attrs.clear();
+    ifield_map->clear();
   }
   return enum_field_to_attrs;
 }

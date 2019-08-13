@@ -9,7 +9,6 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "EnumClinitAnalysis.h"
 #include "EnumUpcastAnalysis.h"
 #include "Mutators.h"
 #include "OptData.h"
@@ -86,6 +85,9 @@ struct EnumUtil {
 
   // Store non-true-virtual methods that will be made static later.
   ConcurrentSet<DexMethod*> m_non_true_virtual_methods;
+
+  // Store methods for getting instance fields to be generated later.
+  ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
 
   DexMethodRef* m_values_method_ref = nullptr;
 
@@ -257,6 +259,23 @@ struct EnumUtil {
     auto proto = DexProto::make_proto(
         INT_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto method = DexMethod::make_method(enum_type, REDEX_HASHCODE, proto);
+    return method;
+  }
+
+  /**
+   * Returns a method ref to LCandidateEnum;.redex$OE$get_iField:(Integer)X
+   * where `X` is the type of the instance field `iField`.
+   * Store the method ref at the same time.
+   */
+  DexMethodRef* add_get_ifield_method(DexType* enum_type, DexFieldRef* ifield) {
+    if (m_get_instance_field_methods.count(ifield)) {
+      return m_get_instance_field_methods.at(ifield);
+    }
+    auto proto = DexProto::make_proto(
+        ifield->get_type(), DexTypeList::make_type_list({INTEGER_TYPE}));
+    auto method_name = DexString::make_string("redex$OE$get_" + ifield->str());
+    auto method = DexMethod::make_method(enum_type, method_name, proto);
+    m_get_instance_field_methods.insert(std::make_pair(ifield, method));
     return method;
   }
 
@@ -480,6 +499,15 @@ class CodeTransformer final {
     case OPCODE_SGET_OBJECT:
       update_sget_object(env, cfg, block, mie);
       break;
+    case OPCODE_IGET:
+    case OPCODE_IGET_WIDE:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET_SHORT:
+      update_iget(cfg, block, mie);
+      break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
       if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
@@ -503,7 +531,7 @@ class CodeTransformer final {
         // Matches all non-true-virtual `SubEnum` methods (virtual methods that
         // do not override and are not overridden by any `Enum`, `Object`, or
         // interface methods).
-        if (m_enum_util->m_config.candidate_enums.count(method->get_class()) &&
+        if (m_enum_attrs.count(method->get_class()) &&
             mog::get_true_virtuals(*m_enum_util->m_method_override_graph,
                                    resolved_method,
                                    /*include_interfaces=*/true)
@@ -576,6 +604,44 @@ class CodeTransformer final {
     auto new_field = m_enum_util->m_fields[ord];
     auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
     m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+  }
+
+  /**
+   * If the instance field belongs to a CandidateEnum, replace the `iget`
+   * instruction with a static call to the correct method.
+   *
+   * iget(-object|-wide)? vObj LCandidateEnum;.iField:Ltype;
+   * move-result-pseudo vDest
+   * =>
+   * invoke-static {vObj}, LCandidateEnum;.redex$OE$get_iField:(Integer;)Ltype;
+   * move-result(-object|-wide)? vDest
+   */
+  void update_iget(cfg::ControlFlowGraph& cfg,
+                   cfg::Block* block,
+                   MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    auto ifield = insn->get_field();
+    auto enum_type = ifield->get_class();
+    if (m_enum_attrs.count(enum_type)) {
+      auto vObj = insn->src(0);
+      auto get_ifield_method =
+          m_enum_util->add_get_ifield_method(enum_type, ifield);
+      IROpcode opcode;
+      switch (insn->opcode()) {
+      case OPCODE_IGET_WIDE:
+        opcode = OPCODE_MOVE_RESULT_WIDE;
+        break;
+      case OPCODE_IGET_OBJECT:
+        opcode = OPCODE_MOVE_RESULT_OBJECT;
+        break;
+      default:
+        opcode = OPCODE_MOVE_RESULT;
+      }
+      m_replacements.push_back(InsnReplacement(
+          cfg, block, mie,
+          dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}),
+          opcode));
+    }
   }
 
   /**
@@ -856,12 +922,14 @@ class EnumTransformer final {
          it != config.candidate_enums.end();
          ++it) {
       auto enum_cls = type_class(*it);
-      auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
+      // TODO: I want to consolidate `enum_attrs` and `ifield_map` to one result
+      EnumFieldMap ifield_map;
+      auto enum_attrs =
+          optimize_enums::analyze_enum_clinit(enum_cls, &ifield_map);
       if (enum_attrs.empty()) {
         TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
               SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
-        continue;
       } else if (enum_attrs.size() > config.max_enum_size) {
         TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
               enum_attrs.size());
@@ -869,6 +937,7 @@ class EnumTransformer final {
         m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
         m_enum_objs += enum_attrs.size();
         m_enum_attrs.emplace(*it, enum_attrs);
+        m_enum_ifield_maps.emplace(*it, ifield_map);
         clean_generated_methods_fields(enum_cls);
         opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       }
@@ -900,8 +969,17 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    for (DexMethod* vmethod : m_enum_util->m_non_true_virtual_methods) {
+    std::set<DexMethod*, dexmethods_comparator> virtual_methods(
+        m_enum_util->m_non_true_virtual_methods.begin(),
+        m_enum_util->m_non_true_virtual_methods.end());
+    for (DexMethod* vmethod : virtual_methods) {
       mutators::make_static(vmethod);
+    }
+    std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
+        m_enum_util->m_get_instance_field_methods.begin(),
+        m_enum_util->m_get_instance_field_methods.end());
+    for (auto& pair : field_to_method) {
+      create_get_instance_field_method(pair.second, pair.first);
     }
     post_update_enum_classes(scope);
     // Update all methods and fields references by replacing the candidate enum
@@ -1150,6 +1228,68 @@ class EnumTransformer final {
   }
 
   /**
+   * Create a helper method to replace `iget` instructions that returns an
+   * instance field value given the enum ordinal.
+   *
+   * public static [type] redex$OE$get_instanceField(Integer obj) {
+   *   switch (obj.intValue()) {
+   *     case 0: return value0;
+   *     case 1: return value1;
+   *     ...
+   *   }
+   * }
+   */
+  void create_get_instance_field_method(DexMethodRef* method_ref,
+                                        DexFieldRef* ifield_ref) {
+    MethodCreator mc(method_ref, ACC_STATIC | ACC_PUBLIC);
+    auto method = mc.create();
+    auto cls = type_class(method_ref->get_class());
+    cls->add_method(method);
+    auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    auto entry = cfg.entry_block();
+    entry->push_back({dasm(OPCODE_INVOKE_VIRTUAL,
+                           m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
+                      dasm(OPCODE_MOVE_RESULT, {0_v})});
+    auto ifield_type = ifield_ref->get_type();
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    for (auto& pair : m_enum_ifield_maps[cls->get_type()][ifield_ref]) {
+      auto ordinal = pair.first;
+      auto block = cfg.create_block();
+      cases.emplace_back(ordinal, block);
+      if (ifield_type == get_string_type()) {
+        const DexString* value = pair.second.string_value;
+        if (value) {
+          block->push_back(
+              {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value)),
+               dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+               dasm(OPCODE_RETURN_OBJECT, {1_v})});
+        } else {
+          // The `Ljava/lang/String` value is a `null` constant.
+          block->push_back({dasm(OPCODE_CONST, {1_v, 0_L}),
+                            dasm(OPCODE_RETURN_OBJECT, {1_v})});
+        }
+      } else {
+        int64_t value = pair.second.primitive_value;
+        if (is_wide_type(ifield_type)) {
+          block->push_back({dasm(OPCODE_CONST_WIDE, {1_v, {LITERAL, value}}),
+                            dasm(OPCODE_RETURN_WIDE, {1_v})});
+        } else {
+          block->push_back({dasm(OPCODE_CONST, {1_v, {LITERAL, value}}),
+                            dasm(OPCODE_RETURN, {1_v})});
+        }
+      }
+    }
+    // Arbitrarily choose the first case block as the default case.
+    always_assert(cases.size() > 0);
+    cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
+                      cases);
+    cfg.recompute_registers_size();
+    code->clear_cfg();
+  }
+
+  /**
    * 1. Erase the enum instance fields and synthetic array field which is
    * usually `$VALUES`.
    * 2. Delete <init>, values() and valueOf(String) methods, and delete
@@ -1285,6 +1425,7 @@ class EnumTransformer final {
   uint32_t m_int_objs{0}; // Generated Integer objects.
   uint32_t m_enum_objs{0}; // Eliminated Enum objects.
   EnumAttrMap m_enum_attrs;
+  std::unordered_map<DexType*, EnumFieldMap> m_enum_ifield_maps;
   std::unique_ptr<EnumUtil> m_enum_util;
 };
 } // namespace

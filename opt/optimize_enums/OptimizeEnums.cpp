@@ -317,20 +317,20 @@ class OptimizeEnums {
     auto method_override_graph = mog::build_graph(m_scope);
 
     /**
-     * An enum is safe if it not external, has no interfaces, has no instance
-     * fields (TODO), has no user defined true-virtual methods, and has only
-     * simple enum constructors. Static fields and non-true-virtual methods are
-     * safe.
+     * An enum is safe if it not external, has no interfaces, has no user
+     * defined true-virtual methods, and has only one simple enum constructor.
+     * Static fields, primitive or string instance fields, and non-true-virtual
+     * methods are safe.
      */
     auto is_safe_enum = [this, &method_override_graph](const DexClass* cls) {
       if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
           can_delete(cls) && cls->get_interfaces()->size() == 0 &&
-          cls->get_ifields().size() == 0 && only_one_static_synth_field(cls)) {
+          only_one_static_synth_field(cls)) {
 
-        for (const auto& method : cls->get_dmethods()) {
-          if (is_init(method) && !is_simple_enum_constructor(method)) {
-            return false;
-          }
+        const auto& ctors = cls->get_ctors();
+        if (ctors.size() != 1 ||
+            !is_simple_enum_constructor(cls, ctors.front())) {
+          return false;
         }
 
         const auto& vmethods = cls->get_vmethods();
@@ -341,7 +341,15 @@ class OptimizeEnums {
                                             /*include_interfaces=*/true)
                          .empty();
             });
-        return has_only_non_true_virtual_methods;
+
+        const auto& ifields = cls->get_ifields();
+        bool has_safe_ifields =
+            std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
+              auto type = field->get_type();
+              return is_primitive(type) || type == get_string_type();
+            });
+
+        return has_only_non_true_virtual_methods && has_safe_ifields;
       }
       return false;
     };
@@ -486,30 +494,22 @@ class OptimizeEnums {
   }
 
   /**
-   * Detect if a constructor is a simple enum constructor.
-   * A simple enum constructor is
-   *  load_param * // multiple load parameter instructions
-   *  invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
-   *  return-void
+   * Returns true if the constructor invokes `Enum.<init>`, sets its instance
+   * fields, and then returns. We want to make sure there are no side affects.
+   *
+   * SubEnum.<init>:(Ljava/lang/String;I[other parameters...])V
+   * load-param * // multiple load parameter instructions
+   * invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   * (iput|const) * // put/const instructions for primitive instance fields
+   * return-void
    */
-  static bool is_simple_enum_constructor(const DexMethod* method) {
-    if (!is_private(method)) {
+  static bool is_simple_enum_constructor(const DexClass* cls,
+                                         const DexMethod* method) {
+    const auto& params = method->get_proto()->get_args()->get_type_list();
+    if (!is_private(method) || params.size() < 2) {
       return false;
     }
-    const auto& args = method->get_proto()->get_args()->get_type_list();
-    if (args.size() != 2) {
-      return false;
-    }
-    // The two arguments should always be string and int.
-    {
-      auto it = args.begin();
-      if (*it != get_string_type()) {
-        return false;
-      }
-      if (*(++it) != get_int_type()) {
-        return false;
-      }
-    }
+
     auto code = InstructionIterable(method->get_code());
     auto it = code.begin();
     // Load parameter instructions.
@@ -519,6 +519,7 @@ class OptimizeEnums {
     if (it == code.end()) {
       return false;
     }
+
     // invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
     if (!is_invoke_direct(it->insn->opcode())) {
       return false;
@@ -532,12 +533,22 @@ class OptimizeEnums {
     if (++it == code.end()) {
       return false;
     }
-    // return-void
-    if (!is_return_void(it->insn->opcode())) {
+
+    auto is_iput_or_const = [](IROpcode opcode) {
+      // `const-string` is followed by `move-result-pseudo-object`
+      return is_iput(opcode) || is_literal_const(opcode) ||
+             opcode == OPCODE_CONST_STRING ||
+             opcode == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+    };
+    while (it != code.end() && is_iput_or_const(it->insn->opcode())) {
+      ++it;
+    }
+    if (it == code.end()) {
       return false;
     }
-    // No more instructions.
-    return (++it) == code.end();
+
+    // return-void is the last instruction
+    return is_return_void(it->insn->opcode()) && (++it) == code.end();
   }
 
   /**
