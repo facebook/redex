@@ -87,7 +87,8 @@ void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
   //
   // then the final state of the edge between s0 and s1 must be
   // non-coalesceable.
-  m_adj_matrix[Edge(u, v)] = m_adj_matrix[Edge(u, v)] || !can_coalesce;
+  m_adj_matrix[build_edge(u, v)] =
+      m_adj_matrix[build_edge(u, v)] || !can_coalesce;
 }
 
 uint32_t Node::colorable_limit() const {
@@ -363,8 +364,8 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
 
   o << "containment graph {\n";
   for (const auto& pair : m_containment_graph) {
-    auto reg1 = pair.first;
-    auto reg2 = pair.second;
+    reg_t reg1 = static_cast<reg_t>((pair & 0xFFFF0000) >> 16);
+    reg_t reg2 = static_cast<reg_t>(pair & 0x0000FFFF);
     o << reg1 << " -- " << reg2 << "\n";
   }
   o << "}\n";
