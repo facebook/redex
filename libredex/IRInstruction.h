@@ -207,7 +207,6 @@ class IRInstruction final {
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }
   const std::vector<uint16_t>& srcs() const { return m_srcs; }
-  uint16_t arg_word_count() const { return m_srcs.size(); }
 
   /*
    * Setters for logical parts of the instruction.
@@ -225,7 +224,7 @@ class IRInstruction final {
     m_srcs.at(i) = vreg;
     return this;
   }
-  IRInstruction* set_arg_word_count(uint16_t count) {
+  IRInstruction* set_srcs_size(uint16_t count) {
     m_srcs.resize(count);
     return this;
   }

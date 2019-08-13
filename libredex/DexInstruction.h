@@ -133,8 +133,6 @@ class DexInstruction : public Gatherable {
    */
   uint16_t count() { return m_count; }
 
-  void verify_encoding() const;
-
   friend std::string show(const DexInstruction* op);
 
  private:

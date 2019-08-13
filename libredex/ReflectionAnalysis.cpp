@@ -629,9 +629,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       always_assert(is_array(array_type));
       auto component_type = get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
-      if (component_type ==
-          DexType::make_type(DexString::make_string("Ljava/lang/Class;"))) {
-        auto arg_count = insn->arg_word_count();
+      if (component_type == DexType::make_type("Ljava/lang/Class;")) {
+        auto arg_count = insn->srcs_size();
         std::vector<DexType*> known_types;
         known_types.reserve(arg_count);
 

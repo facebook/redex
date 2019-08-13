@@ -115,7 +115,7 @@ void build_dispatcher(DexStoresVector& stores,
 IRInstruction* make_invoke(const DexMethodRef* meth, uint16_t v0) {
   auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke->set_method(const_cast<DexMethodRef*>(meth))
-      ->set_arg_word_count(1)
+      ->set_srcs_size(1)
       ->set_src(0, v0);
   return invoke;
 }

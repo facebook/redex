@@ -621,7 +621,7 @@ void DedupStrings::rewrite_const_string_instructions(
           IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
           always_assert(info.const_string_method != nullptr);
           invoke_inst->set_method(info.const_string_method)
-              ->set_arg_word_count(1)
+              ->set_srcs_size(1)
               ->set_src(0, *temp_reg);
           replacements.push_back(invoke_inst);
 

@@ -128,9 +128,8 @@ IRInstruction* dasm(IROpcode opcode,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
   insn->set_method(method);
-  insn->set_arg_word_count(args.size());
+  insn->set_srcs_size(args.size());
   assemble(insn, args);
   return insn;
 }
-
-}
+} // namespace dex_asm

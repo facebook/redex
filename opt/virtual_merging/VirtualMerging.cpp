@@ -516,7 +516,7 @@ void VirtualMerging::merge_methods() {
       // invoke-virtual temp, param1, ..., paramN, OverridingMethod
       auto invoke_virtual_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
       invoke_virtual_insn->set_method(overriding_method);
-      invoke_virtual_insn->set_arg_word_count(param_regs.size());
+      invoke_virtual_insn->set_srcs_size(param_regs.size());
       for (size_t i = 0; i < param_regs.size(); i++) {
         uint32_t reg = param_regs[i];
         if (i == 0) {

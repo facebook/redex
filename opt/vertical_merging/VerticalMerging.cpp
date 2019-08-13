@@ -183,7 +183,7 @@ void handle_invoke_init(
             resolve_method(insn_method, MethodSearch::Direct);
         if (insn_method_def == callee) {
           size_t current_add = 0;
-          insn->set_arg_word_count(num_add_args + num_orig_src);
+          insn->set_srcs_size(num_add_args + num_orig_src);
           while (current_add < num_add_args) {
             auto temp = code->allocate_temp();
             IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);

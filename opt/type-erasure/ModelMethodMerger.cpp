@@ -509,7 +509,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
 
   auto invoke = (new IRInstruction(OPCODE_INVOKE_DIRECT))
                     ->set_method(common_ctor)
-                    ->set_arg_word_count(new_srcs.size());
+                    ->set_srcs_size(new_srcs.size());
   for (size_t i = 0; i < new_srcs.size(); ++i) {
     invoke->set_src(i, new_srcs[i]);
   }

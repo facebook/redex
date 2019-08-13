@@ -452,7 +452,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
         dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    always_assert(insn->arg_word_count() == expected_args);
+    always_assert(insn->srcs_size() == expected_args);
 
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
       // The first argument is a reference to the object instance on which the

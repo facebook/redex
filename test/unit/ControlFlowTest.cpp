@@ -1421,7 +1421,7 @@ TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
     if (is_aput(insn->opcode())) {
       std::vector<IRInstruction*> new_insns;
       auto new_insn = new IRInstruction(OPCODE_DIV_INT);
-      new_insn->set_arg_word_count(2);
+      new_insn->set_srcs_size(2);
       new_insn->set_src(0, 2);
       new_insn->set_src(1, 2);
       new_insns.push_back(new_insn);

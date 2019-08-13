@@ -73,9 +73,7 @@ bool has_offset(DexOpcode op) {
 
 bool has_range(DexOpcode op) {
   auto fmt = format(op);
-  if (fmt == FMT_f3rc || fmt == FMT_f5rc)
-    return true;
-  return false;
+  return fmt == FMT_f3rc || fmt == FMT_f5rc;
 }
 
 bool is_commutative(DexOpcode op) {

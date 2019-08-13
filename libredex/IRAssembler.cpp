@@ -183,7 +183,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   if (opcode::has_variable_srcs_size(op)) {
     auto srcs = tail[0];
     tail = tail.tail(1);
-    insn->set_arg_word_count(srcs.size());
+    insn->set_srcs_size(srcs.size());
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, reg_from_str(srcs[i].get_string()));
     }

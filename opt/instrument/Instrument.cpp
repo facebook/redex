@@ -235,7 +235,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 
   IRInstruction* new_array_insn = new IRInstruction(OPCODE_NEW_ARRAY);
   new_array_insn->set_type(make_array_type(get_short_type()));
-  new_array_insn->set_arg_word_count(1);
+  new_array_insn->set_srcs_size(1);
   new_array_insn->set_src(0, array_dest);
 
   IRInstruction* move_result_pseudo =
@@ -268,7 +268,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 
     // APUT instruction adds the bit vector to the array.
     aput_inst[i] = new IRInstruction(OPCODE_APUT_SHORT);
-    aput_inst[i]->set_arg_word_count(3);
+    aput_inst[i]->set_srcs_size(3);
     aput_inst[i]->set_src(0, reg_bb_vector[i]);
     aput_inst[i]->set_src(1, array_dest);
     aput_inst[i]->set_src(2, index_reg[i]);
@@ -287,7 +287,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 
   IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_inst->set_method(method_onMethodExit);
-  invoke_inst->set_arg_word_count(2);
+  invoke_inst->set_srcs_size(2);
   invoke_inst->set_src(0, reg_method_id);
   invoke_inst->set_src(1, array_dest);
 
@@ -314,7 +314,7 @@ void insert_invoke_static_call_bb(IRCode* code,
         // Method to be invoked depends on the number of vectors in current
         // method. The '1' is added to count first argument i.e. method_id.
         invoke_inst->set_method(method_onMethodExit);
-        invoke_inst->set_arg_word_count(reg_bb_vector.size() + 1);
+        invoke_inst->set_srcs_size(reg_bb_vector.size() + 1);
         invoke_inst->set_src(0, reg_method_id);
         for (size_t reg_index = 0; reg_index < reg_bb_vector.size();
              ++reg_index) {
@@ -475,7 +475,7 @@ void instrument_onMethodBegin(DexMethod* method,
 
   IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke_inst->set_method(method_onMethodBegin);
-  invoke_inst->set_arg_word_count(1);
+  invoke_inst->set_srcs_size(1);
   invoke_inst->set_src(0, reg_dest);
 
   // TODO(minjang): Consider using get_param_instructions.
@@ -815,7 +815,7 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
                    ->set_literal(i - 1)
                    ->set_dest(vN),
                (new IRInstruction(OPCODE_APUT_OBJECT))
-                   ->set_arg_word_count(3)
+                   ->set_srcs_size(3)
                    ->set_src(0, vY)
                    ->set_src(1, vX)
                    ->set_src(2, vN)});

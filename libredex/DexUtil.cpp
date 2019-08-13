@@ -359,13 +359,14 @@ void create_runtime_exception_block(
   auto arg = DexType::make_type("Ljava/lang/String;");
   auto args = DexTypeList::make_type_list({arg});
   auto proto = DexProto::make_proto(ret, args);
-  auto meth = DexMethod::make_method(
-    DexType::make_type("Ljava/lang/RuntimeException;"),
-    DexString::make_string("<init>"), proto);
+  auto meth =
+      DexMethod::make_method(DexType::make_type("Ljava/lang/RuntimeException;"),
+                             DexString::make_string("<init>"), proto);
   auto invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
   invk->set_method(meth);
-  invk->set_arg_word_count(2);
-  invk->set_src(0, 0); invk->set_src(1, 1);
+  invk->set_srcs_size(2);
+  invk->set_src(0, 0);
+  invk->set_src(1, 1);
   IRInstruction* throwinst = new IRInstruction(OPCODE_THROW);
   block.emplace_back(new_inst);
   block.emplace_back(const_inst);

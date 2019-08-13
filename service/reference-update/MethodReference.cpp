@@ -24,7 +24,7 @@ IRInstruction* make_invoke(DexMethod* callee,
                            std::vector<uint16_t> args) {
   always_assert(callee->is_def() && is_public(callee));
   auto invoke = (new IRInstruction(opcode))->set_method(callee);
-  invoke->set_arg_word_count(args.size());
+  invoke->set_srcs_size(args.size());
   for (size_t i = 0; i < args.size(); i++) {
     invoke->set_src(i, args.at(i));
   }
@@ -48,7 +48,7 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
   if (new_callee.additional_args != boost::none) {
     const auto& args = new_callee.additional_args.get();
     auto old_size = insn->srcs_size();
-    insn->set_arg_word_count(old_size + args.size());
+    insn->set_srcs_size(old_size + args.size());
     size_t pos = old_size;
     for (uint32_t arg : args) {
       auto reg = code->allocate_temp();

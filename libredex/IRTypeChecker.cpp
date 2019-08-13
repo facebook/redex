@@ -692,11 +692,11 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
         dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    if (insn->arg_word_count() != expected_args) {
+    if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; "
           << "expected " << expected_args << ", "
-          << "but found " << insn->arg_word_count() << " instead";
+          << "but found " << insn->srcs_size() << " instead";
       throw TypeCheckingException(out.str());
     }
     size_t src_idx{0};

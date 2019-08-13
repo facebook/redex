@@ -105,7 +105,7 @@ TEST_F(MethodInlineTest, insertMoves) {
   caller->set_code(std::make_unique<IRCode>(caller, 0));
 
   auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
-  invoke->set_arg_word_count(2);
+  invoke->set_srcs_size(2);
   invoke->set_src(0, 1);
   invoke->set_src(1, 2);
 

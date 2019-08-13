@@ -50,7 +50,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     mt->push_back(dasm(OPCODE_CONST, {0_v, 0x1_L}));
 
     auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-    invoke->set_method(m_callee)->set_arg_word_count(2);
+    invoke->set_method(m_callee)->set_srcs_size(2);
     // reusing the same register for two separate arguments
     invoke->set_src(0, 0);
     invoke->set_src(1, 0);
@@ -119,7 +119,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
     mt->push_back(*branch);
     auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-    invoke->set_method(m_callee)->set_arg_word_count(0);
+    invoke->set_method(m_callee)->set_srcs_size(0);
     mt->push_back(invoke);
     mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}));
     // fallthrough to main block

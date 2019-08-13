@@ -628,37 +628,6 @@ DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
   return this;
 }
 
-void DexInstruction::verify_encoding() const {
-  auto test = m_count ? new DexInstruction(opcode()) : new DexInstruction(opcode(), 0);
-  if (dests_size()) {
-    test->set_dest(dest());
-  }
-  for (unsigned i = 0; i < srcs_size(); i++) {
-    test->set_src(i, src(i));
-  }
-  auto op = opcode();
-  if (dex_opcode::has_range(op)) {
-    test->set_range_base(range_base());
-    test->set_range_size(range_size());
-  }
-  if (dex_opcode::has_arg_word_count(opcode()))
-    test->set_arg_word_count(arg_word_count());
-  if (dex_opcode::has_literal(op)) test->set_literal(get_literal());
-  if (dex_opcode::has_offset(op)) test->set_offset(offset());
-
-  assert_log(m_opcode == test->m_opcode, "%x %x\n", m_opcode, test->m_opcode);
-  for (unsigned i = 0; i < m_count; i++) {
-    assert_log(m_arg[i] == test->m_arg[i],
-               "(%x %x) (%x %x)",
-               m_opcode,
-               m_arg[i],
-               test->m_opcode,
-               test->m_arg[i]);
-  }
-
-  delete test;
-}
-
 void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
   lstring.push_back(m_string);
 }

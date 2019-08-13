@@ -306,7 +306,7 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
     always_assert_log(append_method, "Could not find append for %s", SHOW(ty));
     code->push_back((new IRInstruction(OPCODE_INVOKE_VIRTUAL))
                         ->set_method(append_method)
-                        ->set_arg_word_count(2)
+                        ->set_srcs_size(2)
                         ->set_src(0, 0)
                         ->set_src(1, reg));
   }
@@ -379,7 +379,7 @@ void Outliner::transform(IRCode* code) {
     auto* outline_helper = m_outline_helpers.at(typelist);
     auto invoke_outlined = new IRInstruction(invoke_for_method(outline_helper));
     invoke_outlined->set_method(outline_helper);
-    invoke_outlined->set_arg_word_count(typelist->size());
+    invoke_outlined->set_srcs_size(typelist->size());
 
     size_t idx{0};
     for (auto* insn : state) {

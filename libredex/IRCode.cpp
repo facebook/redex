@@ -376,12 +376,12 @@ void translate_dex_to_ir(
       }
     }
 
-    insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
+    insn->set_srcs_size(dex_insn->srcs_size());
     for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
       insn->set_src(i, dex_insn->src(i));
     }
     if (dex_opcode::has_range(dex_op)) {
-      insn->set_arg_word_count(dex_insn->range_size());
+      insn->set_srcs_size(dex_insn->range_size());
       for (size_t i = 0; i < dex_insn->range_size(); ++i) {
         insn->set_src(i, dex_insn->range_base() + i);
       }
@@ -392,7 +392,8 @@ void translate_dex_to_ir(
     } else if (dex_insn->has_type()) {
       insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
     } else if (dex_insn->has_field()) {
-      insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+      insn->set_field(
+          static_cast<const DexOpcodeField*>(dex_insn)->get_field());
     } else if (dex_insn->has_method()) {
       insn->set_method(
           static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());

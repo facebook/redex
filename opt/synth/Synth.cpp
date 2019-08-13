@@ -433,11 +433,11 @@ void update_invoke(IRCode* transform,
   auto op = insn->opcode();
   auto new_invoke = [&] {
     redex_assert(op == OPCODE_INVOKE_STATIC || op == OPCODE_INVOKE_DIRECT);
-    auto new_op = is_static(method) ? OPCODE_INVOKE_STATIC
-                  : OPCODE_INVOKE_DIRECT;
+    auto new_op =
+        is_static(method) ? OPCODE_INVOKE_STATIC : OPCODE_INVOKE_DIRECT;
     auto ret = new IRInstruction(new_op);
-    ret->set_method(method)->set_arg_word_count(insn->arg_word_count());
-    for (int i = 0; i < ret->arg_word_count(); i++) {
+    ret->set_method(method)->set_srcs_size(insn->srcs_size());
+    for (size_t i = 0; i < ret->srcs_size(); i++) {
       ret->set_src(i, insn->src(i));
     }
     return ret;
@@ -516,9 +516,8 @@ void replace_ctor_wrapper(IRCode* transform,
   auto new_ctor_call = [&] {
     redex_assert(op == OPCODE_INVOKE_DIRECT);
     auto ret = new IRInstruction(OPCODE_INVOKE_DIRECT);
-    ret->set_method(ctor)->set_arg_word_count(
-        ctor_insn->arg_word_count() - 1);
-    for (int i = 0; i < ret->arg_word_count(); i++) {
+    ret->set_method(ctor)->set_srcs_size(ctor_insn->srcs_size() - 1);
+    for (size_t i = 0; i < ret->srcs_size(); i++) {
       ret->set_src(i, ctor_insn->src(i));
     }
     return ret;

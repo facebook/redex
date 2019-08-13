@@ -350,7 +350,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
           auto insn = mie.insn;
           if (is_return_value(insn->opcode())) {
             insn->set_opcode(OPCODE_RETURN_VOID);
-            insn->set_arg_word_count(0);
+            insn->set_srcs_size(0);
           }
         }
 
@@ -394,7 +394,7 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
   always_assert_log(instr->srcs_size() > updated_srcs.size(),
                     "In RemoveArgs, callsites always update to fewer args\n");
   auto callsite_args_removed = instr->srcs_size() - updated_srcs.size();
-  instr->set_arg_word_count(updated_srcs.size());
+  instr->set_srcs_size(updated_srcs.size());
   return callsite_args_removed;
 }
 

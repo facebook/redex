@@ -77,11 +77,11 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
       patch_call_site(method, insn, call_counter);
 
       if (drop_this) {
-        auto nargs = insn->arg_word_count();
+        auto nargs = insn->srcs_size();
         for (uint16_t i = 0; i < nargs - 1; i++) {
           insn->set_src(i, insn->src(i + 1));
         }
-        insn->set_arg_word_count(nargs - 1);
+        insn->set_srcs_size(nargs - 1);
       }
     }
 

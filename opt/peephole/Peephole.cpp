@@ -427,7 +427,7 @@ struct Matcher {
       redex_assert(replace.kind == DexPattern::Kind::method);
       return (new IRInstruction((IROpcode)opcode))
           ->set_method(replace.method)
-          ->set_arg_word_count(replace.srcs.size());
+          ->set_srcs_size(replace.srcs.size());
 
     case OPCODE_MOVE:
     case OPCODE_MOVE_WIDE:

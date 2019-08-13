@@ -48,7 +48,7 @@ IROpcode move_result_to_move(IROpcode op) {
 void patch_move_result_to_move(IRInstruction* move_result_inst, uint16_t reg) {
   const auto op = move_result_inst->opcode();
   move_result_inst->set_opcode(move_result_to_move(op));
-  move_result_inst->set_arg_word_count(1);
+  move_result_inst->set_srcs_size(1);
   move_result_inst->set_src(0, reg);
 }
 

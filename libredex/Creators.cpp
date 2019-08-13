@@ -63,7 +63,7 @@ void MethodBlock::invoke(IROpcode opcode,
   always_assert(is_invoke(opcode));
   auto invk = new IRInstruction(opcode);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
-  invk->set_method(meth)->set_arg_word_count(arg_count);
+  invk->set_method(meth)->set_srcs_size(arg_count);
   for (uint16_t i = 0; i < arg_count; i++) {
     auto arg = args.at(i);
     invk->set_src(i, arg.get_reg());
@@ -84,7 +84,7 @@ void MethodBlock::new_array(DexType* type,
                             const Location& dst) {
   auto insn = new IRInstruction(OPCODE_NEW_ARRAY);
   insn->set_type(type);
-  insn->set_arg_word_count(1);
+  insn->set_srcs_size(1);
   insn->set_src(0, size.get_reg());
   push_instruction(insn);
   push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))

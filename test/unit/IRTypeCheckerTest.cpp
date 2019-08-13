@@ -89,7 +89,7 @@ TEST_F(IRTypeCheckerTest, move_result) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_FILLED_NEW_ARRAY, DexType::make_type("I"))
-          ->set_arg_word_count(1)
+          ->set_srcs_size(1)
           ->set_src(0, 5),
       dasm(OPCODE_ADD_INT, {5_v, 5_v, 5_v}),
       dasm(OPCODE_MOVE_RESULT, {0_v}),
@@ -350,7 +350,7 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
 TEST_F(IRTypeCheckerTest, longInvoke) {
   using namespace dex_asm;
   IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke->set_arg_word_count(7);
+  invoke->set_srcs_size(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "D", "S", "F"}));
   invoke->set_src(0, 5);
@@ -370,7 +370,7 @@ TEST_F(IRTypeCheckerTest, longInvoke) {
 TEST_F(IRTypeCheckerTest, longSignatureMismatch) {
   using namespace dex_asm;
   IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke->set_arg_word_count(7);
+  invoke->set_srcs_size(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "S", "D", "F"}));
   invoke->set_src(0, 5);

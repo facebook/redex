@@ -175,7 +175,7 @@ void IRInstruction::normalize_registers() {
       old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
     always_assert(old_srcs_idx == srcs_size());
-    set_arg_word_count(srcs_idx);
+    set_srcs_size(srcs_idx);
   }
 }
 

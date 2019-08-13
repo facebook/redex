@@ -367,7 +367,7 @@ TEST(IRInstruction, InvokeSourceIsWideBasic) {
 
   DexMethodRef* m = DexMethod::make_method("Lfoo;", "baz", "V", {"J"});
   IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_STATIC);
-  insn->set_arg_word_count(1);
+  insn->set_srcs_size(1);
   insn->set_src(0, 0);
   insn->set_method(m);
 
@@ -383,7 +383,7 @@ TEST(IRInstruction, InvokeSourceIsWideComplex) {
   DexMethodRef* m =
       DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I"});
   insn->set_method(m);
-  insn->set_arg_word_count(4);
+  insn->set_srcs_size(4);
   insn->set_src(0, 1);
   insn->set_src(1, 0);
   insn->set_src(2, 2);
@@ -404,7 +404,7 @@ TEST(IRInstruction, InvokeSourceIsWideComplex2) {
   DexMethodRef* m =
       DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I", "J"});
   insn->set_method(m);
-  insn->set_arg_word_count(5);
+  insn->set_srcs_size(5);
   insn->set_src(0, 0);
   insn->set_src(1, 1);
   insn->set_src(2, 2);

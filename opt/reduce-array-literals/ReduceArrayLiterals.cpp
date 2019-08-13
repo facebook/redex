@@ -530,7 +530,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   IRInstruction* filled_new_array_insn =
       new IRInstruction(OPCODE_FILLED_NEW_ARRAY);
   filled_new_array_insn->set_type(type);
-  filled_new_array_insn->set_arg_word_count(chunk_size);
+  filled_new_array_insn->set_srcs_size(chunk_size);
   for (size_t index = chunk_start; index < chunk_end; index++) {
     size_t temp_reg_index = index - chunk_start;
     if (temp_reg_index == temp_regs->size()) {
@@ -569,7 +569,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
         "(Ljava/lang/Object;ILjava/lang/Object;II)V");
     always_assert(arraycopy_method != nullptr);
     invoke_static_insn->set_method(arraycopy_method);
-    invoke_static_insn->set_arg_word_count(5);
+    invoke_static_insn->set_srcs_size(5);
     invoke_static_insn->set_src(0, *chunk_dest);
     invoke_static_insn->set_src(1, m_local_temp_regs[0]);
     invoke_static_insn->set_src(2, overall_dest);
