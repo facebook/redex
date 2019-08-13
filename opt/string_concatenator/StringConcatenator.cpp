@@ -314,9 +314,7 @@ class Concatenator {
       DexField* field = resolve_field(entry.first, FieldSearch::Static);
       always_assert(field != nullptr);
       const std::string& str = entry.second;
-      field->make_concrete(
-          field->get_access(),
-          new DexEncodedValueString(DexString::make_string(str)));
+      field->set_value(new DexEncodedValueString(DexString::make_string(str)));
     }
   }
 

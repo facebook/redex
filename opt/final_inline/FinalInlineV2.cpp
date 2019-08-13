@@ -231,7 +231,7 @@ void encode_values(DexClass* cls,
     if (encoded_value == nullptr) {
       continue;
     }
-    field->make_concrete(field->get_access(), encoded_value);
+    field->set_value(encoded_value);
     TRACE(FINALINLINE, 2, "Found encodable field: %s %s", SHOW(field),
           SHOW(value));
   }

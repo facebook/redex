@@ -398,7 +398,7 @@ class FinalInlineImpl {
         ev = DexEncodedValue::zero_for_type(field->get_type());
         ev->value(static_cast<uint64_t>(const_op->get_literal()));
       }
-      field->make_concrete(field->get_access(), ev);
+      field->set_value(ev);
     }
     clazz->remove_method(clinit);
 
@@ -515,7 +515,7 @@ class FinalInlineImpl {
       }
       auto val = cur->get_static_value();
       for (const auto& dep : deps[cur]) {
-        dep.field->make_concrete(dep.field->get_access(), val);
+        dep.field->set_value(val);
         auto code = dep.clinit->get_code();
         TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sget->insn));
         TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sput->insn));
