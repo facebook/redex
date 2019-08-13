@@ -769,7 +769,7 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
           deleted_positions.insert(mie.pos.get());
         } else if (mie.type == MFLOW_OPCODE) {
           auto insn = mie.insn;
-          if (insn->dests_size()) {
+          if (insn->has_dest()) {
             // +1 because registers start at zero
             auto size_required = insn->dest() + insn->dest_is_wide() + 1;
             if (size_required >= m_registers_size) {
@@ -1018,7 +1018,7 @@ uint16_t ControlFlowGraph::compute_registers_size() const {
   uint16_t num_regs = 0;
   for (const auto& mie : cfg::ConstInstructionIterable(*this)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       // +1 because registers start at v0
       uint16_t size_required = insn->dest() + insn->dest_is_wide() + 1;
       num_regs = std::max(size_required, num_regs);

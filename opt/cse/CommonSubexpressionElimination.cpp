@@ -440,7 +440,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     default: {
       // If we get here, reset destination.
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         ValueIdDomain domain;
         if (opcode::is_move_result_any(opcode)) {
           domain = current_state->get_ref_env().get(RESULT_REGISTER);
@@ -1329,7 +1329,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       IRInstruction* insn = mie.insn;
       analyzer.analyze_instruction(insn, &env);
       auto opcode = insn->opcode();
-      if (!insn->dests_size() || is_move(opcode) || is_const(opcode)) {
+      if (!insn->has_dest() || is_move(opcode) || is_const(opcode)) {
         continue;
       }
       auto ref_c = env.get_ref_env().get(insn->dest()).get_constant();
@@ -1383,7 +1383,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     if (!temps.count(earlier_insn)) {
       uint32_t src_reg;
       IROpcode move_opcode;
-      if (earlier_insn->dests_size()) {
+      if (earlier_insn->has_dest()) {
         src_reg = earlier_insn->dest();
         move_opcode = earlier_insn->dest_is_wide()
                           ? OPCODE_MOVE_WIDE
@@ -1465,8 +1465,8 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
     auto& it = iterators.at(earlier_insn);
     IRInstruction* move_insn = new IRInstruction(move_opcode);
-    auto src_reg = earlier_insn->dests_size() ? earlier_insn->dest()
-                                              : earlier_insn->src(0);
+    auto src_reg =
+        earlier_insn->has_dest() ? earlier_insn->dest() : earlier_insn->src(0);
     move_insn->set_src(0, src_reg)->set_dest(temp_reg);
     if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
       // we need to capture the array-length register of a new-array instruction

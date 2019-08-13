@@ -355,14 +355,14 @@ void translate_dex_to_ir(
     auto* insn = new IRInstruction(op);
 
     IRInstruction* move_result_pseudo{nullptr};
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       insn->set_dest(dex_insn->dest());
     } else if (opcode::may_throw(op)) {
       if (op == OPCODE_CHECK_CAST) {
         move_result_pseudo =
             new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(dex_insn->src(0));
-      } else if (dex_insn->dests_size()) {
+      } else if (dex_insn->has_dest()) {
         IROpcode move_op;
         if (opcode_impl::dest_is_wide(op)) {
           move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;

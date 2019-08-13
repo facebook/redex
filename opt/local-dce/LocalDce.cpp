@@ -107,7 +107,7 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
 void update_liveness(const IRInstruction* inst,
                      boost::dynamic_bitset<>& bliveness) {
   // The destination register is killed, so it isn't live before this.
-  if (inst->dests_size()) {
+  if (inst->has_dest()) {
     bliveness.reset(inst->dest());
   }
   auto op = inst->opcode();
@@ -297,7 +297,7 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
       return false;
     }
     return true;
-  } else if (inst->dests_size()) {
+  } else if (inst->has_dest()) {
     return bliveness.test(inst->dest());
   } else if (is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {

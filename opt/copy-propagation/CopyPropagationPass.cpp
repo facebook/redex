@@ -285,7 +285,7 @@ class AliasFixpointIterator final
           next->insn->dest_is_wide()) {
         dest.upper = Value::create_register(RESULT_REGISTER + 1);
       }
-    } else if (insn->dests_size()) {
+    } else if (insn->has_dest()) {
       dest.lower = Value::create_register(insn->dest());
       if (insn->dest_is_wide()) {
         dest.upper = Value::create_register(insn->dest() + 1);
@@ -460,7 +460,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
       }
       insn->normalize_registers();
     }
-    if (insn->dests_size() && insn->dest() > max_dest) {
+    if (insn->has_dest() && insn->dest() > max_dest) {
       max_dest = insn->dest();
     }
   }

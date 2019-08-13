@@ -79,9 +79,7 @@ DexInstruction* DexInstruction::set_opcode(DexOpcode op) {
   return this;
 }
 
-unsigned DexInstruction::dests_size() const {
-  return dex_opcode::dests_size(opcode());
-}
+bool DexInstruction::has_dest() const { return dex_opcode::has_dest(opcode()); }
 
 unsigned DexInstruction::srcs_size() const {
   auto format = dex_opcode::format(opcode());

@@ -52,7 +52,7 @@ constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 
 bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
     const IRInstruction& insn, const std::unordered_set<uint16_t>& vregs) {
-  if (!insn.dests_size()) {
+  if (!insn.has_dest()) {
     // insn has no destination, can not have a side effect
     return false; // we need to return here, otherwise dest() will throw
   }

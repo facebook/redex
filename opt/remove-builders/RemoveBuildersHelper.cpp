@@ -40,7 +40,7 @@ void fields_mapping(IRList::iterator it,
   }
 
   // Check if the register that used to hold the field's value is overwritten.
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     const int current_dest = insn->dest();
 
     for (const auto& pair : fregs->field_to_reg) {
@@ -665,7 +665,7 @@ bool params_change_regs(DexMethod* method) {
         }
       }
 
-      if (insn->dests_size() && insn_tainted[insn->dest()]) {
+      if (insn->has_dest() && insn_tainted[insn->dest()]) {
         return true;
       }
       for (size_t index = 0; index < insn->srcs_size(); ++index) {
@@ -978,7 +978,7 @@ void transfer_object_reach(DexType* obj,
       }
     }
     regs[regs_size] = 0;
-  } else if (insn->dests_size() != 0) {
+  } else if (insn->has_dest() != 0) {
     regs[insn->dest()] = 0;
   }
 }

@@ -335,7 +335,7 @@ struct Matcher {
       if (dex_pattern.opcodes.find(insn->opcode()) ==
               end(dex_pattern.opcodes) ||
           dex_pattern.srcs.size() != insn->srcs_size() ||
-          dex_pattern.dests.size() != insn->dests_size()) {
+          dex_pattern.dests.size() != insn->has_dest()) {
         return false;
       }
 

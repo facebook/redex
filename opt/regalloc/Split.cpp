@@ -41,7 +41,7 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
       }
       auto insn = it->insn;
       // Add store cost for each define.
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         split_costs->increase_store(insn->dest());
         // Since move-result must immediately follow invoke-xxx or
         // fill-new-array, so if there is a def of move-result kind, we need to
@@ -243,7 +243,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         std::unordered_map<reg_t, reg_t>* load_store_reg,
                         IRList::iterator it) {
   size_t split_move = 0;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     auto dest = insn->dest();
     // Avoid case like:
     //  Def s0

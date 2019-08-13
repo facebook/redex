@@ -42,7 +42,7 @@ boost::optional<ParamIndex> find_return_param_index(
   // let's see if it came from a unique load-param
   IRInstruction* load_param = nullptr;
   for (auto& mie : InstructionIterable(cfg)) {
-    if (mie.insn->dests_size()) {
+    if (mie.insn->has_dest()) {
       if (mie.insn->dest() == src_reg) {
         if (opcode::is_load_param(mie.insn->opcode())) {
           load_param = mie.insn;

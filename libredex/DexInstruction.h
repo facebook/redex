@@ -100,7 +100,7 @@ class DexInstruction : public Gatherable {
   /*
    * Number of registers used.
    */
-  unsigned dests_size() const;
+  bool has_dest() const;
   unsigned srcs_size() const;
 
   /*

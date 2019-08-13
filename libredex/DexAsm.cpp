@@ -62,7 +62,7 @@ bool unsupported(IROpcode opcode) {
 
 void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
   auto arg = args.begin();
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     always_assert(arg->tag == VREG);
     insn->set_dest(arg->v);
     ++arg;

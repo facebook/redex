@@ -837,7 +837,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     if (opcode::is_load_param(insn->opcode())) {
       continue;
     }
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       auto dest = insn->dest();
       if (params.find(dest) != params.end()) {
         params.erase(dest);
@@ -990,7 +990,7 @@ void Allocator::spill(const interference::Graph& ig,
           code->insert_before(it.unwrap(), mov);
         }
       }
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         auto dest = insn->dest();
         auto sp_it = spill_plan.global_spills.find(dest);
         if (sp_it != spill_plan.global_spills.end() &&
@@ -1037,7 +1037,7 @@ static void dedicate_this_register(DexMethod* method) {
   bool this_needs_split{false};
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size() && insn->dest() == this_insn->dest() &&
+    if (insn->has_dest() && insn->dest() == this_insn->dest() &&
         insn != this_insn) {
       this_needs_split = true;
       break;

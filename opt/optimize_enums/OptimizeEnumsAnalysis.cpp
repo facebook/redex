@@ -54,7 +54,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     auto op = insn->opcode();
 
     auto default_case = [&]() {
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         env->set(insn->dest(), ConstantValue::top());
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, ConstantValue::top());

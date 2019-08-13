@@ -265,7 +265,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
     default: {
       // All other instructions are transparent for this analysis. We just need
       // to clobber the destination registers in the abstract environment.
-      if (insn->dests_size() > 0) {
+      if (insn->has_dest()) {
         current_state->set(insn->dest(), AbstractAccessPathDomain::top());
         if (insn->dest_is_wide()) {
           current_state->set(insn->dest() + 1, AbstractAccessPathDomain::top());
@@ -387,7 +387,7 @@ std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
   std::unordered_map<uint16_t, size_t> dest_freq;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size() > 0) {
+    if (insn->has_dest()) {
       auto dest = insn->dest();
       dest_freq[dest] = dest_freq[dest] + 1;
     }

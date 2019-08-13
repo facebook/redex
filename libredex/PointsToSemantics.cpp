@@ -793,7 +793,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
       // Since registers can be reused in different contexts, we need to
       // invalidate the corresponding anchor sets. Note that this case also
       // encompasses the initialization to null, like `const v1, 0`.
-      if (insn->dests_size() > 0) {
+      if (insn->has_dest()) {
         current_state->set(insn->dest(), AnchorDomain());
         if (insn->dest_is_wide()) {
           current_state->set(insn->dest() + 1, AnchorDomain());

@@ -1147,12 +1147,12 @@ IROpcode invert_conditional_branch(IROpcode op) {
 
 namespace opcode_impl {
 
-unsigned dests_size(IROpcode op) {
+bool has_dest(IROpcode op) {
   if (opcode::is_internal(op)) {
-    return 1;
+    return true;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return !opcode::may_throw(op) && dex_opcode::dests_size(dex_op);
+    return !opcode::may_throw(op) && dex_opcode::has_dest(dex_op);
   }
 }
 
@@ -1163,7 +1163,7 @@ bool has_move_result_pseudo(IROpcode op) {
     return true;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return dex_opcode::dests_size(dex_op) && opcode::may_throw(op);
+    return dex_opcode::has_dest(dex_op) && opcode::may_throw(op);
   }
 }
 

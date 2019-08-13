@@ -429,7 +429,7 @@ class ThisObjectAnalysis final
  private:
   void analyze_instruction(IRInstruction* insn, ThisEnvironment* env) const {
     auto default_case = [&]() {
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         env->set(insn->dest(), ThisDomain(false));
       } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, ThisDomain(false));

@@ -237,7 +237,7 @@ uint64_t IRInstruction::hash() const {
     bits.push_back(src(i));
   }
 
-  if (dests_size() > 0) {
+  if (has_dest()) {
     bits.push_back(dest());
   }
 

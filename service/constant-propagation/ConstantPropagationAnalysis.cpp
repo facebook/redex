@@ -206,7 +206,7 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
   default:
     break;
   }
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
   } else if (insn->has_move_result_any()) {

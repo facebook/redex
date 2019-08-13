@@ -22,7 +22,7 @@ void drop_this(DexMethod* method) {
   code->remove_opcode(ii.begin().unwrap());
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       auto dest = insn->dest();
       redex_assert(dest != this_reg);
       // Make sure the `this` register isn't the upper half of a wide pair.

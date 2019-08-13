@@ -85,7 +85,7 @@ void DexClassHasher::hash(const IRInstruction* insn) {
   auto old_hash = m_hash;
   m_hash = 0;
   hash(insn->srcs());
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     hash(insn->dest());
   }
   boost::hash_combine(m_registers_hash, m_hash);

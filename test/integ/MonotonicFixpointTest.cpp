@@ -70,7 +70,7 @@ class IRFixpointIterator final
   void analyze_instruction(const IRInstruction* insn,
                            LivenessDomain* current_state) const {
     // This is the standard semantic definition of liveness.
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       // The destination register of an instruction is dead.
       current_state->remove(get_register(insn->dest()));
     }

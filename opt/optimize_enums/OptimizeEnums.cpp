@@ -129,7 +129,7 @@ bool check_ordinal_usage(const DexMethod* method, size_t reg) {
       continue;
     }
 
-    if (insn->dests_size() > 0 && insn->dest() == reg) {
+    if (insn->has_dest() && insn->dest() == reg) {
       return false;
     }
   }

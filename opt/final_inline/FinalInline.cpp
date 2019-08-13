@@ -445,7 +445,7 @@ class FinalInlineImpl {
       auto insn = jt->insn;
 
       // Check if the source register is overwritten
-      if (insn->dests_size() > 0) {
+      if (insn->has_dest()) {
         if (insn->dest() == reg ||
             (insn->dest_is_wide() && insn->dest() + 1 == reg)) {
           return false;

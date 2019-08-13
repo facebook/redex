@@ -489,7 +489,7 @@ namespace optimize_enums {
 void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
                                                EnumTypeEnvironment* env) const {
   const bool use_result = insn->has_move_result_any();
-  if (use_result || insn->dests_size() > 0) {
+  if (use_result || insn->has_dest()) {
     Register dest = use_result ? RESULT_REGISTER : insn->dest();
 
     switch (insn->opcode()) {
@@ -568,7 +568,7 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
         env->set(dest, EnumTypes());
       }
       // When we write a wide register v, the v+1 register is overrode.
-      if (insn->dests_size() > 0 && insn->dest_is_wide()) {
+      if (insn->has_dest() && insn->dest_is_wide()) {
         env->set(dest + 1, EnumTypes());
       }
       break;

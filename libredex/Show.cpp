@@ -543,7 +543,7 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
   std::ostringstream ss;
   ss << show(insn->opcode()) << " ";
   bool first = true;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     ss << "v" << insn->dest();
     first = false;
   }
@@ -883,7 +883,7 @@ std::string show(const DexInstruction* insn) {
   std::ostringstream ss;
   ss << show_opcode(insn);
   bool first = true;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     ss << " v" << insn->dest();
     first = false;
   }

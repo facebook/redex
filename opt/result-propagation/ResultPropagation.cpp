@@ -132,7 +132,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
     const auto default_case = [&]() {
       // If we get here, reset destination.
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         set_current_state_at(insn->dest(), insn->dest_is_wide(),
                              ParamDomain::top());
       } else if (insn->has_move_result_any()) {

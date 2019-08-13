@@ -299,7 +299,7 @@ Branchingness branchingness(IROpcode op);
  */
 namespace opcode_impl {
 
-unsigned dests_size(IROpcode);
+bool has_dest(IROpcode);
 
 bool has_move_result_pseudo(IROpcode);
 

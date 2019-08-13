@@ -244,7 +244,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
     if (check_no_overwrite_this) {
       if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
         this_insn = insn;
-      } else if (insn->dests_size() && insn->dest() == this_insn->dest()) {
+      } else if (insn->has_dest() && insn->dest() == this_insn->dest()) {
         return Result::make_error(
             "Encountered overwrite of `this` register by " + show(insn));
       }

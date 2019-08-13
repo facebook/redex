@@ -156,7 +156,7 @@ class IRInstruction final {
   /*
    * Number of registers used.
    */
-  size_t dests_size() const { return opcode_impl::dests_size(m_opcode); }
+  bool has_dest() const { return opcode_impl::has_dest(m_opcode); }
 
   size_t srcs_size() const { return m_srcs.size(); }
 
@@ -181,11 +181,11 @@ class IRInstruction final {
 
   bool src_is_wide(size_t i) const;
   bool dest_is_wide() const {
-    always_assert(dests_size());
+    always_assert(has_dest());
     return opcode_impl::dest_is_wide(m_opcode);
   }
   bool dest_is_object() const {
-    always_assert(dests_size());
+    always_assert(has_dest());
     return opcode_impl::dest_is_object(m_opcode);
   }
   bool is_wide() const {
@@ -194,7 +194,7 @@ class IRInstruction final {
         return true;
       }
     }
-    return dests_size() && dest_is_wide();
+    return has_dest() && dest_is_wide();
   }
 
   /*
@@ -202,7 +202,7 @@ class IRInstruction final {
    */
   IROpcode opcode() const { return m_opcode; }
   uint16_t dest() const {
-    always_assert_log(dests_size(), "No dest for %s", SHOW(m_opcode));
+    always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }
@@ -216,7 +216,7 @@ class IRInstruction final {
     return this;
   }
   IRInstruction* set_dest(uint16_t vreg) {
-    always_assert(dests_size());
+    always_assert(has_dest());
     m_dest = vreg;
     return this;
   }

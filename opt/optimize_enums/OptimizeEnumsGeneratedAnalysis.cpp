@@ -68,7 +68,7 @@ class FieldAnalyzer final
     auto op = insn->opcode();
 
     auto default_case = [&]() {
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         env->set(insn->dest(), DexFieldConstantDomain::top());
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, DexFieldConstantDomain::top());
@@ -232,7 +232,7 @@ class ConstAnalyzer final
     auto op = insn->opcode();
 
     auto default_case = [&]() {
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         env->set(insn->dest(), UInt32ConstantDomain::top());
         if (insn->dest_is_wide()) {
           env->set(insn->dest() + 1, UInt32ConstantDomain::top());

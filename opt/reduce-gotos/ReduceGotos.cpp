@@ -65,7 +65,7 @@ void ReduceGotosPass::shift_registers(cfg::ControlFlowGraph* cfg,
     for (uint16_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + 1);
     }
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       insn->set_dest(insn->dest() + 1);
     }
   }

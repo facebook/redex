@@ -255,7 +255,7 @@ void check_load_params(DexMethod* method) {
   // check that the params are at the end of the frame
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       always_assert_log(insn->dest() < next_ins,
                         "Instruction %s refers to a register (v%u) >= size (%u)"
                         "in method %s\n",
@@ -399,7 +399,7 @@ void lower_simple_instruction(DexMethod*, IRCode*, IRList::iterator* it_) {
   } else {
     dex_insn = create_dex_instruction(insn);
   }
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     dex_insn->set_dest(insn->dest());
   } else if (insn->has_move_result_pseudo()) {
     dex_insn->set_dest(ir_list::move_result_pseudo_of(it)->dest());

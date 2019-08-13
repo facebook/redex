@@ -795,7 +795,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // instructions following operations that are not considered by this
     // analysis. Hence, the effect of those operations is correctly abstracted
     // away regardless of the size of the destination register.
-    if (insn->dests_size() > 0) {
+    if (insn->has_dest()) {
       current_state->set_abstract_obj(insn->dest(),
                                       AbstractObjectDomain::top());
       if (insn->dest_is_wide()) {

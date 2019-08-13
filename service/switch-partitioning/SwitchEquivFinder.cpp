@@ -39,7 +39,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, uint16_t reg) {
       // non-leaf nodes only have const and branch instructions
       return true;
     }
-    if (insn->dests_size() &&
+    if (insn->has_dest() &&
         (insn->dest() == reg ||
          (insn->dest_is_wide() && insn->dest() + 1 == reg))) {
       // Overwriting the switching reg marks the end of the switch construct

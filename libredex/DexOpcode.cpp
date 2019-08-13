@@ -357,7 +357,7 @@ bit_width_t dest_bit_width(DexOpcode op) {
   not_reached();
 }
 
-unsigned dests_size(DexOpcode op) {
+bool has_dest(DexOpcode op) {
   switch (dex_opcode::format(op)) {
   case FMT_f00x:
   case FMT_f10x:
@@ -378,7 +378,7 @@ unsigned dests_size(DexOpcode op) {
   case FMT_f5rc:
   case FMT_f57c:
   case FMT_fopcode:
-    return 0;
+    return false;
   case FMT_f12x:
   case FMT_f12x_2:
   case FMT_f11n:
@@ -398,7 +398,7 @@ unsigned dests_size(DexOpcode op) {
   case FMT_f41c_d:
   case FMT_f52c_d:
   case FMT_iopcode:
-    return 1;
+    return true;
   case FMT_f20bc:
   case FMT_f22cs:
   case FMT_f35ms:

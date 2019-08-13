@@ -65,7 +65,7 @@ TEST(IRInstruction, RoundTrip) {
     auto insn = DexInstruction::make_instruction(op);
     // populate the instruction args with non-zero values so we can check
     // if we have copied everything correctly
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       insn->set_dest(0xf);
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {

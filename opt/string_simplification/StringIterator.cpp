@@ -125,7 +125,7 @@ void StringIterator::analyze_instruction(const NodeId blk,
     }
 
   } else { // Any other instruction.
-    if (it->insn->dests_size()) {
+    if (it->insn->has_dest()) {
       env->clear(it->insn->dest());
       if (it->insn->dest_is_wide()) {
         env->clear(it->insn->dest() + 1);
@@ -239,7 +239,7 @@ void StringIterator::remove_stringbuilder_instructions_in_block(
       continue;
     }
 
-    if (back_iter->insn->dests_size() &&
+    if (back_iter->insn->has_dest() &&
         eq(env.get_id(back_iter->insn->dest()), id)) {
       if (back_iter->insn->opcode() == OPCODE_NEW_INSTANCE) {
         TRACE(STR_SIMPLE, 5, "new instance.");

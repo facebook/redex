@@ -187,7 +187,7 @@ void GraphBuilder::update_node_constraints(IRList::iterator it,
                                            Graph* graph) {
   auto insn = it->insn;
   auto op = insn->opcode();
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     auto dest = insn->dest();
     auto& node = graph->m_nodes[dest];
     if (opcode::is_load_param(op)) {
@@ -286,7 +286,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       if (opcode::has_range_form(op)) {
         graph.m_range_liveness.emplace(insn, live_out);
       }
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           if (is_move(op) && reg == insn->src(0)) {
             continue;
@@ -317,7 +317,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       // adding containment edge between liverange defined in insn and elements
       // in live-out set of insn
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           graph.add_containment_edge(insn->dest(), reg);
         }

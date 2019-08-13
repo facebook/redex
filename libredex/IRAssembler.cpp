@@ -59,7 +59,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
   auto opcode_str = opcode_to_string_table.at(op);
   std::vector<s_expr> s_exprs{s_expr(opcode_str)};
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
   }
   if (opcode::has_variable_srcs_size(op)) {
@@ -175,7 +175,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   auto insn = std::make_unique<IRInstruction>(op);
   std::string reg_str;
   s_expr tail = e;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     s_patn({s_patn(&reg_str)}, tail)
         .must_match(tail, "Expected dest reg for " + opcode_str);
     insn->set_dest(reg_from_str(reg_str));
@@ -687,9 +687,10 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
-static boost::optional<uint16_t> largest_reg_operand(const IRInstruction* insn) {
+static boost::optional<uint16_t> largest_reg_operand(
+    const IRInstruction* insn) {
   boost::optional<uint16_t> max_reg;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {

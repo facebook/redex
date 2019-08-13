@@ -493,9 +493,8 @@ static size_t get_inlined_cost(IRInstruction* insn) {
   size_t cost{0};
   if (!opcode::is_internal(op) && !opcode::is_move(op) && !is_return(op)) {
     cost++;
-    auto regs =
-        insn->srcs_size() +
-        ((insn->dests_size() || insn->has_move_result_pseudo()) ? 1 : 0);
+    auto regs = insn->srcs_size() +
+                ((insn->has_dest() || insn->has_move_result_pseudo()) ? 1 : 0);
     cost += get_inlined_regs_cost(regs);
     if (op == OPCODE_MOVE_EXCEPTION) {
       cost += 8; // accounting for book-keeping overhead of throw-blocks
