@@ -54,23 +54,8 @@ namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
 namespace mog = method_override_graph;
-using EnumAttrMap =
-    std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
+using EnumAttributeMap = std::unordered_map<DexType*, EnumAttributes>;
 namespace ptrs = local_pointers;
-
-std::vector<EnumAttr> sort_enum_values(
-    const std::unordered_map<const DexField*, EnumAttr>& enum_values) {
-  std::map<uint32_t, const EnumAttr&> enums;
-  for (auto& pair : enum_values) {
-    enums.emplace(pair.second.ordinal, pair.second);
-  }
-  std::vector<EnumAttr> sorted;
-  sorted.reserve(enums.size());
-  for (auto& pair : enums) {
-    sorted.emplace_back(pair.second);
-  }
-  return sorted;
-}
 
 /**
  * A structure holding the enum utils and constant values.
@@ -174,14 +159,14 @@ struct EnumUtil {
    *  ...
    * IF it is not a candidate enum, return nullptr.
    */
-  DexType* try_convert_to_int_type(const EnumAttrMap& enums,
+  DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
                                    DexType* type) const {
     uint32_t level = get_array_level(type);
     DexType* elem_type = type;
     if (level) {
       elem_type = get_array_type(type);
     }
-    if (enums.count(elem_type)) {
+    if (enum_attributes_map.count(elem_type)) {
       return level ? make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
     }
     return nullptr;
@@ -453,10 +438,12 @@ struct InsnReplacement {
  */
 class CodeTransformer final {
  public:
-  CodeTransformer(const EnumAttrMap& enum_attrs,
+  CodeTransformer(const EnumAttributeMap& m_enum_attributes_map,
                   EnumUtil* enum_util,
                   DexMethod* method)
-      : m_enum_attrs(enum_attrs), m_enum_util(enum_util), m_method(method) {}
+      : m_enum_attributes_map(m_enum_attributes_map),
+        m_enum_util(enum_util),
+        m_method(method) {}
 
   void run() {
     optimize_enums::EnumTypeEnvironment start_env =
@@ -531,7 +518,7 @@ class CodeTransformer final {
         // Matches all non-true-virtual `SubEnum` methods (virtual methods that
         // do not override and are not overridden by any `Enum`, `Object`, or
         // interface methods).
-        if (m_enum_attrs.count(method->get_class()) &&
+        if (m_enum_attributes_map.count(method->get_class()) &&
             mog::get_true_virtuals(*m_enum_util->m_method_override_graph,
                                    resolved_method,
                                    /*include_interfaces=*/true)
@@ -593,15 +580,15 @@ class CodeTransformer final {
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto field = static_cast<DexField*>(insn->get_field());
-    if (!m_enum_attrs.count(field->get_type())) {
+    if (!m_enum_attributes_map.count(field->get_type())) {
       return;
     }
-    auto& enum_attrs = m_enum_attrs.at(field->get_type());
-    if (!enum_attrs.count(field)) {
+    auto& constants =
+        m_enum_attributes_map.at(field->get_type()).m_constants_map;
+    if (!constants.count(field)) {
       return;
     }
-    auto ord = enum_attrs.at(field).ordinal;
-    auto new_field = m_enum_util->m_fields[ord];
+    auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
     auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
     m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
@@ -622,7 +609,7 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto ifield = insn->get_field();
     auto enum_type = ifield->get_class();
-    if (m_enum_attrs.count(enum_type)) {
+    if (m_enum_attributes_map.count(enum_type)) {
       auto vObj = insn->src(0);
       auto get_ifield_method =
           m_enum_util->add_get_ifield_method(enum_type, ifield);
@@ -657,11 +644,11 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto method = insn->get_method();
     auto container = method->get_class();
-    auto attrs_it = m_enum_attrs.find(container);
-    if (attrs_it != m_enum_attrs.end()) {
+    auto attributes_it = m_enum_attributes_map.find(container);
+    if (attributes_it != m_enum_attributes_map.end()) {
       auto reg = allocate_temp();
       auto cls = type_class(container);
-      uint64_t enum_size = attrs_it->second.size();
+      uint64_t enum_size = attributes_it->second.m_constants_map.size();
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
       new_insns.push_back(
@@ -685,7 +672,7 @@ class CodeTransformer final {
                              MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (!m_enum_attrs.count(container)) {
+    if (!m_enum_attributes_map.count(container)) {
       return;
     }
     auto valueof_method = m_enum_util->add_substitute_of_valueof(container);
@@ -711,12 +698,13 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
+        container != m_enum_util->ENUM_TYPE &&
+        !m_enum_attributes_map.count(container)) {
       return;
     }
     DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(0)));
-    if (m_enum_attrs.count(container)) {
+    if (m_enum_attributes_map.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
       candidate_type = container;
     } else if (!candidate_type) {
@@ -743,12 +731,12 @@ class CodeTransformer final {
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
         container != m_enum_util->ENUM_TYPE &&
-        m_enum_attrs.count(container) == 0) {
+        m_enum_attributes_map.count(container) == 0) {
       return;
     }
     auto src_reg = insn->src(0);
     DexType* candidate_type = extract_candidate_enum_type(env.get(src_reg));
-    if (m_enum_attrs.count(container)) {
+    if (m_enum_attributes_map.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
       candidate_type = container;
     } else if (!candidate_type) {
@@ -838,12 +826,13 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
+        container != m_enum_util->ENUM_TYPE &&
+        !m_enum_attributes_map.count(container)) {
       return;
     }
     auto this_types = env.get(insn->src(0));
     DexType* candidate_type = extract_candidate_enum_type(this_types);
-    if (m_enum_attrs.count(container)) {
+    if (m_enum_attributes_map.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
     } else if (!candidate_type) {
       return;
@@ -874,14 +863,15 @@ class CodeTransformer final {
    */
   DexType* extract_candidate_enum_type(const EnumTypes& types) {
     auto type_set = types.elements();
-    if (std::all_of(type_set.begin(), type_set.end(),
-                    [this](DexType* t) { return !m_enum_attrs.count(t); })) {
+    if (std::all_of(type_set.begin(), type_set.end(), [this](DexType* t) {
+          return !m_enum_attributes_map.count(t);
+        })) {
       return nullptr;
     }
     DexType* ret = nullptr;
 
     for (auto t : type_set) {
-      if (m_enum_attrs.count(t)) {
+      if (m_enum_attributes_map.count(t)) {
         always_assert_log(ret == nullptr,
                           "Multiple candidate enums %s and %s\n", SHOW(t),
                           SHOW(ret));
@@ -892,14 +882,14 @@ class CodeTransformer final {
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
-    return m_enum_util->try_convert_to_int_type(m_enum_attrs, type);
+    return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
   inline uint16_t allocate_temp() {
     return m_method->get_code()->cfg().allocate_temp();
   }
 
-  const EnumAttrMap& m_enum_attrs;
+  const EnumAttributeMap& m_enum_attributes_map;
   EnumUtil* m_enum_util;
   DexMethod* m_method;
   std::vector<InsnReplacement> m_replacements;
@@ -922,22 +912,19 @@ class EnumTransformer final {
          it != config.candidate_enums.end();
          ++it) {
       auto enum_cls = type_class(*it);
-      // TODO: I want to consolidate `enum_attrs` and `ifield_map` to one result
-      EnumFieldMap ifield_map;
-      auto enum_attrs =
-          optimize_enums::analyze_enum_clinit(enum_cls, &ifield_map);
-      if (enum_attrs.empty()) {
+      auto attributes = optimize_enums::analyze_enum_clinit(enum_cls);
+      size_t num_enum_constants = attributes.m_constants_map.size();
+      if (num_enum_constants == 0) {
         TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
-              SHOW(enum_cls), enum_attrs.size(),
+              SHOW(enum_cls), num_enum_constants,
               enum_cls->get_sfields().size());
-      } else if (enum_attrs.size() > config.max_enum_size) {
+      } else if (num_enum_constants > config.max_enum_size) {
         TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
-              enum_attrs.size());
+              num_enum_constants);
       } else {
-        m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
-        m_enum_objs += enum_attrs.size();
-        m_enum_attrs.emplace(*it, enum_attrs);
-        m_enum_ifield_maps.emplace(*it, ifield_map);
+        m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
+        m_enum_objs += num_enum_constants;
+        m_enum_attributes_map.emplace(*it, attributes);
         clean_generated_methods_fields(enum_cls);
         opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       }
@@ -953,7 +940,7 @@ class EnumTransformer final {
     walk::parallel::code(
         scope,
         [&](DexMethod* method) {
-          if (m_enum_attrs.count(method->get_class()) &&
+          if (m_enum_attributes_map.count(method->get_class()) &&
               is_generated_enum_method(method)) {
             return false;
           }
@@ -965,7 +952,8 @@ class EnumTransformer final {
           });
         },
         [&](DexMethod* method, IRCode& code) {
-          CodeTransformer code_updater(m_enum_attrs, m_enum_util.get(), method);
+          CodeTransformer code_updater(m_enum_attributes_map, m_enum_util.get(),
+                                       method);
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
@@ -985,7 +973,7 @@ class EnumTransformer final {
     // Update all methods and fields references by replacing the candidate enum
     // types with Integer type.
     std::unordered_map<DexType*, DexType*> type_mapping;
-    for (auto& pair : m_enum_attrs) {
+    for (auto& pair : m_enum_attributes_map) {
       type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
     }
     type_reference::TypeRefUpdater updater(type_mapping);
@@ -1008,20 +996,20 @@ class EnumTransformer final {
         if (insn->has_method()) {
           auto method_ref = insn->get_method();
           auto container = method_ref->get_class();
-          if (m_enum_attrs.count(container)) {
+          if (m_enum_attributes_map.count(container)) {
             always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
                               SHOW(insn), SHOW(method));
           }
         } else if (insn->has_field()) {
           auto field_ref = insn->get_field();
           auto container = field_ref->get_class();
-          if (m_enum_attrs.count(container)) {
+          if (m_enum_attributes_map.count(container)) {
             always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
                               SHOW(insn), SHOW(method));
           }
         } else if (insn->has_type()) {
           auto type_ref = insn->get_type();
-          always_assert_log(!m_enum_attrs.count(type_ref),
+          always_assert_log(!m_enum_attributes_map.count(type_ref),
                             "Invalid insn %s in %s\n", SHOW(insn),
                             SHOW(method));
         }
@@ -1107,11 +1095,10 @@ class EnumTransformer final {
     code->build_cfg();
     auto& cfg = code->cfg();
     auto prev_block = cfg.entry_block();
-    auto& enum_attrs = m_enum_attrs.at(ref->get_class());
-    auto sorted_values = sort_enum_values(enum_attrs);
-    for (auto& value : sorted_values) {
+    for (auto& pair :
+         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
       prev_block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
            dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
            dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_EQ_METHOD,
                 {0_v, 1_v}),
@@ -1119,7 +1106,7 @@ class EnumTransformer final {
 
       auto equal_block = cfg.create_block();
       {
-        auto obj_field = m_enum_util->m_fields[value.ordinal];
+        auto obj_field = m_enum_util->m_fields[pair.first];
         equal_block->push_back({dasm(OPCODE_SGET_OBJECT, obj_field),
                                 dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
                                 dasm(OPCODE_RETURN_OBJECT, {2_v})});
@@ -1164,14 +1151,13 @@ class EnumTransformer final {
                            m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
                       dasm(OPCODE_MOVE_RESULT, {0_v})});
 
-    auto& enum_attrs = m_enum_attrs.at(ref->get_class());
-    auto sorted_values = sort_enum_values(enum_attrs);
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
-    for (auto& value : sorted_values) {
+    for (auto& pair :
+         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
       auto block = cfg.create_block();
-      cases.emplace_back(value.ordinal, block);
+      cases.emplace_back(pair.first, block);
       block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
            dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
            dasm(OPCODE_RETURN_OBJECT, {1_v})});
     }
@@ -1254,7 +1240,8 @@ class EnumTransformer final {
                       dasm(OPCODE_MOVE_RESULT, {0_v})});
     auto ifield_type = ifield_ref->get_type();
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
-    for (auto& pair : m_enum_ifield_maps[cls->get_type()][ifield_ref]) {
+    for (auto& pair :
+         m_enum_attributes_map[cls->get_type()].m_field_map[ifield_ref]) {
       auto ordinal = pair.first;
       auto block = cfg.create_block();
       cases.emplace_back(ordinal, block);
@@ -1297,13 +1284,14 @@ class EnumTransformer final {
    */
   void clean_generated_methods_fields(DexClass* enum_cls) {
     auto& sfields = enum_cls->get_sfields();
-    auto& attrs = m_enum_attrs.at(enum_cls->get_type());
+    auto& enum_constants =
+        m_enum_attributes_map[enum_cls->get_type()].m_constants_map;
     auto synth_field_access = synth_access();
     DexField* values_field = nullptr;
 
     for (auto fit = sfields.begin(); fit != sfields.end();) {
       auto field = *fit;
-      if (attrs.count(field)) {
+      if (enum_constants.count(field)) {
         fit = sfields.erase(fit);
       } else if (check_required_access_flags(synth_field_access,
                                              field->get_access())) {
@@ -1321,7 +1309,7 @@ class EnumTransformer final {
     for (auto mit = dmethods.begin(); mit != dmethods.end();) {
       auto method = *mit;
       if (is_clinit(method)) {
-        clean_clinit(attrs, enum_cls, method, values_field);
+        clean_clinit(enum_constants, enum_cls, method, values_field);
         if (empty(method->get_code())) {
           mit = dmethods.erase(mit);
         } else {
@@ -1339,7 +1327,7 @@ class EnumTransformer final {
    * Erase the put instructions that write enum values and synthetic $VALUES
    * array, then erase the dead instructions.
    */
-  void clean_clinit(const AttrMap& attrs,
+  void clean_clinit(const EnumConstantsMap& enum_constants,
                     DexClass* enum_cls,
                     DexMethod* clinit,
                     DexField* values_field) {
@@ -1357,7 +1345,7 @@ class EnumTransformer final {
       auto insn = it->insn;
       if (is_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
-        if (field && (attrs.count(field) || field == values_field)) {
+        if (field && (enum_constants.count(field) || field == values_field)) {
           it = code->erase(it);
           continue;
         }
@@ -1405,7 +1393,7 @@ class EnumTransformer final {
    */
   void post_update_enum_classes(Scope& scope) {
     for (auto cls : scope) {
-      if (!m_enum_attrs.count(cls->get_type())) {
+      if (!m_enum_attributes_map.count(cls->get_type())) {
         continue;
       }
       always_assert_log(cls->get_super_class() == m_enum_util->ENUM_TYPE,
@@ -1418,14 +1406,13 @@ class EnumTransformer final {
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
-    return m_enum_util->try_convert_to_int_type(m_enum_attrs, type);
+    return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
   DexStoresVector& m_stores;
   uint32_t m_int_objs{0}; // Generated Integer objects.
   uint32_t m_enum_objs{0}; // Eliminated Enum objects.
-  EnumAttrMap m_enum_attrs;
-  std::unordered_map<DexType*, EnumFieldMap> m_enum_ifield_maps;
+  EnumAttributeMap m_enum_attributes_map;
   std::unique_ptr<EnumUtil> m_enum_util;
 };
 } // namespace

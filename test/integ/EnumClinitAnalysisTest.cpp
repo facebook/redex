@@ -45,21 +45,22 @@ TEST_F(RedexTest, OrdinalAnalysis) {
 
   // EnumSafe
   auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));
-  EnumFieldMap ifield_map;
-  auto attrs = analyze_enum_clinit(enum_cls, &ifield_map);
+  auto attributes = analyze_enum_clinit(enum_cls);
+  auto& enum_constants = attributes.m_constants_map;
+  auto& ifield_map = attributes.m_field_map;
 
-  EXPECT_EQ(attrs.size(), 2);
+  EXPECT_EQ(enum_constants.size(), 2);
   EXPECT_EQ(ifield_map.size(), 3);
 
   auto field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_A));
-  ASSERT_EQ(attrs.count(field), 1);
-  EXPECT_EQ(attrs[field].ordinal, 0);
-  EXPECT_EQ(attrs[field].name, DexString::make_string("A"));
+  ASSERT_EQ(enum_constants.count(field), 1);
+  EXPECT_EQ(enum_constants[field].ordinal, 0);
+  EXPECT_EQ(enum_constants[field].name, DexString::make_string("A"));
 
   field = static_cast<DexField*>(DexField::get_field(ENUM_SAFE_B));
-  ASSERT_EQ(attrs.count(field), 1);
-  EXPECT_EQ(attrs[field].ordinal, 1);
-  EXPECT_EQ(attrs[field].name, DexString::make_string("B"));
+  ASSERT_EQ(enum_constants.count(field), 1);
+  EXPECT_EQ(enum_constants[field].ordinal, 1);
+  EXPECT_EQ(enum_constants[field].name, DexString::make_string("B"));
 
   auto ifield = DexField::get_field(ENUM_SAFE_NAME);
   ASSERT_EQ(ifield_map.count(ifield), 1);
@@ -83,10 +84,8 @@ TEST_F(RedexTest, OrdinalAnalysis) {
   for (const char* enum_name : {"Lcom/facebook/redextest/EnumUnsafe1;",
                                 "Lcom/facebook/redextest/EnumUnsafe2;"}) {
     enum_cls = type_class(DexType::get_type(enum_name));
-    ifield_map.clear();
-    attrs = analyze_enum_clinit(enum_cls, &ifield_map);
-
-    EXPECT_TRUE(attrs.empty());
-    EXPECT_TRUE(ifield_map.empty());
+    attributes = analyze_enum_clinit(enum_cls);
+    EXPECT_TRUE(attributes.m_constants_map.empty());
+    EXPECT_TRUE(attributes.m_field_map.empty());
   }
 }

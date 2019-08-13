@@ -184,47 +184,45 @@ class EnumOrdinalAnalyzer
  * Ordinals should be consecutive and all the static final fields in the enum
  * type are in the result map.
  */
-bool validate_result(
-    const DexClass* cls,
-    std::unordered_map<const DexField*, optimize_enums::EnumAttr>*
-        enum_field_to_attrs) {
-  if (enum_field_to_attrs->empty()) {
+bool validate_result(const DexClass* cls,
+                     const optimize_enums::EnumConstantsMap& constants) {
+  if (constants.empty()) {
     TRACE(ENUM, 2, "\tEmpty result for %s", SHOW(cls));
     return false;
   }
-  std::vector<bool> ordinals(enum_field_to_attrs->size(), false);
+  std::vector<bool> ordinals(constants.size(), false);
   bool synth_values_field = false;
 
   auto enum_field_access = optimize_enums::enum_field_access();
   auto values_access = optimize_enums::synth_access();
 
-  for (auto field : cls->get_sfields()) {
-    auto access = field->get_access();
-    auto it = enum_field_to_attrs->find(field);
-    if (it != enum_field_to_attrs->end()) {
+  for (auto enum_sfield : cls->get_sfields()) {
+    auto access = enum_sfield->get_access();
+    auto it = constants.find(enum_sfield);
+    if (it != constants.end()) {
       if (!check_required_access_flags(enum_field_access, access)) {
-        TRACE(ENUM, 2, "\tUnexpected access %x on %s", access, SHOW(field));
+        TRACE(ENUM, 2, "\tUnexpected access %x on %s", access,
+              SHOW(enum_sfield));
         return false;
       }
-      auto ordinal = it->second.ordinal;
+      uint32_t ordinal = it->second.ordinal;
       if (ordinal > ordinals.size()) {
         TRACE(ENUM, 2, "\tUnexpected ordinal %u on %s", SHOW(ordinal),
-              SHOW(field));
+              SHOW(enum_sfield));
         return false;
       }
       ordinals[ordinal] = true;
     } else {
       if (check_required_access_flags(enum_field_access, access)) {
         TRACE(ENUM, 2, "\tEnum value %s is missing in the result",
-              SHOW(field));
+              SHOW(enum_sfield));
         return false;
       }
       if (check_required_access_flags(values_access, access)) {
         if (!synth_values_field) {
           synth_values_field = true;
         } else {
-          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s",
-                SHOW(cls));
+          TRACE(ENUM, 2, "\tMultiple static synthetic fields on %s", SHOW(cls));
           return false;
         }
       }
@@ -246,7 +244,7 @@ DexAccessFlags enum_field_access() { return ACC_STATIC | ACC_ENUM; }
 
 DexAccessFlags synth_access() { return ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC; }
 
-AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
+EnumAttributes analyze_enum_clinit(const DexClass* cls) {
   always_assert(is_enum(cls));
 
   auto* code = cls->get_clinit()->get_code();
@@ -272,15 +270,15 @@ AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
     }
   }
 
-  AttrMap enum_field_to_attrs;
   if (!return_env.get_field_environment().is_value()) {
-    return enum_field_to_attrs;
+    return EnumAttributes();
   }
   auto ordinal_field = get_ordinal_field();
   auto enum_name_field = get_enum_name_field();
+  EnumAttributes attributes;
   for (auto& pair : return_env.get_field_environment().bindings()) {
-    auto* field = pair.first;
-    if (field->get_class() != cls->get_type()) {
+    auto* enum_sfield = pair.first;
+    if (enum_sfield->get_class() != cls->get_type()) {
       continue;
     }
     auto heap_ptr = pair.second.maybe_get<AbstractHeapPointer>();
@@ -301,23 +299,34 @@ AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
       continue;
     }
 
-    EnumAttr enum_obj{static_cast<uint32_t>(*ordinal_value), *name_value};
-    enum_field_to_attrs.emplace(field, enum_obj);
+    attributes.m_constants_map[enum_sfield].ordinal = *ordinal_value;
+    attributes.m_constants_map[enum_sfield].name = *name_value;
 
     for (auto* enum_ifield : cls->get_ifields()) {
-      EnumFieldValue& ifield_value = (*ifield_map)[enum_ifield][*ordinal_value];
       auto env_value = ptr.get(enum_ifield);
+      if (env_value.is_bottom()) {
+        if (enum_ifield->get_type() == get_string_type()) {
+          attributes.m_field_map[enum_ifield][*ordinal_value].string_value =
+              nullptr;
+        } else {
+          attributes.m_field_map[enum_ifield][*ordinal_value].primitive_value =
+              0;
+        }
+        continue;
+      }
       if (enum_ifield->get_type() == get_string_type()) {
         if (auto string_ptr = env_value.maybe_get<SignedConstantDomain>()) {
           if (auto string_ptr_value = string_ptr->get_constant()) {
             always_assert(*string_ptr_value == 0);
             // The `Ljava/lang/String` value is a `null` constant.
-            ifield_value.string_value = nullptr;
+            attributes.m_field_map[enum_ifield][*ordinal_value].string_value =
+                nullptr;
             continue;
           }
         } else if (auto string_value = env_value.maybe_get<StringDomain>()) {
           if (auto string_const = string_value->get_constant()) {
-            ifield_value.string_value = *string_const;
+            attributes.m_field_map[enum_ifield][*ordinal_value].string_value =
+                *string_const;
             continue;
           }
         }
@@ -325,7 +334,8 @@ AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
         if (auto primitive_value =
                 env_value.maybe_get<SignedConstantDomain>()) {
           if (auto primitive_const = primitive_value->get_constant()) {
-            ifield_value.primitive_value = *primitive_const;
+            attributes.m_field_map[enum_ifield][*ordinal_value]
+                .primitive_value = *primitive_const;
             continue;
           }
         }
@@ -335,16 +345,13 @@ AttrMap analyze_enum_clinit(const DexClass* cls, EnumFieldMap* ifield_map) {
             "Reject enum %s because we could not find constant value of "
             "instance field %s",
             SHOW(cls), SHOW(enum_ifield));
-      enum_field_to_attrs.clear();
-      ifield_map->clear();
-      return enum_field_to_attrs;
+      return EnumAttributes();
     }
   }
-  if (!validate_result(cls, &enum_field_to_attrs)) {
-    enum_field_to_attrs.clear();
-    ifield_map->clear();
+  if (!validate_result(cls, attributes.m_constants_map)) {
+    return EnumAttributes();
   }
-  return enum_field_to_attrs;
+  return attributes;
 }
 
 } // namespace optimize_enums
