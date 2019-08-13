@@ -98,6 +98,14 @@ static std::vector<std::exception_ptr> exc_reducer(
   }
 }
 
+const uint8_t* align_ptr(const uint8_t* ptr, size_t alignment) {
+  if ((size_t)ptr % alignment != 0) {
+    return ptr + (alignment - ((size_t)ptr % alignment));
+  } else {
+    return ptr;
+  }
+}
+
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   if (!stats) {
     return;
@@ -200,6 +208,143 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     const uint8_t* initial_encdata = encdata;
 
     switch (item.type) {
+    case TYPE_STRING_ID_ITEM:
+      stats->string_id_count += item.size;
+      stats->string_id_bytes += item.size * sizeof(dex_string_id);
+      break;
+    case TYPE_TYPE_ID_ITEM:
+      stats->type_id_count += item.size;
+      stats->type_id_bytes += item.size * sizeof(dex_type_id);
+      break;
+    case TYPE_PROTO_ID_ITEM:
+      stats->proto_id_count += item.size;
+      stats->proto_id_bytes += item.size * sizeof(dex_proto_id);
+      break;
+    case TYPE_FIELD_ID_ITEM:
+      stats->field_id_count += item.size;
+      stats->field_id_bytes += item.size * sizeof(dex_field_id);
+      break;
+    case TYPE_METHOD_ID_ITEM:
+      stats->method_id_count += item.size;
+      stats->method_id_bytes += item.size * sizeof(dex_method_id);
+      break;
+    case TYPE_CLASS_DEF_ITEM:
+      stats->class_def_count += item.size;
+      stats->class_def_bytes += item.size * sizeof(dex_class_def);
+      break;
+    case TYPE_CALL_SITE_ID_ITEM:
+      stats->call_site_id_count += item.size;
+      stats->call_site_id_bytes += item.size * sizeof(dex_call_site_id_item);
+      break;
+    case TYPE_METHOD_HANDLE_ITEM:
+      stats->method_handle_count += item.size;
+      stats->method_handle_bytes += item.size * sizeof(dex_method_handle_item);
+      break;
+    case TYPE_MAP_LIST:
+      stats->map_list_count += item.size;
+      for (uint32_t j = 0; j < item.size; j++) {
+        encdata = align_ptr(encdata, 4);
+
+        uint32_t map_list_entries = *(uint32_t*)(encdata);
+        stats->map_list_bytes +=
+            sizeof(uint32_t) + map_list_entries * sizeof(dex_map_item);
+      }
+      break;
+    case TYPE_TYPE_LIST:
+      stats->type_list_count += item.size;
+      for (uint32_t j = 0; j < item.size; j++) {
+        encdata = align_ptr(encdata, 4);
+
+        uint32_t type_list_entries = *(uint32_t*)(encdata);
+        stats->type_list_bytes +=
+            sizeof(uint32_t) + type_list_entries * sizeof(dex_type_item);
+      }
+      break;
+    case TYPE_ANNOTATION_SET_REF_LIST:
+      stats->annotation_set_ref_list_count += item.size;
+      for (uint32_t j = 0; j < item.size; j++) {
+        encdata = align_ptr(encdata, 4);
+
+        uint32_t annotation_set_ref_list_entries = *(uint32_t*)(encdata);
+        stats->annotation_set_ref_list_bytes +=
+            sizeof(uint32_t) + annotation_set_ref_list_entries *
+                                   sizeof(dex_annotation_set_ref_item);
+      }
+      break;
+    case TYPE_ANNOTATION_SET_ITEM:
+      stats->annotation_set_count += item.size;
+      for (uint32_t j = 0; j < item.size; j++) {
+        encdata = align_ptr(encdata, 4);
+
+        uint32_t annotation_set_entries = *(uint32_t*)(encdata);
+        stats->annotation_set_bytes +=
+            sizeof(uint32_t) +
+            annotation_set_entries * sizeof(dex_annotation_off_item);
+      }
+      break;
+    case TYPE_CLASS_DATA_ITEM:
+      stats->class_data_count += item.size;
+
+      for (uint32_t j = 0; j < item.size; j++) {
+        // Read in field sizes.
+        uint32_t static_fields_size = read_uleb128(&encdata);
+        uint32_t instance_fields_size = read_uleb128(&encdata);
+        uint32_t direct_methods_size = read_uleb128(&encdata);
+        uint32_t virtual_methods_size = read_uleb128(&encdata);
+
+        for (uint32_t k = 0; k < static_fields_size + instance_fields_size;
+             ++k) {
+          // Read and skip all of the encoded_field data.
+          read_uleb128(&encdata);
+          read_uleb128(&encdata);
+        }
+
+        for (uint32_t k = 0; k < direct_methods_size + virtual_methods_size;
+             ++k) {
+          // Read and skip all of the encoded_method data.
+          read_uleb128(&encdata);
+          read_uleb128(&encdata);
+          read_uleb128(&encdata);
+        }
+      }
+
+      stats->class_data_bytes += encdata - initial_encdata;
+      break;
+    case TYPE_CODE_ITEM:
+      stats->code_count += item.size;
+
+      for (uint32_t j = 0; j < item.size; j++) {
+        encdata = align_ptr(encdata, 4);
+
+        dex_code_item* code_item = (dex_code_item*)encdata;
+
+        encdata += sizeof(dex_code_item);
+        encdata += code_item->insns_size * sizeof(uint16_t);
+
+        if (code_item->tries_size != 0 && code_item->insns_size % 2 == 1) {
+          encdata += sizeof(uint16_t);
+        }
+
+        encdata += code_item->tries_size * sizeof(dex_tries_item);
+
+        if (code_item->tries_size != 0) {
+          uint32_t catch_handler_list_size = read_uleb128(&encdata);
+          for (uint32_t k = 0; k < catch_handler_list_size; ++k) {
+            int32_t catch_handler_size = read_sleb128(&encdata);
+            uint32_t abs_size = (uint32_t)std::abs(catch_handler_size);
+            for (uint32_t l = 0; l < abs_size; ++l) {
+              // Read encoded_type_addr_pair.
+              read_uleb128(&encdata);
+              read_uleb128(&encdata);
+            }
+            // Read catch_all_addr
+            if (catch_handler_size <= 0) {
+              read_uleb128(&encdata);
+            }
+          }
+        }
+      }
+      break;
     case TYPE_STRING_DATA_ITEM:
       stats->string_data_count += item.size;
 
@@ -216,6 +361,26 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       }
 
       stats->string_data_bytes += encdata - initial_encdata;
+      break;
+    case TYPE_ANNOTATIONS_DIR_ITEM:
+      stats->annotations_directory_count += item.size;
+
+      for (uint32_t j = 0; j < item.size; ++j) {
+        encdata = align_ptr(encdata, 4);
+
+        dex_annotations_directory_item* annotations_directory_item =
+            (dex_annotations_directory_item*)encdata;
+        encdata += sizeof(dex_annotations_directory_item);
+
+        encdata += sizeof(dex_field_annotation) *
+                   annotations_directory_item->fields_size;
+        encdata += sizeof(dex_method_annotation) *
+                   annotations_directory_item->methods_size;
+        encdata += sizeof(dex_parameter_annotation) *
+                   annotations_directory_item->parameters_size;
+      }
+
+      stats->annotations_directory_count += encdata - initial_encdata;
       break;
     case TYPE_DEBUG_INFO_ITEM:
       stats->num_dbg_items += item.size;
