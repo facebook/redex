@@ -16,11 +16,10 @@
 #include "IntroduceSwitch.h"
 #include "RedexTest.h"
 
-struct InsertSwitchTest : testing::Test {
+struct InsertSwitchTest : public RedexTest {
   DexMethod* m_method;
 
   InsertSwitchTest() {
-    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
     m_method = static_cast<DexMethod*>(DexMethod::make_method(
@@ -28,7 +27,7 @@ struct InsertSwitchTest : testing::Test {
     m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   }
 
-  ~InsertSwitchTest() { delete g_redex; }
+  ~InsertSwitchTest() {}
 };
 
 // Code:    if r == i then A else if r == i+1 then B else if r == i+2 then C; D

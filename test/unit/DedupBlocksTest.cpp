@@ -37,7 +37,7 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   manager.run_passes(stores, dummy_config);
 }
 
-struct DedupBlocksTest : testing::Test {
+struct DedupBlocksTest : public RedexTest {
   DexClass* m_class;
   DexTypeList* m_args;
   DexProto* m_proto;
@@ -45,7 +45,6 @@ struct DedupBlocksTest : testing::Test {
   ClassCreator* m_creator;
 
   DedupBlocksTest() {
-    g_redex = new RedexContext();
     m_args = DexTypeList::make_type_list({});
     m_proto = DexProto::make_proto(get_void_type(), m_args);
     m_type = DexType::make_type("testClass");
@@ -73,7 +72,7 @@ struct DedupBlocksTest : testing::Test {
     run_passes(passes, classes);
   }
 
-  ~DedupBlocksTest() { delete g_redex; }
+  ~DedupBlocksTest() {}
 };
 
 // in Code:     A B E C D          (where C == D)

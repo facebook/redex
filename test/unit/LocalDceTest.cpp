@@ -16,11 +16,10 @@
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 
-struct LocalDceTryTest : testing::Test {
+struct LocalDceTryTest : public RedexTest {
   DexMethod* m_method;
 
   LocalDceTryTest() {
-    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
     m_method = static_cast<DexMethod*>(DexMethod::make_method(
@@ -29,9 +28,7 @@ struct LocalDceTryTest : testing::Test {
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
-  ~LocalDceTryTest() {
-    delete g_redex;
-  }
+  ~LocalDceTryTest() {}
 };
 
 // We used to wrongly delete try items when just one of the the TRY_START /
@@ -223,11 +220,7 @@ TEST_F(LocalDceTryTest, deadCast) {
   EXPECT_FALSE(has_check_cast);
 }
 
-struct LocalDceEnhanceTest : public testing::Test {
-  LocalDceEnhanceTest() { g_redex = new RedexContext(); }
-
-  ~LocalDceEnhanceTest() { delete g_redex; }
-};
+struct LocalDceEnhanceTest : public RedexTest {};
 
 TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   Scope scope = create_empty_scope();

@@ -37,7 +37,7 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   manager.run_passes(stores, dummy_config);
 }
 
-struct RemoveRedundantCheckCastsTest : testing::Test {
+struct RemoveRedundantCheckCastsTest : public RedexTest {
   std::vector<DexClass*> m_classes;
   DexClass* m_class;
   DexTypeList* m_args;
@@ -102,8 +102,6 @@ struct RemoveRedundantCheckCastsTest : testing::Test {
   }
 
   RemoveRedundantCheckCastsTest() {
-    g_redex = new RedexContext();
-
     create_hierarchy();
     add_testing_class();
 
@@ -125,7 +123,7 @@ struct RemoveRedundantCheckCastsTest : testing::Test {
     run_passes(passes, m_classes);
   }
 
-  ~RemoveRedundantCheckCastsTest() { delete g_redex; }
+  ~RemoveRedundantCheckCastsTest() {}
 };
 
 } // namespace

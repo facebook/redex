@@ -20,7 +20,7 @@
 #include "IROpcode.h"
 #include "ImmutableSubcomponentAnalyzer.h"
 #include "JarLoader.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 std::vector<std::vector<std::string>> expected_paths = {
     // First call to `check`
@@ -48,9 +48,9 @@ bool is_immutable_getter(DexMethodRef* method) {
   return boost::algorithm::starts_with(method->get_name()->str(), "get");
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, accessPaths) {
-  g_redex = new RedexContext();
+class ImmutableSubcomponentAnalyzerTest : public RedexTest {};
 
+TEST_F(ImmutableSubcomponentAnalyzerTest, accessPaths) {
   std::vector<DexStore> stores;
   DexMetadata dm;
   dm.set_id("classes");
@@ -97,8 +97,6 @@ TEST(ImmutableSubcomponentAnalyzerTest, accessPaths) {
       }
     }
   }
-
-  delete g_redex;
 }
 
 // Stub out another test method, but with IR so we know exactly which register
@@ -124,8 +122,7 @@ DexMethod* make_ir_test_method() {
   )");
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
   auto method = make_ir_test_method();
   auto code = method->get_code();
   ImmutableSubcomponentAnalyzer analyzer(method, is_immutable_getter);
@@ -162,11 +159,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
     }
   }
   EXPECT_TRUE(found);
-  delete g_redex;
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   auto method = make_ir_test_method();
 
   auto get_a = DexMethod::make_method(
@@ -193,12 +188,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   EXPECT_EQ(
     state2.entry_state_bindings.find(0),
     state2.entry_state_bindings.end());
-
-  delete g_redex;
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
   AccessPath p0{AccessPathKind::Parameter, 0};
   AccessPath v0{AccessPathKind::Local, 0};
   EXPECT_NE(p0, v0);
@@ -230,5 +222,4 @@ TEST(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
     AccessPath f_b{AccessPathKind::FinalField, 0, field_c, {get_b}};
     EXPECT_NE(f_a, f_b);
   }
-  delete g_redex;
 }

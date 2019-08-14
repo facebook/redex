@@ -14,13 +14,10 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "Peephole.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
 
-struct PeepholeTestB : public testing::Test {
-  PeepholeTestB() { g_redex = new RedexContext(); }
-
-  ~PeepholeTestB() { delete g_redex; }
-};
+class PeepholeTestB : public RedexTest {};
 
 TEST_F(PeepholeTestB, StringBuilderInit) {
   ClassCreator creator(DexType::make_type("LFoo;"));

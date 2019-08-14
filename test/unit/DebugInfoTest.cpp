@@ -12,9 +12,9 @@
 #include "InstructionLowering.h"
 #include "RedexTest.h"
 
-TEST(DexPositionTest, multiplePositionBeforeOpcode) {
-  g_redex = new RedexContext();
+class DexPositionTest : public RedexTest {};
 
+TEST_F(DexPositionTest, multiplePositionBeforeOpcode) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -43,13 +43,9 @@ TEST(DexPositionTest, multiplePositionBeforeOpcode) {
   )");
 
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-
-  delete g_redex;
 }
 
-TEST(DexPositionTest, consecutiveIdenticalPositions) {
-  g_redex = new RedexContext();
-
+TEST_F(DexPositionTest, consecutiveIdenticalPositions) {
   auto method =
       static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -80,6 +76,4 @@ TEST(DexPositionTest, consecutiveIdenticalPositions) {
   )");
 
   EXPECT_CODE_EQ(method->get_code(), expected_code.get());
-
-  delete g_redex;
 }

@@ -14,8 +14,11 @@
 #include "IRInstruction.h"
 #include "InstructionLowering.h"
 #include "OpcodeList.h"
+#include "RedexTest.h"
 #include "RegAlloc.h"
 #include "Show.h"
+
+class IRInstructionTest : public RedexTest {};
 
 // for nicer gtest error messages
 std::ostream& operator<<(std::ostream& os, const DexInstruction& to_show) {
@@ -30,9 +33,8 @@ bool is_move(DexOpcode op) {
   return op >= DOPCODE_MOVE && op <= DOPCODE_MOVE_OBJECT_16;
 }
 
-TEST(IRInstruction, RoundTrip) {
+TEST_F(IRInstructionTest, RoundTrip) {
   using namespace instruction_lowering::impl;
-  g_redex = new RedexContext();
 
   DexType* ty = DexType::make_type("Lfoo;");
   DexString* str = DexString::make_string("foo");
@@ -105,13 +107,10 @@ TEST(IRInstruction, RoundTrip) {
 
     delete insn;
   }
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, NormalizeInvoke) {
+TEST_F(IRInstructionTest, NormalizeInvoke) {
   using namespace dex_asm;
-  g_redex = new RedexContext();
 
   auto method = DexMethod::make_method("LFoo;", "x", "V", {"J", "I", "J"});
   auto insn =
@@ -129,8 +128,6 @@ TEST(IRInstruction, NormalizeInvoke) {
       *dasm(OPCODE_INVOKE_VIRTUAL, method, {1_v, 2_v, 3_v, 4_v, 5_v, 6_v}));
 
   EXPECT_EQ(*insn, *orig);
-
-  delete g_redex;
 }
 
 /*
@@ -151,9 +148,8 @@ IRInstruction* select_instruction(IRInstruction* insn) {
   return code->begin()->insn;
 }
 
-TEST(IRInstruction, TwoAddr) {
+TEST_F(IRInstructionTest, TwoAddr) {
   using namespace dex_asm;
-  g_redex = new RedexContext();
 
   auto* method =
       static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
@@ -205,13 +201,10 @@ TEST(IRInstruction, TwoAddr) {
               ->set_dest(17)
               ->set_src(0, 1)
               ->set_src(1, 17));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, SelectCheckCast) {
+TEST_F(IRInstructionTest, SelectCheckCast) {
   using namespace dex_asm;
-  g_redex = new RedexContext();
 
   DexMethod* method =
       static_cast<DexMethod*>(DexMethod::make_method("Lfoo;", "bar", "V", {}));
@@ -231,14 +224,11 @@ TEST(IRInstruction, SelectCheckCast) {
   EXPECT_EQ(*it->dex_insn,
             *(new DexOpcodeType(DOPCODE_CHECK_CAST, get_object_type()))
                  ->set_src(0, 0));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, SelectMove) {
+TEST_F(IRInstructionTest, SelectMove) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
-  g_redex = new RedexContext();
 
   EXPECT_EQ(DOPCODE_MOVE, select_move_opcode(dasm(OPCODE_MOVE, {0_v, 0_v})));
   EXPECT_EQ(DOPCODE_MOVE_FROM16,
@@ -251,14 +241,11 @@ TEST(IRInstruction, SelectMove) {
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {255_v, 65535_v})));
   EXPECT_EQ(DOPCODE_MOVE_OBJECT_16,
             select_move_opcode(dasm(OPCODE_MOVE_OBJECT, {65535_v, 65535_v})));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, SelectConst) {
+TEST_F(IRInstructionTest, SelectConst) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
-  g_redex = new RedexContext();
 
   auto insn = dasm(OPCODE_CONST, {0_v});
   EXPECT_EQ(DOPCODE_CONST_4, select_const_opcode(insn));
@@ -298,15 +285,11 @@ TEST(IRInstruction, SelectConst) {
 
   wide_insn->set_literal(0xffff000000000001);
   EXPECT_EQ(DOPCODE_CONST_WIDE, select_const_opcode(wide_insn));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, SelectBinopLit) {
+TEST_F(IRInstructionTest, SelectBinopLit) {
   using namespace dex_asm;
   using namespace instruction_lowering::impl;
-  g_redex = new RedexContext();
-
   const IROpcode ops[] = {
       OPCODE_ADD_INT_LIT16, OPCODE_RSUB_INT,      OPCODE_MUL_INT_LIT16,
       OPCODE_DIV_INT_LIT16, OPCODE_REM_INT_LIT16, OPCODE_AND_INT_LIT16,
@@ -358,12 +341,10 @@ TEST(IRInstruction, SelectBinopLit) {
     EXPECT_THROW(select_binop_lit_opcode(insn), RedexException)
         << "at " << show(ops[i]);
   }
-  delete g_redex;
 }
 
-TEST(IRInstruction, InvokeSourceIsWideBasic) {
+TEST_F(IRInstructionTest, InvokeSourceIsWideBasic) {
   using namespace dex_asm;
-  g_redex = new RedexContext();
 
   DexMethodRef* m = DexMethod::make_method("Lfoo;", "baz", "V", {"J"});
   IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_STATIC);
@@ -372,13 +353,9 @@ TEST(IRInstruction, InvokeSourceIsWideBasic) {
   insn->set_method(m);
 
   EXPECT_TRUE(insn->invoke_src_is_wide(0));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, InvokeSourceIsWideComplex) {
-  g_redex = new RedexContext();
-
+TEST_F(IRInstructionTest, InvokeSourceIsWideComplex) {
   IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
   DexMethodRef* m =
       DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I"});
@@ -393,13 +370,9 @@ TEST(IRInstruction, InvokeSourceIsWideComplex) {
   EXPECT_FALSE(insn->invoke_src_is_wide(1));
   EXPECT_TRUE(insn->invoke_src_is_wide(2));
   EXPECT_FALSE(insn->invoke_src_is_wide(3));
-
-  delete g_redex;
 }
 
-TEST(IRInstruction, InvokeSourceIsWideComplex2) {
-  g_redex = new RedexContext();
-
+TEST_F(IRInstructionTest, InvokeSourceIsWideComplex2) {
   IRInstruction* insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
   DexMethodRef* m =
       DexMethod::make_method("Lfoo;", "qux", "V", {"I", "J", "I", "J"});
@@ -416,6 +389,4 @@ TEST(IRInstruction, InvokeSourceIsWideComplex2) {
   EXPECT_TRUE(insn->invoke_src_is_wide(2));
   EXPECT_FALSE(insn->invoke_src_is_wide(3));
   EXPECT_TRUE(insn->invoke_src_is_wide(4));
-
-  delete g_redex;
 }

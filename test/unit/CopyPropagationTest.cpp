@@ -13,7 +13,9 @@
 
 using namespace copy_propagation_impl;
 
-TEST(CopyPropagationTest, simple) {
+class CopyPropagationTest : public RedexTest {};
+
+TEST_F(CopyPropagationTest, simple) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -41,7 +43,7 @@ TEST(CopyPropagationTest, simple) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, deleteRepeatedMove) {
+TEST_F(CopyPropagationTest, deleteRepeatedMove) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -75,8 +77,7 @@ TEST(CopyPropagationTest, deleteRepeatedMove) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, noRemapRange) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, noRemapRange) {
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -105,11 +106,9 @@ TEST(CopyPropagationTest, noRemapRange) {
 )");
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
-
-  delete g_redex;
 }
 
-TEST(CopyPropagationTest, deleteSelfMove) {
+TEST_F(CopyPropagationTest, deleteSelfMove) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v1 0)
@@ -130,8 +129,7 @@ TEST(CopyPropagationTest, deleteSelfMove) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, representative) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, representative) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -155,10 +153,9 @@ TEST(CopyPropagationTest, representative) {
 )");
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
-  delete g_redex;
 }
 
-TEST(CopyPropagationTest, verifyEnabled) {
+TEST_F(CopyPropagationTest, verifyEnabled) {
   // assuming verify-none is disabled for this test
   auto code = assembler::ircode_from_string(R"(
     (
@@ -185,7 +182,7 @@ TEST(CopyPropagationTest, verifyEnabled) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, consts_safe_by_constant_uses) {
+TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
   // even with verify-none being disabled, the following is safe
   auto code = assembler::ircode_from_string(R"(
     (
@@ -211,8 +208,7 @@ TEST(CopyPropagationTest, consts_safe_by_constant_uses) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 
   // even with verify-none being disabled, the following is safe
 
@@ -248,12 +244,9 @@ TEST(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
 )");
 
   EXPECT_CODE_EQ(code, expected_code.get());
-
-  delete g_redex;
 }
 
-TEST(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
 
   // the following is not safe, and shall not be fully optimized
   auto method = assembler::method_from_string(R"(
@@ -290,11 +283,9 @@ TEST(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
 )");
 
   EXPECT_CODE_EQ(code, expected_code.get());
-
-  delete g_redex;
 }
 
-TEST(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
+TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
   // even with verify-none being disabled, the following is safe
   auto code = assembler::ircode_from_string(R"(
     (
@@ -320,8 +311,7 @@ TEST(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, if_constraints_with_constant_uses) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
 
   // if-eq and if-ne require that *both* of their incoming registers agree on
   // either being an object reference, or an integer.
@@ -371,7 +361,7 @@ TEST(CopyPropagationTest, if_constraints_with_constant_uses) {
   EXPECT_CODE_EQ(code, expected_code.get());
 }
 
-TEST(CopyPropagationTest, cliqueAliasing) {
+TEST_F(CopyPropagationTest, cliqueAliasing) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v2)
@@ -397,7 +387,7 @@ TEST(CopyPropagationTest, cliqueAliasing) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, loopNoChange) {
+TEST_F(CopyPropagationTest, loopNoChange) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -435,7 +425,7 @@ TEST(CopyPropagationTest, loopNoChange) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, branchNoChange) {
+TEST_F(CopyPropagationTest, branchNoChange) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -475,7 +465,7 @@ TEST(CopyPropagationTest, branchNoChange) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, intersect1) {
+TEST_F(CopyPropagationTest, intersect1) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -514,7 +504,7 @@ TEST(CopyPropagationTest, intersect1) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, intersect2) {
+TEST_F(CopyPropagationTest, intersect2) {
   auto no_change = R"(
     (
       (move v0 v1)
@@ -543,7 +533,7 @@ TEST(CopyPropagationTest, intersect2) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, wide) {
+TEST_F(CopyPropagationTest, wide) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move-wide v0 v2)
@@ -565,7 +555,7 @@ TEST(CopyPropagationTest, wide) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, wideClobber) {
+TEST_F(CopyPropagationTest, wideClobber) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v4)
@@ -590,7 +580,7 @@ TEST(CopyPropagationTest, wideClobber) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, wideClobberWideTrue) {
+TEST_F(CopyPropagationTest, wideClobberWideTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v4)
@@ -615,7 +605,7 @@ TEST(CopyPropagationTest, wideClobberWideTrue) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, repWide) {
+TEST_F(CopyPropagationTest, repWide) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const-wide v0 0)
@@ -646,7 +636,7 @@ TEST(CopyPropagationTest, repWide) {
 
 // whichRep and whichRep2 make sure that we deterministically choose the
 // representative after a merge point.
-TEST(CopyPropagationTest, whichRep) {
+TEST_F(CopyPropagationTest, whichRep) {
   auto no_change = R"(
     (
       (if-eqz v0 :true)
@@ -673,7 +663,7 @@ TEST(CopyPropagationTest, whichRep) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, whichRep2) {
+TEST_F(CopyPropagationTest, whichRep2) {
   auto no_change = R"(
     (
       (if-eqz v0 :true)
@@ -699,7 +689,7 @@ TEST(CopyPropagationTest, whichRep2) {
 }
 
 // make sure we keep using the oldest representative even after a merge
-TEST(CopyPropagationTest, whichRepPreserve) {
+TEST_F(CopyPropagationTest, whichRepPreserve) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -738,8 +728,7 @@ TEST(CopyPropagationTest, whichRepPreserve) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(CopyPropagationTest, wideInvokeSources) {
-  g_redex = new RedexContext();
+TEST_F(CopyPropagationTest, wideInvokeSources) {
 
   auto no_change = R"(
     (
@@ -759,6 +748,4 @@ TEST(CopyPropagationTest, wideInvokeSources) {
   auto expected_code = assembler::ircode_from_string(no_change);
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
-
-  delete g_redex;
 }

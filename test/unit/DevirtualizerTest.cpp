@@ -5,14 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <memory>
 #include <gtest/gtest.h>
+#include <memory>
 
-#include "DexClass.h"
 #include "Creators.h"
+#include "DexClass.h"
 #include "DexUtil.h"
-#include "VirtualScope.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "VirtualScope.h"
 
 namespace {
 
@@ -431,8 +432,9 @@ bool check_classes(const std::vector<DexMethod*>& methods,
 // Tests
 //
 
-TEST(OneClass2Finals, empty) {
-  g_redex = new RedexContext();
+class DevirtualizerTest : public RedexTest {};
+
+TEST_F(DevirtualizerTest, OneClass2Finals) {
   std::vector<DexClass*> scope = create_scope_1();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 2);
@@ -445,21 +447,17 @@ TEST(OneClass2Finals, empty) {
   }
   EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
   EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LA;");
-  delete g_redex;
 }
 
-TEST(AbstractClassInterface1Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, AbstractClassInterface1Final) {
   std::vector<DexClass*> scope = create_scope_2();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 1);
   EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
-  delete g_redex;
 }
 
-TEST(InterfaceClassInheritance2Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, InterfaceClassInheritance2Final) {
   std::vector<DexClass*> scope = create_scope_3();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 2);
@@ -474,31 +472,25 @@ TEST(InterfaceClassInheritance2Final, empty) {
     EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LB;");
     EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LA;");
   }
-  delete g_redex;
 }
 
-TEST(InterfaceWithImplInBase1Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, InterfaceWithImplInBase1Final) {
   std::vector<DexClass*> scope = create_scope_4();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 1);
   EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
-  delete g_redex;
 }
 
-TEST(InterfaceWithImplInBaseAndOverride1Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, InterfaceWithImplInBaseAndOverride1Final) {
   std::vector<DexClass*> scope = create_scope_5();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 1);
   EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
   EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LB;");
-  delete g_redex;
 }
 
-TEST(InterfaceWithImplInBase2Classes2Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, InterfaceWithImplInBase2Classes2Final) {
   std::vector<DexClass*> scope = create_scope_6();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 2);
@@ -511,11 +503,9 @@ TEST(InterfaceWithImplInBase2Classes2Final, empty) {
     EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LC;");
     EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LB;");
   }
-  delete g_redex;
 }
 
-TEST(InterfaceWithImplInBaseMultipleClasses3Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, InterfaceWithImplInBaseMultipleClasses3Final) {
   std::vector<DexClass*> scope = create_scope_7();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 3);
@@ -527,11 +517,10 @@ TEST(InterfaceWithImplInBaseMultipleClasses3Final, empty) {
       DexType::get_type("LC;"),
       DexType::get_type("LE;") };
   EXPECT_TRUE(check_classes(methods, types));
-  delete g_redex;
 }
 
-TEST(InterfaceWithImplInBaseMultipleClassesAndOverloads6Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest,
+       InterfaceWithImplInBaseMultipleClassesAndOverloads6Final) {
   std::vector<DexClass*> scope = create_scope_8();
   auto methods = devirtualize(scope);
   EXPECT_EQ(methods.size(), 6);
@@ -547,11 +536,10 @@ TEST(InterfaceWithImplInBaseMultipleClassesAndOverloads6Final, empty) {
       DexType::get_type("LF;"),
       DexType::get_type("LG;") };
   EXPECT_TRUE(check_classes(methods, types));
-  delete g_redex;
 }
 
-TEST(InterfacesWithImplInBaseMultipleClassesAndOverloads3Final, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest,
+       InterfacesWithImplInBaseMultipleClassesAndOverloads3Final) {
   std::vector<DexClass*> scope = create_scope_9();
   // std::reverse(scope.begin(), scope.end());
   auto methods = devirtualize(scope);
@@ -564,11 +552,9 @@ TEST(InterfacesWithImplInBaseMultipleClassesAndOverloads3Final, empty) {
       DexType::get_type("LC;"),
       DexType::get_type("LE;") };
   EXPECT_TRUE(check_classes(methods, types));
-  delete g_redex;
 }
 
-TEST(GenericRichHierarchy, empty) {
-  g_redex = new RedexContext();
+TEST_F(DevirtualizerTest, GenericRichHierarchy) {
   std::vector<DexClass*> scope = create_scope_10();
   // std::reverse(scope.begin(), scope.end());
   auto methods = devirtualize(scope);
@@ -584,5 +570,4 @@ TEST(GenericRichHierarchy, empty) {
       DexType::get_type("LAAB;"),
       DexType::get_type("LABA;") };
   EXPECT_TRUE(check_classes(methods, types));
-  delete g_redex;
 }

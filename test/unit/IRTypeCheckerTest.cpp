@@ -21,16 +21,15 @@
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "LocalDce.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 using namespace testing;
 
-class IRTypeCheckerTest : public ::testing::Test {
+class IRTypeCheckerTest : public RedexTest {
  public:
-  ~IRTypeCheckerTest() { delete g_redex; }
+  ~IRTypeCheckerTest() {}
 
   IRTypeCheckerTest() {
-    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({
         DexType::make_type("I"), // v5
         DexType::make_type("B"), // v6

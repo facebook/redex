@@ -20,18 +20,17 @@
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "LocalDce.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 #include "ReflectionAnalysis.h"
 
 using namespace testing;
 using namespace reflection;
 
-class ReflectionAnalysisTest : public ::testing::Test {
+class ReflectionAnalysisTest : public RedexTest {
  public:
-  ~ReflectionAnalysisTest() { delete g_redex; }
+  ~ReflectionAnalysisTest() {}
 
   ReflectionAnalysisTest() {
-    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({
         get_object_type() // v5
     });
