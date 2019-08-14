@@ -378,7 +378,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
   std::unordered_set<const DexType*> dont_rename_native_bindings;
   // find all classes with native methods, and all types mentioned
   // in protos of native methods
-  for(auto clazz: scope) {
+  for (auto clazz : scope) {
     for (auto meth : clazz->get_dmethods()) {
       if (is_native(meth)) {
         dont_rename_native_bindings.insert(clazz->get_type());
@@ -386,13 +386,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
         for (auto ptype : proto->get_args()->get_type_list()) {
-          // TODO: techincally we should recurse for array types
-          // not just go one level
-          if (is_array(ptype)) {
-            dont_rename_native_bindings.insert(get_array_element_type(ptype));
-          } else {
-            dont_rename_native_bindings.insert(ptype);
-          }
+          dont_rename_native_bindings.insert(get_element_type_if_array(ptype));
         }
       }
     }
@@ -403,13 +397,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
         for (auto ptype : proto->get_args()->get_type_list()) {
-          // TODO: techincally we should recurse for array types
-          // not just go one level
-          if (is_array(ptype)) {
-            dont_rename_native_bindings.insert(get_array_element_type(ptype));
-          } else {
-            dont_rename_native_bindings.insert(ptype);
-          }
+          dont_rename_native_bindings.insert(get_element_type_if_array(ptype));
         }
       }
     }
