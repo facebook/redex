@@ -18,10 +18,8 @@ IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
 // because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_opcode == that.m_opcode &&
-    m_string == that.m_string && // just test one member of the union
-    m_srcs == that.m_srcs &&
-    m_dest == that.m_dest &&
-    m_literal == that.m_literal;
+         m_literal == that.m_literal && // just test one member of the union
+         m_srcs == that.m_srcs && m_dest == that.m_dest;
 }
 
 uint16_t IRInstruction::size() const {
@@ -230,44 +228,36 @@ bool needs_range_conversion(const IRInstruction* insn) {
 }
 
 uint64_t IRInstruction::hash() const {
-  std::vector<uint64_t> bits;
-  bits.push_back(opcode());
+  uint64_t result = opcode();
 
   for (size_t i = 0; i < srcs_size(); i++) {
-    bits.push_back(src(i));
+    result ^= src(i);
   }
 
   if (has_dest()) {
-    bits.push_back(dest());
+    result ^= dest();
   }
 
-  if (has_data()) {
+  switch (opcode::ref(opcode())) {
+  case opcode::Ref::Data: {
     size_t size = get_data()->data_size();
     const auto& data = get_data()->data();
     for (size_t i = 0; i < size; i++) {
-      bits.push_back(data[i]);
+      result ^= data[i];
     }
+    break;
+  }
+  case opcode::Ref::Field:
+  case opcode::Ref::Method:
+  case opcode::Ref::Literal:
+  case opcode::Ref::String:
+  case opcode::Ref::Type: {
+    result ^= m_literal;
+    break;
+  }
+  case opcode::Ref::None:
+    break;
   }
 
-  if (has_type()) {
-    bits.push_back(reinterpret_cast<uint64_t>(get_type()));
-  }
-  if (has_field()) {
-    bits.push_back(reinterpret_cast<uint64_t>(get_field()));
-  }
-  if (has_method()) {
-    bits.push_back(reinterpret_cast<uint64_t>(get_method()));
-  }
-  if (has_string()) {
-    bits.push_back(reinterpret_cast<uint64_t>(get_string()));
-  }
-  if (has_literal()) {
-    bits.push_back(get_literal());
-  }
-
-  uint64_t result = 0;
-  for (uint64_t elem : bits) {
-    result ^= elem;
-  }
   return result;
 }
