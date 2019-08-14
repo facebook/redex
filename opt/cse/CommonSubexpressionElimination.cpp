@@ -776,7 +776,7 @@ namespace cse_impl {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-SharedState::SharedState() {
+SharedState::SharedState() : m_safe_methods(get_pure_methods()) {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -791,122 +791,39 @@ SharedState::SharedState() {
   static const char* safe_method_names[] = {
       "Landroid/os/SystemClock;.elapsedRealtime:()J",
       "Landroid/os/SystemClock;.uptimeMillis:()J",
-      "Landroid/util/Pair;.<init>:(Ljava/lang/Object;Ljava/lang/Object;)V",
-      "Landroid/util/SparseArray;.<init>:()V",
       "Landroid/util/SparseArray;.append:(ILjava/lang/Object;)V",
       "Landroid/util/SparseArray;.get:(I)Ljava/lang/Object;",
       "Landroid/util/SparseArray;.put:(ILjava/lang/Object;)V",
       "Landroid/util/SparseArray;.size:()I",
       "Landroid/util/SparseArray;.valueAt:(I)Ljava/lang/Object;",
       "Landroid/util/SparseIntArray;.put:(II)V",
-      "Ljava/io/IOException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/Boolean;.booleanValue:()Z",
-      "Ljava/lang/Boolean;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Boolean;.getBoolean:(Ljava/lang/String;)Z",
-      "Ljava/lang/Boolean;.hashCode:()I",
       "Ljava/lang/Boolean;.parseBoolean:(Ljava/lang/String;)Z",
-      "Ljava/lang/Boolean;.toString:()Ljava/lang/String;",
-      "Ljava/lang/Boolean;.toString:(Z)Ljava/lang/String;",
-      "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;",
-      "Ljava/lang/Boolean;.valueOf:(Ljava/lang/String;)Ljava/lang/Boolean;",
-      "Ljava/lang/Byte;.byteValue:()B",
-      "Ljava/lang/Byte;.equals:(Ljava/lang/Object;)Z",
       "Ljava/lang/Byte;.parseByte:(Ljava/lang/String;)B",
-      "Ljava/lang/Byte;.toString:()Ljava/lang/String;",
-      "Ljava/lang/Byte;.toString:(B)Ljava/lang/String;",
-      "Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;",
       "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;",
-      "Ljava/lang/Class;.getName:()Ljava/lang/String;",
-      "Ljava/lang/Class;.getSimpleName:()Ljava/lang/String;",
-      "Ljava/lang/Double;.compare:(DD)I",
-      "Ljava/lang/Double;.doubleValue:()D",
-      "Ljava/lang/Double;.doubleToLongBits:(D)J",
-      "Ljava/lang/Double;.doubleToRawLongBits:(D)J",
-      "Ljava/lang/Double;.longBitsToDouble:(J)D",
       "Ljava/lang/Double;.parseDouble:(Ljava/lang/String;)D",
-      "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;",
-      "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V",
-      "Ljava/lang/Enum;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Enum;.name:()Ljava/lang/String;",
-      "Ljava/lang/Enum;.ordinal:()I",
       "Ljava/lang/Enum;.valueOf:(Ljava/lang/Class;Ljava/lang/String;)Ljava/"
       "lang/Enum;",
-      "Ljava/lang/Exception;.<init>:()V",
-      "Ljava/lang/Float;.floatValue:()F",
-      "Ljava/lang/Float;.compare:(FF)I",
-      "Ljava/lang/Float;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Float;.intBitsToFloat:(I)F",
-      "Ljava/lang/Float;.floatToIntBits:(F)I",
-      "Ljava/lang/Float;.isInfinite:(F)Z",
-      "Ljava/lang/Float;.isNaN:(F)Z",
       "Ljava/lang/Float;.parseFloat:(Ljava/lang/String;)F",
-      "Ljava/lang/Float;.valueOf:(F)Ljava/lang/Float;",
-      "Ljava/lang/Float;.toString:(F)Ljava/lang/String;",
-      "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/IllegalStateException;.<init>:()V",
-      "Ljava/lang/IllegalStateException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/Integer;.<init>:(I)V",
-      "Ljava/lang/Integer;.byteValue:()B",
-      "Ljava/lang/Integer;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Integer;.hashCode:()I",
-      "Ljava/lang/Integer;.highestOneBit:(I)I",
-      "Ljava/lang/Integer;.intValue:()I",
-      "Ljava/lang/Integer;.longValue:()J",
       "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;)I",
       "Ljava/lang/Integer;.parseInt:(Ljava/lang/String;I)I",
-      "Ljava/lang/Integer;.shortValue:()S",
-      "Ljava/lang/Integer;.toBinaryString:(I)Ljava/lang/String;",
-      "Ljava/lang/Integer;.toHexString:(I)Ljava/lang/String;",
-      "Ljava/lang/Integer;.toString:(I)Ljava/lang/String;",
-      "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;",
       "Ljava/lang/Integer;.valueOf:(Ljava/lang/String;)Ljava/lang/Integer;",
-      "Ljava/lang/Long;.<init>:(J)V",
-      "Ljava/lang/Long;.bitCount:(J)I",
-      "Ljava/lang/Long;.compareTo:(Ljava/lang/Long;)I",
-      "Ljava/lang/Long;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Long;.hashCode:()I",
-      "Ljava/lang/Long;.intValue:()I",
-      "Ljava/lang/Long;.longValue:()J",
       "Ljava/lang/Long;.parseLong:(Ljava/lang/String;)J",
-      "Ljava/lang/Long;.signum:(J)I",
-      "Ljava/lang/Long;.toBinaryString:(J)Ljava/lang/String;",
-      "Ljava/lang/Long;.toHexString:(J)Ljava/lang/String;",
-      "Ljava/lang/Long;.toString:()Ljava/lang/String;",
-      "Ljava/lang/Long;.toString:(J)Ljava/lang/String;",
-      "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;",
-      "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/Object;.<init>:()V",
-      "Ljava/lang/Object;.getClass:()Ljava/lang/Class;",
+      "Ljava/lang/Math;.addExact:(II)I",
+      "Ljava/lang/Math;.addExact:(JJ)J",
+      "Ljava/lang/Math;.decrementExact:(J)J",
+      "Ljava/lang/Math;.decrementExact:(I)I",
+      "Ljava/lang/Math;.incrementExact:(I)I",
+      "Ljava/lang/Math;.incrementExact:(J)J",
+      "Ljava/lang/Math;.multiplyExact:(II)I",
+      "Ljava/lang/Math;.multiplyExact:(JJ)J",
+      "Ljava/lang/Math;.negateExact:(I)I",
+      "Ljava/lang/Math;.negateExact:(J)J",
+      "Ljava/lang/Math;.subtractExact:(JJ)J",
+      "Ljava/lang/Math;.subtractExact:(II)I",
+      "Ljava/lang/Math;.toIntExact:(J)I",
       "Ljava/lang/ref/Reference;.get:()Ljava/lang/Object;",
-      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/Short;.<init>:(S)V",
-      "Ljava/lang/Short;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/Short;.shortValue:()S",
-      "Ljava/lang/Short;.toString:(S)Ljava/lang/String;",
-      "Ljava/lang/Short;.valueOf:(S)Ljava/lang/Short;",
-      "Ljava/lang/String;.<init>:(Ljava/lang/String;)V",
-      "Ljava/lang/String;.charAt:(I)C",
-      "Ljava/lang/String;.concat:(Ljava/lang/String;)Ljava/lang/String;",
-      "Ljava/lang/String;.equals:(Ljava/lang/Object;)Z",
-      "Ljava/lang/String;.equalsIgnoreCase:(Ljava/lang/String;)Z",
       "Ljava/lang/String;.getBytes:()[B",
-      "Ljava/lang/String;.hashCode:()I",
-      "Ljava/lang/String;.indexOf:(I)I",
-      "Ljava/lang/String;.isEmpty:()Z",
-      "Ljava/lang/String;.lastIndexOf:(I)I",
-      "Ljava/lang/String;.lastIndexOf:(I)I",
-      "Ljava/lang/String;.length:()I",
       "Ljava/lang/String;.split:(Ljava/lang/String;)[Ljava/lang/String;",
-      "Ljava/lang/String;.startsWith:(Ljava/lang/String;)Z",
-      "Ljava/lang/String;.substring:(I)Ljava/lang/String;",
-      "Ljava/lang/String;.substring:(II)Ljava/lang/String;",
-      "Ljava/lang/String;.trim:()Ljava/lang/String;",
-      "Ljava/lang/String;.valueOf:(I)Ljava/lang/String;",
-      "Ljava/lang/String;.valueOf:(J)Ljava/lang/String;",
-      "Ljava/lang/String;.valueOf:(Z)Ljava/lang/String;",
-      "Ljava/lang/StringBuilder;.<init>:()V",
-      "Ljava/lang/StringBuilder;.<init>:(I)V",
-      "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V",
       "Ljava/lang/StringBuilder;.append:(C)Ljava/lang/StringBuilder;",
       "Ljava/lang/StringBuilder;.append:(I)Ljava/lang/StringBuilder;",
       "Ljava/lang/StringBuilder;.append:(J)Ljava/lang/StringBuilder;",
@@ -916,13 +833,7 @@ SharedState::SharedState() {
       "Ljava/lang/StringBuilder;.length:()I",
       "Ljava/lang/StringBuilder;.toString:()Ljava/lang/String;",
       "Ljava/lang/System;.currentTimeMillis:()J",
-      "Ljava/lang/System;.identityHashCode:(Ljava/lang/Object;)I",
       "Ljava/lang/System;.nanoTime:()J",
-      "Ljava/lang/Thread;.currentThread:()Ljava/lang/Thread;",
-      "Ljava/lang/UnsupportedOperationException;.<init>:(Ljava/lang/"
-      "String;)V",
-      "Ljava/util/ArrayList;.<init>:()V",
-      "Ljava/util/ArrayList;.<init>:(I)V",
       "Ljava/util/ArrayList;.add:(Ljava/lang/Object;)Z",
       "Ljava/util/ArrayList;.add:(ILjava/lang/Object;)V",
       "Ljava/util/ArrayList;.clear:()V",
@@ -930,18 +841,12 @@ SharedState::SharedState() {
       "Ljava/util/ArrayList;.isEmpty:()Z",
       "Ljava/util/ArrayList;.remove:(I)Ljava/lang/Object;",
       "Ljava/util/ArrayList;.size:()I",
-      "Ljava/util/BitSet;.<init>:(I)V",
       "Ljava/util/BitSet;.clear:()V",
       "Ljava/util/BitSet;.get:(I)Z",
       "Ljava/util/BitSet;.set:(I)V",
-      "Ljava/util/HashMap;.<init>:()V",
-      "Ljava/util/HashMap;.<init>:(I)V",
       "Ljava/util/HashMap;.isEmpty:()Z",
       "Ljava/util/HashMap;.size:()I",
-      "Ljava/util/HashSet;.<init>:()V",
       "Ljava/util/HashSet;.clear:()V",
-      "Ljava/util/LinkedHashMap;.<init>:()V",
-      "Ljava/util/LinkedList;.<init>:()V",
       "Ljava/util/LinkedList;.add:(Ljava/lang/Object;)Z",
       "Ljava/util/LinkedList;.addLast:(Ljava/lang/Object;)V",
       "Ljava/util/LinkedList;.clear:()V",
@@ -949,8 +854,37 @@ SharedState::SharedState() {
       "Ljava/util/LinkedList;.getFirst:()Ljava/lang/Object;",
       "Ljava/util/LinkedList;.removeFirst:()Ljava/lang/Object;",
       "Ljava/util/LinkedList;.size:()I",
-      "Ljava/util/Random;.<init>:()V",
       "Ljava/util/Random;.nextInt:(I)I",
+
+      "Landroid/util/Pair;.<init>:(Ljava/lang/Object;Ljava/lang/Object;)V",
+      "Landroid/util/SparseArray;.<init>:()V",
+      "Ljava/io/IOException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V",
+      "Ljava/lang/Exception;.<init>:()V",
+      "Ljava/lang/IllegalArgumentException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/IllegalStateException;.<init>:()V",
+      "Ljava/lang/IllegalStateException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Integer;.<init>:(I)V",
+      "Ljava/lang/Long;.<init>:(J)V",
+      "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Object;.<init>:()V",
+      "Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/Short;.<init>:(S)V",
+      "Ljava/lang/String;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/StringBuilder;.<init>:()V",
+      "Ljava/lang/StringBuilder;.<init>:(I)V",
+      "Ljava/lang/StringBuilder;.<init>:(Ljava/lang/String;)V",
+      "Ljava/lang/UnsupportedOperationException;.<init>:(Ljava/lang/"
+      "String;)V",
+      "Ljava/util/ArrayList;.<init>:()V",
+      "Ljava/util/ArrayList;.<init>:(I)V",
+      "Ljava/util/BitSet;.<init>:(I)V",
+      "Ljava/util/HashMap;.<init>:()V",
+      "Ljava/util/HashMap;.<init>:(I)V",
+      "Ljava/util/HashSet;.<init>:()V",
+      "Ljava/util/LinkedHashMap;.<init>:()V",
+      "Ljava/util/LinkedList;.<init>:()V",
+      "Ljava/util/Random;.<init>:()V",
   };
 
   for (auto const safe_method_name : safe_method_names) {
@@ -958,23 +892,22 @@ SharedState::SharedState() {
     auto method_ref = DexMethod::get_method(s);
     if (method_ref == nullptr) {
       TRACE(CSE, 1, "[CSE]: Could not find safe method %s", s.c_str());
-    } else {
-      if (method_ref->is_def()) {
-        always_assert(method_ref->is_external());
-        always_assert(!is_interface(type_class(method_ref->get_class())));
-        auto method = static_cast<DexMethod*>(method_ref);
-        always_assert(!is_abstract(method));
-      } else {
-        // Referenced but not defined safe method, we still can mark it as
-        // "safe" because we don't check the body of safe methods anyway.
-        TRACE(CSE, 1, "[CSE]: Referenced but not defined safe method %s",
-              SHOW(method_ref));
-      }
-      m_safe_methods.insert(method_ref);
+      continue;
+    }
+
+    m_safe_methods.insert(method_ref);
+  }
+
+  // Check that we don't have abstract or interface methods
+  for (DexMethodRef* method_ref : m_safe_methods) {
+    if (method_ref->is_def()) {
+      always_assert(method_ref->is_external());
+      always_assert(!is_interface(type_class(method_ref->get_class())));
+      auto method = static_cast<DexMethod*>(method_ref);
+      always_assert(!is_abstract(method));
     }
   }
 
-  m_safe_types.insert(DexType::make_type("Ljava/lang/Math;"));
   if (traceEnabled(CSE, 2)) {
     m_barriers.reset(new ConcurrentMap<Barrier, size_t, BarrierHasher>());
   }
@@ -1189,20 +1122,14 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
   auto method_ref = insn->get_method();
   auto opcode = insn->opcode();
 
-  if (opcode == OPCODE_INVOKE_STATIC &&
-      m_safe_types.count(method_ref->get_class())) {
+  if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) &&
+      m_safe_methods.count(method_ref)) {
     return true;
   }
 
   auto method = resolve_method(method_ref, opcode_to_search(insn));
   if (!method) {
     return false;
-  }
-
-  // Let's check again, as even ReBindRefs doesn't pre-resolve external methods
-  if (opcode == OPCODE_INVOKE_STATIC &&
-      m_safe_types.count(method->get_class())) {
-    return true;
   }
 
   if ((opcode == OPCODE_INVOKE_STATIC || opcode == OPCODE_INVOKE_DIRECT) &&

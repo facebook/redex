@@ -249,6 +249,7 @@ namespace final_inline {
  * as part of the WholeProgramState object.
  */
 cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
+  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
@@ -277,7 +278,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       transform_config.class_under_init = cls->get_type();
       cp::Transform(transform_config).apply(intra_cp, wps, code);
       // Delete the instructions rendered dead by the removal of those sputs.
-      LocalDcePass::run(code);
+      LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
       if (is_trivial_clinit(clinit)) {
         cls->remove_method(clinit);
@@ -301,6 +302,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
  */
 cp::WholeProgramState analyze_and_simplify_inits(
     const Scope& scope, const cp::EligibleIfields& eligible_ifields) {
+  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
     if (cls->is_external()) {
@@ -329,7 +331,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config).apply(intra_cp, wps, code);
         // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDcePass::run(code);
+        LocalDce(pure_methods).dce(code);
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,

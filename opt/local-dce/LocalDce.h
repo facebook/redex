@@ -74,12 +74,7 @@ class LocalDcePass : public Pass {
          no_implementor_abstract_is_pure);
   }
 
-  static void run(IRCode* code);
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   std::unordered_set<DexMethodRef*> find_no_sideeffect_methods(const Scope&);
-
- private:
-  static std::unordered_set<DexMethodRef*> find_pure_methods();
 };

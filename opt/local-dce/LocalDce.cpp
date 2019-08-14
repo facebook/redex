@@ -315,10 +315,6 @@ bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
   return m_pure_methods.find(ref) != m_pure_methods.end();
 }
 
-void LocalDcePass::run(IRCode* code) {
-  LocalDce(find_pure_methods()).dce(code);
-}
-
 void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& /* conf */,
                             PassManager& mgr) {
@@ -354,23 +350,9 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
 
-std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
-  /*
-   * Pure methods have no observable side effects, so they can be removed
-   * if their outputs are not used.
-   *
-   * TODO: Derive this list with static analysis rather than hard-coding
-   * it.
-   */
-  std::unordered_set<DexMethodRef*> pure_methods;
-  pure_methods.emplace(DexMethod::make_method(
-      "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
-  return pure_methods;
-}
-
 std::unordered_set<DexMethodRef*> LocalDcePass::find_no_sideeffect_methods(
     const Scope& scope) {
-  auto pure_methods = find_pure_methods();
+  auto pure_methods = get_pure_methods();
   if (no_implementor_abstract_is_pure) {
     // Find abstract methods that have no implementors
     ConcurrentSet<DexMethod*> concurrent_method_set =

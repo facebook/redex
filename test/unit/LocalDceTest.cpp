@@ -63,7 +63,8 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->set_registers_size(0);
 
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -98,7 +99,8 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->set_registers_size(0);
 
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -129,7 +131,8 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->set_registers_size(0);
 
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -162,7 +165,8 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->set_registers_size(1);
 
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -183,7 +187,8 @@ TEST_F(LocalDceTryTest, deadIf) {
   code->set_registers_size(1);
 
   fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   auto has_if =
       std::find_if(code->begin(), code->end(), [if_mie](MethodItemEntry& mie) {
         return &mie == if_mie;
@@ -207,7 +212,8 @@ TEST_F(LocalDceTryTest, deadCast) {
   code->set_registers_size(1);
 
   fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
-  LocalDcePass().run(code);
+  std::unordered_set<DexMethodRef*> pure_methods;
+  LocalDce(pure_methods).dce(code);
   auto has_check_cast = std::find_if(code->begin(), code->end(),
                                      [check_cast_mie](MethodItemEntry& mie) {
                                        return &mie == check_cast_mie;
