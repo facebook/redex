@@ -39,13 +39,9 @@ std::unordered_set<const DexMethod*> get_overridden_methods(
     bool include_interfaces = false);
 
 /*
- * Returns all the methods that override or are overridden by :method. The set
- * does *not* include the :method itself.
+ * Whether a method overrides or is overridden by any other method.
  */
-std::unordered_set<const DexMethod*> get_true_virtuals(
-    const Graph& graph,
-    const DexMethod* method,
-    bool include_interfaces = false);
+bool is_true_virtual(const Graph& graph, const DexMethod* method);
 
 /*
  * Slow-ish; users should build the graph once and cache it somewhere.

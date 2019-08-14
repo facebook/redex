@@ -519,10 +519,8 @@ class CodeTransformer final {
         // do not override and are not overridden by any `Enum`, `Object`, or
         // interface methods).
         if (m_enum_attributes_map.count(method->get_class()) &&
-            mog::get_true_virtuals(*m_enum_util->m_method_override_graph,
-                                   resolved_method,
-                                   /*include_interfaces=*/true)
-                .empty()) {
+            !mog::is_true_virtual(*m_enum_util->m_method_override_graph,
+                                  resolved_method)) {
           update_invoke_user_method(cfg, block, mie, resolved_method);
         }
       }

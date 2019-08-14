@@ -337,9 +337,7 @@ class OptimizeEnums {
         bool has_only_non_true_virtual_methods = std::all_of(
             vmethods.begin(), vmethods.end(), [&](DexMethod* method) {
               return can_rename(method) &&
-                     mog::get_true_virtuals(*method_override_graph, method,
-                                            /*include_interfaces=*/true)
-                         .empty();
+                     !mog::is_true_virtual(*method_override_graph, method);
             });
 
         const auto& ifields = cls->get_ifields();
