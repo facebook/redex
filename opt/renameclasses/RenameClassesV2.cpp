@@ -389,7 +389,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
           // TODO: techincally we should recurse for array types
           // not just go one level
           if (is_array(ptype)) {
-            dont_rename_native_bindings.insert(get_array_type(ptype));
+            dont_rename_native_bindings.insert(get_array_element_type(ptype));
           } else {
             dont_rename_native_bindings.insert(ptype);
           }
@@ -406,7 +406,7 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
           // TODO: techincally we should recurse for array types
           // not just go one level
           if (is_array(ptype)) {
-            dont_rename_native_bindings.insert(get_array_type(ptype));
+            dont_rename_native_bindings.insert(get_array_element_type(ptype));
           } else {
             dont_rename_native_bindings.insert(ptype);
           }

@@ -62,7 +62,7 @@ void process_annotation(
 
 DexType* array_base_type(DexType* type) {
   while (is_array(type)) {
-    type = get_array_type(type);
+    type = get_array_element_type(type);
   }
   return type;
 }

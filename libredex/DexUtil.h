@@ -232,31 +232,40 @@ bool is_void(const DexType* type);
 uint32_t get_array_level(const DexType* type);
 
 /**
- * Return the type of a given array type or the type itself if it's not an array
+ * The component type of an array is the type of the values contained in the
+ * array. E.g.:
+ *
+ * [LFoo; -> LFoo;
+ * [[LFoo; -> [LFoo;
+ */
+DexType* get_array_component_type(const DexType*);
+
+/**
+ * An array's component type may also be an array. Recursively unwrapping these
+ * array types will give us the element type. E.g.:
+ *
+ * [LFoo; -> LFoo;
+ * [[LFoo; -> LFoo;
+ *
+ * If the input argument is not an array type, this returns null.
+ *
+ * The terms "component type" and "element type" are defined in the JLS:
+ * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html
+ */
+DexType* get_array_element_type(const DexType*);
+
+/**
+ * Return the element type of a given array type or the type itself if it's not
+ * an array.
  *
  * Examples:
  *   [java.lang.String -> java.lang.String
  *   java.lang.Integer -> java.lang.Integer
  */
-const DexType* get_array_type_or_self(const DexType*);
+const DexType* get_element_type_if_array(const DexType*);
 
 /**
- * Return the type of a given array type or nullptr if the type is not
- * an array.
- */
-DexType* get_array_type(const DexType*);
-
-/**
- * According to the description in the Java 7 spec:
- * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html Given an array
- * type, it's components are referenced directly via array access expressions
- * that use integer index values. The component type of an array may itself be
- * an array type.
- */
-DexType* get_array_component_type(const DexType*);
-
-/**
- * Return the array type of a given type.
+ * Return the (level 1) array type of a given type.
  */
 DexType* make_array_type(const DexType*);
 

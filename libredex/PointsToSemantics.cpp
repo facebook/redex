@@ -1030,7 +1030,7 @@ class PointsToActionGenerator final {
           PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
           get_variable_from_anchor(insn)));
       if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
-        const DexType* element_type = get_array_type(insn->get_type());
+        const DexType* element_type = get_array_element_type(insn->get_type());
         if (!is_object(element_type)) {
           break;
         }

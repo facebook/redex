@@ -164,7 +164,7 @@ struct EnumUtil {
     uint32_t level = get_array_level(type);
     DexType* elem_type = type;
     if (level) {
-      elem_type = get_array_type(type);
+      elem_type = get_array_element_type(type);
     }
     if (enum_attributes_map.count(elem_type)) {
       return level ? make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;

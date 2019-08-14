@@ -66,7 +66,7 @@ struct AnalysisImpl : SingleImplAnalysis {
 DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
   if (exists(single_impls, type)) return type;
   if (is_array(type)) {
-    auto array_type = get_array_type(type);
+    auto array_type = get_array_element_type(type);
     redex_assert(array_type);
     const auto sit = single_impls.find(array_type);
     if (sit != single_impls.end()) {

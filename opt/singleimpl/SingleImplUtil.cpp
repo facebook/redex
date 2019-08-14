@@ -13,7 +13,7 @@ DexType* get_concrete_type(SingleImpls& single_impls, DexType* type) {
   DexType* lookup_type = type;
   uint32_t array_level = get_array_level(type);
   if (array_level > 0) {
-    auto array_type = get_array_type(type);
+    auto array_type = get_array_element_type(type);
     redex_assert(array_type);
     lookup_type = array_type;
   }

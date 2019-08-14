@@ -236,7 +236,7 @@ struct Rebinder {
   bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
     static auto clone = DexString::make_string("clone");
     return is_array(mtype) && mref->get_name() == clone &&
-           !is_primitive(get_array_type(mtype));
+           !is_primitive(get_array_element_type(mtype));
   }
 
   DexMethodRef* rebind_array_clone(DexMethodRef* mref) {

@@ -200,12 +200,12 @@ void strip_out_collision(const Scope& scope,
       fake_sets.emplace(fake_new_meth);
       return;
     }
-    const DexType* rtype = get_array_type_or_self(proto->get_rtype());
+    const DexType* rtype = get_element_type_if_array(proto->get_rtype());
     if (mergeables.count(rtype) > 0) {
       to_delete.emplace(rtype);
     }
     for (const auto arg_type : proto->get_args()->get_type_list()) {
-      const DexType* extracted_arg_type = get_array_type_or_self(arg_type);
+      const DexType* extracted_arg_type = get_element_type_if_array(arg_type);
       if (mergeables.count(extracted_arg_type) > 0) {
         to_delete.emplace(extracted_arg_type);
       }
@@ -493,7 +493,7 @@ void update_reference_for_code(
         continue;
       }
       DexType* ref_type = insn->get_type();
-      const DexType* type = get_array_type_or_self(ref_type);
+      const DexType* type = get_element_type_if_array(ref_type);
       if (intf_merge_map.count(type) == 0) {
         continue;
       }

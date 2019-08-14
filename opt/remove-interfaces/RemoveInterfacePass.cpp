@@ -230,7 +230,7 @@ void remove_interface_references(
       return;
     }
     const auto ref_type = insn->get_type();
-    auto type = get_array_type_or_self(ref_type);
+    auto type = get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
     }
@@ -317,7 +317,7 @@ size_t exclude_unremovables(
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
       }
-      auto type = get_array_type_or_self(insn->get_type());
+      auto type = get_element_type_if_array(insn->get_type());
       if (candidates.count(type) == 0) {
         continue;
       }

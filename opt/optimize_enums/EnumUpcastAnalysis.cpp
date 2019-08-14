@@ -28,7 +28,7 @@ bool need_analyze(const DexMethod* method,
   method->gather_types(types);
   for (DexType* t : types) {
     if (is_array(t)) {
-      t = get_array_type(t);
+      t = get_array_element_type(t);
     }
     if (candidate_enums.count_unsafe(t) && !rejected_enums.count(t)) {
       return true;
@@ -193,7 +193,7 @@ class EnumUpcastDetector {
     EnumTypes elem_types = env->get(insn->src(0));
     std::unordered_set<DexType*> acceptable_elem_types;
     for (DexType* type : array_types.elements()) {
-      DexType* elem = get_array_type(type);
+      DexType* elem = get_array_element_type(type);
       if (elem && !is_primitive(elem)) {
         acceptable_elem_types.insert(elem); // An array of one type of objects.
       }
@@ -383,7 +383,7 @@ class EnumUpcastDetector {
     if (type == nullptr) {
       return false;
     }
-    type = const_cast<DexType*>(get_array_type_or_self(type));
+    type = const_cast<DexType*>(get_element_type_if_array(type));
     return m_candidate_enums->count_unsafe(type);
   }
 
@@ -436,7 +436,7 @@ class EnumUpcastDetector {
               DexType* type,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
-    type = const_cast<DexType*>(get_array_type_or_self(type));
+    type = const_cast<DexType*>(get_element_type_if_array(type));
     if (m_candidate_enums->count_unsafe(type)) {
       rejected_enums->insert(type);
       TRACE(ENUM, 9, "reject %s %d %s %s", SHOW(type), reason, SHOW(m_method),
@@ -550,7 +550,7 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
       EnumTypes types;
       EnumTypes array_types = env->get(insn->src(0));
       for (const auto& array_type : array_types.elements()) {
-        const auto type = get_array_type(array_type);
+        const auto type = get_array_element_type(array_type);
         if (type && !is_primitive(type)) {
           types.add(type);
         }
@@ -623,7 +623,7 @@ void reject_enums_for_colliding_constructors(
       auto param_types = ctor->get_proto()->get_args()->get_type_list();
       for (size_t i = 0; i < param_types.size(); i++) {
         auto base_type =
-            const_cast<DexType*>(get_array_type_or_self(param_types[i]));
+            const_cast<DexType*>(get_element_type_if_array(param_types[i]));
         if (candidate_enums->count(base_type)) {
           transforming_enums.insert(base_type);
           param_types[i] = make_array_type(get_integer_type(),
@@ -679,7 +679,8 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
         return;
       }
     }
-    auto type = const_cast<DexType*>(get_array_type_or_self(field->get_type()));
+    auto type =
+        const_cast<DexType*>(get_element_type_if_array(field->get_type()));
     if (candidate_enums->count_unsafe(type)) {
       rejected_enums.insert(type);
     }
@@ -699,7 +700,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
       for (auto type : types) {
-        auto elem_type = const_cast<DexType*>(get_array_type_or_self(type));
+        auto elem_type = const_cast<DexType*>(get_element_type_if_array(type));
         if (candidate_enums->count_unsafe(elem_type)) {
           rejected_enums.insert(elem_type);
         }

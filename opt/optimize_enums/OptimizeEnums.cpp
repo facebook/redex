@@ -417,7 +417,7 @@ class OptimizeEnums {
           if (traceEnabled(ENUM, 9)) {
             for (auto& ifield : cls->get_ifields()) {
               auto enum_cls =
-                  type_class(get_array_type_or_self(ifield->get_type()));
+                  type_class(get_element_type_if_array(ifield->get_type()));
               if (enum_cls && is_enum(enum_cls)) {
                 TRACE(ENUM, 9, "Reject %s because it extends external class %s",
                       SHOW(enum_cls), SHOW(*first_external_it));
@@ -433,7 +433,7 @@ class OptimizeEnums {
         // We reject all enums that are instance fields of serializable classes.
         for (auto& ifield : cls->get_ifields()) {
           types_used_in_serializable.insert(
-              get_array_type_or_self(ifield->get_type()));
+              get_element_type_if_array(ifield->get_type()));
         }
       }
     });

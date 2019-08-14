@@ -299,15 +299,17 @@ uint32_t get_array_level(const DexType* type) {
   return level;
 }
 
-const DexType* get_array_type_or_self(const DexType* type) {
+const DexType* get_element_type_if_array(const DexType* type) {
   if (is_array(type)) {
-    return get_array_type(type);
+    return get_array_element_type(type);
   }
   return type;
 }
 
-DexType* get_array_type(const DexType* type) {
-  if (!is_array(type)) return nullptr;
+DexType* get_array_element_type(const DexType* type) {
+  if (!is_array(type)) {
+    return nullptr;
+  }
   auto name = type->get_name()->c_str();
   while (*name == '[') {
     name++;

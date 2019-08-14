@@ -21,9 +21,9 @@ void setup() {
   cc.set_super(get_object_type());
   auto field =
       static_cast<DexField*>(DexField::make_field("LFoo;.table:[LBar;"));
-  field->make_concrete(
-      ACC_PUBLIC | ACC_STATIC,
-      DexEncodedValue::zero_for_type(get_array_type(get_object_type())));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       DexEncodedValue::zero_for_type(
+                           get_array_element_type(get_object_type())));
   cc.add_field(field);
   cc.create();
 }

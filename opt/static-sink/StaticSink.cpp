@@ -218,7 +218,7 @@ bool allow_method_access(DexMethod* meth) {
 
 bool allow_type_access(DexType* type) {
   if (is_array(type)) {
-    type = get_array_type(type);
+    type = get_array_element_type(type);
   }
   auto typecls = type_class(type);
   if (!typecls) {

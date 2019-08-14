@@ -103,7 +103,7 @@ void remove_referenced(const Scope& scope,
                        UnreferencedInterfacesPass::Metric& metric) {
 
   const auto check_type = [&](DexType* t, size_t& count) {
-    const auto type = get_array_type_or_self(t);
+    const auto type = get_element_type_if_array(t);
     if (candidates.count(type) > 0) {
       candidates.erase(type);
       count++;

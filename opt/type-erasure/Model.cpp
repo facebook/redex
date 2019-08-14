@@ -600,7 +600,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         continue;
       }
 
-      const auto& type = get_array_type_or_self(insn->get_type());
+      const auto& type = get_element_type_if_array(insn->get_type());
       if (const_types.count(type) > 0) {
         current_non_mergeables.insert(type);
       }
@@ -626,7 +626,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     walk::fields(scope, [&](DexField* field) {
       if (generated.count(field->get_class()) > 0) {
         if (is_static(field)) {
-          auto rtype = get_array_type_or_self(field->get_type());
+          auto rtype = get_element_type_if_array(field->get_type());
           if (!is_primitive(rtype) && rtype != string_type) {
             // If the type is either non-primitive or a list of
             // non-primitive types (excluding Strings), then exclude it as
