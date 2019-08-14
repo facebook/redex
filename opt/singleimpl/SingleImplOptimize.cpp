@@ -31,7 +31,7 @@ namespace {
 /**
  * Rewrite all typerefs from the interfaces to the concrete type.
  */
-void set_type_refs(DexType* intf, SingleImplData& data) {
+void set_type_refs(const DexType* intf, const SingleImplData& data) {
   for (auto opcode : data.typerefs) {
     TRACE(INTF, 3, "(TREF) %s", SHOW(opcode));
     redex_assert(opcode->get_type() == intf);
@@ -44,7 +44,9 @@ void set_type_refs(DexType* intf, SingleImplData& data) {
  * Get or create a new proto given an original proto and an interface to be
  * substituted by an implementation.
  */
-DexProto* get_or_make_proto(DexType* intf, DexType* impl, DexProto* proto) {
+DexProto* get_or_make_proto(const DexType* intf,
+                            DexType* impl,
+                            DexProto* proto) {
   DexType* rtype = proto->get_rtype();
   if (rtype == intf) rtype = impl;
   DexTypeList* new_args = nullptr;
@@ -84,7 +86,7 @@ void setup_method(DexMethod* orig_method, DexMethod* new_method) {
  * down parent interfaces as needed so the contract of the class stays
  * the same.
  */
-void remove_interface(DexType* intf, SingleImplData& data) {
+void remove_interface(const DexType* intf, const SingleImplData& data) {
   auto cls = type_class(data.cls);
   TRACE(INTF, 3, "(REMI) %s", SHOW(intf));
 
@@ -139,7 +141,28 @@ bool must_set_method_annotations(const SingleImplConfig& config) {
   return config.meth_anno;
 }
 
+/**
+ * Update method proto from an old type reference to a new one. Return true if
+ * the method is updated, return false if the method proto does not contain the
+ * old type reference, crash if the updated method will collide with an existing
+ * method.
+ */
+bool update_method_proto(const DexType* old_type_ref,
+                         DexType* new_type_ref,
+                         DexMethodRef* method) {
+  auto proto =
+      get_or_make_proto(old_type_ref, new_type_ref, method->get_proto());
+  if (proto == method->get_proto()) {
+    return false;
+  }
+  DexMethodSpec spec;
+  spec.proto = proto;
+  method->change(spec, false /* rename on collision */,
+                 true /* update deob name */);
+  return true;
 }
+
+} // namespace
 
 struct OptimizationImpl {
   OptimizationImpl(
@@ -151,22 +174,26 @@ struct OptimizationImpl {
   size_t optimize(Scope& scope, const SingleImplConfig& config);
 
  private:
-  EscapeReason can_optimize(DexType* intf,
-                            SingleImplData& data,
+  EscapeReason can_optimize(const DexType* intf,
+                            const SingleImplData& data,
                             bool rename_on_collision);
-  void do_optimize(DexType* intf, SingleImplData& data);
-  EscapeReason check_field_collision(DexType* intf, SingleImplData& data);
-  EscapeReason check_method_collision(DexType* intf, SingleImplData& data);
-  void drop_single_impl_collision(DexType* intf,
-                                  SingleImplData& data,
+  void do_optimize(const DexType* intf, const SingleImplData& data);
+  EscapeReason check_field_collision(const DexType* intf,
+                                     const SingleImplData& data);
+  EscapeReason check_method_collision(const DexType* intf,
+                                      const SingleImplData& data);
+  void drop_single_impl_collision(const DexType* intf,
+                                  const SingleImplData& data,
                                   DexMethod* method);
-  void set_field_defs(DexType* intf, SingleImplData& data);
-  void set_field_refs(DexType* intf, SingleImplData& data);
-  void set_method_defs(DexType* intf, SingleImplData& data);
-  void set_method_refs(DexType* intf, SingleImplData& data);
-  void rewrite_interface_methods(DexType* intf, SingleImplData& data);
+  void set_field_defs(const DexType* intf, const SingleImplData& data);
+  void set_field_refs(const DexType* intf, const SingleImplData& data);
+  void set_method_defs(const DexType* intf, const SingleImplData& data);
+  void set_method_refs(const DexType* intf, const SingleImplData& data);
+  void rewrite_interface_methods(const DexType* intf,
+                                 const SingleImplData& data);
   void rewrite_annotations(Scope& scope, const SingleImplConfig& config);
-  void rename_possible_collisions(DexType* intf, SingleImplData& data);
+  void rename_possible_collisions(const DexType* intf,
+                                  const SingleImplData& data);
 
  private:
   std::unique_ptr<SingleImplAnalysis> single_impls;
@@ -183,7 +210,8 @@ struct OptimizationImpl {
  * old fields to the new ones. Remove old field and add the new one
  * to the list of fields.
  */
-void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_field_defs(const DexType* intf,
+                                      const SingleImplData& data) {
   for (const auto& field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
     auto f = static_cast<DexField*>(DexField::make_field(
@@ -207,7 +235,8 @@ void OptimizationImpl::set_field_defs(DexType* intf, SingleImplData& data) {
 /**
  * Rewrite all fieldref.
  */
-void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::set_field_refs(const DexType* intf,
+                                      const SingleImplData& data) {
   for (const auto& fieldrefs : data.fieldrefs) {
     const auto field = fieldrefs.first;
     redex_assert(!single_impls->is_escaped(field->get_class()));
@@ -227,17 +256,12 @@ void OptimizationImpl::set_field_refs(DexType* intf, SingleImplData& data) {
  * We will never get collision here since we renamed potential colliding methods
  * before doing the optimization.
  */
-void OptimizationImpl::set_method_defs(DexType* intf,
-                                       SingleImplData& data) {
+void OptimizationImpl::set_method_defs(const DexType* intf,
+                                       const SingleImplData& data) {
   for (auto method : data.methoddefs) {
     TRACE(INTF, 3, "(MDEF) %s", SHOW(method));
-    auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     TRACE(INTF, 5, "(MDEF) Update method: %s", SHOW(method));
-    redex_assert(proto != method->get_proto());
-    DexMethodSpec spec;
-    spec.proto = proto;
-    method->change(spec, false /* rename on collision */,
-                   true /* update deob name */);
+    always_assert(update_method_proto(intf, data.cls, method));
     TRACE(INTF, 3, "(MDEF)\t=> %s", SHOW(method));
   }
 }
@@ -245,8 +269,8 @@ void OptimizationImpl::set_method_defs(DexType* intf,
 /**
  * Rewrite all method refs.
  */
-void OptimizationImpl::set_method_refs(DexType* intf,
-                                       SingleImplData& data) {
+void OptimizationImpl::set_method_refs(const DexType* intf,
+                                       const SingleImplData& data) {
   for (auto mrefit : data.methodrefs) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF) update ref %s", SHOW(method));
@@ -258,15 +282,9 @@ void OptimizationImpl::set_method_refs(DexType* intf,
     // method would be returned if there is nothing to change and create.
     // Still we need to change the opcodes where we assert the new method
     // to go in the opcode is in fact different than what was there.
-    auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
-    if (proto == method->get_proto()) {
-      continue;
+    if (update_method_proto(intf, data.cls, method)) {
+      TRACE(INTF, 3, "(MREF)\t=> %s", SHOW(method));
     }
-    DexMethodSpec spec;
-    spec.proto = proto;
-    method->change(spec, false /* rename on collision */,
-                   true /* update deob name */);
-    TRACE(INTF, 3, "(MREF)\t=> %s", SHOW(method));
   }
 }
 
@@ -275,8 +293,8 @@ void OptimizationImpl::set_method_refs(DexType* intf,
  * and rewrite all refs that were calling to the interface
  * (invoke-interface* -> invoke-virtual*).
  */
-void OptimizationImpl::rewrite_interface_methods(DexType* intf,
-                                                 SingleImplData& data) {
+void OptimizationImpl::rewrite_interface_methods(const DexType* intf,
+                                                 const SingleImplData& data) {
   auto intf_cls = type_class(intf);
   auto impl = type_class(data.cls);
   for (auto meth : intf_cls->get_vmethods()) {
@@ -384,8 +402,8 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
 /**
  * Check collisions in field definition.
  */
-EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
-                                                     SingleImplData& data) {
+EscapeReason OptimizationImpl::check_field_collision(
+    const DexType* intf, const SingleImplData& data) {
   for (const auto field : data.fielddefs) {
     redex_assert(!single_impls->is_escaped(field->get_class()));
     auto collision =
@@ -398,8 +416,8 @@ EscapeReason OptimizationImpl::check_field_collision(DexType* intf,
 /**
  * Check collisions in method definition.
  */
-EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
-                                                      SingleImplData& data) {
+EscapeReason OptimizationImpl::check_method_collision(
+    const DexType* intf, const SingleImplData& data) {
   for (auto method : data.methoddefs) {
     auto proto = get_or_make_proto(intf, data.cls, method->get_proto());
     redex_assert(proto != method->get_proto());
@@ -430,8 +448,8 @@ EscapeReason OptimizationImpl::check_method_collision(DexType* intf,
  * I1, I2 and void C.m(I1, I2)
  * then m is changed in a single pass for both I1 and I2.
  */
-void OptimizationImpl::drop_single_impl_collision(DexType* intf,
-                                                  SingleImplData& data,
+void OptimizationImpl::drop_single_impl_collision(const DexType* intf,
+                                                  const SingleImplData& data,
                                                   DexMethod* method) {
   auto check_type = [&](DexType* type) {
     if (type != intf && single_impls->is_single_impl(type) &&
@@ -457,8 +475,8 @@ void OptimizationImpl::drop_single_impl_collision(DexType* intf,
  * 1- there is no collision in fields rewrite
  * 2- there is no collision in methods rewrite
  */
-EscapeReason OptimizationImpl::can_optimize(DexType* intf,
-                                            SingleImplData& data,
+EscapeReason OptimizationImpl::can_optimize(const DexType* intf,
+                                            const SingleImplData& data,
                                             bool rename_on_collision) {
   auto escape = check_field_collision(intf, data);
   if (escape != EscapeReason::NO_ESCAPE) return escape;
@@ -483,8 +501,8 @@ EscapeReason OptimizationImpl::can_optimize(DexType* intf,
 /**
  * Remove any chance for collisions.
  */
-void OptimizationImpl::rename_possible_collisions(
-    DexType* intf, SingleImplData& data) {
+void OptimizationImpl::rename_possible_collisions(const DexType* intf,
+                                                  const SingleImplData& data) {
 
   const auto& rename = [](DexMethodRef* meth, DexString* name) {
     DexMethodSpec spec;
@@ -523,7 +541,8 @@ void OptimizationImpl::rename_possible_collisions(
 /**
  * Perform the optimization.
  */
-void OptimizationImpl::do_optimize(DexType* intf, SingleImplData& data) {
+void OptimizationImpl::do_optimize(const DexType* intf,
+                                   const SingleImplData& data) {
   set_type_refs(intf, data);
   set_field_defs(intf, data);
   set_field_refs(intf, data);
