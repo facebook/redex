@@ -103,13 +103,14 @@ struct LocationHasher {
 
 class SharedState {
  public:
-  SharedState();
+  SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
   MethodBarriersStats init_method_barriers(const Scope&, size_t);
   boost::optional<Location> get_relevant_written_location(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,
       const std::unordered_set<Location, LocationHasher>& read_locations);
   void log_barrier(const Barrier& barrier);
+  bool is_pure(DexMethodRef* method_ref, DexMethod* method);
   void cleanup();
 
  private:
@@ -118,6 +119,7 @@ class SharedState {
   bool is_invoke_a_barrier(
       const IRInstruction* insn,
       const std::unordered_set<Location, LocationHasher>& read_locations);
+  std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<DexMethodRef*> m_safe_methods;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*,

@@ -50,7 +50,8 @@ void test(const Scope& scope,
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
-  cse_impl::SharedState shared_state;
+  auto pure_methods = get_pure_methods();
+  cse_impl::SharedState shared_state(pure_methods);
   auto method_barriers_stats =
       shared_state.init_method_barriers(scope, max_iterations);
   cse_impl::CommonSubexpressionElimination cse(&shared_state,
@@ -1280,4 +1281,28 @@ TEST_F(CommonSubexpressionEliminationTest, cmp) {
   )";
   auto expected_str = code_str;
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
+      (move-result v1)
+      (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
+      (move-result v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
+      (move-result v1)
+      (move v2 v1)
+      (invoke-static (v0) "Ljava/lang/Math;.abs:(I)I")
+      (move-result v1)
+      (move v1 v2)
+    )
+  )";
+  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
 }

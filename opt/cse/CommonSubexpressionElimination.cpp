@@ -52,8 +52,6 @@
  * - Implement proper phi-nodes, tracking merged values as early as possible,
  *   instead of just tracking on first use after value went to 'top'. Not sure
  *   if there are tangible benefits.
- * - Identify pure method invocations that do not need to trigger a (memory)
- *   barrier
  *
  */
 
@@ -708,10 +706,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
-    case OPCODE_INVOKE_INTERFACE:
-      // TODO: Identify pure methods; they do not need to be positional.
-      is_positional = true;
+    case OPCODE_INVOKE_INTERFACE: {
+      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+      // TODO: Is this really safe for all virtual/interface invokes? This
+      //       mimics the way assumenosideeffects is used in LocalDCE.
+      is_positional = !m_shared_state->is_pure(insn->get_method(), method);
       break;
+    }
     default:
       auto location = m_shared_state->get_relevant_written_location(
           insn, nullptr /* exact_virtual_scope */, m_read_locations);
@@ -776,7 +777,8 @@ namespace cse_impl {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-SharedState::SharedState() : m_safe_methods(get_pure_methods()) {
+SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
+    : m_pure_methods(pure_methods), m_safe_methods(pure_methods) {
   // The following methods are...
   // - static, or
   // - direct (constructors), or
@@ -967,7 +969,7 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
         if (other_method == nullptr) {
           return false;
         }
-        if (is_abstract(other_method)) {
+        if (is_abstract(other_method) || assumenosideeffects(other_method)) {
           return true;
         }
         // we'll only inline methods that themselves do not have any further
@@ -985,7 +987,7 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
 
       std::unordered_set<Barrier, BarrierHasher> barriers;
       auto inline_barriers = [&](const DexMethod* other_method) {
-        if (!is_abstract(other_method)) {
+        if (!is_abstract(other_method) && !assumenosideeffects(other_method)) {
           always_assert(!waiting_for.count_unsafe(other_method));
           always_assert(!other_method->is_external());
           always_assert(!is_native(other_method));
@@ -1210,6 +1212,13 @@ void SharedState::log_barrier(const Barrier& barrier) {
     m_barriers->update(
         barrier, [](const Barrier, size_t& v, bool /* exists */) { v++; });
   }
+}
+
+bool SharedState::is_pure(DexMethodRef* method_ref, DexMethod* method) {
+  if (method != nullptr && assumenosideeffects(method)) {
+    return true;
+  }
+  return m_pure_methods.find(method_ref) != m_pure_methods.end();
 }
 
 void SharedState::cleanup() {
@@ -1551,7 +1560,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
 
-  auto shared_state = SharedState();
+  auto pure_methods = get_pure_methods();
+  auto shared_state = SharedState(pure_methods);
   auto method_barriers_stats =
       shared_state.init_method_barriers(scope, m_max_iterations);
   const auto stats = walk::parallel::reduce_methods<Stats>(
@@ -1578,7 +1588,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           copy_propagation_impl::CopyPropagation copy_propagation(config);
           copy_propagation.run(code, method);
 
-          std::unordered_set<DexMethodRef*> pure_methods;
           auto local_dce = LocalDce(pure_methods);
           local_dce.dce(code);
 
