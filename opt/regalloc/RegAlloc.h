@@ -18,6 +18,11 @@ class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
 
+  void bind_config() override {
+    bool unused;
+    bind("live_range_splitting", false, unused);
+  }
+
   /*
    * Allocate the code in a single method; exposed for unit tests.
    */
