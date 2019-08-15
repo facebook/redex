@@ -361,13 +361,15 @@ void OptimizationImpl::rewrite_annotations(Scope& scope, const SingleImplConfig&
           const auto& meth_it =
               m_intf_meth_to_impl_meth.find(method_value->method());
           if (meth_it == m_intf_meth_to_impl_meth.end()) {
-            // Assert that no optimized interfaces in the method ref. All the
-            // definitions with optimized interfaces are updated, so we simply
-            // assert that the method is a def.
-            always_assert_log(method_value->method()->is_def(),
-                              "Found methodref %s in annotation of class %s, "
-                              "this is not supported by SingleImplPass.\n",
-                              SHOW(method_value->method()), SHOW(cls));
+            if (method_value->method()->is_def()) {
+              continue;
+            }
+            // All the method definitions with optimized interfaces are updated,
+            // this is a pure ref, we are not sure if it's updated properly.
+            TRACE(INTF, 2,
+                  "[SingleImpl]: Found pure methodref %s in annotation of "
+                  "class %s, this may not be properly supported.\n",
+                  SHOW(method_value->method()), SHOW(cls));
             continue;
           }
           TRACE(INTF, 4, "REWRITE: %s\n", SHOW(anno));
