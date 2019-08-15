@@ -16,5 +16,10 @@ class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
 
+  void bind_config() override {
+    bool unused;
+    bind("live_range_splitting", false, unused);
+  }
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
