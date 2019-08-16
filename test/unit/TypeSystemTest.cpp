@@ -10,8 +10,9 @@
 #include <gmock/gmock.h>
 
 #include "DexClass.h"
-#include "TypeSystem.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
+#include "TypeSystem.h"
 
 /**
  * class java.lang.Object { // Object methods ... }
@@ -47,9 +48,10 @@
  *    class Odd12 extends Odd1 {}
  *  class Odd2 extends Odd implements IOut2 {}
  */
-TEST(TypeSystem, empty) {
-  g_redex = new RedexContext();
 
+class TypeSystemTest : public RedexTest {};
+
+TEST_F(TypeSystemTest, empty) {
   auto const intf_flag = ACC_PUBLIC | ACC_INTERFACE;
   Scope scope = create_empty_scope();
   auto obj_t = get_object_type();
@@ -368,6 +370,4 @@ TEST(TypeSystem, empty) {
   EXPECT_THAT(type_system.get_implemented_interfaces(odd12_t),
       ::testing::UnorderedElementsAre(iout1_t));
   EXPECT_THAT(type_system.get_implemented_interfaces(odd_t).size(), 0);
-
-  delete g_redex;
 }

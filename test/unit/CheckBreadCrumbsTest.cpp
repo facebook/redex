@@ -13,6 +13,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
 // Create the following hierarchy
 //
@@ -202,9 +203,10 @@ std::vector<DexClass*> create_classes() {
   return classes;
 }
 
+class CheckBreadcrumbsTest : public RedexTest {};
+
 //========== Test Cases ==========
-TEST(CheckBreadcrumbs, AccessValidityTest) {
-  g_redex = new RedexContext();
+TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
   std::vector<DexClass*> classes = create_classes();
   DexMetadata dm;
   dm.set_id("classes");
@@ -227,7 +229,6 @@ TEST(CheckBreadcrumbs, AccessValidityTest) {
            << "Bad field refs in method LB;.call_a_pri_field\n"
            << "\ta_pri_field\n\n";
   EXPECT_EQ(expected.str(), bc.get_methods_with_bad_refs());
-  delete g_redex;
 }
 
 } // namespace

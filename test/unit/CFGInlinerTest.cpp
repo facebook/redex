@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "RedexTest.h"
 
 cfg::InstructionIterator get_invoke(cfg::ControlFlowGraph* cfg) {
   auto iterable = cfg::InstructionIterable(*cfg);
@@ -25,8 +26,6 @@ cfg::InstructionIterator get_invoke(cfg::ControlFlowGraph* cfg) {
 void test_inliner(const std::string& caller_str,
                   const std::string& callee_str,
                   const std::string& expected_str) {
-  g_redex = new RedexContext();
-
   auto caller_code = assembler::ircode_from_string(caller_str);
   caller_code->build_cfg(true);
   auto& caller = caller_code->cfg();
@@ -43,11 +42,11 @@ void test_inliner(const std::string& caller_str,
   caller_code->clear_cfg();
   EXPECT_EQ(assembler::to_string(expected_code.get()),
             assembler::to_string(caller_code.get())) << final_cfg;
-
-  delete g_redex;
 }
 
-TEST(CFGInliner, simple) {
+class CFGInlinerTest : public RedexTest {};
+
+TEST_F(CFGInlinerTest, simple) {
   const auto& caller_str = R"(
     (
       (invoke-static () "LCls;.foo:()V")
@@ -67,7 +66,7 @@ TEST(CFGInliner, simple) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, with_regs) {
+TEST_F(CFGInlinerTest, with_regs) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -91,7 +90,7 @@ TEST(CFGInliner, with_regs) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, with_args) {
+TEST_F(CFGInlinerTest, with_args) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -117,7 +116,7 @@ TEST(CFGInliner, with_args) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, with_returns) {
+TEST_F(CFGInlinerTest, with_returns) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -143,7 +142,7 @@ TEST(CFGInliner, with_returns) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, with_args_and_returns) {
+TEST_F(CFGInlinerTest, with_args_and_returns) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -173,7 +172,7 @@ TEST(CFGInliner, with_args_and_returns) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, multi_return) {
+TEST_F(CFGInlinerTest, multi_return) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -217,7 +216,7 @@ TEST(CFGInliner, multi_return) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, multi_return_wide) {
+TEST_F(CFGInlinerTest, multi_return_wide) {
   const auto& caller_str = R"(
     (
       (const-wide v0 0)
@@ -264,7 +263,7 @@ TEST(CFGInliner, multi_return_wide) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, multi_return_object) {
+TEST_F(CFGInlinerTest, multi_return_object) {
   const auto& caller_str = R"(
     (
       (invoke-static () "LCls;.randObj:()Ljava/lang/Object;")
@@ -315,7 +314,7 @@ TEST(CFGInliner, multi_return_object) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, both_multi_block) {
+TEST_F(CFGInlinerTest, both_multi_block) {
   const auto& caller_str = R"(
     (
       (const v0 0)
@@ -367,7 +366,7 @@ TEST(CFGInliner, both_multi_block) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, callee_diamond_caller_loop) {
+TEST_F(CFGInlinerTest, callee_diamond_caller_loop) {
   const auto& caller_str = R"(
     (
       (const v0 10)
@@ -425,7 +424,7 @@ TEST(CFGInliner, callee_diamond_caller_loop) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_simple) {
+TEST_F(CFGInlinerTest, try_catch_simple) {
   const auto& caller_str = R"(
     (
       (.try_start a)
@@ -461,7 +460,7 @@ TEST(CFGInliner, try_catch_simple) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_with_return_reg) {
+TEST_F(CFGInlinerTest, try_catch_with_return_reg) {
   const auto& caller_str = R"(
     (
       (.try_start a)
@@ -498,7 +497,7 @@ TEST(CFGInliner, try_catch_with_return_reg) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_with_arg_and_return_regs) {
+TEST_F(CFGInlinerTest, try_catch_with_arg_and_return_regs) {
   const auto& caller_str = R"(
     (
       (.try_start a)
@@ -543,7 +542,7 @@ TEST(CFGInliner, try_catch_with_arg_and_return_regs) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_caller_catch_chain) {
+TEST_F(CFGInlinerTest, try_catch_caller_catch_chain) {
   const auto& caller_str = R"(
     (
       (.try_start a)
@@ -594,7 +593,7 @@ TEST(CFGInliner, try_catch_caller_catch_chain) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_with_may_throws) {
+TEST_F(CFGInlinerTest, try_catch_with_may_throws) {
   const auto& caller_str = R"(
     (
       (.try_start outer)
@@ -661,7 +660,7 @@ TEST(CFGInliner, try_catch_with_may_throws) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_with_only_may_throws) {
+TEST_F(CFGInlinerTest, try_catch_with_only_may_throws) {
   const auto& caller_str = R"(
     (
       (.try_start outer)
@@ -707,7 +706,7 @@ TEST(CFGInliner, try_catch_with_only_may_throws) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, try_catch_callee_has_chain) {
+TEST_F(CFGInlinerTest, try_catch_callee_has_chain) {
   const auto& caller_str = R"(
     (
       (.try_start outer)
@@ -767,7 +766,7 @@ TEST(CFGInliner, try_catch_callee_has_chain) {
   test_inliner(caller_str, callee_str, expected_str);
 }
 
-TEST(CFGInliner, inf_loop) {
+TEST_F(CFGInlinerTest, inf_loop) {
   const auto& caller_str = R"(
     (
       (:lbl)
