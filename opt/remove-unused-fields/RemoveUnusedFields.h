@@ -43,9 +43,9 @@ class PassImpl : public Pass {
 
   void bind_config() override {
     bind("remove_unread_fields", true, m_config.remove_unread_fields);
-    bind("remove_unwritten_fields", false, m_config.remove_unwritten_fields);
+    bind("remove_unwritten_fields", true, m_config.remove_unwritten_fields);
     bind("remove_zero_written_fields",
-         false,
+         true,
          m_config.remove_zero_written_fields);
     bind("blacklist_types",
          {},
