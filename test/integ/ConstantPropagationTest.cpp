@@ -12,8 +12,7 @@
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "PassManager.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 #include "LocalDce.h"
 #include "DelInit.h"
@@ -84,23 +83,13 @@ ClassType filter_test_classes(const DexString *cls_name) {
   return OTHERCLASS;
 }
 
-TEST(ConstantPropagationTest, constantPropagation) {
-  g_redex = new RedexContext();
+class ConstantPropagationTest : public RedexIntegrationTest {};
 
-  const char* dexfile = std::getenv("dexfile");
-  EXPECT_NE(nullptr, dexfile);
-
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
+TEST_F(ConstantPropagationTest, constantPropagation) {
+  std::cout << "Loaded classes: " << classes->size() << std::endl;
 
   TRACE(CONSTP, 1, "Code before:");
-  for(const auto& cls : classes) {
+  for (const auto& cls : *classes) {
     TRACE(CONSTP, 1, "Class %s", SHOW(cls));
     if (filter_test_classes(cls->get_name()) < 2) {
       TRACE(CONSTP, 1, "Class %s", SHOW(cls));
@@ -121,15 +110,10 @@ TEST(ConstantPropagationTest, constantPropagation) {
     constp
   };
 
-  PassManager manager(passes);
-  manager.set_testing_mode();
-
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
+  run_passes(passes);
 
   TRACE(CONSTP, 1, "Code after:");
-  for(const auto& cls : classes) {
+  for (const auto& cls : *classes) {
     TRACE(CONSTP, 1, "Class %s", SHOW(cls));
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {

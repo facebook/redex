@@ -8,14 +8,10 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
-#include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
-#include "DexStore.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "PassManager.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 #include "Transform.h"
 
 #include "ResultPropagation.h"
@@ -63,35 +59,19 @@ boost::optional<ParamIndex> find_return_param_index(
   }
 }
 
-TEST(ResultPropagationTest, useSwitch) {
-  g_redex = new RedexContext();
+class ResultPropagationTest : public RedexIntegrationTest {};
 
-  const char* dexfile = std::getenv("dexfile");
-  EXPECT_NE(nullptr, dexfile);
-
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-
+TEST_F(ResultPropagationTest, useSwitch) {
   std::vector<Pass*> passes = {
       new ResultPropagationPass(),
   };
 
-  PassManager manager(passes);
-  manager.set_testing_mode();
-
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
+  run_passes(passes);
 
   int num_test_classes = 0;
   const char* test_class_prefix = "Lcom/facebook/redextest/ResultPropagation$";
   const char* test_method_prefix = "returns_";
-  for (const auto& cls : classes) {
+  for (const auto& cls : *classes) {
     if (strncmp(cls->get_name()->c_str(), test_class_prefix,
                 strlen(test_class_prefix)) == 0) {
       TRACE(RP, 1, "test class %s", cls->get_name()->c_str());

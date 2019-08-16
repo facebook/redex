@@ -9,13 +9,10 @@
 
 #include <functional>
 
-#include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "PassManager.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 #include "DelInit.h"
 #include "LocalDce.h"
@@ -38,50 +35,39 @@ namespace {
 typedef std::function<void(const MethodItemEntry& mei)> MethodItemCallback;
 typedef std::function<void(const DexClasses& classes)> DexClassesCallback;
 
-void foreach_method_entry_item(const DexClasses& classes,
-                               MethodItemCallback const& callback) {
-  for (const auto& cls : classes) {
-    std::vector<DexMethodRef*> methods;
-    cls->gather_methods(methods);
-    for (auto method : methods) {
-      if (!method->is_def()) continue;
-      IRCode* code = static_cast<DexMethod*>(method)->get_code();
-      if (!code) continue;
-      for (const auto& mei : *code)
-        callback(mei);
-    }
-  }
-}
-
-void run_test_pass(Pass* pass, DexClassesCallback const& callback) {
-  g_redex = new RedexContext();
-  const char* dexfile = std::getenv("dexfile");
-  EXPECT_NE(nullptr, dexfile);
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-  std::vector<Pass*> passes = {pass};
-  PassManager manager(passes);
-  manager.set_testing_mode();
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_cfg(conf_obj);
-  manager.run_passes(stores, dummy_cfg);
-  callback(classes);
-}
-
-void run_test_pass(Pass* pass, MethodItemCallback const& callback) {
-  run_test_pass(pass, [&](const DexClasses& classes) {
-    foreach_method_entry_item(classes, callback);
-  });
-}
-
 } // anonymous namespace
 
-TEST(StripDebugInfoTest, StripPrologueEnd) {
+class StripDebugInfoTest : public RedexIntegrationTest {
+ protected:
+  void foreach_method_entry_item(const DexClasses& classes,
+                                 MethodItemCallback const& callback) {
+    for (const auto& cls : classes) {
+      std::vector<DexMethodRef*> methods;
+      cls->gather_methods(methods);
+      for (auto method : methods) {
+        if (!method->is_def()) continue;
+        IRCode* code = static_cast<DexMethod*>(method)->get_code();
+        if (!code) continue;
+        for (const auto& mei : *code)
+          callback(mei);
+      }
+    }
+  }
+
+  void run_test_pass(Pass* pass, DexClassesCallback const& callback) {
+    std::vector<Pass*> passes = {pass};
+    run_passes(passes);
+    callback(*classes);
+  }
+
+  void run_test_pass(Pass* pass, MethodItemCallback const& callback) {
+    run_test_pass(pass, [&](const DexClasses& classes) {
+      foreach_method_entry_item(classes, callback);
+    });
+  }
+};
+
+TEST_F(StripDebugInfoTest, StripPrologueEnd) {
   // Test that we can remove all DBG_SET_PROLOGUE_END ops.
   auto pass = new StripDebugInfoPass();
   pass->set_drop_prologue_end(true);
@@ -95,7 +81,7 @@ TEST(StripDebugInfoTest, StripPrologueEnd) {
   });
 }
 
-TEST(StripDebugInfoTest, StripEpilogueBegin) {
+TEST_F(StripDebugInfoTest, StripEpilogueBegin) {
   // Test that we can remove all DBG_SET_EPILOGUE_BEGIN ops.
   auto pass = new StripDebugInfoPass();
   pass->set_drop_epilogue_begin(true);
@@ -109,7 +95,7 @@ TEST(StripDebugInfoTest, StripEpilogueBegin) {
   });
 }
 
-TEST(StripDebugInfoTest, StripLocals) {
+TEST_F(StripDebugInfoTest, StripLocals) {
   // Test that we can remove all DBG_*LOCAL* ops.
   auto pass = new StripDebugInfoPass();
   pass->set_drop_local_variables(true);
@@ -127,7 +113,7 @@ TEST(StripDebugInfoTest, StripLocals) {
   });
 }
 
-TEST(StripDebugInfoTest, StripAllDebugInfo) {
+TEST_F(StripDebugInfoTest, StripAllDebugInfo) {
   // Test that we can remove all debug info.
   auto pass = new StripDebugInfoPass();
   pass->set_drop_all_debug_info(true);
@@ -138,7 +124,7 @@ TEST(StripDebugInfoTest, StripAllDebugInfo) {
   });
 }
 
-TEST(StripDebugInfoTest, StripAllLineNumbers) {
+TEST_F(StripDebugInfoTest, StripAllLineNumbers) {
   // Test that we can remove all line number information.
   auto pass = new StripDebugInfoPass();
   pass->set_drop_line_numbers(true);

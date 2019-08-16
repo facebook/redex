@@ -17,13 +17,11 @@
 #include <sstream>
 
 #include "ControlFlow.h"
-#include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 #include "HashedSetAbstractDomain.h"
 
@@ -103,22 +101,12 @@ class IRFixpointIterator final
   const cfg::ControlFlowGraph& m_cfg;
 };
 
-TEST(MonotonicFixpointTest, livenessAnalysis) {
-  g_redex = new RedexContext();
+class MonotonicFixpointTest : public RedexIntegrationTest {};
 
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
+TEST_F(MonotonicFixpointTest, livenessAnalysis) {
+  std::cout << "Loaded classes: " << classes->size() << std::endl;
 
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-  std::cout << "Loaded classes: " << classes.size() << std::endl;
-
-  for (const auto& cls : classes) {
+  for (const auto& cls : *classes) {
     if (std::strcmp(cls->get_name()->c_str(),
                     "Lcom/facebook/redextest/MonotonicFixpoint;") == 0) {
       for (const auto& method : cls->get_vmethods()) {
@@ -193,7 +181,5 @@ TEST(MonotonicFixpointTest, livenessAnalysis) {
         }
       }
     }
-
-    delete g_redex;
   }
 }

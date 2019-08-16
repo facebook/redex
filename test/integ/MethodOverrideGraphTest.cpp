@@ -16,7 +16,7 @@
 
 namespace mog = method_override_graph;
 
-struct MethodOverrideGraphTest : public RedexTest {};
+struct MethodOverrideGraphTest : public RedexIntegrationTest {};
 
 std::vector<std::string> get_overriding_methods(const mog::Graph& graph,
                                                 const DexMethodRef* mref,
@@ -53,14 +53,6 @@ TEST_F(MethodOverrideGraphTest, verify) {
   const char* A_M = "Lcom/facebook/redextest/A;.m:()V";
   const char* A_N = "Lcom/facebook/redextest/A;.n:()V";
   const char* B_M = "Lcom/facebook/redextest/B;.m:()V";
-
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
 
   auto graph = mog::build_graph(build_class_scope(stores));
   // Find the methods that override the given methods

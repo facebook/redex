@@ -8,34 +8,21 @@
 #include <gtest/gtest.h>
 
 #include "AnnoUtils.h"
-#include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "PassManager.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 #include "RemoveEmptyClasses.h"
 
 /*
  * This test verifies if default annotation values can be parsed correctly
  */
 
-TEST(DefaultAnnotation, defaultAnnotation) {
-  g_redex = new RedexContext();
+class DefaultAnnotationTest : public RedexIntegrationTest {};
 
-  const char* dexfile = std::getenv("dexfile");
-  EXPECT_NE(nullptr, dexfile);
-
-  std::vector<DexStore> stores;
-  DexMetadata dex_metadata;
-  dex_metadata.set_id("classes");
-  DexStore root_store(dex_metadata);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-  TRACE(ANNO, 9, "Loaded classes: %d \n", classes.size());
-  for (const auto& dex_class : classes) {
+TEST_F(DefaultAnnotationTest, defaultAnnotation) {
+  TRACE(ANNO, 9, "Loaded classes: %d \n", classes->size());
+  for (const auto& dex_class : *classes) {
     TRACE(ANNO, 9, "Class %s\n", SHOW(dex_class));
     TRACE(ANNO, 9, "%s\n", SHOW(dex_class->get_anno_set()));
     for (const auto& dex_method : dex_class->get_dmethods()) {

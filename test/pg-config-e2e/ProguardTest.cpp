@@ -22,7 +22,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 /**
 The objective of these tests are to make sure the ProGuard rules are
@@ -109,12 +109,11 @@ DexField* find_static_field_named(const DexClass* cls, const char* name) {
   return find_field_named(cls->get_sfields(), name);
 }
 
+class ProguardTest : public RedexTest {};
 /**
  * Ensure the ProGuard test rules are properly applied.
  */
-TEST(ProguardTest, assortment) {
-  g_redex = new RedexContext();
-
+TEST_F(ProguardTest, assortment) {
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   ASSERT_NE(nullptr, dexfile);
 
@@ -923,6 +922,4 @@ TEST(ProguardTest, assortment) {
     EXPECT_FALSE(root(omega_gamma));
    }
   }
-
-  delete g_redex;
 }

@@ -15,12 +15,10 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
-#include "DexLoader.h"
-#include "PassManager.h"
 #include "ProguardConfiguration.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 #include "RemoveUnreachable.h"
 
@@ -68,20 +66,9 @@ DexMethod* find_vmethod(
   return it == vmethods.end() ? nullptr : *it;
 }
 
-TEST(RemoveUnreachableTest, synthetic) {
-  g_redex = new RedexContext();
+class RemoveUnreachableTest : public RedexIntegrationTest {};
 
-  auto dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
-
-  std::vector<DexStore> stores;
-  DexStore root_store("classes");
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  DexClasses& classes = root_store.get_dexen().back();
-  stores.emplace_back(std::move(root_store));
-
-  Json::Value conf_obj = Json::nullValue;
-  ConfigFiles dummy_cfg(conf_obj);
+TEST_F(RemoveUnreachableTest, synthetic) {
   dummy_cfg.using_seeds = false;
 
   redex::ProguardConfiguration pg_config;
@@ -119,8 +106,7 @@ TEST(RemoveUnreachableTest, synthetic) {
   // Make sure some unreachable things exist before we start.
   ASSERT_TRUE(find_vmethod(classes, "LA;", "V", "bor", {}));
 
-  PassManager manager(passes, pg_config);
-  manager.run_passes(stores, dummy_cfg);
+  run_passes(passes, pg_config);
 
   // Seed elements
   ASSERT_TRUE(find_class(classes, "LA;"));
@@ -176,6 +162,4 @@ TEST(RemoveUnreachableTest, synthetic) {
   // Class kept alive via array refrences
   ASSERT_TRUE(find_class(classes, "LOnlyInArray;"));
   ASSERT_TRUE(find_ifield(classes, "LA;", "[LOnlyInArray;", "arr"));
-
-  delete g_redex;
 }

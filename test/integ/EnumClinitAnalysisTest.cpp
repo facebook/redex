@@ -27,21 +27,15 @@ constexpr const char* ENUM_SAFE_VALUE =
 constexpr const char* ENUM_SAFE_IS_USEFUL =
     "Lcom/facebook/redextest/EnumSafe;.isUseful:Z";
 
+class EnumClinitAnalysisTest : public RedexIntegrationTest {};
+
 /*
  * Check that analyze_enum_clinit returns the correct enum field -> ordinal and
  * name mapping.
  */
-TEST_F(RedexTest, OrdinalAnalysis) {
+TEST_F(EnumClinitAnalysisTest, OrdinalAnalysis) {
   using namespace optimize_enums;
   always_assert(load_class_file(std::getenv("enum_class_file")));
-
-  auto dexfile = std::getenv("dexfile");
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  auto scope = build_class_scope(root_store.get_dexen());
 
   // EnumSafe
   auto enum_cls = type_class(DexType::get_type(ENUM_SAFE));

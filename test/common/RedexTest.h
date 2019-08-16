@@ -8,14 +8,57 @@
 #pragma once
 
 #include <gtest/gtest.h>
+#include <json/json.h>
 
+#include "DexClass.h"
+#include "DexLoader.h"
+#include "DexStore.h"
 #include "IRAssembler.h"
+#include "PassManager.h"
 #include "RedexContext.h"
 
 struct RedexTest : public testing::Test {
   RedexTest() { g_redex = new RedexContext(); }
 
   ~RedexTest() { delete g_redex; }
+};
+
+struct RedexIntegrationTest : public RedexTest {
+ protected:
+  const char* dex_file;
+  std::vector<DexStore> stores;
+  boost::optional<DexClasses&> classes;
+  DexMetadata dex_metadata;
+
+ public:
+  RedexIntegrationTest() {
+    dex_file = std::getenv("dexfile");
+    always_assert_log(dex_file,
+                      "Dex file must be set up before integration tests.\n");
+    dex_metadata.set_id("classes");
+    DexStore root_store(dex_metadata);
+    root_store.add_classes(load_classes_from_dex(dex_file));
+    classes = root_store.get_dexen().back();
+    stores.emplace_back(std::move(root_store));
+  }
+
+  void run_passes(
+      const std::vector<Pass*>& passes,
+      std::unique_ptr<redex::ProguardConfiguration> pg_config = nullptr,
+      const Json::Value& json_conf = Json::nullValue) {
+
+    std::unique_ptr<PassManager> manager = nullptr;
+    if (pg_config) {
+      manager = std::make_unique<PassManager>(passes, std::move(pg_config));
+    } else {
+      manager = std::make_unique<PassManager>(passes);
+    }
+    manager->set_testing_mode();
+    ConfigFiles conf(json_conf);
+    manager->run_passes(stores, conf);
+  }
+
+  virtual ~RedexIntegrationTest() {}
 };
 
 /*
