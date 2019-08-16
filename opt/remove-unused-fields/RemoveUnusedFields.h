@@ -32,6 +32,7 @@ constexpr const char* REMOVED_FIELDS_FILENAME = "redex-removed-fields.txt";
 struct Config {
   bool remove_unread_fields;
   bool remove_unwritten_fields;
+  bool remove_zero_written_fields;
   std::unordered_set<const DexType*> blacklist_types;
   boost::optional<std::unordered_set<DexField*>> whitelist;
 };
@@ -43,6 +44,9 @@ class PassImpl : public Pass {
   void bind_config() override {
     bind("remove_unread_fields", true, m_config.remove_unread_fields);
     bind("remove_unwritten_fields", false, m_config.remove_unwritten_fields);
+    bind("remove_zero_written_fields",
+         false,
+         m_config.remove_zero_written_fields);
     bind("blacklist_types",
          {},
          m_config.blacklist_types,

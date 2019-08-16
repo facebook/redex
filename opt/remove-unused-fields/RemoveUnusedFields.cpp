@@ -44,6 +44,10 @@ class RemoveUnusedFields final {
     return m_unwritten_fields;
   }
 
+  const std::unordered_set<const DexField*>& zero_written_fields() const {
+    return m_zero_written_fields;
+  }
+
  private:
   bool is_blacklisted(const DexType* type) const {
     return m_config.blacklist_types.count(type) != 0;
@@ -56,6 +60,17 @@ class RemoveUnusedFields final {
   void analyze() {
     field_op_tracker::FieldStatsMap field_stats =
         field_op_tracker::analyze(m_scope);
+
+    // analyze_non_zero_writes and the later transform() need (editable) cfg
+    walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
+      code.build_cfg(/* editable = true*/);
+    });
+
+    boost::optional<field_op_tracker::NonZeroWrittenFields> non_zero_writes;
+    if (m_config.remove_zero_written_fields) {
+      non_zero_writes = field_op_tracker::analyze_non_zero_writes(m_scope);
+    }
+
     for (auto& pair : field_stats) {
       auto* field = pair.first;
       auto& stats = pair.second;
@@ -74,18 +89,22 @@ class RemoveUnusedFields final {
         } else if (m_config.remove_unwritten_fields && stats.writes == 0 &&
                    !has_non_zero_static_value(field)) {
           m_unwritten_fields.emplace(field);
+        } else if (m_config.remove_zero_written_fields &&
+                   !non_zero_writes->count(field) &&
+                   !has_non_zero_static_value(field)) {
+          m_zero_written_fields.emplace(field);
         }
       }
     }
     TRACE(RMUF, 2, "unread_fields %u", m_unread_fields.size());
     TRACE(RMUF, 2, "unwritten_fields %u", m_unwritten_fields.size());
+    TRACE(RMUF, 2, "zero written_fields %u", m_zero_written_fields.size());
   }
 
   void transform() const {
     // Replace reads to unwritten fields with appropriate const-0 instructions,
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
-      code.build_cfg(/* editable = true*/);
       auto& cfg = code.cfg();
       auto iterable = cfg::InstructionIterable(cfg);
       std::vector<cfg::InstructionIterator> to_replace;
@@ -105,6 +124,15 @@ class RemoveUnusedFields final {
           always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
           TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
           to_replace.push_back(insn_it);
+        } else if (m_zero_written_fields.count(field)) {
+          if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
+            TRACE(RMUF, 5, "Removing %s", SHOW(insn));
+            to_remove.push_back(insn_it);
+          } else {
+            always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
+            TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
+            to_replace.push_back(insn_it);
+          }
         }
       }
       for (auto insn_it : to_replace) {
@@ -126,6 +154,7 @@ class RemoveUnusedFields final {
   const Scope& m_scope;
   std::unordered_set<const DexField*> m_unread_fields;
   std::unordered_set<const DexField*> m_unwritten_fields;
+  std::unordered_set<const DexField*> m_zero_written_fields;
 };
 
 } // namespace
@@ -139,6 +168,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   RemoveUnusedFields rmuf(m_config, scope);
   mgr.set_metric("unread_fields", rmuf.unread_fields().size());
   mgr.set_metric("unwritten_fields", rmuf.unwritten_fields().size());
+  mgr.set_metric("zero written_fields", rmuf.zero_written_fields().size());
 
   if (m_export_removed) {
     std::vector<const DexField*> removed_fields(rmuf.unread_fields().begin(),
