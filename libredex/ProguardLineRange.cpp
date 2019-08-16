@@ -30,5 +30,5 @@ bool ProguardLineRange::remaps_to_single_line() const {
 }
 
 bool ProguardLineRange::matches(uint32_t line) const {
-  return (start == 0 && end == 0) || (start <= line && end >= line);
+  return start <= line && end >= line;
 }

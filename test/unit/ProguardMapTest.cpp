@@ -226,6 +226,7 @@ TEST(ProguardMapTest, DeobfuscateFrameWithRelocation) {
 
   std::stringstream ss(
       "com.foo.Bar -> X.A:\n"
+      "    short com.blah.foo.bar.boo(byte) -> a\n"
       "    2:2:long com.whatsapp.core.Time.currentServerTimeMillis():66:66 -> "
       "a\n");
 
