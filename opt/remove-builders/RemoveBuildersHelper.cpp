@@ -1158,6 +1158,8 @@ bool BuilderTransform::inline_methods(
 
   std::vector<DexMethod*> previous_to_inline;
   std::vector<DexMethod*> to_inline = get_methods_to_inline(code, type);
+  // TODO: This is a temporary fix, we should fix inliner T52618040
+  std::sort(to_inline.begin(), to_inline.end(), compare_dexmethods);
 
   while (to_inline.size() != 0) {
 
@@ -1177,6 +1179,8 @@ bool BuilderTransform::inline_methods(
     // Check all possible methods were inlined.
     previous_to_inline = to_inline;
     to_inline = get_methods_to_inline(code, type);
+    // TODO: This is a temporary fix, we should fix inliner T52618040
+    std::sort(to_inline.begin(), to_inline.end(), compare_dexmethods);
 
     // Return false if  nothing changed / nothing got inlined though
     // there were methods to inline.
