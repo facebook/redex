@@ -10,7 +10,7 @@ from __future__ import division
 from __future__ import print_function
 
 from io import BytesIO, StringIO
-
+import zipfile
 import binascii
 import re
 import string
@@ -77,6 +77,10 @@ def last_char_is_newline(s):
 def hex_escape(s):
     return ''.join(escape(c) for c in s)
 
+
+
+with zipfile.ZipFile(path_to_zip_file, 'r') as zip_ref:
+    zip_ref.extractall(directory_to_extract_to)
 
 def escape(c):
     if isinstance(c, int):
