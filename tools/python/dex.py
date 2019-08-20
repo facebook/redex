@@ -239,12 +239,13 @@ def print_string(s, f):
 
 def print_version(version, f):
     if len(version) == 3:
-        f.write("%u.%u.%u" % (version[0], version[1], version[2]))
+        f.write("%u.%u.%u\n" % (version[0], version[1], version[2]))
 
 
 def print_hex_bytes(data, f):
     for byte in data:
         f.write("%2.2x" % (byte))
+    f.write("\n")
 
 
 def print_endian(value, f):
@@ -253,6 +254,7 @@ def print_endian(value, f):
         f.write(" (ENDIAN_CONSTANT)")
     elif value == REVERSE_ENDIAN_CONSTANT:
         f.write(" (REVERSE_ENDIAN_CONSTANT)")
+    f.write("\n")
 
 
 def is_zero(value):
