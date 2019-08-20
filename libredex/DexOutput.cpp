@@ -491,7 +491,7 @@ void DexOutput::generate_string_data(SortMode mode) {
   }
 
   if (m_emit_name_based_locators) {
-    locators += 2;
+    locators += 3;
     always_assert(dodx->stringidx(DexString::make_string("")) == 0);
   }
 
@@ -569,9 +569,9 @@ void DexOutput::emit_name_based_locators() {
         m_store_number, m_dex_number, global_class_indices_first,
         global_class_indices_last);
 
-  if (global_class_indices_first != Locator::invalid_global_class_index) {
-    // Emit two strings:
+  // Emit three locator strings
 
+  if (global_class_indices_first != Locator::invalid_global_class_index) {
     // 1. Locator for the last renamed class in this Dex
     emit_locator(
         Locator(m_store_number, m_dex_number + 1, global_class_indices_last));
@@ -581,10 +581,14 @@ void DexOutput::emit_name_based_locators() {
     emit_locator(
         Locator(m_store_number, m_dex_number + 1, global_class_indices_first));
   } else {
-    // Dummy locators
+    // 2 dummy locators
     emit_locator(Locator(0, 0, 0));
     emit_locator(Locator(0, 0, 0));
   }
+
+  // magic locator
+  emit_locator(Locator(Locator::magic_strnr, Locator::magic_dexnr,
+                       Locator::magic_clsnr));
 }
 
 void DexOutput::generate_type_data() {

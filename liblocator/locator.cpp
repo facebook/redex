@@ -35,7 +35,7 @@ Locator::make(uint32_t str, uint32_t dex, uint32_t cls)
 uint32_t
 Locator::encode(char buf[encoded_max]) noexcept
 {
-  uint64_t value = strnr << clsnr_bits;
+  uint64_t value = ((uint64_t)strnr) << clsnr_bits;
   value = (value | clsnr) << dexnr_bits;
   value = (value | dexnr);
   uint8_t* pos = (uint8_t*) &buf[0];
