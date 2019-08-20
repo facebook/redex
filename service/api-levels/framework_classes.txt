@@ -1,0 +1,50 @@
+Landroidx/collection/ArrayMap; Landroid/util/ArrayMap; 19 29 2
+  Landroid/util/ArrayMap;/indexOfKey:(Ljava/lang/Object;)I 21
+  Landroid/util/ArrayMap;/indexOfValue:(Ljava/lang/Object;)I 29
+Landroidx/collection/ArraySet; Landroid/util/ArraySet; 23 29 2
+  Landroid/util/ArraySet;/<init>:(Ljava/util/Collection;)V 29
+  Landroid/util/ArraySet;/removeIf:(Ljava/util/function/Predicate;)Z 24
+Landroidx/collection/LongSparseArray; Landroid/util/LongSparseArray; 16 29 0
+Landroidx/collection/LruCache; Landroid/util/LruCache; 12 29 2
+  Landroid/util/LruCache;/resize:(I)V 21
+  Landroid/util/LruCache;/trimTpSize:(I)V 17
+Landroidx/core/util/Pair; Landroid/util/Pair; 5 29 0
+Landroidx/fragment/app/FragmentTransaction; Landroid/app/FragmentTransaction; 11 27 9
+  Landroid/app/FragmentTransaction;/addSharedElement:(Landroid/view/View;Ljava/lang/String;)Landroid/app/FragmentTransaction; 21
+  Landroid/app/FragmentTransaction;/attach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;/commitNow:()V 24
+  Landroid/app/FragmentTransaction;/commitNowAllowingStateLoss:()V 24
+  Landroid/app/FragmentTransaction;/detach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;/runOnCommit:(Ljava/lang/Runnable;)Landroid/app/FragmentTransaction; 26
+  Landroid/app/FragmentTransaction;/setCustomAnimations:(IIII)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;/setPrimaryNavigationFragment:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 26
+  Landroid/app/FragmentTransaction;/setReorderingAllowed:(Z)Landroid/app/FragmentTransaction; 26
+Landroidx/appcompat/view/ActionMode; Landroid/view/ActionMode; 11 29 0
+Landroidx/transition/ArcMotion; Landroid/transition/ArcMotion; 21 29 0
+Landroidx/transition/AutoTransition; Landroid/transition/AutoTransition; 19 29 0
+Landroidx/transition/ChangeBounds; Landroid/transition/ChangeBounds; 19 29 0
+Landroidx/transition/ChangeClipBounds; Landroid/transition/ChangeClipBounds; 21 29 0
+Landroidx/transition/ChangeImageTransform; Landroid/transition/ChangeImageTransform; 21 29 0
+Landroidx/transition/ChangeScroll; Landroid/transition/ChangeScroll; 23 29 0
+Landroidx/transition/ChangeTransform; Landroid/transition/ChangeTransform; 21 29 0
+Landroidx/transition/CircularPropagation; Landroid/transition/CircularPropagation; 21 29 0
+Landroidx/transition/Explode; Landroid/transition/Explode; 21 29 0
+Landroidx/transition/Fade; Landroid/transition/Fade; 19 29 0
+Landroidx/transition/PathMotion; Landroid/transition/PathMotion; 21 29 0
+Landroidx/transition/PatternPathMotion; Landroid/transition/PatternPathMotion; 21 29 0
+Landroidx/transition/Scene; Landroid/transition/Scene; 19 29 0
+Landroidx/transition/SidePropagation; Landroid/transition/SidePropagation; 21 29 0
+Landroidx/transition/Slide; Landroid/transition/Slide; 21 29 0
+Landroidx/transition/Transition; Landroid/transition/Transition; 19 29 0
+Landroidx/transition/Transition$EpicenterCallback; Landroid/transition/Transition$EpicenterCallback; 21 29 0
+Landroidx/transition/TransitionInflater; Landroid/transition/TransitionInflater; 19 29 0
+Landroidx/transition/TransitionListenerAdapter; Landroid/transition/TransitionListenerAdapter; 26 29 0
+Landroidx/transition/TransitionManager; Landroid/transition/TransitionManager; 19 29 0
+Landroidx/transition/TransitionPropagation; Landroid/transition/TransitionPropagation; 21 29 0
+Landroidx/transition/TransitionSet; Landroid/transition/TransitionSet; 19 29 0
+Landroidx/transition/TransitionValues; Landroid/transition/TransitionValues; 19 29 0
+Landroidx/transition/Visibility; Landroid/transition/Visibility; 19 29 0
+Landroidx/transition/VisibilityPropagation; Landroid/transition/VisibilityPropagation; 21 29 0
+Landroidx/loader/content/AsyncTaskLoader; Landroid/content/AsyncTaskLoader; 11 27 0
+Landroidx/loader/content/Loader; Landroid/content/Loader; 11 27 0
+Landroidx/loader/content/CursorLoader; Landroid/content/CursorLoader; 11 27 0
