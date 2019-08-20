@@ -87,10 +87,13 @@ namespace facebook {
 //
 // Similar to how general class locator strings as stored just in front of type
 // descriptors in the string table, the global class index range information
-// for a dex is stored in the string table as well, as two locator strings
-// immediately preceeding the (empty) string with index 0, in the form of
-// the locator string for first class in the dex, and the locator string for
-// the last class in the dex.
+// for a dex is stored in the string table as well, as three locator strings
+// immediately preceeding the (empty) string with index 0. The last locator
+// string is a "magic" locator string with a particular fixed value
+// just to check that the dex file was indeed generated with name-based
+// locators enabled. The first two locator strings are always
+// the locator string for last class in the dex, and the locator string for
+// the first class in the dex.
 //
 // At runtime, all this kicks in when the manifest.txt file contains
 // the line
@@ -121,6 +124,12 @@ class Locator {
   // Number of bits in the locator we reserve for dex number
   constexpr static const uint32_t dexnr_bits = 6;
 
+  // The new name-based locator string format contains a special magic locator;
+  // see the full description above for details.
+  constexpr static const uint32_t magic_strnr = 27277;
+  constexpr static const uint32_t magic_dexnr = 0;
+  constexpr static const uint32_t magic_clsnr = 77227;
+
  private:
   // Number of bits (lower bound) available for a class number
   constexpr static const uint32_t clsnr_bits = 20;
@@ -139,9 +148,9 @@ class Locator {
 
  public:
 
-  const unsigned strnr;
-  const unsigned dexnr; // 0 == special
-  const unsigned clsnr;
+  const uint32_t strnr;
+  const uint32_t dexnr; // 0 == special
+  const uint32_t clsnr;
 
   static Locator make(uint32_t str, uint32_t dex, uint32_t cls);
 
