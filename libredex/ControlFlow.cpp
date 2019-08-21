@@ -2066,8 +2066,15 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   always_assert_log(op != OPCODE_GOTO,
                     "There are no GOTO instructions in the CFG");
   Block* block = it.block();
+
   auto last_it = block->get_last_insn();
   always_assert_log(last_it != block->end(), "cannot remove from empty block");
+  if (insn == last_it->insn && (opcode::may_throw(op) || op == OPCODE_THROW)) {
+    // We're deleting the last instruction that may throw, this block no longer
+    // throws. We should remove the throw edges
+    delete_succ_edge_if(block,
+                        [](const Edge* e) { return e->type() == EDGE_THROW; });
+  }
 
   if (is_conditional_branch(op) || is_switch(op)) {
     // Remove all outgoing EDGE_BRANCHes
@@ -2112,13 +2119,6 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
         block->m_entries.erase_and_dispose(mrp_it.unwrap());
       }
     }
-  }
-
-  if (insn == last_it->insn && (opcode::may_throw(op) || op == OPCODE_THROW)) {
-    // We're deleting the last instruction that may throw, this block no longer
-    // throws. We should remove the throw edges
-    delete_succ_edge_if(block,
-                        [](const Edge* e) { return e->type() == EDGE_THROW; });
   }
 
   // delete the requested instruction
