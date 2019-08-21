@@ -36,7 +36,7 @@ class LinesSymbolicator(object):
         class_name = class_name.replace("/", ".")
 
         if class_name in self.symbol_maps.class_map:
-            ans = self.symbol_maps.class_map[class_name]
+            ans = self.symbol_maps.class_map[class_name].origin_class
             return ans + "\n"
         return line
 
