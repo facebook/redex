@@ -4,10 +4,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import argparse
 import collections
 import io
@@ -76,23 +74,29 @@ class SymbolMaps(object):
                     if line[0] != " ":
                         new = new.strip()[:-1]
                         ClassMemberMapping = collections.namedtuple(
-                            'ClassMemberMapping',
-                            ['origin_class', 'method_mapping', 'field_mapping']
+                            "ClassMemberMapping",
+                            ["origin_class", "method_mapping", "field_mapping"],
                         )
                         mapping[new] = ClassMemberMapping(original, {}, {})
                         current_class = new
                     else:
                         if current_class is None:
                             logging.error(
-                                "The member " + original
-                                + " , obfuscated as " + new
+                                "The member "
+                                + original
+                                + " , obfuscated as "
+                                + new
                                 + " does not belong to any class!"
                             )
                         original = original.strip()
                         if "(" in original and original[len(original) - 1] == ")":
-                            mapping[current_class].method_mapping[new.strip()] = original.split()[-1].split("(")[0]
+                            mapping[current_class].method_mapping[
+                                new.strip()
+                            ] = original.split()[-1].split("(")[0]
                         else:
-                            mapping[current_class].field_mapping[new.strip()] = original.split()[-1]
+                            mapping[current_class].field_mapping[
+                                new.strip()
+                            ] = original.split()[-1]
         return mapping
 
 

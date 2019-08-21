@@ -3,10 +3,8 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
+
 import re
 import sys
 
@@ -38,7 +36,9 @@ class DexdumpSymbolicator(object):
         m = matchobj.group("class")
         cls = m.replace("/", ".")
         if cls in self.symbol_maps.class_map:
-            return "L%s;" % self.symbol_maps.class_map[cls].origin_class.replace(".", "/")
+            return "L%s;" % self.symbol_maps.class_map[cls].origin_class.replace(
+                ".", "/"
+            )
         return "L%s;" % m
 
     def line_replacer(self, matchobj):
@@ -58,11 +58,21 @@ class DexdumpSymbolicator(object):
                 if self.reading_methods:
                     method_name = matchobj.group("method")
                     if method_name in self.symbol_maps.class_map[cls].method_mapping:
-                        return left + _sep + self.symbol_maps.class_map[cls].method_mapping[method_name]
+                        return (
+                            left
+                            + _sep
+                            + self.symbol_maps.class_map[cls].method_mapping[
+                                method_name
+                            ]
+                        )
                 else:
                     field_name = matchobj.group("method")
                     if field_name in self.symbol_maps.class_map[cls].field_mapping:
-                        return left + _sep + self.symbol_maps.class_map[cls].field_mapping[field_name]
+                        return (
+                            left
+                            + _sep
+                            + self.symbol_maps.class_map[cls].field_mapping[field_name]
+                        )
         return m
 
     def reset_state(self):

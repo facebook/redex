@@ -8,9 +8,7 @@ import sys
 class IODIMetadata(object):
     def __init__(self, path):
         with open(path, "rb") as f:
-            magic, version, count, zero = struct.unpack(
-                "<LLLL", f.read(4 * 4)
-            )
+            magic, version, count, zero = struct.unpack("<LLLL", f.read(4 * 4))
             if magic != 0xFACEB001:
                 raise Exception("Unexpected magic: " + hex(magic))
             if version != 1:
@@ -30,9 +28,7 @@ class IODIMetadata(object):
     def write(self, path):
         with open(path, "wb") as f:
             self._f = f
-            self._write(
-                "<LLLL", 0xFACEB001, 1, len(self.entries), 0
-            )
+            self._write("<LLLL", 0xFACEB001, 1, len(self.entries), 0)
             for key, mid in self.entries.items():
                 self._write("<HQ", len(key), mid)
                 self._write("<" + str(len(key)) + "s", key.encode("ascii"))
