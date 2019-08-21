@@ -12,6 +12,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
 import androidx.annotation.Nullable;
 import java.io.Serializable;
+import java.util.EventObject;
 
 enum UsesValueOf {
   ONE, TWO;
@@ -48,9 +49,10 @@ enum InstanceFieldOfSerializable {
 
  /* Test cases */
 public class EnumTestRemoveGenerated {
-
-  private class ImplementsSerializable implements Serializable {
+  // EventObject implements Serializable.
+  private class ImplementsSerializable extends EventObject {
     InstanceFieldOfSerializable field;
+    ImplementsSerializable(Object source) { super(source); }
   }
   private class DoesNotImplementSerializable {
     UsesValuesMethod field0;

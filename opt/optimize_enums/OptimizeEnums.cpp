@@ -380,54 +380,7 @@ class OptimizeEnums {
     TypeSystem type_system(m_scope);
     const auto serializable_type = DexType::make_type("Ljava/io/Serializable;");
     walk::parallel::classes(m_scope, [&](DexClass* cls) {
-      bool is_serializable;
       if (type_system.implements(cls->get_type(), serializable_type)) {
-        is_serializable = true;
-      } else {
-        // A list of common external classes that we know do not implement
-        // `Serializable`. We assume all other external classes could implement
-        // `Serializable`.
-        static const std::unordered_set<const DexType*> whitelisted_classes = {
-            get_object_type(),
-            DexType::make_type("Landroid/app/Activity;"),
-            DexType::make_type("Landroid/graphics/drawable/Drawable;"),
-            DexType::make_type("Landroid/view/TextureView;"),
-            DexType::make_type("Landroid/view/View;"),
-            DexType::make_type("Landroid/view/ViewGroup;"),
-            DexType::make_type("Landroid/widget/BaseAdapter;"),
-            DexType::make_type("Landroid/widget/FrameLayout;"),
-            DexType::make_type("Landroid/widget/ImageView;"),
-            DexType::make_type("Landroid/widget/LinearLayout;"),
-            DexType::make_type("Landroid/widget/RelativeLayout;"),
-        };
-        // Search chain in reverse order, from self up to `Object`.
-        const auto& parent_chain = type_system.parent_chain(cls->get_type());
-        auto first_external_it =
-            std::find_if(parent_chain.rbegin(), parent_chain.rend(),
-                         [](const DexType* parent_type) {
-                           auto parent_cls = type_class(parent_type);
-                           return !parent_cls || parent_cls->is_external();
-                         });
-
-        if (first_external_it != parent_chain.rend() &&
-            !whitelisted_classes.count(*first_external_it)) {
-          is_serializable = true;
-          if (traceEnabled(ENUM, 9)) {
-            for (auto& ifield : cls->get_ifields()) {
-              auto enum_cls =
-                  type_class(get_element_type_if_array(ifield->get_type()));
-              if (enum_cls && is_enum(enum_cls)) {
-                TRACE(ENUM, 9, "Reject %s because it extends external class %s",
-                      SHOW(enum_cls), SHOW(*first_external_it));
-              }
-            }
-          }
-        } else {
-          is_serializable = false;
-        }
-      }
-
-      if (is_serializable) {
         // We reject all enums that are instance fields of serializable classes.
         for (auto& ifield : cls->get_ifields()) {
           types_used_in_serializable.insert(
