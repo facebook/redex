@@ -87,8 +87,8 @@ bool IODIMetadata::can_safely_use_iodi(const DexMethod* method) const {
   {
     auto iter = m_method_to_name.find(method);
     if (iter == m_method_to_name.end()) {
-      fprintf(stderr, "[IODI] Warning: didn't find %s in pretty map in %s",
-              SHOW(method), __PRETTY_FUNCTION__);
+      TRACE(IODI, 3, "[IODI] Warning: didn't find %s in pretty map in %s",
+            SHOW(method), __PRETTY_FUNCTION__);
       auto cls = type_class(method->get_class());
       always_assert(cls);
       pretty_name = pretty_prefix_for_cls(cls);
