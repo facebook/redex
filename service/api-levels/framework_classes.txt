@@ -1,24 +1,24 @@
 Landroidx/collection/ArrayMap; Landroid/util/ArrayMap; 19 29 2
-  Landroid/util/ArrayMap;/indexOfKey:(Ljava/lang/Object;)I 21
-  Landroid/util/ArrayMap;/indexOfValue:(Ljava/lang/Object;)I 29
+  Landroid/util/ArrayMap;.indexOfKey:(Ljava/lang/Object;)I 21
+  Landroid/util/ArrayMap;.indexOfValue:(Ljava/lang/Object;)I 29
 Landroidx/collection/ArraySet; Landroid/util/ArraySet; 23 29 2
-  Landroid/util/ArraySet;/<init>:(Ljava/util/Collection;)V 29
-  Landroid/util/ArraySet;/removeIf:(Ljava/util/function/Predicate;)Z 24
+  Landroid/util/ArraySet;.<init>:(Ljava/util/Collection;)V 29
+  Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z 24
 Landroidx/collection/LongSparseArray; Landroid/util/LongSparseArray; 16 29 0
 Landroidx/collection/LruCache; Landroid/util/LruCache; 12 29 2
-  Landroid/util/LruCache;/resize:(I)V 21
-  Landroid/util/LruCache;/trimTpSize:(I)V 17
+  Landroid/util/LruCache;.resize:(I)V 21
+  Landroid/util/LruCache;.trimTpSize:(I)V 17
 Landroidx/core/util/Pair; Landroid/util/Pair; 5 29 0
 Landroidx/fragment/app/FragmentTransaction; Landroid/app/FragmentTransaction; 11 27 9
-  Landroid/app/FragmentTransaction;/addSharedElement:(Landroid/view/View;Ljava/lang/String;)Landroid/app/FragmentTransaction; 21
-  Landroid/app/FragmentTransaction;/attach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
-  Landroid/app/FragmentTransaction;/commitNow:()V 24
-  Landroid/app/FragmentTransaction;/commitNowAllowingStateLoss:()V 24
-  Landroid/app/FragmentTransaction;/detach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
-  Landroid/app/FragmentTransaction;/runOnCommit:(Ljava/lang/Runnable;)Landroid/app/FragmentTransaction; 26
-  Landroid/app/FragmentTransaction;/setCustomAnimations:(IIII)Landroid/app/FragmentTransaction; 13
-  Landroid/app/FragmentTransaction;/setPrimaryNavigationFragment:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 26
-  Landroid/app/FragmentTransaction;/setReorderingAllowed:(Z)Landroid/app/FragmentTransaction; 26
+  Landroid/app/FragmentTransaction;.addSharedElement:(Landroid/view/View;Ljava/lang/String;)Landroid/app/FragmentTransaction; 21
+  Landroid/app/FragmentTransaction;.attach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;.commitNow:()V 24
+  Landroid/app/FragmentTransaction;.commitNowAllowingStateLoss:()V 24
+  Landroid/app/FragmentTransaction;.detach:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;.runOnCommit:(Ljava/lang/Runnable;)Landroid/app/FragmentTransaction; 26
+  Landroid/app/FragmentTransaction;.setCustomAnimations:(IIII)Landroid/app/FragmentTransaction; 13
+  Landroid/app/FragmentTransaction;.setPrimaryNavigationFragment:(Landroid/app/Fragment;)Landroid/app/FragmentTransaction; 26
+  Landroid/app/FragmentTransaction;.setReorderingAllowed:(Z)Landroid/app/FragmentTransaction; 26
 Landroidx/appcompat/view/ActionMode; Landroid/view/ActionMode; 11 29 0
 Landroidx/transition/ArcMotion; Landroid/transition/ArcMotion; 21 29 0
 Landroidx/transition/AutoTransition; Landroid/transition/AutoTransition; 19 29 0

@@ -12,12 +12,12 @@
 namespace api {
 
 struct FrameworkMethod {
-  std::string method_str;
+  DexMethodRef* mref;
   uint32_t min_api_level;
 };
 
 struct FrameworkAPI {
-  std::string cls;
+  DexType* cls;
   uint32_t min_api_level;
   uint32_t max_api_level;
   // Contains
@@ -26,22 +26,23 @@ struct FrameworkAPI {
 
 class ApiLevelsUtils {
  public:
-  ApiLevelsUtils(const std::string& framework_api_info_filename)
-      : m_framework_api_info_filename(framework_api_info_filename) {}
+  ApiLevelsUtils(const Scope& scope,
+                 const std::string& framework_api_info_filename)
+      : m_scope(scope),
+        m_framework_api_info_filename(framework_api_info_filename) {
+    load_types_to_framework_api();
+  }
 
-  const std::unordered_map<DexType*, FrameworkAPI>&
+  const std::unordered_map<const DexType*, FrameworkAPI>&
   get_types_to_framework_api() {
-    if (m_types_to_framework_api.size() == 0) {
-      load_types_to_framework_api();
-    }
-
     return m_types_to_framework_api;
   }
 
  private:
   void load_types_to_framework_api();
 
-  std::unordered_map<DexType*, FrameworkAPI> m_types_to_framework_api;
+  const Scope& m_scope;
+  std::unordered_map<const DexType*, FrameworkAPI> m_types_to_framework_api;
   std::string m_framework_api_info_filename;
 };
 
