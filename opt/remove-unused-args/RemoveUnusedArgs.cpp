@@ -18,11 +18,12 @@
 #include "IRCode.h"
 #include "Liveness.h"
 #include "Match.h"
+#include "MethodOverrideGraph.h"
 #include "OptData.h"
 #include "OptDataDefs.h"
-#include "TypeSystem.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 using namespace opt_metadata;
 
@@ -250,6 +251,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
     bool remove_result;
   };
   ConcurrentMap<DexMethod*, Entry> unordered_entries;
+  auto override_graph = mog::build_graph(m_scope);
   walk::parallel::methods(m_scope, [&](DexMethod* method) {
     if (method->get_code() == nullptr) {
       return;
@@ -274,12 +276,9 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
     }
 
     // If a method is devirtualizable, proceed with live arg computation.
-    if (method->is_virtual()) {
-      auto virt_scope = m_type_system.find_virtual_scope(method);
-      if (virt_scope == nullptr || !is_non_virtual_scope(virt_scope)) {
-        // TODO: T31388603 -- Remove unused args for true virtuals.
-        return;
-      }
+    if (method->is_virtual() && mog::is_true_virtual(*override_graph, method)) {
+      // TODO: T31388603 -- Remove unused args for true virtuals.
+      return;
     }
 
     std::vector<IRInstruction*> dead_insns;

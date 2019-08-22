@@ -12,7 +12,6 @@
 #include "ConcurrentContainers.h"
 #include "LocalDce.h"
 #include "PassManager.h"
-#include "TypeSystem.h"
 
 namespace remove_unused_args {
 
@@ -35,10 +34,7 @@ class RemoveArgs {
   RemoveArgs(const Scope& scope,
              const std::vector<std::string>& black_list,
              size_t iteration = 0)
-      : m_scope(scope),
-        m_type_system(scope),
-        m_black_list(black_list),
-        m_iteration(iteration){};
+      : m_scope(scope), m_black_list(black_list), m_iteration(iteration){};
   RemoveArgs::PassStats run();
   std::deque<uint16_t> compute_live_args(
       DexMethod* method,
@@ -47,7 +43,6 @@ class RemoveArgs {
 
  private:
   const Scope& m_scope;
-  const TypeSystem m_type_system;
   ConcurrentMap<DexMethod*, std::deque<uint16_t>> m_live_arg_idxs_map;
   std::unordered_map<DexString*, std::unordered_map<DexTypeList*, size_t>>
       m_renamed_indices;

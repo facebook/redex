@@ -57,7 +57,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
-	-I$(top_srcdir)/opt/remove_unused_args \
+	-I$(top_srcdir)/opt/remove-unused-args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
 	-I$(top_srcdir)/opt/reduce-array-literals \
@@ -298,7 +298,7 @@ redex_all_SOURCES = \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
-	opt/remove_unused_args/RemoveUnusedArgs.cpp \
+	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
