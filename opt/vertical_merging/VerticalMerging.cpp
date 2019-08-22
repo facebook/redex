@@ -15,7 +15,6 @@
 #include "Resolver.h"
 #include "Trace.h"
 #include "TypeReference.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -225,17 +224,17 @@ void collect_can_merge(
     const XStoreRefs& xstores,
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
-  TypeSystem ts(scope);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   for (DexClass* cls : scope) {
     if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
         can_rename_if_ignoring_blanket_keepnames(cls)) {
       DexType* cls_type = cls->get_type();
-      const auto& children_types = ts.get_children(cls->get_type());
+      const auto& children_types = get_children(ch, cls->get_type());
       if (children_types.size() != 1) {
         continue;
       }
       const DexType* child_type = *children_types.begin();
-      if (ts.get_children(child_type).size() != 0) {
+      if (get_children(ch, child_type).size() != 0) {
         // TODO(suree404): we are skipping pairs that child class still have
         // their subclasses, but we might still be able to optimize this case.
         continue;
@@ -248,8 +247,8 @@ void collect_can_merge(
       }
       DexClass* child_cls = type_class_internal(child_type);
       if (child_cls) {
-        check_dont_merge_list(
-            dont_merge_status, child_cls, cls, mergeable_to_merger);
+        check_dont_merge_list(dont_merge_status, child_cls, cls,
+                              mergeable_to_merger);
       }
     }
   }

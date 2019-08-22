@@ -95,8 +95,14 @@ DexType* create_empty_base_type(const ModelSpec& spec,
     return nullptr;
   }
 
-  // Build a temporary type system.
-  TypeSystem type_system(scope);
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  InterfaceMap intf_map = build_interface_map(ch);
+  std::unordered_map<const DexType*, TypeSet> implements;
+  for (const auto& pair : intf_map) {
+    for (const auto& type : pair.second) {
+      implements[type].emplace(pair.first);
+    }
+  }
 
   // Create an empty base and add to the scope. Put the base class in the same
   // package as the root interface.
@@ -109,19 +115,19 @@ DexType* create_empty_base_type(const ModelSpec& spec,
                                  TypeSet(),
                                  true);
 
-  TRACE(TERA, 3, "Created an empty base class %s for interface %s.",
-        SHOW(cls), SHOW(interface_root));
+  TRACE(TERA, 3, "Created an empty base class %s for interface %s.", SHOW(cls),
+        SHOW(interface_root));
 
   // Set it as the super class of implementors.
   size_t num = 0;
   XStoreRefs xstores(stores);
 
-  for (auto impl_type : type_system.get_implementors(interface_root)) {
+  for (auto impl_type : get_all_implementors(intf_map, interface_root)) {
     if (type_class(impl_type)->is_external()) {
       TRACE(TERA, 3, "Skip external implementer %s", SHOW(impl_type));
       continue;
     }
-    auto& ifcs = type_system.get_implemented_interfaces(impl_type);
+    auto& ifcs = implements.at(impl_type);
     // Add an empty base class to qualified implementors
     auto impl_cls = type_class(impl_type);
     if (ifcs.size() == 1 && impl_cls &&

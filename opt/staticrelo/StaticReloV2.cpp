@@ -7,8 +7,8 @@
 
 #include "StaticReloV2.h"
 
+#include "ClassHierarchy.h"
 #include "Resolver.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 /**
@@ -220,10 +220,9 @@ namespace static_relo_v2 {
  */
 std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
   std::vector<DexClass*> candidate_classes;
-  TypeSystem typesystem(scope);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   walk::classes(scope, [&](DexClass* cls) {
-    if (!cls->is_external() &&
-        typesystem.get_children(cls->get_type()).empty() &&
+    if (!cls->is_external() && get_children(ch, cls->get_type()).empty() &&
         !is_interface(cls) && cls->get_ifields().empty() &&
         cls->get_sfields().empty() && cls->get_vmethods().empty()) {
       for (const auto& method : cls->get_dmethods()) {

@@ -23,8 +23,11 @@ using TypeToTypeSet = std::unordered_map<const DexType*, TypeSet>;
  * of the universe given a Scope.
  * It provides common API to an object-oriented type system: inheritance
  * relationships, interface relationships, virtual scopes.
- * It's a one-stop class for everything related to the type system with
- * hopefully decent performance.
+ *
+ * NOTE: Computing virtual scopes is relatively expensive. If you only need
+ * class-level and not method-level relationships, consider using ClassHierarchy
+ * directly. Also, for method-level relationships, prefer the
+ * MethodOverrideGraph over the VirtualScopes used here; the former is faster.
  */
 class TypeSystem {
  private:

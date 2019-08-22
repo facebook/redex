@@ -500,25 +500,14 @@ void initialize_reachable_for_json_serde(
   if (serde_superclses.size() == 0) {
     return;
   }
-  TypeSystem ts(scope);
-  walk::parallel::classes(scope, [&ts, &serde_superclses](DexClass* cls) {
-    if (is_interface(cls)) {
-      return;
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  TypeSet children;
+  for (auto* serde_supercls : serde_superclses) {
+    get_all_children(ch, serde_supercls, children);
+    for (auto* child : children) {
+      type_class(child)->rstate.set_is_serde();
     }
-    const auto& parents_chain = ts.parent_chain(cls->get_type());
-    if (parents_chain.size() <= 2) {
-      // The class's direct super class is java.lang.Object, no need
-      // to proceed.
-      return;
-    }
-    for (uint32_t index = 1; index < parents_chain.size() - 1; ++index) {
-      if (serde_superclses.find(parents_chain[index]) !=
-          serde_superclses.end()) {
-        cls->rstate.set_is_serde();
-        break;
-      }
-    }
-  });
+  }
 }
 
 template <typename DexMember>
