@@ -1280,6 +1280,11 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   )");
   creator.add_method(returns_constant);
 
+  auto no_code =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.no_code:()V"));
+  no_code->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE, true);
+  creator.add_method(no_code);
+
   Scope scope{creator.create()};
   walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
@@ -1289,8 +1294,11 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   auto& wps = fp_iter->get_whole_program_state();
 
   // Make sure we mark methods that have a reachable return-void statement as
-  // "returning" Top
+  // "returning" Top.
+  // And for a method that has no implementation in dex we also want its
+  // return value be Top but not Bottom.
   EXPECT_EQ(wps.get_return_value(returns_void), SignedConstantDomain::top());
+  EXPECT_EQ(wps.get_return_value(no_code), SignedConstantDomain::top());
   EXPECT_EQ(wps.get_return_value(never_returns),
             SignedConstantDomain::bottom());
   EXPECT_EQ(wps.get_return_value(returns_constant), SignedConstantDomain(1));
