@@ -17,16 +17,19 @@
 #include "Mutators.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace mog = method_override_graph;
 
 namespace {
-size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
+
+size_t mark_classes_final(const Scope& scope) {
+  ClassHierarchy ch = build_type_hierarchy(scope);
   size_t n_classes_finalized = 0;
   for (auto const& cls : scope) {
-    if (has_keep(cls) || is_abstract(cls) || is_final(cls)) continue;
+    if (has_keep(cls) || is_abstract(cls) || is_final(cls)) {
+      continue;
+    }
     auto const& children = get_children(ch, cls->get_type());
     if (children.empty()) {
       TRACE(ACCESS, 2, "Finalizing class: %s", SHOW(cls));
@@ -37,31 +40,15 @@ size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
   return n_classes_finalized;
 }
 
-const DexMethod* find_override(const DexMethod* method,
-                               const DexClass* cls,
-                               const ClassHierarchy& ch) {
-  TypeSet children;
-  get_all_children(ch, cls->get_type(), children);
-  for (auto const& childtype : children) {
-    auto const& child = type_class(childtype);
-    redex_assert(child);
-    for (auto const& child_method : child->get_vmethods()) {
-      if (signatures_match(method, child_method)) {
-        return child_method;
-      }
-    }
-  }
-  return nullptr;
-}
-
-size_t mark_methods_final(const Scope& scope, const ClassHierarchy& ch) {
+size_t mark_methods_final(const Scope& scope,
+                          const mog::Graph& override_graph) {
   size_t n_methods_finalized = 0;
   for (auto const& cls : scope) {
     for (auto const& method : cls->get_vmethods()) {
       if (has_keep(method) || is_abstract(method) || is_final(method)) {
         continue;
       }
-      if (!find_override(method, cls, ch)) {
+      if (override_graph.get_node(method).children.size() == 0) {
         TRACE(ACCESS, 2, "Finalizing method: %s", SHOW(method));
         set_final(method);
         ++n_methods_finalized;
@@ -99,8 +86,8 @@ std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
 }
 
 std::unordered_set<DexMethod*> find_private_methods(
-    const std::vector<DexClass*>& scope) {
-  auto candidates = mog::get_non_true_virtuals(scope);
+    const std::vector<DexClass*>& scope, const mog::Graph& override_graph) {
+  auto candidates = mog::get_non_true_virtuals(override_graph, scope);
   auto dmethods = direct_methods(scope);
   for (auto* dmethod : dmethods) {
     candidates.emplace(dmethod);
@@ -114,17 +101,26 @@ std::unordered_set<DexMethod*> find_private_methods(
       ++it;
     }
   }
-  walk::opcodes(
+
+  ConcurrentSet<DexMethod*> externally_referenced;
+  walk::parallel::opcodes(
       scope,
       [](DexMethod*) { return true; },
       [&](DexMethod* caller, IRInstruction* inst) {
-        if (!inst->has_method()) return;
-        auto callee = resolve_method(inst->get_method(), MethodSearch::Any);
+        if (!inst->has_method()) {
+          return;
+        }
+        auto callee =
+            resolve_method(inst->get_method(), opcode_to_search(inst));
         if (callee == nullptr || callee->get_class() == caller->get_class()) {
           return;
         }
-        candidates.erase(callee);
+        externally_referenced.emplace(callee);
       });
+
+  for (auto* m : externally_referenced) {
+    candidates.erase(m);
+  }
   return candidates;
 }
 
@@ -171,14 +167,14 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
                                  ConfigFiles& /* conf */,
                                  PassManager& pm) {
   auto scope = build_class_scope(stores);
-  ClassHierarchy ch = build_type_hierarchy(scope);
+  auto override_graph = mog::build_graph(scope);
   if (m_finalize_classes) {
-    auto n_classes_final = mark_classes_final(scope, ch);
+    auto n_classes_final = mark_classes_final(scope);
     pm.incr_metric("finalized_classes", n_classes_final);
     TRACE(ACCESS, 1, "Finalized %lu classes", n_classes_final);
   }
   if (m_finalize_methods) {
-    auto n_methods_final = mark_methods_final(scope, ch);
+    auto n_methods_final = mark_methods_final(scope, *override_graph);
     pm.incr_metric("finalized_methods", n_methods_final);
     TRACE(ACCESS, 1, "Finalized %lu methods", n_methods_final);
   }
@@ -188,7 +184,7 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     TRACE(ACCESS, 1, "Finalized %lu fields", n_fields_final);
   }
   if (m_privatize_methods) {
-    auto privates = find_private_methods(scope);
+    auto privates = find_private_methods(scope, *override_graph);
     fix_call_sites_private(scope, privates);
     mark_methods_private(privates);
     pm.incr_metric("privatized_methods", privates.size());
