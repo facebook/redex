@@ -116,7 +116,7 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::vector<DexMethod*>& non_true_virtuals,
+    const std::unordered_set<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_black_list) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be

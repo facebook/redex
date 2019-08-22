@@ -11,9 +11,11 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "IPConstantPropagationAnalysis.h"
+#include "MethodOverrideGraph.h"
 #include "Timer.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace constant_propagation {
 
@@ -88,7 +90,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-  auto non_true_virtuals = devirtualize(scope);
+  auto non_true_virtuals = mog::get_non_true_virtuals(scope);
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
     auto wps = std::make_unique<WholeProgramState>(

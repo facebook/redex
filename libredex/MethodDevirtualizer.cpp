@@ -7,10 +7,12 @@
 
 #include "MethodDevirtualizer.h"
 
+#include "MethodOverrideGraph.h"
 #include "Mutators.h"
 #include "Resolver.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 
@@ -144,7 +146,8 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
     const std::vector<DexClass*>& scope,
     const std::vector<DexClass*>& targets) {
   std::vector<DexMethod*> ret;
-  auto vmethods = devirtualize(scope);
+  const auto& override_graph = mog::build_graph(scope);
+  auto vmethods = mog::get_non_true_virtuals(*override_graph, scope);
   auto targets_set =
       std::unordered_set<DexClass*>(targets.begin(), targets.end());
   for (auto m : vmethods) {
@@ -154,23 +157,6 @@ std::vector<DexMethod*> get_devirtualizable_vmethods(
     }
   }
   return ret;
-}
-
-std::vector<DexMethod*> get_devirtualizable_vmethods(
-    const std::vector<DexClass*>& scope,
-    const std::vector<DexMethod*>& targets) {
-  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
-  auto signature_map = build_signature_map(class_hierarchy);
-
-  std::vector<DexMethod*> res;
-  for (const auto m : targets) {
-    always_assert(!is_static(m) && !is_private(m) && !is_any_init(m));
-    if (can_devirtualize(signature_map, m)) {
-      res.push_back(m);
-    }
-  }
-
-  return res;
 }
 
 std::vector<DexMethod*> get_devirtualizable_dmethods(
@@ -276,24 +262,6 @@ DevirtualizerMetrics MethodDevirtualizer::devirtualize_methods(
 
   if (m_config.dmethods_using_this) {
     staticize_methods_using_this(scope, using_this);
-  }
-
-  return m_metrics;
-}
-
-DevirtualizerMetrics MethodDevirtualizer::devirtualize_vmethods(
-    const Scope& scope, const std::vector<DexMethod*>& methods) {
-  reset_metrics();
-  const auto candidates = get_devirtualizable_vmethods(scope, methods);
-  std::unordered_set<DexMethod*> using_this, not_using_this;
-  verify_and_split(candidates, using_this, not_using_this);
-
-  if (m_config.vmethods_using_this) {
-    staticize_methods_using_this(scope, using_this);
-  }
-
-  if (m_config.vmethods_not_using_this) {
-    staticize_methods_not_using_this(scope, not_using_this);
   }
 
   return m_metrics;

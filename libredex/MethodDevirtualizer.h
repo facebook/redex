@@ -59,10 +59,6 @@ class MethodDevirtualizer {
   DevirtualizerMetrics devirtualize_methods(
       const Scope& scope, const std::vector<DexClass*>& target_classes);
 
-  // Assuming vmethods.
-  DevirtualizerMetrics devirtualize_vmethods(
-      const Scope& scope, const std::vector<DexMethod*>& methods);
-
  private:
   DevirtualizerConfigs m_config;
   DevirtualizerMetrics m_metrics;

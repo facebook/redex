@@ -9,7 +9,6 @@
 
 #include "MethodReference.h"
 #include "Resolver.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace {

@@ -292,8 +292,24 @@ std::unordered_set<const DexMethod*> get_overridden_methods(
 }
 
 bool is_true_virtual(const Graph& graph, const DexMethod* method) {
+  if (is_abstract(method)) {
+    return true;
+  }
   const auto& node = graph.get_node(method);
   return node.parents.size() != 0 || node.children.size() != 0;
+}
+
+std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
+                                                     const Scope& scope) {
+  std::unordered_set<DexMethod*> non_true_virtuals;
+  for (const auto* cls : scope) {
+    for (auto* method : cls->get_vmethods()) {
+      if (!is_true_virtual(graph, method)) {
+        non_true_virtuals.emplace(method);
+      }
+    }
+  }
+  return non_true_virtuals;
 }
 
 } // namespace method_override_graph

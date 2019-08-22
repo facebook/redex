@@ -20,10 +20,12 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "Inliner.h"
+#include "MethodOverrideGraph.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 
@@ -113,7 +115,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
     methods.insert(method);
   });
   if (virtual_inline) {
-    auto non_virtual = devirtualize(scope);
+    auto non_virtual = mog::get_non_true_virtuals(scope);
     non_virt_methods = non_virtual.size();
     for (const auto& vmeth : non_virtual) {
       auto code = vmeth->get_code();
@@ -127,8 +129,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
   TRACE(INLINE, 2, "All methods count: %ld", all_methods);
   TRACE(INLINE, 2, "Direct methods count: %ld", direct_methods);
-  TRACE(INLINE, 2, "Virtual methods count: %ld",
-        all_methods - direct_methods);
+  TRACE(INLINE, 2, "Virtual methods count: %ld", all_methods - direct_methods);
   TRACE(INLINE, 2, "Direct methods no code: %ld", direct_no_code);
   TRACE(INLINE, 2, "Direct methods with code: %ld",
         direct_methods - direct_no_code);
@@ -136,8 +137,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
   TRACE(INLINE, 2, "Static constructors: %ld", clinit);
   TRACE(INLINE, 2, "Static methods: %ld", static_methods);
   TRACE(INLINE, 2, "Private methods: %ld", private_methods);
-  TRACE(INLINE, 2, "Virtual methods non virtual count: %ld",
-        non_virt_methods);
+  TRACE(INLINE, 2, "Virtual methods non virtual count: %ld", non_virt_methods);
   TRACE(INLINE, 2, "Non virtual no code count: %ld", non_virtual_no_code);
   TRACE(INLINE, 2, "Non virtual no strip count: %ld", non_virt_dont_strip);
   TRACE(INLINE, 2, "Don't strip inlinable methods count: %ld", dont_strip);

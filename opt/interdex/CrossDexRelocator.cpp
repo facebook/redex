@@ -14,7 +14,6 @@
 #include "DexUtil.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace interdex {

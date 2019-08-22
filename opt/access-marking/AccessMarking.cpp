@@ -13,11 +13,14 @@
 #include "DexUtil.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
+#include "MethodOverrideGraph.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 size_t mark_classes_final(const Scope& scope, const ClassHierarchy& ch) {
@@ -96,12 +99,19 @@ std::vector<DexMethod*> direct_methods(const std::vector<DexClass*>& scope) {
 }
 
 std::unordered_set<DexMethod*> find_private_methods(
-    const std::vector<DexClass*>& scope, const std::vector<DexMethod*>& cv) {
-  std::unordered_set<DexMethod*> candidates;
-  for (auto m : cv) {
+    const std::vector<DexClass*>& scope) {
+  auto candidates = mog::get_non_true_virtuals(scope);
+  auto dmethods = direct_methods(scope);
+  for (auto* dmethod : dmethods) {
+    candidates.emplace(dmethod);
+  }
+  for (auto it = candidates.begin(); it != candidates.end();) {
+    auto* m = *it;
     TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
-    if (!is_clinit(m) && !has_keep(m) && !is_abstract(m) && !is_private(m)) {
-      candidates.emplace(m);
+    if (is_clinit(m) || has_keep(m) || is_abstract(m) || is_private(m)) {
+      it = candidates.erase(it);
+    } else {
+      ++it;
     }
   }
   walk::opcodes(
@@ -162,7 +172,6 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
                                  PassManager& pm) {
   auto scope = build_class_scope(stores);
   ClassHierarchy ch = build_type_hierarchy(scope);
-  SignatureMap sm = build_signature_map(ch);
   if (m_finalize_classes) {
     auto n_classes_final = mark_classes_final(scope, ch);
     pm.incr_metric("finalized_classes", n_classes_final);
@@ -178,11 +187,8 @@ void AccessMarkingPass::run_pass(DexStoresVector& stores,
     pm.incr_metric("finalized_fields", n_fields_final);
     TRACE(ACCESS, 1, "Finalized %lu fields", n_fields_final);
   }
-  auto candidates = devirtualize(sm);
-  auto dmethods = direct_methods(scope);
-  candidates.insert(candidates.end(), dmethods.begin(), dmethods.end());
   if (m_privatize_methods) {
-    auto privates = find_private_methods(scope, candidates);
+    auto privates = find_private_methods(scope);
     fix_call_sites_private(scope, privates);
     mark_methods_private(privates);
     pm.incr_metric("privatized_methods", privates.size());

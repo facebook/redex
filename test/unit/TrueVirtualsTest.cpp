@@ -5,15 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
 
 #include "Creators.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "MethodOverrideGraph.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
-#include "VirtualScope.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 
@@ -60,8 +63,8 @@ std::vector<DexClass*> create_scope_2() {
   auto void_void = DexProto::make_proto(void_t, args);
 
   auto interf_t = DexType::make_type("LInterf;");
-  auto interf_cls = create_internal_class(
-      interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
+  auto interf_cls =
+      create_internal_class(interf_t, obj_t, {}, ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(interf_cls, "intf_meth1", void_void, ACC_PUBLIC);
   create_abstract_method(interf_cls, "intf_meth2", void_void, ACC_PUBLIC);
   scope.push_back(interf_cls);
@@ -402,31 +405,19 @@ std::vector<DexClass*> create_scope_10() {
 }
 
 //
-// Assert utilities for tests
+// Utilities for tests
 //
-bool check_names(const std::vector<DexMethod*>& methods,
-    const std::vector<DexString*>& names) {
-  for (const auto& method : methods) {
-    if (std::find(names.begin(), names.end(), method->get_name()) ==
-        names.end()) {
-      return false;
-    }
+
+std::unordered_set<std::string> get_method_names(
+    std::unordered_set<DexMethod*> methods) {
+  std::unordered_set<std::string> result;
+  for (auto* method : methods) {
+    result.emplace(show(method));
   }
-  return true;
+  return result;
 }
 
-bool check_classes(const std::vector<DexMethod*>& methods,
-    const std::vector<DexType*>& types) {
-  for (const auto& method : methods) {
-    if (std::find(types.begin(), types.end(), method->get_class()) ==
-        types.end()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-}
+} // namespace
 
 //
 // Tests
@@ -436,138 +427,82 @@ class DevirtualizerTest : public RedexTest {};
 
 TEST_F(DevirtualizerTest, OneClass2Finals) {
   std::vector<DexClass*> scope = create_scope_1();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 2);
-  if (strcmp(methods[0]->get_name()->c_str(), "final1") == 0) {
-    EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-    EXPECT_STREQ(methods[1]->get_name()->c_str(), "final2");
-  } else {
-    EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
-    EXPECT_STREQ(methods[0]->get_name()->c_str(), "final2");
-  }
-  EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
-  EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LA;");
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(
+      get_method_names(methods),
+      ::testing::UnorderedElementsAre("LA;.final1:()V", "LA;.final2:()V"));
 }
 
 TEST_F(DevirtualizerTest, AbstractClassInterface1Final) {
   std::vector<DexClass*> scope = create_scope_2();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 1);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre("LA;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceClassInheritance2Final) {
   std::vector<DexClass*> scope = create_scope_3();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 2);
-  if (strcmp(methods[0]->get_name()->c_str(), "final1") == 0) {
-    EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-    EXPECT_STREQ(methods[1]->get_name()->c_str(), "final2");
-    EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
-    EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LB;");
-  } else {
-    EXPECT_STREQ(methods[0]->get_name()->c_str(), "final2");
-    EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
-    EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LB;");
-    EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LA;");
-  }
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(
+      get_method_names(methods),
+      ::testing::UnorderedElementsAre("LA;.final1:()V", "LB;.final2:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBase1Final) {
   std::vector<DexClass*> scope = create_scope_4();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 1);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LA;");
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre("LA;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBaseAndOverride1Final) {
   std::vector<DexClass*> scope = create_scope_5();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 1);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LB;");
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre("LB;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBase2Classes2Final) {
   std::vector<DexClass*> scope = create_scope_6();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 2);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
-  if (strcmp(methods[0]->get_class()->get_name()->c_str(), "LB;") == 0) {
-    EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LB;");
-    EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LC;");
-  } else {
-    EXPECT_STREQ(methods[0]->get_class()->get_name()->c_str(), "LC;");
-    EXPECT_STREQ(methods[1]->get_class()->get_name()->c_str(), "LB;");
-  }
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(
+      get_method_names(methods),
+      ::testing::UnorderedElementsAre("LB;.final1:()V", "LC;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, InterfaceWithImplInBaseMultipleClasses3Final) {
   std::vector<DexClass*> scope = create_scope_7();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 3);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[2]->get_name()->c_str(), "final1");
-  std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;") };
-  EXPECT_TRUE(check_classes(methods, types));
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre(
+                  "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest,
        InterfaceWithImplInBaseMultipleClassesAndOverloads6Final) {
   std::vector<DexClass*> scope = create_scope_8();
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 6);
-  std::vector<DexString*> names = {
-      DexString::get_string("final1"),
-      DexString::get_string("intf_meth1"),
-      DexString::get_string("intf_meth2") };
-  EXPECT_TRUE(check_names(methods, names));
-  std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;"),
-      DexType::get_type("LF;"),
-      DexType::get_type("LG;") };
-  EXPECT_TRUE(check_classes(methods, types));
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre(
+                  "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V",
+                  "LF;.final1:()V", "LF;.intf_meth1:(I)V",
+                  "LG;.intf_meth2:(I)V"));
 }
 
 TEST_F(DevirtualizerTest,
        InterfacesWithImplInBaseMultipleClassesAndOverloads3Final) {
   std::vector<DexClass*> scope = create_scope_9();
-  // std::reverse(scope.begin(), scope.end());
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 3);
-  EXPECT_STREQ(methods[0]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[1]->get_name()->c_str(), "final1");
-  EXPECT_STREQ(methods[2]->get_name()->c_str(), "final1");
-  std::vector<DexType*> types = {
-      DexType::get_type("LB;"),
-      DexType::get_type("LC;"),
-      DexType::get_type("LE;") };
-  EXPECT_TRUE(check_classes(methods, types));
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre(
+                  "LB;.final1:()V", "LC;.final1:()V", "LE;.final1:()V"));
 }
 
 TEST_F(DevirtualizerTest, GenericRichHierarchy) {
   std::vector<DexClass*> scope = create_scope_10();
-  // std::reverse(scope.begin(), scope.end());
-  auto methods = devirtualize(scope);
-  EXPECT_EQ(methods.size(), 5);
-  std::vector<DexString*> names = {
-      DexString::get_string("final1"),
-      DexString::get_string("final2") };
-  EXPECT_TRUE(check_names(methods, names));
-  std::vector<DexType*> types = {
-      DexType::get_type("LA;"),
-      DexType::get_type("LAA;"),
-      DexType::get_type("LAAA;"),
-      DexType::get_type("LAAB;"),
-      DexType::get_type("LABA;") };
-  EXPECT_TRUE(check_classes(methods, types));
+  auto methods = mog::get_non_true_virtuals(scope);
+  EXPECT_THAT(get_method_names(methods),
+              ::testing::UnorderedElementsAre(
+                  "LA;.final1:()V", "LABA;.final2:()V", "LAA;.final1:(I)V",
+                  "LAAB;.final2:()V", "LAAA;.final2:()V"));
 }

@@ -21,6 +21,11 @@ namespace method_override_graph {
 class Graph;
 
 /*
+ * Slow-ish; users should build the graph once and cache it somewhere.
+ */
+std::unique_ptr<const Graph> build_graph(const Scope&);
+
+/*
  * Returns all the methods that override :method. The set does *not* include
  * :method itself.
  */
@@ -40,13 +45,22 @@ std::unordered_set<const DexMethod*> get_overridden_methods(
 
 /*
  * Whether a method overrides or is overridden by any other method.
+ *
+ * Abstract methods are always true virtuals, even if they lack an
+ * implementation.
  */
 bool is_true_virtual(const Graph& graph, const DexMethod* method);
 
 /*
- * Slow-ish; users should build the graph once and cache it somewhere.
+ * Return all non-true-virtuals in scope.
  */
-std::unique_ptr<const Graph> build_graph(const Scope&);
+std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,
+                                                     const Scope& scope);
+
+inline std::unordered_set<DexMethod*> get_non_true_virtuals(
+    const Scope& scope) {
+  return get_non_true_virtuals(*build_graph(scope), scope);
+}
 
 /*
  * The `children` edges point to the overriders / implementors of the current

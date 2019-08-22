@@ -8,11 +8,13 @@
 #include "MethodMerger.h"
 
 #include "DexAsm.h"
+#include "MethodOverrideGraph.h"
 #include "MethodReference.h"
 #include "Resolver.h"
 #include "SwitchDispatch.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 
@@ -198,7 +200,7 @@ Stats merge_methods_within_class(const DexClasses& classes,
     std::unordered_map<DexType*, std::vector<DexMethod*>> methods;
     std::for_each(classes.begin(), classes.end(),
                   [&methods](DexClass* clazz) { methods[clazz->get_type()]; });
-    auto non_virtuals = devirtualize(scope);
+    auto non_virtuals = mog::get_non_true_virtuals(scope);
     std::for_each(non_virtuals.begin(), non_virtuals.end(),
                   [&methods](DexMethod* method) {
                     auto type = method->get_class();

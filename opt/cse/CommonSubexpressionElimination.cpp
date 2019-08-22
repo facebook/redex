@@ -69,7 +69,6 @@
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "TypeInference.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 using namespace sparta;
