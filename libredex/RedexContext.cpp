@@ -399,6 +399,9 @@ void RedexContext::publish_class(DexClass* cls) {
     }
   }
   m_type_to_class.emplace(type, cls);
+  if (cls->is_external()) {
+    m_external_classes.emplace_back(cls);
+  }
 }
 
 DexClass* RedexContext::type_class(const DexType* t) {

@@ -12,24 +12,27 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
+#include "MethodOverrideGraph.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "TypeInference.h"
-#include "TypeSystem.h"
 #include "Util.h"
 #include "Walkers.h"
 
+namespace mog = method_override_graph;
+
 namespace {
 
-boost::optional<DexMethod*> get_method_def_from(const VirtualScope* v_scope,
-                                                const DexType* inferred_type) {
-  for (const auto& v_pair : v_scope->methods) {
-    auto m = v_pair.first;
+boost::optional<DexMethod*> get_method_def_from(
+    const mog::Graph& override_graph,
+    DexMethod* callee,
+    const DexType* inferred_type) {
+  auto overrides = mog::get_overriding_methods(override_graph, callee);
+  for (auto* m : overrides) {
     if (m->get_class() == inferred_type && m->is_def()) {
-      return boost::optional<DexMethod*>(m);
+      return boost::optional<DexMethod*>(const_cast<DexMethod*>(m));
     }
   }
-
   return boost::none;
 }
 
@@ -38,7 +41,8 @@ struct Stats {
   uint32_t num_invoke_interface_replaced{0};
 };
 
-Stats replaced_virtual_refs(const TypeSystem& type_system, DexMethod* method) {
+Stats replaced_virtual_refs(const mog::Graph& override_graph,
+                            DexMethod* method) {
   Stats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -67,21 +71,7 @@ Stats replaced_virtual_refs(const TypeSystem& type_system, DexMethod* method) {
 
       if (dex_type && callee->get_class() != *dex_type) {
         // replace it with the actual implementation if any provided.
-
-        boost::optional<DexMethod*> m_def = boost::none;
-        if (is_invoke_virtual(insn->opcode())) {
-          auto virtual_scope = type_system.find_virtual_scope(callee);
-          m_def = get_method_def_from(virtual_scope, *dex_type);
-        } else {
-          auto intf_scope = type_system.find_interface_scope(callee);
-          for (const auto& v_scope : intf_scope) {
-            m_def = get_method_def_from(v_scope, *dex_type);
-            if (m_def) {
-              break;
-            }
-          }
-        }
-
+        auto m_def = get_method_def_from(override_graph, callee, *dex_type);
         if (m_def) {
           insn->set_method(*m_def);
           if (opcode == OPCODE_INVOKE_INTERFACE) {
@@ -104,12 +94,18 @@ void ReBindVRefsPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* conf */,
                                PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  TypeSystem type_system(scope);
+  // We want to be able to rebind external refs as well, so make sure they are
+  // included in the MOG.
+  std::vector<DexClass*> full_scope{scope};
+  full_scope.insert(full_scope.end(),
+                    g_redex->external_classes().begin(),
+                    g_redex->external_classes().end());
+  auto override_graph = mog::build_graph(full_scope);
 
   Stats stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) -> Stats {
-        return replaced_virtual_refs(type_system, method);
+        return replaced_virtual_refs(*override_graph, method);
       },
       [](Stats a, Stats b) {
         a.num_invoke_virtual_replaced += b.num_invoke_virtual_replaced;
