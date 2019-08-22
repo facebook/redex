@@ -135,12 +135,12 @@ WholeProgramState::WholeProgramState(
   });
   // Put non-root non true virtual methods in known methods.
   for (const auto& non_true_virtual : non_true_virtuals) {
-    if (!root(non_true_virtual)) {
+    if (!root(non_true_virtual) && non_true_virtual->get_code()) {
       m_known_methods.emplace(non_true_virtual);
     }
   }
   walk::code(scope, [&](DexMethod* method, const IRCode&) {
-    if (!method->is_virtual()) {
+    if (!method->is_virtual() && method->get_code()) {
       // Put non virtual methods in known methods.
       m_known_methods.emplace(method);
     }
