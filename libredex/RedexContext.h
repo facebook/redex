@@ -38,6 +38,10 @@ struct RedexContext;
 
 extern RedexContext* g_redex;
 
+#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
+extern "C" bool strcmp_less(const char* str1, const char* str2);
+#endif
+
 struct RedexContext {
   RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
@@ -154,7 +158,11 @@ struct RedexContext {
 
   struct Strcmp {
     bool operator()(const char* a, const char* b) const {
+#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
+      return strcmp_less(a, b);
+#else
       return strcmp(a, b) < 0;
+#endif
     }
   };
 
