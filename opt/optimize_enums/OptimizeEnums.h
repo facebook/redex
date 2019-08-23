@@ -8,7 +8,6 @@
 #pragma once
 
 #include "Pass.h"
-#include "TypeSystem.h"
 
 namespace optimize_enums {
 

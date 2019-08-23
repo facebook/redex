@@ -377,10 +377,11 @@ class OptimizeEnums {
     optimize_enums::EnumAnalyzeGeneratedMethods analyzer;
 
     ConcurrentSet<const DexType*> types_used_in_serializable;
-    TypeSystem type_system(m_scope);
+    const auto class_hierarchy = build_type_hierarchy(m_scope);
+    const auto interface_map = build_interface_map(class_hierarchy);
     const auto serializable_type = DexType::make_type("Ljava/io/Serializable;");
     walk::parallel::classes(m_scope, [&](DexClass* cls) {
-      if (type_system.implements(cls->get_type(), serializable_type)) {
+      if (implements(interface_map, cls->get_type(), serializable_type)) {
         // We reject all enums that are instance fields of serializable classes.
         for (auto& ifield : cls->get_ifields()) {
           types_used_in_serializable.insert(
