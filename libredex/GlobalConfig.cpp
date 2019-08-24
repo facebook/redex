@@ -50,6 +50,7 @@ void GlobalConfig::bind_config() {
   bind("debug_info_kind", "", string_param);
   bind("emit_class_method_info_map", false, bool_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
+  bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("keep_annotations", {}, string_vector_param);
   bind("keep_class_members", {}, string_vector_param);
