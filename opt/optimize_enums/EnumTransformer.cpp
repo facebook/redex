@@ -34,9 +34,10 @@
  *                    Ljava/lang/Integer;.equals:(Object)Z
  *  -- sget-object LCandidateEnum;.f:LCandidateEnum; =>
  *                 LEnumUtils;.f?:Ljava/lang/Integer;
- *  -- invoke-virtual LCandidateEnum;.toString:()String or
- *     invoke-virtual LCandidateEnum;.name:()String =>
+ *  -- invoke-virtual LCandidateEnum;.toString:()String =>
  *                    LCandidateEnum;.redex$OE$toString:(Integer)String
+ *  -- invoke-virtual LCandidateEnum;.name:()String =>
+ *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
  *                    LCandidateEnum;.redex$OE$hashCode:(Integer)I
  *  -- invoke-static LCandidateEnum;.valueOf:(String)LCandidateEnum; =>
@@ -82,6 +83,7 @@ struct EnumUtil {
 
   DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
   DexString* REDEX_TOSTRING = DexString::make_string("redex$OE$toString");
+  DexString* REDEX_NAME = DexString::make_string("redex$OE$name");
   DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
   DexString* REDEX_STRING_VALUEOF =
       DexString::make_string("redex$OE$String_valueOf");
@@ -220,6 +222,27 @@ struct EnumUtil {
     auto proto = DexProto::make_proto(
         STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
     auto method = DexMethod::make_method(enum_type, REDEX_TOSTRING, proto);
+    return method;
+  }
+
+  /**
+   * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String, a
+   * substitute for LCandidateEnum;.name:()String.
+   * Store the method ref at the same time.
+   */
+  DexMethodRef* add_substitute_of_name(DexType* enum_type) {
+    auto method = get_substitute_of_name(enum_type);
+    m_substitute_methods.insert(method);
+    return method;
+  }
+
+  /**
+   * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String
+   */
+  DexMethodRef* get_substitute_of_name(DexType* enum_type) {
+    auto proto = DexProto::make_proto(
+        STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
+    auto method = DexMethod::make_method(enum_type, REDEX_NAME, proto);
     return method;
   }
 
@@ -506,9 +529,10 @@ class CodeTransformer final {
       } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_COMPARETO_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD) ||
-                 signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
+      } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD)) {
         update_invoke_tostring(env, cfg, block, mie);
+      } else if (signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
+        update_invoke_name(env, cfg, block, mie);
       } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
         update_invoke_hashcode(env, cfg, block, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
@@ -682,12 +706,8 @@ class CodeTransformer final {
 
   /**
    * If v0 is a candidate enum,
-   * invoke-virtual v0 LCandidateEnum;.toString:()Ljava/lang/String; or
-   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; =>
+   * invoke-virtual v0 LCandidateEnum;.toString:()Ljava/lang/String; =>
    *    invoke-static v0 LCandidateEnum;.redex$OE$toString:(Integer)String
-   * Since we never optimize enums that override toString method,
-   * LCandidateEnum;.toString:()String and LCandidateEnum;.name:()String are the
-   * same when LCandidateEnum; is a candidate enum.
    */
   void update_invoke_tostring(const optimize_enums::EnumTypeEnvironment& env,
                               cfg::ControlFlowGraph& cfg,
@@ -710,6 +730,37 @@ class CodeTransformer final {
     }
     auto helper_method =
         m_enum_util->add_substitute_of_tostring(candidate_type);
+    auto reg = insn->src(0);
+    m_replacements.push_back(InsnReplacement(
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
+  }
+
+  /**
+   * If v0 is a candidate enum,
+   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; =>
+   *    invoke-static v0 LCandidateEnum;.redex$OE$name:(Integer)String
+   */
+  void update_invoke_name(const optimize_enums::EnumTypeEnvironment& env,
+                          cfg::ControlFlowGraph& cfg,
+                          cfg::Block* block,
+                          MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    auto container = insn->get_method()->get_class();
+    if (container != m_enum_util->OBJECT_TYPE &&
+        container != m_enum_util->ENUM_TYPE &&
+        !m_enum_attributes_map.count(container)) {
+      return;
+    }
+    DexType* candidate_type =
+        extract_candidate_enum_type(env.get(insn->src(0)));
+    if (m_enum_attributes_map.count(container)) {
+      always_assert(candidate_type == nullptr || candidate_type == container);
+      candidate_type = container;
+    } else if (!candidate_type) {
+      return;
+    }
+    auto helper_method = m_enum_util->add_substitute_of_name(candidate_type);
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
         cfg, block, mie,
@@ -1019,6 +1070,8 @@ class EnumTransformer final {
     for (auto ref : methods) {
       if (ref->get_name() == m_enum_util->REDEX_TOSTRING) {
         create_tostring_method(ref);
+      } else if (ref->get_name() == m_enum_util->REDEX_NAME) {
+        create_name_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {
         create_hashcode_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_VALUEOF) {
@@ -1137,6 +1190,52 @@ class EnumTransformer final {
    * }
    */
   void create_tostring_method(DexMethodRef* ref) {
+    MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
+    auto method = mc.create();
+    auto cls = type_class(ref->get_class());
+    cls->add_method(method);
+    auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    auto entry = cfg.entry_block();
+    entry->push_back({dasm(OPCODE_INVOKE_VIRTUAL,
+                           m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
+                      dasm(OPCODE_MOVE_RESULT, {0_v})});
+
+    std::vector<std::pair<int32_t, cfg::Block*>> cases;
+    for (auto& pair :
+         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
+      auto block = cfg.create_block();
+      cases.emplace_back(pair.first, block);
+      block->push_back(
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
+           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+           dasm(OPCODE_RETURN_OBJECT, {1_v})});
+    }
+    // This goto edge should never be taken, but we need a goto edge because the
+    // switch is not a valid way to end a method. A switch cannot end a block
+    // because the on-device dex verifier is unable to prove if the switch is
+    // exhaustive.
+    //
+    // Arbitrarily choose the first case block.
+    cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
+                      cases);
+    cfg.recompute_registers_size();
+    code->clear_cfg();
+  }
+
+  /**
+   * Substitute for LCandidateEnum;.name()
+   *
+   * public static String redex$OE$name(Integer obj) {
+   *   switch(obj.intValue()) {
+   *     case 0 : ...;
+   *     case 1 : ...;
+   *     ...
+   *   }
+   * }
+   */
+  void create_name_method(DexMethodRef* ref) {
     MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
     auto method = mc.create();
     auto cls = type_class(ref->get_class());
