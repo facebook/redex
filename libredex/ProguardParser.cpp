@@ -310,16 +310,10 @@ DexAccessFlags process_access_modifier(token type, bool* is_access_flag) {
     return ACC_PRIVATE;
   case token::final:
     return ACC_FINAL;
-  case token::interface:
-    return ACC_INTERFACE;
   case token::abstract:
     return ACC_ABSTRACT;
   case token::synthetic:
     return ACC_SYNTHETIC;
-  case token::annotation:
-    return ACC_ANNOTATION;
-  case token::enumToken:
-    return ACC_ENUM;
   case token::staticToken:
     return ACC_STATIC;
   case token::volatileToken:
@@ -349,7 +343,6 @@ bool is_negation_or_class_access_modifier(token type) {
   case token::staticToken:
   case token::volatileToken:
   case token::transient:
-  case token::annotation:
     return true;
   default:
     return false;
@@ -388,16 +381,18 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
                         DexAccessFlags& unsetFlags_) {
   bool negated = false;
   while (is_negation_or_class_access_modifier((**it)->type)) {
-    // Consume the negation token if present.
+    // Copy the iterator so we can peek and see if the next token is an access
+    // token; we don't want to modify the main iterator otherwise
+    auto access_it = *it;
     if ((**it)->type == token::notToken) {
       negated = true;
-      ++(*it);
-      continue;
+      ++access_it;
     }
     bool ok;
-    DexAccessFlags access_flag = process_access_modifier((**it)->type, &ok);
+    DexAccessFlags access_flag =
+        process_access_modifier((*access_it)->type, &ok);
     if (ok) {
-      ++(*it);
+      *it = ++access_it;
       if (negated) {
         if (is_access_flag_set(setFlags_, access_flag)) {
           cerr << "Access flag " << (**it)->show()
@@ -421,6 +416,39 @@ bool parse_access_flags(std::vector<unique_ptr<Token>>::iterator* it,
       break;
     }
   }
+  return true;
+}
+
+/*
+ * Parse [!](class|interface|enum|@interface).
+ */
+bool parse_class_token(std::vector<unique_ptr<Token>>::iterator* it,
+                       DexAccessFlags& setFlags_,
+                       DexAccessFlags& unsetFlags_) {
+  bool negated = false;
+  if ((**it)->type == token::notToken) {
+    negated = true;
+    ++(*it);
+  }
+  // Make sure the next keyword is interface, class, enum.
+  switch ((**it)->type) {
+  case token::interface:
+    set_access_flag(negated ? unsetFlags_ : setFlags_, ACC_INTERFACE);
+    break;
+  case token::enumToken:
+    set_access_flag(negated ? unsetFlags_ : setFlags_, ACC_ENUM);
+    break;
+  case token::annotation:
+    set_access_flag(negated ? unsetFlags_ : setFlags_, ACC_ANNOTATION);
+    break;
+  case token::classToken:
+    break;
+  default:
+    cerr << "Expected interface, class or enum but got " << (**it)->show()
+         << " at line number " << (**it)->line << endl;
+    return false;
+  }
+  ++(*it);
   return true;
 }
 
@@ -633,37 +661,10 @@ ClassSpecification parse_class_specification(
     *ok = false;
     return class_spec;
   }
-  // According to the ProGuard grammer the next token could be a '!' to express
-  // a rule that
-  // says !class or !interface or !enum. We choose to not implement this
-  // feature.
-  if ((**it)->type == token::notToken) {
-    cerr << "Keep rules that match the negation of class, interface or enum "
-            "are not supported.\n";
+  if (!parse_class_token(
+          it, class_spec.setAccessFlags, class_spec.unsetAccessFlags)) {
     *ok = false;
     return class_spec;
-  }
-  bool match_annotation_class = is_annotation(class_spec.setAccessFlags);
-  if (!match_annotation_class) {
-    // Make sure the next keyword is interface, class, enum.
-    if (!(((**it)->type == token::interface) ||
-          ((**it)->type == token::classToken) ||
-          ((**it)->type == token::enumToken ||
-           ((**it)->type == token::annotation)))) {
-      cerr << "Expected interface, class or enum but got " << (**it)->show()
-           << " at line number " << (**it)->line << endl;
-      *ok = false;
-      return class_spec;
-    }
-    // Restrict matches to interface classes
-    if ((**it)->type == token::interface) {
-      set_access_flag(class_spec.setAccessFlags, ACC_INTERFACE);
-    }
-    // Restrict matches to enum classes
-    if ((**it)->type == token::enumToken) {
-      set_access_flag(class_spec.setAccessFlags, ACC_ENUM);
-    }
-    ++(*it);
   }
   // Parse the class name.
   if ((**it)->type != token::identifier) {
