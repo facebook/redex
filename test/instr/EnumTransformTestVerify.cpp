@@ -43,9 +43,9 @@ void expect_other_enums(const DexClasses& classes) {
   std::vector<std::string> class_names{
       "Lcom/facebook/redextest/USED_IN_UNSAFE_CONSTRUCTOR;",
       "Lcom/facebook/redextest/MODIFIES_INSTANCE_FIELD;",
-      "Lcom/facebook/redextest/HAS_TRUE_VIRTUAL;",
       "Lcom/facebook/redextest/CAST_WHEN_RETURN;",
       "Lcom/facebook/redextest/CAST_THIS_POINTER;",
+      "Lcom/facebook/redextest/CAST_THIS_POINTER_2;",
       "Lcom/facebook/redextest/CAST_PARAMETER;",
       "Lcom/facebook/redextest/USED_AS_CLASS_OBJECT;",
       "Lcom/facebook/redextest/CAST_CHECK_CAST;",

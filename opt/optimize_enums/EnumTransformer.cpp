@@ -34,18 +34,22 @@
  *                    Ljava/lang/Integer;.equals:(Object)Z
  *  -- sget-object LCandidateEnum;.f:LCandidateEnum; =>
  *                 LEnumUtils;.f?:Ljava/lang/Integer;
- *  -- invoke-virtual LCandidateEnum;.toString:()String =>
- *                    LCandidateEnum;.redex$OE$toString:(Integer)String
  *  -- invoke-virtual LCandidateEnum;.name:()String =>
  *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
  *                    LCandidateEnum;.redex$OE$hashCode:(Integer)I
  *  -- invoke-static LCandidateEnum;.valueOf:(String)LCandidateEnum; =>
  *                   LCandidateEnum;.redex$OE$valueOf:(String)Integer
- *  We also make all non-true-virtual methods static (those are virtual methods
- *  that do not override and are not overridden by `Object`, `Enum`, or
- *  interface methods) and keep them in their original class while also changing
- *  their invocations to static.
+ *
+ *  If CandidateEnum.toString() overrides Enum.toString()
+ *  -- invoke-virtual LCandidateEnum;.toString:()String =>
+ *                    LCandidateEnum;.toString$REDEX$YCYa1bLthVk:(Integer)String
+ *  otherwise
+ *  -- invoke-virtual LCandidateEnum;.toString:()String =>
+ *                    LCandidateEnum;.redex$OE$name:(Integer)String
+ *
+ *  We also make all virtual methods static and keep them in their original
+ * class while also changing their invocations to static.
  * 3. Clean the static fileds of candidate enums and update these enum classes
  * to inherit Object instead of Enum.
  * 4. Update specs of methods and fields based on name mangling.
@@ -54,7 +58,6 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
-namespace mog = method_override_graph;
 using EnumAttributeMap = std::unordered_map<DexType*, EnumAttributes>;
 namespace ptrs = local_pointers;
 
@@ -69,20 +72,17 @@ struct EnumUtil {
   // later.
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
-  // Store non-true-virtual methods that will be made static later.
-  ConcurrentSet<DexMethod*> m_non_true_virtual_methods;
+  // Store virtual methods of candidate enums that will be made static later.
+  ConcurrentSet<DexMethod*> m_virtual_methods;
 
   // Store methods for getting instance fields to be generated later.
   ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
 
   DexMethodRef* m_values_method_ref = nullptr;
 
-  std::unique_ptr<const mog::Graph> m_method_override_graph;
-
   const Config& m_config;
 
   DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
-  DexString* REDEX_TOSTRING = DexString::make_string("redex$OE$toString");
   DexString* REDEX_NAME = DexString::make_string("redex$OE$name");
   DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
   DexString* REDEX_STRING_VALUEOF =
@@ -99,6 +99,8 @@ struct EnumUtil {
   DexType* INTEGER_TYPE = get_integer_type();
   DexType* OBJECT_TYPE = get_object_type();
   DexType* STRING_TYPE = get_string_type();
+  DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
+  DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
   DexType* RTEXCEPTION_TYPE =
       DexType::make_type("Ljava/lang/RuntimeException;");
   DexType* ILLEGAL_ARG_EXCP_TYPE =
@@ -141,11 +143,7 @@ struct EnumUtil {
   DexMethodRef* STRING_EQ_METHOD =
       DexMethod::make_method("Ljava/lang/String;.equals:(Ljava/lang/Object;)Z");
 
-  explicit EnumUtil(const Config& config,
-                    std::unique_ptr<const mog::Graph> graph)
-      : m_config(config) {
-    m_method_override_graph = std::move(graph);
-  }
+  explicit EnumUtil(const Config& config) : m_config(config) {}
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
     DexClass* cls = make_enumutils_class(fields_count);
@@ -184,9 +182,11 @@ struct EnumUtil {
    * method of LCandidateEnum;.toString:()String.
    */
   DexMethodRef* add_substitute_of_stringvalueof(DexType* enum_type) {
-    auto tostring_meth = add_substitute_of_tostring(enum_type);
-    auto method = DexMethod::make_method(enum_type, REDEX_STRING_VALUEOF,
-                                         tostring_meth->get_proto());
+    add_substitute_of_tostring(enum_type);
+    auto proto = DexProto::make_proto(
+        STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
+    auto method =
+        DexMethod::make_method(enum_type, REDEX_STRING_VALUEOF, proto);
     m_substitute_methods.insert(method);
     return method;
   }
@@ -205,23 +205,34 @@ struct EnumUtil {
   }
 
   /**
-   * Return method ref to LCandidateEnum;.redex$OE$toString:(Integer)String, a
-   * substitute for LCandidateEnum;.toString:()String.
+   * If `Enum.toString` is not overridden, return method ref to
+   * LCandidateEnum;.redex$OE$name:(Integer)String, a substitute for
+   * LCandidateEnum;.toString:()String. Otherwise return the overriding method.
    * Store the method ref at the same time.
    */
   DexMethodRef* add_substitute_of_tostring(DexType* enum_type) {
-    auto method = get_substitute_of_tostring(enum_type);
-    m_substitute_methods.insert(method);
-    return method;
+    auto method_ref = get_user_defined_tostring_method(type_class(enum_type));
+    if (!method_ref) {
+      return add_substitute_of_name(enum_type);
+    } else {
+      auto method = resolve_method(method_ref, MethodSearch::Virtual);
+      always_assert(method);
+      m_virtual_methods.insert(method);
+      return method_ref;
+    }
   }
 
   /**
-   * Return method ref to LCandidateEnum;.redex$OE$toString:(Integer)String
+   * If `Enum.toString` is not overridden, return method ref to
+   * LCandidateEnum;.redex$OE$name:(Integer)String. Otherwise return the
+   * overriding method.
    */
   DexMethodRef* get_substitute_of_tostring(DexType* enum_type) {
-    auto proto = DexProto::make_proto(
-        STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method = DexMethod::make_method(enum_type, REDEX_TOSTRING, proto);
+    DexMethodRef* method =
+        get_user_defined_tostring_method(type_class(enum_type));
+    if (!method) {
+      return get_substitute_of_name(enum_type);
+    }
     return method;
   }
 
@@ -285,6 +296,25 @@ struct EnumUtil {
     auto method = DexMethod::make_method(enum_type, method_name, proto);
     m_get_instance_field_methods.insert(std::make_pair(ifield, method));
     return method;
+  }
+
+  /**
+   * Returns the `LCandidateEnum.toString()` method that overrides
+   * `Enum.toString()`. Return `nullptr` if `Enum.toString()` is not overridden.
+   */
+  DexMethod* get_user_defined_tostring_method(DexClass* cls) {
+    static ConcurrentMap<DexClass*, DexMethod*> cache;
+    if (cache.count(cls)) {
+      return cache.at(cls);
+    }
+    for (auto vmethod : cls->get_vmethods()) {
+      if (signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
+        cache.insert(std::make_pair(cls, vmethod));
+        return vmethod;
+      }
+    }
+    cache.insert(std::make_pair(cls, nullptr));
+    return nullptr;
   }
 
  private:
@@ -529,8 +559,6 @@ class CodeTransformer final {
       } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_COMPARETO_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD)) {
-        update_invoke_tostring(env, cfg, block, mie);
       } else if (signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
         update_invoke_name(env, cfg, block, mie);
       } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
@@ -538,15 +566,7 @@ class CodeTransformer final {
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
         update_invoke_stringbuilder_append(env, cfg, block, mie);
       } else {
-        auto resolved_method = resolve_method(method, MethodSearch::Virtual);
-        // Matches all non-true-virtual `SubEnum` methods (virtual methods that
-        // do not override and are not overridden by any `Enum`, `Object`, or
-        // interface methods).
-        if (m_enum_attributes_map.count(method->get_class()) &&
-            !mog::is_true_virtual(*m_enum_util->m_method_override_graph,
-                                  resolved_method)) {
-          update_invoke_user_method(cfg, block, mie, resolved_method);
-        }
+        update_invoke_user_method(env, cfg, block, mie);
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
@@ -706,39 +726,8 @@ class CodeTransformer final {
 
   /**
    * If v0 is a candidate enum,
+   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; or
    * invoke-virtual v0 LCandidateEnum;.toString:()Ljava/lang/String; =>
-   *    invoke-static v0 LCandidateEnum;.redex$OE$toString:(Integer)String
-   */
-  void update_invoke_tostring(const optimize_enums::EnumTypeEnvironment& env,
-                              cfg::ControlFlowGraph& cfg,
-                              cfg::Block* block,
-                              MethodItemEntry* mie) {
-    auto insn = mie->insn;
-    auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    DexType* candidate_type =
-        extract_candidate_enum_type(env.get(insn->src(0)));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
-      return;
-    }
-    auto helper_method =
-        m_enum_util->add_substitute_of_tostring(candidate_type);
-    auto reg = insn->src(0);
-    m_replacements.push_back(InsnReplacement(
-        cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
-  }
-
-  /**
-   * If v0 is a candidate enum,
-   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; =>
    *    invoke-static v0 LCandidateEnum;.redex$OE$name:(Integer)String
    */
   void update_invoke_name(const optimize_enums::EnumTypeEnvironment& env,
@@ -894,14 +883,47 @@ class CodeTransformer final {
     m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
   }
 
-  void update_invoke_user_method(cfg::ControlFlowGraph& cfg,
+  /**
+   * If this is an invocation of a user-defined virtual method on a
+   * CandidateEnum, then we make that method static. If that method is
+   * toString(), then we call one of the appropriate methods Enum.name()
+   * or CandidateEnum.toString(). Otherwise we do nothing.
+   */
+  void update_invoke_user_method(const optimize_enums::EnumTypeEnvironment& env,
+                                 cfg::ControlFlowGraph& cfg,
                                  cfg::Block* block,
-                                 MethodItemEntry* mie,
-                                 DexMethod* method) {
-    m_enum_util->m_non_true_virtual_methods.insert(method);
-    auto new_insn =
-        (new IRInstruction(*mie->insn))->set_opcode(OPCODE_INVOKE_STATIC);
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+                                 MethodItemEntry* mie) {
+    auto insn = mie->insn;
+    auto method_ref = insn->get_method();
+    auto container_type = method_ref->get_class();
+    if (!m_enum_attributes_map.count(container_type)) {
+      if (container_type != m_enum_util->OBJECT_TYPE &&
+          container_type != m_enum_util->ENUM_TYPE &&
+          container_type != m_enum_util->SERIALIZABLE_TYPE &&
+          container_type != m_enum_util->COMPARABLE_TYPE) {
+        return;
+      }
+      container_type = extract_candidate_enum_type(env.get(insn->src(0)));
+      if (!m_enum_attributes_map.count(container_type)) {
+        return;
+      }
+    }
+
+    // If this is toString() and there is no CandidateEnum.toString(), then we
+    // call Enum.name() instead.
+    if (signatures_match(method_ref, m_enum_util->ENUM_TOSTRING_METHOD) &&
+        m_enum_util->get_user_defined_tostring_method(
+            type_class(container_type)) == nullptr) {
+      update_invoke_name(env, cfg, block, mie);
+    } else {
+      auto method = resolve_method(method_ref, MethodSearch::Virtual);
+      always_assert(method);
+      m_enum_util->m_virtual_methods.insert(method);
+      auto new_insn = (new IRInstruction(*insn))
+                          ->set_opcode(OPCODE_INVOKE_STATIC)
+                          ->set_method(method);
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    }
   }
 
   /**
@@ -952,11 +974,9 @@ class EnumTransformer final {
   /**
    * EnumTransformer constructor. Analyze <clinit> of candidate enums.
    */
-  EnumTransformer(const Config& config,
-                  DexStoresVector* stores,
-                  std::unique_ptr<const mog::Graph> graph)
+  EnumTransformer(const Config& config, DexStoresVector* stores)
       : m_stores(*stores), m_int_objs(0) {
-    m_enum_util = std::make_unique<EnumUtil>(config, std::move(graph));
+    m_enum_util = std::make_unique<EnumUtil>(config);
     for (auto it = config.candidate_enums.begin();
          it != config.candidate_enums.end();
          ++it) {
@@ -994,7 +1014,7 @@ class EnumTransformer final {
             return false;
           }
           std::vector<DexType*> types;
-          method->get_proto()->gather_types(types);
+          method->gather_types_shallow(types);
           method->gather_types(types);
           return std::any_of(types.begin(), types.end(), [this](DexType* type) {
             return (bool)try_convert_to_int_type(type);
@@ -1007,9 +1027,9 @@ class EnumTransformer final {
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
     std::set<DexMethod*, dexmethods_comparator> virtual_methods(
-        m_enum_util->m_non_true_virtual_methods.begin(),
-        m_enum_util->m_non_true_virtual_methods.end());
-    for (DexMethod* vmethod : virtual_methods) {
+        m_enum_util->m_virtual_methods.begin(),
+        m_enum_util->m_virtual_methods.end());
+    for (auto vmethod : virtual_methods) {
       mutators::make_static(vmethod);
     }
     std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
@@ -1068,9 +1088,7 @@ class EnumTransformer final {
 
   void create_substitute_methods(const ConcurrentSet<DexMethodRef*>& methods) {
     for (auto ref : methods) {
-      if (ref->get_name() == m_enum_util->REDEX_TOSTRING) {
-        create_tostring_method(ref);
-      } else if (ref->get_name() == m_enum_util->REDEX_NAME) {
+      if (ref->get_name() == m_enum_util->REDEX_NAME) {
         create_name_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {
         create_hashcode_method(ref);
@@ -1089,7 +1107,7 @@ class EnumTransformer final {
    *   if (obj == null) {
    *     return "null";
    *   }
-   *   return redex$OE$toString(obj);
+   *   return CandidateEnum.toString(obj);
    * }
    */
   void create_stringvalueof_method(DexMethodRef* ref) {
@@ -1179,52 +1197,6 @@ class EnumTransformer final {
   }
 
   /**
-   * Substitute for LCandidateEnum;.toString()
-   *
-   * public static String redex$OE$toString(Integer obj) {
-   *   switch(obj.intValue()) {
-   *     case 0 : ...;
-   *     case 1 : ...;
-   *     ...
-   *   }
-   * }
-   */
-  void create_tostring_method(DexMethodRef* ref) {
-    MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
-    auto method = mc.create();
-    auto cls = type_class(ref->get_class());
-    cls->add_method(method);
-    auto code = method->get_code();
-    code->build_cfg();
-    auto& cfg = code->cfg();
-    auto entry = cfg.entry_block();
-    entry->push_back({dasm(OPCODE_INVOKE_VIRTUAL,
-                           m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
-                      dasm(OPCODE_MOVE_RESULT, {0_v})});
-
-    std::vector<std::pair<int32_t, cfg::Block*>> cases;
-    for (auto& pair :
-         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
-      auto block = cfg.create_block();
-      cases.emplace_back(pair.first, block);
-      block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
-           dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-           dasm(OPCODE_RETURN_OBJECT, {1_v})});
-    }
-    // This goto edge should never be taken, but we need a goto edge because the
-    // switch is not a valid way to end a method. A switch cannot end a block
-    // because the on-device dex verifier is unable to prove if the switch is
-    // exhaustive.
-    //
-    // Arbitrarily choose the first case block.
-    cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
-                      cases);
-    cfg.recompute_registers_size();
-    code->clear_cfg();
-  }
-
-  /**
    * Substitute for LCandidateEnum;.name()
    *
    * public static String redex$OE$name(Integer obj) {
@@ -1280,7 +1252,7 @@ class EnumTransformer final {
    *
    *
    * public static int redex$OE$hashCode(Integer obj) {
-   *   String name = redex$OE$toString(obj);
+   *   String name = CandidateEnum.toString(obj);
    *   return obj.intValue() + name.hashCode();
    * }
    */
@@ -1521,13 +1493,12 @@ namespace optimize_enums {
  */
 int transform_enums(const Config& config,
                     DexStoresVector* stores,
-                    std::unique_ptr<const mog::Graph> graph,
                     size_t* num_int_objs) {
   if (!config.candidate_enums.size()) {
     return 0;
   }
 
-  EnumTransformer transformer(config, stores, std::move(graph));
+  EnumTransformer transformer(config, stores);
   transformer.run();
   *num_int_objs = transformer.get_int_objs_count();
   return transformer.get_enum_objs_count();

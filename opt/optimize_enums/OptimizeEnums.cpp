@@ -14,7 +14,6 @@
 #include "EnumTransformer.h"
 #include "EnumUpcastAnalysis.h"
 #include "IRCode.h"
-#include "MethodOverrideGraph.h"
 #include "OptimizeEnumsAnalysis.h"
 #include "OptimizeEnumsGeneratedAnalysis.h"
 #include "Resolver.h"
@@ -39,7 +38,6 @@ namespace {
 
 using GeneratedSwitchCases =
     std::unordered_map<DexField*, std::unordered_map<size_t, DexField*>>;
-namespace mog = method_override_graph;
 
 constexpr const char* METRIC_NUM_SYNTHETIC_CLASSES = "num_synthetic_classes";
 constexpr const char* METRIC_NUM_LOOKUP_TABLES = "num_lookup_tables";
@@ -314,15 +312,13 @@ class OptimizeEnums {
     }
     optimize_enums::Config config(max_enum_size);
     calculate_param_summaries(m_scope, &config.param_summary_map);
-    auto method_override_graph = mog::build_graph(m_scope);
 
     /**
-     * An enum is safe if it not external, has no interfaces, has no user
-     * defined true-virtual methods, and has only one simple enum constructor.
-     * Static fields, primitive or string instance fields, and non-true-virtual
-     * methods are safe.
+     * An enum is safe if it not external, has no interfaces, and has only one
+     * simple enum constructor. Static fields, primitive or string instance
+     * fields, and virtual methods are safe.
      */
-    auto is_safe_enum = [this, &method_override_graph](const DexClass* cls) {
+    auto is_safe_enum = [this](const DexClass* cls) {
       if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
           can_delete(cls) && cls->get_interfaces()->size() == 0 &&
           only_one_static_synth_field(cls)) {
@@ -333,21 +329,17 @@ class OptimizeEnums {
           return false;
         }
 
-        const auto& vmethods = cls->get_vmethods();
-        bool has_only_non_true_virtual_methods = std::all_of(
-            vmethods.begin(), vmethods.end(), [&](DexMethod* method) {
-              return can_rename(method) &&
-                     !mog::is_true_virtual(*method_override_graph, method);
-            });
+        for (auto& vmethod : cls->get_vmethods()) {
+          if (!can_rename(vmethod)) {
+            return false;
+          }
+        }
 
         const auto& ifields = cls->get_ifields();
-        bool has_safe_ifields =
-            std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
-              auto type = field->get_type();
-              return is_primitive(type) || type == get_string_type();
-            });
-
-        return has_only_non_true_virtual_methods && has_safe_ifields;
+        return std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
+          auto type = field->get_type();
+          return is_primitive(type) || type == get_string_type();
+        });
       }
       return false;
     };
@@ -365,8 +357,7 @@ class OptimizeEnums {
       }
     }
     m_stats.num_enum_objs = optimize_enums::transform_enums(
-        config, &m_stores, std::move(method_override_graph),
-        &m_stats.num_int_objs);
+        config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
   }
 

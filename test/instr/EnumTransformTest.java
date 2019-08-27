@@ -51,9 +51,13 @@ enum SCORE {
     return null;
   }
 
-  // Non-true-virtual methods are safe.
+  // Virtual methods are safe.
   public boolean is_max() {
     return this == THREE;
+  }
+
+  public String toString() {
+    return this.myOtherField;
   }
 }
 
@@ -116,13 +120,6 @@ enum MODIFIES_INSTANCE_FIELD {
     myField++;
   }
 }
-enum HAS_TRUE_VIRTUAL {
-  ONE;
-  // True-virtual methods are not safe.
-  public String toString() {
-    return "I am a search bar!";
-  }
-}
 enum CAST_WHEN_RETURN {
   ONE;
   public static Enum[] method() {
@@ -135,6 +132,12 @@ enum CAST_THIS_POINTER {
   ONE;
   public static void cast_this_method() {
     EnumHelper.inlined_method(CAST_THIS_POINTER.ONE);
+  }
+}
+enum CAST_THIS_POINTER_2 {
+  ONE;
+  public String cast_this_method() {
+    return super.toString();
   }
 }
 enum CAST_PARAMETER {
@@ -275,7 +278,7 @@ public class EnumTransformTest {
       obj = null;
     }
     if (rand >= 0) {
-      assertThat(String.valueOf(obj)).isEqualTo(SCORE.ONE.name());
+      assertThat(String.valueOf(obj)).isEqualTo(SCORE.ONE.toString());
     } else {
       assertThat(String.valueOf(obj)).isEqualTo("null");
     }
@@ -328,7 +331,7 @@ public class EnumTransformTest {
     sb.append(SCORE.ONE.toString());
     sb.append(SCORE.TWO);
     sb.append(SCORE.THREE);
-    assertThat(sb.toString()).isEqualTo("nullONETWOTHREE");
+    assertThat(sb.toString()).isEqualTo("nullUNODOSnull");
   }
 
   @Test(expected = NullPointerException.class)
