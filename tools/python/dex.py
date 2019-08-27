@@ -1350,33 +1350,37 @@ class DexMethod:
         ) != 0
 
     def dump(self, options, dump_code=True, dump_debug_info=True, f=sys.stdout):
-        if self.is_virtual:
-            method_type = "virtual"
-        else:
-            method_type = "direct"
         dex = self.get_dex()
-        f.write(
-            "method: (%s) %s%s\n"
-            % (method_type, self.get_class().get_name(), self.get_name())
-        )
-        code_item_idx = dex.get_code_item_index_from_code_off(
-            self.encoded_method.code_off
-        )
-        self.encoded_method.dump(f=f, prefix="    encoded_method.", flat=False)
         method_id = dex.get_method_id(self.encoded_method.method_idx)
-        if method_id:
-            method_id.dump(f=f, prefix="    method_id.", flat=False)
-            proto_id = dex.get_proto_id(method_id.proto_idx)
-            if proto_id:
-                proto_id.dump(f=f, prefix="    proto_id.", flat=False)
-        f.write("\n")
+        f.write(
+            "method: %s %s.%s:%s (%s)\n"
+            % (
+                "virtual" if self.is_virtual else "direct",
+                self.get_class().get_name(),
+                self.get_name(),
+                dex.get_proto_string(method_id.proto_idx) if method_id else "",
+                access_flags_to_string(self.encoded_method.access_flags),
+            )
+        )
+        if options.verbose:
+            self.encoded_method.dump(f=f, prefix="    encoded_method.", flat=False)
+            if method_id:
+                method_id.dump(f=f, prefix="    method_id.", flat=False)
+                proto_id = dex.get_proto_id(method_id.proto_idx)
+                if proto_id:
+                    proto_id.dump(f=f, prefix="    proto_id.", flat=False)
+            f.write("\n")
         if dump_code:
+            code_item_idx = dex.get_code_item_index_from_code_off(
+                self.encoded_method.code_off
+            )
             if code_item_idx >= 0:
                 code_item = dex.get_code_items()[code_item_idx]
-                f.write(
-                    "    code_item[%u] @ %#8.8x:\n"
-                    % (code_item_idx, code_item.get_offset())
-                )
+                if options.verbose:
+                    f.write(
+                        "    code_item[%u] @ %#8.8x:"
+                        % (code_item_idx, code_item.get_offset())
+                    )
                 code_item.dump(f=f, prefix="        ", verbose=options.verbose)
         if dump_debug_info:
             self.dump_debug_info(f=f, prefix="    ")
@@ -1408,6 +1412,12 @@ class DexMethod:
         if debug_info:
             return debug_info.check_encoding(self)
 
+    def get_line_number(self):
+        debug_info = self.get_debug_info()
+        if debug_info:
+            return debug_info.line_start
+        return 0
+
 
 class DexClass:
     """Encapsulates a class within a DEX file."""
@@ -1421,18 +1431,58 @@ class DexClass:
         self.demangled = None
         self.method_mapping = None
 
-    def dump(self, f=sys.stdout):
-        f.write("\nclass: %s\n" % (self.get_name()))
+    def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
         class_def_offset = self.class_def.get_offset()
         class_def_idx = dex.get_class_def_index_from_offset(class_def_offset)
-        f.write("    class_def[%u] @ %#8.8x:\n" % (class_def_idx, class_def_offset))
-        self.class_def.dump(f=f, flat=False, prefix="        ")
+        class_data = self.class_def.class_data
+        f.write("\nclass: %s // @%#8.8x" % (self.get_name(), class_def_offset))
         f.write(
-            "    class_data_item @ %#8.8x:\n" % (self.class_def.class_data.get_offset())
+            "\n\tAccess flags: (%s)\n\tSuperclass: %s\n\tInterfaces: (%s)"
+            % (
+                access_flags_to_string(self.class_def.access_flags),
+                dex.get_typename(self.class_def.superclass_idx),
+                # TODO: Dump interfaces for class
+                "TODO",
+            )
         )
-        self.class_def.class_data.dump(f=f, flat=False, prefix="        ")
-        f.write("\n")
+        field_ids = dex.get_field_ids()
+
+        def field_to_string(field):
+            field_item = field_ids[field.field_idx]
+            return "(%s) %s:%s" % (
+                access_flags_to_string(field.access_flags),
+                dex.get_string(field_item.name_idx),
+                dex.get_typename(field_item.type_idx),
+            )
+
+        f.write(
+            "\n\tStatic fields:\n\t\t%s"
+            % "\n\t\t".join(
+                [
+                    field_to_string(class_data.static_fields[i])
+                    for i in range(class_data.static_fields_size)
+                ]
+            )
+        )
+        f.write(
+            "\n\tInstance fields:\n\t\t%s\n"
+            % "\n\t\t".join(
+                [
+                    field_to_string(class_data.instance_fields[i])
+                    for i in range(class_data.instance_fields_size)
+                ]
+            )
+        )
+        if options.verbose:
+            f.write("    class_def[%u] @ %#8.8x:\n" % (class_def_idx, class_def_offset))
+            self.class_def.dump(f=f, flat=False, prefix="        ")
+            f.write(
+                "    class_data_item @ %#8.8x:\n"
+                % (self.class_def.class_data.get_offset())
+            )
+            self.class_def.class_data.dump(f=f, flat=False, prefix="        ")
+            f.write("\n")
 
     def get_type_index(self):
         """Get type ID index (class_idx) for this class."""
@@ -1469,7 +1519,7 @@ class DexClass:
                 self.methods.append(DexMethod(self, encoded_method, False))
             for encoded_method in self.class_def.class_data.virtual_methods:
                 self.methods.append(DexMethod(self, encoded_method, True))
-        return self.methods
+        return sorted(self.methods, key=lambda method: method.get_line_number())
 
     def get_method_mapping(self):
         if self.method_mapping is None:
@@ -2001,7 +2051,7 @@ class File:
             for cls in classes:
                 if options.skip_abstract and cls.is_abstract():
                     continue
-                cls.dump(f=f)
+                cls.dump(options, f=f)
                 methods = cls.get_methods()
                 dc = options.dump_code or options.dump_all
                 ddi = options.debug or options.dump_all
@@ -4363,7 +4413,7 @@ def main():
             dex_class = dex.find_class(options.class_filter)
             if dex_class:
                 if options.method_filter is None:
-                    dex_class.dump()
+                    dex_class.dump(options)
                 for method in dex_class.get_methods():
                     method_name = method.get_name()
                     if options.method_filter:
