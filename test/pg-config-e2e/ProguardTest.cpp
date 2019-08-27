@@ -80,8 +80,7 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
 }
 
 template <class Container>
-DexField* find_field_named(const Container& fields,
-                           const char* name) {
+DexField* find_field_named(const Container& fields, const char* name) {
   TRACE(PGR, 8, "==> Searching for field %s", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
     auto deobfuscated_field = f->get_deobfuscated_name();
@@ -783,7 +782,7 @@ TEST_F(ProguardTest, assortment) {
         classes, "Lcom/facebook/redex/test/proguard/Delta$S3;");
     ASSERT_NE(nullptr, delta_s3);
     EXPECT_FALSE(root(delta_s3));
-    EXPECT_FALSE(can_rename(delta_s3));
+    EXPECT_TRUE(can_rename(delta_s3));
 
     auto delta_s4 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S4;");

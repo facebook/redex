@@ -128,7 +128,8 @@ struct ClassMatcher {
     for (const auto& impl : interfaces->get_type_list()) {
       auto impl_class = type_class(impl);
       if (impl_class) {
-        if (search_extends_and_interfaces(impl_class)) {
+        if (type_and_annotation_match(impl_class) ||
+            search_extends_and_interfaces(impl_class)) {
           return true;
         }
       }
@@ -148,16 +149,13 @@ struct ClassMatcher {
 
   bool search_extends_and_interfaces_nocache(const DexClass* cls) {
     always_assert(cls != nullptr);
-    // Does this class match the annotation and type wildcard?
-    if (type_and_annotation_match(cls)) {
-      return true;
-    }
     // Do any of the classes and interfaces above match?
     auto super_type = cls->get_super_class();
     if (super_type && super_type != get_object_type()) {
       auto super_class = type_class(super_type);
       if (super_class) {
-        if (search_extends_and_interfaces(super_class)) {
+        if (type_and_annotation_match(super_class) ||
+            search_extends_and_interfaces(super_class)) {
           return true;
         }
       }
