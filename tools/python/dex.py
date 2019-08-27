@@ -506,7 +506,7 @@ class encoded_catch_handler_list(AutoParser):
         return True
 
 
-def print_instructions(insns, prefix, flat, f):
+def print_instructions(insns, prefix, flat, f, context=None):
     f.write("\n")
     code_units = CodeUnits(insns)
     dex_inst = DexInstruction()
@@ -515,7 +515,7 @@ def print_instructions(insns, prefix, flat, f):
         if prefix:
             f.write(prefix)
         f.write("    ")
-        dex_inst.dump()
+        dex_inst.dump(context=context)
 
 
 DBG_END_SEQUENCE = 0x00
@@ -848,11 +848,11 @@ class code_item(AutoParser):
         },
     ]
 
-    def __init__(self, data):
-        AutoParser.__init__(self, self.items, data)
+    def __init__(self, data, context):
+        AutoParser.__init__(self, self.items, data, context)
         self.debug_info = None
         self.data = data
-        # Convert insns from a list to a tuple to avoid mutattion and also to
+        # Convert insns from a list to a tuple to avoid mutation and also to
         # allow self.insns to be hashed.
         self.insns = tuple(self.insns)
 
@@ -863,6 +863,12 @@ class code_item(AutoParser):
             self.debug_info = debug_info_item(data)
             data.pop_offset_and_seek()
         return self.debug_info
+
+    def dump(self, f, prefix, verbose=False):
+        if verbose:
+            AutoParser.dump(self, f=f, prefix=prefix)
+        else:
+            print_instructions(self.insns, prefix, False, f, self.context)
 
 
 class encoded_value:
@@ -1326,7 +1332,7 @@ class DexMethod:
     def is_synthetic(self):
         return (self.encoded_method.access_flags & ACC_SYNTHETIC) != 0
 
-    def dump(self, dump_code=True, dump_debug_info=True, f=sys.stdout):
+    def dump(self, options, dump_code=True, dump_debug_info=True, f=sys.stdout):
         if self.is_virtual:
             method_type = "virtual"
         else:
@@ -1354,7 +1360,7 @@ class DexMethod:
                     "    code_item[%u] @ %#8.8x:\n"
                     % (code_item_idx, code_item.get_offset())
                 )
-                code_item.dump(f=f, prefix="        ")
+                code_item.dump(f=f, prefix="        ", verbose=options.verbose)
         if dump_debug_info:
             self.dump_debug_info(f=f, prefix="    ")
 
@@ -1496,7 +1502,7 @@ def mangle_classname(demangled):
 
 
 class File:
-    """Represents and DEX (Dalvik Executable) file"""
+    """Represents a DEX (Dalvik Executable) file"""
 
     def __init__(self, path, proguard_path):
         self.path = path
@@ -1740,7 +1746,7 @@ class File:
             self.data.push_offset_and_seek(offset)
             for i in range(size):
                 self.data.align_to(4)
-                item = code_item(self.data)
+                item = code_item(self.data, self)
                 self.code_items.append(item)
                 self.code_off_to_code_item_idx[item.get_offset()] = i
             self.data.pop_offset_and_seek()
@@ -1969,7 +1975,7 @@ class File:
                 ddi = options.debug or options.dump_all
                 for method in methods:
                     if dc or ddi:
-                        method.dump(f=f, dump_code=dc, dump_debug_info=ddi)
+                        method.dump(options, f=f, dump_code=dc, dump_debug_info=ddi)
                 f.write("\n")
 
     def dump_code_items(self, options, f=sys.stdout):
@@ -2132,7 +2138,7 @@ class Opcode00(Opcode):
         else:
             raise ValueError("add support for NOP nature %u" % (self.nature))
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         if self.nature == 0:
             f.write("%s" % (self.get_name()))
         elif self.nature == 1:
@@ -2168,7 +2174,7 @@ class Opcode01(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2194,7 +2200,7 @@ class Opcode02(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2224,7 +2230,7 @@ class Opcode03(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2243,7 +2249,7 @@ class Opcode04(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2270,7 +2276,7 @@ class Opcode05(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2301,7 +2307,7 @@ class Opcode06(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2320,7 +2326,7 @@ class Opcode07(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2347,7 +2353,7 @@ class Opcode08(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2379,7 +2385,7 @@ class Opcode09(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2401,7 +2407,7 @@ class Opcode0A_0D(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2417,7 +2423,7 @@ class Opcode0E(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s" % (self.get_name()))
 
     def emulate(self, emulator):
@@ -2434,7 +2440,7 @@ class Opcode0F(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2451,7 +2457,7 @@ class Opcode10(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2468,7 +2474,7 @@ class Opcode11(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2486,7 +2492,7 @@ class Opcode12(Opcode):
         self.reg = inst.get_A()
         self.imm = sign_extending(inst[0] >> 12, 4)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2526,7 +2532,7 @@ class Opcode13(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2562,7 +2568,7 @@ class Opcode14(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2582,7 +2588,7 @@ class Opcode15(Opcode):
         self.reg = inst.get_AA()
         self.imm = inst[1] << 16
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2602,7 +2608,7 @@ class Opcode16(Opcode):
         self.reg = inst.get_AA()
         self.imm = sign_extending(inst[1], 16)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2640,7 +2646,7 @@ class Opcode17(Opcode):
             return 2
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2677,7 +2683,7 @@ class Opcode18(Opcode):
             return 4
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2697,7 +2703,7 @@ class Opcode19(Opcode):
         self.reg = inst.get_AA()
         self.imm = sign_extending(inst[1], 16) << 48
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, #int %i // #%#x" % (self.get_name(), self.reg, self.imm, self.imm)
         )
@@ -2717,7 +2723,7 @@ class Opcode1A(Opcode):
         self.reg = inst.get_AA()
         self.string_idx = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, string@%4.4x" % (self.get_name(), self.reg, self.string_idx))
 
     def emulate(self, emulator):
@@ -2735,7 +2741,7 @@ class Opcode1B(Opcode):
         self.reg = inst.get_AA()
         self.string_idx = inst.get_uint32(1)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, string@%8.8x" % (self.get_name(), self.reg, self.string_idx))
 
     def check_encoding(self, f=sys.stdout):
@@ -2761,7 +2767,7 @@ class Opcode1C(Opcode):
         self.reg = inst.get_AA()
         self.type = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
 
     def emulate(self, emulator):
@@ -2778,7 +2784,7 @@ class Opcode1D(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2795,7 +2801,7 @@ class Opcode1E(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -2813,7 +2819,7 @@ class Opcode1F(Opcode):
         self.reg = inst.get_AA()
         self.type = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
 
     def emulate(self, emulator):
@@ -2833,7 +2839,7 @@ class Opcode20(Opcode):
         self.regs.append(inst.get_B())
         self.type = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, type@%4.4x"
             % (self.get_name(), self.regs[0], self.regs[1], self.type)
@@ -2855,7 +2861,7 @@ class Opcode21(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -2873,7 +2879,7 @@ class Opcode22(Opcode):
         self.reg = inst.get_AA()
         self.type = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
 
     def emulate(self, emulator):
@@ -2893,7 +2899,7 @@ class Opcode23(Opcode):
         self.regs.append(inst.get_B())
         self.type = inst[1]
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, type@%4.4x"
             % (self.get_name(), self.regs[0], self.regs[1], self.type)
@@ -2919,15 +2925,15 @@ class Opcode24(Opcode):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
-    def dump(self, f=sys.stdout):
-        f.write("%s {" % (self.get_name()))
-        first = True
-        for reg in self.regs:
-            if not first:
-                f.write(", ")
-            f.write("v%u" % (reg))
-            first = False
-        f.write("} type@%4.4x" % (self.type))
+    def dump(self, f=sys.stdout, context=None):
+        f.write(
+            "%s {%s} type@%4.4x"
+            % (
+                self.get_name(),
+                ", ".join(["v%u" % reg for reg in self.regs]),
+                self.type,
+            )
+        )
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2949,15 +2955,15 @@ class Opcode25(Opcode):
         for i in range(arg_count):
             self.regs.append(first_reg + i)
 
-    def dump(self, f=sys.stdout):
-        f.write("%s {" % (self.get_name()))
-        first = True
-        for reg in self.regs:
-            if not first:
-                f.write(", ")
-            f.write("v%u" % (reg))
-            first = False
-        f.write("} type@%4.4x" % (self.type))
+    def dump(self, f=sys.stdout, context=None):
+        f.write(
+            "%s {%s} type@%4.4x"
+            % (
+                self.get_name(),
+                ", ".join(["v%u" % reg for reg in self.regs]),
+                self.type,
+            )
+        )
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2974,7 +2980,7 @@ class Opcode26(Opcode):
         self.reg = inst.get_AA()
         self.signed_offset = inst.get_sint32(1)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, %8.8x // %s"
             % (
@@ -2999,7 +3005,7 @@ class Opcode27(Opcode):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u" % (self.get_name(), self.reg))
 
     def emulate(self, emulator):
@@ -3021,7 +3027,7 @@ class Opcode28(Opcode):
             f.write('error: "goto" has a zero offset  (invalid encoding)\n')
         return 0
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s %4.4x // %+i"
             % (
@@ -3045,7 +3051,7 @@ class Opcode29(Opcode):
         Opcode.__init__(self, inst)
         self.signed_offset = sign_extending(inst[1], 16)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s %4.4x // %+i"
             % (
@@ -3078,7 +3084,7 @@ class Opcode2A(Opcode):
         Opcode.__init__(self, inst)
         self.signed_offset = inst.get_sint32(1)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s %4.4x // %+i"
             % (
@@ -3126,7 +3132,7 @@ class Opcode2B(Opcode):
         self.reg = inst.get_AA()
         self.branch = inst.get_sint32(1)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, %8.8x // +%8.8x"
             % (
@@ -3152,7 +3158,7 @@ class Opcode2C(Opcode):
         self.reg = inst.get_AA()
         self.branch = inst.get_sint32(1)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, %8.8x // +%8.8x"
             % (
@@ -3186,7 +3192,7 @@ class Opcode2D_31(Opcode):
         self.regs.append(inst.get_uint8_lo(1))
         self.regs.append(inst.get_uint8_hi(1))
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, v%u"
             % (self.get_name(), self.regs[0], self.regs[1], self.regs[2])
@@ -3216,7 +3222,7 @@ class Opcode32_37(Opcode):
         self.regs.append(inst.get_B())
         self.signed_offset = sign_extending(inst[1], 16)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, %4.4x // %i"
             % (
@@ -3250,7 +3256,7 @@ class Opcode38_3D(Opcode):
         self.reg = inst.get_AA()
         self.signed_offset = sign_extending(inst[1], 16)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, %4.4x // %s"
             % (
@@ -3293,7 +3299,7 @@ class Opcode44_51(Opcode):
         self.regs.append(inst.get_uint8_lo(1))
         self.regs.append(inst.get_uint8_hi(1))
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, v%u"
             % (self.get_name(), self.regs[0], self.regs[1], self.regs[2])
@@ -3329,13 +3335,21 @@ class Opcode52_5f(Opcode):
         self.regs = []
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
-        self.field = inst[1]
+        self.field_idx = inst[1]
 
-    def dump(self, f=sys.stdout):
-        f.write(
-            "%s v%u, v%u, field@%4.4x"
-            % (self.get_name(), self.regs[0], self.regs[1], self.field)
-        )
+    def dump(self, f=sys.stdout, context=None):
+        f.write("%s v%u, v%u, " % (self.get_name(), self.regs[0], self.regs[1]))
+        if context is not None:
+            field_item = context.get_field_ids()[self.field_idx]
+            f.write(
+                "%s.%s:%s // "
+                % (
+                    context.get_typename(field_item.class_idx),
+                    context.get_string(field_item.name_idx),
+                    context.get_typename(field_item.type_idx),
+                )
+            )
+        f.write("field@%4.4x" % self.field_idx)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -3365,10 +3379,21 @@ class Opcode60_6d(Opcode):
     def __init__(self, inst, code_units):
         Opcode.__init__(self, inst)
         self.reg = inst.get_AA()
-        self.field = inst.get_uint16(1)
+        self.field_idx = inst.get_uint16(1)
 
-    def dump(self, f=sys.stdout):
-        f.write("%s v%u, field@%4.4x" % (self.get_name(), self.reg, self.field))
+    def dump(self, f=sys.stdout, context=None):
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            field_item = context.get_field_ids()[self.field_idx]
+            f.write(
+                "%s.%s:%s // "
+                % (
+                    context.get_typename(field_item.class_idx),
+                    context.get_string(field_item.name_idx),
+                    context.get_typename(field_item.type_idx),
+                )
+            )
+        f.write("field@%4.4x" % self.field_idx)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -3401,15 +3426,22 @@ class Opcode6E_72(Opcode):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
-    def dump(self, f=sys.stdout):
-        f.write("%s {" % (self.get_name()))
-        first = True
-        for reg in self.regs:
-            if not first:
-                f.write(", ")
-            f.write("v%u" % (reg))
-            first = False
-        f.write("} method@%4.4x" % (self.method_idx))
+    def dump(self, f=sys.stdout, context=None):
+        f.write(
+            "%s {%s} "
+            % (self.get_name(), ", ".join(["v%u" % reg for reg in self.regs]))
+        )
+        if context is not None:
+            method_item = context.get_method_ids()[self.method_idx]
+            f.write(
+                "%s.%s:%s // "
+                % (
+                    context.get_typename(method_item.class_idx),
+                    context.get_string(method_item.name_idx),
+                    context.get_proto_shorty(method_item.proto_idx),
+                )
+            )
+        f.write("method@%4.4x" % self.method_idx)
 
     def new_encoding(self, f=sys.stdout):
         if (
@@ -3454,15 +3486,22 @@ class Opcode74_78(Opcode):
         for i in range(arg_count):
             self.regs.append(first_reg + i)
 
-    def dump(self, f=sys.stdout):
-        f.write("%s {" % (self.get_name()))
-        first = True
-        for reg in self.regs:
-            if not first:
-                f.write(", ")
-            f.write("v%u" % (reg))
-            first = False
-        f.write("} method@%4.4x" % (self.method_idx))
+    def dump(self, f=sys.stdout, context=None):
+        f.write(
+            "%s {%s} "
+            % (self.get_name(), ", ".join(["v%u" % reg for reg in self.regs]))
+        )
+        if context is not None:
+            method_item = context.get_method_ids()[self.method_idx]
+            f.write(
+                "%s.%s:%s // "
+                % (
+                    context.get_typename(method_item.class_idx),
+                    context.get_string(method_item.name_idx),
+                    context.get_proto_shorty(method_item.proto_idx),
+                )
+            )
+        f.write("method@%4.4x" % self.method_idx)
 
     def new_encoding(self, f=sys.stdout):
         if (
@@ -3515,7 +3554,7 @@ class Opcode7B_8F(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -3568,7 +3607,7 @@ class Opcode90_AF(Opcode):
         self.regs.append(inst.get_uint8_lo(1))
         self.regs.append(inst.get_uint8_hi(1))
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, v%u"
             % (self.get_name(), self.regs[0], self.regs[1], self.regs[2])
@@ -3578,21 +3617,21 @@ class Opcode90_AF(Opcode):
         """Return True if the operation is commutative"""
         op = self.get_op()
         return (
-            op == 0x90
-            or op == 0x92  # add-int
-            or op == 0x95  # mul-int
-            or op == 0x96  # and-int
-            or op == 0x97  # or-int
-            or op == 0x9B  # xor-int
-            or op == 0x9D  # add-long
-            or op == 0xA0  # mul-long
-            or op == 0xA1  # and-long
-            or op == 0xA2  # or-long
-            or op == 0xA6  # xor-long
-            or op == 0xA8  # add-float
-            or op == 0xAB  # mul-float
-            or op == 0xAD  # add-double
-        )  # mul-double
+            op == 0x90  # add-int
+            or op == 0x92  # mul-int
+            or op == 0x95  # and-int
+            or op == 0x96  # or-int
+            or op == 0x97  # xor-int
+            or op == 0x9B  # add-long
+            or op == 0x9D  # mul-long
+            or op == 0xA0  # and-long
+            or op == 0xA1  # or-long
+            or op == 0xA2  # xor-long
+            or op == 0xA6  # add-float
+            or op == 0xA8  # mul-float
+            or op == 0xAB  # add-double
+            or op == 0xAD  # mul-double
+        )
 
     def check_encoding(self, f=sys.stdout):
         vAA = self.regs[0]
@@ -3666,7 +3705,7 @@ class OpcodeB0_CF(Opcode):
         self.regs.append(inst.get_A())
         self.regs.append(inst.get_B())
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write("%s v%u, v%u" % (self.get_name(), self.regs[0], self.regs[1]))
 
     def emulate(self, emulator):
@@ -3695,7 +3734,7 @@ class OpcodeD0_D7(Opcode):
         self.regs.append(inst.get_B())
         self.imm = sign_extending(inst[1], 16)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, #int %i // #%#x"
             % (self.get_name(), self.regs[0], self.regs[1], self.imm, self.imm)
@@ -3730,7 +3769,7 @@ class OpcodeD8_E2(Opcode):
         self.regs.append(inst.get_uint8_lo(1))
         self.imm = sign_extending(inst.get_uint8_hi(1), 8)
 
-    def dump(self, f=sys.stdout):
+    def dump(self, f=sys.stdout, context=None):
         f.write(
             "%s v%u, v%u, #int %i // #%#x"
             % (self.get_name(), self.regs[0], self.regs[1], self.imm, self.imm)
@@ -3759,15 +3798,15 @@ class OpcodeFA(Opcode):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
-    def dump(self, f=sys.stdout):
-        f.write("%s {" % (self.get_name()))
-        first = True
-        for reg in self.regs:
-            if not first:
-                f.write(", ")
-            f.write("v%u" % (reg))
-            first = False
-        f.write("} type@%4.4x" % (self.type))
+    def dump(self, f=sys.stdout, context=None):
+        f.write(
+            "%s {%s} type@%4.4x"
+            % (
+                self.get_name(),
+                ", ".join(["v%u" % reg for reg in self.regs]),
+                self.type(),
+            )
+        )
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -3878,7 +3917,7 @@ class DexInstruction(object):
                         "%#2.2x in %s" % (op, str(opcode_class))
                     )
 
-    def dump(self, f=sys.stdout, suffix="\n"):
+    def dump(self, f=sys.stdout, suffix="\n", context=None):
         f.write("%4.4x:" % (self.code_unit_idx))
         for code_unit in self.code_units:
             f.write(" %4.4x" % (swap16(code_unit)))
@@ -3888,7 +3927,7 @@ class DexInstruction(object):
             for i in range(pad):
                 f.write("     ")
         f.write(" ")
-        self.instruction.dump(f=f)
+        self.instruction.dump(f=f, context=context)
         if suffix:
             f.write(suffix)
 
@@ -4286,7 +4325,7 @@ def main():
                     if options.method_filter:
                         if options.method_filter != method_name:
                             continue
-                    method.dump()
+                    method.dump(options)
             else:
                 print(
                     'error: class definition not found for "%s"'
@@ -4343,6 +4382,7 @@ def main():
                 for method in methods:
                     if options.dump_disassembly or options.debug:
                         method.dump(
+                            options,
                             f=sys.stdout,
                             dump_code=options.dump_disassembly,
                             dump_debug_info=options.debug,
