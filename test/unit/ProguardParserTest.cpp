@@ -306,6 +306,116 @@ TEST(ProguardParserTest, keep) {
   ASSERT_EQ(cs.methodSpecifications.size(), 0);
 }
 
+// keep negation
+TEST(ProguardParserTest, negated_keep) {
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !enum Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    auto cs = (*config.keep_rules.begin())->class_spec;
+    EXPECT_EQ(cs.className, "Alpha.Beta");
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, ACC_ENUM);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !public !enum Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    auto cs = (*config.keep_rules.begin())->class_spec;
+    EXPECT_EQ(cs.className, "Alpha.Beta");
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, ACC_ENUM | ACC_PUBLIC);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !interface Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    auto cs = (*config.keep_rules.begin())->class_spec;
+    EXPECT_EQ(cs.className, "Alpha.Beta");
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, ACC_INTERFACE);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !@interface Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    auto cs = (*config.keep_rules.begin())->class_spec;
+    EXPECT_EQ(cs.className, "Alpha.Beta");
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, ACC_ANNOTATION);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+
+  // Not sure we should allow this, just documenting that we do
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !class Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    ASSERT_EQ(config.keep_rules.size(), 1);
+    auto cs = (*config.keep_rules.begin())->class_spec;
+    EXPECT_EQ(cs.className, "Alpha.Beta");
+    EXPECT_EQ(cs.setAccessFlags, 0);
+    EXPECT_EQ(cs.unsetAccessFlags, 0);
+    EXPECT_EQ(cs.extendsAnnotationType, "");
+    EXPECT_EQ(cs.extendsClassName, "");
+    EXPECT_EQ(cs.annotationType, "");
+    EXPECT_EQ(cs.fieldSpecifications.size(), 0);
+    EXPECT_EQ(cs.methodSpecifications.size(), 0);
+  }
+}
+
+TEST(ProguardParserTest, bad_keep) {
+  // wrong order
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep interface public Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    EXPECT_FALSE(config.ok);
+  }
+
+  // wrong order
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep !interface public Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    EXPECT_FALSE(config.ok);
+  }
+
+  // missing class identifier
+  {
+    ProguardConfiguration config;
+    std::istringstream ss("-keep public Alpha.Beta");
+    proguard_parser::parse(ss, &config);
+    EXPECT_FALSE(config.ok);
+  }
+}
+
 // Shrinking Options
 
 // dontshrink

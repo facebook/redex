@@ -784,7 +784,7 @@ TEST(ProguardTest, assortment) {
         classes, "Lcom/facebook/redex/test/proguard/Delta$S3;");
     ASSERT_NE(nullptr, delta_s3);
     EXPECT_FALSE(root(delta_s3));
-    EXPECT_FALSE(can_rename(delta_s3));
+    EXPECT_TRUE(can_rename(delta_s3));
 
     auto delta_s4 = find_class_named(
         classes, "Lcom/facebook/redex/test/proguard/Delta$S4;");
