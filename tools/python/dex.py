@@ -65,25 +65,31 @@ UINT32_MAX = 4294967295
 # ----------------------------------------------------------------------
 # access_flags definitions
 # ----------------------------------------------------------------------
-ACC_PUBLIC = 0x1
-ACC_PRIVATE = 0x2
-ACC_PROTECTED = 0x4
-ACC_STATIC = 0x8
-ACC_FINAL = 0x10
-ACC_SYNCHRONIZED = 0x20
-ACC_VOLATILE = 0x40
-ACC_BRIDGE = 0x40
-ACC_TRANSIENT = 0x80
-ACC_VARARGS = 0x80
-ACC_NATIVE = 0x100
-ACC_INTERFACE = 0x200
-ACC_ABSTRACT = 0x400
-ACC_STRICT = 0x800
-ACC_SYNTHETIC = 0x1000
-ACC_ANNOTATION = 0x2000
-ACC_ENUM = 0x4000
-ACC_CONSTRUCTOR = 0x10000
-ACC_DECLARED_SYNCHRONIZED = 0x20000
+
+
+class AccessFlags:
+    flags = {
+        "ACC_PUBLIC": 0x1,
+        "ACC_PRIVATE": 0x2,
+        "ACC_PROTECTED": 0x4,
+        "ACC_STATIC": 0x8,
+        "ACC_FINAL": 0x10,
+        "ACC_SYNCHRONIZED": 0x20,
+        "ACC_VOLATILE": 0x40,
+        "ACC_BRIDGE": 0x40,
+        "ACC_TRANSIENT": 0x80,
+        "ACC_VARARGS": 0x80,
+        "ACC_NATIVE": 0x100,
+        "ACC_INTERFACE": 0x200,
+        "ACC_ABSTRACT": 0x400,
+        "ACC_STRICT": 0x800,
+        "ACC_SYNTHETIC": 0x1000,
+        "ACC_ANNOTATION": 0x2000,
+        "ACC_ENUM": 0x4000,
+        "ACC_CONSTRUCTOR": 0x10000,
+        "ACC_DECLARED_SYNCHRONIZED": 0x20000,
+    }
+
 
 # ----------------------------------------------------------------------
 # Value formats
@@ -271,6 +277,13 @@ def is_dex_magic(magic):
 
 def hex_escape(s):
     return "".join(escape(c) for c in s)
+
+
+def access_flags_to_string(access_flags):
+    # Do not print the "ACC_" part of the flag names.
+    return ", ".join(
+        [key[4:] for key, value in AccessFlags.flags.items() if access_flags & value]
+    )
 
 
 # ----------------------------------------------------------------------
@@ -1324,13 +1337,17 @@ class DexMethod:
         return self.insns
 
     def is_abstract(self):
-        return (self.encoded_method.access_flags & ACC_ABSTRACT) != 0
+        return (
+            self.encoded_method.access_flags & AccessFlags.flags["ACC_ABSTRACT"]
+        ) != 0
 
     def is_native(self):
-        return (self.encoded_method.access_flags & ACC_NATIVE) != 0
+        return (self.encoded_method.access_flags & AccessFlags.flags["ACC_NATIVE"]) != 0
 
     def is_synthetic(self):
-        return (self.encoded_method.access_flags & ACC_SYNTHETIC) != 0
+        return (
+            self.encoded_method.access_flags & AccessFlags.flags["ACC_SYNTHETIC"]
+        ) != 0
 
     def dump(self, options, dump_code=True, dump_debug_info=True, f=sys.stdout):
         if self.is_virtual:
@@ -1422,7 +1439,7 @@ class DexClass:
         return self.class_def.class_idx
 
     def is_abstract(self):
-        return (self.class_def.access_flags & ACC_ABSTRACT) != 0
+        return (self.class_def.access_flags & AccessFlags.flags["ACC_ABSTRACT"]) != 0
 
     def get_mangled_name(self):
         if self.mangled is None:
@@ -1646,6 +1663,19 @@ class File:
         id = self.get_proto_id(proto_idx)
         return self.get_string(id.shorty_idx)
 
+    def get_proto_string(self, proto_idx):
+        proto = self.get_proto_id(proto_idx)
+        return_type = self.get_typename(proto.return_type_idx)
+        params = proto.get_parameters()
+        return "(%s)%s" % (
+            ", ".join(
+                [self.get_typename(type_idx) for type_idx in params.list]
+                if params
+                else []
+            ),
+            return_type,
+        )
+
     def get_field_ids(self):
         if self.field_ids is None:
             self.field_ids = []
@@ -1838,6 +1868,7 @@ class File:
 
     def dump_header(self, options, f=sys.stdout):
         self.header.dump(f=f)
+        f.write("\n")
 
     def dump_map_list(self, options, f=sys.stdout):
         self.get_map_list().dump(f=f)
@@ -1848,7 +1879,7 @@ class File:
         if string_ids:
             f.write("string_ids:\n")
             for (i, item) in enumerate(self.get_strings()):
-                f.write("[%3u] %#8.8x ( " % (i, string_ids[i]))
+                f.write("[%4u] %#8.8x ( " % (i, string_ids[i]))
                 item.dump(f=f)
                 f.write(")\n")
 
@@ -1857,7 +1888,7 @@ class File:
         if type_ids:
             f.write("\ntype_ids:\n      DESCRIPTOR_IDX\n")
             for (i, item) in enumerate(type_ids):
-                f.write('[%3u] %#8.8x ("%s")\n' % (i, item, self.get_string(item)))
+                f.write('[%4u] %#8.8x ("%s")\n' % (i, item, self.get_string(item)))
 
     def find_type_idx(self, class_str_idx):
         types = self.get_type_ids()
@@ -1877,59 +1908,53 @@ class File:
         proto_ids = self.get_proto_ids()
         if proto_ids:
             f.write("\nproto_ids:\n")
-            f.write(" " * (5 + 1))
+            f.write(" " * (6 + 1))
             f.write(proto_id_item.get_table_header())
             for (i, item) in enumerate(proto_ids):
-                f.write("[%3u] " % (i))
+                f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
-                shorty = self.get_string(item.shorty_idx)
-                ret = self.get_string(item.return_type_idx)
-                f.write(' ("%s", "%s"' % (shorty, ret))
-                parameters = item.get_parameters()
-                if parameters:
-                    f.write(", (")
-                    for (i, type_id) in enumerate(parameters.list):
-                        if i > 0:
-                            f.write(", ")
-                        f.write(self.get_string(type_id))
-                    f.write(")")
-                else:
-                    f.write(", ()")
-                f.write(")\n")
+                f.write("%s\n" % self.get_proto_string(i))
 
     def dump_field_ids(self, options, f=sys.stdout):
         field_ids = self.get_field_ids()
         if field_ids:
             f.write("\nfield_ids:\n")
-            f.write(" " * (5 + 1))
+            f.write(" " * (6 + 1))
             f.write(field_id_item.get_table_header())
             for (i, item) in enumerate(field_ids):
-                f.write("[%3u] " % (i))
+                f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
                 f.write(
-                    ' ("%s", "%s", "%s")\n'
+                    " %s.%s:%s\n"
                     % (
                         self.get_typename(item.class_idx),
-                        self.get_typename(item.type_idx),
                         self.get_string(item.name_idx),
+                        self.get_typename(item.type_idx),
                     )
                 )
 
-    def dump_method_ids(self, options, f=sys.stdout):
+    def dump_class_method_ids(self, options, f=sys.stdout):
         method_ids = self.get_method_ids()
-        if method_ids:
-            f.write("\nmethod_ids:\n")
-            f.write(" " * (5 + 1))
-            f.write(method_id_item.get_table_header())
-            for (i, item) in enumerate(method_ids):
-                f.write("[%3u] " % (i))
-                item.dump(f=f, print_name=False)
+        if not method_ids:
+            return
+        f.write("\nmethod_ids:\n")
+        f.write(" " * (6 + 1))
+        f.write(method_id_item.get_table_header())
+        for dex_class in self.get_classes():
+            f.write("\nclass %s\n" % dex_class.get_name())
+            for dex_method in dex_class.get_methods():
+                method_idx = dex_method.encoded_method.method_idx
+                access_flags = dex_method.encoded_method.access_flags
+                method_item = method_ids[method_idx]
+                f.write("[%4u] " % method_idx)
+                method_item.dump(f=f, print_name=False)
                 f.write(
-                    ' ("%s", "%s", "%s")\n'
+                    " %s.%s:%s (%s)\n"
                     % (
-                        self.get_typename(item.class_idx),
-                        self.get_proto_shorty(item.proto_idx),
-                        self.get_string(item.name_idx),
+                        self.get_typename(method_item.class_idx),
+                        self.get_string(method_item.name_idx),
+                        self.get_proto_string(method_item.proto_idx),
+                        access_flags_to_string(access_flags),
                     )
                 )
 
@@ -1937,29 +1962,36 @@ class File:
         class_defs = self.get_class_defs()
         if class_defs:
             f.write("\nclass_defs:\n")
-            f.write(" " * (5 + 1))
+            f.write(" " * (6 + 1))
             f.write(class_def_item.get_table_header())
             for (i, item) in enumerate(class_defs):
-                f.write("[%3u] " % (i))
+                f.write("[%4u] " % (i))
                 item.dump(f=f, print_name=False)
-                f.write('   ("%s")' % (self.get_typename(item.class_idx)))
+                f.write(
+                    "   (%s, %s, (%s))"
+                    % (
+                        self.get_typename(item.class_idx),
+                        self.get_typename(item.superclass_idx),
+                        access_flags_to_string(item.access_flags),
+                    )
+                )
                 f.write("\n")
 
     def dump_call_site_ids(self, options, f=sys.stdout):
         call_site_ids = self.get_call_site_ids()
         if call_site_ids:
             f.write("\ncall_site_ids:\n")
-            f.write(" " * (5 + 1))
+            f.write(" " * (6 + 1))
             for (i, item) in enumerate(call_site_ids):
-                f.write("[%3u] %#8.8x\n" % (i, item))
+                f.write("[%4u] %#8.8x\n" % (i, item))
 
     def dump_method_handle_items(self, options, f=sys.stdout):
         method_handle_items = self.get_method_handle_items()
         if method_handle_items:
             f.write("\nmethod_handle_items:\n")
-            f.write(" " * (5 + 1))
+            f.write(" " * (6 + 1))
             for (i, item) in enumerate(method_handle_items):
-                f.write("[%3u] " % (i))
+                f.write("[%4u] " % (i))
                 item.dump(f=f)
                 f.write("\n")
 
@@ -2143,14 +2175,14 @@ class Opcode00(Opcode):
             f.write("%s" % (self.get_name()))
         elif self.nature == 1:
             f.write("packed-switch-payload\n")
-            f.write("INDEX KEY       TARGET\n===== --------- ---------\n")
+            f.write("INDEX  KEY       TARGET\n===== --------- ---------\n")
             for (i, target) in enumerate(self.targets):
-                f.write("[%3u] %+8.8x %+8.8x\n" % (i, self.first_key + i, target))
+                f.write("[%4u] %+8.8x %+8.8x\n" % (i, self.first_key + i, target))
         elif self.nature == 2:
             f.write("sparse-switch-payload\n")
-            f.write("INDEX KEY       TARGET\n===== --------- ---------\n")
+            f.write("INDEX  KEY       TARGET\n===== --------- ---------\n")
             for (i, key) in enumerate(self.keys):
-                f.write("[%3u] %+8.8x %+8.8x\n" % (i, key, self.targets[i]))
+                f.write("[%4u] %+8.8x %+8.8x\n" % (i, key, self.targets[i]))
         elif self.nature == 3:
             f.write(
                 "fill-array-data-payload (elem_width = %u, size = %u)\n"
@@ -2724,7 +2756,10 @@ class Opcode1A(Opcode):
         self.string_idx = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write("%s v%u, string@%4.4x" % (self.get_name(), self.reg, self.string_idx))
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            f.write('"%s" // ' % context.get_string(self.string_idx))
+        f.write("string@%4.4x" % self.string_idx)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2742,7 +2777,10 @@ class Opcode1B(Opcode):
         self.string_idx = inst.get_uint32(1)
 
     def dump(self, f=sys.stdout, context=None):
-        f.write("%s v%u, string@%8.8x" % (self.get_name(), self.reg, self.string_idx))
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            f.write('"%s" // ' % context.get_string(self.string_idx))
+        f.write("string@%8.8x" % self.string_idx)
 
     def check_encoding(self, f=sys.stdout):
         if self.signed_offset <= UINT16_MAX:
@@ -2768,7 +2806,10 @@ class Opcode1C(Opcode):
         self.type = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2820,7 +2861,10 @@ class Opcode1F(Opcode):
         self.type = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2840,10 +2884,10 @@ class Opcode20(Opcode):
         self.type = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write(
-            "%s v%u, v%u, type@%4.4x"
-            % (self.get_name(), self.regs[0], self.regs[1], self.type)
-        )
+        f.write("%s v%u, v%u, " % (self.get_name(), self.regs[0], self.regs[1]))
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2880,7 +2924,10 @@ class Opcode22(Opcode):
         self.type = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write("%s v%u, type@%4.4x" % (self.get_name(), self.reg, self.type))
+        f.write("%s v%u, " % (self.get_name(), self.reg))
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2900,10 +2947,10 @@ class Opcode23(Opcode):
         self.type = inst[1]
 
     def dump(self, f=sys.stdout, context=None):
-        f.write(
-            "%s v%u, v%u, type@%4.4x"
-            % (self.get_name(), self.regs[0], self.regs[1], self.type)
-        )
+        f.write("%s v%u, v%u " % (self.get_name(), self.regs[0], self.regs[1]))
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2927,13 +2974,12 @@ class Opcode24(Opcode):
 
     def dump(self, f=sys.stdout, context=None):
         f.write(
-            "%s {%s} type@%4.4x"
-            % (
-                self.get_name(),
-                ", ".join(["v%u" % reg for reg in self.regs]),
-                self.type,
-            )
+            "%s {%s} "
+            % (self.get_name(), ", ".join(["v%u" % reg for reg in self.regs]))
         )
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -2957,13 +3003,12 @@ class Opcode25(Opcode):
 
     def dump(self, f=sys.stdout, context=None):
         f.write(
-            "%s {%s} type@%4.4x"
-            % (
-                self.get_name(),
-                ", ".join(["v%u" % reg for reg in self.regs]),
-                self.type,
-            )
+            "%s {%s} "
+            % (self.get_name(), ", ".join(["v%u" % reg for reg in self.regs]))
         )
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -3438,7 +3483,7 @@ class Opcode6E_72(Opcode):
                 % (
                     context.get_typename(method_item.class_idx),
                     context.get_string(method_item.name_idx),
-                    context.get_proto_shorty(method_item.proto_idx),
+                    context.get_proto_string(method_item.proto_idx),
                 )
             )
         f.write("method@%4.4x" % self.method_idx)
@@ -3498,7 +3543,7 @@ class Opcode74_78(Opcode):
                 % (
                     context.get_typename(method_item.class_idx),
                     context.get_string(method_item.name_idx),
-                    context.get_proto_shorty(method_item.proto_idx),
+                    context.get_proto_string(method_item.proto_idx),
                 )
             )
         f.write("method@%4.4x" % self.method_idx)
@@ -3800,13 +3845,12 @@ class OpcodeFA(Opcode):
 
     def dump(self, f=sys.stdout, context=None):
         f.write(
-            "%s {%s} type@%4.4x"
-            % (
-                self.get_name(),
-                ", ".join(["v%u" % reg for reg in self.regs]),
-                self.type(),
-            )
+            "%s {%s} "
+            % (self.get_name(), ", ".join(["v%u" % reg for reg in self.regs]))
         )
+        if context is not None:
+            f.write("%s // " % context.get_typename(self.type))
+        f.write("type@%4.4x" % self.type)
 
     def emulate(self, emulator):
         raise ValueError("emulate not supported")
@@ -4334,7 +4378,6 @@ def main():
 
         if options.dump_header or options.dump_all:
             dex.dump_header(options)
-            print("")
         if options.dump_map_list or options.dump_all:
             dex.dump_map_list(options)
         if options.dump_debug_info_items or options.dump_all:
@@ -4348,7 +4391,7 @@ def main():
         if options.dump_fields or options.dump_all:
             dex.dump_field_ids(options)
         if options.dump_methods or options.dump_all:
-            dex.dump_method_ids(options)
+            dex.dump_class_method_ids(options)
         if options.dump_classes or options.dump_all:
             dex.dump_class_defs(options)
         if options.dump_call_sites or options.dump_all:
