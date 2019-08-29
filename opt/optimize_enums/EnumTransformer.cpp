@@ -263,9 +263,9 @@ struct EnumUtil {
    * Store the method ref at the same time.
    */
   DexMethodRef* add_substitute_of_hashcode(DexType* enum_type) {
-    // `redex$OE$hashCode()` uses `redex$OE$toString()` so we better make sure
+    // `redex$OE$hashCode()` uses `redex$OE$name()` so we better make sure
     // the method exists.
-    add_substitute_of_tostring(enum_type);
+    add_substitute_of_name(enum_type);
     auto method = get_substitute_of_hashcode(enum_type);
     m_substitute_methods.insert(method);
     return method;
@@ -1252,7 +1252,7 @@ class EnumTransformer final {
    *
    *
    * public static int redex$OE$hashCode(Integer obj) {
-   *   String name = CandidateEnum.toString(obj);
+   *   String name = CandidateEnum.name(obj);
    *   return obj.intValue() + name.hashCode();
    * }
    */
@@ -1265,10 +1265,9 @@ class EnumTransformer final {
     code->build_cfg();
     auto& cfg = code->cfg();
     auto entry = cfg.entry_block();
-    auto tostring_method =
-        m_enum_util->get_substitute_of_tostring(ref->get_class());
+    auto name_method = m_enum_util->get_substitute_of_name(ref->get_class());
     entry->push_back({
-        dasm(OPCODE_INVOKE_STATIC, tostring_method, {0_v}),
+        dasm(OPCODE_INVOKE_STATIC, name_method, {0_v}),
         dasm(OPCODE_MOVE_RESULT_OBJECT, {1_v}),
         dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_HASHCODE_METHOD, {1_v}),
         dasm(OPCODE_MOVE_RESULT, {1_v}),
