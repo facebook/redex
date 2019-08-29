@@ -319,10 +319,28 @@ References TransitiveClosureMarker::gather(const DexField* field) const {
   return generic_gather(field);
 }
 
+bool TransitiveClosureMarker::has_class_forname(DexMethod* meth) {
+  auto code = meth->get_code();
+  if (!code || !m_class_forname) {
+    return false;
+  }
+  for (auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->has_method() && insn->get_method() == m_class_forname) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   auto* type = meth->get_class();
   auto* cls = type_class(type);
+  auto refs = gather(meth);
   bool check_strings = m_ignore_sets.keep_class_in_string;
+  if (!check_strings && refs.strings.size() > 0 && has_class_forname(meth)) {
+    check_strings = true;
+  }
   if (m_ignore_sets.string_literals.count(type)) {
     ++m_worker_state->get_data()->num_ignore_check_strings;
     check_strings = false;
@@ -336,7 +354,6 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
       }
     }
   }
-  auto refs = gather(meth);
   if (check_strings) {
     push_typelike_strings(meth, refs.strings);
   }
