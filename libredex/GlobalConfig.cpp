@@ -31,6 +31,7 @@ void IRTypeCheckerConfig::bind_config() {
   bind("run_after_each_pass", {}, run_after_each_pass);
   bind("verify_moves", {}, verify_moves);
   bind("run_after_passes", {}, run_after_passes);
+  bind("check_no_overwrite_this", {}, check_no_overwrite_this);
 }
 
 void GlobalConfig::bind_config() {
