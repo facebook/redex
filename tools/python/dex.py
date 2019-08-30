@@ -1349,7 +1349,7 @@ class DexMethod:
             self.encoded_method.access_flags & AccessFlags.flags["ACC_SYNTHETIC"]
         ) != 0
 
-    def dump(self, options, dump_code=True, dump_debug_info=True, f=sys.stdout):
+    def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
         method_id = dex.get_method_id(self.encoded_method.method_idx)
         f.write(
@@ -1370,19 +1370,18 @@ class DexMethod:
                 if proto_id:
                     proto_id.dump(f=f, prefix="    proto_id.", flat=False)
             f.write("\n")
-        if dump_code:
-            code_item_idx = dex.get_code_item_index_from_code_off(
-                self.encoded_method.code_off
-            )
-            if code_item_idx >= 0:
-                code_item = dex.get_code_items()[code_item_idx]
-                if options.verbose:
-                    f.write(
-                        "    code_item[%u] @ %#8.8x:"
-                        % (code_item_idx, code_item.get_offset())
-                    )
-                code_item.dump(f=f, prefix="        ", verbose=options.verbose)
-        if dump_debug_info:
+        code_item_idx = dex.get_code_item_index_from_code_off(
+            self.encoded_method.code_off
+        )
+        if code_item_idx >= 0:
+            code_item = dex.get_code_items()[code_item_idx]
+            if options.verbose:
+                f.write(
+                    "    code_item[%u] @ %#8.8x:"
+                    % (code_item_idx, code_item.get_offset())
+                )
+            code_item.dump(f=f, prefix="        ", verbose=options.verbose)
+        if options.dump_debug_info:
             self.dump_debug_info(f=f, prefix="    ")
 
     def dump_code(self, f=sys.stdout):
@@ -2061,11 +2060,9 @@ class File:
                     continue
                 cls.dump(options, f=f)
                 methods = cls.get_methods()
-                dc = options.dump_code or options.dump_all
-                ddi = options.debug or options.dump_all
-                for method in methods:
-                    if dc or ddi:
-                        method.dump(options, f=f, dump_code=dc, dump_debug_info=ddi)
+                if options.dump_code or options.dump_debug_info or options.dump_all:
+                    for method in methods:
+                        method.dump(options, f=f)
                 f.write("\n")
 
     def dump_code_items(self, options, f=sys.stdout):
@@ -4336,9 +4333,9 @@ def main():
         default=False,
     )
     parser.add_option(
-        "--debug",
+        "--debug-info",
         action="store_true",
-        dest="debug",
+        dest="dump_debug_info",
         help="Dump the DEX debug info for each method.",
         default=False,
     )
@@ -4347,14 +4344,6 @@ def main():
         action="store_true",
         dest="dump_debug_info_items",
         help="Dump the DEX debug info items pointed to in its" + " map_list",
-        default=False,
-    )
-    parser.add_option(
-        "-d",
-        "--disassemble",
-        action="store_true",
-        dest="dump_disassembly",
-        help="Dump the DEX code items instructions.",
         default=False,
     )
     parser.add_option(
@@ -4468,13 +4457,12 @@ def main():
             dex.dump_call_site_ids(options)
         if options.dump_method_handles or options.dump_all:
             dex.dump_method_handle_items(options)
-        if options.dump_code or options.debug or options.dump_all:
+        if options.dump_code or options.dump_all:
             dex.dump_code(options)
         if options.dump_code_items:
             dex.dump_code_items(options)
         if (
-            options.dump_disassembly
-            or options.dump_stats
+            options.dump_stats
             or options.check_encoding
             or options.new_encoding
             or options.dump_counts
@@ -4493,13 +4481,7 @@ def main():
             for cls in classes:
                 methods = cls.get_methods()
                 for method in methods:
-                    if options.dump_disassembly or options.debug:
-                        method.dump(
-                            options,
-                            f=sys.stdout,
-                            dump_code=options.dump_disassembly,
-                            dump_debug_info=options.debug,
-                        )
+                    method.dump(options, f=sys.stdout)
                     opcodes_bytes_size = method.get_code_byte_size()
                     file_opcodes_byte_size += opcodes_bytes_size
                     total_opcode_byte_size += opcodes_bytes_size
