@@ -1426,7 +1426,6 @@ class DexClass:
         self.dex = dex
         self.class_def = class_def
         self.methods = None
-        self.num_direct_methods = 0
         self.mangled = None
         self.demangled = None
         self.method_mapping = None
@@ -1513,13 +1512,13 @@ class DexClass:
 
     def get_methods(self):
         if self.methods is None:
-            self.methods = []
-            self.num_direct_methods = len(self.class_def.class_data.direct_methods)
-            for encoded_method in self.class_def.class_data.direct_methods:
-                self.methods.append(DexMethod(self, encoded_method, False))
-            for encoded_method in self.class_def.class_data.virtual_methods:
-                self.methods.append(DexMethod(self, encoded_method, True))
-        return sorted(self.methods, key=lambda method: method.get_line_number())
+            class_data = self.class_def.class_data
+            self.methods = sorted(
+                [DexMethod(self, m, False) for m in class_data.direct_methods]
+                + [DexMethod(self, m, True) for m in class_data.virtual_methods],
+                key=lambda method: method.get_line_number(),
+            )
+        return self.methods
 
     def get_method_mapping(self):
         if self.method_mapping is None:
@@ -1548,6 +1547,16 @@ class DexClass:
             return None
         proto_map = methods[method_name]
         return proto_map.get(proto, None)
+
+    def get_line_number(self):
+        method_line_numbers = [
+            method.get_line_number()
+            for method in self.get_methods()
+            if not method.is_abstract() and method.get_line_number() > 0
+        ]
+        if len(method_line_numbers) == 0:
+            return 0
+        return min(method_line_numbers)
 
 
 def demangle_classname(mangled):
@@ -1899,11 +1908,10 @@ class File:
 
     def get_classes(self):
         if self.classes is None:
-            self.classes = []
-            class_defs = self.get_class_defs()
-            for class_def in class_defs:
-                dex_class = DexClass(self, class_def)
-                self.classes.append(dex_class)
+            self.classes = sorted(
+                (DexClass(self, class_def) for class_def in self.get_class_defs()),
+                key=lambda cls: cls.get_line_number(),
+            )
             self.data.pop_offset_and_seek()
         return self.classes
 
@@ -4274,6 +4282,13 @@ def main():
         default=False,
     )
     parser.add_option(
+        "--class-list",
+        action="store_true",
+        dest="dump_class_list",
+        help="Dump the list of DEX classes.",
+        default=False,
+    )
+    parser.add_option(
         "--classes",
         action="store_true",
         dest="dump_classes",
@@ -4425,6 +4440,11 @@ def main():
                     'error: class definition not found for "%s"'
                     % (options.class_filter)
                 )
+        if options.dump_classes:
+            for dex_class in dex.get_classes():
+                dex_class.dump(options)
+                for method in dex_class.get_methods():
+                    method.dump(options)
 
         if options.dump_header or options.dump_all:
             dex.dump_header(options)
@@ -4442,7 +4462,7 @@ def main():
             dex.dump_field_ids(options)
         if options.dump_methods or options.dump_all:
             dex.dump_class_method_ids(options)
-        if options.dump_classes or options.dump_all:
+        if options.dump_class_list or options.dump_all:
             dex.dump_class_defs(options)
         if options.dump_call_sites or options.dump_all:
             dex.dump_call_site_ids(options)
