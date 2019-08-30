@@ -416,6 +416,8 @@ class class_def_item(AutoParser):
 
     def __init__(self, data, context):
         AutoParser.__init__(self, self.items, data, context)
+        self.data = data
+        self.interface_ids = None
 
     @classmethod
     def get_table_header(self):
@@ -435,6 +437,17 @@ class class_def_item(AutoParser):
             if encoded_method.code_off == code_off:
                 return encoded_method
         return None
+
+    def get_interface_ids(self):
+        if self.interface_ids is not None:
+            return self.interface_ids
+        elif self.interfaces_off > 0:
+            self.data.push_offset_and_seek(self.interfaces_off)
+            self.interface_ids = type_list(self.data).list
+            self.data.pop_offset_and_seek()
+        else:
+            self.interface_ids = []
+        return self.interface_ids
 
 
 # ----------------------------------------------------------------------
@@ -1440,8 +1453,12 @@ class DexClass:
             % (
                 access_flags_to_string(self.class_def.access_flags),
                 dex.get_typename(self.class_def.superclass_idx),
-                # TODO: Dump interfaces for class
-                "TODO",
+                ", ".join(
+                    [
+                        self.dex.get_typename(interface)
+                        for interface in self.class_def.get_interface_ids()
+                    ]
+                ),
             )
         )
         field_ids = dex.get_field_ids()
