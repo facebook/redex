@@ -1695,11 +1695,39 @@ class File:
             return file_extract.hex_escape(strings[index].data)
         return None
 
-    def get_typename(self, type_id):
+    def get_raw_typename(self, type_id):
         types = self.get_type_ids()
         if type_id < len(types):
             return self.get_string(types[type_id])
         return None
+
+    def get_typename(self, type_id):
+        raw_typename = self.get_raw_typename(type_id)
+        if raw_typename is None:
+            return None
+        array_level = 0
+        for c in raw_typename:
+            if c == "[":
+                array_level += 1
+            else:
+                break
+        raw_prefix = raw_typename[array_level]
+        raw_base_typename = raw_typename[array_level + 1 :]
+        if raw_prefix == "L":
+            assert raw_base_typename[-1] == ";"
+            return raw_base_typename[:-1].replace("/", ".") + "[]" * array_level
+        prefix_to_typename = {
+            "V": "void",
+            "Z": "boolean",
+            "B": "byte",
+            "S": "short",
+            "C": "char",
+            "I": "int",
+            "J": "long",
+            "F": "float",
+            "D": "double",
+        }
+        return prefix_to_typename[raw_prefix] + "[]" * array_level
 
     def get_string_ids(self):
         if self.string_ids is None:
