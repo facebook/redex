@@ -160,7 +160,6 @@ struct Tracer {
       m_file = fopen(envfile, "w");
     }
     if (!m_file) {
-      fprintf(stderr, "Unable to open TRACEFILE, falling back to stderr\n");
       m_file = stderr;
     }
   }
@@ -172,10 +171,12 @@ struct Tracer {
 };
 
 static Tracer tracer;
-} // namespace
+}
 
 #ifdef NDEBUG
-bool traceEnabled(TraceModule, int) { return false; }
+bool traceEnabled(TraceModule, int) {
+  return false;
+}
 #else
 bool traceEnabled(TraceModule module, int level) {
   return tracer.traceEnabled(module, level);
