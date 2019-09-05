@@ -272,7 +272,7 @@ struct Rebinder {
   void rebind_field(IRInstruction* insn, FieldSearch field_search) {
     const auto fref = insn->get_field();
     const auto real_ref = resolve_field(fref, field_search);
-    if (real_ref && real_ref != fref) {
+    if (real_ref && !real_ref->is_external() && real_ref != fref) {
       auto cls = type_class(real_ref->get_class());
       always_assert(cls != nullptr);
       if (!is_public(cls)) {
