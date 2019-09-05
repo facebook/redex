@@ -2,7 +2,7 @@
 -dontshrink
 -dontoptimize
 
--keep class com.facebook.redextest.EnumTransformTest { *; }
+-keep class redex.EnumTransformTest { *; }
 
 # Don't muck with test infra
 -keep class org.fest.** { *; }
@@ -12,5 +12,3 @@
 -keep class android.test.** { *; }
 -keep class android.support.test.** { *; }
 -keep class androidx.test.** { *; }
-
-

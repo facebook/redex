@@ -5,16 +5,30 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-package com.facebook.redextest;
+package redex;
 
 import java.util.Random;
 import javax.annotation.Nullable;
 import org.junit.Test;
 import static org.fest.assertions.api.Assertions.assertThat;
 
+// POSTCHECK-LABEL: class: redex.$EnumUtils
+// POSTCHECK-NEXT: Access flags: (PUBLIC, FINAL)
+// POSTCHECK-NEXT: Superclass: java.lang.Object
+// POSTCHECK: (PRIVATE, FINAL, STATIC) $VALUES:java.lang.Integer[]
+// POSTCHECK: (PUBLIC, FINAL, STATIC) f0:java.lang.Integer
+// POSTCHECK: (PUBLIC, FINAL, STATIC) f1:java.lang.Integer
+// POSTCHECK: (PUBLIC, FINAL, STATIC) f2:java.lang.Integer
+// POSTCHECK: (PUBLIC, FINAL, STATIC) f3:java.lang.Integer
+// POSTCHECK: (PUBLIC, FINAL, STATIC) f4:java.lang.Integer
+
 // This enum class contains some user defined static methods and it's never
 // being casted to other types. It will be transformed to a class with only
 // static methods by OptimizeEnumsPass.
+// CHECK-LABEL: class: redex.SCORE
+// CHECK-NEXT: Access flags:
+// PRECHECK-NEXT: Superclass: java.lang.Enum
+// POSTCHECK-NEXT: Superclass: java.lang.Object
 enum SCORE {
   ONE(11, "UNO"),
   TWO(12, "DOS"),
@@ -32,11 +46,14 @@ enum SCORE {
   static int number = 0;
 
   // Primitive or String instance fields are (usually) safe.
+  // POSTCHECK-DAG: method: direct redex.SCORE.redex$OE$get_myField:(java.lang.Integer)int
   int myField;
+  // POSTCHECK-DAG: method: direct redex.SCORE.redex$OE$get_myOtherField:(java.lang.Integer)java.lang.String
   String myOtherField;
   int scoreToWin;
   String constantString;
 
+  // POSTCHECK-DAG: method: direct redex.SCORE.increase$REDEX${{.*}}:(java.lang.Integer)java.lang.Integer
   public static @Nullable SCORE increase(SCORE score) {
     if (score == null) {
       return null;
@@ -52,10 +69,12 @@ enum SCORE {
   }
 
   // Virtual methods are safe.
+  // POSTCHECK-DAG: method: direct redex.SCORE.is_max$REDEX${{.*}}:(java.lang.Integer)boolean
   public boolean is_max() {
     return this == THREE;
   }
 
+  // POSTCHECK-DAG: method: direct redex.SCORE.toString$REDEX${{.*}}:(java.lang.Integer)java.lang.String
   public String toString() {
     return this.myOtherField;
   }
@@ -69,24 +88,26 @@ interface Intf {
 // Some usages of SCORE.
 class A {
   // As parameter.
+  // POSTCHECK: method: virtual redex.A.ha$REDEX${{.*}}:(java.lang.Integer)int
   public int ha(SCORE score) { return 1; }
 }
 
 abstract class B extends A implements Intf {
   // As return value.
+  // POSTCHECK: method: virtual redex.B.haha$REDEX${{.*}}:()java.lang.Integer
   public SCORE haha() { return SCORE.THREE; }
   public int make(int i) { return i * 7; }
   int ha(int i) { return 11; }
 }
 
+// CHECK-LABEL: class: redex.C
 class C extends B {
-  // As static field.
   static SCORE s_score = SCORE.ONE;
-  // As instance field.
+  // PRECHECK: (STATIC) array:redex.SCORE[][]
+  // POSTCHECK: (STATIC) array$REDEX${{.*}}:java.lang.Integer[][]
+  static SCORE[][] array;
   @Nullable SCORE i_score = SCORE.ONE;
   @Nullable Object i_obj = null;
-  // As element of an array.
-  static SCORE[][] array;
 
   public void set(SCORE score) { i_score = score; }
   public @Nullable SCORE get() { return i_score; }
@@ -96,6 +117,10 @@ class C extends B {
 
 // This enum class only contains several Enum objects.
 // It will be optimized by OptimizeEnumsPass.
+// PRECHECK: class: redex.PURE_SCORE
+// PRECHECK-NEXT: Access flags:
+// PRECHECK-NEXT: Superclass: java.lang.Enum
+// POSTCHECK-NOT: class redex.PURE_SCORE
 enum PURE_SCORE {
   ONE,
   TWO,
@@ -103,6 +128,9 @@ enum PURE_SCORE {
 }
 
 /* Some enums that are unsafe to be transformed. */
+// CHECK: class: redex.USED_IN_UNSAFE_CONSTRUCTOR
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum USED_IN_UNSAFE_CONSTRUCTOR {
   ONE;
 }
@@ -110,6 +138,9 @@ class HasUnsafeConstructor {
   HasUnsafeConstructor(USED_IN_UNSAFE_CONSTRUCTOR[] e) {}
   HasUnsafeConstructor(Integer[] e) {}
 }
+// CHECK: class: redex.MODIFIES_INSTANCE_FIELD
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum MODIFIES_INSTANCE_FIELD {
   ONE(1234);
   int myField;
@@ -120,6 +151,9 @@ enum MODIFIES_INSTANCE_FIELD {
     myField++;
   }
 }
+// CHECK: class: redex.CAST_WHEN_RETURN
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_WHEN_RETURN {
   ONE;
   public static Enum[] method() {
@@ -128,33 +162,59 @@ enum CAST_WHEN_RETURN {
     return array;
   }
 }
+// CHECK: class: redex.CAST_THIS_POINTER
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_THIS_POINTER {
   ONE;
   public static void cast_this_method() {
     EnumHelper.inlined_method(CAST_THIS_POINTER.ONE);
   }
 }
+// CHECK: class: redex.CAST_THIS_POINTER_2
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_THIS_POINTER_2 {
   ONE;
   public String cast_this_method() {
     return super.toString();
   }
 }
+// CHECK: class: redex.CAST_PARAMETER
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_PARAMETER {
   ONE;
   public static <E extends Enum<E>> void method(Enum<E> o) {}
   public static void method() { method(ONE); }
 }
+// CHECK: class: redex.USED_AS_CLASS_OBJECT
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum USED_AS_CLASS_OBJECT {
   ONE;
   public static <T> void method(Class<T> c) {}
   public static void method() { method(USED_AS_CLASS_OBJECT.class); }
 }
+// CHECK: class: redex.CAST_CHECK_CAST
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_CHECK_CAST { ONE; }
+// CHECK: class: redex.CAST_ISPUT_OBJECT
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_ISPUT_OBJECT { ONE; }
+// CHECK: class: redex.CAST_APUT_OBJECT
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_APUT_OBJECT { ONE; }
-
+// CHECK: class: redex.ENUM_TYPE_1
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum ENUM_TYPE_1 { ONE; }
+// CHECK: class: redex.ENUM_TYPE_2
+// CHECK-NEXT: Access flags:
+// CHECK-NEXT: Superclass: java.lang.Enum
 enum ENUM_TYPE_2 {
   ONE,
   TWO;

@@ -5,10 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-package com.facebook.redextest;
+package redex;
 
+// CHECK-LABEL: class: redex.RemoveUnusedFieldsTest
 class RemoveUnusedFieldsTest {
+  // NOTE: Be careful with `CHECK-NOT`. A typo can yield a false positive.
+  // CHECK-NOT: redex.RemoveUnusedFieldsTest.unusedInt:int
   int unusedInt;
+  // Removal of Strings are blacklisted in the test Redex config
+  // CHECK: redex.RemoveUnusedFieldsTest.unusedString:java.lang.String
   String unusedString;
 
   public void init() {
