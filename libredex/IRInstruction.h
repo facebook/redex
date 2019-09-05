@@ -320,7 +320,6 @@ class IRInstruction final {
 
  private:
   IROpcode m_opcode;
-  std::vector<uint16_t> m_srcs;
   uint16_t m_dest{0};
   union {
     // Zero-initialize this union with the uint64_t member instead of a
@@ -332,6 +331,8 @@ class IRInstruction final {
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
+  // Put m_srcs at the end for dense packing
+  std::vector<uint16_t> m_srcs;
 };
 
 /*
