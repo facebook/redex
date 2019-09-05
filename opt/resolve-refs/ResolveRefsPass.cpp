@@ -64,7 +64,7 @@ void resolve_field_refs(IRInstruction* insn,
     return;
   }
   const auto real_ref = resolve_field(fref, field_search);
-  if (real_ref && real_ref != fref) {
+  if (real_ref && !real_ref->is_external() && real_ref != fref) {
     TRACE(RESO, 2, "Resolving %s\n\t=>%s\n", SHOW(fref), SHOW(real_ref));
     insn->set_field(real_ref);
     stats.fref_count++;
