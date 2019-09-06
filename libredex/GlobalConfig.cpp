@@ -58,6 +58,7 @@ void GlobalConfig::bind_config() {
   bind("keep_class_members", {}, string_vector_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
+  bind("pure_methods", {}, string_vector_param);
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("coldstart_classes", "", string_param);

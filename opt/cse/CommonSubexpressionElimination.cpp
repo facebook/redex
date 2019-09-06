@@ -902,7 +902,6 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
   // Check that we don't have abstract or interface methods
   for (DexMethodRef* method_ref : m_safe_methods) {
     if (method_ref->is_def()) {
-      always_assert(method_ref->is_external());
       always_assert(!is_interface(type_class(method_ref->get_class())));
       auto method = static_cast<DexMethod*>(method_ref);
       always_assert(!is_abstract(method));
@@ -1555,11 +1554,15 @@ void CommonSubexpressionEliminationPass::bind_config() {
 }
 
 void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
-                                                  ConfigFiles& /* conf */,
+                                                  ConfigFiles& conf,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
 
-  auto pure_methods = get_pure_methods();
+  auto pure_methods = /* Android framework */ get_pure_methods();
+  auto configured_pure_methods = conf.get_pure_methods();
+  pure_methods.insert(configured_pure_methods.begin(),
+                      configured_pure_methods.end());
+
   auto shared_state = SharedState(pure_methods);
   auto method_barriers_stats =
       shared_state.init_method_barriers(scope, m_max_iterations);

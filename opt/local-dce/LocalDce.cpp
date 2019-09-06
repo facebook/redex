@@ -316,7 +316,7 @@ bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
 }
 
 void LocalDcePass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& /* conf */,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DCE, 1,
@@ -325,7 +325,11 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  const auto& pure_methods = find_no_sideeffect_methods(scope);
+  auto pure_methods = find_no_sideeffect_methods(scope);
+  auto configured_pure_methods = conf.get_pure_methods();
+  pure_methods.insert(configured_pure_methods.begin(),
+                      configured_pure_methods.end());
+
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
       [&](DexMethod* m) {

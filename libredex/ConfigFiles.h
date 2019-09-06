@@ -67,6 +67,7 @@ struct ConfigFiles {
   }
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
+  const std::unordered_set<DexMethodRef*>& get_pure_methods();
 
   const std::unordered_map<std::string, unsigned int>& get_method_to_weight()
       const {
@@ -148,6 +149,8 @@ struct ConfigFiles {
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;
+  // global pure methods
+  std::unordered_set<DexMethodRef*> m_pure_methods;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config{nullptr};
 };
