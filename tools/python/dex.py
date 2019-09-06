@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
@@ -6,10 +6,9 @@
 # LICENSE file in the root directory of this source tree.
 
 
-from __future__ import absolute_import, division, print_function
-
 import bisect
 import copy
+import enum
 import numbers
 import operator
 import optparse
@@ -19,13 +18,8 @@ import string
 import sys
 from io import BytesIO
 
-import dict_utils
 import file_extract
 from file_extract import AutoParser
-
-
-def text(s):
-    return unicode(s) if sys.version_info[0] < 3 else str(s)
 
 
 def get_uleb128_byte_size(value):
@@ -62,163 +56,118 @@ UINT8_MAX = 255
 UINT16_MAX = 65535
 UINT32_MAX = 4294967295
 
-# ----------------------------------------------------------------------
-# access_flags definitions
-# ----------------------------------------------------------------------
+
+class AccessFlags(enum.IntFlag):
+    PUBLIC = 0x1
+    PRIVATE = 0x2
+    PROTECTED = 0x4
+    STATIC = 0x8
+    FINAL = 0x10
+    SYNCHRONIZED = 0x20
+    VOLATILE = 0x40
+    BRIDGE = 0x40
+    TRANSIENT = 0x80
+    VARARGS = 0x80
+    NATIVE = 0x100
+    INTERFACE = 0x200
+    ABSTRACT = 0x400
+    STRICT = 0x800
+    SYNTHETIC = 0x1000
+    ANNOTATION = 0x2000
+    ENUM = 0x4000
+    CONSTRUCTOR = 0x10000
+    DECLARED_SYNCHRONIZED = 0x20000
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, file_extract.FileExtract):
+            return cls(value.get_uint8())
+        else:
+            return super()._missing_(value)
+
+    def __str__(self):
+        return ", ".join(flag.name for flag in AccessFlags if flag & self.value)
 
 
-class AccessFlags:
-    flags = {
-        "ACC_PUBLIC": 0x1,
-        "ACC_PRIVATE": 0x2,
-        "ACC_PROTECTED": 0x4,
-        "ACC_STATIC": 0x8,
-        "ACC_FINAL": 0x10,
-        "ACC_SYNCHRONIZED": 0x20,
-        "ACC_VOLATILE": 0x40,
-        "ACC_BRIDGE": 0x40,
-        "ACC_TRANSIENT": 0x80,
-        "ACC_VARARGS": 0x80,
-        "ACC_NATIVE": 0x100,
-        "ACC_INTERFACE": 0x200,
-        "ACC_ABSTRACT": 0x400,
-        "ACC_STRICT": 0x800,
-        "ACC_SYNTHETIC": 0x1000,
-        "ACC_ANNOTATION": 0x2000,
-        "ACC_ENUM": 0x4000,
-        "ACC_CONSTRUCTOR": 0x10000,
-        "ACC_DECLARED_SYNCHRONIZED": 0x20000,
-    }
+class ValueFormat(enum.Enum):
+    BYTE = 0x00
+    SHORT = 0x02
+    CHAR = 0x03
+    INT = 0x04
+    LONG = 0x06
+    FLOAT = 0x10
+    DOUBLE = 0x11
+    METHOD_TYPE = 0x15
+    METHOD_HANDLE = 0x16
+    STRING = 0x17
+    TYPE = 0x18
+    FIELD = 0x19
+    METHOD = 0x1A
+    ENUM = 0x1B
+    ARRAY = 0x1C
+    ANNOTATION = 0x1D
+    NULL = 0x1E
+    BOOLEAN = 0x1F
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, file_extract.FileExtract):
+            return cls(value.get_uint16())
+        else:
+            return super()._missing_(value)
 
 
-# ----------------------------------------------------------------------
-# Value formats
-# ----------------------------------------------------------------------
-VALUE_BYTE = 0x00
-VALUE_SHORT = 0x02
-VALUE_CHAR = 0x03
-VALUE_INT = 0x04
-VALUE_LONG = 0x06
-VALUE_FLOAT = 0x10
-VALUE_DOUBLE = 0x11
-VALUE_METHOD_TYPE = 0x15
-VALUE_METHOD_HANDLE = 0x16
-VALUE_STRING = 0x17
-VALUE_TYPE = 0x18
-VALUE_FIELD = 0x19
-VALUE_METHOD = 0x1A
-VALUE_ENUM = 0x1B
-VALUE_ARRAY = 0x1C
-VALUE_ANNOTATION = 0x1D
-VALUE_NULL = 0x1E
-VALUE_BOOLEAN = 0x1F
+class TypeCode(enum.Enum):
+    HEADER_ITEM = 0x0000
+    STRING_ID_ITEM = 0x0001
+    TYPE_ID_ITEM = 0x0002
+    PROTO_ID_ITEM = 0x0003
+    FIELD_ID_ITEM = 0x0004
+    METHOD_ID_ITEM = 0x0005
+    CLASS_DEF_ITEM = 0x0006
+    CALL_SITE_ID_ITEM = 0x0007
+    METHOD_HANDLE_ITEM = 0x0008
+    MAP_LIST = 0x1000
+    TYPE_LIST = 0x1001
+    ANNOTATION_SET_REF_LIST = 0x1002
+    ANNOTATION_SET_ITEM = 0x1003
+    CLASS_DATA_ITEM = 0x2000
+    CODE_ITEM = 0x2001
+    STRING_DATA_ITEM = 0x2002
+    DEBUG_INFO_ITEM = 0x2003
+    ANNOTATION_ITEM = 0x2004
+    ENCODED_ARRAY_ITEM = 0x2005
+    ANNOTATIONS_DIRECTORY_ITEM = 0x2006
 
-
-class ValueFormat(dict_utils.Enum):
-    enum = {
-        "VALUE_BYTE": VALUE_BYTE,
-        "VALUE_SHORT": VALUE_SHORT,
-        "VALUE_CHAR": VALUE_CHAR,
-        "VALUE_INT": VALUE_INT,
-        "VALUE_LONG": VALUE_LONG,
-        "VALUE_FLOAT": VALUE_FLOAT,
-        "VALUE_DOUBLE": VALUE_DOUBLE,
-        "VALUE_METHOD_TYPE": VALUE_METHOD_TYPE,
-        "VALUE_METHOD_HANDLE": VALUE_METHOD_HANDLE,
-        "VALUE_STRING": VALUE_STRING,
-        "VALUE_TYPE": VALUE_TYPE,
-        "VALUE_FIELD": VALUE_FIELD,
-        "VALUE_METHOD": VALUE_METHOD,
-        "VALUE_ENUM": VALUE_ENUM,
-        "VALUE_ARRAY": VALUE_ARRAY,
-        "VALUE_ANNOTATION": VALUE_ANNOTATION,
-        "VALUE_NULL": VALUE_NULL,
-        "VALUE_BOOLEAN": VALUE_BOOLEAN,
-    }
-
-    def __init__(self, data):
-        dict_utils.Enum.__init__(self, data.get_uint16(), self.enum)
-
-
-# ----------------------------------------------------------------------
-# Type Codes
-# ----------------------------------------------------------------------
-TYPE_HEADER_ITEM = 0x0000  # size = 0x70
-TYPE_STRING_ID_ITEM = 0x0001  # size = 0x04
-TYPE_TYPE_ID_ITEM = 0x0002  # size = 0x04
-TYPE_PROTO_ID_ITEM = 0x0003  # size = 0x0c
-TYPE_FIELD_ID_ITEM = 0x0004  # size = 0x08
-TYPE_METHOD_ID_ITEM = 0x0005  # size = 0x08
-TYPE_CLASS_DEF_ITEM = 0x0006  # size = 0x20
-TYPE_CALL_SITE_ID_ITEM = 0x0007  # size = 0x04
-TYPE_METHOD_HANDLE_ITEM = 0x0008  # size = 0x08
-TYPE_MAP_LIST = 0x1000  # size = 4 + (item.size * 12)
-TYPE_TYPE_LIST = 0x1001  # size = 4 + (item.size * 2)
-TYPE_ANNOTATION_SET_REF_LIST = 0x1002  # size = 4 + (item.size * 4)
-TYPE_ANNOTATION_SET_ITEM = 0x1003  # size = 4 + (item.size * 4)
-TYPE_CLASS_DATA_ITEM = 0x2000
-TYPE_CODE_ITEM = 0x2001
-TYPE_STRING_DATA_ITEM = 0x2002
-TYPE_DEBUG_INFO_ITEM = 0x2003
-TYPE_ANNOTATION_ITEM = 0x2004
-TYPE_ENCODED_ARRAY_ITEM = 0x2005
-TYPE_ANNOTATIONS_DIRECTORY_ITEM = 0x2006
-
-
-class TypeCode(dict_utils.Enum):
-    enum = {
-        "TYPE_HEADER_ITEM": TYPE_HEADER_ITEM,
-        "TYPE_STRING_ID_ITEM": TYPE_STRING_ID_ITEM,
-        "TYPE_TYPE_ID_ITEM": TYPE_TYPE_ID_ITEM,
-        "TYPE_PROTO_ID_ITEM": TYPE_PROTO_ID_ITEM,
-        "TYPE_FIELD_ID_ITEM": TYPE_FIELD_ID_ITEM,
-        "TYPE_METHOD_ID_ITEM": TYPE_METHOD_ID_ITEM,
-        "TYPE_CLASS_DEF_ITEM": TYPE_CLASS_DEF_ITEM,
-        "TYPE_CALL_SITE_ID_ITEM": TYPE_CALL_SITE_ID_ITEM,
-        "TYPE_METHOD_HANDLE_ITEM": TYPE_METHOD_HANDLE_ITEM,
-        "TYPE_MAP_LIST": TYPE_MAP_LIST,
-        "TYPE_TYPE_LIST": TYPE_TYPE_LIST,
-        "TYPE_ANNOTATION_SET_REF_LIST": TYPE_ANNOTATION_SET_REF_LIST,
-        "TYPE_ANNOTATION_SET_ITEM": TYPE_ANNOTATION_SET_ITEM,
-        "TYPE_CLASS_DATA_ITEM": TYPE_CLASS_DATA_ITEM,
-        "TYPE_CODE_ITEM": TYPE_CODE_ITEM,
-        "TYPE_STRING_DATA_ITEM": TYPE_STRING_DATA_ITEM,
-        "TYPE_DEBUG_INFO_ITEM": TYPE_DEBUG_INFO_ITEM,
-        "TYPE_ANNOTATION_ITEM": TYPE_ANNOTATION_ITEM,
-        "TYPE_ENCODED_ARRAY_ITEM": TYPE_ENCODED_ARRAY_ITEM,
-        "TYPE_ANNOTATIONS_DIRECTORY_ITEM": TYPE_ANNOTATIONS_DIRECTORY_ITEM,
-    }
-
-    def __init__(self, data):
-        dict_utils.Enum.__init__(self, data.get_uint16(), self.enum)
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, file_extract.FileExtract):
+            return cls(value.get_uint16())
+        else:
+            return super()._missing_(value)
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True, parent_path=None):
-        f.write(text(self))
+        f.write(self.name)
+
+    @staticmethod
+    def max_width():
+        return max(len(bin(flag.value)) for flag in TypeCode)
 
 
-# ----------------------------------------------------------------------
-# Method Handle Type Codes
-# ----------------------------------------------------------------------
-METHOD_HANDLE_TYPE_STATIC_PUT = 0x00
-METHOD_HANDLE_TYPE_STATIC_GET = 0x01
-METHOD_HANDLE_TYPE_INSTANCE_PUT = 0x02
-METHOD_HANDLE_TYPE_INSTANCE_GET = 0x03
-METHOD_HANDLE_TYPE_INVOKE_STATIC = 0x04
-METHOD_HANDLE_TYPE_INVOKE_INSTANCE = 0x05
+class MethodHandleTypeCode(enum.Enum):
+    STATIC_PUT = 0x00
+    STATIC_GET = 0x01
+    INSTANCE_PUT = 0x02
+    INSTANCE_GET = 0x03
+    INVOKE_STATIC = 0x04
+    INVOKE_INSTANCE = 0x05
 
-
-class MethodHandleTypeCode(dict_utils.Enum):
-    enum = {
-        "METHOD_HANDLE_TYPE_STATIC_PUT": METHOD_HANDLE_TYPE_STATIC_PUT,
-        "METHOD_HANDLE_TYPE_STATIC_GET": METHOD_HANDLE_TYPE_STATIC_GET,
-        "METHOD_HANDLE_TYPE_INSTANCE_PUT": METHOD_HANDLE_TYPE_INSTANCE_PUT,
-        "METHOD_HANDLE_TYPE_INSTANCE_GET": METHOD_HANDLE_TYPE_INSTANCE_GET,
-        "METHOD_HANDLE_TYPE_INVOKE_STATIC": METHOD_HANDLE_TYPE_INVOKE_STATIC,
-        "METHOD_HANDLE_TYPE_INVOKE_INSTANCE": METHOD_HANDLE_TYPE_INVOKE_INSTANCE,
-    }
-
-    def __init__(self, data):
-        dict_utils.Enum.__init__(self, data.get_uint16(), self.enum)
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, file_extract.FileExtract):
+            return cls(value.get_uint16())
+        else:
+            return super()._missing_(value)
 
 
 PRINTABLE = string.ascii_letters + string.digits + string.punctuation + " "
@@ -279,13 +228,6 @@ def hex_escape(s):
     return "".join(escape(c) for c in s)
 
 
-def access_flags_to_string(access_flags):
-    # Do not print the "ACC_" part of the flag names.
-    return ", ".join(
-        [key[4:] for key, value in AccessFlags.flags.items() if access_flags & value]
-    )
-
-
 # ----------------------------------------------------------------------
 # encoded_field
 # ----------------------------------------------------------------------
@@ -309,6 +251,9 @@ class encoded_field(AutoParser):
 
     def get_dump_flat(self):
         return True
+
+    def get_access_flags(self):
+        return AccessFlags(self.access_flags)
 
 
 # ----------------------------------------------------------------------
@@ -337,6 +282,9 @@ class encoded_method(AutoParser):
 
     def get_dump_flat(self):
         return True
+
+    def get_access_flags(self):
+        return AccessFlags(self.access_flags)
 
 
 # ----------------------------------------------------------------------
@@ -449,6 +397,9 @@ class class_def_item(AutoParser):
             self.interface_ids = []
         return self.interface_ids
 
+    def get_access_flags(self):
+        return AccessFlags(self.access_flags)
+
 
 # ----------------------------------------------------------------------
 # try_item
@@ -544,40 +495,33 @@ def print_instructions(insns, prefix, flat, f, context=None):
         dex_inst.dump(context=context)
 
 
-DBG_END_SEQUENCE = 0x00
-DBG_ADVANCE_PC = 0x01
-DBG_ADVANCE_LINE = 0x02
-DBG_START_LOCAL = 0x03
-DBG_START_LOCAL_EXTENDED = 0x04
-DBG_END_LOCAL = 0x05
-DBG_RESTART_LOCAL = 0x06
-DBG_SET_PROLOGUE_END = 0x07
-DBG_SET_EPILOGUE_BEGIN = 0x08
-DBG_SET_FILE = 0x09
-DBG_FIRST_SPECIAL = 0x0A
-DBG_LINE_BASE = -4
-DBG_LINE_RANGE = 15
+class DBG(enum.IntEnum):
+    END_SEQUENCE = 0x00
+    ADVANCE_PC = 0x01
+    ADVANCE_LINE = 0x02
+    START_LOCAL = 0x03
+    START_LOCAL_EXTENDED = 0x04
+    END_LOCAL = 0x05
+    RESTART_LOCAL = 0x06
+    SET_PROLOGUE_END = 0x07
+    SET_EPILOGUE_BEGIN = 0x08
+    SET_FILE = 0x09
 
+    @staticmethod
+    def is_special_opcode(value):
+        return value >= 0x0A and value <= 0xFF
 
-class DBG(dict_utils.Enum):
-    enum = {
-        "DBG_END_SEQUENCE": DBG_END_SEQUENCE,
-        "DBG_ADVANCE_PC": DBG_ADVANCE_PC,
-        "DBG_ADVANCE_LINE": DBG_ADVANCE_LINE,
-        "DBG_START_LOCAL": DBG_START_LOCAL,
-        "DBG_START_LOCAL_EXTENDED": DBG_START_LOCAL_EXTENDED,
-        "DBG_END_LOCAL": DBG_END_LOCAL,
-        "DBG_RESTART_LOCAL": DBG_RESTART_LOCAL,
-        "DBG_SET_PROLOGUE_END": DBG_SET_PROLOGUE_END,
-        "DBG_SET_EPILOGUE_BEGIN": DBG_SET_EPILOGUE_BEGIN,
-        "DBG_SET_FILE": DBG_SET_FILE,
-    }
-
-    def __init__(self, data):
-        dict_utils.Enum.__init__(self, data.get_uint8(), self.enum)
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, file_extract.FileExtract):
+            return cls(value.get_uint8())
+        elif DBG.is_special_opcode(value):
+            return value
+        else:
+            return super()._missing_(value)
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True, parent_path=None):
-        f.write(str(self))
+        f.write(self.name)
 
 
 class debug_info_op(AutoParser):
@@ -586,22 +530,22 @@ class debug_info_op(AutoParser):
         {
             "switch": "op",
             "cases": {
-                DBG_ADVANCE_PC: [{"type": "uleb", "name": "addr_offset"}],
-                DBG_ADVANCE_LINE: [{"type": "sleb", "name": "line_offset"}],
-                DBG_START_LOCAL: [
+                DBG.ADVANCE_PC: [{"type": "uleb", "name": "addr_offset"}],
+                DBG.ADVANCE_LINE: [{"type": "sleb", "name": "line_offset"}],
+                DBG.START_LOCAL: [
                     {"type": "uleb", "name": "register_num"},
                     {"type": "ulebp1", "name": "name_idx"},
                     {"type": "ulebp1", "name": "type_idx"},
                 ],
-                DBG_START_LOCAL_EXTENDED: [
+                DBG.START_LOCAL_EXTENDED: [
                     {"type": "uleb", "name": "register_num"},
                     {"type": "ulebp1", "name": "name_idx"},
                     {"type": "ulebp1", "name": "type_idx"},
                     {"type": "ulebp1", "name": "sig_idx"},
                 ],
-                DBG_END_LOCAL: [{"type": "uleb", "name": "register_num"}],
-                DBG_RESTART_LOCAL: [{"type": "uleb", "name": "register_num"}],
-                DBG_SET_FILE: [{"type": "ulebp1", "name": "name_idx"}],
+                DBG.END_LOCAL: [{"type": "uleb", "name": "register_num"}],
+                DBG.RESTART_LOCAL: [{"type": "uleb", "name": "register_num"}],
+                DBG.SET_FILE: [{"type": "ulebp1", "name": "name_idx"}],
                 "default": [],
             },
         },
@@ -609,13 +553,13 @@ class debug_info_op(AutoParser):
 
     def __init__(self, data):
         AutoParser.__init__(self, self.items, data)
-        if self.op >= DBG_FIRST_SPECIAL:
-            adjusted_opcode = int(self.op) - DBG_FIRST_SPECIAL
-            line_offset = DBG_LINE_BASE + (adjusted_opcode % DBG_LINE_RANGE)
-            addr_offset = int(adjusted_opcode / DBG_LINE_RANGE)
-            setattr(self, "line_offset", line_offset)
-            setattr(self, "addr_offset", addr_offset)
-        setattr(self, "byte_size", data.tell() - self.get_offset())
+        if DBG.is_special_opcode(self.op):
+            line_base = -4
+            line_range = 15
+            adjusted_opcode = self.op - 0x0A
+            self.line_offset = line_base + (adjusted_opcode % line_range)
+            self.addr_offset = int(adjusted_opcode / line_range)
+        self.byte_size = data.tell() - self.get_offset()
 
     def get_dump_flat(self):
         return True
@@ -624,12 +568,16 @@ class debug_info_op(AutoParser):
         return self.byte_size
 
     def dump_opcode(self, f=sys.stdout):
-        f.write(str(self.op))
-        if self.op == DBG_ADVANCE_PC:
+        if isinstance(self.op, DBG):
+            f.write(self.op.name)
+        else:
+            assert DBG.is_special_opcode(self.op)
+            f.write(f"SPECIAL_OPCODE({self.op})")
+        if self.op == DBG.ADVANCE_PC:
             f.write("(%u)" % self.addr_offset)
-        elif self.op == DBG_ADVANCE_LINE:
+        elif self.op == DBG.ADVANCE_LINE:
             f.write("(%u)" % self.line_offset)
-        elif self.op == DBG_START_LOCAL:
+        elif self.op == DBG.START_LOCAL:
             f.write("(register_num=%u, name_idx=" % self.register_num)
             if self.name_idx < 0:
                 f.write("NO_INDEX")
@@ -640,7 +588,7 @@ class debug_info_op(AutoParser):
                 f.write("NO_INDEX)")
             else:
                 f.write("%u)" % (self.type_idx))
-        elif self.op == DBG_START_LOCAL_EXTENDED:
+        elif self.op == DBG.START_LOCAL_EXTENDED:
             f.write("(register_num=%u, name_idx=" % self.register_num)
             if self.name_idx < 0:
                 f.write("NO_INDEX")
@@ -656,11 +604,11 @@ class debug_info_op(AutoParser):
                 f.write("NO_INDEX)")
             else:
                 f.write("%u)" % (self.type_idx))
-        elif self.op == DBG_END_LOCAL or self.op == DBG_RESTART_LOCAL:
+        elif self.op == DBG.END_LOCAL or self.op == DBG.RESTART_LOCAL:
             f.write("(register_num=%u)" % self.register_num)
-        elif self.op == DBG_SET_FILE:
+        elif self.op == DBG.SET_FILE:
             f.write("(name_idx=%u)" % self.name_idx)
-        elif self.op >= DBG_FIRST_SPECIAL:
+        elif DBG.is_special_opcode(self.op):
             f.write(
                 " (addr_offset=%u, line_offset=%i)"
                 % (self.addr_offset, self.line_offset)
@@ -705,7 +653,7 @@ class debug_info_item(AutoParser):
         ops = self.get_ops()
         if len(ops) == 1:
             op = ops[0]
-            if op.op == DBG_END_SEQUENCE:
+            if op.op == DBG.END_SEQUENCE:
                 bytes_saved += get_uleb128_byte_size(
                     self.line_start
                 ) + get_uleb128p1_byte_size(self.parameters_size)
@@ -724,37 +672,37 @@ class debug_info_item(AutoParser):
         # debug info ops
         for op in ops:
             size = op.get_byte_size()
-            if op.op == DBG_SET_PROLOGUE_END:
+            if op.op == DBG.SET_PROLOGUE_END:
                 f.write(
                     "warning: %s %s can be removed (%u byte)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
                 )
                 bytes_saved += size
-            elif op.op == DBG_SET_EPILOGUE_BEGIN:
+            elif op.op == DBG.SET_EPILOGUE_BEGIN:
                 f.write(
                     "warning: %s %s can be removed (%u byte)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
                 )
                 bytes_saved += size
-            elif op.op == DBG_START_LOCAL:
+            elif op.op == DBG.START_LOCAL:
                 f.write(
                     "warning: %s %s can be removed (%u bytes)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
                 )
                 bytes_saved += size
-            elif op.op == DBG_START_LOCAL_EXTENDED:
+            elif op.op == DBG.START_LOCAL_EXTENDED:
                 f.write(
                     "warning: %s %s can be removed (%u bytes)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
                 )
                 bytes_saved += size
-            elif op.op == DBG_END_LOCAL:
+            elif op.op == DBG.END_LOCAL:
                 f.write(
                     "warning: %s %s can be removed (%u bytes)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
                 )
                 bytes_saved += size
-            elif op.op == DBG_RESTART_LOCAL:
+            elif op.op == DBG.RESTART_LOCAL:
                 f.write(
                     "warning: %s %s can be removed (%u bytes)\n"
                     % (dex_method.get_qualified_name(), op.op, size)
@@ -769,25 +717,25 @@ class debug_info_item(AutoParser):
             row = debug_info_item.row()
             for op_args in ops:
                 op = op_args.op
-                if op == DBG_END_SEQUENCE:
+                if op == DBG.END_SEQUENCE:
                     break
-                if op == DBG_ADVANCE_PC:
+                if op == DBG.ADVANCE_PC:
                     row.address += op_args.addr_offset
-                elif op == DBG_ADVANCE_LINE:
+                elif op == DBG.ADVANCE_LINE:
                     row.line += op_args.line_offset
-                elif op == DBG_START_LOCAL:
+                elif op == DBG.START_LOCAL:
                     pass
-                elif op == DBG_START_LOCAL_EXTENDED:
+                elif op == DBG.START_LOCAL_EXTENDED:
                     pass
-                elif op == DBG_END_LOCAL:
+                elif op == DBG.END_LOCAL:
                     pass
-                elif op == DBG_RESTART_LOCAL:
+                elif op == DBG.RESTART_LOCAL:
                     pass
-                elif op == DBG_SET_PROLOGUE_END:
+                elif op == DBG.SET_PROLOGUE_END:
                     row.prologue_end = True
-                elif op == DBG_SET_EPILOGUE_BEGIN:
+                elif op == DBG.SET_EPILOGUE_BEGIN:
                     row.epilogue_begin = True
-                elif op == DBG_SET_FILE:
+                elif op == DBG.SET_FILE:
                     row.source_file = op_args.name_idx
                 else:
                     row.line += op_args.line_offset
@@ -809,7 +757,7 @@ class debug_info_item(AutoParser):
             while True:
                 op = debug_info_op(data)
                 self.ops.append(op)
-                if op.op == DBG_END_SEQUENCE:
+                if op.op == DBG.END_SEQUENCE:
                     break
             if reset_offset:
                 data.pop_offset_and_seek()
@@ -901,58 +849,57 @@ class encoded_value:
     def __init__(self, data):
         arg_type = data.get_uint8()
         value_arg = arg_type >> 5
-        value_type = arg_type & 0x1F
-        self.value_type = ValueFormat(value_type)
+        self.value_type = ValueFormat(arg_type & 0x1F)
         self.value = None
         size = value_arg + 1
-        if value_type == VALUE_BYTE:
+        if self.value_type == ValueFormat.BYTE:
             if value_arg != 0:
                 raise ValueError("VALUE_BYTE value_arg != 0 (%u)" % (value_arg))
             self.value = data.get_sint8()
-        elif value_type == VALUE_SHORT:
+        elif self.value_type == ValueFormat.SHORT:
             self.value = data.get_sint_size(size)
-        elif value_type == VALUE_CHAR:
+        elif self.value_type == ValueFormat.CHAR:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_INT:
+        elif self.value_type == ValueFormat.INT:
             self.value = data.get_sint_size(size)
-        elif value_type == VALUE_LONG:
+        elif self.value_type == ValueFormat.LONG:
             self.value = data.get_sint_size(size)
-        elif value_type == VALUE_FLOAT:
+        elif self.value_type == ValueFormat.FLOAT:
             raise ValueError("VALUE_FLOAT not supported yet")
-        elif value_type == VALUE_DOUBLE:
+        elif self.value_type == ValueFormat.DOUBLE:
             raise ValueError("VALUE_DOUBLE not supported yet")
-        elif value_type == VALUE_METHOD_TYPE:
+        elif self.value_type == ValueFormat.METHOD_TYPE:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_METHOD_HANDLE:
+        elif self.value_type == ValueFormat.METHOD_HANDLE:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_STRING:
+        elif self.value_type == ValueFormat.STRING:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_TYPE:
+        elif self.value_type == ValueFormat.TYPE:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_FIELD:
+        elif self.value_type == ValueFormat.FIELD:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_METHOD:
+        elif self.value_type == ValueFormat.METHOD:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_ENUM:
+        elif self.value_type == ValueFormat.ENUM:
             self.value = data.get_uint_size(size)
-        elif value_type == VALUE_ARRAY:
+        elif self.value_type == ValueFormat.ARRAY:
             if value_arg != 0:
                 raise ValueError("VALUE_ARRAY value_arg != 0 (%u)" % (value_arg))
             raise ValueError("VALUE_ARRAY not supported yet")
             # encoded_array: an array of values, in the format specified by
             # "encoded_array format". The size of the value is implicit in
             # the encoding.
-        elif value_type == VALUE_ANNOTATION:
+        elif self.value_type == ValueFormat.ANNOTATION:
             if value_arg != 0:
                 raise ValueError("VALUE_ANNOTATION value_arg != 0 (%u)" % (value_arg))
             # encoded_annotation: a sub-annotation, in the format specified by
             # "encoded_annotation format" below. The size of the value is
             # implicit in the encoding.
-        elif value_type == VALUE_NULL:
+        elif self.value_type == ValueFormat.NULL:
             if value_arg != 0:
                 raise ValueError("VALUE_ARRAY value_arg != 0 (%u)" % (value_arg))
             self.value = 0
-        elif value_type == VALUE_BOOLEAN:
+        elif self.value_type == ValueFormat.BOOLEAN:
             if size == 0:
                 self.value = False
             else:
@@ -1350,17 +1297,13 @@ class DexMethod:
         return self.insns
 
     def is_abstract(self):
-        return (
-            self.encoded_method.access_flags & AccessFlags.flags["ACC_ABSTRACT"]
-        ) != 0
+        return bool(self.encoded_method.get_access_flags() & AccessFlags.ABSTRACT)
 
     def is_native(self):
-        return (self.encoded_method.access_flags & AccessFlags.flags["ACC_NATIVE"]) != 0
+        return bool(self.encoded_method.get_access_flags() & AccessFlags.NATIVE)
 
     def is_synthetic(self):
-        return (
-            self.encoded_method.access_flags & AccessFlags.flags["ACC_SYNTHETIC"]
-        ) != 0
+        return bool(self.encoded_method.get_access_flags() & AccessFlags.SYNTHETIC)
 
     def dump(self, options, f=sys.stdout):
         dex = self.get_dex()
@@ -1372,7 +1315,7 @@ class DexMethod:
                 self.get_class().get_name(),
                 self.get_name(),
                 dex.get_proto_string(method_id.proto_idx) if method_id else "",
-                access_flags_to_string(self.encoded_method.access_flags),
+                str(self.encoded_method.get_access_flags()),
             )
         )
         if options.verbose:
@@ -1451,7 +1394,7 @@ class DexClass:
         f.write(
             "\n\tAccess flags: (%s)\n\tSuperclass: %s\n\tInterfaces: (%s)"
             % (
-                access_flags_to_string(self.class_def.access_flags),
+                str(self.class_def.get_access_flags()),
                 dex.get_typename(self.class_def.superclass_idx),
                 ", ".join(
                     [
@@ -1466,7 +1409,7 @@ class DexClass:
         def field_to_string(field):
             field_item = field_ids[field.field_idx]
             return "(%s) %s:%s" % (
-                access_flags_to_string(field.access_flags),
+                str(field.get_access_flags()),
                 dex.get_string(field_item.name_idx),
                 dex.get_typename(field_item.type_idx),
             )
@@ -1504,7 +1447,7 @@ class DexClass:
         return self.class_def.class_idx
 
     def is_abstract(self):
-        return (self.class_def.access_flags & AccessFlags.flags["ACC_ABSTRACT"]) != 0
+        return bool(self.class_def.get_access_flags() & AccessFlags.ABSTRACT)
 
     def get_mangled_name(self):
         if self.mangled is None:
@@ -1648,18 +1591,18 @@ class File:
     def get_map_tuple(self, type_code):
         map_list = self.get_map_list()
         for item in map_list.list:
-            if item.type.get_enum_value() == type_code:
+            if item.type == type_code:
                 return (item.size, item.offset)
         return (0, 0)
 
     def get_debug_info_items_and_total_size(self):
         if self.debug_info_items is None:
-            (size, offset) = self.get_map_tuple(TYPE_DEBUG_INFO_ITEM)
+            (size, offset) = self.get_map_tuple(TypeCode.DEBUG_INFO_ITEM)
             if size == 0 or offset == 0:
                 return (None, None)
             self.data.push_offset_and_seek(offset)
             self.debug_info_items = []
-            for i in range(size):
+            for _ in range(size):
                 item = debug_info_item(self.data)
                 item.get_ops(reset_offset=False)
                 self.debug_info_items.append(item)
@@ -1733,7 +1676,7 @@ class File:
         if self.string_ids is None:
             self.string_ids = []
             self.data.push_offset_and_seek(self.header.string_ids_off)
-            for i in range(self.header.string_ids_size):
+            for _ in range(self.header.string_ids_size):
                 self.string_ids.append(self.data.get_uint32())
             self.data.pop_offset_and_seek()
         return self.string_ids
@@ -1742,7 +1685,7 @@ class File:
         if self.type_ids is None:
             self.type_ids = []
             self.data.push_offset_and_seek(self.header.type_ids_off)
-            for i in range(self.header.type_ids_size):
+            for _ in range(self.header.type_ids_size):
                 self.type_ids.append(self.data.get_uint32())
             self.data.pop_offset_and_seek()
         return self.type_ids
@@ -1751,7 +1694,7 @@ class File:
         if self.proto_ids is None:
             self.proto_ids = []
             self.data.push_offset_and_seek(self.header.proto_ids_off)
-            for i in range(self.header.proto_ids_size):
+            for _ in range(self.header.proto_ids_size):
                 self.proto_ids.append(proto_id_item(self.data, self))
             self.data.pop_offset_and_seek()
         return self.proto_ids
@@ -1783,7 +1726,7 @@ class File:
         if self.field_ids is None:
             self.field_ids = []
             self.data.push_offset_and_seek(self.header.field_ids_off)
-            for i in range(self.header.field_ids_size):
+            for _ in range(self.header.field_ids_size):
                 self.field_ids.append(field_id_item(self.data, self))
             self.data.pop_offset_and_seek()
         return self.field_ids
@@ -1792,7 +1735,7 @@ class File:
         if self.method_ids is None:
             self.method_ids = []
             self.data.push_offset_and_seek(self.header.method_ids_off)
-            for i in range(self.header.method_ids_size):
+            for _ in range(self.header.method_ids_size):
                 self.method_ids.append(method_id_item(self.data, self))
             self.data.pop_offset_and_seek()
         return self.method_ids
@@ -1854,9 +1797,9 @@ class File:
         if self.call_site_ids is None:
             self.call_site_ids = []
             self.call_sites = []
-            (size, offset) = self.get_map_tuple(TYPE_CALL_SITE_ID_ITEM)
+            (size, offset) = self.get_map_tuple(TypeCode.CALL_SITE_ID_ITEM)
             self.data.push_offset_and_seek(offset)
-            for i in range(size):
+            for _ in range(size):
                 self.call_site_ids.append(self.data.get_uint32())
                 self.call_sites.append(None)
             self.data.pop_offset_and_seek()
@@ -1865,9 +1808,9 @@ class File:
     def get_method_handle_items(self):
         if self.method_handle_items is None:
             self.method_handle_items = []
-            (size, offset) = self.get_map_tuple(TYPE_METHOD_HANDLE_ITEM)
+            (size, offset) = self.get_map_tuple(TypeCode.METHOD_HANDLE_ITEM)
             self.data.push_offset_and_seek(offset)
-            for i in range(size):
+            for _ in range(size):
                 self.method_handle_items.append(method_handle_item(self.data))
             self.data.pop_offset_and_seek()
         return self.method_handle_items
@@ -1875,7 +1818,7 @@ class File:
     def get_code_items(self):
         if self.code_items is None:
             self.code_items = []
-            (size, offset) = self.get_map_tuple(TYPE_CODE_ITEM)
+            (size, offset) = self.get_map_tuple(TypeCode.CODE_ITEM)
             self.data.push_offset_and_seek(offset)
             for i in range(size):
                 self.data.align_to(4)
@@ -1944,7 +1887,7 @@ class File:
         if self.class_defs is None:
             self.class_defs = []
             self.data.push_offset_and_seek(self.header.class_defs_off)
-            for i in range(self.header.class_defs_size):
+            for _ in range(self.header.class_defs_size):
                 class_def = class_def_item(self.data, self)
                 self.class_defs.append(class_def)
             self.data.pop_offset_and_seek()
@@ -2046,7 +1989,6 @@ class File:
             f.write("\nclass %s\n" % dex_class.get_name())
             for dex_method in dex_class.get_methods():
                 method_idx = dex_method.encoded_method.method_idx
-                access_flags = dex_method.encoded_method.access_flags
                 method_item = method_ids[method_idx]
                 f.write("[%4u] " % method_idx)
                 method_item.dump(f=f, print_name=False)
@@ -2056,7 +1998,7 @@ class File:
                         self.get_typename(method_item.class_idx),
                         self.get_string(method_item.name_idx),
                         self.get_proto_string(method_item.proto_idx),
-                        access_flags_to_string(access_flags),
+                        str(dex_method.encoded_method.get_access_flags()),
                     )
                 )
 
@@ -2074,7 +2016,7 @@ class File:
                     % (
                         self.get_typename(item.class_idx),
                         self.get_typename(item.superclass_idx),
-                        access_flags_to_string(item.access_flags),
+                        str(item.get_access_flags()),
                     )
                 )
                 f.write("\n")
@@ -2215,22 +2157,22 @@ class Opcode00(Opcode):
             self.size = code_units.get_code_unit()
             self.first_key = code_units.get_int()
             self.targets = []
-            for i in range(self.size):
+            for _ in range(self.size):
                 self.targets.append(code_units.get_int())
         elif self.nature == 2:
             self.size = code_units.get_code_unit()
             self.keys = []
             self.targets = []
-            for i in range(self.size):
+            for _ in range(self.size):
                 self.keys.append(code_units.get_int())
-            for i in range(self.size):
+            for _ in range(self.size):
                 self.targets.append(code_units.get_int())
         elif self.nature == 3:
             self.element_width = code_units.get_code_unit()
             self.size = code_units.get_uint()
             num_code_units = int((self.size * self.element_width + 1) / 2)
             encoder = file_extract.FileEncode(BytesIO(), "little", 4)
-            for i in range(num_code_units):
+            for _ in range(num_code_units):
                 encoder.put_uint16(code_units.get_code_unit())
             encoder.seek(0)
             self.data = encoder.file.getvalue()
@@ -3068,7 +3010,7 @@ class Opcode24(Opcode):
         self.type = inst[1]
         self.regs = []
         regs = inst[2] | ((inst[0] << 8) & 0xF0000)
-        for i in range(arg_count):
+        for _ in range(arg_count):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
@@ -3567,7 +3509,7 @@ class Opcode6E_72(Opcode):
         self.method_idx = inst[1]
         self.regs = []
         regs = inst[2] | ((inst[0] << 8) & 0xF0000)
-        for i in range(arg_count):
+        for _ in range(arg_count):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
@@ -3939,7 +3881,7 @@ class OpcodeFA(Opcode):
         self.regs = []
         regs = inst[3] | ((inst[0] << 8) & 0xF0000)
         self.proto = inst[4]
-        for i in range(arg_count):
+        for _ in range(arg_count):
             self.regs.append(regs & 0xF)
             regs >>= 4
 
@@ -4049,7 +3991,7 @@ class DexInstruction(object):
             OpcodeD8_E2,
             OpcodeFA,
         ]
-        for i in range(256):
+        for _ in range(256):
             cls.opcode_defs.append(None)
         for opcode_class in opcode_classes:
             for op in opcode_class.ops:
@@ -4068,7 +4010,7 @@ class DexInstruction(object):
         num_code_units = len(self.code_units)
         if num_code_units < 5:
             pad = 5 - num_code_units
-            for i in range(pad):
+            for _ in range(pad):
                 f.write("     ")
         f.write(" ")
         self.instruction.dump(f=f, context=context)
@@ -4102,7 +4044,7 @@ class DexInstruction(object):
         opcode_class = self.opcode_defs[op]
         if opcode_class is None:
             raise ValueError("unsupported opcode %#4.4x" % (swap16(self[0])))
-        for i in range(1, opcode_class.num_code_units):
+        for _ in range(1, opcode_class.num_code_units):
             self.code_units.append(code_units.get_code_unit())
         self.instruction = opcode_class(self, code_units)
 
@@ -4449,7 +4391,7 @@ def main():
         print("No input files. {}".format(usage))
         return
 
-    for (i, path) in enumerate(files):
+    for path in files:
         if os.path.splitext(path)[1] == ".apk":
             print("error: dex.py operates on dex files, please unpack your apk")
             return

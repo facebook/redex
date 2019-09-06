@@ -15,12 +15,12 @@ import static org.fest.assertions.api.Assertions.assertThat;
 // POSTCHECK-LABEL: class: redex.$EnumUtils
 // POSTCHECK-NEXT: Access flags: (PUBLIC, FINAL)
 // POSTCHECK-NEXT: Superclass: java.lang.Object
-// POSTCHECK: (PRIVATE, FINAL, STATIC) $VALUES:java.lang.Integer[]
-// POSTCHECK: (PUBLIC, FINAL, STATIC) f0:java.lang.Integer
-// POSTCHECK: (PUBLIC, FINAL, STATIC) f1:java.lang.Integer
-// POSTCHECK: (PUBLIC, FINAL, STATIC) f2:java.lang.Integer
-// POSTCHECK: (PUBLIC, FINAL, STATIC) f3:java.lang.Integer
-// POSTCHECK: (PUBLIC, FINAL, STATIC) f4:java.lang.Integer
+// POSTCHECK: (PRIVATE, STATIC, FINAL) $VALUES:java.lang.Integer[]
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f0:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f1:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f2:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f3:java.lang.Integer
+// POSTCHECK: (PUBLIC, STATIC, FINAL) f4:java.lang.Integer
 
 // This enum class contains some user defined static methods and it's never
 // being casted to other types. It will be transformed to a class with only
