@@ -220,6 +220,10 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   bool run_hasher_after_each_pass =
       hasher_args.get("run_after_each_pass", true).asBool();
 
+  if (get_redex_options().disable_dex_hasher) {
+    run_hasher_after_each_pass = false;
+  }
+
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
       conf.get_json_config()["ir_type_checker"];

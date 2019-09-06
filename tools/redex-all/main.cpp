@@ -256,6 +256,11 @@ Arguments parse_args(int argc, char* argv[]) {
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
   od.add_options()(
+      "disable-dex-hasher",
+      po::bool_switch(&args.redex_options.disable_dex_hasher)
+          ->default_value(false),
+      "If specified, states that the current run disables dex hasher.\n");
+  od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
       "Architecture; one of arm/arm64/thumb2/x86_64/x86/mips/mips64");

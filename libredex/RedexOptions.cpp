@@ -13,6 +13,7 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   auto& options = entry_data["redex_options"];
   options["verify_none_enabled"] = verify_none_enabled;
   options["is_art_build"] = is_art_build;
+  options["disable_dex_hasher"] = disable_dex_hasher;
   options["instrument_pass_enabled"] = instrument_pass_enabled;
   options["min_sdk"] = min_sdk;
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
@@ -22,6 +23,7 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   const auto& options_data = entry_data["redex_options"];
   verify_none_enabled = options_data["verify_none_enabled"].asBool();
   is_art_build = options_data["is_art_build"].asBool();
+  disable_dex_hasher = options_data["disable_dex_hasher"].asBool();
   instrument_pass_enabled = options_data["instrument_pass_enabled"].asBool();
   min_sdk = options_data["min_sdk"].asInt();
   debug_info_kind =

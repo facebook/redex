@@ -178,6 +178,9 @@ def run_redex_binary(state):
     if state.args.is_art_build:
         args += ["--is-art-build"]
 
+    if state.args.disable_dex_hasher:
+        args += ["--disable-dex-hasher"]
+
     if state.args.enable_instrument_pass or state.config_dict.get(
         "enable_instrument_pass"
     ):
@@ -554,6 +557,9 @@ Given an APK, produce a better APK!
         "--is-art-build",
         action="store_true",
         help="States that this is an art only build",
+    )
+    parser.add_argument(
+        "--disable-dex-hasher", action="store_true", help="Disable DexHasher"
     )
     parser.add_argument(
         "--page-align-libs",
