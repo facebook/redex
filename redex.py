@@ -109,6 +109,10 @@ def add_extra_environment_args(env):
             "MALLOC_CONF"
         ] = "prof:true,prof_prefix:jeprof.out,prof_gdump:true,prof_active:false"
 
+    # If we haven't set MALLOC_CONF, tune MALLOC_CONF for better perf
+    if "MALLOC_CONF" not in env:
+        env["MALLOC_CONF"] = "background_thread:true,metadata_thp:always,thp:always"
+
 
 def get_stop_pass_idx(passes_list, pass_name_and_num):
     # Get the stop position
