@@ -51,6 +51,8 @@ def patch_zip_file():
     zipfile.ZipInfo._decodeExtra = decodeExtra
 
 
+patch_zip_file()
+
 timer = timeit.default_timer
 
 per_file_compression = {}
@@ -914,7 +916,6 @@ def run_redex(args):
 
 
 if __name__ == "__main__":
-    patch_zip_file()
     keys = {}
     try:
         keystore = join(os.environ["HOME"], ".android", "debug.keystore")
