@@ -1257,13 +1257,13 @@ class DexMethod:
         proto_id = dex.get_proto_id(self.get_method_id().proto_idx)
         if proto_id is None:
             return None
-        return_type = dex.get_typename(proto_id.return_type_idx)
+        return_type = dex.get_raw_typename(proto_id.return_type_idx)
         param = "("
         if proto_id.parameters_off != 0:
             # type is type_list
             param_list = proto_id.get_parameters().list
             for type_idx in param_list:
-                param += dex.get_typename(type_idx)
+                param += dex.get_raw_typename(type_idx)
         param += ")"
         return param + return_type
 
