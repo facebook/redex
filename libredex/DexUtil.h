@@ -565,23 +565,6 @@ struct dex_stats_t {
 dex_stats_t&
   operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
-/*
- * Pure methods...
- * - do not read or write mutable state
- * - are deterministic (and do not return newly allocated objects, unless object
- *                      identity should be truly irrelevant, such as in the case
- *                      of boxing certain values)
- * - may throw trivial exceptions such as null-pointer exception that
- *   generally shouldn't be caught, or return normally
- *
- * If their outputs are not used, pure method invocations can be removed by DCE.
- * Redundant invocations with same incoming arguments can be eliminated by CSE.
- *
- * TODO: Derive this list with static analysis rather than hard-coding
- * it.
- */
-std::unordered_set<DexMethodRef*> get_pure_methods();
-
 namespace JavaNameUtil {
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"

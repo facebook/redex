@@ -178,6 +178,7 @@ libredex_la_SOURCES = \
 	libredex/ProguardPrintConfiguration.cpp \
 	libredex/ProguardRegex.cpp \
 	libredex/ProguardReporting.cpp \
+	libredex/Purity.cpp \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \

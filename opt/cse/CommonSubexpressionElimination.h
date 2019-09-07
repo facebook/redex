@@ -110,7 +110,7 @@ class SharedState {
       DexType* exact_virtual_scope,
       const std::unordered_set<Location, LocationHasher>& read_locations);
   void log_barrier(const Barrier& barrier);
-  bool is_pure(DexMethodRef* method_ref, DexMethod* method);
+  bool has_pure_method(const IRInstruction* insn) const;
   void cleanup();
 
  private:

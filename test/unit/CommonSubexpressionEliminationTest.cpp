@@ -12,6 +12,7 @@
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "Purity.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
 

@@ -66,6 +66,7 @@
 #include "IRInstruction.h"
 #include "LocalDce.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
+#include "Purity.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "TypeInference.h"
@@ -706,10 +707,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
     case OPCODE_INVOKE_INTERFACE: {
-      auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
       // TODO: Is this really safe for all virtual/interface invokes? This
       //       mimics the way assumenosideeffects is used in LocalDCE.
-      is_positional = !m_shared_state->is_pure(insn->get_method(), method);
+      is_positional = !m_shared_state->has_pure_method(insn);
       break;
     }
     default:
@@ -1212,11 +1212,21 @@ void SharedState::log_barrier(const Barrier& barrier) {
   }
 }
 
-bool SharedState::is_pure(DexMethodRef* method_ref, DexMethod* method) {
-  if (method != nullptr && assumenosideeffects(method)) {
+bool SharedState::has_pure_method(const IRInstruction* insn) const {
+  auto method_ref = insn->get_method();
+  if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
+    TRACE(CSE, 4, "[CSE] unresolved pure for %s", SHOW(method_ref));
     return true;
   }
-  return m_pure_methods.find(method_ref) != m_pure_methods.end();
+
+  auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+  if (method != nullptr &&
+      m_pure_methods.find(method) != m_pure_methods.end()) {
+    TRACE(CSE, 4, "[CSE] resolved pure for %s", SHOW(method));
+    return true;
+  }
+
+  return false;
 }
 
 void SharedState::cleanup() {
@@ -1386,6 +1396,10 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
     if (opcode::is_move_result_any(insn->opcode())) {
       insn = m_cfg.primary_instruction_of_move_result(it)->insn;
+      if (is_invoke(insn->opcode())) {
+        TRACE(CSE, 3, "[CSE] eliminating invocation of %s",
+              SHOW(insn->get_method()));
+      }
     }
     m_stats.eliminated_opcodes[insn->opcode()]++;
   }

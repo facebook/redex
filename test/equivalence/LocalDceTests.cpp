@@ -9,6 +9,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "LocalDce.h"
+#include "Purity.h"
 #include "TestGenerator.h"
 
 class DceTest : public EquivalenceTest {

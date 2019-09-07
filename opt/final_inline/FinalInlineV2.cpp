@@ -20,6 +20,7 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "LocalDce.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
 #include "Walkers.h"

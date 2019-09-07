@@ -59,7 +59,7 @@ class LocalDce {
                    cfg::Block* b,
                    IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
-  bool is_pure(DexMethodRef* ref, DexMethod* meth);
+  bool assumenosideeffects(DexMethodRef* ref, DexMethod* meth);
 };
 
 class LocalDcePass : public Pass {
@@ -76,5 +76,5 @@ class LocalDcePass : public Pass {
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
-  std::unordered_set<DexMethodRef*> find_no_sideeffect_methods(const Scope&);
+  std::unordered_set<DexMethodRef*> find_pure_methods(const Scope&);
 };

@@ -249,7 +249,7 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  const auto& pure_methods = impl.find_pure_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
@@ -293,7 +293,7 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  const auto& pure_methods = impl.find_pure_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
@@ -330,7 +330,7 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  const auto& pure_methods = impl.find_pure_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
@@ -368,7 +368,7 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
+  const auto& pure_methods = impl.find_pure_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);

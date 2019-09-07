@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "TypeSystem.h"
@@ -275,7 +276,7 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
       if (meth == nullptr) {
         return true;
       }
-      if (!is_pure(inst->get_method(), meth)) {
+      if (!assumenosideeffects(inst->get_method(), meth)) {
         return true;
       }
       return bliveness.test(bliveness.size() - 1);
@@ -308,8 +309,8 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
   return false;
 }
 
-bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
-  if (assumenosideeffects(meth)) {
+bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
+  if (::assumenosideeffects(meth)) {
     return true;
   }
   return m_pure_methods.find(ref) != m_pure_methods.end();
@@ -325,7 +326,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
-  auto pure_methods = find_no_sideeffect_methods(scope);
+  auto pure_methods = find_pure_methods(scope);
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
@@ -354,7 +355,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
 
-std::unordered_set<DexMethodRef*> LocalDcePass::find_no_sideeffect_methods(
+std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods(
     const Scope& scope) {
   auto pure_methods = get_pure_methods();
   if (no_implementor_abstract_is_pure) {
