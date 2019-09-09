@@ -345,6 +345,10 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
       if (kept_builders.find(builder_cls) != kept_builders.end()) {
         continue;
       }
+      if (m_blacklist.find(builder) != m_blacklist.end()) {
+        TRACE(BUILDERS, 2, "Skipping blacklisted type %s", SHOW(builder));
+        continue;
+      }
 
       // Check it is a trivial one.
       if (trivial_builders.find(builder_cls) != trivial_builders.end()) {
