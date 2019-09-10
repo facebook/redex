@@ -14,6 +14,7 @@ package com.facebook.redextest;
 
 import org.junit.Test;
 import java.lang.Integer;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -160,6 +161,61 @@ public class ReflectionAnalysisTest {
       Class[][] someArray = new Class[1][];
       someArray[0] = types; // invalidate
       return baz.getDeclaredMethod("test", types);
+    }
+
+    @Nullable
+    Constructor getConstructorWithParam() {
+      Class<?> baz = Baz.class;
+      Class[] empty = new Class[0];
+      Class[] types = new Class[2];
+      types[0] = Integer.class;
+      types[1] = double.class;
+      Constructor c1 = null;
+      Constructor c2 = null;
+      Constructor c3 = null;
+      try {
+        c1 = baz.getDeclaredConstructor(empty);
+        c2 = baz.getDeclaredConstructor(types);
+        c3 = baz.getDeclaredConstructor(types);
+      } catch (NoSuchMethodException e) { return null; }
+      return c1;
+    }
+
+    Constructor getConstructorWithParamInvalidatedArgs1() throws NoSuchMethodException {
+      Class<?> baz = Baz.class;
+      Class[] types = new Class[2];
+      types[0] = Integer.class;
+      types[1] = double.class;
+      mClassArray = types; // invalidate
+      return baz.getDeclaredConstructor(types);
+    }
+
+    Constructor getConstructorWithParamInvalidatedArgs2() throws NoSuchMethodException {
+      Class<?> baz = Baz.class;
+      Class[] types = new Class[2];
+      types[0] = Integer.class;
+      types[1] = double.class;
+      sClassArray = types; // invalidate
+      return baz.getDeclaredConstructor(types);
+    }
+
+    Constructor getConstructorWithParamInvalidatedArgs3() throws NoSuchMethodException {
+      Class<?> baz = Baz.class;
+      Class[] types = new Class[2];
+      types[0] = Integer.class;
+      types[1] = double.class;
+      updateClassArray(types); // invalidate
+      return baz.getDeclaredConstructor(types);
+    }
+
+    Constructor getConstructorWithParamInvalidatedArgs4() throws NoSuchMethodException {
+      Class<?> baz = Baz.class;
+      Class[] types = new Class[2];
+      types[0] = Integer.class;
+      types[1] = double.class;
+      Class[][] someArray = new Class[1][];
+      someArray[0] = types; // invalidate
+      return baz.getDeclaredConstructor(types);
     }
   }
 

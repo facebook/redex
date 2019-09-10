@@ -905,11 +905,20 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
             method_param_types = *maybe_array;
           }
         }
-      } else if (m_ctor_lookup_vmethods.count(callee) > 0) {
+      } else if (callee == m_get_constructor ||
+                 callee == m_get_declared_constructor) {
         element_kind = METHOD;
-        // Hard code the <init> method name, to continue on treating this as
-        // no different than a method.
         element_name = DexString::get_string("<init>");
+        auto arr_reg = insn->src(1);
+        auto arr_obj = current_state->get_abstract_obj(arr_reg).get_object();
+        if (arr_obj && arr_obj->is_known_class_array()) {
+          auto maybe_array =
+              current_state->get_heap_class_array(arr_obj->heap_address)
+                  .get_constant();
+          if (maybe_array) {
+            method_param_types = *maybe_array;
+          }
+        }
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
@@ -919,6 +928,10 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       } else if (callee == m_get_methods || callee == m_get_declared_methods) {
         element_kind = METHOD;
         element_name = DexString::get_string("");
+      } else if (callee == m_get_constructors ||
+                 callee == m_get_declared_constructors) {
+        element_kind = METHOD;
+        element_name = DexString::get_string("<init>");
       }
       if (element_name == nullptr) {
         break;
@@ -1008,13 +1021,6 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredConstructors",
                              {},
                              "[Ljava/lang/reflect/Constructor;")};
-  // Set of vmethods on java.lang.Class that can find constructors.
-  std::unordered_set<DexMethodRef*> m_ctor_lookup_vmethods{{
-      m_get_constructor,
-      m_get_declared_constructor,
-      m_get_constructors,
-      m_get_declared_constructors,
-  }};
   DexMethodRef* m_get_field{
       DexMethod::make_method("Ljava/lang/Class;",
                              "getField",

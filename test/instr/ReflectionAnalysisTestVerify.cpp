@@ -261,3 +261,45 @@ TEST_F(PreVerify, MethodWithParamInvalidatedArgs4) {
   EXPECT_EQ(methods.size(), 1);
   EXPECT_TRUE(methods.count({"test", {}}));
 }
+
+TEST_F(PreVerify, ConstructorWithParam) {
+  Methods methods;
+  get_reflected_methods_by_test(methods, classes, "getConstructorWithParam");
+  DexType* integer = DexType::make_type("Ljava/lang/Integer;");
+  DexType* doublee = DexType::make_type("D");
+  EXPECT_TRUE(methods.count({"<init>", {}}));
+  EXPECT_TRUE(methods.count({"<init>", {integer, doublee}}));
+  EXPECT_TRUE(methods.count({"<init>", {integer, doublee}}));
+}
+
+TEST_F(PreVerify, ConstructorWithParamInvalidatedArgs1) {
+  Methods methods;
+  get_reflected_methods_by_test(methods, classes,
+                                "getConstructorWithParamInvalidatedArgs1");
+  EXPECT_EQ(methods.size(), 1);
+  EXPECT_TRUE(methods.count({"<init>", {}}));
+}
+
+TEST_F(PreVerify, ConstructorWithParamInvalidatedArgs2) {
+  Methods methods;
+  get_reflected_methods_by_test(methods, classes,
+                                "getConstructorWithParamInvalidatedArgs2");
+  EXPECT_EQ(methods.size(), 1);
+  EXPECT_TRUE(methods.count({"<init>", {}}));
+}
+
+TEST_F(PreVerify, ConstructorWithParamInvalidatedArgs3) {
+  Methods methods;
+  get_reflected_methods_by_test(methods, classes,
+                                "getConstructorWithParamInvalidatedArgs3");
+  EXPECT_EQ(methods.size(), 1);
+  EXPECT_TRUE(methods.count({"<init>", {}}));
+}
+
+TEST_F(PreVerify, ConstructorWithParamInvalidatedArgs4) {
+  Methods methods;
+  get_reflected_methods_by_test(methods, classes,
+                                "getConstructorWithParamInvalidatedArgs4");
+  EXPECT_EQ(methods.size(), 1);
+  EXPECT_TRUE(methods.count({"<init>", {}}));
+}
