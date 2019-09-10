@@ -19,7 +19,7 @@
  * should happen rarely.
 */
 
-#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
+#if defined(__SSE4_2__) && defined(__linux__)
         .file       "strcmp_less.S"
         .text
 
