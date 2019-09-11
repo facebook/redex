@@ -189,8 +189,7 @@ void run_inliner(DexStoresVector& stores,
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
   TRACE(INLINE, 3, "blacklisted meths %ld", inliner.get_info().blacklisted);
-  TRACE(INLINE, 3, "virtualizing methods %ld",
-        inliner.get_info().need_vmethod);
+  TRACE(INLINE, 3, "virtualizing methods %ld", inliner.get_info().need_vmethod);
   TRACE(INLINE, 3, "invoke super %ld", inliner.get_info().invoke_super);
   TRACE(INLINE, 3, "override inputs %ld", inliner.get_info().write_over_ins);
   TRACE(INLINE, 3, "escaped virtual %ld", inliner.get_info().escaped_virtual);
@@ -204,10 +203,8 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 3, "references cross stores %ld",
         inliner.get_info().cross_store);
   TRACE(INLINE, 3, "not found %ld", inliner.get_info().not_found);
-  TRACE(INLINE, 3, "caller too large %ld",
-        inliner.get_info().caller_too_large);
-  TRACE(INLINE, 1,
-        "%ld inlined calls over %ld methods and %ld methods removed",
+  TRACE(INLINE, 3, "caller too large %ld", inliner.get_info().caller_too_large);
+  TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
         inliner.get_info().calls_inlined, inlined_count, deleted);
 
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);

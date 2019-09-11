@@ -43,9 +43,7 @@ void inline_tail_call(DexMethod* caller,
  * Inline `callee` into `caller` at `pos`.
  * This is a general-purpose inliner.
  */
-void inline_method(IRCode* caller,
-                   IRCode* callee,
-                   IRList::iterator pos);
+void inline_method(IRCode* caller, IRCode* callee, IRList::iterator pos);
 
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
@@ -90,9 +88,7 @@ class MultiMethodInliner {
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex);
 
-  ~MultiMethodInliner() {
-    invoke_direct_to_static();
-  }
+  ~MultiMethodInliner() { invoke_direct_to_static(); }
 
   /**
    * attempt inlining for all candidates.
@@ -102,9 +98,7 @@ class MultiMethodInliner {
   /**
    * Return the count of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const {
-    return inlined;
-  }
+  std::unordered_set<DexMethod*> get_inlined() const { return inlined; }
 
   /**
    * Inline callees in the caller if is_inlinable below returns true.
@@ -330,7 +324,5 @@ class MultiMethodInliner {
   const MultiMethodInlinerMode m_mode;
 
  public:
-  const InliningInfo& get_info() {
-    return info;
-  }
+  const InliningInfo& get_info() { return info; }
 };

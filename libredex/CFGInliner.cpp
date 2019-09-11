@@ -9,9 +9,9 @@
 
 #include <memory>
 
+#include "DexPosition.h"
 #include "IRList.h"
 #include "IROpcode.h"
-#include "DexPosition.h"
 
 namespace cfg {
 
