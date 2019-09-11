@@ -30,8 +30,7 @@ void test(const Scope& scope,
           const std::string& expected_str,
           size_t expected_instructions_eliminated,
           size_t expected_inlined_barriers_into_methods = 0,
-          size_t expected_inlined_barriers_iterations = 1,
-          size_t max_iterations = 10) {
+          size_t expected_inlined_barriers_iterations = 0) {
   auto field_a = static_cast<DexField*>(DexField::make_field("LFoo;.a:I"));
   field_a->make_concrete(ACC_PUBLIC);
 
@@ -53,8 +52,7 @@ void test(const Scope& scope,
   code.get()->build_cfg(/* editable */ true);
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
-  auto method_barriers_stats =
-      shared_state.init_method_barriers(scope, max_iterations);
+  auto method_barriers_stats = shared_state.init_method_barriers(scope);
   cse_impl::CommonSubexpressionElimination cse(&shared_state,
                                                code.get()->cfg());
   bool is_static = true;
@@ -681,7 +679,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
 
   test(Scope{type_class(get_object_type()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 1, 1, 2);
+       code_str, expected_str, 1, 0, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
@@ -752,7 +750,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
 
   test(Scope{type_class(get_object_type()), a_creator.create(),
              b_creator.create(), c_creator.create()},
-       code_str, expected_str, 1, 2, 3);
+       code_str, expected_str, 1, 0, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
@@ -802,7 +800,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
 
   test(Scope{type_class(get_object_type()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 0, 1, 2);
+       code_str, expected_str, 0, 1, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -1306,4 +1304,44 @@ TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
     )
   )";
   test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
+  ClassCreator a_creator(DexType::make_type("LA;"));
+  a_creator.set_super(get_object_type());
+
+  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+     (
+       (invoke-static () "LA;.m:()V")
+     )
+   )"));
+  a_creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (invoke-static () "LA;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v1)
+      (move v3 v1)
+      (invoke-static () "LA;.m:()V")
+      (iget v0 "LFoo;.a:I")
+      (move-result-pseudo v2)
+      (move v2 v3)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type()), a_creator.create()}, code_str,
+       expected_str, 1, 0, 1);
 }

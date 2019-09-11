@@ -104,7 +104,7 @@ struct LocationHasher {
 class SharedState {
  public:
   SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
-  MethodBarriersStats init_method_barriers(const Scope&, size_t);
+  MethodBarriersStats init_method_barriers(const Scope&);
   boost::optional<Location> get_relevant_written_location(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,
@@ -174,7 +174,6 @@ class CommonSubexpressionEliminationPass : public Pass {
   virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
-  int64_t m_max_iterations;
   bool m_debug;
   bool m_runtime_assertions;
 };

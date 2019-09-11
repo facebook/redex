@@ -913,159 +913,162 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
   }
 }
 
-MethodBarriersStats SharedState::init_method_barriers(const Scope& scope,
-                                                      size_t max_iterations) {
+MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
   m_method_override_graph = method_override_graph::build_graph(scope);
 
-  ConcurrentMap<const DexMethod*, std::vector<Barrier>> method_barriers;
-  ConcurrentMap<const DexMethod*, const DexMethod*> waiting_for;
-  // Let's initialize method_barriers, and waiting_for.
+  struct WrittenLocationsAndDependencies {
+    std::unordered_set<Location, LocationHasher> written_locations;
+    std::unordered_set<const DexMethod*> dependencies;
+  };
+
+  // 1. Let's initialize known method written locations and dependencies by
+  //    scanning method bodies
+  ConcurrentMap<const DexMethod*, WrittenLocationsAndDependencies>
+      concurrent_method_wlads;
   walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
     if (method->rstate.no_optimizations()) {
-      waiting_for.emplace(method, nullptr);
       return;
     }
     code.build_cfg(/* editable */ true);
-    std::unordered_set<Barrier, BarrierHasher> set;
-    boost::optional<const DexMethod*> wait_for_method;
+    WrittenLocationsAndDependencies wlads;
+    bool general_memory_barrier = false;
     for (auto& mie : cfg::InstructionIterable(code.cfg())) {
       auto* insn = mie.insn;
       if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
         auto barrier = make_barrier(insn);
-        get_written_location(barrier);
-        set.insert(barrier);
-        if (is_invoke(barrier.opcode)) {
-          wait_for_method = barrier.method;
-        }
-      }
-    }
-    std::vector<Barrier> barriers(set.begin(), set.end());
-    method_barriers.emplace(method, barriers);
-    if (wait_for_method) {
-      waiting_for.emplace(method, *wait_for_method);
-    }
-  });
-
-  // Let's try to (semantically) inline barriers: We merge sets of
-  // barriers, looking into invocations. We do it incrementally,
-  // each time only from methods that do not call any other methods.
-  MethodBarriersStats stats;
-  for (size_t iterations = 0; iterations < max_iterations; iterations++) {
-    stats.inlined_barriers_iterations++;
-
-    ConcurrentMap<const DexMethod*, std::vector<Barrier>>
-        updated_method_barriers;
-    ConcurrentMap<const DexMethod*, const DexMethod*> updated_waiting_for;
-    walk::parallel::code(scope, [&](DexMethod* method, IRCode&) {
-      auto waiting_for_it = waiting_for.find(method);
-      if (waiting_for_it == waiting_for.end()) {
-        // no invocation to inline
-        return;
-      }
-
-      auto can_inline_barriers = [&](const DexMethod* other_method) {
-        if (other_method == nullptr) {
-          return false;
-        }
-        if (is_abstract(other_method) || assumenosideeffects(other_method)) {
-          return true;
-        }
-        // we'll only inline methods that themselves do not have any further
-        // calls
-        return !waiting_for.count_unsafe(other_method) &&
-               !other_method->is_external() && !is_native(other_method);
-      };
-
-      // Quick check: Are we are waiting for a method that cannot be inlined
-      // (yet)?
-      auto waiting_for_method = waiting_for_it->second;
-      if (!can_inline_barriers(waiting_for_method)) {
-        return;
-      }
-
-      std::unordered_set<Barrier, BarrierHasher> barriers;
-      auto inline_barriers = [&](const DexMethod* other_method) {
-        if (!is_abstract(other_method) && !assumenosideeffects(other_method)) {
-          always_assert(!waiting_for.count_unsafe(other_method));
-          always_assert(!other_method->is_external());
-          always_assert(!is_native(other_method));
-          always_assert(other_method->get_code());
-          always_assert(can_inline_barriers(other_method));
-          always_assert(method_barriers.count_unsafe(other_method));
-          auto& invoked_barriers = method_barriers.at_unsafe(other_method);
-          std::copy(invoked_barriers.begin(), invoked_barriers.end(),
-                    std::inserter(barriers, barriers.end()));
-        }
-      };
-
-      for (auto& barrier : method_barriers.at_unsafe(method)) {
         if (!is_invoke(barrier.opcode)) {
-          barriers.insert(barrier);
-          continue;
+          auto location = get_written_location(barrier);
+          if (location == Location(GENERAL_MEMORY_BARRIER)) {
+            general_memory_barrier = true;
+            break;
+          } else {
+            wlads.written_locations.insert(location);
+            continue;
+          }
         }
 
         if (barrier.opcode == OPCODE_INVOKE_SUPER) {
           // TODO: Implement
-          updated_waiting_for.insert_or_assign(std::make_pair(method, nullptr));
-          return;
+          general_memory_barrier = true;
+          break;
         }
 
-        if (!can_inline_barriers(barrier.method)) {
-          // giving up, won't inline anything as it's pointless
-          updated_waiting_for.insert_or_assign(
-              std::make_pair(method, barrier.method));
-          return;
-        }
+        auto process_method = [&](const DexMethod* other_method) {
+          if (other_method == nullptr) {
+            general_memory_barrier = true;
+          } else if (is_abstract(other_method) ||
+                     assumenosideeffects(other_method)) {
+            // nothing to do here
+          } else if (other_method->is_external() || is_native(other_method)) {
+            general_memory_barrier = true;
+          } else {
+            wlads.dependencies.insert(other_method);
+          }
+        };
 
-        inline_barriers(barrier.method);
+        process_method(barrier.method);
 
-        if (barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
-            barrier.opcode == OPCODE_INVOKE_INTERFACE) {
+        if ((barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
+             barrier.opcode == OPCODE_INVOKE_INTERFACE) &&
+            !general_memory_barrier && !assumenosideeffects(barrier.method)) {
           always_assert(barrier.method->is_virtual());
           const auto overriding_methods =
               method_override_graph::get_overriding_methods(
                   *m_method_override_graph, barrier.method);
           for (const DexMethod* overriding_method : overriding_methods) {
-            if (!can_inline_barriers(overriding_method)) {
-              // giving up, won't inline anything as it's pointless
-              updated_waiting_for.insert_or_assign(
-                  std::make_pair(method, overriding_method));
-              return;
-            }
-
-            inline_barriers(overriding_method);
+            process_method(overriding_method);
           }
         }
       }
-
-      std::vector<Barrier> vector(barriers.begin(), barriers.end());
-      updated_method_barriers.emplace(method, vector);
-    });
-
-    if (updated_method_barriers.size() == 0) {
-      break;
     }
 
-    for (auto& p : updated_waiting_for) {
-      waiting_for.insert_or_assign(p);
-      always_assert(!updated_method_barriers.count(p.first));
+    if (!general_memory_barrier) {
+      concurrent_method_wlads.emplace(method, wlads);
     }
+  });
 
-    for (auto& p : updated_method_barriers) {
-      method_barriers.insert_or_assign(p);
-      always_assert(!updated_waiting_for.count_unsafe(p.first));
-      always_assert(waiting_for.count_unsafe(p.first));
-      waiting_for.erase(p.first);
-      stats.inlined_barriers_into_methods++;
+  std::unordered_map<const DexMethod*, WrittenLocationsAndDependencies>
+      method_wlads(concurrent_method_wlads.begin(),
+                   concurrent_method_wlads.end());
+
+  // 2. Compute inverse dependencies so that we know what needs to be recomputed
+  // during the fixpoint computation, and determine set of methods that are
+  // initially "impacted" in the sense that they have dependencies.
+  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
+      inverse_dependencies;
+  std::unordered_set<const DexMethod*> impacted_methods;
+  for (auto p : method_wlads) {
+    auto method = p.first;
+    auto& wlads = p.second;
+    if (wlads.dependencies.size()) {
+      for (auto d : wlads.dependencies) {
+        inverse_dependencies[d].insert(method);
+      }
+      impacted_methods.insert(method);
     }
   }
 
-  for (auto& p : method_barriers) {
-    std::unordered_set<Location, LocationHasher>& written_locations =
-        m_method_written_locations[p.first];
-    for (auto& barrier : p.second) {
-      written_locations.insert(get_written_location(barrier));
+  // 3. Let's try to (semantically) inline written locations, computing a fixed
+  //    point. Methods for which information is directly or indirectly absent
+  //    are equivalent to a general memory barrier, and are systematically
+  //    pruned.
+  MethodBarriersStats stats;
+  while (impacted_methods.size()) {
+    stats.inlined_barriers_iterations++;
+
+    // TODO: Consider ordering impacted_methods by their dependencies to
+    // minimize how often we need to iterate the outer fixpoint loop
+    std::unordered_set<const DexMethod*> changed_methods;
+    for (const DexMethod* method : impacted_methods) {
+      auto& wlads = method_wlads.at(method);
+      bool general_memory_barrier = false;
+      size_t wlads_written_locations_size = wlads.written_locations.size();
+      for (const DexMethod* d : wlads.dependencies) {
+        if (d == method) {
+          continue;
+        }
+        auto it = method_wlads.find(d);
+        if (it == method_wlads.end()) {
+          general_memory_barrier = true;
+          break;
+        }
+        const auto& other_written_locations = it->second.written_locations;
+        wlads.written_locations.insert(other_written_locations.begin(),
+                                       other_written_locations.end());
+      }
+      if (general_memory_barrier ||
+          wlads_written_locations_size < wlads.written_locations.size()) {
+        // something changed
+        stats.inlined_barriers_into_methods++;
+        changed_methods.insert(method);
+        if (general_memory_barrier) {
+          method_wlads.erase(method);
+        }
+      }
     }
+
+    // Given set of changed methods, determine set of dependents for which
+    // we need to re-run the analysis in another iteration.
+    impacted_methods.clear();
+    for (auto changed_method : changed_methods) {
+      auto it = inverse_dependencies.find(changed_method);
+      if (it != inverse_dependencies.end()) {
+        for (auto impacted_method : it->second) {
+          if (method_wlads.count(impacted_method)) {
+            impacted_methods.insert(impacted_method);
+          }
+        }
+      }
+    }
+  }
+
+  // For all methods which have a known set of written locations at this point,
+  // persist that information
+  for (auto& p : method_wlads) {
+    auto method = p.first;
+    auto& wlads = p.second;
+    m_method_written_locations[method].insert(wlads.written_locations.begin(),
+                                              wlads.written_locations.end());
   }
 
   return stats;
@@ -1177,9 +1180,6 @@ bool SharedState::is_invoke_a_barrier(
       return true;
     }
     auto& written_locations = it->second;
-    if (written_locations.count(Location(GENERAL_MEMORY_BARRIER))) {
-      return true;
-    }
     return !are_disjoint(&written_locations, &read_locations);
   };
 
@@ -1188,7 +1188,8 @@ bool SharedState::is_invoke_a_barrier(
   if (method == nullptr || has_barriers(method)) {
     return true;
   }
-  if (opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) {
+  if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) &&
+      !assumenosideeffects(method)) {
     always_assert(method->is_virtual());
     if (!m_method_override_graph) {
       return true;
@@ -1560,11 +1561,6 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
 void CommonSubexpressionEliminationPass::bind_config() {
   bind("debug", false, m_debug);
   bind("runtime_assertions", false, m_runtime_assertions);
-  // The default value 77 is somewhat arbitrary. In practice, the fixed-point
-  // computation terminates after fewer iterations.
-  int64_t default_max_iterations = 77;
-  bind("max_iterations", default_max_iterations, m_max_iterations);
-  after_configuration([this] { always_assert(m_max_iterations >= 0); });
 }
 
 void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
@@ -1578,8 +1574,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                       configured_pure_methods.end());
 
   auto shared_state = SharedState(pure_methods);
-  auto method_barriers_stats =
-      shared_state.init_method_barriers(scope, m_max_iterations);
+  auto method_barriers_stats = shared_state.init_method_barriers(scope);
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
