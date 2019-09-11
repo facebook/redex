@@ -143,12 +143,8 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
 
 def run_redex_binary(state):
     if state.args.redex_binary is None:
-        try:
-            state.args.redex_binary = (
-                subprocess.check_output(["which", "redex-all"]).rstrip().decode("ascii")
-            )
-        except subprocess.CalledProcessError:
-            pass
+        state.args.redex_binary = shutil.which("redex-all")
+
     if state.args.redex_binary is None:
         # __file__ can be /path/fb-redex.pex/redex.pyc
         dir_name = dirname(abspath(__file__))
