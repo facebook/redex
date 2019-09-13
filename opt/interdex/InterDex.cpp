@@ -778,7 +778,42 @@ void InterDex::cleanup(const Scope& final_scope) {
   }
 }
 
+void InterDex::run_in_force_single_dex_mode() {
+  auto scope = build_class_scope(m_dexen);
+
+  // Add all classes into m_dexes_structure without further checking when
+  // force_single_dex is on. The overflow checking will be done later on at
+  // the end of the pipeline (e.g. write_classes_to_dex).
+  for (DexClass* cls : scope) {
+    MethodRefs clazz_mrefs;
+    FieldRefs clazz_frefs;
+    TypeRefs clazz_trefs;
+    std::vector<DexClass*> erased_classes;
+
+    gather_refs(m_plugins, EMPTY_DEX_INFO, cls, &clazz_mrefs, &clazz_frefs,
+                &clazz_trefs, &erased_classes,
+                should_not_relocate_methods_of_class(cls));
+
+    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
+                                          cls);
+  }
+
+  // Emit all no matter what it is.
+  if (m_dexes_structure.get_current_dex_classes().size()) {
+    flush_out_dex(EMPTY_DEX_INFO);
+  }
+
+  TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
+        m_dexes_structure.get_num_dexes());
+  print_stats(&m_dexes_structure);
+  return;
+}
+
 void InterDex::run() {
+  if (m_force_single_dex) {
+    run_in_force_single_dex_mode();
+    return;
+  }
   auto scope = build_class_scope(m_dexen);
 
   std::vector<DexType*> interdex_types = get_interdex_types(scope);

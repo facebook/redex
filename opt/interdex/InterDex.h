@@ -30,6 +30,7 @@ class InterDex {
            int64_t type_refs_limit,
            bool static_prune_classes,
            bool normal_primary_dex,
+           bool force_single_dex,
            bool emit_scroll_set_marker,
            bool emit_canaries,
            bool minimize_cross_dex_refs,
@@ -42,6 +43,7 @@ class InterDex {
         m_plugins(plugins),
         m_static_prune_classes(static_prune_classes),
         m_normal_primary_dex(normal_primary_dex),
+        m_force_single_dex(force_single_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
         m_cross_dex_ref_minimizer(cross_dex_refs_config),
@@ -100,6 +102,7 @@ class InterDex {
   void cleanup(const Scope& final_scope);
 
  private:
+  void run_in_force_single_dex_mode();
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
   void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
@@ -146,6 +149,7 @@ class InterDex {
   std::vector<std::unique_ptr<InterDexPassPlugin>>& m_plugins;
   bool m_static_prune_classes;
   bool m_normal_primary_dex;
+  bool m_force_single_dex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
 

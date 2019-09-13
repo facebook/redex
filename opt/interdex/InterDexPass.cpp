@@ -190,11 +190,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     reserve_mrefs += plugin->reserve_mrefs();
   }
 
+  bool force_single_dex = conf.get_json_config().get("force_single_dex", false);
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
-                    m_normal_primary_dex, m_emit_scroll_set_marker,
-                    m_emit_canaries, m_minimize_cross_dex_refs,
-                    m_minimize_cross_dex_refs_config,
+                    m_normal_primary_dex, force_single_dex,
+                    m_emit_scroll_set_marker, m_emit_canaries,
+                    m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, reserve_mrefs);
 
   // If we have a list of pre-defined dexes for mixed mode, that has priority.

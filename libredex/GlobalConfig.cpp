@@ -46,6 +46,7 @@ void GlobalConfig::bind_config() {
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("lower_with_cfg", {}, bool_param);
   bind("emit_locator_strings", {}, bool_param);
+  bind("force_single_dex", false, bool_param);
   bind("emit_name_based_locator_strings", {}, bool_param);
   bind("record_keep_reasons", {}, bool_param);
   bind("debug_info_kind", "", string_param);

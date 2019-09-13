@@ -2339,6 +2339,10 @@ dex_stats_t write_classes_to_dex(
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic) {
   const JsonWrapper& json_cfg = conf.get_json_config();
+  bool force_single_dex = json_cfg.get("force_single_dex", false);
+  if (force_single_dex) {
+    always_assert_log(dex_number == 0, "force_single_dex requires one dex");
+  }
   auto sort_strings = json_cfg.get("string_sort_mode", std::string());
   SortMode string_sort_mode = SortMode::DEFAULT;
   if (sort_strings == "class_strings") {
