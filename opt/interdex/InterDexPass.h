@@ -60,7 +60,6 @@ class InterDexPass : public Pass {
   bool m_normal_primary_dex;
   int64_t m_linear_alloc_limit;
   int64_t m_type_refs_limit;
-  std::string m_mixed_mode_classes_file;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
   std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;

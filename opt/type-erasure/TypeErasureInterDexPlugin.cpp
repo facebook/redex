@@ -53,12 +53,6 @@ bool TypeErasureInterDexPlugin::is_mergeable(const DexClass* clazz) {
     return false;
   }
 
-  // TODO: Find a better way to exclude those. For now, excluding
-  // any of the classes that might get used in mix mode.
-  if (clazz->rstate.has_mix_mode()) {
-    return false;
-  }
-
   return get_model_root(m_root_to_model_spec, clazz) != nullptr;
 }
 

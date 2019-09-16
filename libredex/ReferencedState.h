@@ -35,9 +35,6 @@ class ReferencedState {
     // Whether it is a json serializer/deserializer class for a reachable class.
     bool m_is_serde{false};
 
-    // Flag that specifies if this member is used for mix-mode compilation.
-    bool m_mix_mode{false};
-
     // ProGuard keep settings
     //
     // Whether any keep rule has matched this. This applies for both `-keep` and
@@ -110,8 +107,6 @@ class ReferencedState {
           this->inner_struct.m_by_resources | other.inner_struct.m_by_resources;
       this->inner_struct.m_is_serde =
           this->inner_struct.m_is_serde | other.inner_struct.m_is_serde;
-      this->inner_struct.m_mix_mode =
-          this->inner_struct.m_mix_mode | other.inner_struct.m_mix_mode;
 
       this->inner_struct.m_keep =
           this->inner_struct.m_keep | other.inner_struct.m_keep;
@@ -306,9 +301,6 @@ class ReferencedState {
   void increment_keep_count() { m_keep_count++; }
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
-
-  bool has_mix_mode() const { return inner_struct.m_mix_mode; }
-  void set_mix_mode() { inner_struct.m_mix_mode = true; }
 
   void set_interdex_subgroup(const boost::optional<size_t>& interdex_subgroup) {
     m_interdex_subgroup = interdex_subgroup;

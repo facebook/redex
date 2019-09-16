@@ -34,7 +34,6 @@ class IRMetaIO {
            !obj->rstate.inner_struct.m_by_string &&
            !obj->rstate.inner_struct.m_by_resources &&
            !obj->rstate.inner_struct.m_is_serde &&
-           !obj->rstate.inner_struct.m_mix_mode &&
            !obj->rstate.inner_struct.m_keep &&
            !obj->rstate.inner_struct.m_assumenosideeffects &&
            !obj->rstate.inner_struct.m_blanket_keepnames &&
