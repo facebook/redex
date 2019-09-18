@@ -188,16 +188,6 @@ bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   return false;
 }
 
-bool InterDex::should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
-                                                   DexClass* clazz) {
-  if (!dex_info.primary && m_mixed_mode_info.is_mixed_mode_class(clazz)) {
-    TRACE(IDEX, 4, "IDEX: Skipping mixed mode class :: %s\n", SHOW(clazz));
-    return true;
-  }
-
-  return false;
-}
-
 void InterDex::add_to_scope(DexClass* cls) {
   for (auto& plugin : m_plugins) {
     plugin->add_to_scope(cls);
@@ -231,8 +221,7 @@ bool InterDex::emit_class(const DexInfo& dex_info,
     return false;
   }
 
-  if (check_if_skip && (should_skip_class_due_to_plugin(clazz) ||
-                        should_skip_class_due_to_mixed_mode(dex_info, clazz))) {
+  if (check_if_skip && (should_skip_class_due_to_plugin(clazz))) {
     return false;
   }
 
@@ -383,17 +372,6 @@ void InterDex::emit_interdex_classes(
         if (end_marker == std::prev(m_end_markers.end())) {
           dex_info.coldstart = false;
           dex_info.extended = true;
-
-          if (m_mixed_mode_info.has_predefined_classes()) {
-            TRACE(IDEX, 3,
-                  "Emitting the mixed mode dex between the coldstart "
-                  "set and the extended set of classes.\n");
-            bool can_touch_interdex_order =
-                m_mixed_mode_info.can_touch_coldstart_set() ||
-                m_mixed_mode_info.can_touch_coldstart_extended_set();
-
-            emit_mixed_mode_classes(interdex_types, can_touch_interdex_order);
-          }
         }
       }
 
@@ -404,24 +382,6 @@ void InterDex::emit_interdex_classes(
       }
 
       continue;
-    }
-
-    // If we can't touch coldstart classes, simply remove the class
-    // from the mix mode class list. Otherwise, we will end up moving
-    // the class in the mixed mode dex.
-    if (!m_mixed_mode_info.can_touch_coldstart_set() &&
-        m_mixed_mode_info.is_mixed_mode_class(cls)) {
-      if (last_end_marker_it > it) {
-        TRACE(IDEX, 2,
-              "%s is part of coldstart classes. Removing it from the "
-              "list of mix mode classes\n",
-              SHOW(cls));
-        m_mixed_mode_info.remove_mixed_mode_class(cls);
-      } else if (!m_mixed_mode_info.can_touch_coldstart_extended_set()) {
-        always_assert_log(false,
-                          "We shouldn't get here since we cleared "
-                          "it up when emitting the mixed mode dex!\n");
-      }
     }
 
     if (unreferenced_classes.count(cls)) {
@@ -448,59 +408,6 @@ void InterDex::emit_interdex_classes(
         "[interdex order]: %d classes are unreferenced from the interdex order "
         "in secondary dexes.\n",
         cls_skipped_in_secondary);
-}
-
-/**
- * Emit mix mode classes in a separate dex.
- * We respect the order of the classes in the interdexorder,
- * for the mixed mode classes that it contains.
- */
-void InterDex::emit_mixed_mode_classes(
-    const std::vector<DexType*>& interdex_types,
-    bool can_touch_interdex_order) {
-  always_assert_log(m_mixed_mode_info.has_predefined_classes(),
-                    "No mixed mode classes to emit!\n");
-  size_t pre_mixedmode_dexes = m_dexes_structure.get_num_dexes();
-
-  DexInfo mixedmode_info;
-  mixedmode_info.mixed_mode = true;
-
-  // NOTE: When we got here, we would have removed the coldstart
-  //       mixed mode classes, if we couldn't touch them.
-  //       The only classes that might still be in the mixed_mode_cls
-  //       set would be the extended ones, which we will remove
-  //       if needed.
-  for (DexType* type : interdex_types) {
-    DexClass* clazz = type_class(type);
-
-    if (m_mixed_mode_info.is_mixed_mode_class(clazz)) {
-      if (can_touch_interdex_order) {
-        TRACE(IDEX, 2,
-              " Emitting mixed mode class, that is also in the "
-              "interdex list: %s \n",
-              SHOW(clazz));
-        emit_class(mixedmode_info, clazz, /* check_if_skip */ false,
-                   /* perf_sensitive */ true);
-      }
-      m_mixed_mode_info.remove_mixed_mode_class(clazz);
-    }
-  }
-
-  for (const auto& clazz : m_mixed_mode_info.get_mixed_mode_classes()) {
-    TRACE(IDEX, 2, " Emitting mixed mode class: %s \n", SHOW(clazz));
-    emit_class(mixedmode_info, clazz, /* check_if_skip */ false,
-               /* perf_sensitive */ true);
-  }
-
-  flush_out_dex(mixedmode_info);
-
-  // NOTE: For now, we only support this to generate one dex.
-  always_assert_log(m_dexes_structure.get_num_dexes() - pre_mixedmode_dexes ==
-                        1,
-                    "For now, we only support 1 dex for mixedmode classes.\n");
-
-  // Clearing up the mixed mode classes.
-  m_mixed_mode_info.remove_all_mixed_mode_classes();
 }
 
 namespace {
@@ -676,10 +583,6 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
       // which is accounted for via the erased_classes reported through the
       // plugin's gather_refs callback. So we'll also sample those classes here.
       m_cross_dex_ref_minimizer.sample(cls);
-      continue;
-    }
-
-    if (should_skip_class_due_to_mixed_mode(EMPTY_DEX_INFO, cls)) {
       continue;
     }
 

@@ -60,15 +60,6 @@ class InterDex {
         std::move(mixed_mode_dex_statuses));
   }
 
-  void set_mixed_mode_classes(
-      std::unordered_set<DexClass*>&& mixed_mode_classes,
-      bool can_touch_coldstart_set,
-      bool can_touch_coldstart_extended_set) {
-    m_mixed_mode_info.set_mixed_mode_classes(std::move(mixed_mode_classes),
-                                             can_touch_coldstart_set,
-                                             can_touch_coldstart_extended_set);
-  }
-
   size_t get_num_cold_start_set_dexes() const {
     return m_dexes_structure.get_num_coldstart_dexes();
   }
@@ -103,8 +94,6 @@ class InterDex {
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
   void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
-  bool should_skip_class_due_to_mixed_mode(const DexInfo& dex_info,
-                                           DexClass* clazz);
   bool emit_class(const DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,
@@ -119,8 +108,6 @@ class InterDex {
       const std::unordered_set<DexClass*>& unreferenced_classes);
   void init_cross_dex_ref_minimizer_and_relocate_methods(const Scope& scope);
   void emit_remaining_classes(const Scope& scope);
-  void emit_mixed_mode_classes(const std::vector<DexType*>& interdexorder,
-                               bool can_touch_interdex_order);
   void flush_out_dex(DexInfo dex_info);
   bool is_mixed_mode_dex(const DexInfo& dex_info);
 
