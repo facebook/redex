@@ -59,4 +59,5 @@ void GlobalConfig::bind_config() {
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("coldstart_classes", "", string_param);
+  bind("string_sort_mode", "", string_param);
 }
