@@ -30,6 +30,7 @@ enum class Ref {
 
 } // namespace opcode
 
+// clang-format off
 #define OPS \
   OP(NOP               , Ref::None, "nop") \
   OP(MOVE              , Ref::None, "move") \
@@ -208,6 +209,7 @@ enum IROpcode : uint16_t {
   IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
   IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
 };
+// clang-format on
 
 std::string show(IROpcode);
 

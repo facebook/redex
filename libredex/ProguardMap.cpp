@@ -23,16 +23,10 @@ std::string find_or_same(
 }
 
 std::string convert_scalar_type(std::string type) {
-  static const std::unordered_map<std::string, std::string> prim_map =
-    {{"void",    "V"},
-     {"boolean", "Z"},
-     {"byte",    "B"},
-     {"short",   "S"},
-     {"char",    "C"},
-     {"int",     "I"},
-     {"long",    "J"},
-     {"float",   "F"},
-     {"double",  "D"}};
+  static const std::unordered_map<std::string, std::string> prim_map = {
+      {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
+      {"short", "S"}, {"char", "C"},    {"int", "I"},
+      {"long", "J"},  {"float", "F"},   {"double", "D"}};
   auto it = prim_map.find(type);
   if (it != prim_map.end()) {
     return it->second;
@@ -40,9 +34,9 @@ std::string convert_scalar_type(std::string type) {
   return JavaNameUtil::external_to_internal(type);
 }
 
-std::string convert_field(const std::string &cls,
-    const std::string &type,
-    const std::string &name) {
+std::string convert_field(const std::string& cls,
+                          const std::string& type,
+                          const std::string& name) {
   std::ostringstream ss;
   ss << cls << "." << name;
   if (!type.empty()) {
@@ -51,12 +45,10 @@ std::string convert_field(const std::string &cls,
   return ss.str();
 }
 
-std::string convert_method(
-  const std::string &cls,
-  const std::string &rtype,
-  const std::string &methodname,
-  const std::string &args
-) {
+std::string convert_method(const std::string& cls,
+                           const std::string& rtype,
+                           const std::string& methodname,
+                           const std::string& args) {
   std::ostringstream ss;
   ss << cls << "." << methodname << ":(" << args << ")" << rtype;
   return ss.str();
@@ -84,13 +76,8 @@ uint32_t line_number(const char*& p) {
 }
 
 bool isseparator(uint32_t cp) {
-  return cp == '\0' ||
-    cp == ' ' ||
-    cp == ':' ||
-    cp == ',' ||
-    cp == '\n' ||
-    cp == '(' ||
-    cp == ')';
+  return cp == '\0' || cp == ' ' || cp == ':' || cp == ',' || cp == '\n' ||
+         cp == '(' || cp == ')';
 }
 
 bool id(const char*& p, std::string& s) {
@@ -138,7 +125,8 @@ void inlined_method(std::string& classname, std::string& methodname) {
 }
 
 /**
- * Proguard would generate some special sequences when a coalesced interface is used.
+ * Proguard would generate some special sequences when a coalesced interface is
+ * used.
  * https://sourceforge.net/p/proguard/code/ci/default/tree/core/src/proguard/classfile/editor/ClassReferenceFixer.java#l554
  * Before:
  *   com.facebook.imagepipeline.core.ExecutorSupplier mExecutorSupplier;
@@ -243,9 +231,8 @@ void ProguardMap::parse_proguard_map(std::istream& fp) {
     if (comment(line)) {
       continue;
     }
-    always_assert_log(false,
-                      "Bogus line encountered in proguard map: %s\n",
-                      line.c_str());
+    always_assert_log(
+        false, "Bogus line encountered in proguard map: %s\n", line.c_str());
   }
 }
 
@@ -465,8 +452,8 @@ void apply_deobfuscated_names(const std::vector<DexClasses>& dexen,
     }
   };
 
-  auto wq = workqueue_foreach<DexClass*>(
-      pm.empty() ? worker_empty_pg_map : worker_pg_map);
+  auto wq = workqueue_foreach<DexClass*>(pm.empty() ? worker_empty_pg_map
+                                                    : worker_pg_map);
 
   for (const auto& dex : dexen) {
     for (const auto& cls : dex) {

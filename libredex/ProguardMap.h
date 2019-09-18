@@ -9,9 +9,9 @@
 
 #include <cstddef>
 #include <fstream>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <string>
 
 #include "DexClass.h"
 #include "ProguardLineRange.h"
@@ -47,9 +47,7 @@ struct ProguardMap {
   /**
    * Construct map from a given stream.
    */
-  explicit ProguardMap(std::istream& is) {
-    parse_proguard_map(is);
-  }
+  explicit ProguardMap(std::istream& is) { parse_proguard_map(is); }
 
   /**
    * Translate un-obfuscated class name to obfuscated name.
@@ -98,8 +96,9 @@ struct ProguardMap {
    */
   ProguardLineRangeVector& method_lines(const std::string& obfuscated_method);
 
-  bool empty() const { return m_classMap.empty() && m_fieldMap.empty() &&
-                              m_methodMap.empty() ; }
+  bool empty() const {
+    return m_classMap.empty() && m_fieldMap.empty() && m_methodMap.empty();
+  }
 
   bool is_special_interface(const std::string& type) const {
     return m_pg_coalesced_interfaces.find(type) !=
@@ -146,9 +145,8 @@ struct ProguardMap {
  * themselves, so that they're automatically carried through optimization
  * passes.
  */
-void apply_deobfuscated_names(
-  const std::vector<DexClasses>&,
-  const ProguardMap&);
+void apply_deobfuscated_names(const std::vector<DexClasses>&,
+                              const ProguardMap&);
 
 // Exposed for testing purposes.
 namespace pg_impl {

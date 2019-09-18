@@ -15,6 +15,7 @@
 
 namespace opcode {
 
+// clang-format off
 Ref ref(IROpcode opcode) {
   switch (opcode) {
 #define OP(op, ref, ...) \
@@ -32,6 +33,7 @@ Ref ref(IROpcode opcode) {
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
+// clang-format on
 
 IROpcode from_dex_opcode(DexOpcode op) {
   switch (op) {
@@ -474,6 +476,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case FOPCODE_FILLED_ARRAY:
     always_assert_log(false, "Cannot create IROpcode from %s", SHOW(op));
     not_reached();
+    // clang-format off
   SWITCH_FORMAT_QUICK_FIELD_REF {
     always_assert_log(false, "Invalid use of a quick ref opcode %02x\n", op);
     not_reached();
@@ -486,6 +489,7 @@ IROpcode from_dex_opcode(DexOpcode op) {
     always_assert_log(false, "Invalid use of return-void-no-barrier opcode %02x\n", op);
     not_reached();
   }
+    // clang-format on
   }
   always_assert_log(false, "Unknown opcode %02x\n", op);
   not_reached();

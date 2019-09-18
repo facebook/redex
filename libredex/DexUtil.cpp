@@ -20,57 +20,31 @@
 #include "Resolver.h"
 #include "UnknownVirtuals.h"
 
-DexType* get_object_type() {
-  return DexType::make_type("Ljava/lang/Object;");
-}
+DexType* get_object_type() { return DexType::make_type("Ljava/lang/Object;"); }
 
-DexType* get_void_type() {
-   return DexType::make_type("V");
-}
+DexType* get_void_type() { return DexType::make_type("V"); }
 
-DexType* get_byte_type() {
-  return DexType::make_type("B");
-}
+DexType* get_byte_type() { return DexType::make_type("B"); }
 
-DexType* get_char_type() {
-  return DexType::make_type("C");
-}
+DexType* get_char_type() { return DexType::make_type("C"); }
 
-DexType* get_short_type() {
-  return DexType::make_type("S");
-}
+DexType* get_short_type() { return DexType::make_type("S"); }
 
-DexType* get_int_type() {
-  return DexType::make_type("I");
-}
+DexType* get_int_type() { return DexType::make_type("I"); }
 
-DexType* get_long_type() {
-  return DexType::make_type("J");
-}
+DexType* get_long_type() { return DexType::make_type("J"); }
 
-DexType* get_boolean_type() {
-  return DexType::make_type("Z");
-}
+DexType* get_boolean_type() { return DexType::make_type("Z"); }
 
-DexType* get_float_type() {
-  return DexType::make_type("F");
-}
+DexType* get_float_type() { return DexType::make_type("F"); }
 
-DexType* get_double_type() {
-  return DexType::make_type("D");
-}
+DexType* get_double_type() { return DexType::make_type("D"); }
 
-DexType* get_string_type() {
-  return DexType::make_type("Ljava/lang/String;");
-}
+DexType* get_string_type() { return DexType::make_type("Ljava/lang/String;"); }
 
-DexType* get_class_type() {
-  return DexType::make_type("Ljava/lang/Class;");
-}
+DexType* get_class_type() { return DexType::make_type("Ljava/lang/Class;"); }
 
-DexType* get_enum_type() {
-  return DexType::make_type("Ljava/lang/Enum;");
-}
+DexType* get_enum_type() { return DexType::make_type("Ljava/lang/Enum;"); }
 
 DexType* get_integer_type() {
   return DexType::make_type("Ljava/lang/Integer;");
@@ -123,19 +97,19 @@ std::string get_simple_name(const DexType* type) {
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();
   switch (name[0]) {
-    case 'Z':
-    case 'B':
-    case 'S':
-    case 'C':
-    case 'I':
-    case 'J':
-    case 'F':
-    case 'D':
-    case 'V':
-      return true;
-    case 'L':
-    case '[':
-      return false;
+  case 'Z':
+  case 'B':
+  case 'S':
+  case 'C':
+  case 'I':
+  case 'J':
+  case 'F':
+  case 'D':
+  case 'V':
+    return true;
+  case 'L':
+  case '[':
+    return false;
   }
   not_reached();
 }
@@ -267,7 +241,9 @@ bool is_integer(const DexType* type) {
   case 'I': {
     return true;
   }
-  default: { return false; }
+  default: {
+    return false;
+  }
   }
 }
 
@@ -338,18 +314,20 @@ DexType* make_array_type(const DexType* type, uint32_t level) {
   const auto elem_name = type->str();
   const uint32_t size = elem_name.size() + level;
   std::string name;
-  name.reserve(size+1);
+  name.reserve(size + 1);
   name.append(level, '[');
   name.append(elem_name.begin(), elem_name.end());
   return DexType::make_type(name.c_str(), name.size());
 }
 
-void create_runtime_exception_block(
-    DexString* except_str, std::vector<IRInstruction*>& block) {
+void create_runtime_exception_block(DexString* except_str,
+                                    std::vector<IRInstruction*>& block) {
+  // clang-format off
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852
   // const-string v1, "Exception String e.g. Too many args" // string@7a6d
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
   // throw v0
+  // clang-format on
   auto new_inst =
       (new IRInstruction(OPCODE_NEW_INSTANCE))
           ->set_type(DexType::make_type("Ljava/lang/RuntimeException;"));
@@ -382,8 +360,7 @@ bool passes_args_through(IRInstruction* insn,
 ) {
   size_t src_idx{0};
   size_t param_count{0};
-  for (const auto& mie :
-       InstructionIterable(code.get_param_instructions())) {
+  for (const auto& mie : InstructionIterable(code.get_param_instructions())) {
     auto load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {
@@ -417,7 +394,7 @@ void load_root_dexen(DexStore& store,
   // Discover dex files
   auto end = fs::directory_iterator();
   std::vector<fs::path> dexen;
-  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
+  for (fs::directory_iterator it(dexen_dir_path); it != end; ++it) {
     auto file = it->path();
     if (fs::is_regular_file(file) &&
         !file.extension().compare(std::string(".dex"))) {
@@ -429,7 +406,7 @@ void load_root_dexen(DexStore& store,
    * Comparator for dexen filename. 'classes.dex' should sort first,
    * followed by [^\d]*[\d]+.dex ordered by N numerically.
    */
-  auto dex_comparator = [](const fs::path& a, const fs::path& b){
+  auto dex_comparator = [](const fs::path& a, const fs::path& b) {
     boost::regex s_dex_regex("[^0-9]*([0-9]+)\\.dex");
 
     auto as = a.filename().string();
@@ -450,7 +427,7 @@ void load_root_dexen(DexStore& store,
       // Compare captures as integers
       auto anum = std::stoi(amatch[1]);
       auto bnum = std::stoi(bmatch[1]);
-      return bnum > anum ;
+      return bnum > anum;
     }
   };
 
@@ -490,7 +467,7 @@ void create_store(const std::string& store_name,
  * use cases.
  */
 size_t sum_param_sizes(const IRCode* code) {
-  size_t size {0};
+  size_t size{0};
   auto param_ops = code->get_param_instructions();
   for (auto& mie : InstructionIterable(&param_ops)) {
     size += mie.insn->dest_is_wide() ? 2 : 1;
@@ -498,8 +475,7 @@ size_t sum_param_sizes(const IRCode* code) {
   return size;
 }
 
-dex_stats_t&
-  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
+dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
   lhs.num_types += rhs.num_types;
   lhs.num_classes += rhs.num_classes;
   lhs.num_methods += rhs.num_methods;
@@ -605,7 +581,8 @@ void change_visibility(DexMethod* method, DexType* scope) {
       }
       auto field =
           resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-              ? FieldSearch::Static : FieldSearch::Instance);
+                                               ? FieldSearch::Static
+                                               : FieldSearch::Instance);
       if (field != nullptr && field->is_concrete()) {
         set_public(field);
         set_public(type_class(field->get_class()));
@@ -617,8 +594,8 @@ void change_visibility(DexMethod* method, DexType* scope) {
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
       }
-      auto current_method = resolve_method(
-          insn->get_method(), opcode_to_search(insn));
+      auto current_method =
+          resolve_method(insn->get_method(), opcode_to_search(insn));
       if (current_method != nullptr && current_method->is_concrete() &&
           (scope == nullptr || current_method->get_class() != scope)) {
         set_public(current_method);

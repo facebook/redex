@@ -8,16 +8,15 @@
 #include "TypeSystem.h"
 
 #include "DexUtil.h"
-#include "Timer.h"
 #include "Resolver.h"
+#include "Timer.h"
 
 namespace {
 
-void make_instanceof_table(
-    InstanceOfTable& instance_of_table,
-    const ClassHierarchy& hierarchy,
-    const DexType* type,
-    size_t depth = 1) {
+void make_instanceof_table(InstanceOfTable& instance_of_table,
+                           const ClassHierarchy& hierarchy,
+                           const DexType* type,
+                           size_t depth = 1) {
   auto& parent_chain = instance_of_table[type];
   const auto cls = type_class(type);
   if (cls != nullptr) {
@@ -51,11 +50,10 @@ void load_interface_children(ClassHierarchy& children, const DexClass* intf) {
 }
 
 void load_interface_children(ClassHierarchy& children) {
-  g_redex->walk_type_class(
-      [&](const DexType* type, const DexClass* cls) {
-        if (!cls->is_external() || !is_interface(cls)) return;
-        load_interface_children(children, cls);
-      });
+  g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
+    if (!cls->is_external() || !is_interface(cls)) return;
+    load_interface_children(children, cls);
+  });
 }
 
 void load_interface_children(const Scope& scope, ClassHierarchy& children) {
@@ -66,7 +64,7 @@ void load_interface_children(const Scope& scope, ClassHierarchy& children) {
   load_interface_children(children);
 }
 
-}
+} // namespace
 
 const TypeSet TypeSystem::empty_set = TypeSet();
 const TypeVector TypeSystem::empty_vec = TypeVector();
@@ -76,8 +74,8 @@ TypeSystem::TypeSystem(const Scope& scope) : m_class_scopes(scope) {
   make_instanceof_interfaces_table();
 }
 
-void TypeSystem::get_all_super_interfaces(
-    const DexType* intf, TypeSet& supers) const {
+void TypeSystem::get_all_super_interfaces(const DexType* intf,
+                                          TypeSet& supers) const {
   const auto cls = type_class(intf);
   if (cls == nullptr) return;
   for (const auto& super : cls->get_interfaces()->get_type_list()) {
@@ -123,7 +121,7 @@ const VirtualScope* TypeSystem::find_virtual_scope(
 
   const auto match = [](const DexMethod* meth1, const DexMethod* meth2) {
     return meth1->get_name() == meth2->get_name() &&
-        meth1->get_proto() == meth2->get_proto();
+           meth1->get_proto() == meth2->get_proto();
   };
 
   auto type = meth->get_class();
@@ -160,9 +158,7 @@ std::vector<const DexMethod*> TypeSystem::select_from(
   }
   if (!found_root_method) {
     const auto& parents = parent_chain(type);
-    for (auto parent = parents.rbegin();
-        parent != parents.rend();
-        ++parent) {
+    for (auto parent = parents.rbegin(); parent != parents.rend(); ++parent) {
       const auto& meth = non_child_methods.find(*parent);
       if (meth == non_child_methods.end()) continue;
       refined_scope.emplace_back(meth->second);
@@ -197,8 +193,8 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
     if (super != nullptr) {
       const auto& parent_intfs = m_interfaces.find(super);
       if (parent_intfs != m_interfaces.end()) {
-        m_interfaces[type].insert(
-            parent_intfs->second.begin(), parent_intfs->second.end());
+        m_interfaces[type].insert(parent_intfs->second.begin(),
+                                  parent_intfs->second.end());
       }
     }
     for (const auto& intf : cls->get_interfaces()->get_type_list()) {
@@ -215,10 +211,9 @@ void TypeSystem::make_interfaces_table(const DexType* type) {
   }
 }
 
-void TypeSystem::select_methods(
-    const VirtualScope& scope,
-    const std::unordered_set<DexType*>& types,
-    std::unordered_set<DexMethod*>& methods) const {
+void TypeSystem::select_methods(const VirtualScope& scope,
+                                const std::unordered_set<DexType*>& types,
+                                std::unordered_set<DexMethod*>& methods) const {
   TRACE(VIRT, 1, "select_methods make filter");
   std::unordered_set<DexType*> filter;
   filter.insert(types.begin(), types.end());
@@ -249,10 +244,9 @@ void TypeSystem::select_methods(
   }
 }
 
-void TypeSystem::select_methods(
-    const InterfaceScope& scope,
-    const std::unordered_set<DexType*>& types,
-    std::unordered_set<DexMethod*>& methods) const {
+void TypeSystem::select_methods(const InterfaceScope& scope,
+                                const std::unordered_set<DexType*>& types,
+                                std::unordered_set<DexMethod*>& methods) const {
   for (const auto& virt_scope : scope) {
     select_methods(*virt_scope, types, methods);
   }

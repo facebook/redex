@@ -17,6 +17,7 @@ using namespace sparta;
 
 namespace {
 
+// clang-format off
 #define OP(OP, KIND, STR) {OPCODE_##OP, STR},
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
@@ -41,6 +42,7 @@ std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
     {"move-result-pseudo-wide", IOPCODE_MOVE_RESULT_PSEUDO_WIDE},
 };
 #undef OP
+// clang-format on
 
 using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
 using LabelRefs =
@@ -129,7 +131,7 @@ s_expr _to_s_expr(const DexPosition* pos, uint32_t idx, uint32_t parent_idx) {
       s_expr(parent_idx_str),
   });
 }
-}
+} // namespace
 
 std::vector<s_expr> to_s_exprs(
     const DexPosition* pos,
@@ -361,11 +363,14 @@ std::unique_ptr<DexPosition> position_from_s_expr(
   std::string file_str;
   std::string line_str;
   s_expr parent_expr;
-  s_patn({
-      s_patn(&method_str),
-      s_patn(&file_str),
-      s_patn(&line_str),
-  }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
+  s_patn(
+      {
+          s_patn(&method_str),
+          s_patn(&file_str),
+          s_patn(&line_str),
+      },
+      parent_expr)
+      .must_match(e, "Expected 3 or 4 args for position directive");
   auto* file = DexString::make_string(file_str);
   uint32_t line;
   std::istringstream in(line_str);
@@ -452,9 +457,8 @@ std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
         s_patn({s_patn({s_patn(&this_catch)}, maybe_next)}, type_expr)
             .must_match(tail, "catch marker missing a name list");
         // FIXME?
-        result.emplace(
-            this_catch,
-            new MethodItemEntry(static_cast<DexType*>(nullptr)));
+        result.emplace(this_catch,
+                       new MethodItemEntry(static_cast<DexType*>(nullptr)));
       }
     }
   }
@@ -588,31 +592,31 @@ s_expr to_s_expr(const IRCode* code) {
   // Gather jump targets and give them string names
   for (auto it = code->cbegin(); it != code->cend(); ++it) {
     switch (it->type) {
-      case MFLOW_TARGET: {
-        auto bt = it->target;
-        always_assert_log(bt->src != nullptr, "%s", SHOW(code));
+    case MFLOW_TARGET: {
+      auto bt = it->target;
+      always_assert_log(bt->src != nullptr, "%s", SHOW(code));
 
-        // Don't generate redundant labels. If we would duplicate the previous
-        // label, steal its name instead of generating another
-        if (it != code->begin()) {
-          auto prev = std::prev(it);
-          if (can_merge(prev, it)) {
-            auto& label_strs = label_refs.at(prev->target->src->insn);
-            if (label_strs.size() > 0) {
-              const auto& label_name = label_strs.back();
-              label_refs[bt->src->insn].push_back(label_name);
-              break;
-            }
+      // Don't generate redundant labels. If we would duplicate the previous
+      // label, steal its name instead of generating another
+      if (it != code->begin()) {
+        auto prev = std::prev(it);
+        if (can_merge(prev, it)) {
+          auto& label_strs = label_refs.at(prev->target->src->insn);
+          if (label_strs.size() > 0) {
+            const auto& label_name = label_strs.back();
+            label_refs[bt->src->insn].push_back(label_name);
+            break;
           }
         }
-        label_refs[bt->src->insn].push_back(generate_label_name());
-        break;
       }
-      case MFLOW_CATCH:
-        catch_names.emplace(&*it, generate_catch_name());
-        break;
-      default:
-        break;
+      label_refs[bt->src->insn].push_back(generate_label_name());
+      break;
+    }
+    case MFLOW_CATCH:
+      catch_names.emplace(&*it, generate_catch_name());
+      break;
+    default:
+      break;
     }
   }
 
@@ -621,66 +625,66 @@ s_expr to_s_expr(const IRCode* code) {
   std::vector<const DexPosition*> positions_emitted;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
-      case MFLOW_OPCODE:
-        exprs.emplace_back(::to_s_expr(it->insn, label_refs));
-        break;
-      case MFLOW_TRY:
-        exprs.emplace_back(create_try_expr(
-            it->tentry->type, catch_names.at(it->tentry->catch_start)));
-        break;
-      case MFLOW_CATCH:
-        exprs.emplace_back(create_catch_expr(&*it, catch_names));
-        break;
-      case MFLOW_DEBUG:
-        exprs.emplace_back(create_dbg_expr(&*it));
-        break;
-      case MFLOW_POSITION:
-        for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
-          exprs.push_back(e);
-        }
-        break;
-      case MFLOW_TARGET: {
-        auto branch_target = it->target;
-        auto insn = branch_target->src->insn;
-        const auto& label_strs = label_refs.at(insn);
-
-        if (branch_target->type == BRANCH_MULTI) {
-          // Claim one of the labels.
-          // Doesn't matter which one as long as no other s_expr re-uses it.
-          auto& index = unused_label_index[insn];
-          auto label_str = label_strs[index];
-          ++index;
-
-          const s_expr& label =
-              s_expr({s_expr(label_str),
-                      s_expr(std::to_string(branch_target->case_key))});
-
-          // Don't duplicate labels even if some crazy person has two switches
-          // that share targets :O
-          if (exprs.empty() || exprs.back() != label) {
-            exprs.emplace_back(label);
-          }
-        } else {
-          always_assert(branch_target->type == BRANCH_SIMPLE);
-          always_assert_log(
-              label_strs.size() == 1,
-              "Expecting 1 label string, actually have %d. code:\n%s",
-              label_strs.size(),
-              SHOW(code));
-          const s_expr& label = s_expr({s_expr(label_strs[0])});
-
-          // Two gotos to the same destination will produce two MFLOW_TARGETs
-          // but we only need one label in the s expression syntax.
-          if (exprs.empty() || exprs.back() != label) {
-            exprs.push_back(label);
-          }
-        }
-        break;
+    case MFLOW_OPCODE:
+      exprs.emplace_back(::to_s_expr(it->insn, label_refs));
+      break;
+    case MFLOW_TRY:
+      exprs.emplace_back(create_try_expr(
+          it->tentry->type, catch_names.at(it->tentry->catch_start)));
+      break;
+    case MFLOW_CATCH:
+      exprs.emplace_back(create_catch_expr(&*it, catch_names));
+      break;
+    case MFLOW_DEBUG:
+      exprs.emplace_back(create_dbg_expr(&*it));
+      break;
+    case MFLOW_POSITION:
+      for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
+        exprs.push_back(e);
       }
-      case MFLOW_FALLTHROUGH:
-        break;
-      case MFLOW_DEX_OPCODE:
-        not_reached();
+      break;
+    case MFLOW_TARGET: {
+      auto branch_target = it->target;
+      auto insn = branch_target->src->insn;
+      const auto& label_strs = label_refs.at(insn);
+
+      if (branch_target->type == BRANCH_MULTI) {
+        // Claim one of the labels.
+        // Doesn't matter which one as long as no other s_expr re-uses it.
+        auto& index = unused_label_index[insn];
+        auto label_str = label_strs[index];
+        ++index;
+
+        const s_expr& label =
+            s_expr({s_expr(label_str),
+                    s_expr(std::to_string(branch_target->case_key))});
+
+        // Don't duplicate labels even if some crazy person has two switches
+        // that share targets :O
+        if (exprs.empty() || exprs.back() != label) {
+          exprs.emplace_back(label);
+        }
+      } else {
+        always_assert(branch_target->type == BRANCH_SIMPLE);
+        always_assert_log(
+            label_strs.size() == 1,
+            "Expecting 1 label string, actually have %d. code:\n%s",
+            label_strs.size(),
+            SHOW(code));
+        const s_expr& label = s_expr({s_expr(label_strs[0])});
+
+        // Two gotos to the same destination will produce two MFLOW_TARGETs
+        // but we only need one label in the s expression syntax.
+        if (exprs.empty() || exprs.back() != label) {
+          exprs.push_back(label);
+        }
+      }
+      break;
+    }
+    case MFLOW_FALLTHROUGH:
+      break;
+    case MFLOW_DEX_OPCODE:
+      not_reached();
     }
   }
 
@@ -782,8 +786,8 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         code->push_back(std::move(dbg_insn));
       } else if (keyword[0] == ':') {
         const auto& label = keyword;
-        always_assert_log(
-            label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
+        always_assert_log(label_defs.count(label) == 0, "Duplicate label %s",
+                          label.c_str());
 
         // We insert a MFLOW_TARGET with an empty source mie that may be filled
         // in later if something points to it
@@ -825,8 +829,8 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
     if (s_expr_input.eoi()) {
       break;
     }
-    always_assert_log(
-        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+    always_assert_log(!s_expr_input.fail(), "%s\n",
+                      s_expr_input.what().c_str());
   }
   return ircode_from_s_expr(expr);
 }
@@ -861,8 +865,8 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(code_expr)}, tail).match_with(tail);
   always_assert_log(code_expr.is_list(), "Expecting code listing");
   bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
-  method->make_concrete(
-      access_flags, ircode_from_s_expr(code_expr), is_virtual);
+  method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
+                        is_virtual);
 
   return method;
 }
@@ -876,8 +880,8 @@ DexMethod* method_from_string(const std::string& s) {
     if (s_expr_input.eoi()) {
       break;
     }
-    always_assert_log(
-        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+    always_assert_log(!s_expr_input.fail(), "%s\n",
+                      s_expr_input.what().c_str());
   }
   return method_from_s_expr(expr);
 }

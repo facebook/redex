@@ -12,9 +12,9 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
-#include "Trace.h"
 #include "Pass.h"
 #include "ProguardMap.h"
+#include "Trace.h"
 
 #include <locator.h>
 using facebook::Locator;

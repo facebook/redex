@@ -1121,8 +1121,8 @@ void do_basic_block_tracing(DexClass* analysis_cls,
   for (const auto& p : bb_vector_stat) {
     double percent = (double)p.second * 100. / (float)all_method_inst;
     cumulative += percent;
-    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)",
-          p.first, p.second, percent, cumulative);
+    TRACE(INSTRUMENT, 4, " %3zu bit vectors: %6d (%6.3lf%%, %6.3lf%%)", p.first,
+          p.second, percent, cumulative);
   }
 
   TRACE(INSTRUMENT, 3,

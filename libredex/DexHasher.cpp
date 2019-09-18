@@ -299,12 +299,10 @@ DexHash DexClassHasher::run() {
   hash(m_cls->get_interfaces());
   hash(m_cls->get_anno_set());
 
-  TRACE(HASHER, 3, "[hasher] === dmethods: %zu",
-        m_cls->get_dmethods().size());
+  TRACE(HASHER, 3, "[hasher] === dmethods: %zu", m_cls->get_dmethods().size());
   hash(m_cls->get_dmethods());
 
-  TRACE(HASHER, 3, "[hasher] === vmethods: %zu",
-        m_cls->get_vmethods().size());
+  TRACE(HASHER, 3, "[hasher] === vmethods: %zu", m_cls->get_vmethods().size());
   hash(m_cls->get_vmethods());
 
   TRACE(HASHER, 3, "[hasher] === sfields: %zu", m_cls->get_sfields().size());

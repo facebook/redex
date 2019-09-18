@@ -8,8 +8,8 @@
 #pragma once
 
 #include "DexClass.h"
-#include "DexIdx.h"
 #include "DexDefs.h"
+#include "DexIdx.h"
 #include "DexUtil.h"
 
 DexClasses load_classes_from_dex(const char* location,

@@ -313,7 +313,8 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
   DexMethodRef* m1 = DexMethod::get_method(m1desc);
   DexMethodRef* m3 = DexMethod::get_method(m3desc);
   static_cast<DexMethod*>(m3)->make_concrete((DexAccessFlags)0, false);
-  std::unordered_set<DexMethod*> resolved_methods = { static_cast<DexMethod*>(m3) };
+  std::unordered_set<DexMethod*> resolved_methods = {
+      static_cast<DexMethod*>(m3)};
 
   EXPECT_EQ(false, DexMethod::get_method(m1desc)->is_def());
   EXPECT_EQ(true, DexMethod::get_method(m3desc)->is_def());
@@ -337,7 +338,8 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
     EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
   }
   {
-    MethodsBindFlags c(Configurable::bindflags::methods::warn_if_not_def|Configurable::bindflags::methods::warn_if_unresolvable);
+    MethodsBindFlags c(Configurable::bindflags::methods::warn_if_not_def |
+                       Configurable::bindflags::methods::warn_if_unresolvable);
     c.parse_config(JsonWrapper(json));
     EXPECT_EQ(resolved_methods, c.m_methods_param);
   }

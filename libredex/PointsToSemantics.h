@@ -163,6 +163,7 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v);
  * java.lang.Class objects need to be handled specially by the analyzer.
  */
 
+// clang-format off
 //                              is_load  is_get  is_put  is_invoke
 #define PTS_OPS \
    PTS_OP(PTS_CONST_STRING,     true ,   false,  false,  false    ) \
@@ -185,6 +186,7 @@ I  PTS_OP(PTS_INVOKE_INTERFACE, false,   false,  false,  true     ) \
 I  PTS_OP(PTS_INVOKE_STATIC,    false,   false,  false,  true     ) \
 I  PTS_OP(PTS_RETURN,           false,   false,  false,  false    ) \
 I  PTS_OP(PTS_DISJUNCTION,      false,   false,  false,  false    )
+// clang-format on
 
 #define MAX_PTS_OPS sizeof(unsigned long long) * 8
 

@@ -14,7 +14,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-
 using MethodRefCache = std::unordered_map<DexMethodRef*, DexMethod*>;
 using MethodSet = std::unordered_set<DexMethod*>;
 
@@ -64,16 +63,18 @@ inline MethodSearch opcode_to_search(const IRInstruction* insn) {
  * The lookup is performed according to the search rules specified via
  * MethodSearch.
  */
-DexMethod* resolve_method(
-    const DexClass*, const DexString*,
-    const DexProto*, MethodSearch search = MethodSearch::Any);
+DexMethod* resolve_method(const DexClass*,
+                          const DexString*,
+                          const DexProto*,
+                          MethodSearch search = MethodSearch::Any);
 
 /**
  * Given a scope defined by DexClass, a name and a proto look for a vmethod
  * definition in scope.
  */
-inline DexMethod* resolve_virtual(
-    const DexClass* cls, const DexString* name, const DexProto* proto) {
+inline DexMethod* resolve_virtual(const DexClass* cls,
+                                  const DexString* name,
+                                  const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Virtual);
 }
 
@@ -81,8 +82,9 @@ inline DexMethod* resolve_virtual(
  * Given a scope defined by DexClass, a name and a proto look for a dmethod
  * definition in class only.
  */
-inline DexMethod* resolve_direct(
-    const DexClass* cls, const DexString* name, const DexProto* proto) {
+inline DexMethod* resolve_direct(const DexClass* cls,
+                                 const DexString* name,
+                                 const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Direct);
 }
 
@@ -90,8 +92,9 @@ inline DexMethod* resolve_direct(
  * Given a scope defined by DexClass, a name and a proto look for a dmethod
  * definition in scope.
  */
-inline DexMethod* resolve_static(
-    const DexClass* cls, const DexString* name, const DexProto* proto) {
+inline DexMethod* resolve_static(const DexClass* cls,
+                                 const DexString* name,
+                                 const DexProto* proto) {
   return resolve_method(cls, name, proto, MethodSearch::Static);
 }
 
@@ -99,8 +102,9 @@ inline DexMethod* resolve_static(
  * Given a scope defined by DexClass, a name and a proto look for a vmethod
  * definition in the scope defined by the interface.
  */
-inline DexMethod* resolve_interface_method(
-    const DexClass* cls, const DexString* name, const DexProto* proto) {
+inline DexMethod* resolve_interface_method(const DexClass* cls,
+                                           const DexString* name,
+                                           const DexProto* proto) {
   if (!is_interface(cls)) return nullptr;
   return resolve_method(cls, name, proto, MethodSearch::Interface);
 }
@@ -111,11 +115,10 @@ inline DexMethod* resolve_interface_method(
  * the super interfaces for interfaces.
  * If the type the method belongs to is unknown return nullptr.
  */
-DexMethod* resolve_method_ref(
-    const DexClass* cls,
-    const DexString* name,
-    const DexProto* proto,
-    MethodSearch search);
+DexMethod* resolve_method_ref(const DexClass* cls,
+                              const DexString* name,
+                              const DexProto* proto,
+                              MethodSearch search);
 
 /**
  * Resolve a method to its definition.
@@ -126,7 +129,8 @@ inline DexMethod* resolve_method(DexMethodRef* method, MethodSearch search) {
   if (method->is_def()) return static_cast<DexMethod*>(method);
   auto cls = type_class(method->get_class());
   if (cls == nullptr) return nullptr;
-  return resolve_method_ref(cls, method->get_name(), method->get_proto(), search);
+  return resolve_method_ref(cls, method->get_name(), method->get_proto(),
+                            search);
 }
 
 /**
@@ -139,8 +143,9 @@ inline DexMethod* resolve_method(DexMethodRef* method, MethodSearch search) {
  * of refs that had been resolved already.
  * Clients are responsible for the lifetime of the cache.
  */
-inline DexMethod* resolve_method(
-    DexMethodRef* method, MethodSearch search, MethodRefCache& ref_cache) {
+inline DexMethod* resolve_method(DexMethodRef* method,
+                                 MethodSearch search,
+                                 MethodRefCache& ref_cache) {
   if (method->is_def()) return static_cast<DexMethod*>(method);
   auto def = ref_cache.find(method);
   if (def != ref_cache.end()) {
@@ -167,25 +172,23 @@ DexMethod* find_top_impl(const DexClass*, const DexString*, const DexProto*);
  * the class where the interface is declared has a concrete method for the
  * interface method.
  */
-DexMethod* find_top_intf_impl(
-    const DexClass* cls, const DexString* name, const DexProto* proto);
+DexMethod* find_top_intf_impl(const DexClass* cls,
+                              const DexString* name,
+                              const DexProto* proto);
 
 /**
  * Type of fields to resolve.
  */
-enum class FieldSearch {
-  Static, Instance, Any
-};
+enum class FieldSearch { Static, Instance, Any };
 
 /**
  * Given a scope, a field name and a field type search the class
  * hierarchy for a definition of the field
  */
-DexField* resolve_field(
-  const DexType*,
-  const DexString*,
-  const DexType*,
-  FieldSearch = FieldSearch::Any);
+DexField* resolve_field(const DexType*,
+                        const DexString*,
+                        const DexType*,
+                        FieldSearch = FieldSearch::Any);
 
 /**
  * Given a field, search its class hierarchy for the definition.
@@ -197,6 +200,6 @@ inline DexField* resolve_field(const DexFieldRef* field,
   if (field->is_def()) {
     return const_cast<DexField*>(static_cast<const DexField*>(field));
   }
-  return resolve_field(
-      field->get_class(), field->get_name(), field->get_type(), search);
+  return resolve_field(field->get_class(), field->get_name(), field->get_type(),
+                       search);
 }

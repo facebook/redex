@@ -71,7 +71,7 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable types
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
     struct classes {
       static constexpr int shift = 2;
@@ -79,7 +79,7 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable classes
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
     struct methods {
       static constexpr int shift = 4;
@@ -87,10 +87,10 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable methods
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
       // error or warn if method is not a def
       static constexpr bindflags_t error_if_not_def = {0x04L << shift};
-      static constexpr bindflags_t warn_if_not_def = {0x08L << shift};      
+      static constexpr bindflags_t warn_if_not_def = {0x08L << shift};
     };
     struct optionals {
       static constexpr int shift = 6;

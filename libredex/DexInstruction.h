@@ -419,9 +419,7 @@ inline bool is_conditional_branch(IROpcode op) {
   }
 }
 
-inline bool is_goto(IROpcode op) {
-  return op == OPCODE_GOTO;
-}
+inline bool is_goto(IROpcode op) { return op == OPCODE_GOTO; }
 
 inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
 

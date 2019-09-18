@@ -90,15 +90,14 @@ float Configurable::as<float>(const Json::Value& value, bindflags_t bindflags) {
 }
 
 template <>
-int Configurable::as<int>(const Json::Value& value,
-                                  bindflags_t bindflags) {
+int Configurable::as<int>(const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(int);
   return value.asInt();
 }
 
 template <>
 unsigned int Configurable::as<unsigned int>(const Json::Value& value,
-                                    bindflags_t bindflags) {
+                                            bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned int);
   return value.asUInt();
 }
@@ -118,15 +117,14 @@ boost::optional<unsigned int> Configurable::as<boost::optional<unsigned int>>(
 }
 
 template <>
-long Configurable::as<long>(const Json::Value& value,
-                                  bindflags_t bindflags) {
+long Configurable::as<long>(const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(long);
   return value.asInt64();
 }
 
 template <>
 unsigned long Configurable::as<unsigned long>(const Json::Value& value,
-                                    bindflags_t bindflags) {
+                                              bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned long);
   return value.asUInt64();
 }
@@ -147,14 +145,14 @@ boost::optional<unsigned long> Configurable::as<boost::optional<unsigned long>>(
 
 template <>
 long long Configurable::as<long long>(const Json::Value& value,
-                                  bindflags_t bindflags) {
+                                      bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(long long);
   return value.asInt64();
 }
 
 template <>
-unsigned long long Configurable::as<unsigned long long>(const Json::Value& value,
-                                    bindflags_t bindflags) {
+unsigned long long Configurable::as<unsigned long long>(
+    const Json::Value& value, bindflags_t bindflags) {
   ASSERT_NO_BINDFLAGS(unsigned long long);
   return value.asUInt64();
 }
@@ -230,8 +228,8 @@ template <>
 std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-             "Only type bindflags may be specified for a "
-             "std::vector<DexType*>");
+                    "Only type bindflags may be specified for a "
+                    "std::vector<DexType*>");
   std::vector<DexType*> result;
   for (auto& str : value) {
     auto type = DexType::get_type(str.asString());
@@ -251,9 +249,9 @@ template <>
 std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-             "Only type bindflags may be specified for a "
-             "std::unordered_set<DexType*>, you specified 0x%08x",
-             bindflags);
+                    "Only type bindflags may be specified for a "
+                    "std::unordered_set<DexType*>, you specified 0x%08x",
+                    bindflags);
   std::unordered_set<DexType*> result;
   for (auto& str : value) {
     auto type = DexType::get_type(str.asString());
@@ -274,8 +272,8 @@ std::unordered_set<const DexType*>
 Configurable::as<std::unordered_set<const DexType*>>(const Json::Value& value,
                                                      bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
-             "Only type bindflags may be specified for a "
-             "std::unordered_set<DexType*>");
+                    "Only type bindflags may be specified for a "
+                    "std::unordered_set<DexType*>");
   std::unordered_set<const DexType*> result;
   for (auto& str : value) {
     auto type = DexType::get_type(str.asString());
@@ -295,8 +293,8 @@ template <>
 std::unordered_set<DexClass*> Configurable::as<std::unordered_set<DexClass*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::classes::mask),
-             "Only type bindflags may be specified for a "
-             "std::unordered_set<DexClass*>");
+                    "Only type bindflags may be specified for a "
+                    "std::unordered_set<DexClass*>");
   std::unordered_set<DexClass*> result;
   for (auto& str : value) {
     auto cls =
@@ -318,8 +316,8 @@ template <>
 std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
-             "Only method bindflags may be specified for a "
-             "std::unordered_set<DexMethod*>");
+                    "Only method bindflags may be specified for a "
+                    "std::unordered_set<DexMethod*>");
   std::unordered_set<DexMethod*> result;
   for (auto& str : value) {
     auto meth = DexMethod::get_method(str.asString());

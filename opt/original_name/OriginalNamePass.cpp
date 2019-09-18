@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DexUtil.h"
 #include "OriginalNamePass.h"
 #include "ClassHierarchy.h"
+#include "DexUtil.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_ORIGINAL_NAME_COUNT "num_original_name"
@@ -40,8 +40,8 @@ void OriginalNamePass::build_hierarchies(
     auto base_name = base_class->get_deobfuscated_name();
     hierarchies->emplace(base_class->get_type(), base_name);
     TypeSet children_and_implementors;
-    get_all_children_or_implementors(
-        ch, scope, base_class, children_and_implementors);
+    get_all_children_or_implementors(ch, scope, base_class,
+                                     children_and_implementors);
     for (const auto& cls : children_and_implementors) {
       hierarchies->emplace(cls, base_name);
     }

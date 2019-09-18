@@ -90,16 +90,13 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
     return call_counter;
   };
 
-  CallCounter call_counter =
-      walk::parallel::reduce_methods<CallCounter, Scope>(
-          scope,
-          fixer,
-          [](CallCounter a, CallCounter b) -> CallCounter {
-            a.virtuals += b.virtuals;
-            a.supers += b.supers;
-            a.directs += b.directs;
-            return a;
-          });
+  CallCounter call_counter = walk::parallel::reduce_methods<CallCounter, Scope>(
+      scope, fixer, [](CallCounter a, CallCounter b) -> CallCounter {
+        a.virtuals += b.virtuals;
+        a.supers += b.supers;
+        a.directs += b.directs;
+        return a;
+      });
 
   metrics.num_virtual_calls += call_counter.virtuals;
   metrics.num_super_calls += call_counter.supers;

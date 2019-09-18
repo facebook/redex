@@ -18,10 +18,7 @@
 
 namespace dex_asm {
 
-enum OperandTag {
-  VREG,
-  LITERAL
-};
+enum OperandTag { VREG, LITERAL };
 
 struct Operand {
   OperandTag tag;

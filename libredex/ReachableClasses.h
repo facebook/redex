@@ -19,9 +19,8 @@ void init_reachable_classes(
 
 void recompute_classes_reachable_from_code(const Scope& scope);
 
-void recompute_reachable_from_xml_layouts(
-  const Scope& scope,
-  const std::string& apk_dir);
+void recompute_reachable_from_xml_layouts(const Scope& scope,
+                                          const std::string& apk_dir);
 
 // Note: The lack of convenience functions for DexType* is intentional. By doing
 // so, it implies you need to nullptr check. Which is evil because it sprinkles

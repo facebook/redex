@@ -11,10 +11,10 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/numeric/conversion/cast.hpp>
-#include <memory>
-#include <unordered_set>
 #include <limits>
 #include <list>
+#include <memory>
+#include <unordered_set>
 
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -68,9 +68,8 @@ typedef bimap<tagged<MethodItemEntry*, Entry>,
 
 } // namespace
 
-static MethodItemEntry* get_target(
-    const MethodItemEntry* mei,
-    const EntryAddrBiMap& bm) {
+static MethodItemEntry* get_target(const MethodItemEntry* mei,
+                                   const EntryAddrBiMap& bm) {
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
@@ -93,9 +92,7 @@ static void insert_branch_target(IRList* ir,
 }
 
 // Returns true if the offset could be encoded without modifying ir.
-bool encode_offset(IRList* ir,
-                   MethodItemEntry* target_mie,
-                   int32_t offset) {
+bool encode_offset(IRList* ir, MethodItemEntry* target_mie, int32_t offset) {
   auto branch_op_mie = target_mie->target->src;
   auto insn = branch_op_mie->dex_insn;
   // A branch to the very next instruction does nothing. Replace with
@@ -199,7 +196,7 @@ static void shard_multi_target(IRList* ir,
       case_key++;
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
-    const uint16_t* tdata = data + 2 * entries;  // entries are 32b
+    const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
@@ -409,7 +406,7 @@ void translate_dex_to_ir(
     it->insn = insn;
     if (move_result_pseudo != nullptr) {
       it = ir_list->insert_before(std::next(it),
-                           *(new MethodItemEntry(move_result_pseudo)));
+                                  *(new MethodItemEntry(move_result_pseudo)));
     }
   }
 }
@@ -510,11 +507,10 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
     auto copy_mie = old_mentry_to_new.at(&mie);
     switch (mie.type) {
     case MFLOW_TRY:
-      copy_mie->tentry =
-          new TryEntry(mie.tentry->type,
-                       mie.tentry->catch_start
-                           ? old_mentry_to_new[mie.tentry->catch_start]
-                           : nullptr);
+      copy_mie->tentry = new TryEntry(
+          mie.tentry->type,
+          mie.tentry->catch_start ? old_mentry_to_new[mie.tentry->catch_start]
+                                  : nullptr);
       break;
     case MFLOW_CATCH:
       copy_mie->centry = new CatchEntry(mie.centry->catch_type);
@@ -553,14 +549,14 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 
 } // namespace
 
-IRCode::IRCode(): m_ir_list(new IRList()) {}
+IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
   m_ir_list->clear_and_dispose();
   delete m_ir_list;
 }
 
-IRCode::IRCode(DexMethod* method): m_ir_list(new IRList()) {
+IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
   generate_load_params(
       method, dc->get_registers_size() - dc->get_ins_size(), this);
@@ -568,8 +564,7 @@ IRCode::IRCode(DexMethod* method): m_ir_list(new IRList()) {
   m_dbg = dc->release_debug_item();
 }
 
-IRCode::IRCode(DexMethod* method, size_t temp_regs)
-    : m_ir_list(new IRList()) {
+IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
   always_assert(method->get_dex_code() == nullptr);
   generate_load_params(method, temp_regs, this);
 }
@@ -627,7 +622,7 @@ const char* DEBUG_ONLY show_reg_map(RegMap& map) {
 }
 
 uint16_t calc_outs_size(const IRCode* code) {
-  uint16_t size {0};
+  uint16_t size{0};
   for (auto& mie : *code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
@@ -996,9 +991,8 @@ bool IRCode::try_sync(DexCode* code) {
     }
 
     DexCatches catches;
-    for (auto mei = try_end->tentry->catch_start;
-        mei != nullptr;
-        mei = mei->centry->next) {
+    for (auto mei = try_end->tentry->catch_start; mei != nullptr;
+         mei = mei->centry->next) {
       if (mei->centry->next != nullptr) {
         always_assert(mei->centry->catch_type != nullptr);
       }

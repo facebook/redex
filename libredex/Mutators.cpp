@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Mutators.h"
+
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "Mutators.h"
 
 namespace {
 void drop_this(DexMethod* method) {
@@ -50,7 +51,7 @@ void drop_this(DexMethod* method) {
     }
   }
 }
-}
+} // namespace
 
 namespace mutators {
 
@@ -109,4 +110,4 @@ void make_non_static(DexMethod* method, bool make_virtual) {
   }
   cls->add_method(method);
 }
-}
+} // namespace mutators

@@ -124,8 +124,8 @@ void collect_layout_classes_and_attributes_for_file(
 // Convenience method for copying values in a multimap to a set, for a
 // particular key.
 std::set<std::string> multimap_values_to_set(
-  const std::unordered_multimap<std::string, std::string>& map,
-  const std::string& key);
+    const std::unordered_multimap<std::string, std::string>& map,
+    const std::string& key);
 
 // Given the bytes of a binary XML file, replace the entries (if any) in the
 // ResStringPool. Writes result to the given Vector output param.

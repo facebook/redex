@@ -17,6 +17,6 @@ void show_configuration(std::ostream& output,
                         const ProguardConfiguration& config);
 
 std::string show_keep(const KeepSpec& keep_rule, bool show_source = true);
-}
+} // namespace redex
 
 // namespace redex

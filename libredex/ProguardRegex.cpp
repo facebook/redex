@@ -7,8 +7,8 @@
 
 #include <cstring>
 
-#include "ProguardRegex.h"
 #include "ProguardMap.h"
+#include "ProguardRegex.h"
 
 namespace redex {
 namespace proguard_parser {
