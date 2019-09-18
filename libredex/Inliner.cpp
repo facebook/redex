@@ -69,12 +69,20 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_set<DexMethod*>& candidates,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const inliner::InlinerConfig& config,
-    MultiMethodInlinerMode mode /* default is InterDex */)
+    MultiMethodInlinerMode mode /* default is InterDex */,
+    const CalleeCallerInsns& true_virtual_callers)
     : resolver(resolve_fn),
       xstores(stores),
       m_scope(scope),
       m_config(config),
       m_mode(mode) {
+  for (const auto& callee_callers : true_virtual_callers) {
+    for (const auto& caller_insns : callee_callers.second) {
+      for (auto insn : caller_insns.second) {
+        caller_virtual_callee[caller_insns.first][insn] = callee_callers.first;
+      }
+    }
+  }
   // Walk every opcode in scope looking for calls to inlinable candidates and
   // build a map of callers to callees and the reverse callees to callers. If
   // intra_dex is false, we build the map for all the candidates. If intra_dex
@@ -90,7 +98,8 @@ MultiMethodInliner::MultiMethodInliner(
                       auto callee =
                           resolver(insn->get_method(), opcode_to_search(insn));
                       if (callee != nullptr && callee->is_concrete() &&
-                          candidate_callees.count(callee)) {
+                          candidate_callees.count(callee) &&
+                          true_virtual_callers.count(callee) == 0) {
                         if (x_dex.cross_dex_ref(caller, callee)) {
                           candidate_callees.erase(callee);
                           if (callee_caller.count(callee)) {
@@ -102,6 +111,17 @@ MultiMethodInliner::MultiMethodInliner(
                       }
                     }
                   });
+    for (const auto& callee_callers : true_virtual_callers) {
+      auto callee = callee_callers.first;
+      for (const auto& caller_insns : callee_callers.second) {
+        auto caller = caller_insns.first;
+        if (x_dex.cross_dex_ref(callee, caller)) {
+          callee_caller.erase(callee);
+          break;
+        }
+        callee_caller[callee].push_back(caller);
+      }
+    }
     for (auto& pair : callee_caller) {
       DexMethod* callee = const_cast<DexMethod*>(pair.first);
       const auto& callers = pair.second;
@@ -115,13 +135,22 @@ MultiMethodInliner::MultiMethodInliner(
                     if (is_invoke(insn->opcode())) {
                       auto callee =
                           resolver(insn->get_method(), opcode_to_search(insn));
-                      if (callee != nullptr && callee->is_concrete() &&
+                      if (true_virtual_callers.count(callee) == 0 &&
+                          callee != nullptr && callee->is_concrete() &&
                           candidates.count(callee)) {
                         callee_caller[callee].push_back(caller);
                         caller_callee[caller].push_back(callee);
                       }
                     }
                   });
+    for (const auto& callee_callers : true_virtual_callers) {
+      auto callee = callee_callers.first;
+      for (const auto& caller_insns : callee_callers.second) {
+        auto caller = caller_insns.first;
+        callee_caller[callee].push_back(caller);
+        caller_callee[caller].push_back(callee);
+      }
+    }
   }
 }
 
@@ -190,6 +219,11 @@ void MultiMethodInliner::inline_callees(
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        if (caller_virtual_callee.count(caller) &&
+            caller_virtual_callee[caller].count(insn)) {
+          callee = caller_virtual_callee[caller][insn];
+          always_assert(callee);
+        }
         if (callee == nullptr) {
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
@@ -221,6 +255,10 @@ void MultiMethodInliner::inline_callees(
         auto insn = it->insn;
         if (insns.count(insn)) {
           auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          if (caller_virtual_callee.count(caller) &&
+              caller_virtual_callee[caller].count(insn)) {
+            callee = caller_virtual_callee[caller][insn];
+          }
           if (callee == nullptr) {
             return editable_cfg_adapter::LOOP_CONTINUE;
           }

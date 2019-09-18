@@ -17,6 +17,7 @@ namespace inliner {
 struct InlinerConfig {
   // inline virtual methods
   bool virtual_inline{true};
+  bool true_virtual_inline{false};
   bool throws_inline{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};

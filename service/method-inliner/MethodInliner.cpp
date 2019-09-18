@@ -91,7 +91,6 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
   // collect all non virtual methods (dmethods and vmethods)
   std::unordered_set<DexMethod*> methods;
-
   walk::methods(scope, [&](DexMethod* method) {
     all_methods++;
     if (method->is_virtual()) return;
@@ -143,6 +142,106 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
   TRACE(INLINE, 2, "Don't strip inlinable methods count: %ld", dont_strip);
   return methods;
 }
+
+using CallerInsns =
+    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
+/**
+ * Gather candidates of true virtual methods that can be inlined and their
+ * call site in true_virtual_callers.
+ * A true virtual method can be inlined to its callsite if the callsite can
+ * be resolved to only one method implementation deterministically.
+ * We are currently ruling out candidates that access field/methods or
+ * return an object type.
+ */
+void gather_true_virtual_methods(const Scope& scope,
+                                 CalleeCallerInsns* true_virtual_callers,
+                                 std::unordered_set<DexMethod*>* methods) {
+  auto method_override_graph = method_override_graph::build_graph(scope);
+  auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
+  std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
+                                                 non_virtual.end()};
+  // Add mapping from callee to monomorphic callsites.
+  auto update_monomorphic_callsite =
+      [](DexMethod* caller, IRInstruction* callsite, DexMethod* callee,
+         ConcurrentMap<DexMethod*, CallerInsns>* meth_caller) {
+        if (!callee->get_code()) {
+          return;
+        }
+        meth_caller->update(
+            callee, [&](const DexMethod*, CallerInsns& m, bool /* exists */) {
+              m[caller].emplace(callsite);
+            });
+      };
+
+  ConcurrentMap<DexMethod*, CallerInsns> meth_caller;
+  walk::parallel::code(scope, [&non_virtual_set, &method_override_graph,
+                               &meth_caller, &update_monomorphic_callsite](
+                                  DexMethod* method, IRCode& code) {
+    for (auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
+          insn->opcode() != OPCODE_INVOKE_INTERFACE) {
+        continue;
+      }
+      auto insn_method = insn->get_method();
+      auto callee = resolve_method(insn_method, opcode_to_search(insn));
+      if (callee == nullptr) {
+        // There are some invoke-virtual call on methods whose def are
+        // actually in interface.
+        callee = resolve_method(insn->get_method(), MethodSearch::Interface);
+      }
+      if (callee == nullptr) {
+        continue;
+      }
+      if (non_virtual_set.count(callee) != 0) {
+        // Not true virtual, no need to continue;
+        continue;
+      }
+      always_assert_log(callee->is_def(), "Resolved method not def %s",
+                        SHOW(callee));
+      const auto& overriding_methods =
+          mog::get_overriding_methods(*method_override_graph, callee);
+      if (!callee->is_external()) {
+        if (overriding_methods.size() == 0) {
+          // There is no override for this method
+          update_monomorphic_callsite(
+              method, insn, static_cast<DexMethod*>(callee), &meth_caller);
+        } else if (is_abstract(callee) && overriding_methods.size() == 1) {
+          // The method is an abstract method, the only override is its
+          // implementation.
+          auto implementing_method =
+              const_cast<DexMethod*>(*(overriding_methods.begin()));
+
+          update_monomorphic_callsite(method, insn, implementing_method,
+                                      &meth_caller);
+        }
+      }
+    }
+  });
+
+  // Post processing candidates.
+  std::for_each(meth_caller.begin(), meth_caller.end(), [&](const auto& pair) {
+    DexMethod* callee = pair.first;
+    auto& caller_to_invocations = pair.second;
+    always_assert_log(methods->count(callee) == 0, "%s\n", SHOW(callee));
+    always_assert(callee->get_code());
+    // Not considering candidates that accessed type in their method body
+    // or returning a non primitive type.
+    if (!is_primitive(
+            get_element_type_if_array(callee->get_proto()->get_rtype()))) {
+      return;
+    }
+    for (auto& mie : InstructionIterable(callee->get_code())) {
+      auto insn = mie.insn;
+      if (insn->has_type() || insn->has_method() || insn->has_field()) {
+        return;
+      }
+    }
+    methods->insert(callee);
+    (*true_virtual_callers)[callee] = caller_to_invocations;
+  });
+}
+
 } // namespace
 
 namespace inliner {
@@ -157,10 +256,14 @@ void run_inliner(DexStoresVector& stores,
     return;
   }
   auto scope = build_class_scope(stores);
+  CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 
+  if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
+    gather_true_virtual_methods(scope, &true_virtual_callers, &methods);
+  }
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;
   auto resolver = [&resolved_refs](DexMethodRef* method, MethodSearch search) {
@@ -174,7 +277,8 @@ void run_inliner(DexStoresVector& stores,
 
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
-                             intra_dex ? IntraDex : InterDex);
+                             intra_dex ? IntraDex : InterDex,
+                             true_virtual_callers);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {
@@ -185,6 +289,15 @@ void run_inliner(DexStoresVector& stores,
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
+
+  // Do not erase true virtual methods that are inlined because we are only
+  // inlining callsites that are monomorphic, for polymorphic callsite we
+  // didn't inline, but in run time the callsite may still be resolved to
+  // those methods that are inlined. We are relying on RMU to clean up
+  // true virtual methods that are not referenced.
+  for (const auto& pair : true_virtual_callers) {
+    inlined.erase(pair.first);
+  }
   size_t deleted = delete_methods(scope, inlined, resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);

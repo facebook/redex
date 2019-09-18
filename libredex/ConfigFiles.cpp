@@ -212,6 +212,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   }
   JsonWrapper jw(config);
   jw.get("virtual", true, inliner_config->virtual_inline);
+  jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);
   jw.get("enforce_method_size_limit",
          true,

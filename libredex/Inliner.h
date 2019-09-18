@@ -64,6 +64,10 @@ enum MultiMethodInlinerMode {
   IntraDex,
 };
 
+using CalleeCallerInsns = std::unordered_map<
+    DexMethod*,
+    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>>;
+
 /**
  * Helper class to inline a set of candidates.
  * Take a set of candidates and a scope and walk all instructions in scope
@@ -86,7 +90,8 @@ class MultiMethodInliner {
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const inliner::InlinerConfig& config,
-      MultiMethodInlinerMode mode = InterDex);
+      MultiMethodInlinerMode mode = InterDex,
+      const CalleeCallerInsns& true_virtual_callers = {});
 
   ~MultiMethodInliner() { invoke_direct_to_static(); }
 
@@ -282,6 +287,8 @@ class MultiMethodInliner {
   std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
       caller_callee;
 
+  std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
+      caller_virtual_callee;
   // Cache of the inlined costs of each method after all its eligible callsites
   // have been inlined.
   mutable std::unordered_map<const DexMethod*, size_t> m_inlined_costs;

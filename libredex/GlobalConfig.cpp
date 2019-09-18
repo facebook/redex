@@ -8,6 +8,7 @@
 #include "GlobalConfig.h"
 
 void InlinerConfig::bind_config() {
+  bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("use_cfg_inliner", use_cfg_inliner, use_cfg_inliner);
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
