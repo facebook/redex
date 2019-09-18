@@ -67,7 +67,7 @@ TEST(StrcmpLessTest, Test9) {
   std::string str2 = "";
   const int min_str_len = 1;
   const int max_str_len = 100;
-  const int loop_iter = 1000000;
+  const int loop_iter = 10000;
   for (int i = 0; i < loop_iter; i++) {
     str1.clear();
     str2.clear();
@@ -91,7 +91,7 @@ TEST(StrcmpLessTest, Test10) {
   std::string str2 = "";
   const int min_str_len = 1;
   const int max_str_len = 100;
-  const int loop_iter = 1000000;
+  const int loop_iter = 10000;
   for (int i = 0; i < loop_iter; i++) {
     str1.clear();
     str2.clear();
@@ -111,7 +111,7 @@ TEST(StrcmpLessTest, Test11) {
   std::string str2 = "";
   const int min_str_len = 1;
   const int max_str_len = 100;
-  const int loop_iter = 1000000;
+  const int loop_iter = 10000;
   for (int i = 0; i < loop_iter; i++) {
     str1.clear();
     str2.clear();
@@ -135,7 +135,7 @@ TEST(StrcmpLessTest, Test12) {
   std::string str2 = "";
   const int min_str_len = 1;
   const int max_str_len = 100;
-  const int loop_iter = 1000000;
+  const int loop_iter = 10000;
   for (int i = 0; i < loop_iter; i++) {
     str1.clear();
     str2.clear();
