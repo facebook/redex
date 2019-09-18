@@ -502,37 +502,15 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
 
 void InterDex::update_interdexorder(const DexClasses& dex,
                                     std::vector<DexType*>* interdex_types) {
-  // For all classes that are in the interdex order before
-  // the first class end marker, we keep it at that position. Otherwise, we
-  // add it to the head of the list.
-  auto first_end_marker_it = interdex_types->end();
-  auto last_end_marker_it = interdex_types->end();
-
-  if (m_end_markers.size() == 0) {
-    TRACE(IDEX, 3,
-          "[coldstart classes]: Couldn't find any class end marker.");
-  } else {
-    first_end_marker_it = std::find(
-        interdex_types->begin(), interdex_types->end(), m_end_markers.front());
-    last_end_marker_it = std::find(interdex_types->begin(),
-                                   interdex_types->end(), m_end_markers.back());
+  std::vector<DexType*> primary_dex;
+  for (DexClass* cls : dex) {
+    primary_dex.emplace_back(cls->get_type());
   }
 
-  std::vector<DexType*> not_already_included;
-  for (const auto& pclass : dex) {
-    auto pclass_it = std::find(interdex_types->begin(), interdex_types->end(),
-                               pclass->get_type());
-    if (pclass_it == interdex_types->end() || pclass_it > first_end_marker_it) {
-      TRACE(IDEX, 4, "Class %s is not in the interdex order.", SHOW(pclass));
-      not_already_included.push_back(pclass->get_type());
-    } else {
-      TRACE(IDEX, 4, "Class %s is in the interdex order. No change required.",
-            SHOW(pclass));
-    }
-  }
-  interdex_types->insert(interdex_types->begin(),
-                         not_already_included.begin(),
-                         not_already_included.end());
+  // We keep the primary classes untouched - at the beginning of
+  // the interdex list.
+  interdex_types->insert(interdex_types->begin(), primary_dex.begin(),
+                         primary_dex.end());
 }
 
 void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
