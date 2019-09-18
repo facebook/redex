@@ -855,7 +855,7 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(access_tokens), s_patn(&method_name)}, tail)
       .must_match(tail, "Expecting access list and method name");
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method(method_name));
+  auto method = DexMethod::make_method(method_name);
   DexAccessFlags access_flags = static_cast<DexAccessFlags>(0);
   for (size_t i = 0; i < access_tokens.size(); ++i) {
     access_flags |= string_to_access_table.at(access_tokens[i].str());
@@ -865,10 +865,8 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(code_expr)}, tail).match_with(tail);
   always_assert_log(code_expr.is_list(), "Expecting code listing");
   bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
-  method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
-                        is_virtual);
-
-  return method;
+  return method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
+                               is_virtual);
 }
 
 DexMethod* method_from_string(const std::string& s) {

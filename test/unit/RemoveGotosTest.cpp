@@ -21,9 +21,10 @@ struct RemoveGotosTest : public RedexTest {
   RemoveGotosTest() {
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method = static_cast<DexMethod*>(DexMethod::make_method(
-        get_object_type(), DexString::make_string("testMethod"), proto));
-    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_method =
+        DexMethod::make_method(get_object_type(),
+                               DexString::make_string("testMethod"), proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 

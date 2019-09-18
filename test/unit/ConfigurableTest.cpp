@@ -311,10 +311,9 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
   json["methods_param"] = array;
 
   DexMethodRef* m1 = DexMethod::get_method(m1desc);
-  DexMethodRef* m3 = DexMethod::get_method(m3desc);
-  static_cast<DexMethod*>(m3)->make_concrete((DexAccessFlags)0, false);
-  std::unordered_set<DexMethod*> resolved_methods = {
-      static_cast<DexMethod*>(m3)};
+  DexMethod* m3 =
+      DexMethod::get_method(m3desc)->make_concrete((DexAccessFlags)0, false);
+  std::unordered_set<DexMethod*> resolved_methods = {m3};
 
   EXPECT_EQ(false, DexMethod::get_method(m1desc)->is_def());
   EXPECT_EQ(true, DexMethod::get_method(m3desc)->is_def());

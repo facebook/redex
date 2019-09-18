@@ -169,17 +169,14 @@ DexClass* create_class_A() {
       make_field_def(a_t, "a_pro_field", int_t, ACC_PROTECTED | ACC_STATIC),
       make_field_def(a_t, "a_pri_field", int_t, ACC_PRIVATE | ACC_STATIC),
   };
-  auto a_pub_fun = static_cast<DexMethod*>(
-      DexMethod::make_method("LA;", "a_pub_fun", "V", {}));
-  a_pub_fun->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto a_pub_fun = DexMethod::make_method("LA;", "a_pub_fun", "V", {})
+                       ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
-  auto a_pro_fun = static_cast<DexMethod*>(
-      DexMethod::make_method("LA;", "a_pro_fun", "V", {}));
-  a_pro_fun->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
+  auto a_pro_fun = DexMethod::make_method("LA;", "a_pro_fun", "V", {})
+                       ->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
 
-  auto a_pri_fun = static_cast<DexMethod*>(
-      DexMethod::make_method("LA;", "a_pri_fun", "V", {}));
-  a_pri_fun->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
+  auto a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
+                       ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
   return create_class(a_t, get_object_type(), a_methods, a_fields, ACC_PUBLIC);
 }

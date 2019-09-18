@@ -245,8 +245,8 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
       continue;
     }
     TRACE(STRBUILD, 3,
-          "Outlining %lu StringBuilders of length %lu with typelist %s",
-          count, typelist->size(), SHOW(typelist));
+          "Outlining %lu StringBuilders of length %lu with typelist %s", count,
+          typelist->size(), SHOW(typelist));
     m_stats.stringbuilders_removed += count;
     m_stats.operations_removed += count * typelist->size();
 
@@ -255,10 +255,10 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
     }
     m_stats.helper_methods_created += 1;
 
-    auto helper = static_cast<DexMethod*>(
+    auto helper =
         DexMethod::make_method(outline_helper_cls, concat_str,
-                               DexProto::make_proto(string_ty, typelist)));
-    helper->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+                               DexProto::make_proto(string_ty, typelist))
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     helper->set_code(create_outline_helper_code(helper));
     helper->set_deobfuscated_name(show(helper));
     cc.add_method(helper);

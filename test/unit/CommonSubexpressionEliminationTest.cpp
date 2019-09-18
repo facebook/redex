@@ -31,20 +31,18 @@ void test(const Scope& scope,
           size_t expected_instructions_eliminated,
           size_t expected_inlined_barriers_into_methods = 0,
           size_t expected_inlined_barriers_iterations = 0) {
-  auto field_a = static_cast<DexField*>(DexField::make_field("LFoo;.a:I"));
-  field_a->make_concrete(ACC_PUBLIC);
+  auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
-  auto field_b = static_cast<DexField*>(DexField::make_field("LFoo;.b:I"));
-  field_b->make_concrete(ACC_PUBLIC);
+  auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
 
-  auto field_s = static_cast<DexField*>(DexField::make_field("LFoo;.s:I"));
-  field_s->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto field_s =
+      DexField::make_field("LFoo;.s:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  auto field_t = static_cast<DexField*>(DexField::make_field("LFoo;.t:I"));
-  field_t->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto field_t =
+      DexField::make_field("LFoo;.t:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  auto field_v = static_cast<DexField*>(DexField::make_field("LFoo;.v:I"));
-  field_v->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
+  auto field_v = DexField::make_field("LFoo;.v:I")
+                     ->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
@@ -445,9 +443,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest0;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest0;.test0:()V"));
-  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto method = DexMethod::make_method("LTest0;.test0:()V")
+                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
@@ -488,9 +485,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
   base_creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTestBase;.m:()V"));
-  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto method = DexMethod::make_method("LTestBase;.m:()V")
+                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   base_creator.add_method(method);
   DexClass* base_class = base_creator.create();
@@ -500,9 +496,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator derived_creator(DexType::make_type("LTestDerived;"));
   derived_creator.set_super(base_class->get_type());
 
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTestDerived;.m:()V"));
-  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method = DexMethod::make_method("LTestDerived;.m:()V")
+               ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   derived_creator.add_method(method);
   DexClass* derived_class = derived_creator.create();
@@ -544,9 +539,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
   base_creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTestBase;.m:()V"));
-  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  auto method = DexMethod::make_method("LTestBase;.m:()V")
+                    ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   base_creator.add_method(method);
   DexClass* base_class = base_creator.create();
@@ -556,9 +550,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator derived_creator(DexType::make_type("LTestDerived;"));
   derived_creator.set_super(base_class->get_type());
 
-  method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTestDerived;.m:()V"));
-  method->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  method = DexMethod::make_method("LTestDerived;.m:()V")
+               ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -593,9 +586,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest1;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest1;.test1:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest1;.test1:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   creator.add_method(method);
 
@@ -632,8 +624,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(get_object_type());
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LA;.m:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -649,8 +641,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   ClassCreator b_creator(DexType::make_type("LB;"));
   b_creator.set_super(get_object_type());
 
-  method = static_cast<DexMethod*>(DexMethod::make_method("LB;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method = DexMethod::make_method("LB;.m:()V")
+               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   b_creator.add_method(method);
 
@@ -686,8 +678,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(get_object_type());
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LA;.m:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -703,8 +695,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   ClassCreator b_creator(DexType::make_type("LB;"));
   b_creator.set_super(get_object_type());
 
-  method = static_cast<DexMethod*>(DexMethod::make_method("LB;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method = DexMethod::make_method("LB;.m:()V")
+               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -720,8 +712,8 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   ClassCreator c_creator(DexType::make_type("LC;"));
   c_creator.set_super(get_object_type());
 
-  method = static_cast<DexMethod*>(DexMethod::make_method("LC;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method = DexMethod::make_method("LC;.m:()V")
+               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string("((return-void))"));
   c_creator.add_method(method);
 
@@ -757,8 +749,8 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(get_object_type());
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LA;.m:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
      (
        (const v0 0)
@@ -774,8 +766,8 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   ClassCreator b_creator(DexType::make_type("LB;"));
   b_creator.set_super(get_object_type());
 
-  method = static_cast<DexMethod*>(DexMethod::make_method("LB;.m:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method = DexMethod::make_method("LB;.m:()V")
+               ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -808,9 +800,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest2;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest2;.test2:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest2;.test2:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -844,9 +835,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest3;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest3;.test3:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest3;.test3:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -878,9 +868,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest4;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest4;.test4:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest4;.test4:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -916,9 +905,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest2;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest2;.test2:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest2;.test2:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -963,9 +951,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest5;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest5;.test5:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest5;.test5:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1007,9 +994,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   ClassCreator creator(DexType::make_type("LTest6;"));
   creator.set_super(get_object_type());
 
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LTest6;.test6:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LTest6;.test6:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   method->set_code(assembler::ircode_from_string(R"(
     (
       (const v0 0)

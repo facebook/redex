@@ -8,9 +8,9 @@
 #include <gtest/gtest.h>
 
 #include "DexAsm.h"
-#include "InstructionLowering.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "InstructionLowering.h"
 #include "RedexTest.h"
 
 struct IRCodeTest : public RedexTest {};
@@ -18,9 +18,8 @@ struct IRCodeTest : public RedexTest {};
 TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
   using namespace dex_asm;
 
-  auto method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM, {3_v}));
@@ -31,9 +30,8 @@ TEST_F(IRCodeTest, LoadParamInstructionsDirect) {
 TEST_F(IRCodeTest, LoadParamInstructionsVirtual) {
   using namespace dex_asm;
 
-  auto method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "bar", "V", {"I"}));
-  method->make_concrete(ACC_PUBLIC, true);
+  auto method = DexMethod::make_method("Lfoo;", "bar", "V", {"I"})
+                    ->make_concrete(ACC_PUBLIC, true);
   auto code = std::make_unique<IRCode>(method, 3);
   auto it = code->begin();
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_OBJECT, {3_v}));
@@ -120,9 +118,8 @@ TEST_F(IRCodeTest, useless_if) {
 }
 
 TEST_F(IRCodeTest, try_region) {
-  auto method = static_cast<DexMethod*>(
-      DexMethod::make_method("Lfoo;", "tryRegionTest", "V", {}));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("Lfoo;", "tryRegionTest", "V", {})
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto opcode = DOPCODE_CONST_WIDE_16;
   auto code = std::make_unique<IRCode>(method, 1);

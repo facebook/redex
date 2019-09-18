@@ -743,13 +743,13 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
         fields.push_back(field);
         for (size_t i = 2; i <= num_shards; i++) {
           const auto new_name = "sMethodStats" + std::to_string(i);
-          DexField* new_field = static_cast<DexField*>(
+          DexField* new_field =
               DexField::make_field(field->get_class(),
                                    DexString::make_string(new_name),
-                                   field->get_type()));
+                                   field->get_type())
+                  ->make_concrete(field->get_access(),
+                                  field->get_static_value());
           new_field->set_deobfuscated_name(new_name);
-          new_field->make_concrete(field->get_access(),
-                                   field->get_static_value());
           fields.push_back(new_field);
           cls->add_field(new_field);
         }

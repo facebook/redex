@@ -35,12 +35,11 @@ class ReflectionAnalysisTest : public RedexTest {
         get_object_type() // v5
     });
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method = static_cast<DexMethod*>(
-        DexMethod::make_method(DexType::make_type("Lbar;"),
-                               DexString::make_string("testMethod"),
-                               proto));
+    m_method = DexMethod::make_method(DexType::make_type("Lbar;"),
+                                      DexString::make_string("testMethod"),
+                                      proto)
+                   ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     m_method->set_deobfuscated_name("testMethod");
-    m_method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
   }
 

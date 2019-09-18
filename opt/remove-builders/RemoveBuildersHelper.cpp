@@ -735,9 +735,9 @@ std::vector<IRInstruction*> generate_load_params(
 DexMethod* create_fields_constr(DexMethod* method, DexClass* cls) {
   auto init = DexString::get_string("<init>");
   auto void_fields = make_proto_for(cls);
-  DexMethod* fields_constr = static_cast<DexMethod*>(
-      DexMethod::make_method(method->get_class(), init, void_fields));
-  fields_constr->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
+  DexMethod* fields_constr =
+      DexMethod::make_method(method->get_class(), init, void_fields)
+          ->make_concrete(ACC_PUBLIC | ACC_CONSTRUCTOR, false);
 
   auto code = method->get_code();
   uint16_t regs_size = code->get_registers_size();

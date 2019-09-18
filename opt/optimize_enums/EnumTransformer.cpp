@@ -356,11 +356,11 @@ struct EnumUtil {
    */
   DexFieldRef* make_values_field(DexClass* cls) {
     auto name = DexString::make_string("$VALUES");
-    auto field = static_cast<DexField*>(DexField::make_field(
-        cls->get_type(), name, make_array_type(INTEGER_TYPE)));
-    field->make_concrete(
-        ACC_PRIVATE | ACC_FINAL | ACC_STATIC,
-        DexEncodedValue::zero_for_type(make_array_type(INTEGER_TYPE)));
+    auto field = DexField::make_field(cls->get_type(), name,
+                                      make_array_type(INTEGER_TYPE))
+                     ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC,
+                                     DexEncodedValue::zero_for_type(
+                                         make_array_type(INTEGER_TYPE)));
     cls->add_field(field);
     return (DexFieldRef*)field;
   }
@@ -370,10 +370,10 @@ struct EnumUtil {
    */
   DexFieldRef* make_a_field(DexClass* cls, uint32_t value, IRCode* code) {
     auto name = DexString::make_string("f" + std::to_string(value));
-    auto field = static_cast<DexField*>(
-        DexField::make_field(cls->get_type(), name, INTEGER_TYPE));
-    field->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC,
-                         DexEncodedValue::zero_for_type(INTEGER_TYPE));
+    auto field =
+        DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
+            ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC,
+                            DexEncodedValue::zero_for_type(INTEGER_TYPE));
     cls->add_field(field);
     code->push_back(dasm(OPCODE_CONST, {1_v, {LITERAL, value}}));
     code->push_back(dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {1_v}));
@@ -389,9 +389,9 @@ struct EnumUtil {
   DexMethod* make_clinit_method(DexClass* cls, uint32_t fields_count) {
     auto proto =
         DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
-    DexMethod* method = static_cast<DexMethod*>(
-        DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto));
-    method->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
+    DexMethod* method =
+        DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto)
+            ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
     method->set_code(std::make_unique<IRCode>());
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));
@@ -415,9 +415,8 @@ struct EnumUtil {
     DexProto* proto =
         DexProto::make_proto(make_array_type(INTEGER_TYPE),
                              DexTypeList::make_type_list({get_int_type()}));
-    DexMethod* method = static_cast<DexMethod*>(
-        DexMethod::make_method(cls->get_type(), name, proto));
-    method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
+                            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>());
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));

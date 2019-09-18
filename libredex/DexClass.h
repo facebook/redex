@@ -292,11 +292,15 @@ class DexFieldRef {
                           update_deobfuscated_name);
   }
 
+  DexField* make_concrete(DexAccessFlags access_flags,
+                          DexEncodedValue* v = nullptr);
+
   static void erase_field(DexFieldRef* f) { return g_redex->erase_field(f); }
 };
 
 class DexField : public DexFieldRef {
   friend struct RedexContext;
+  friend class DexFieldRef;
 
   /* Concrete method members */
   DexAccessFlags m_access;
@@ -403,7 +407,6 @@ class DexField : public DexFieldRef {
     m_value = v;
   }
 
-  void make_concrete(DexAccessFlags access_flags, DexEncodedValue* v = nullptr);
   void clear_annotations() {
     delete m_anno;
     m_anno = nullptr;
@@ -821,11 +824,22 @@ class DexMethodRef {
                            update_deobfuscated_name);
   }
 
+  DexMethod* make_concrete(DexAccessFlags,
+                           std::unique_ptr<DexCode>,
+                           bool is_virtual);
+
+  DexMethod* make_concrete(DexAccessFlags,
+                           std::unique_ptr<IRCode>,
+                           bool is_virtual);
+
+  DexMethod* make_concrete(DexAccessFlags access, bool is_virtual);
+
   static void erase_method(DexMethodRef* m) { return g_redex->erase_method(m); }
 };
 
 class DexMethod : public DexMethodRef {
   friend struct RedexContext;
+  friend class DexMethodRef;
 
   /* Concrete method members */
   DexAnnotationSet* m_anno;
@@ -988,10 +1002,6 @@ class DexMethod : public DexMethodRef {
     m_dex_code = std::move(code);
   }
   void set_code(std::unique_ptr<IRCode> code);
-
-  void make_concrete(DexAccessFlags, std::unique_ptr<DexCode>, bool is_virtual);
-  void make_concrete(DexAccessFlags, std::unique_ptr<IRCode>, bool is_virtual);
-  void make_concrete(DexAccessFlags access, bool is_virtual);
 
   void make_non_concrete();
 

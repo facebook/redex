@@ -15,9 +15,8 @@
 class DexPositionTest : public RedexTest {};
 
 TEST_F(DexPositionTest, multiplePositionBeforeOpcode) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -46,9 +45,8 @@ TEST_F(DexPositionTest, multiplePositionBeforeOpcode) {
 }
 
 TEST_F(DexPositionTest, consecutiveIdenticalPositions) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (

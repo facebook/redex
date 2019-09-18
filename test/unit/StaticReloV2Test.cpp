@@ -33,9 +33,10 @@ struct StaticReloV2Test : public RedexTest {
   DexMethod* create_method(DexClass* cls,
                            const char* method_name,
                            DexAccessFlags access) {
-    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
-        cls->get_type(), DexString::make_string(method_name), m_proto));
-    method->make_concrete(access, false);
+    DexMethod* method =
+        DexMethod::make_method(
+            cls->get_type(), DexString::make_string(method_name), m_proto)
+            ->make_concrete(access, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
     cls->add_method(method);
     return method;

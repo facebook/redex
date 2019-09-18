@@ -41,12 +41,12 @@ class IRTypeCheckerTest : public RedexTest {
         get_object_type() // v14
     });
     auto proto = DexProto::make_proto(get_boolean_type(), args);
-    m_method = static_cast<DexMethod*>(
+    m_method =
         DexMethod::make_method(DexType::make_type("Lbar;"),
                                DexString::make_string("testMethod"),
-                               proto));
+                               proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
     m_method->set_deobfuscated_name("testMethod");
-    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
   }
 
@@ -110,12 +110,12 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   // this one
   auto args = DexTypeList::make_type_list({});
   auto proto = DexProto::make_proto(get_boolean_type(), args);
-  auto method = static_cast<DexMethod*>(
+  auto method =
       DexMethod::make_method(DexType::make_type("Lbar;"),
                              DexString::make_string("testMethod2"),
-                             proto));
+                             proto)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_deobfuscated_name("testMethod2");
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(std::make_unique<IRCode>(method, 0));
 
   IRCode* code = method->get_code();

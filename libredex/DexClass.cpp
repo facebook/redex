@@ -28,7 +28,6 @@
 #include <mutex>
 #include <unordered_map>
 
-
 uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
@@ -49,11 +48,14 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   return (int)(((uint8_t*)typep) - (uint8_t*)output);
 }
 
-void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
+DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
+                                     DexEncodedValue* v) {
   // FIXME assert if already concrete
-  m_value = v;
-  m_access = access_flags;
-  m_concrete = true;
+  auto that = static_cast<DexField*>(this);
+  that->m_value = v;
+  that->m_access = access_flags;
+  that->m_concrete = true;
+  return that;
 }
 
 DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
@@ -431,7 +433,8 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     auto& dextry = *it;
     always_assert(dextry->m_start_addr < code->insns_size);
     dti[tryno].start_addr = dextry->m_start_addr;
-    always_assert(dextry->m_start_addr + dextry->m_insn_count <= code->insns_size);
+    always_assert(dextry->m_start_addr + dextry->m_insn_count <=
+                  code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
       catches_map[dextry->m_catches] = hemit - handler_base;
@@ -650,26 +653,30 @@ void DexMethod::become_virtual() {
   insert_sorted(vmethods, this, compare_dexmethods);
 }
 
-void DexMethod::make_concrete(DexAccessFlags access,
-                              std::unique_ptr<DexCode> dc,
-                              bool is_virtual) {
-  m_access = access;
-  m_dex_code = std::move(dc);
-  m_concrete = true;
-  m_virtual = is_virtual;
+DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
+                                       std::unique_ptr<DexCode> dc,
+                                       bool is_virtual) {
+  auto that = static_cast<DexMethod*>(this);
+  that->m_access = access;
+  that->m_dex_code = std::move(dc);
+  that->m_concrete = true;
+  that->m_virtual = is_virtual;
+  return that;
 }
 
-void DexMethod::make_concrete(DexAccessFlags access,
-                              std::unique_ptr<IRCode> dc,
-                              bool is_virtual) {
-  m_access = access;
-  m_code = std::move(dc);
-  m_concrete = true;
-  m_virtual = is_virtual;
+DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
+                                       std::unique_ptr<IRCode> dc,
+                                       bool is_virtual) {
+  auto that = static_cast<DexMethod*>(this);
+  that->m_access = access;
+  that->m_code = std::move(dc);
+  that->m_concrete = true;
+  that->m_virtual = is_virtual;
+  return that;
 }
 
-void DexMethod::make_concrete(DexAccessFlags access, bool is_virtual) {
-  make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
+DexMethod* DexMethodRef::make_concrete(DexAccessFlags access, bool is_virtual) {
+  return make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
 }
 
 void DexMethod::make_non_concrete() {

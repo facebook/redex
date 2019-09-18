@@ -353,9 +353,8 @@ std::vector<DexPosition*> get_positions(const std::unique_ptr<IRCode>& code) {
 }
 
 TEST_F(IRAssemblerTest, pos) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -378,12 +377,10 @@ TEST_F(IRAssemblerTest, pos) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
-  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 = DexMethod::make_method("LFoo;.baz:()I")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -417,12 +414,10 @@ TEST_F(IRAssemblerTest, posWithParent_DbgLabel) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
-  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 = DexMethod::make_method("LFoo;.baz:()I")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -456,12 +451,10 @@ TEST_F(IRAssemblerTest, posWithParent_UserLabel) {
 }
 
 TEST_F(IRAssemblerTest, posWithParent_BadParent) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
-  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 = DexMethod::make_method("LFoo;.baz:()I")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -495,15 +488,12 @@ TEST_F(IRAssemblerTest, posWithParent_BadParent) {
 }
 
 TEST_F(IRAssemblerTest, posWithGrandparent) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
-  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method3 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()Z"));
-  method3->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 = DexMethod::make_method("LFoo;.baz:()I")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method3 = DexMethod::make_method("LFoo;.baz:()Z")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -538,15 +528,12 @@ TEST_F(IRAssemblerTest, posWithGrandparent) {
 }
 
 TEST_F(IRAssemblerTest, posWithGreatGrandparent) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()I"));
-  method2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-  auto method3 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.baz:()Z"));
-  method3->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method2 = DexMethod::make_method("LFoo;.baz:()I")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method3 = DexMethod::make_method("LFoo;.baz:()Z")
+                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -593,9 +580,8 @@ std::vector<DexDebugInstruction*> get_debug_info(
 }
 
 TEST_F(IRAssemblerTest, dexDebugInstruction) {
-  auto method =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method = DexMethod::make_method("LFoo;.bar:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
