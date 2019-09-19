@@ -1069,10 +1069,33 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
   while (impacted_methods.size()) {
     stats.inlined_barriers_iterations++;
 
-    // TODO: Consider ordering impacted_methods by their dependencies to
-    // minimize how often we need to iterate the outer fixpoint loop
+    // We order the impacted methods in a deterministic way that's likely
+    // helping to reduce the number of needed iterations.
+    // TODO: Do a proper (weak) topological ordering
+    std::vector<const DexMethod*> ordered_impacted_methods(
+        impacted_methods.begin(), impacted_methods.end());
+    impacted_methods.clear();
+    std::sort(
+        ordered_impacted_methods.begin(), ordered_impacted_methods.end(),
+        [&](const DexMethod* a, const DexMethod* b) {
+          auto& a_wlads = method_wlads.at(a);
+          auto& b_wlads = method_wlads.at(b);
+          if (a_wlads.dependencies.size() != b_wlads.dependencies.size()) {
+            // put methods with fewer dependencies first
+            return a_wlads.dependencies.size() < b_wlads.dependencies.size();
+          }
+          if (a_wlads.written_locations.size() !=
+              b_wlads.written_locations.size()) {
+            // put methods with fewer written locations first
+            return a_wlads.written_locations.size() <
+                   b_wlads.written_locations.size();
+          }
+          // tie breaker: method order
+          return compare_dexmethods(a, b);
+        });
+
     std::unordered_set<const DexMethod*> changed_methods;
-    for (const DexMethod* method : impacted_methods) {
+    for (const DexMethod* method : ordered_impacted_methods) {
       auto& wlads = method_wlads.at(method);
       bool general_memory_barrier = false;
       size_t wlads_written_locations_size = wlads.written_locations.size();
@@ -1102,7 +1125,6 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
 
     // Given set of changed methods, determine set of dependents for which
     // we need to re-run the analysis in another iteration.
-    impacted_methods.clear();
     for (auto changed_method : changed_methods) {
       auto it = inverse_dependencies.find(changed_method);
       if (it != inverse_dependencies.end()) {
