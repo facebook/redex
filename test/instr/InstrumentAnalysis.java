@@ -13,7 +13,7 @@ import java.text.MessageFormat;
 public class InstrumentAnalysis {
   private static final String LOG_TAG = "DYNA";
 
-  private static int sMethodCount = 0; // Redex will patch
+  private static int sNumStaticallyInstrumented = 0; // Redex will patch
   private static final int[] sMethodStats1 = new int[0]; // Redex will patch
   private static short[][] sMethodStatsArray = new short[][] {};  // Redex will patch
 
