@@ -1020,7 +1020,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
 
   // Patch method count constant.
   always_assert(method_id == kTotalSize);
-  patch_static_field(*analysis_cls, "sMethodCount", kTotalSize);
+  patch_static_field(*analysis_cls, "sNumStaticallyInstrumented", kTotalSize);
 
   ofs.close();
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", file_name.c_str());
