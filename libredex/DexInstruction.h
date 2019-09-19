@@ -444,3 +444,11 @@ inline bool is_div_int_lit(IROpcode op) {
 inline bool is_rem_int_lit(IROpcode op) {
   return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
 }
+
+inline bool is_div_int_or_long(IROpcode op) {
+  return op == OPCODE_DIV_INT || op == OPCODE_DIV_LONG;
+}
+
+inline bool is_rem_int_or_long(IROpcode op) {
+  return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
+}

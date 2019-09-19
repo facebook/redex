@@ -35,7 +35,6 @@ static Out reinterpret_bits(In in) {
   if (std::is_same<In, Out>::value) {
     return in;
   }
-  static_assert(sizeof(In) == sizeof(Out), "types must be same size");
   return *reinterpret_cast<Out*>(&in);
 }
 
@@ -358,6 +357,127 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
     if (result != boost::none) {
       int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
       res_const_dom = SignedConstantDomain(result32);
+    }
+    env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
+    return true;
+  }
+  return analyze_default(insn, env);
+}
+
+bool is_binop64(IROpcode op) {
+  switch (op) {
+  case OPCODE_ADD_INT:
+  case OPCODE_SUB_INT:
+  case OPCODE_MUL_INT:
+  case OPCODE_DIV_INT:
+  case OPCODE_REM_INT:
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT:
+  case OPCODE_SHL_INT:
+  case OPCODE_SHR_INT:
+  case OPCODE_USHR_INT:
+  case OPCODE_ADD_FLOAT:
+  case OPCODE_SUB_FLOAT:
+  case OPCODE_MUL_FLOAT:
+  case OPCODE_DIV_FLOAT:
+  case OPCODE_REM_FLOAT: {
+    return false;
+    break;
+  }
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_DIV_LONG:
+  case OPCODE_REM_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG:
+  case OPCODE_SHL_LONG:
+  case OPCODE_SHR_LONG:
+  case OPCODE_USHR_LONG:
+  case OPCODE_ADD_DOUBLE:
+  case OPCODE_SUB_DOUBLE:
+  case OPCODE_MUL_DOUBLE:
+  case OPCODE_DIV_DOUBLE:
+  case OPCODE_REM_DOUBLE: {
+    return true;
+    break;
+  }
+  default: {
+    always_assert_log(false, "Unexpected opcode: %s\n", SHOW(op));
+    break;
+  }
+  }
+}
+
+bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
+                                      ConstantEnvironment* env) {
+  auto op = insn->opcode();
+  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
+  auto cst_left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
+  auto cst_right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
+  boost::optional<int64_t> result = boost::none;
+  if (cst_left && cst_right) {
+    bool use_result_reg = false;
+    switch (op) {
+    case OPCODE_ADD_INT:
+    case OPCODE_ADD_LONG: {
+      result = (*cst_left) + (*cst_right);
+      break;
+    }
+    case OPCODE_SUB_INT:
+    case OPCODE_SUB_LONG: {
+      result = (*cst_left) - (*cst_right);
+      break;
+    }
+    case OPCODE_MUL_INT:
+    case OPCODE_MUL_LONG: {
+      result = (*cst_left) * (*cst_right);
+      break;
+    }
+    case OPCODE_DIV_INT:
+    case OPCODE_DIV_LONG: {
+      if ((*cst_right) != 0) {
+        result = (*cst_left) / (*cst_right);
+      }
+      use_result_reg = true;
+      break;
+    }
+    case OPCODE_REM_INT:
+    case OPCODE_REM_LONG: {
+      if ((*cst_right) != 0) {
+        result = (*cst_left) % (*cst_right);
+      }
+      use_result_reg = true;
+      break;
+    }
+    case OPCODE_AND_INT:
+    case OPCODE_AND_LONG: {
+      result = (*cst_left) & (*cst_right);
+      break;
+    }
+    case OPCODE_OR_INT:
+    case OPCODE_OR_LONG: {
+      result = (*cst_left) | (*cst_right);
+      break;
+    }
+    case OPCODE_XOR_INT:
+    case OPCODE_XOR_LONG: {
+      result = (*cst_left) ^ (*cst_right);
+      break;
+    }
+    default:
+      return analyze_default(insn, env);
+    }
+    auto res_const_dom = SignedConstantDomain::top();
+    if (result != boost::none) {
+      if (is_binop64(op)) {
+        res_const_dom = SignedConstantDomain(*result);
+      } else {
+        int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
+        res_const_dom = SignedConstantDomain(result32);
+      }
     }
     env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
     return true;

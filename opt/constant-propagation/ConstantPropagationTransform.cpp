@@ -120,7 +120,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
     auto op = primary_insn->opcode();
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
-        is_rem_int_lit(op) || is_instance_of(op)) {
+        is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
+        is_div_int_or_long(op)) {
       replace_with_const(env, it);
     }
     break;
@@ -152,7 +153,19 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_XOR_INT_LIT8:
   case OPCODE_SHL_INT_LIT8:
   case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8: {
+  case OPCODE_USHR_INT_LIT8:
+  case OPCODE_ADD_INT:
+  case OPCODE_SUB_INT:
+  case OPCODE_MUL_INT:
+  case OPCODE_AND_INT:
+  case OPCODE_OR_INT:
+  case OPCODE_XOR_INT:
+  case OPCODE_ADD_LONG:
+  case OPCODE_SUB_LONG:
+  case OPCODE_MUL_LONG:
+  case OPCODE_AND_LONG:
+  case OPCODE_OR_LONG:
+  case OPCODE_XOR_LONG: {
     replace_with_const(env, it);
     break;
   }
