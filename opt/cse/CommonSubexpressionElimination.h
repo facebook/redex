@@ -64,9 +64,11 @@ struct CseLocationHasher {
   size_t operator()(const CseLocation& l) const { return (size_t)l.field; }
 };
 
+using CseUnorderedLocationSet =
+    std::unordered_set<CseLocation, CseLocationHasher>;
+
 std::ostream& operator<<(std::ostream&, const CseLocation&);
-std::ostream& operator<<(
-    std::ostream&, const std::unordered_set<CseLocation, CseLocationHasher>&);
+std::ostream& operator<<(std::ostream&, const CseUnorderedLocationSet&);
 
 namespace cse_impl {
 
@@ -110,10 +112,10 @@ class SharedState {
  public:
   SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
   MethodBarriersStats init_method_barriers(const Scope&);
-  boost::optional<CseLocation> get_relevant_written_location(
+  CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,
-      const std::unordered_set<CseLocation, CseLocationHasher>& read_locations);
+      const CseUnorderedLocationSet& read_locations);
   void log_barrier(const Barrier& barrier);
   bool has_pure_method(const IRInstruction* insn) const;
   void cleanup();
@@ -121,14 +123,12 @@ class SharedState {
  private:
   bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
   bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
-  bool is_invoke_a_barrier(
-      const IRInstruction* insn,
-      const std::unordered_set<CseLocation, CseLocationHasher>& read_locations);
+  CseUnorderedLocationSet get_relevant_written_locations(
+      const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<DexMethodRef*> m_safe_methods;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
-  std::unordered_map<const DexMethod*,
-                     std::unordered_set<CseLocation, CseLocationHasher>>
+  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
 };

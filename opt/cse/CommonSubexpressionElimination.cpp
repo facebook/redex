@@ -93,17 +93,17 @@ constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
 constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 
 using value_id_t = uint64_t;
+constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
 enum ValueIdFlags : value_id_t {
   // lower bits for tracked locations
   IS_NOT_READ_ONLY_WRITTEN_LOCATION = 0,
   IS_FIRST_TRACKED_LOCATION = ((value_id_t)1),
-  IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << (sizeof(value_id_t) * 4),
+  IS_OTHER_TRACKED_LOCATION = ((value_id_t)1) << TRACKED_LOCATION_BITS,
   IS_ONLY_READ_NOT_WRITTEN_LOCATION = ((value_id_t)1)
-                                      << (sizeof(value_id_t) * 4 + 1),
+                                      << (TRACKED_LOCATION_BITS + 1),
   IS_TRACKED_LOCATION_MASK = IS_ONLY_READ_NOT_WRITTEN_LOCATION * 2 - 1,
-  IS_PRE_STATE_SRC = ((value_id_t)1) << (sizeof(value_id_t) * 4 + 2),
-  // upper bits for unique values
-  BASE = ((value_id_t)1) << (sizeof(value_id_t) * 4 + 3),
+  // upper bits for unique running index
+  BASE = ((value_id_t)1) << (TRACKED_LOCATION_BITS + 2),
 };
 
 using register_t = ir_analyzer::register_t;
@@ -296,26 +296,17 @@ CseLocation get_read_location(const IRInstruction* insn) {
   }
 }
 
-bool is_barrier_relevant(
-    const Barrier& barrier,
-    const std::unordered_set<CseLocation, CseLocationHasher>& read_locations) {
+bool is_barrier_relevant(const Barrier& barrier,
+                         const CseUnorderedLocationSet& read_locations) {
   auto location = get_written_location(barrier);
   return location == CseLocation(GENERAL_MEMORY_BARRIER) ||
          read_locations.count(location);
 }
 
-template <class Set>
-bool are_disjoint(const Set* s, const Set* t) {
-  if (s->size() > t->size()) {
-    std::swap(s, t);
-  }
-  for (const auto& elem : *s) {
-    if (t->count(elem)) {
-      return false;
-    }
-  }
-  return true;
-}
+const CseUnorderedLocationSet no_locations = CseUnorderedLocationSet();
+
+const CseUnorderedLocationSet general_memory_barrier_locations =
+    CseUnorderedLocationSet{CseLocation(GENERAL_MEMORY_BARRIER)};
 
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
  public:
@@ -334,18 +325,21 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         written_location_counts;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
-      auto location = shared_state->get_relevant_written_location(
+      auto locations = shared_state->get_relevant_written_locations(
           mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
-      if (location) {
-        written_location_counts[*location]++;
+      if (!locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
+        for (const auto& location : locations) {
+          written_location_counts[location]++;
+        }
       }
     }
 
     std::vector<CseLocation> read_and_written_locations;
     for (auto& p : written_location_counts) {
+      always_assert(p.first != CseLocation(GENERAL_MEMORY_BARRIER));
       if (read_location_counts.count(p.first)) {
         read_and_written_locations.push_back(p.first);
-      } else if (p.first != CseLocation(GENERAL_MEMORY_BARRIER)) {
+      } else {
         m_tracked_locations.emplace(
             p.first, ValueIdFlags::IS_NOT_READ_ONLY_WRITTEN_LOCATION);
       }
@@ -429,6 +423,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     };
 
     init_pre_state(insn, current_state);
+    auto clobbered_locations = get_clobbered_locations(insn, current_state);
     auto opcode = insn->opcode();
     switch (opcode) {
     case OPCODE_MOVE:
@@ -445,7 +440,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         if (opcode::is_move_result_any(opcode)) {
           domain = current_state->get_ref_env().get(RESULT_REGISTER);
         } else {
-          domain = get_value_id_domain(insn, current_state);
+          domain =
+              get_value_id_domain(insn, current_state, clobbered_locations);
         }
         auto c = domain.get_constant();
         if (c) {
@@ -459,7 +455,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         }
         set_current_state_at(insn->dest(), insn->dest_is_wide(), domain);
       } else if (insn->has_move_result_any()) {
-        ValueIdDomain domain = get_value_id_domain(insn, current_state);
+        ValueIdDomain domain =
+            get_value_id_domain(insn, current_state, clobbered_locations);
         current_state->mutate_ref_env(
             [&](RefEnvironment* env) { env->set(RESULT_REGISTER, domain); });
         if (opcode == OPCODE_NEW_ARRAY && domain.get_constant()) {
@@ -473,9 +470,11 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    auto location = get_clobbered_location(insn, current_state);
-    if (location) {
-      auto mask = get_location_value_id_mask(*location);
+    if (clobbered_locations.size()) {
+      value_id_t mask = (value_id_t)0;
+      for (const auto& l : clobbered_locations) {
+        mask |= get_location_value_id_mask(l);
+      }
 
       // TODO: The following loops are probably the most expensive thing in this
       // algorithm; is there a better way of doing this? (Then again, overall,
@@ -506,7 +505,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         m_shared_state->log_barrier(make_barrier(insn));
       }
 
-      if (location != CseLocation(GENERAL_MEMORY_BARRIER)) {
+      if (!clobbered_locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
         auto value = get_equivalent_put_value(insn, current_state);
         if (value) {
           TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s",
@@ -530,7 +529,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   bool is_pre_state_src(value_id_t value_id) const {
-    return !!(value_id & ValueIdFlags::IS_PRE_STATE_SRC);
+    return !!m_pre_state_value_ids.count(value_id);
   }
 
   bool is_barrier_sensitive(value_id_t value_id) const {
@@ -544,7 +543,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
  private:
-  boost::optional<CseLocation> get_clobbered_location(
+  CseUnorderedLocationSet get_clobbered_locations(
       const IRInstruction* insn, CseEnvironment* current_state) const {
     DexType* exact_virtual_scope = nullptr;
     if (insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
@@ -553,13 +552,15 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         exact_virtual_scope = get_exact_type(*src0);
       }
     }
-    return m_shared_state->get_relevant_written_location(
+    return m_shared_state->get_relevant_written_locations(
         insn, exact_virtual_scope, m_read_locations);
   }
 
-  ValueIdDomain get_value_id_domain(const IRInstruction* insn,
-                                    CseEnvironment* current_state) const {
-    auto value = get_value(insn, current_state);
+  ValueIdDomain get_value_id_domain(
+      const IRInstruction* insn,
+      CseEnvironment* current_state,
+      const CseUnorderedLocationSet& clobbered_locations) const {
+    auto value = get_value(insn, current_state, clobbered_locations);
     auto value_id = get_value_id(value);
     return value_id ? ValueIdDomain(*value_id) : ValueIdDomain::top();
   }
@@ -587,8 +588,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         return boost::none;
       }
       id |= get_location_value_id_mask(location);
-    } else if (value.opcode == IOPCODE_PRE_STATE_SRC) {
-      id |= ValueIdFlags::IS_PRE_STATE_SRC;
     }
     if (value.opcode != IOPCODE_PRE_STATE_SRC) {
       for (auto src : value.srcs) {
@@ -598,6 +597,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     m_value_ids.emplace(value, id);
     if (value.opcode == IOPCODE_POSITIONAL) {
       m_positional_insns.emplace(id, value.positional_insn);
+    } else if (value.opcode == IOPCODE_PRE_STATE_SRC) {
+      m_pre_state_value_ids.insert(id);
     }
     return boost::optional<value_id_t>(id);
   }
@@ -677,7 +678,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   IRValue get_value(const IRInstruction* insn,
-                    CseEnvironment* current_state) const {
+                    CseEnvironment* current_state,
+                    const CseUnorderedLocationSet& clobbered_locations) const {
     IRValue value;
     auto opcode = insn->opcode();
     always_assert(opcode != IOPCODE_PRE_STATE_SRC);
@@ -715,9 +717,9 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       break;
     }
     default:
-      auto location = m_shared_state->get_relevant_written_location(
-          insn, nullptr /* exact_virtual_scope */, m_read_locations);
-      is_positional = !!location;
+      // there might be an impacted field, array element, general memory barrier
+      always_assert(clobbered_locations.size() <= 1);
+      is_positional = !!clobbered_locations.size();
       break;
     }
     if (is_positional) {
@@ -764,11 +766,12 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   bool m_using_other_tracked_location_bit{false};
-  std::unordered_set<CseLocation, CseLocationHasher> m_read_locations;
+  CseUnorderedLocationSet m_read_locations;
   std::unordered_map<CseLocation, value_id_t, CseLocationHasher>
       m_tracked_locations;
   SharedState* m_shared_state;
   mutable std::unordered_map<IRValue, value_id_t, IRValueHasher> m_value_ids;
+  mutable std::unordered_set<value_id_t> m_pre_state_value_ids;
   mutable std::unordered_map<value_id_t, const IRInstruction*>
       m_positional_insns;
 };
@@ -808,9 +811,7 @@ std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
   return o;
 }
 
-std::ostream& operator<<(
-    std::ostream& o,
-    const std::unordered_set<CseLocation, CseLocationHasher>& ls) {
+std::ostream& operator<<(std::ostream& o, const CseUnorderedLocationSet& ls) {
   o << "{";
   bool first = true;
   for (const auto& l : ls) {
@@ -970,7 +971,7 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
   m_method_override_graph = method_override_graph::build_graph(scope);
 
   struct WrittenLocationsAndDependencies {
-    std::unordered_set<CseLocation, CseLocationHasher> written_locations;
+    CseUnorderedLocationSet written_locations;
     std::unordered_set<const DexMethod*> dependencies;
   };
 
@@ -1151,24 +1152,21 @@ MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
   return stats;
 }
 
-boost::optional<CseLocation> SharedState::get_relevant_written_location(
+CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     const IRInstruction* insn,
     DexType* exact_virtual_scope,
-    const std::unordered_set<CseLocation, CseLocationHasher>& read_locations) {
+    const CseUnorderedLocationSet& read_locations) {
   if (may_be_barrier(insn, exact_virtual_scope)) {
     if (is_invoke(insn->opcode())) {
-      if (is_invoke_a_barrier(insn, read_locations)) {
-        return boost::optional<CseLocation>(
-            CseLocation(GENERAL_MEMORY_BARRIER));
-      }
+      return get_relevant_written_locations(insn, read_locations);
     } else {
       auto barrier = make_barrier(insn);
       if (is_barrier_relevant(barrier, read_locations)) {
-        return boost::optional<CseLocation>(get_written_location(barrier));
+        return CseUnorderedLocationSet{get_written_location(barrier)};
       }
     }
   }
-  return boost::none;
+  return no_locations;
 }
 
 bool SharedState::may_be_barrier(const IRInstruction* insn,
@@ -1233,55 +1231,75 @@ bool SharedState::is_invoke_safe(const IRInstruction* insn,
   return false;
 }
 
-bool SharedState::is_invoke_a_barrier(
-    const IRInstruction* insn,
-    const std::unordered_set<CseLocation, CseLocationHasher>& read_locations) {
+CseUnorderedLocationSet SharedState::get_relevant_written_locations(
+    const IRInstruction* insn, const CseUnorderedLocationSet& read_locations) {
   always_assert(is_invoke(insn->opcode()));
 
   auto opcode = insn->opcode();
   if (opcode == OPCODE_INVOKE_SUPER) {
     // TODO
-    return true;
+    return general_memory_barrier_locations;
   }
 
-  auto has_barriers = [&](const DexMethod* method) {
+  auto get_relevant_written_locations =
+      [&](const DexMethod* method) -> const CseUnorderedLocationSet& {
     if (method->is_external() || is_native(method)) {
-      return true;
+      return general_memory_barrier_locations;
     }
     if (is_abstract(method)) {
       // We say abstract methods are not a barrier per se, as we'll inspect all
       // overriding methods further below.
-      return false;
+      return no_locations;
     }
     auto it = m_method_written_locations.find(method);
     if (it == m_method_written_locations.end()) {
-      return true;
+      return general_memory_barrier_locations;
     }
-    auto& written_locations = it->second;
-    return !are_disjoint(&written_locations, &read_locations);
+    return it->second;
   };
 
   auto method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
-  if (method == nullptr || has_barriers(method)) {
-    return true;
+  if (method == nullptr) {
+    return general_memory_barrier_locations;
   }
+  auto written_locations = get_relevant_written_locations(method);
+  if (written_locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
+    return general_memory_barrier_locations;
+  }
+
   if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) &&
       !assumenosideeffects(method)) {
     always_assert(method->is_virtual());
     if (!m_method_override_graph) {
-      return true;
+      return general_memory_barrier_locations;
     }
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(*m_method_override_graph,
                                                       method);
     for (const DexMethod* overriding_method : overriding_methods) {
-      if (has_barriers(overriding_method)) {
-        return true;
+      auto overriding_written_locations =
+          get_relevant_written_locations(overriding_method);
+      if (overriding_written_locations.count(
+              CseLocation(GENERAL_MEMORY_BARRIER))) {
+        return general_memory_barrier_locations;
       }
+
+      written_locations.insert(overriding_written_locations.begin(),
+                               overriding_written_locations.end());
     }
   }
-  return false;
+
+  // Remove written locations that are not read
+  for (auto it = written_locations.begin(); it != written_locations.end();) {
+    if (!read_locations.count(*it)) {
+      it = written_locations.erase(it);
+    } else {
+      it++;
+    }
+  }
+
+  return written_locations;
 }
 
 void SharedState::log_barrier(const Barrier& barrier) {

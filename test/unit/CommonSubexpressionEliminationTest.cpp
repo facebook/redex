@@ -41,6 +41,9 @@ void test(const Scope& scope,
   auto field_t =
       DexField::make_field("LFoo;.t:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
+  auto field_u =
+      DexField::make_field("LFoo;.u:I")->make_concrete(ACC_PUBLIC | ACC_STATIC);
+
   auto field_v = DexField::make_field("LFoo;.v:I")
                      ->make_concrete(ACC_PUBLIC | ACC_VOLATILE);
 
@@ -1330,4 +1333,57 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
 
   test(Scope{type_class(get_object_type()), a_creator.create()}, code_str,
        expected_str, 1, 0, 1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       invoked_static_method_with_somewhat_relevant_s_barrier) {
+  ClassCreator creator(DexType::make_type("LTest7;"));
+  creator.set_super(get_object_type());
+
+  auto method = DexMethod::make_method("LTest7;.test7:()V")
+                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (sput v0 "LFoo;.s:I")
+      (const v0 0)
+      (sput v0 "LFoo;.u:I")
+      (return-void)
+    )
+  )"));
+  creator.add_method(method);
+
+  auto code_str = R"(
+    (
+      (sget "LFoo;.u:I")
+      (move-result-pseudo v0)
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v0)
+      (invoke-static () "LTest7;.test7:()V")
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v1)
+      (sget "LFoo;.u:I")
+      (move-result-pseudo v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (sget "LFoo;.u:I")
+      (move-result-pseudo v0)
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v0)
+      (move v2 v0)
+      (invoke-static () "LTest7;.test7:()V")
+      (sget "LFoo;.t:I")
+      (move-result-pseudo v1)
+      (move v1 v2)
+      (sget "LFoo;.u:I")
+      (move-result-pseudo v1)
+    )
+  )";
+
+  test(Scope{type_class(get_object_type()), creator.create()},
+       code_str,
+       expected_str,
+       1);
 }
