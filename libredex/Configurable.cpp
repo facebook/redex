@@ -19,13 +19,11 @@ void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
   m_reflecting = false;
   m_reflector =
-      [](const std::string& param_name,
-         const std::string& param_doc,
-         const bool param_is_required,
-         const bindflags_t param_bindflags,
+      [](const std::string& param_name, const std::string& param_doc,
+         const bool param_is_required, const bindflags_t param_bindflags,
          const Configurable::ReflectionParam::Type param_type_tag,
-         const std::tuple<std::string, Configurable::Reflection>& param_type) {
-      };
+         const std::tuple<std::string, Configurable::Reflection>& param_type,
+         const Json::Value default_value) {};
   m_parser = [&json](const std::string& name) {
     // TODO: add std::string API for contains
     if (json.contains(name.c_str())) {
@@ -57,12 +55,14 @@ Configurable::Reflection Configurable::reflect() {
                       const bindflags_t param_bindflags,
                       const Configurable::ReflectionParam::Type param_type_tag,
                       const std::tuple<std::string, Configurable::Reflection>&
-                          param_type) {
+                          param_type,
+                      const Json::Value default_value) {
     switch (param_type_tag) {
     case Configurable::ReflectionParam::Type::PRIMITIVE:
       cr.params[param_name] = Configurable::ReflectionParam(
           param_name, param_doc, param_is_required, param_bindflags,
-          std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(param_type));
+          std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(param_type),
+          default_value);
       break;
     case Configurable::ReflectionParam::Type::COMPOSITE:
       cr.params[param_name] = Configurable::ReflectionParam(
@@ -376,46 +376,48 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
   return value;
 }
 
-#define IMPLEMENT_REFLECTOR(type)                                         \
-  template <>                                                             \
-  void Configurable::reflect(                                             \
-      std::function<void(                                                 \
-          const std::string& param_name, const std::string& param_doc,    \
-          const bool param_is_required,                                   \
-          const Configurable::bindflags_t param_bindflags,                \
-          const Configurable::ReflectionParam::Type param_type_tag,       \
-          const std::tuple<std::string, Configurable::Reflection>&        \
-              param_type)>& reflector,                                    \
-      const std::string& param_name, const std::string& param_doc,        \
-      const bool param_is_required,                                       \
-      const Configurable::bindflags_t param_bindflags, type& param) {     \
-    reflector(                                                            \
-        param_name, param_doc, param_is_required, param_bindflags,        \
-        Configurable::ReflectionParam::PRIMITIVE,                         \
-        std::make_tuple(std::string{#type}, Configurable::Reflection())); \
+#define IMPLEMENT_REFLECTOR(type)                                              \
+  template <>                                                                  \
+  void Configurable::reflect(                                                  \
+      ReflectorFunc& reflector, const std::string& param_name,                 \
+      const std::string& param_doc, const bool param_is_required,              \
+      const Configurable::bindflags_t param_bindflags, type& param,            \
+      type default_value) {                                                    \
+    reflector(param_name, param_doc, param_is_required, param_bindflags,       \
+              Configurable::ReflectionParam::PRIMITIVE,                        \
+              std::make_tuple(std::string{#type}, Configurable::Reflection()), \
+              Json::nullValue);                                                \
   }
 
-#define IMPLEMENT_REFLECTOR_EX(type, type_name)                               \
-  template <>                                                                 \
-  void Configurable::reflect(                                                 \
-      std::function<void(                                                     \
-          const std::string& param_name, const std::string& param_doc,        \
-          const bool param_is_required,                                       \
-          const Configurable::bindflags_t param_bindflags,                    \
-          const Configurable::ReflectionParam::Type param_type_tag,           \
-          const std::tuple<std::string, Configurable::Reflection>&            \
-              param_type)>& reflector,                                        \
-      const std::string& param_name, const std::string& param_doc,            \
-      const bool param_is_required,                                           \
-      const Configurable::bindflags_t param_bindflags, type& param) {         \
-    reflector(                                                                \
-        param_name, param_doc, param_is_required, param_bindflags,            \
-        Configurable::ReflectionParam::PRIMITIVE,                             \
-        std::make_tuple(std::string{type_name}, Configurable::Reflection())); \
+#define IMPLEMENT_REFLECTOR_EX(type, type_name)                              \
+  template <>                                                                \
+  void Configurable::reflect(                                                \
+      ReflectorFunc& reflector, const std::string& param_name,               \
+      const std::string& param_doc, const bool param_is_required,            \
+      const Configurable::bindflags_t param_bindflags, type& param,          \
+      type default_value) {                                                  \
+    reflector(                                                               \
+        param_name, param_doc, param_is_required, param_bindflags,           \
+        Configurable::ReflectionParam::PRIMITIVE,                            \
+        std::make_tuple(std::string{type_name}, Configurable::Reflection()), \
+        Json::nullValue);                                                    \
+  }
+
+#define IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(type)                              \
+  template <>                                                                  \
+  void Configurable::reflect(                                                  \
+      ReflectorFunc& reflector, const std::string& param_name,                 \
+      const std::string& param_doc, const bool param_is_required,              \
+      const Configurable::bindflags_t param_bindflags, type& param,            \
+      type default_value) {                                                    \
+    reflector(param_name, param_doc, param_is_required, param_bindflags,       \
+              Configurable::ReflectionParam::PRIMITIVE,                        \
+              std::make_tuple(std::string{#type}, Configurable::Reflection()), \
+              Json::Value(default_value));                                     \
   }
 
 IMPLEMENT_REFLECTOR(float)
-IMPLEMENT_REFLECTOR(bool)
+IMPLEMENT_REFLECTOR_WITH_DFLT_VALUE(bool)
 IMPLEMENT_REFLECTOR_EX(int, "int")
 IMPLEMENT_REFLECTOR_EX(unsigned int, "int")
 IMPLEMENT_REFLECTOR_EX(boost::optional<int>, "int")

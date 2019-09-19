@@ -182,6 +182,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     case Configurable::ReflectionParam::Type::PRIMITIVE:
       param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
           entry.second.variant);
+      param["default_value"] = entry.second.default_value;
       break;
     case Configurable::ReflectionParam::Type::COMPOSITE:
       param["type"] = reflect_config(
