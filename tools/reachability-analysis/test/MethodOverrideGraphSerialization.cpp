@@ -18,15 +18,14 @@
 namespace mog = method_override_graph;
 
 std::unique_ptr<mog::Graph> generate_graph() {
-  auto m1 = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
-  auto m2 = static_cast<DexMethod*>(DexMethod::make_method("LBar;.bar:()V"));
-  auto m3 = static_cast<DexMethod*>(DexMethod::make_method("LBaz;.bar:()V"));
-  auto m4 = static_cast<DexMethod*>(DexMethod::make_method("LQux;.bar:()V"));
-
-  m1->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
-  m2->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
-  m3->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
-  m4->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto m1 = DexMethod::make_method("LFoo;.bar:()V")
+                ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto m2 = DexMethod::make_method("LBar;.bar:()V")
+                ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto m3 = DexMethod::make_method("LBaz;.bar:()V")
+                ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto m4 = DexMethod::make_method("LQux;.bar:()V")
+                ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
 
   auto graph = std::make_unique<mog::Graph>();
   graph->add_edge(m1, m2);

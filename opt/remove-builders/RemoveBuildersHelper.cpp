@@ -844,11 +844,14 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
       DexString::make_string("<init>"),
       DexProto::make_proto(get_void_type(),
                            DexTypeList::make_type_list({builder->get_type()})));
-  if (!buildee_constr_ref || !buildee_constr_ref->is_def()) {
+  if (!buildee_constr_ref) {
     // Nothing to search for.
     return true;
   }
-  DexMethod* buildee_constr = static_cast<DexMethod*>(buildee_constr_ref);
+  DexMethod* buildee_constr = buildee_constr_ref->as_def();
+  if (!buildee_constr) {
+    return true;
+  }
 
   // Extra conservative: We expect the constructor to do minimum work.
   if (params_change_regs(buildee_constr)) {

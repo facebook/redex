@@ -1168,6 +1168,22 @@ void DexClass::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_anno) m_anno->gather_methods(lmethod);
 }
 
+const DexField* DexFieldRef::as_def() const {
+  if (is_def()) {
+    return static_cast<const DexField*>(this);
+  } else {
+    return nullptr;
+  }
+}
+
+DexField* DexFieldRef::as_def() {
+  if (is_def()) {
+    return static_cast<DexField*>(this);
+  } else {
+    return nullptr;
+  }
+}
+
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);
@@ -1246,6 +1262,22 @@ void DexMethod::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
       auto anno_set = pair.second;
       anno_set->gather_methods(lmethod);
     }
+  }
+}
+
+const DexMethod* DexMethodRef::as_def() const {
+  if (is_def()) {
+    return static_cast<const DexMethod*>(this);
+  } else {
+    return nullptr;
+  }
+}
+
+DexMethod* DexMethodRef::as_def() {
+  if (is_def()) {
+    return static_cast<DexMethod*>(this);
+  } else {
+    return nullptr;
   }
 }
 

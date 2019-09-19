@@ -234,9 +234,8 @@ std::vector<DexField*> create_merger_fields(
     }
 
     name = name + std::to_string(cnt);
-    auto field = static_cast<DexField*>(
-        DexField::make_field(owner, DexString::make_string(name), type));
-    field->make_concrete(ACC_PUBLIC);
+    auto field = DexField::make_field(owner, DexString::make_string(name), type)
+                     ->make_concrete(ACC_PUBLIC);
     res.push_back(field);
     cnt++;
   }
@@ -270,10 +269,11 @@ DexClass* create_merger_class(const DexType* type,
   std::vector<DexField*> fields;
 
   if (add_type_tag_field) {
-    auto type_tag_field = static_cast<DexField*>(DexField::make_field(
-        type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
-        get_int_type()));
-    type_tag_field->make_concrete(ACC_PUBLIC | ACC_FINAL);
+    auto type_tag_field =
+        DexField::make_field(
+            type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
+            get_int_type())
+            ->make_concrete(ACC_PUBLIC | ACC_FINAL);
     fields.push_back(type_tag_field);
   }
 

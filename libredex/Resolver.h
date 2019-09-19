@@ -126,7 +126,10 @@ DexMethod* resolve_method_ref(const DexClass* cls,
  * If the type the method belongs to is unknown return nullptr.
  */
 inline DexMethod* resolve_method(DexMethodRef* method, MethodSearch search) {
-  if (method->is_def()) return static_cast<DexMethod*>(method);
+  auto m = method->as_def();
+  if (m) {
+    return m;
+  }
   auto cls = type_class(method->get_class());
   if (cls == nullptr) return nullptr;
   return resolve_method_ref(cls, method->get_name(), method->get_proto(),
@@ -146,7 +149,10 @@ inline DexMethod* resolve_method(DexMethodRef* method, MethodSearch search) {
 inline DexMethod* resolve_method(DexMethodRef* method,
                                  MethodSearch search,
                                  MethodRefCache& ref_cache) {
-  if (method->is_def()) return static_cast<DexMethod*>(method);
+  auto m = method->as_def();
+  if (m) {
+    return m;
+  }
   auto def = ref_cache.find(method);
   if (def != ref_cache.end()) {
     return def->second;

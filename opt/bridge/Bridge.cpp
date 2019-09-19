@@ -93,10 +93,16 @@ bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
 
 DexMethod* find_bridgee(DexMethod* bridge) {
   auto bridgee_ref = match_pattern(bridge);
-  if (!bridgee_ref) return nullptr;
-  if (!bridgee_ref->is_def()) return nullptr;
-  auto bridgee = static_cast<DexMethod*>(bridgee_ref);
-  if (!is_optimization_candidate(bridge, bridgee)) return nullptr;
+  if (!bridgee_ref) {
+    return nullptr;
+  }
+  auto bridgee = bridgee_ref->as_def();
+  if (!bridgee) {
+    return nullptr;
+  }
+  if (!is_optimization_candidate(bridge, bridgee)) {
+    return nullptr;
+  }
   return bridgee;
 }
 
@@ -317,8 +323,11 @@ class BridgeRemover {
 
     std::unordered_set<DexMethod*> refs_set;
     for (const auto& ref : refs) {
-      if (!ref->is_def()) continue;
-      refs_set.insert(static_cast<DexMethod*>(ref));
+      auto method = ref->as_def();
+      if (!method) {
+        continue;
+      }
+      refs_set.insert(method);
     }
     std::vector<DexMethod*> kill_me;
     for (auto const& p : m_bridges_to_bridgees) {

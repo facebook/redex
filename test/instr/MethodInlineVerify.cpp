@@ -57,8 +57,8 @@ TEST_F(PreVerify, InlineCallerTryCalleeElseThrows) {
   // for the instrumentation test to pass, we must duplicate the caller try
   // item
   ASSERT_TRUE(invoke->get_method()->is_def());
-  auto callee_insns = static_cast<DexMethod*>(invoke->get_method())->
-      get_dex_code()->get_instructions();
+  auto callee_insns =
+      invoke->get_method()->as_def()->get_dex_code()->get_instructions();
   auto retop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
       return insn->opcode() == DOPCODE_RETURN_VOID;
@@ -103,12 +103,11 @@ TEST_F(PreVerify, InlineCallerTryCalleeIfThrows) {
   // verify that the callee has an if-else statement, and that the if block
   // (which throws an exception) comes before the return opcode
   ASSERT_TRUE(invoke->get_method()->is_def());
-  auto callee_insns = static_cast<DexMethod*>(invoke->get_method())->
-      get_dex_code()->get_instructions();
-  auto ifop = std::find_if(callee_insns.begin(), callee_insns.end(),
-    [](DexInstruction* insn) {
-      return insn->opcode() == DOPCODE_IF_NEZ;
-    });
+  auto callee_insns =
+      invoke->get_method()->as_def()->get_dex_code()->get_instructions();
+  auto ifop = std::find_if(
+      callee_insns.begin(), callee_insns.end(),
+      [](DexInstruction* insn) { return insn->opcode() == DOPCODE_IF_NEZ; });
   ASSERT_NE(callee_insns.end(), ifop);
   auto retop = std::find_if(callee_insns.begin(), callee_insns.end(),
     [](DexInstruction* insn) {
@@ -336,8 +335,7 @@ TEST_F(PreVerify, InlineInvokeDirectCrossClasses) {
       find_invoke(static_cast<DexMethod*>(invoke->get_method()),
                   DOPCODE_INVOKE_DIRECT, "noninlinable");
   ASSERT_TRUE(noninlinable_invoke_direct->get_method()->is_def());
-  auto noninlinable =
-      static_cast<DexMethod*>(noninlinable_invoke_direct->get_method());
+  auto noninlinable = noninlinable_invoke_direct->get_method()->as_def();
   ASSERT_EQ(show(noninlinable->get_proto()), "()V");
 
   // verify that there are two inlinable() methods in the class. The static
@@ -388,8 +386,8 @@ TEST_F(PreVerify, testArrayDataInCaller) {
   // the inliner code path that searches for fopcodes in the caller
   auto callee = find_invoke(m, DOPCODE_INVOKE_DIRECT, "calleeWithIf");
   ASSERT_TRUE(callee->get_method()->is_def());
-  auto insns = static_cast<DexMethod*>(callee->get_method())->
-      get_dex_code()->get_instructions();
+  auto insns =
+      callee->get_method()->as_def()->get_dex_code()->get_instructions();
   auto ret_it =
       std::find_if(insns.begin(), insns.end(), [&](DexInstruction* insn) {
         return insn->opcode() == DOPCODE_RETURN_VOID;

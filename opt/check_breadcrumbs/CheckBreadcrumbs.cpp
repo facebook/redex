@@ -418,12 +418,14 @@ bool Breadcrumbs::check_field_accessibility(const DexMethod* method,
   return true;
 }
 
-bool Breadcrumbs::referenced_field_is_deleted(DexFieldRef* field) {
-  return field->is_def() && !class_contains(static_cast<DexField*>(field));
+bool Breadcrumbs::referenced_field_is_deleted(DexFieldRef* field_ref) {
+  auto field = field_ref->as_def();
+  return field && !class_contains(field);
 }
 
-bool Breadcrumbs::referenced_method_is_deleted(DexMethodRef* method) {
-  return method->is_def() && !class_contains(static_cast<DexMethod*>(method));
+bool Breadcrumbs::referenced_method_is_deleted(DexMethodRef* method_ref) {
+  auto method = method_ref->as_def();
+  return method && !class_contains(method);
 }
 
 /* verify that all method instructions that access methods are valid */

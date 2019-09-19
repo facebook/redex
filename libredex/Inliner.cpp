@@ -1001,8 +1001,8 @@ void MultiMethodInliner::invoke_direct_to_static() {
                 [&](DexMethod*, IRInstruction* insn) {
                   auto op = insn->opcode();
                   if (op == OPCODE_INVOKE_DIRECT) {
-                    if (m_make_static.count(
-                            static_cast<DexMethod*>(insn->get_method()))) {
+                    auto m = insn->get_method()->as_def();
+                    if (m && m_make_static.count(m)) {
                       insn->set_opcode(OPCODE_INVOKE_STATIC);
                     }
                   }

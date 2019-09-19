@@ -260,8 +260,9 @@ void TransitiveClosureMarker::push(const Parent* parent,
   if (m_reachable_objects->marked(field)) {
     return;
   }
-  if (field->is_def()) {
-    gather_and_push(static_cast<const DexField*>(field));
+  auto f = field->as_def();
+  if (f) {
+    gather_and_push(f);
   }
   m_reachable_objects->mark(field);
   m_worker_state->push_task(ReachableObject(field));
@@ -462,10 +463,10 @@ void TransitiveClosureMarker::visit(const DexMethodRef* method) {
   for (auto const& t : method->get_proto()->get_args()->get_type_list()) {
     push(method, t);
   }
-  if (!method->is_def()) {
+  auto m = method->as_def();
+  if (!m) {
     return;
   }
-  auto m = static_cast<const DexMethod*>(method);
   // If we're keeping an interface or virtual method, we have to keep its
   // implementations and overriding methods respectively.
   if (m->is_virtual() || !m->is_concrete()) {

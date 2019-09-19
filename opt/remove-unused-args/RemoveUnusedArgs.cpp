@@ -88,13 +88,11 @@ void RemoveArgs::gather_results_used() {
           if (!opcode::is_move_result(peek->opcode())) {
             continue;
           }
-          auto method_ref = insn->get_method();
-          if (!method_ref->is_def()) {
+          auto method = insn->get_method()->as_def();
+          if (!method) {
             // TODO: T31388603 -- Remove unused results for true virtuals.
             continue;
           }
-          // Since is_def() is true, the following cast is safe and appropriate.
-          DexMethod* method = static_cast<DexMethod*>(method_ref);
           result_used.insert(method);
         }
       });
@@ -203,12 +201,14 @@ bool RemoveArgs::update_method_signature(
   auto updated_proto = DexProto::make_proto(rtype, live_args_list);
   always_assert(updated_proto != method->get_proto());
 
-  auto colliding_method = DexMethod::get_method(
+  auto colliding_mref = DexMethod::get_method(
       method->get_class(), method->get_name(), updated_proto);
-  if (colliding_method && colliding_method->is_def() &&
-      is_constructor(static_cast<const DexMethod*>(colliding_method))) {
-    // We can't rename constructors, so we give up on removing args.
-    return false;
+  if (colliding_mref) {
+    auto colliding_method = colliding_mref->as_def();
+    if (colliding_method && is_constructor(colliding_method)) {
+      // We can't rename constructors, so we give up on removing args.
+      return false;
+    }
   }
 
   auto name = method->get_name();
@@ -373,13 +373,11 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
  * Returns the number of arguments removed.
  */
 size_t RemoveArgs::update_callsite(IRInstruction* instr) {
-  auto method_ref = instr->get_method();
-  if (!method_ref->is_def()) {
+  auto method = instr->get_method()->as_def();
+  if (!method) {
     // TODO: T31388603 -- Remove unused args for true virtuals.
     return 0;
   };
-  // Since is_def() is true, the following cast is safe and appropriate.
-  DexMethod* method = static_cast<DexMethod*>(method_ref);
 
   auto kv_pair = m_live_arg_idxs_map.find(method);
   if (kv_pair == m_live_arg_idxs_map.end()) {

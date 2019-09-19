@@ -569,30 +569,27 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(get_object_type());
   auto base_foo =
-      static_cast<DexMethod*>(DexMethod::make_method("LBase;.foo:()I"));
-  base_foo->make_concrete(ACC_PUBLIC, true);
+      DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
   cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
-  auto a_ctor =
-      static_cast<DexMethod*>(DexMethod::make_method("LA;.<init>:()V"));
-  a_ctor->make_concrete(ACC_PUBLIC, false);
+  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
+                    ->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_foo = static_cast<DexMethod*>(DexMethod::make_method("LA;.foo:()I"));
-  a_foo->make_concrete(ACC_PUBLIC, true);
+  auto a_foo =
+      DexMethod::make_method("LA;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_a_creator.add_method(a_foo);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type_base);
-  auto b_ctor =
-      static_cast<DexMethod*>(DexMethod::make_method("LB;.<init>:()V"));
-  b_ctor->make_concrete(ACC_PUBLIC, false);
+  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
+                    ->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_foo = static_cast<DexMethod*>(DexMethod::make_method("LB;.foo:()I"));
-  b_foo->make_concrete(ACC_PUBLIC, true);
+  auto b_foo =
+      DexMethod::make_method("LB;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
@@ -660,9 +657,8 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
 TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   // Good
   {
-    auto method = static_cast<DexMethod*>(
-        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
-    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -677,9 +673,8 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: virtual method
   {
-    auto method = static_cast<DexMethod*>(
-        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
-    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -697,9 +692,8 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: non-static (private) direct method
   {
-    auto method = static_cast<DexMethod*>(
-        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
-    method->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)

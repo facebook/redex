@@ -955,9 +955,9 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
 
   // Check that we don't have abstract or interface methods
   for (DexMethodRef* method_ref : m_safe_methods) {
-    if (method_ref->is_def()) {
+    auto method = method_ref->as_def();
+    if (method) {
       always_assert(!is_interface(type_class(method_ref->get_class())));
-      auto method = static_cast<DexMethod*>(method_ref);
       always_assert(!is_abstract(method));
     }
   }

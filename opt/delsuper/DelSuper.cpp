@@ -228,11 +228,11 @@ private:
 
     // If the invoked method does not have access flags, we can't operate
     // on it at all.
-    if (!invoked_meth->is_def()) {
+    auto meth_def = invoked_meth->as_def();
+    if (!meth_def) {
       m_num_culled_super_not_def++;
       return nullptr;
     }
-    auto meth_def = static_cast<DexMethod*>(invoked_meth);
     // If invoked method is not public, make it public
     if (!is_public(meth_def)) {
       if (!meth_def->is_concrete()) {
@@ -299,11 +299,10 @@ public:
                    [](DexMethod* meth) { return true; },
                    [&](DexMethod* meth, IRInstruction* insn) {
                      if (is_invoke(insn->opcode())) {
-                       if (!insn->get_method()->is_def()) {
+                       auto method = insn->get_method()->as_def();
+                       if (!method) {
                          return;
                        }
-                       auto method =
-                           static_cast<DexMethod*>(insn->get_method());
                        while (m_delmeths.count(method)) {
                          method = m_delmeths.at(method);
                        }

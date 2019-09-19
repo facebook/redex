@@ -275,6 +275,8 @@ class DexFieldRef {
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
+  const DexField* as_def() const;
+  DexField* as_def();
 
   DexType* get_class() const { return m_spec.cls; }
   DexString* get_name() const { return m_spec.name; }
@@ -807,6 +809,8 @@ class DexMethodRef {
   bool is_concrete() const { return m_concrete; }
   bool is_external() const { return m_external; }
   bool is_def() const { return is_concrete() || is_external(); }
+  const DexMethod* as_def() const;
+  DexMethod* as_def();
 
   DexType* get_class() const { return m_spec.cls; }
   DexString* get_name() const { return m_spec.name; }
