@@ -17,8 +17,6 @@ void init_reachable_classes(
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 
-void recompute_classes_reachable_from_code(const Scope& scope);
-
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir);
 

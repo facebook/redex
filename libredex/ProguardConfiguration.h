@@ -110,6 +110,8 @@ class KeepSpecSet {
 
   bool empty() const { return begin() == end(); }
 
+  void erase_if(const std::function<bool(const KeepSpec&)>&);
+
  private:
   std::vector<KeepSpec*> m_ordered;
   std::unordered_set<std::unique_ptr<KeepSpec>,

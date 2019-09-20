@@ -1037,5 +1037,20 @@ std::string show_bool(bool b) {
   }
 }
 
+void remove_blanket_resource_keep(ProguardConfiguration* pg_config) {
+  auto blanket_resource_keep = R"(
+  -keepclassmembers class **.R$* {
+    public static <fields>;
+  }
+)";
+  std::stringstream ss(blanket_resource_keep);
+  ProguardConfiguration tmp_pg_config;
+  proguard_parser::parse(ss, &tmp_pg_config);
+  always_assert(tmp_pg_config.keep_rules.size() == 1);
+  const auto& blanket_resource_ks = **tmp_pg_config.keep_rules.begin();
+  pg_config->keep_rules.erase_if(
+      [&](const KeepSpec& ks) { return ks == blanket_resource_ks; });
+}
+
 } // namespace proguard_parser
 } // namespace redex

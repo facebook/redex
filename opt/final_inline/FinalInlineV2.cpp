@@ -748,36 +748,6 @@ size_t inline_final_gets(
   return inlined_count;
 }
 
-// XXX(jezng): In principle, we should avoid deleting a field if
-// can_delete(field) is false, even if can_delete(containing class) is true.
-// However, the previous implementation of FinalInline did this more aggressive
-// deletion -- deleting as long as either can_delete(field) or can_delete(cls)
-// is true -- and I'm following it so as not to cause a regression. The right
-// long-term fix is to clean up the proguard keep rules -- then we can just rely
-// on RMU to delete these fields.
-void aggressively_delete_static_finals(const Scope& scope) {
-  std::unordered_set<const DexField*> referenced_fields;
-  walk::opcodes(scope, [&](const DexMethod*, const IRInstruction* insn) {
-    if (!insn->has_field()) {
-      return;
-    }
-    auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-    referenced_fields.emplace(field);
-  });
-  for (auto* cls : scope) {
-    auto& sfields = cls->get_sfields();
-    sfields.erase(
-        std::remove_if(sfields.begin(),
-                       sfields.end(),
-                       [&](DexField* field) {
-                         return is_final(field) && !field->is_external() &&
-                                referenced_fields.count(field) == 0 &&
-                                (can_delete(cls) || can_delete(field));
-                       }),
-        sfields.end());
-  }
-}
-
 } // namespace
 
 size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
@@ -818,9 +788,6 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
         gather_ifield_candidates(scope, m_config.whitelist_method_names);
     inlined_ifields_count =
         run_inline_ifields(scope, eligible_ifields, m_config);
-  }
-  if (m_config.aggressively_delete) {
-    aggressively_delete_static_finals(scope);
   }
   mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
   mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);

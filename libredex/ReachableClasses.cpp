@@ -740,8 +740,6 @@ void init_permanently_reachable_classes(
   }
 }
 
-} // namespace
-
 /**
  * Walks all the code of the app, finding classes that are reachable from
  * code.
@@ -759,6 +757,8 @@ void recompute_classes_reachable_from_code(const Scope& scope) {
     }
   });
 }
+
+} // namespace
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir) {
