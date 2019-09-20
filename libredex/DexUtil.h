@@ -106,6 +106,12 @@ struct ClassSerdes {
 };
 
 /**
+ * Looks for a <clinit> method for the given class, creates a new one if it
+ * does not exist
+ */
+DexMethod* get_or_create_clinit(DexClass* cls);
+
+/**
  * Return possible deserializer and serializer classes of the given class
  * 'class$Deserializer;', 'class_Deserializer;', 'class$Serializer;',
  * 'class_Serializer;'

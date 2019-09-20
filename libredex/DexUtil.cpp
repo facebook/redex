@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "Debug.h"
+#include "DexAsm.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
@@ -73,6 +74,32 @@ ClassSerdes get_class_serdes(const DexClass* cls) {
   DexType* flatbuf_ser = DexType::get_type(flatbuf_sername);
 
   return ClassSerdes(deser, flatbuf_deser, ser, flatbuf_ser);
+}
+
+DexMethod* get_or_create_clinit(DexClass* cls) {
+  using namespace dex_asm;
+
+  auto clinit_name = DexString::make_string("<clinit>");
+  auto clinit_proto =
+      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+
+  DexMethod* clinit = static_cast<DexMethod*>(
+      DexMethod::get_method(cls->get_type(), clinit_name, clinit_proto));
+
+  if (clinit) {
+    return clinit;
+  }
+
+  // clinit does not exist, create one
+  clinit =
+      DexMethod::make_method(cls->get_type(), clinit_name, clinit_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
+
+  auto ir_code = std::make_unique<IRCode>(clinit, 1);
+  ir_code->push_back(dasm(OPCODE_RETURN_VOID));
+  clinit->set_code(std::move(ir_code));
+  cls->add_method(clinit);
+  return clinit;
 }
 
 std::string get_package_name(const DexType* type) {
