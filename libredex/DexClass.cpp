@@ -1332,7 +1332,6 @@ void DexMethod::add_load_params(size_t num_add_loads) {
   IRCode* code = this->get_code();
   always_assert_log(code, "Method don't have IRCode\n");
   auto callee_params = code->get_param_instructions();
-  auto param_ops = InstructionIterable(callee_params);
   size_t added_params = 0;
   while (added_params < num_add_loads) {
     ++added_params;
