@@ -1252,6 +1252,29 @@ class DexMethod:
                     self.name = name_in_file
         return self.name
 
+    def get_internal_pretty_method_str_rep(self):
+        # What it looks like boolean com.facebook.common.jit.common.JitDisabledChecker.testCompileMethod(int)
+        dex = self.get_dex()
+        proto_id = dex.get_proto_id(self.get_method_id().proto_idx)
+        if proto_id is None:
+            return None
+        return_type = dex.get_typename(proto_id.return_type_idx)
+        param = "("
+        if proto_id.parameters_off != 0:
+            # type is type_list
+            param_list = proto_id.get_parameters().list
+            not_first = False
+            for type_idx in param_list:
+                if not_first:
+                    param += ", "
+                param += dex.get_typename(type_idx)
+        param += ")"
+
+        cur_class_name = self.get_class().get_name()
+        cur_method_name = self.get_name()
+
+        return return_type + " " + cur_class_name + "." + cur_method_name + param
+
     def get_pretty_proto(self):
         dex = self.get_dex()
         proto_id = dex.get_proto_id(self.get_method_id().proto_idx)
@@ -1277,6 +1300,12 @@ class DexMethod:
                     self.encoded_method.code_off
                 )
         return self.code_item
+
+    def get_instruction_count(self):
+        code_item = self.get_code_item()
+        if code_item:
+            return len(code_item.insns)
+        return 0
 
     def get_code_byte_size(self):
         code_item = self.get_code_item()
