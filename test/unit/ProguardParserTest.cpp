@@ -787,6 +787,8 @@ TEST(ProguardParserTest, remove_blanket_resource_keep) {
     -keep class Foo {}
     -keep class Bar {}
 )");
+    proguard_parser::parse(ss, &config);
+    ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 2);
     proguard_parser::remove_blanket_resource_keep(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
