@@ -32,7 +32,7 @@ class ArtifactsTestFixture(unittest.TestCase):
                 "-c",
                 config_file,
                 "-j",
-                os.environ["SDK_PATH"] + "platforms/android-25/android.jar",
+                f"{os.environ['SDK_PATH']}/platforms/{os.environ['SDK_TARGET']}/android.jar",
                 "--redex-binary",
                 os.environ["REDEX_BINARY"],
                 "-o",
