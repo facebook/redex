@@ -202,6 +202,29 @@ char type_shorty(const DexType* type) {
   not_reached();
 }
 
+DexType* get_boxed_reference_type(const DexType* type) {
+  switch (type_shorty(type)) {
+  case 'Z':
+    return DexType::make_type("Ljava/lang/Boolean;");
+  case 'B':
+    return DexType::make_type("Ljava/lang/Byte;");
+  case 'S':
+    return DexType::make_type("Ljava/lang/Short;");
+  case 'C':
+    return DexType::make_type("Ljava/lang/Character;");
+  case 'I':
+    return DexType::make_type("Ljava/lang/Integer;");
+  case 'J':
+    return DexType::make_type("Ljava/lang/Long;");
+  case 'F':
+    return DexType::make_type("Ljava/lang/Float;");
+  case 'D':
+    return DexType::make_type("Ljava/lang/Double;");
+  default:
+    return nullptr;
+  }
+}
+
 bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
   const auto cls = type_class(type);

@@ -161,6 +161,16 @@ inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
 char type_shorty(const DexType* type);
 
 /**
+ * Returns the corresponding wrapper type of primitive types
+ * e.g.
+ *   I -> Ljava/lang/Integer;
+ *   Z -> Ljava/lang/Boolean;
+ *   ... etc.
+ * returns nullptr if argument `type` is not a primitive type or is void
+ */
+DexType* get_boxed_reference_type(const DexType* type);
+
+/**
  * Return true if the parent chain leads to known classes.
  * False if one of the parent is in a scope unknown to redex.
  */
