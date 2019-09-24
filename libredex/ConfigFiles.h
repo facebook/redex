@@ -37,13 +37,6 @@ struct ConfigFiles {
     return m_coldstart_classes;
   }
 
-  const std::vector<std::string>& get_coldstart_methods() {
-    if (m_coldstart_methods.size() == 0) {
-      m_coldstart_methods = load_coldstart_methods();
-    }
-    return m_coldstart_methods;
-  }
-
   void ensure_class_lists_loaded() {
     if (!m_load_class_lists_attempted) {
       m_load_class_lists_attempted = true;
@@ -122,7 +115,6 @@ struct ConfigFiles {
   std::string outdir;
 
   std::vector<std::string> load_coldstart_classes();
-  std::vector<std::string> load_coldstart_methods();
   std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void load_method_to_weight();
   void load_method_sorting_whitelisted_substrings();
@@ -131,10 +123,8 @@ struct ConfigFiles {
   bool m_load_class_lists_attempted{false};
   ProguardMap m_proguard_map;
   std::string m_coldstart_class_filename;
-  std::string m_coldstart_method_filename;
   std::string m_profiled_methods_filename;
   std::vector<std::string> m_coldstart_classes;
-  std::vector<std::string> m_coldstart_methods;
   std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
