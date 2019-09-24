@@ -19,8 +19,6 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
     : m_json(config),
       outdir(outdir),
       m_proguard_map(config.get("proguard_map", "").asString()),
-      m_coldstart_method_filename(
-          config.get("coldstart_methods", "").asString()),
       m_profiled_methods_filename(
           config.get("profiled_methods_file", "").asString()),
       m_printseeds(config.get("printseeds", "").asString()) {
@@ -123,26 +121,6 @@ std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_cla
   lists["secondary_dex_head.list"] = get_coldstart_classes();
 
   return lists;
-}
-
-/*
- * Read the method list file and return it is a vector of strings.
- */
-std::vector<std::string> ConfigFiles::load_coldstart_methods() {
-  std::ifstream listfile(m_coldstart_method_filename);
-  if (!listfile) {
-    fprintf(stderr, "Failed to open coldstart method list: `%s'\n",
-            m_coldstart_method_filename.c_str());
-    return std::vector<std::string>();
-  }
-  std::vector<std::string> coldstart_methods;
-  std::string method;
-  while (std::getline(listfile, method)) {
-    if (method.length() > 0) {
-      coldstart_methods.push_back(m_proguard_map.translate_method(method));
-    }
-  }
-  return coldstart_methods;
 }
 
 void ConfigFiles::load_method_to_weight() {
