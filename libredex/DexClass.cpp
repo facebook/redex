@@ -52,9 +52,13 @@ DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
                                      DexEncodedValue* v) {
   // FIXME assert if already concrete
   auto that = static_cast<DexField*>(this);
-  that->m_value = v;
   that->m_access = access_flags;
   that->m_concrete = true;
+  if (is_static(access_flags)) {
+    that->set_value(v);
+  } else {
+    always_assert(v == nullptr);
+  }
   return that;
 }
 
@@ -707,13 +711,6 @@ void DexClass::load_class_data_item(DexIdx* idx,
     DexEncodedValue* ev = nullptr;
     if (svalues != nullptr) {
       ev = svalues->pop_next();
-    }
-    // The last contiguous block of static fields with null values are not
-    // represented in the encoded value array, so ev would be null for them.
-    // OTOH null-initialized static fields that appear earlier in the static
-    // field list have explicit values. Let's standardize things here.
-    if (ev == nullptr) {
-      ev = DexEncodedValue::zero_for_type(df->get_type());
     }
     df->make_concrete(access_flags, ev);
     m_sfields.push_back(df);

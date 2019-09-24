@@ -20,10 +20,8 @@ using namespace testing;
 void setup() {
   ClassCreator cc(DexType::make_type("LFoo;"));
   cc.set_super(get_object_type());
-  auto field =
-      static_cast<DexField*>(DexField::make_field("LFoo;.table:[LBar;"));
-  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                       DexEncodedValue::zero_for_type(field->get_type()));
+  auto field = DexField::make_field("LFoo;.table:[LBar;")
+                   ->make_concrete(ACC_PUBLIC | ACC_STATIC);
   cc.add_field(field);
   cc.create();
 }

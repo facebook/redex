@@ -358,9 +358,7 @@ struct EnumUtil {
     auto name = DexString::make_string("$VALUES");
     auto field = DexField::make_field(cls->get_type(), name,
                                       make_array_type(INTEGER_TYPE))
-                     ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC,
-                                     DexEncodedValue::zero_for_type(
-                                         make_array_type(INTEGER_TYPE)));
+                     ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
     return (DexFieldRef*)field;
   }
@@ -370,10 +368,8 @@ struct EnumUtil {
    */
   DexFieldRef* make_a_field(DexClass* cls, uint32_t value, IRCode* code) {
     auto name = DexString::make_string("f" + std::to_string(value));
-    auto field =
-        DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
-            ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC,
-                            DexEncodedValue::zero_for_type(INTEGER_TYPE));
+    auto field = DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
+                     ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
     code->push_back(dasm(OPCODE_CONST, {1_v, {LITERAL, value}}));
     code->push_back(dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {1_v}));

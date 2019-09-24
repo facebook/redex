@@ -402,11 +402,12 @@ class DexField : public DexFieldRef {
     always_assert_log(
         m_concrete,
         "Field needs to be concrete to be attached an encoded value.");
-    always_assert_log(
-        v,
-        "Encoded value can't be nullptr. Use DexEncodedValue::zero_for_type() "
-        "to obtain a default value.");
-    m_value = v;
+    always_assert(is_static(m_access));
+    // The last contiguous block of static fields with null values are not
+    // represented in the encoded value array. OTOH null-initialized static
+    // fields that appear earlier in the static field list have explicit values.
+    // Let's standardize things here.
+    m_value = v != nullptr ? v : DexEncodedValue::zero_for_type(get_type());
   }
 
   void clear_annotations() {
