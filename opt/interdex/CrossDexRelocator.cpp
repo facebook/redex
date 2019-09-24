@@ -61,11 +61,11 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
 }
 
 bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
-    DexMethod* m,
+    DexMethod* meth,
     std::unordered_map<DexMethod*, DexClass*>& relocated_methods) {
   std::unordered_set<DexMethodRef*> methods_preventing_relocation;
   if (gather_invoked_methods_that_prevent_relocation(
-          m, &methods_preventing_relocation)) {
+          meth, &methods_preventing_relocation)) {
     always_assert(methods_preventing_relocation.size() == 0);
     // No issues with direct methods.
     return true;
