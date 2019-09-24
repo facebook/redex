@@ -75,11 +75,11 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   if (std::any_of(methods_preventing_relocation.begin(),
                   methods_preventing_relocation.end(),
                   [&relocated_methods](DexMethodRef* mref) {
-                    auto m = mref->as_def();
-                    if (m == nullptr) {
+                    auto mdef = mref->as_def();
+                    if (mdef == nullptr) {
                       return true;
                     }
-                    return !relocated_methods.count(m);
+                    return !relocated_methods.count(mdef);
                   })) {
     // If a problematic method that gets invoked isn't getting relocated itself,
     // then we give up
@@ -93,9 +93,9 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   // information to turn more eventually unrelocated static methods back into
   // non-static direct methods.
   for (DexMethodRef* mref : methods_preventing_relocation) {
-    auto m = mref->as_def();
-    always_assert(m);
-    DexClass* relocated_cls = relocated_methods.at(m);
+    auto mdef = mref->as_def();
+    always_assert(mdef);
+    DexClass* relocated_cls = relocated_methods.at(mdef);
     RelocatedMethodInfo& info = m_relocated_method_infos.at(relocated_cls);
     info.is_dependent_non_static_direct = true;
   }
