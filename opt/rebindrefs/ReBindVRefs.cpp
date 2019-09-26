@@ -39,10 +39,35 @@ boost::optional<DexMethod*> get_method_def_from(
 struct Stats {
   uint32_t num_invoke_virtual_replaced{0};
   uint32_t num_invoke_interface_replaced{0};
+  uint32_t num_desupered{0};
 };
 
+void try_desuperify(const DexMethod* caller,
+                    IRInstruction* insn,
+                    Stats* stats) {
+  if (!is_invoke_super(insn->opcode())) {
+    return;
+  }
+  auto cls = type_class(caller->get_class());
+  if (cls == nullptr) {
+    return;
+  }
+  // resolve_method_ref will start its search in the superclass of :cls.
+  auto callee = resolve_method_ref(cls, insn->get_method()->get_name(),
+                                   insn->get_method()->get_proto(),
+                                   MethodSearch::Virtual);
+  // External methods may not always be final across runtime versions
+  if (callee != nullptr && !callee->is_external() && is_final(callee)) {
+    TRACE(BIND, 5, "Desuperifying %s because %s is final", SHOW(insn),
+          SHOW(callee));
+    insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
+    stats->num_desupered++;
+  }
+}
+
 Stats replaced_virtual_refs(const mog::Graph& override_graph,
-                            DexMethod* method) {
+                            DexMethod* method,
+                            bool desuperify) {
   Stats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -57,6 +82,10 @@ Stats replaced_virtual_refs(const mog::Graph& override_graph,
 
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
+    if (desuperify) {
+      try_desuperify(method, insn, &stats);
+    }
+
     auto opcode = insn->opcode();
     if (is_invoke_virtual(opcode) || opcode == OPCODE_INVOKE_INTERFACE) {
 
@@ -105,13 +134,15 @@ void ReBindVRefsPass::run_pass(DexStoresVector& stores,
   Stats stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) -> Stats {
-        return replaced_virtual_refs(*override_graph, method);
+        return replaced_virtual_refs(*override_graph, method, m_desuperify);
       },
       [](Stats a, Stats b) {
         a.num_invoke_virtual_replaced += b.num_invoke_virtual_replaced;
         a.num_invoke_interface_replaced += b.num_invoke_interface_replaced;
+        a.num_desupered += b.num_desupered;
         return a;
       });
+  mgr.set_metric("num_desupered", stats.num_desupered);
   mgr.set_metric("num_invoke_virtual_replaced",
                  stats.num_invoke_virtual_replaced);
   mgr.set_metric("num_invoke_interface_replaced",
