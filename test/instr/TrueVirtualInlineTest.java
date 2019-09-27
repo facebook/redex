@@ -54,6 +54,40 @@ class H extends F {
   public int do_something() { return 4; }
 }
 
+interface IGetInt {
+  public int getInt();
+  public int getAnotherInt();
+}
+
+abstract class GetInt implements IGetInt {}
+
+class GetInt1 extends GetInt {
+  // CHECK: method: virtual redex.GetInt1.getAnotherInt
+  public int getAnotherInt() { return 2; }
+
+  // PRECHECK: method: virtual redex.GetInt1.getInt
+  // POSTCHECK-NOT: method: virtual redex.GetInt1.getInt
+  public int getInt() { return 1; }
+}
+
+class GetInt2 extends GetInt {
+  // CHECK: method: virtual redex.GetInt2.getAnotherInt
+  public int getAnotherInt() { return 3; }
+
+  // PRECHECK: method: virtual redex.GetInt2.getInt
+  // POSTCHECK-NOT: method: virtual redex.GetInt2.getInt
+  public int getInt() { return 1; }
+}
+
+class GetInt3 extends GetInt {
+  // CHECK: method: virtual redex.GetInt3.getAnotherInt
+  public int getAnotherInt() { return 4; }
+
+  // PRECHECK: method: virtual redex.GetInt3.getInt
+  // POSTCHECK-NOT: method: virtual redex.GetInt3.getInt
+  public int getInt() { return 1; }
+}
+
 public class TrueVirtualInlineTest {
 
   // CHECK: method: virtual redex.TrueVirtualInlineTest.test_do_something
@@ -94,6 +128,29 @@ public class TrueVirtualInlineTest {
     // PRECHECK: invoke-virtual {{.*}} redex.CC.return_self
     // POSTCHECK: invoke-virtual {{.*}} redex.CC.return_self
     assertThat(c.return_self() instanceof CC).isTrue();
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_same_implementation
+  @Test
+  public void test_same_implementation() {
+    GetInt get_int;
+    if (Math.random() > 1) {
+      get_int = new GetInt1();
+    } else if (Math.random() < 0) {
+      get_int = new GetInt3();
+    } else {
+      // get_int should be of type GetInt2
+      get_int = new GetInt2();
+    }
+
+    // PRECHECK: invoke-virtual {{.*}} redex.GetInt.getInt
+    // POSTCHECK-NOT: invoke-virtual {{.*}} redex.GetInt.getInt
+    assertThat(get_int.getInt()).isEqualTo(1);
+
+    // PRECHECK: invoke-virtual {{.*}} redex.GetInt.getAnotherInt
+    // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.getAnotherInt
+    assertThat(get_int.getAnotherInt()).isEqualTo(3);
     // CHECK: return-void
   }
 }

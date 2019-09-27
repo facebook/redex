@@ -143,6 +143,59 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
   return methods;
 }
 
+/**
+ * Get a map of method -> implementation method that hold the same
+ * implementation as the method would perform at run time.
+ * So if a abtract method have multiple implementor but they all have the same
+ * implementation, we can have a mapping between the abstract method and
+ * one of its implementor.
+ */
+std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
+    const Scope& scope,
+    std::unique_ptr<const mog::Graph>& method_override_graph) {
+  std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
+  walk::methods(scope, [&](DexMethod* method) {
+    if (method->is_external() || root(method) || !is_abstract(method)) {
+      return;
+    }
+    const auto& overriding_methods =
+        mog::get_overriding_methods(*method_override_graph, method);
+
+    // Filter out methods without IRCode.
+    std::set<const DexMethod*, dexmethods_comparator> filtered_methods;
+    for (auto overriding_method : overriding_methods) {
+      if (is_abstract(overriding_method)) {
+        continue;
+      }
+      if (!overriding_method->get_code()) {
+        // If the method is not abstract method and it doesn't have
+        // implementation, we bail out.
+        return;
+      }
+      filtered_methods.emplace(overriding_method);
+    }
+    if (filtered_methods.size() == 0) {
+      return;
+    }
+
+    // If all methods have the same implementation we create mapping between
+    // methods and their representative implementation.
+    auto* comparing_method = const_cast<DexMethod*>(*filtered_methods.begin());
+    auto compare_method_ir = [&](const DexMethod* current) -> bool {
+      return const_cast<DexMethod*>(current)->get_code()->structural_equals(
+          *(comparing_method->get_code()));
+    };
+    if (std::all_of(std::next(filtered_methods.begin()), filtered_methods.end(),
+                    compare_method_ir)) {
+      method_to_implementations[method] = comparing_method;
+      for (auto overriding_method : overriding_methods) {
+        method_to_implementations[overriding_method] = comparing_method;
+      }
+    }
+  });
+  return method_to_implementations;
+}
+
 using CallerInsns =
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>;
 /**
@@ -156,8 +209,10 @@ using CallerInsns =
 void gather_true_virtual_methods(const Scope& scope,
                                  CalleeCallerInsns* true_virtual_callers,
                                  std::unordered_set<DexMethod*>* methods) {
-  auto method_override_graph = method_override_graph::build_graph(scope);
+  auto method_override_graph = mog::build_graph(scope);
   auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
+  auto same_implementation_map =
+      get_same_implementation_map(scope, method_override_graph);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -175,8 +230,9 @@ void gather_true_virtual_methods(const Scope& scope,
 
   ConcurrentMap<DexMethod*, CallerInsns> meth_caller;
   walk::parallel::code(scope, [&non_virtual_set, &method_override_graph,
-                               &meth_caller, &update_monomorphic_callsite](
-                                  DexMethod* method, IRCode& code) {
+                               &meth_caller, &update_monomorphic_callsite,
+                               &same_implementation_map](DexMethod* method,
+                                                         IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (insn->opcode() != OPCODE_INVOKE_VIRTUAL &&
@@ -199,6 +255,14 @@ void gather_true_virtual_methods(const Scope& scope,
       }
       always_assert_log(callee->is_def(), "Resolved method not def %s",
                         SHOW(callee));
+      if (same_implementation_map.count(callee)) {
+        // We can find the resolved callee in same_implementation_map,
+        // just use that piece of info because we know the implementors are all
+        // the same
+        update_monomorphic_callsite(
+            method, insn, same_implementation_map[callee], &meth_caller);
+        continue;
+      }
       const auto& overriding_methods =
           mog::get_overriding_methods(*method_override_graph, callee);
       if (!callee->is_external()) {
