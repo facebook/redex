@@ -1119,6 +1119,30 @@ const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   return reflection_sites;
 }
 
+boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
+    IRInstruction* invoke_insn) const {
+  auto code = m_dex_method->get_code();
+  IRInstruction* move_result_insn = nullptr;
+  auto ii = InstructionIterable(code);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto* insn = it->insn;
+    if (insn == invoke_insn) {
+      move_result_insn = std::next(it)->insn;
+      break;
+    }
+  }
+  if (!move_result_insn ||
+      !opcode::is_move_result(move_result_insn->opcode())) {
+    return boost::none;
+  }
+  auto arg_param = get_abstract_object(impl::RESULT_REGISTER, move_result_insn);
+  if (!arg_param ||
+      arg_param->obj_kind != reflection::AbstractObjectKind::METHOD) {
+    return boost::none;
+  }
+  return arg_param->dex_type_array;
+}
+
 bool ReflectionAnalysis::has_found_reflection() const {
   return !get_reflection_sites().empty();
 }

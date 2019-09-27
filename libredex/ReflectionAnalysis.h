@@ -205,6 +205,12 @@ class ReflectionAnalysis final {
 
   const ReflectionSites get_reflection_sites() const;
 
+  /**
+   * Return a parameter type array for this invoke method instruction.
+   */
+  boost::optional<std::vector<DexType*>> get_method_params(
+      IRInstruction* invoke_insn) const;
+
   bool has_found_reflection() const;
 
   /*

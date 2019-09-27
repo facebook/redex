@@ -59,16 +59,15 @@ struct DexItemIter<DexMethod*, F> {
  * Prevent a class from being deleted due to its being referenced via
  * reflection. :reflecting_method is the method containing the reflection site.
  */
-template <typename T>
-void blacklist(DexMethod* reflecting_method,
-               DexType* type,
-               DexString* name,
-               bool declared) {
+void blacklist_field(DexMethod* reflecting_method,
+                     DexType* type,
+                     DexString* name,
+                     bool declared) {
   auto* cls = type_class(type);
   if (cls == nullptr) {
     return;
   }
-  auto yield = [&](T t) {
+  auto yield = [&](DexField* t) {
     if (t->get_name() != name) {
       return;
     }
@@ -78,11 +77,42 @@ void blacklist(DexMethod* reflecting_method,
     TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
     t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
   };
-  DexItemIter<T, decltype(yield)>::iterate(cls, yield);
+  DexItemIter<DexField*, decltype(yield)>::iterate(cls, yield);
   if (!declared) {
     auto super_cls = cls->get_super_class();
     if (super_cls != nullptr) {
-      blacklist<T>(reflecting_method, super_cls, name, declared);
+      blacklist_field(reflecting_method, super_cls, name, declared);
+    }
+  }
+}
+
+void blacklist_method(DexMethod* reflecting_method,
+                      DexType* type,
+                      DexString* name,
+                      const boost::optional<std::vector<DexType*>>& params,
+                      bool declared) {
+  auto* cls = type_class(type);
+  if (cls == nullptr) {
+    return;
+  }
+  auto yield = [&](DexMethod* t) {
+    if (t->get_name() != name) {
+      return;
+    }
+    if (params != boost::none && !t->get_proto()->get_args()->equals(*params)) {
+      return;
+    }
+    if (!is_public(t) && !declared) {
+      return;
+    }
+    TRACE(PGR, 4, "SRA BLACKLIST: %s", SHOW(t));
+    t->rstate.set_root(keep_reason::REFLECTION, reflecting_method);
+  };
+  DexItemIter<DexMethod*, decltype(yield)>::iterate(cls, yield);
+  if (!declared) {
+    auto super_cls = cls->get_super_class();
+    if (super_cls != nullptr) {
+      blacklist_method(reflecting_method, super_cls, name, params, declared);
     }
   }
 }
@@ -151,7 +181,7 @@ void analyze_reflection(const Scope& scope) {
     }
   };
 
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
+  walk::code(scope, [&](DexMethod* method, IRCode& code) {
     std::unique_ptr<ReflectionAnalysis> analysis = nullptr;
     for (auto& mie : InstructionIterable(code)) {
       IRInstruction* insn = mie.insn;
@@ -191,7 +221,12 @@ void analyze_reflection(const Scope& scope) {
       if (arg_str_value == nullptr) {
         continue;
       }
-
+      boost::optional<std::vector<DexType*>> param_types = boost::none;
+      if (refl_type == GET_METHOD || refl_type == GET_CONSTRUCTOR ||
+          refl_type == GET_DECLARED_METHOD ||
+          refl_type == GET_DECLARED_CONSTRUCTOR) {
+        param_types = analysis->get_method_params(insn);
+      }
       TRACE(PGR, 4, "SRA ANALYZE: %s: type:%d %s.%s cls: %d %s %s str: %s",
             insn->get_method()->get_name()->str().c_str(), refl_type,
             method_class_name.c_str(), method_name.c_str(), arg_cls->obj_kind,
@@ -200,23 +235,25 @@ void analyze_reflection(const Scope& scope) {
 
       switch (refl_type) {
       case GET_FIELD:
-        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, false);
+        blacklist_field(method, arg_cls->dex_type, arg_str_value, false);
         break;
       case GET_DECLARED_FIELD:
-        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, true);
+        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       case GET_METHOD:
       case GET_CONSTRUCTOR:
-        blacklist<DexMethod*>(method, arg_cls->dex_type, arg_str_value, false);
+        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+                         false);
         break;
       case GET_DECLARED_METHOD:
       case GET_DECLARED_CONSTRUCTOR:
-        blacklist<DexMethod*>(method, arg_cls->dex_type, arg_str_value, true);
+        blacklist_method(method, arg_cls->dex_type, arg_str_value, param_types,
+                         true);
         break;
       case INT_UPDATER:
       case LONG_UPDATER:
       case REF_UPDATER:
-        blacklist<DexField*>(method, arg_cls->dex_type, arg_str_value, true);
+        blacklist_field(method, arg_cls->dex_type, arg_str_value, true);
         break;
       }
     }

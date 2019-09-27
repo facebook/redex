@@ -508,6 +508,10 @@ class DexTypeList {
   }
 
   void gather_types(std::vector<DexType*>& ltype) const;
+
+  bool equals(const std::vector<DexType*>& vec) const {
+    return std::equal(m_list.begin(), m_list.end(), vec.begin(), vec.end());
+  }
 };
 
 inline bool compare_dextypelists(const DexTypeList* a, const DexTypeList* b) {
