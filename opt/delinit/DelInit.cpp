@@ -150,12 +150,12 @@ void find_referenced_classes(const Scope& scope) {
 }
 
 bool can_remove(const DexClass* cls) {
-  return can_delete(cls) && !referenced_classes.count_unsafe(cls);
+  return !root_or_string(cls) && !referenced_classes.count_unsafe(cls);
 }
 
 bool can_remove(const DexMethod* m, const ConcurrentSet<DexMethod*>& callers) {
   return callers.count_unsafe(const_cast<DexMethod*>(m)) == 0 &&
-         (can_remove(type_class(m->get_class())) || can_delete(m));
+         (can_remove(type_class(m->get_class())) || !root_or_string(m));
 }
 
 /**
@@ -176,7 +176,7 @@ bool can_remove_init(const DexMethod* m,
     return false;
   }
 
-  if (!can_delete(m)) {
+  if (root_or_string(m)) {
     return false;
   }
 
@@ -194,7 +194,7 @@ bool can_remove_init(const DexMethod* m,
 }
 
 bool can_remove(const DexField* f) {
-  return can_remove(type_class(f->get_class())) || can_delete(f);
+  return can_remove(type_class(f->get_class())) || !root_or_string(f);
 }
 
 /**

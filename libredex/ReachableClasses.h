@@ -56,6 +56,11 @@ inline bool has_keep(DexMember* member) {
 }
 
 template <class DexMember>
+inline bool marked_by_string(DexMember* member) {
+  return member->rstate.is_referenced_by_string();
+}
+
+template <class DexMember>
 inline bool allowshrinking(DexMember* member) {
   return member->rstate.allowshrinking();
 }
@@ -79,4 +84,12 @@ inline bool assumenosideeffects(DexMember* member) {
 template <class DexMember>
 inline bool root(DexMember* member) {
   return has_keep(member) && !allowshrinking(member);
+}
+
+/**
+ * If this member is root or it has m_by_string be true.
+ */
+template <class DexMember>
+inline bool root_or_string(DexMember* member) {
+  return root(member) || marked_by_string(member);
 }
