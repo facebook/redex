@@ -59,7 +59,12 @@ Arguments parse_args(int argc, char* argv[]) {
     std::cerr << "output-dir is empty\n";
     exit(EXIT_FAILURE);
   }
-  boost::filesystem::create_directory(args.output_ir_dir);
+  std::string meta_dir = args.output_ir_dir + "/meta";
+  boost::filesystem::create_directories(meta_dir);
+  if (!boost::filesystem::is_directory(meta_dir)) {
+    std::cerr << "Could not create " << meta_dir << std::endl;
+    exit(EXIT_FAILURE);
+  }
 
   if (vm.count("pass-name")) {
     args.pass_names = vm["pass-name"].as<std::vector<std::string>>();
@@ -82,7 +87,7 @@ Json::Value process_entry_data(const Json::Value& entry_data,
     passes_list.append(pass_name);
   }
   int len = config_data["redex"]["passes"].size();
-  if (len > 0 && passes_list[len - 1].asString() != "RegAllocPass") {
+  if (len == 0 || passes_list[len - 1].asString() != "RegAllocPass") {
     passes_list.append("RegAllocPass");
   }
 

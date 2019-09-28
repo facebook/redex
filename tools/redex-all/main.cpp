@@ -82,7 +82,6 @@ struct Arguments {
   // command line arguments. For development usage
   Json::Value entry_data;
   boost::optional<int> stop_pass_idx;
-  std::string output_ir_dir;
   RedexOptions redex_options;
 };
 
@@ -386,17 +385,6 @@ Arguments parse_args(int argc, char* argv[]) {
     }
   }
 
-  std::string metafiles = args.out_dir + "/meta/";
-  int status = mkdir(metafiles.c_str(), 0755);
-  if (status != 0) {
-    // Attention: errno may get changed by syscalls or lib functions.
-    // Saving before printing is a conventional way of using errno.
-    int errsv = errno;
-    std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
-              << std::endl;
-    exit(EXIT_FAILURE);
-  }
-
   if (vm.count("proguard-config")) {
     args.proguard_config_paths =
         vm["proguard-config"].as<std::vector<std::string>>();
@@ -465,7 +453,9 @@ Arguments parse_args(int argc, char* argv[]) {
   }
 
   if (vm.count("output-ir")) {
-    args.output_ir_dir = vm["output-ir"].as<std::string>();
+    // The out_dir is for final apk only or intermediate results only.
+    always_assert(args.stop_pass_idx);
+    args.out_dir = vm["output-ir"].as<std::string>();
   }
 
   if (args.stop_pass_idx != boost::none) {
@@ -480,14 +470,24 @@ Arguments parse_args(int argc, char* argv[]) {
     if (passes_list.size() > (size_t)idx) {
       passes_list.resize(idx);
     }
-    if (idx > 0 && passes_list[idx - 1].asString() != "RegAllocPass") {
+    if (idx == 0 || passes_list[idx - 1].asString() != "RegAllocPass") {
       passes_list.append("RegAllocPass");
     }
-    if (args.output_ir_dir.empty() ||
-        !redex::dir_is_writable(args.output_ir_dir)) {
+    if (args.out_dir.empty() || !redex::dir_is_writable(args.out_dir)) {
       std::cerr << "output-ir is empty or not writable" << std::endl;
       exit(EXIT_FAILURE);
     }
+  }
+
+  std::string metafiles = args.out_dir + "/meta/";
+  int status = mkdir(metafiles.c_str(), 0755);
+  if (status != 0 && errno != EEXIST) {
+    // Attention: errno may get changed by syscalls or lib functions.
+    // Saving before printing is a conventional way of using errno.
+    int errsv = errno;
+    std::cerr << "error: cannot mkdir meta in outdir. errno = " << errsv
+              << std::endl;
+    exit(EXIT_FAILURE);
   }
 
   TRACE(MAIN, 2, "Verify-none mode: %s\n",
@@ -1092,9 +1092,8 @@ int main(int argc, char* argv[]) {
                                    stores);
       }
     } else {
-      redex::write_all_intermediate(conf, args.output_ir_dir,
-                                    args.redex_options, stores,
-                                    args.entry_data);
+      redex::write_all_intermediate(conf, args.out_dir, args.redex_options,
+                                    stores, args.entry_data);
     }
 
     stats_output_path = conf.metafile(
