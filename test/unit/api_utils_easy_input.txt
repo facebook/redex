@@ -1,7 +1,7 @@
-LA; Landroid/util/ArrayMap; 19 29 2
-  Landroid/util/ArrayMap;.indexOfKey:(Ljava/lang/Object;)I 21
-  Landroid/util/ArrayMap;.indexOfValue:(Ljava/lang/Object;)I 29
-LB; Landroid/util/ArraySet; 23 29 2
-  Landroid/util/ArraySet;.<init>:(Ljava/util/Collection;)V 29
-  Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z 24
-LC; Landroid/util/LongSparseArray; 16 29 0
+Landroid/util/ArrayMap; 2 0
+  M Landroid/util/ArrayMap;.indexOfKey:(Ljava/lang/Object;)I
+  M Landroid/util/ArrayMap;.indexOfValue:(Ljava/lang/Object;)I
+Landroid/util/ArraySet; 2 0
+  M Landroid/util/ArraySet;.<init>:(Ljava/util/Collection;)V
+  M Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z
+Landroid/util/LongSparseArray; 0 0

@@ -45,33 +45,20 @@ TEST(ApiUtilsTest, testEasyInputFormat) {
   g_redex = new RedexContext();
 
   Scope scope = create_scope(false);
-  api::ApiLevelsUtils api_utils(scope,
-                                std::getenv("api_utils_easy_input_path"));
+  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
+                                21);
+  const auto& framework_cls_to_api = api_utils.get_framework_classes();
+  EXPECT_EQ(framework_cls_to_api.size(), 3);
 
-  const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
-  EXPECT_EQ(types_to_framework_api.size(), 3);
+  auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
+  EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs.size(), 2);
+  EXPECT_EQ(framework_cls_to_api.at(a_t).frefs.size(), 0);
 
-  auto a_t = DexType::make_type("LA;");
-  EXPECT_EQ(types_to_framework_api.at(a_t).methods.size(), 2);
+  auto b_t = DexType::make_type("Landroid/util/ArraySet;");
+  EXPECT_EQ(framework_cls_to_api.at(b_t).mrefs.size(), 2);
 
-  auto b_t = DexType::make_type("LB;");
-  EXPECT_EQ(types_to_framework_api.at(b_t).methods.size(), 2);
-
-  auto c_t = DexType::make_type("LC;");
-  EXPECT_EQ(types_to_framework_api.at(c_t).methods.size(), 0);
-
-  delete g_redex;
-}
-
-TEST(ApiUtilsTest, testSubClassMissingInputFormat) {
-  g_redex = new RedexContext();
-
-  Scope scope = create_scope(true);
-  api::ApiLevelsUtils api_utils(scope,
-                                std::getenv("api_utils_easy_input_path"));
-
-  const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
-  EXPECT_EQ(types_to_framework_api.size(), 2);
+  auto c_t = DexType::make_type("Landroid/util/LongSparseArray;");
+  EXPECT_EQ(framework_cls_to_api.at(c_t).mrefs.size(), 0);
 
   delete g_redex;
 }
