@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -32,11 +34,9 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
                     "MergeInterfacePass",
                     "RemoveUnreachablePass",
                     "RegAllocPass",
-                ],
+                ]
             },
-            "opt_decisions": {
-                "enable_logs": True,
-            },
+            "opt_decisions": {"enable_logs": True},
             "debug_info_kind": "iodi",
             "emit_class_method_info_map": True,
         }
