@@ -55,6 +55,38 @@ DexType* get_throwable_type() {
   return DexType::make_type("Ljava/lang/Throwable;");
 }
 
+DexType* get_java_lang_boolean_type() {
+  return DexType::make_type("Ljava/lang/Boolean;");
+}
+
+DexType* get_java_lang_byte_type() {
+  return DexType::make_type("Ljava/lang/Byte;");
+}
+
+DexType* get_java_lang_short_type() {
+  return DexType::make_type("Ljava/lang/Short;");
+}
+
+DexType* get_java_lang_character_type() {
+  return DexType::make_type("Ljava/lang/Character;");
+}
+
+DexType* get_java_lang_integer_type() {
+  return DexType::make_type("Ljava/lang/Integer;");
+}
+
+DexType* get_java_lang_long_type() {
+  return DexType::make_type("Ljava/lang/Long;");
+}
+
+DexType* get_java_lang_float_type() {
+  return DexType::make_type("Ljava/lang/Float;");
+}
+
+DexType* get_java_lang_double_type() {
+  return DexType::make_type("Ljava/lang/Double;");
+}
+
 ClassSerdes get_class_serdes(const DexClass* cls) {
   std::string name = cls->get_name()->str();
   name.pop_back();
@@ -205,24 +237,76 @@ char type_shorty(const DexType* type) {
 DexType* get_boxed_reference_type(const DexType* type) {
   switch (type_shorty(type)) {
   case 'Z':
-    return DexType::make_type("Ljava/lang/Boolean;");
+    return get_java_lang_boolean_type();
   case 'B':
-    return DexType::make_type("Ljava/lang/Byte;");
+    return get_java_lang_byte_type();
   case 'S':
-    return DexType::make_type("Ljava/lang/Short;");
+    return get_java_lang_short_type();
   case 'C':
-    return DexType::make_type("Ljava/lang/Character;");
+    return get_java_lang_character_type();
   case 'I':
-    return DexType::make_type("Ljava/lang/Integer;");
+    return get_java_lang_integer_type();
   case 'J':
-    return DexType::make_type("Ljava/lang/Long;");
+    return get_java_lang_long_type();
   case 'F':
-    return DexType::make_type("Ljava/lang/Float;");
+    return get_java_lang_float_type();
   case 'D':
-    return DexType::make_type("Ljava/lang/Double;");
+    return get_java_lang_double_type();
   default:
     return nullptr;
   }
+}
+
+// Takes a reference type, returns its corresponding unboxing method
+DexMethodRef* get_unboxing_method_for_type(const DexType* type) {
+  if (type == get_java_lang_boolean_type()) {
+    return DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z");
+  } else if (type == get_java_lang_byte_type()) {
+    return DexMethod::make_method("Ljava/lang/Byte;.byteValue:()B");
+  } else if (type == get_java_lang_short_type()) {
+    return DexMethod::make_method("Ljava/lang/Short;.shortValue:()S");
+  } else if (type == get_java_lang_character_type()) {
+    return DexMethod::make_method("Ljava/lang/Character;.charValue:()C");
+  } else if (type == get_java_lang_integer_type()) {
+    return DexMethod::make_method("Ljava/lang/Integer;.intValue:()I");
+  } else if (type == get_java_lang_long_type()) {
+    return DexMethod::make_method("Ljava/lang/Long;.longValue:()J");
+  } else if (type == get_java_lang_float_type()) {
+    return DexMethod::make_method("Ljava/lang/Float;.floatValue:()F");
+  } else if (type == get_java_lang_double_type()) {
+    return DexMethod::make_method("Ljava/lang/Double;.doubleValue:()D");
+  }
+  return nullptr;
+}
+
+// Take a reference type, returns its valueOf function
+DexMethodRef* get_value_of_method_for_type(const DexType* type) {
+  if (type == get_java_lang_boolean_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;");
+  } else if (type == get_java_lang_byte_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;");
+  } else if (type == get_java_lang_short_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Short;.valueOf:(S)Ljava/lang/Short;");
+  } else if (type == get_java_lang_character_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Character;.valueOf:(C)Ljava/lang/Character;");
+  } else if (type == get_java_lang_integer_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;");
+  } else if (type == get_java_lang_long_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;");
+  } else if (type == get_java_lang_float_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Float;.valueOf:(Z)Ljava/lang/Float;");
+  } else if (type == get_java_lang_double_type()) {
+    return DexMethod::make_method(
+        "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;");
+  }
+  return nullptr;
 }
 
 bool check_cast(const DexType* type, const DexType* base_type) {

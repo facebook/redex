@@ -88,6 +88,23 @@ DexType* get_enum_type();
  */
 DexType* get_integer_type();
 
+/**
+ * Return the DexType for an java.lang.Throwable type.
+ */
+DexType* get_throwable_type();
+
+/**
+ * Return the reference type wrappers for primitive types
+ */
+DexType* get_java_lang_boolean_type();
+DexType* get_java_lang_byte_type();
+DexType* get_java_lang_short_type();
+DexType* get_java_lang_character_type();
+DexType* get_java_lang_integer_type();
+DexType* get_java_lang_long_type();
+DexType* get_java_lang_float_type();
+DexType* get_java_lang_double_type();
+
 struct ClassSerdes {
   std::vector<DexType*> serdes;
 
@@ -117,11 +134,6 @@ DexMethod* get_or_create_clinit(DexClass* cls);
  * 'class_Serializer;'
  */
 ClassSerdes get_class_serdes(const DexClass* cls);
-
-/**
- * Return the DexType for an java.lang.Throwable type.
- */
-DexType* get_throwable_type();
 
 /**
  * Return the package for a valid DexType.
@@ -169,6 +181,9 @@ char type_shorty(const DexType* type);
  * returns nullptr if argument `type` is not a primitive type or is void
  */
 DexType* get_boxed_reference_type(const DexType* type);
+
+DexMethodRef* get_unboxing_method_for_type(const DexType* type);
+DexMethodRef* get_value_of_method_for_type(const DexType* type);
 
 /**
  * Return true if the parent chain leads to known classes.
