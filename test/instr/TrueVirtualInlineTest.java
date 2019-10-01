@@ -88,6 +88,21 @@ class GetInt3 extends GetInt {
   public int getInt() { return 1; }
 }
 
+class SameImplementation {
+  // PRECHECK: method: virtual redex.SameImplementation.getInt
+  // POSTCHECK-NOT: method: virtual redex.SameImplementation.getInt
+  public int getInt() { return 1; }
+}
+
+class SameImplementation2 extends SameImplementation {
+  // PRECHECK: method: virtual redex.SameImplementation2.getInt
+  // POSTCHECK-NOT: method: virtual redex.SameImplementation2.getInt
+  @Override
+  public int getInt() {
+    return 1;
+  }
+}
+
 public class TrueVirtualInlineTest {
 
   // CHECK: method: virtual redex.TrueVirtualInlineTest.test_do_something
@@ -151,6 +166,22 @@ public class TrueVirtualInlineTest {
     // PRECHECK: invoke-virtual {{.*}} redex.GetInt.getAnotherInt
     // POSTCHECK: invoke-virtual {{.*}} redex.GetInt.getAnotherInt
     assertThat(get_int.getAnotherInt()).isEqualTo(3);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.TrueVirtualInlineTest.test_same_implementation
+  @Test
+  public void test_same_implementation2() {
+    SameImplementation get_int;
+    if (Math.random() > 0.5) {
+      get_int = new SameImplementation();
+    } else {
+      get_int = new SameImplementation2();
+    }
+
+    // PRECHECK: invoke-virtual {{.*}} redex.SameImplementation.getInt
+    // POSTCHECK-NOT: invoke-virtual {{.*}} redex.SameImplementation.getInt
+    assertThat(get_int.getInt()).isEqualTo(1);
     // CHECK: return-void
   }
 }

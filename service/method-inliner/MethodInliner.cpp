@@ -155,12 +155,15 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     std::unique_ptr<const mog::Graph>& method_override_graph) {
   std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
-    if (method->is_external() || root(method) || !is_abstract(method)) {
+    if (method->is_external() || root(method) || !method->is_virtual() ||
+        (!method->get_code() && !is_abstract(method))) {
       return;
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(*method_override_graph, method);
-
+    if (overriding_methods.size() == 0) {
+      return;
+    }
     // Filter out methods without IRCode.
     std::set<const DexMethod*, dexmethods_comparator> filtered_methods;
     for (auto overriding_method : overriding_methods) {
@@ -176,6 +179,9 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     }
     if (filtered_methods.size() == 0) {
       return;
+    }
+    if (method->get_code()) {
+      filtered_methods.emplace(method);
     }
 
     // If all methods have the same implementation we create mapping between
