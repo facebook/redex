@@ -42,7 +42,6 @@ class IRMetaIO {
            !obj->rstate.inner_struct.m_unset_allowshrinking &&
            !obj->rstate.inner_struct.m_set_allowobfuscation &&
            !obj->rstate.inner_struct.m_unset_allowobfuscation &&
-           !obj->rstate.inner_struct.m_keep_name &&
            !obj->rstate.m_keep_count.load();
   }
 };

@@ -59,8 +59,6 @@ class ReferencedState {
     bool m_set_allowobfuscation{false};
     bool m_unset_allowobfuscation{false};
 
-    bool m_keep_name{false};
-
     bool m_no_optimizations{false};
 
     bool m_generated{false};
@@ -133,8 +131,6 @@ class ReferencedState {
           this->inner_struct.m_unset_allowobfuscation |
           other.inner_struct.m_unset_allowobfuscation;
 
-      this->inner_struct.m_keep_name =
-          this->inner_struct.m_keep_name | other.inner_struct.m_keep_name;
       this->inner_struct.m_no_optimizations =
           this->inner_struct.m_no_optimizations |
           other.inner_struct.m_no_optimizations;
@@ -164,7 +160,7 @@ class ReferencedState {
   // Like can_delete(), this is also over-conservative. We don't yet have a
   // better alternative, but we should create one.
   bool can_rename() const {
-    return !inner_struct.m_keep_name && !inner_struct.m_by_string &&
+    return !inner_struct.m_by_string &&
            (!inner_struct.m_keep || allowobfuscation()) && !allowshrinking();
   }
 
@@ -274,8 +270,6 @@ class ReferencedState {
   const keep_reason::ReasonPtrSet& keep_reasons() const {
     return m_keep_reasons;
   }
-
-  void set_keep_name() { inner_struct.m_keep_name = true; }
 
   void set_allowshrinking() { inner_struct.m_set_allowshrinking = true; }
   void unset_allowshrinking() { inner_struct.m_unset_allowshrinking = true; }

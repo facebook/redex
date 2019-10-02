@@ -169,7 +169,8 @@ DexClass* create_class(const DexType* type,
   }
   auto cls = creator.create();
   // Keeping type-erasure generated classes from being renamed.
-  cls->rstate.set_keep_name();
+  cls->rstate.set_has_keep();
+  cls->rstate.set_allowshrinking();
 
   if (!with_default_ctor) {
     return cls;
