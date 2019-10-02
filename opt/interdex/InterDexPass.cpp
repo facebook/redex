@@ -194,6 +194,37 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                  cross_dex_relocator_stats.relocated_virtual_methods);
 }
 
+void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
+                                             DexClassesVector& dexen,
+                                             ConfigFiles& conf,
+                                             PassManager& mgr) {
+  auto original_scope = build_class_scope(stores);
+
+  // Setup default configs for non-root store
+  // For now, no plugins configured for non-root stores
+  std::vector<std::unique_ptr<InterDexPassPlugin>> plugins;
+  size_t reserve_mrefs = 0;
+
+  // Cross dex ref minimizers are disabled for non-root stores
+  // TODO: Make this logic cleaner when these features get enabled for non-root
+  // stores
+  CrossDexRefMinimizerConfig cross_dex_refs_config;
+  CrossDexRelocatorConfig cross_dex_relocator_config;
+
+  // Initialize interdex and run for nonroot store
+  InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
+                    m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
+                    m_normal_primary_dex, false /* force single dex */,
+                    m_emit_scroll_set_marker, m_emit_canaries,
+                    false /* minimize_cross_dex_refs */, cross_dex_refs_config,
+                    cross_dex_relocator_config, reserve_mrefs);
+
+  interdex.run_on_nonroot_store();
+
+  auto final_scope = build_class_scope(stores);
+  interdex.cleanup(final_scope);
+}
+
 void InterDexPass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
@@ -207,6 +238,8 @@ void InterDexPass::run_pass(DexStoresVector& stores,
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(stores, store.get_dexen(), conf, mgr);
+    } else {
+      run_pass_on_nonroot_store(stores, store.get_dexen(), conf, mgr);
     }
   }
 }

@@ -691,6 +691,7 @@ void InterDex::run_in_force_single_dex_mode() {
 }
 
 void InterDex::run() {
+  TRACE(IDEX, 2, "IDEX: Running on root store");
   if (m_force_single_dex) {
     run_in_force_single_dex_mode();
     return;
@@ -742,6 +743,21 @@ void InterDex::run() {
                         m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
                     "Bailing, max dex number surpassed %d\n",
                     m_dexes_structure.get_num_dexes());
+
+  print_stats(&m_dexes_structure);
+}
+
+void InterDex::run_on_nonroot_store() {
+  TRACE(IDEX, 2, "IDEX: Running on non-root store");
+  for (DexClass* cls : m_original_scope) {
+    emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+               /* perf_sensitive */ false);
+  }
+
+  // Emit what is left, if any.
+  if (m_dexes_structure.get_current_dex_classes().size()) {
+    flush_out_dex(EMPTY_DEX_INFO);
+  }
 
   print_stats(&m_dexes_structure);
 }

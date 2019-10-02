@@ -72,6 +72,11 @@ class InterDexPass : public Pass {
                         DexClassesVector&,
                         ConfigFiles&,
                         PassManager&);
+
+  void run_pass_on_nonroot_store(DexStoresVector&,
+                                 DexClassesVector&,
+                                 ConfigFiles&,
+                                 PassManager&);
 };
 
 } // namespace interdex

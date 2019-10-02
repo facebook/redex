@@ -89,6 +89,7 @@ class InterDex {
   DexClassesVector take_outdex() { return std::move(m_outdex); }
 
   void run();
+  void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
   void cleanup(const Scope& final_scope);
 
