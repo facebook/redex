@@ -7,8 +7,8 @@
 
 #include "LocalDce.h"
 
-#include <iostream>
 #include <array>
+#include <iostream>
 #include <unordered_set>
 #include <vector>
 
@@ -226,10 +226,7 @@ void LocalDce::dce(IRCode* code) {
             dead_instructions.emplace_back(b, forward_it);
           }
         }
-        TRACE(CFG,
-              5,
-              "%s\n%s",
-              show(it->insn).c_str(),
+        TRACE(CFG, 5, "%s\n%s", show(it->insn).c_str(),
               show(bliveness).c_str());
       }
       if (bliveness != prev_liveness) {

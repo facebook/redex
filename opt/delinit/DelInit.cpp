@@ -30,12 +30,9 @@
 
 namespace {
 
-constexpr const char* METRIC_INIT_METHODS_REMOVED =
-  "num_init_methods_removed";
-constexpr const char* METRIC_VMETHODS_REMOVED =
-  "num_vmethods_removed";
-constexpr const char* METRIC_IFIELDS_REMOVED =
-  "num_ifields_removed";
+constexpr const char* METRIC_INIT_METHODS_REMOVED = "num_init_methods_removed";
+constexpr const char* METRIC_VMETHODS_REMOVED = "num_vmethods_removed";
+constexpr const char* METRIC_IFIELDS_REMOVED = "num_ifields_removed";
 constexpr const char* METRIC_DMETHODS_REMOVED = "num_dmethods_removed";
 
 static ConcurrentSet<const DexClass*> referenced_classes;
@@ -57,7 +54,8 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   return DexType::get_type(buf.c_str());
 }
 
-// Search a class name in a list of package names, return true if there is a match
+// Search a class name in a list of package names, return true if there is a
+// match
 bool find_package(const char* name) {
   // If there's no whitelisted package, optimize every package by default
   if (package_filter.size() == 0) {
@@ -586,7 +584,9 @@ void DelInitPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* conf */,
                            PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(DELINIT, 1, "DelInitPass not run because no ProGuard configuration was provided.");
+    TRACE(
+        DELINIT, 1,
+        "DelInitPass not run because no ProGuard configuration was provided.");
     return;
   }
   package_filter = m_package_filter;
@@ -595,22 +595,16 @@ void DelInitPass::run_pass(DexStoresVector& stores,
   DeadRefs drefs;
   drefs.delinit(scope);
   TRACE(DELINIT, 1, "Removed %d <init> methods",
-      drefs.del_init_res.deleted_inits);
-  TRACE(DELINIT, 1, "Removed %d vmethods",
-      drefs.del_init_res.deleted_vmeths);
-  TRACE(DELINIT, 1, "Removed %d ifields",
-      drefs.del_init_res.deleted_ifields);
-  TRACE(DELINIT, 1, "Removed %d dmethods",
-      drefs.del_init_res.deleted_dmeths);
+        drefs.del_init_res.deleted_inits);
+  TRACE(DELINIT, 1, "Removed %d vmethods", drefs.del_init_res.deleted_vmeths);
+  TRACE(DELINIT, 1, "Removed %d ifields", drefs.del_init_res.deleted_ifields);
+  TRACE(DELINIT, 1, "Removed %d dmethods", drefs.del_init_res.deleted_dmeths);
 
   mgr.incr_metric(METRIC_INIT_METHODS_REMOVED,
                   drefs.del_init_res.deleted_inits);
-  mgr.incr_metric(METRIC_VMETHODS_REMOVED,
-                  drefs.del_init_res.deleted_vmeths);
-  mgr.incr_metric(METRIC_IFIELDS_REMOVED,
-                  drefs.del_init_res.deleted_ifields);
-  mgr.incr_metric(METRIC_DMETHODS_REMOVED,
-                  drefs.del_init_res.deleted_dmeths);
+  mgr.incr_metric(METRIC_VMETHODS_REMOVED, drefs.del_init_res.deleted_vmeths);
+  mgr.incr_metric(METRIC_IFIELDS_REMOVED, drefs.del_init_res.deleted_ifields);
+  mgr.incr_metric(METRIC_DMETHODS_REMOVED, drefs.del_init_res.deleted_dmeths);
 
   post_dexen_changes(scope, stores);
 }

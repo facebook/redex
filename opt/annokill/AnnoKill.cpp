@@ -29,16 +29,20 @@ constexpr const char* METRIC_FIELD_ASETS_CLEARED = "num_field_cleared";
 constexpr const char* METRIC_FIELD_ASETS_TOTAL = "num_field_total";
 constexpr const char* METRIC_SIGNATURES_KILLED = "num_signatures_killed";
 
-AnnoKill::AnnoKill(Scope& scope,
-                   bool kill_bad_signatures,
-                   bool only_force_kill,
-                   const AnnoNames& keep,
-                   const AnnoNames& kill,
-                   const AnnoNames& force_kill,
-                   const std::unordered_map<std::string, std::vector<std::string>>& class_hierarchy_keep_annos,
-                   const std::unordered_map<std::string, std::vector<std::string>>& annotated_keep_annos
-                   )
-  : m_scope(scope), m_only_force_kill(only_force_kill), m_kill_bad_signatures(kill_bad_signatures) {
+AnnoKill::AnnoKill(
+    Scope& scope,
+    bool kill_bad_signatures,
+    bool only_force_kill,
+    const AnnoNames& keep,
+    const AnnoNames& kill,
+    const AnnoNames& force_kill,
+    const std::unordered_map<std::string, std::vector<std::string>>&
+        class_hierarchy_keep_annos,
+    const std::unordered_map<std::string, std::vector<std::string>>&
+        annotated_keep_annos)
+    : m_scope(scope),
+      m_only_force_kill(only_force_kill),
+      m_kill_bad_signatures(kill_bad_signatures) {
   // Load annotations that should not be deleted.
   TRACE(ANNO, 2, "Keep annotations count %d", keep.size());
   for (const auto& anno_name : keep) {
@@ -96,7 +100,11 @@ AnnoKill::AnnoKill(Scope& scope,
   }
   for (auto it : m_anno_class_hierarchy_keep) {
     for (auto type : it.second) {
-      TRACE(ANNO, 4, "anno_class_hier_keep: %s -> %s", it.first->get_name()->c_str(), type->get_name()->c_str());
+      TRACE(ANNO,
+            4,
+            "anno_class_hier_keep: %s -> %s",
+            it.first->get_name()->c_str(),
+            type->get_name()->c_str());
     }
   }
   // Populate anno keep map
@@ -145,7 +153,7 @@ AnnoKill::AnnoSet AnnoKill::get_referenced_annos() {
   });
   // all annotations in fields
   walk::fields(m_scope,
-              [&](DexField* field) { annos_in_aset(field->get_anno_set()); });
+               [&](DexField* field) { annos_in_aset(field->get_anno_set()); });
 
   AnnoKill::AnnoSet referenced_annos;
 
@@ -319,10 +327,8 @@ AnnoKill::AnnoSet AnnoKill::get_removable_annotation_instances() {
     for (auto anno : annos) {
       if (m_kill.count(anno->type())) {
         bannotations.insert(clazz->get_type());
-        TRACE(ANNO,
-              3,
-              "removable annotation class %s",
-              SHOW(clazz->get_type()));
+        TRACE(
+            ANNO, 3, "removable annotation class %s", SHOW(clazz->get_type()));
       }
     }
   }
@@ -343,9 +349,10 @@ void AnnoKill::count_annotation(const DexAnnotation* da) {
   }
 }
 
-void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
-                            const AnnoKill::AnnoSet& referenced_annos,
-                            const std::unordered_set<const DexType*>& keep_annos) {
+void AnnoKill::cleanup_aset(
+    DexAnnotationSet* aset,
+    const AnnoKill::AnnoSet& referenced_annos,
+    const std::unordered_set<const DexType*>& keep_annos) {
   m_stats.annotations += aset->size();
   auto& annos = aset->get_annotations();
   auto fn = [&](DexAnnotation* da) {
@@ -363,9 +370,7 @@ void AnnoKill::cleanup_aset(DexAnnotationSet* aset,
     }
 
     if (keep_annos.count(anno_type) > 0) {
-      TRACE(ANNO,
-            4,
-            "Prohibited from removing annotation %s", SHOW(da));
+      TRACE(ANNO, 4, "Prohibited from removing annotation %s", SHOW(da));
       return false;
     }
 
@@ -498,7 +503,8 @@ bool AnnoKill::should_kill_bad_signature(DexAnnotation* da) {
   return false;
 }
 
-std::unordered_set<const DexType*> AnnoKill::build_anno_keep(DexAnnotationSet* aset) {
+std::unordered_set<const DexType*> AnnoKill::build_anno_keep(
+    DexAnnotationSet* aset) {
   std::unordered_set<const DexType*> keep_list;
   for (const auto& anno : aset->get_annotations()) {
     auto& keeps = m_annotated_keep_annos[anno->type()];
@@ -525,10 +531,8 @@ bool AnnoKill::kill_annotations() {
     m_stats.class_asets++;
     cleanup_aset(aset, referenced_annos, keep_list);
     if (aset->size() == 0) {
-      TRACE(ANNO,
-            3,
-            "Clearing annotation for class %s",
-            SHOW(clazz->get_type()));
+      TRACE(
+          ANNO, 3, "Clearing annotation for class %s", SHOW(clazz->get_type()));
       clazz->clear_annotations();
       m_stats.class_asets_cleared++;
     }
@@ -609,27 +613,26 @@ bool AnnoKill::kill_annotations() {
   bool classes_removed = false;
   // We're done removing annotation instances, go ahead and remove annotation
   // classes.
-  m_scope.erase(std::remove_if(m_scope.begin(),
-                               m_scope.end(),
-                               [&](DexClass* cls) {
-                                 if (!is_annotation(cls)) {
-                                   return false;
-                                 }
-                                 auto type = cls->get_type();
-                                 if (referenced_annos.count(type)) {
-                                   return false;
-                                 }
-                                 if (m_keep.count(type)) {
-                                   return false;
-                                 }
-                                 TRACE(ANNO,
-                                       3,
-                                       "Removing annotation type: %s",
-                                       SHOW(type));
-                                 classes_removed = true;
-                                 return true;
-                               }),
-                m_scope.end());
+  m_scope.erase(
+      std::remove_if(m_scope.begin(),
+                     m_scope.end(),
+                     [&](DexClass* cls) {
+                       if (!is_annotation(cls)) {
+                         return false;
+                       }
+                       auto type = cls->get_type();
+                       if (referenced_annos.count(type)) {
+                         return false;
+                       }
+                       if (m_keep.count(type)) {
+                         return false;
+                       }
+                       TRACE(
+                           ANNO, 3, "Removing annotation type: %s", SHOW(type));
+                       classes_removed = true;
+                       return true;
+                     }),
+      m_scope.end());
 
   for (const auto& p : m_build_anno_map) {
     TRACE(ANNO, 3, "Build anno: %lu, %s", p.second, p.first.c_str());
@@ -707,10 +710,7 @@ void AnnoKillPass::run_pass(DexStoresVector& stores,
         3,
         "Total referenced System Annos: %d",
         stats.visibility_system_count);
-  TRACE(ANNO,
-        1,
-        "@Signatures Killed: %d",
-        stats.signatures_killed);
+  TRACE(ANNO, 1, "@Signatures Killed: %d", stats.signatures_killed);
 
   mgr.incr_metric(METRIC_ANNO_KILLED, stats.annotations_killed);
   mgr.incr_metric(METRIC_ANNO_TOTAL, stats.annotations);
