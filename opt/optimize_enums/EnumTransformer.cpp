@@ -584,9 +584,13 @@ class CodeTransformer final {
     case OPCODE_CHECK_CAST: {
       auto type = insn->get_type();
       if (try_convert_to_int_type(type)) {
-        DexType* candidate_type =
-            extract_candidate_enum_type(env.get(insn->src(0)));
-        always_assert(candidate_type == type);
+        auto possible_src_types = env.get(insn->src(0));
+        if (possible_src_types.size() != 0) {
+          DexType* candidate_type =
+              extract_candidate_enum_type(possible_src_types);
+          always_assert(candidate_type == type);
+        }
+        // Empty src_types means the src register holds null object.
         m_replacements.push_back(
             InsnReplacement(cfg, block, mie,
                             dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,

@@ -404,7 +404,7 @@ class EnumUpcastDetector {
           reject(insn, possible_type, rejected_enums, reason);
         }
       }
-      if (need_delete || types.size() == 0) {
+      if (need_delete) {
         reject(insn, required_type, rejected_enums, reason);
       }
     } else {

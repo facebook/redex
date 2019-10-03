@@ -54,7 +54,7 @@ enum SCORE {
   String constantString;
 
   // POSTCHECK-DAG: method: direct redex.SCORE.increase$REDEX${{.*}}:(java.lang.Integer)java.lang.Integer
-  public static @Nullable SCORE increase(SCORE score) {
+  public static @Nullable SCORE increase(@Nullable SCORE score) {
     if (score == null) {
       return null;
     }
@@ -102,7 +102,7 @@ abstract class B extends A implements Intf {
 
 // CHECK-LABEL: class: redex.C
 class C extends B {
-  static SCORE s_score = SCORE.ONE;
+  static @Nullable SCORE s_score = SCORE.ONE;
   // PRECHECK: (STATIC) array:redex.SCORE[][]
   // POSTCHECK: (STATIC) array$REDEX${{.*}}:java.lang.Integer[][]
   static SCORE[][] array;
@@ -185,8 +185,9 @@ enum CAST_THIS_POINTER_2 {
 // CHECK-NEXT: Superclass: java.lang.Enum
 enum CAST_PARAMETER {
   ONE;
-  public static <E extends Enum<E>> void method(Enum<E> o) {}
-  public static void method() { method(ONE); }
+  public static <E extends Enum<E>> void method_accepts_enum_arg(
+      @Nullable Enum<E> o) {}
+  public static void method() { method_accepts_enum_arg(ONE); }
 }
 // CHECK: class: redex.USED_AS_CLASS_OBJECT
 // CHECK-NEXT: Access flags:
@@ -454,5 +455,24 @@ public class EnumTransformTest {
     assertThat(SCORE.ONE.myField).isEqualTo(11);
     assertThat(SCORE.TWO.myField).isEqualTo(12);
     assertThat(SCORE.THREE.myField).isEqualTo(13);
+  }
+
+  @Test
+  public void null_enum_value() {
+    // PRECHECK:  check-cast {{.*}}, redex.SCORE
+    // POSTCHECK: check-cast {{.*}}, java.lang.Integer
+    SCORE score_obj = (SCORE) null;
+    // CHECK: SCORE.increase
+    SCORE.increase(null);
+    // CHECK: sput-object {{.*}} redex.C.s_score
+    C.s_score = null;
+    C c_obj = new C();
+    // CHECK: iput-object {{.*}} redex.C.i_score
+    c_obj.i_score = null;
+    // It's possible that a null value is used as Enum and candidate enum
+    // type at the same time.
+    SCORE null_ptr = null;
+    SCORE.increase(null_ptr);
+    CAST_PARAMETER.method_accepts_enum_arg(null_ptr);
   }
 }
