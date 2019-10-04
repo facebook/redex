@@ -567,10 +567,17 @@ void update_references(const Scope& scope,
                   "Vertical Merging: subclass ref exist %s\nin %s\n",
                   SHOW(insn),
                   SHOW(method));
-              insn->set_method(
-                  DexMethod::make_method(find_mergeable->second,
-                                         insn_method->get_name(),
-                                         insn_method->get_proto()));
+              if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+                insn->set_method(DexMethod::make_method(
+                    type_class(insn_method->get_class())->get_super_class(),
+                    insn_method->get_name(),
+                    insn_method->get_proto()));
+              } else {
+                insn->set_method(
+                    DexMethod::make_method(find_mergeable->second,
+                                           insn_method->get_name(),
+                                           insn_method->get_proto()));
+              }
             }
           }
         }
