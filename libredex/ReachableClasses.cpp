@@ -644,6 +644,37 @@ bool in_reflected_pkg(DexClass* dclass,
                           reflected_pkg_classes);
 }
 
+/**
+ * Mark serializable class's non-serializable super class's no arg constructor
+ * as root.
+ */
+void analyze_serializable(const Scope& scope) {
+  DexType* serializable = DexType::get_type("Ljava/io/Serializable;");
+  if (!serializable) {
+    return;
+  }
+  TypeSet children;
+  get_all_implementors(scope, serializable, children);
+
+  for (auto* child : children) {
+    DexClass* child_cls = type_class(child);
+    DexType* child_super_type = child_cls->get_super_class();
+    DexClass* child_supercls = type_class(child_super_type);
+    if (!child_supercls || child_supercls->is_external()) {
+      continue;
+    }
+    // We should keep the no argument constructors of the superclasses of
+    // any Serializable class, if they are themselves not Serializable.
+    if (!children.count(child_super_type)) {
+      for (auto meth : child_supercls->get_dmethods()) {
+        if (is_init(meth) && meth->get_proto()->get_args()->size() == 0) {
+          meth->rstate.set_root(keep_reason::SERIALIZABLE);
+        }
+      }
+    }
+  }
+}
+
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -775,6 +806,7 @@ void init_permanently_reachable_classes(
       mark_reachable_by_classname(clazz);
     }
   }
+  analyze_serializable(scope);
 }
 
 /**

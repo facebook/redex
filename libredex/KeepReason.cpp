@@ -29,6 +29,8 @@ std::ostream& operator<<(std::ostream& os, const Reason& reason) {
     return os << "CLINIT";
   case ANNO:
     return os << "ANNO";
+  case SERIALIZABLE:
+    return os << "SERIALIZABLE";
   case UNKNOWN:
     return os << "UNKNOWN";
   }
