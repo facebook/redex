@@ -21,9 +21,9 @@ struct InsertSwitchTest : public RedexTest {
 
   InsertSwitchTest() {
     auto args = DexTypeList::make_type_list({});
-    auto proto = DexProto::make_proto(get_void_type(), args);
+    auto proto = DexProto::make_proto(known_types::_void(), args);
     m_method =
-        DexMethod::make_method(get_object_type(),
+        DexMethod::make_method(known_types::java_lang_Object(),
                                DexString::make_string("testMethod"), proto)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   }

@@ -30,8 +30,6 @@ class PointsToSemanticsUtils final {
   PointsToSemanticsUtils& operator=(const PointsToSemanticsUtils& other) =
       delete;
 
-  DexType* get_throwable_type() const { return m_throwable_type; }
-
   bool is_primitive_type_wrapper(DexType* dex_type) const {
     return m_primitive_type_wrappers.count(dex_type) > 0;
   }
@@ -45,7 +43,6 @@ class PointsToSemanticsUtils final {
   bool is_get_class_invocation(IRInstruction* insn) const;
 
  private:
-  DexType* m_throwable_type{DexType::make_type("Ljava/lang/Throwable;")};
   std::unordered_set<DexType*> m_primitive_type_wrappers{
       {DexType::make_type("Ljava/lang/Boolean;"),
        DexType::make_type("Ljava/lang/Byte;"),

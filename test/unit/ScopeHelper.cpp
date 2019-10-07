@@ -16,7 +16,7 @@ namespace {
  * Build a DexClass for java.lang.Object
  */
 DexClass* create_java_lang_object() {
-  auto obj_t = get_object_type();
+  auto obj_t = known_types::java_lang_Object();
   auto obj_cls = type_class(obj_t);
   if (obj_cls != nullptr) return obj_cls;
 
@@ -41,18 +41,22 @@ DexClass* create_java_lang_object() {
 
   // required sigs
   auto void_args = DexTypeList::make_type_list({});
-  auto void_object = DexProto::make_proto(get_object_type(), void_args);
+  auto void_object =
+      DexProto::make_proto(known_types::java_lang_Object(), void_args);
   auto object_bool = DexProto::make_proto(
-      get_boolean_type(), DexTypeList::make_type_list({get_object_type()}));
-  auto void_void = DexProto::make_proto(get_void_type(), void_args);
-  auto void_class = DexProto::make_proto(get_class_type(), void_args);
-  auto void_int = DexProto::make_proto(get_int_type(), void_args);
-  auto void_string = DexProto::make_proto(get_string_type(), void_args);
+      known_types::_boolean(),
+      DexTypeList::make_type_list({known_types::java_lang_Object()}));
+  auto void_void = DexProto::make_proto(known_types::_void(), void_args);
+  auto void_class =
+      DexProto::make_proto(known_types::java_lang_Class(), void_args);
+  auto void_int = DexProto::make_proto(known_types::_int(), void_args);
+  auto void_string =
+      DexProto::make_proto(known_types::java_lang_String(), void_args);
   auto long_void = DexProto::make_proto(
-      get_void_type(), DexTypeList::make_type_list({get_int_type()}));
+      known_types::_void(), DexTypeList::make_type_list({known_types::_int()}));
   auto long_int_void = DexProto::make_proto(
-      get_void_type(),
-      DexTypeList::make_type_list({get_long_type(), get_int_type()}));
+      known_types::_void(),
+      DexTypeList::make_type_list({known_types::_long(), known_types::_int()}));
 
   // required names
   auto clone = DexString::make_string("clone");
@@ -202,7 +206,7 @@ DexClass* create_class(DexType* type,
   ClassCreator creator(type);
   creator.set_access(access);
   if (external) creator.set_external();
-  if (super == nullptr) super = get_object_type();
+  if (super == nullptr) super = known_types::java_lang_Object();
   creator.set_super(super);
   for (const auto& interface : interfaces) {
     creator.add_interface(interface);
@@ -254,7 +258,7 @@ DexMethod* create_empty_method(
       DexString::make_string(name), proto, access);
   auto main_block = mcreator.get_main_block();
   auto rtype = proto->get_rtype();
-  if (rtype == get_void_type()) {
+  if (rtype == known_types::_void()) {
     main_block->ret_void();
   } else {
     auto null_loc = mcreator.make_local(rtype);

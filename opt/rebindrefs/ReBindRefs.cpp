@@ -49,23 +49,23 @@ DexMethodRef* object_getClass() {
 
 bool is_object_equals(DexMethodRef* mref) {
   static DexString* equals = DexString::make_string("equals");
-  static DexProto* bool_obj =
-      DexProto::make_proto(DexType::make_type("Z"),
-                           DexTypeList::make_type_list({get_object_type()}));
+  static DexProto* bool_obj = DexProto::make_proto(
+      DexType::make_type("Z"),
+      DexTypeList::make_type_list({known_types::java_lang_Object()}));
   return mref->get_name() == equals && mref->get_proto() == bool_obj;
 }
 
 bool is_object_hashCode(DexMethodRef* mref) {
   static DexString* hashCode = DexString::make_string("hashCode");
-  static DexProto* int_void =
-      DexProto::make_proto(get_int_type(), DexTypeList::make_type_list({}));
+  static DexProto* int_void = DexProto::make_proto(
+      known_types::_int(), DexTypeList::make_type_list({}));
   return mref->get_name() == hashCode && mref->get_proto() == int_void;
 }
 
 bool is_object_getClass(DexMethodRef* mref) {
   static DexString* getClass = DexString::make_string("getClass");
-  static DexProto* cls_void =
-      DexProto::make_proto(get_class_type(), DexTypeList::make_type_list({}));
+  static DexProto* cls_void = DexProto::make_proto(
+      known_types::java_lang_Class(), DexTypeList::make_type_list({}));
   return mref->get_name() == getClass && mref->get_proto() == cls_void;
 }
 

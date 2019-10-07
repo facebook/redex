@@ -160,7 +160,7 @@ void CrossDexRelocator::relocate_methods(
         DexType* new_type = DexType::make_type(new_type_name.c_str());
         ClassCreator cc(new_type);
         cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(get_object_type());
+        cc.set_super(known_types::java_lang_Object());
         DexClass* relocated_cls = cc.create();
         relocated_cls->rstate.set_generated();
 

@@ -461,9 +461,9 @@ class EnumUpcastDetector {
   const DexMethodRef* STRINGBUILDER_APPEND_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
-  const DexType* ENUM_TYPE = get_enum_type();
-  const DexType* OBJECT_TYPE = get_object_type();
-  const DexType* STRING_TYPE = get_string_type();
+  const DexType* ENUM_TYPE = known_types::java_lang_Enum();
+  const DexType* OBJECT_TYPE = known_types::java_lang_Object();
+  const DexType* STRING_TYPE = known_types::java_lang_String();
 
   const DexMethod* m_method;
   Config* m_config;
@@ -525,7 +525,7 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
       env->set(dest, EnumTypes(insn->get_method()->get_proto()->get_rtype()));
       break;
     case OPCODE_CONST_CLASS:
-      env->set(dest, EnumTypes(get_class_type()));
+      env->set(dest, EnumTypes(known_types::java_lang_Class()));
       break;
     case OPCODE_CHECK_CAST: {
       auto type = insn->get_type();
@@ -626,7 +626,7 @@ void reject_enums_for_colliding_constructors(
             const_cast<DexType*>(get_element_type_if_array(param_types[i]));
         if (candidate_enums->count(base_type)) {
           transforming_enums.insert(base_type);
-          param_types[i] = make_array_type(get_integer_type(),
+          param_types[i] = make_array_type(known_types::java_lang_Integer(),
                                            get_array_level(param_types[i]));
         }
       }
@@ -640,7 +640,7 @@ void reject_enums_for_colliding_constructors(
           rejected_enums.insert(enum_type);
         }
       } else {
-        auto new_proto = DexProto::make_proto(get_void_type(), new_params);
+        auto new_proto = DexProto::make_proto(known_types::_void(), new_params);
         if (DexMethod::get_method(ctor->get_class(), ctor->get_name(),
                                   new_proto) != nullptr) {
           for (auto enum_type : transforming_enums) {
@@ -743,7 +743,7 @@ bool is_enum_valueof(const DexMethodRef* method) {
     return false;
   }
   auto& args = proto->get_args()->get_type_list();
-  return args.size() == 1 && args.front() == get_string_type();
+  return args.size() == 1 && args.front() == known_types::java_lang_String();
 }
 
 bool is_enum_values(const DexMethodRef* method) {

@@ -330,7 +330,7 @@ void MethodBlock::check_cast(Location& src_and_dst, DexType* type) {
 
 void MethodBlock::instance_of(Location& obj, Location& dst, DexType* type) {
   always_assert(obj.is_ref());
-  always_assert(dst.type == get_boolean_type());
+  always_assert(dst.type == known_types::_boolean());
   IRInstruction* insn = new IRInstruction(OPCODE_INSTANCE_OF);
   insn->set_src(0, obj.get_reg());
   insn->set_type(type);
@@ -360,7 +360,7 @@ void MethodBlock::ret_void() {
 }
 
 void MethodBlock::ret(DexType* rtype, Location loc) {
-  if (rtype != get_void_type()) {
+  if (rtype != known_types::_void()) {
     ret(loc);
   } else {
     ret_void();
@@ -372,7 +372,7 @@ void MethodBlock::load_const(Location& loc, int32_t value) {
   IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(value);
-  loc.type = get_int_type();
+  loc.type = known_types::_int();
   push_instruction(load);
 }
 
@@ -381,7 +381,7 @@ void MethodBlock::load_const(Location& loc, double value) {
   IRInstruction* load = new IRInstruction(OPCODE_CONST_WIDE);
   load->set_dest(loc.get_reg());
   load->set_literal(value);
-  loc.type = get_double_type();
+  loc.type = known_types::_double();
   push_instruction(load);
 }
 
@@ -392,7 +392,7 @@ void MethodBlock::load_const(Location& loc, DexString* value) {
   push_instruction(load);
   IRInstruction* move_result_pseudo =
       new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  loc.type = get_string_type();
+  loc.type = known_types::java_lang_String();
   move_result_pseudo->set_dest(loc.get_reg());
   push_instruction(move_result_pseudo);
 }
@@ -404,7 +404,7 @@ void MethodBlock::load_const(Location& loc, DexType* value) {
   push_instruction(load);
   IRInstruction* move_result_pseudo =
       new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
-  loc.type = get_class_type();
+  loc.type = known_types::java_lang_Class();
   move_result_pseudo->set_dest(loc.get_reg());
   push_instruction(move_result_pseudo);
 }
@@ -414,7 +414,7 @@ void MethodBlock::load_null(Location& loc) {
   IRInstruction* load = new IRInstruction(OPCODE_CONST);
   load->set_dest(loc.get_reg());
   load->set_literal(0);
-  loc.type = get_object_type();
+  loc.type = known_types::java_lang_Object();
   push_instruction(load);
 }
 
@@ -434,7 +434,7 @@ void MethodBlock::binop_lit16(IROpcode op,
                               int16_t literal) {
   always_assert(OPCODE_ADD_INT_LIT16 <= op && op <= OPCODE_XOR_INT_LIT16);
   always_assert(dest.type == src.type);
-  always_assert(dest.type == get_int_type());
+  always_assert(dest.type == known_types::_int());
   IRInstruction* insn = new IRInstruction(op);
   insn->set_dest(dest.get_reg());
   insn->set_src(0, src.get_reg());
@@ -448,7 +448,7 @@ void MethodBlock::binop_lit8(IROpcode op,
                              int8_t literal) {
   always_assert(OPCODE_ADD_INT_LIT8 <= op && op <= OPCODE_USHR_INT_LIT8);
   always_assert(dest.type == src.type);
-  always_assert(dest.type == get_int_type());
+  always_assert(dest.type == known_types::_int());
   IRInstruction* insn = new IRInstruction(op);
   insn->set_dest(dest.get_reg());
   insn->set_src(0, src.get_reg());

@@ -92,7 +92,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
                         ACC_STATIC | ACC_PUBLIC, anno_set, keep_debug_info);
   // Variable setup
   auto self_loc = mc->get_local(0);
-  auto type_test_loc = mc->make_local(get_boolean_type());
+  auto type_test_loc = mc->make_local(known_types::_boolean());
   auto ret_loc = new_proto->is_void() ? mc->get_local(0) // not used
                                       : mc->make_local(new_proto->get_rtype());
   std::vector<Location> args = get_args_for(new_proto, mc);
@@ -193,7 +193,7 @@ const DexType* get_replacement_type(const TypeSystem& type_system,
     return root;
   }
   TRACE(RM_INTF, 9, "Replacing %s with java.lang.Object;", SHOW(to_remove));
-  return get_object_type();
+  return known_types::java_lang_Object();
 }
 
 /**

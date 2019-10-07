@@ -94,11 +94,11 @@ struct EnumUtil {
 
   const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
 
-  const DexType* ENUM_TYPE = get_enum_type();
-  DexType* INT_TYPE = get_int_type();
-  DexType* INTEGER_TYPE = get_integer_type();
-  DexType* OBJECT_TYPE = get_object_type();
-  DexType* STRING_TYPE = get_string_type();
+  const DexType* ENUM_TYPE = known_types::java_lang_Enum();
+  DexType* INT_TYPE = known_types::_int();
+  DexType* INTEGER_TYPE = known_types::java_lang_Integer();
+  DexType* OBJECT_TYPE = known_types::java_lang_Object();
+  DexType* STRING_TYPE = known_types::java_lang_String();
   DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
   DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
   DexType* RTEXCEPTION_TYPE =
@@ -331,7 +331,7 @@ struct EnumUtil {
     type = DexType::make_type(name.c_str());
     ClassCreator cc(type);
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
-    cc.set_super(get_object_type());
+    cc.set_super(known_types::java_lang_Object());
     DexClass* cls = cc.create();
     cls->rstate.set_generated();
 
@@ -383,8 +383,8 @@ struct EnumUtil {
    * Make <clinit> method.
    */
   DexMethod* make_clinit_method(DexClass* cls, uint32_t fields_count) {
-    auto proto =
-        DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+    auto proto = DexProto::make_proto(known_types::_void(),
+                                      DexTypeList::make_type_list({}));
     DexMethod* method =
         DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto)
             ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
@@ -408,9 +408,9 @@ struct EnumUtil {
    */
   DexMethodRef* make_values_method(DexClass* cls, DexFieldRef* values_field) {
     DexString* name = DexString::make_string("values");
-    DexProto* proto =
-        DexProto::make_proto(make_array_type(INTEGER_TYPE),
-                             DexTypeList::make_type_list({get_int_type()}));
+    DexProto* proto = DexProto::make_proto(
+        make_array_type(INTEGER_TYPE),
+        DexTypeList::make_type_list({known_types::_int()}));
     DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
                             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>());
@@ -1312,7 +1312,7 @@ class EnumTransformer final {
       auto ordinal = pair.first;
       auto block = cfg.create_block();
       cases.emplace_back(ordinal, block);
-      if (ifield_type == get_string_type()) {
+      if (ifield_type == known_types::java_lang_String()) {
         const DexString* value = pair.second.string_value;
         if (value) {
           block->push_back(

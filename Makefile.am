@@ -194,6 +194,7 @@ libredex_la_SOURCES = \
 	libredex/IRTypeChecker.cpp \
 	libredex/TypeInference.cpp \
 	libredex/TypeSystem.cpp \
+	libredex/TypeUtil.cpp \
 	libredex/UnknownVirtuals.cpp \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \

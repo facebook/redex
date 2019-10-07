@@ -21,7 +21,7 @@ class CommonSubexpressionEliminationTest : public RedexTest {
   CommonSubexpressionEliminationTest() {
     // Calling get_vmethods under the hood initializes the object-class, which
     // we need in the tests to create a proper scope
-    get_vmethods(get_object_type());
+    get_vmethods(known_types::java_lang_Object());
   }
 };
 
@@ -95,9 +95,10 @@ TEST_F(CommonSubexpressionEliminationTest, simple) {
     )
   )";
 
-  always_assert(get_object_type());
-  always_assert(type_class(get_object_type()));
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  always_assert(known_types::java_lang_Object());
+  always_assert(type_class(known_types::java_lang_Object()));
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, pre_values) {
@@ -118,7 +119,8 @@ TEST_F(CommonSubexpressionEliminationTest, pre_values) {
       (move v2 v3)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, many) {
@@ -141,7 +143,8 @@ TEST_F(CommonSubexpressionEliminationTest, many) {
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 2);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 2);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
@@ -163,7 +166,8 @@ TEST_F(CommonSubexpressionEliminationTest, registers_dont_matter) {
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, commutative) {
@@ -185,7 +189,8 @@ TEST_F(CommonSubexpressionEliminationTest, commutative) {
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, wide) {
@@ -205,7 +210,8 @@ TEST_F(CommonSubexpressionEliminationTest, wide) {
       (move-wide v4 v6)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, object) {
@@ -227,7 +233,8 @@ TEST_F(CommonSubexpressionEliminationTest, object) {
       (move-object v1 v2)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget) {
@@ -251,7 +258,8 @@ TEST_F(CommonSubexpressionEliminationTest, iget) {
       (move v2 v3)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
@@ -265,7 +273,8 @@ TEST_F(CommonSubexpressionEliminationTest, iget_volatile) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
@@ -280,7 +289,8 @@ TEST_F(CommonSubexpressionEliminationTest, affected_by_barrier) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
@@ -306,13 +316,14 @@ TEST_F(CommonSubexpressionEliminationTest, safe_methods_are_not_barriers) {
       (move v2 v3)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
        safe_virtual_methods_with_exact_types_are_not_barriers) {
   ClassCreator creator(DexType::make_type("Ljava/util/ArrayList;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = static_cast<DexMethod*>(
       DexMethod::make_method("Ljava/util/ArrayList;.<init>:()V"));
@@ -357,8 +368,8 @@ TEST_F(CommonSubexpressionEliminationTest,
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type()), creator.create()}, code_str,
-       expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
+       code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
@@ -390,7 +401,8 @@ TEST_F(CommonSubexpressionEliminationTest, recovery_after_barrier) {
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
@@ -414,7 +426,8 @@ TEST_F(CommonSubexpressionEliminationTest, unaffected_by_barrier) {
       (move-object v1 v2)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
@@ -438,13 +451,14 @@ TEST_F(CommonSubexpressionEliminationTest, top_move_tracking) {
       (move v3 v4)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
        empty_non_true_virtual_methods_are_not_barriers) {
   ClassCreator creator(DexType::make_type("LTest0;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest0;.test0:()V")
                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -474,7 +488,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);
@@ -486,7 +500,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   // define base type
 
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
-  base_creator.set_super(get_object_type());
+  base_creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTestBase;.m:()V")
                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -528,7 +542,8 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), base_class, derived_class},
+  test(Scope{type_class(known_types::java_lang_Object()), base_class,
+             derived_class},
        code_str,
        expected_str,
        1);
@@ -540,7 +555,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   // define base type
 
   ClassCreator base_creator(DexType::make_type("LTestBase;"));
-  base_creator.set_super(get_object_type());
+  base_creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTestBase;.m:()V")
                     ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
@@ -578,7 +593,8 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{type_class(get_object_type()), base_class, derived_class},
+  test(Scope{type_class(known_types::java_lang_Object()), base_class,
+             derived_class},
        code_str,
        expected_str,
        0);
@@ -587,7 +603,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        empty_static_methods_are_not_barriers) {
   ClassCreator creator(DexType::make_type("LTest1;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest1;.test1:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -617,7 +633,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);
@@ -625,7 +641,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 
 TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.set_super(get_object_type());
+  a_creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LA;.m:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -642,7 +658,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
   a_creator.add_method(method);
 
   ClassCreator b_creator(DexType::make_type("LB;"));
-  b_creator.set_super(get_object_type());
+  b_creator.set_super(known_types::java_lang_Object());
 
   method = DexMethod::make_method("LB;.m:()V")
                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -672,14 +688,14 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
     )
   )";
 
-  test(Scope{type_class(get_object_type()), a_creator.create(),
+  test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create()},
        code_str, expected_str, 1, 0, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.set_super(get_object_type());
+  a_creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LA;.m:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -696,7 +712,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   a_creator.add_method(method);
 
   ClassCreator b_creator(DexType::make_type("LB;"));
-  b_creator.set_super(get_object_type());
+  b_creator.set_super(known_types::java_lang_Object());
 
   method = DexMethod::make_method("LB;.m:()V")
                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -713,7 +729,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
   b_creator.add_method(method);
 
   ClassCreator c_creator(DexType::make_type("LC;"));
-  c_creator.set_super(get_object_type());
+  c_creator.set_super(known_types::java_lang_Object());
 
   method = DexMethod::make_method("LC;.m:()V")
                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -743,14 +759,14 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
     )
   )";
 
-  test(Scope{type_class(get_object_type()), a_creator.create(),
+  test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create(), c_creator.create()},
        code_str, expected_str, 1, 0, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.set_super(get_object_type());
+  a_creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LA;.m:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -767,7 +783,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   a_creator.add_method(method);
 
   ClassCreator b_creator(DexType::make_type("LB;"));
-  b_creator.set_super(get_object_type());
+  b_creator.set_super(known_types::java_lang_Object());
 
   method = DexMethod::make_method("LB;.m:()V")
                ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -793,7 +809,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
   )";
   auto expected_str = code_str;
 
-  test(Scope{type_class(get_object_type()), a_creator.create(),
+  test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create()},
        code_str, expected_str, 0, 1, 1);
 }
@@ -801,7 +817,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_relevant_i_barrier) {
   ClassCreator creator(DexType::make_type("LTest2;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest2;.test2:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -827,7 +843,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        0);
@@ -836,7 +852,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_relevant_s_barrier) {
   ClassCreator creator(DexType::make_type("LTest3;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest3;.test3:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -860,7 +876,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        0);
@@ -869,7 +885,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_relevant_a_barrier) {
   ClassCreator creator(DexType::make_type("LTest4;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest4;.test4:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -897,7 +913,7 @@ TEST_F(CommonSubexpressionEliminationTest,
   )";
   auto expected_str = code_str;
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        0);
@@ -906,7 +922,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_irrelevant_i_barrier) {
   ClassCreator creator(DexType::make_type("LTest2;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest2;.test2:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -943,7 +959,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);
@@ -952,7 +968,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_irrelevant_s_barrier) {
   ClassCreator creator(DexType::make_type("LTest5;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest5;.test5:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -986,7 +1002,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);
@@ -995,7 +1011,7 @@ TEST_F(CommonSubexpressionEliminationTest,
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_irrelevant_a_barrier) {
   ClassCreator creator(DexType::make_type("LTest6;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest6;.test6:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -1035,7 +1051,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);
@@ -1064,7 +1080,8 @@ TEST_F(CommonSubexpressionEliminationTest, iget_unrelated_iput) {
       (move v2 v3)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
@@ -1087,7 +1104,8 @@ TEST_F(CommonSubexpressionEliminationTest, aget_unrelated_aput) {
       (move-result-pseudo v2)
       (move v2 v3)    )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
@@ -1101,7 +1119,8 @@ TEST_F(CommonSubexpressionEliminationTest, aget_related_aput) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
@@ -1127,7 +1146,8 @@ TEST_F(CommonSubexpressionEliminationTest, aput_related_aget) {
       (move v0 v3)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
@@ -1151,7 +1171,8 @@ TEST_F(CommonSubexpressionEliminationTest, iput_related_iget) {
       (move v0 v2)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
@@ -1173,7 +1194,8 @@ TEST_F(CommonSubexpressionEliminationTest, sput_related_sget) {
       (move v0 v1)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, sput_related_sget_with_barrier) {
@@ -1187,7 +1209,8 @@ TEST_F(CommonSubexpressionEliminationTest, sput_related_sget_with_barrier) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
@@ -1201,7 +1224,8 @@ TEST_F(CommonSubexpressionEliminationTest, volatile_iput_related_iget) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, simple_with_put) {
@@ -1254,7 +1278,8 @@ TEST_F(CommonSubexpressionEliminationTest, array_length) {
       (return v0)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, cmp) {
@@ -1268,7 +1293,8 @@ TEST_F(CommonSubexpressionEliminationTest, cmp) {
     )
   )";
   auto expected_str = code_str;
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 0);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
@@ -1292,12 +1318,13 @@ TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
       (move v1 v2)
     )
   )";
-  test(Scope{type_class(get_object_type())}, code_str, expected_str, 1);
+  test(Scope{type_class(known_types::java_lang_Object())}, code_str,
+       expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
   ClassCreator a_creator(DexType::make_type("LA;"));
-  a_creator.set_super(get_object_type());
+  a_creator.set_super(known_types::java_lang_Object());
 
   auto method = static_cast<DexMethod*>(DexMethod::make_method("LA;.m:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -1331,14 +1358,14 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
     )
   )";
 
-  test(Scope{type_class(get_object_type()), a_creator.create()}, code_str,
-       expected_str, 1, 0, 1);
+  test(Scope{type_class(known_types::java_lang_Object()), a_creator.create()},
+       code_str, expected_str, 1, 0, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
        invoked_static_method_with_somewhat_relevant_s_barrier) {
   ClassCreator creator(DexType::make_type("LTest7;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
 
   auto method = DexMethod::make_method("LTest7;.test7:()V")
                     ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
@@ -1382,7 +1409,7 @@ TEST_F(CommonSubexpressionEliminationTest,
     )
   )";
 
-  test(Scope{type_class(get_object_type()), creator.create()},
+  test(Scope{type_class(known_types::java_lang_Object()), creator.create()},
        code_str,
        expected_str,
        1);

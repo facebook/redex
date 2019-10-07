@@ -165,8 +165,8 @@ class FieldAnalyzer final
   void setup_ordinal_method() {
     auto enum_type = DexType::get_type(ENUM_TYPE);
     auto ordinal_str = DexString::get_string(ORDINAL_METHOD_NAME);
-    auto proto =
-        DexProto::get_proto(get_int_type(), DexTypeList::make_type_list({}));
+    auto proto = DexProto::get_proto(known_types::_int(),
+                                     DexTypeList::make_type_list({}));
 
     auto method_ref = DexMethod::get_method(enum_type, ordinal_str, proto);
     m_ordinal_method = resolve_method(method_ref, MethodSearch::Virtual);

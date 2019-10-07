@@ -1010,7 +1010,8 @@ class PointsToActionGenerator final {
     }
     case OPCODE_NEW_INSTANCE: {
       DexType* dex_type = insn->get_type();
-      if (m_type_system.is_subtype(m_utils.get_throwable_type(), dex_type)) {
+      if (m_type_system.is_subtype(known_types::java_lang_Throwable(),
+                                   dex_type)) {
         // If the object created is an exception (i.e., its type inherits from
         // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
         // model, the exact identity of an exception is abstracted away for

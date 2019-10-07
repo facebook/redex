@@ -36,8 +36,8 @@ namespace {
  */
 std::vector<DexClass*> create_scope_1() {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
 
@@ -57,8 +57,8 @@ std::vector<DexClass*> create_scope_1() {
  */
 std::vector<DexClass*> create_scope_2() {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
 
@@ -87,8 +87,8 @@ std::vector<DexClass*> create_scope_2() {
 std::vector<DexClass*> create_scope_3() {
   auto scope = create_scope_2();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
   auto a_t = DexType::get_type("LA;");
@@ -111,8 +111,8 @@ std::vector<DexClass*> create_scope_3() {
  */
 std::vector<DexClass*> create_scope_4() {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
 
@@ -146,8 +146,8 @@ std::vector<DexClass*> create_scope_4() {
  */
 std::vector<DexClass*> create_scope_5() {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
 
@@ -185,8 +185,8 @@ std::vector<DexClass*> create_scope_5() {
 std::vector<DexClass*> create_scope_6() {
   std::vector<DexClass*> scope = create_scope_5();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
   auto a_t = DexType::get_type("LA;");
@@ -217,8 +217,8 @@ std::vector<DexClass*> create_scope_6() {
 std::vector<DexClass*> create_scope_7() {
   std::vector<DexClass*> scope = create_scope_6();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
   auto args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, args);
   auto a_t = DexType::get_type("LA;");
@@ -253,9 +253,9 @@ std::vector<DexClass*> create_scope_7() {
 std::vector<DexClass*> create_scope_8() {
   std::vector<DexClass*> scope = create_scope_7();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
-  auto int_t = get_int_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
+  auto int_t = known_types::_int();
   auto void_args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, void_args);
   auto int_args = DexTypeList::make_type_list({int_t});
@@ -292,9 +292,9 @@ std::vector<DexClass*> create_scope_8() {
 std::vector<DexClass*> create_scope_9() {
   std::vector<DexClass*> scope = create_scope_7();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
-  auto int_t = get_int_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
+  auto int_t = known_types::_int();
   auto int_args = DexTypeList::make_type_list({int_t});
   auto int_void = DexProto::make_proto(void_t, int_args);
   auto a_t = DexType::get_type("LA;");
@@ -332,9 +332,9 @@ std::vector<DexClass*> create_scope_9() {
 std::vector<DexClass*> create_scope_10() {
   std::vector<DexClass*> scope = create_empty_scope();
 
-  auto obj_t = get_object_type();
-  auto void_t = get_void_type();
-  auto int_t = get_int_type();
+  auto obj_t = known_types::java_lang_Object();
+  auto void_t = known_types::_void();
+  auto int_t = known_types::_int();
   auto no_args = DexTypeList::make_type_list({});
   auto void_void = DexProto::make_proto(void_t, no_args);
   auto int_args = DexTypeList::make_type_list({int_t});

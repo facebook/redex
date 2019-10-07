@@ -111,7 +111,7 @@ struct ClassMatcher {
 
   bool type_and_annotation_match(const DexClass* cls) const {
     if (cls == nullptr) return false;
-    if (cls->get_type() == get_object_type()) return false;
+    if (cls->get_type() == known_types::java_lang_Object()) return false;
     // First check to see if an annotation type needs to be matched.
     if (m_extends_anno) {
       if (!match_annotation_rx(cls, *m_extends_anno)) {
@@ -151,7 +151,7 @@ struct ClassMatcher {
     always_assert(cls != nullptr);
     // Do any of the classes and interfaces above match?
     auto super_type = cls->get_super_class();
-    if (super_type && super_type != get_object_type()) {
+    if (super_type && super_type != known_types::java_lang_Object()) {
       auto super_class = type_class(super_type);
       if (super_class) {
         if (type_and_annotation_match(super_class) ||

@@ -21,7 +21,7 @@ class PeepholeTestB : public RedexTest {};
 
 TEST_F(PeepholeTestB, StringBuilderInit) {
   ClassCreator creator(DexType::make_type("LFoo;"));
-  creator.set_super(get_object_type());
+  creator.set_super(known_types::java_lang_Object());
   auto method_1 = DexMethod::make_method("LFoo;.b:()V")
                       ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto original_code_1 = R"(

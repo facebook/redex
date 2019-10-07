@@ -51,9 +51,9 @@ TypeTags collect_type_tags(const std::vector<const MergerType*>& mergers) {
 DexField* scan_type_tag_field(const char* type_tag_field_name,
                               const DexType* type) {
   DexField* field = nullptr;
-  while (field == nullptr && type != get_object_type()) {
+  while (field == nullptr && type != known_types::java_lang_Object()) {
     auto cls = type_class(type);
-    field = cls->find_field(type_tag_field_name, get_int_type());
+    field = cls->find_field(type_tag_field_name, known_types::_int());
     type = cls->get_super_class();
   }
 
@@ -227,9 +227,9 @@ void update_refs_to_mergeable_fields(
 
 DexMethod* create_instanceof_method(const DexType* merger_type,
                                     DexField* type_tag_field) {
-  auto arg_list =
-      DexTypeList::make_type_list({get_object_type(), get_int_type()});
-  auto proto = DexProto::make_proto(get_boolean_type(), arg_list);
+  auto arg_list = DexTypeList::make_type_list(
+      {known_types::java_lang_Object(), known_types::_int()});
+  auto proto = DexProto::make_proto(known_types::_boolean(), arg_list);
   auto access = ACC_PUBLIC | ACC_STATIC;
   auto mc = new MethodCreator(const_cast<DexType*>(merger_type),
                               DexString::make_string(INSTANCE_OF_STUB_NAME),
@@ -238,16 +238,16 @@ DexMethod* create_instanceof_method(const DexType* merger_type,
   auto obj_loc = mc->get_local(0);
   auto type_tag_loc = mc->get_local(1);
   // first type check result loc.
-  auto check_res_loc = mc->make_local(get_boolean_type());
+  auto check_res_loc = mc->make_local(known_types::_boolean());
   auto mb = mc->get_main_block();
   mb->instance_of(obj_loc, check_res_loc, const_cast<DexType*>(merger_type));
   // ret slot.
-  auto ret_loc = mc->make_local(get_boolean_type());
+  auto ret_loc = mc->make_local(known_types::_boolean());
   // first check and branch off. Zero means fail.
   auto instance_of_block = mb->if_testz(OPCODE_IF_EQZ, check_res_loc);
 
   // Fall through. Check succeed.
-  auto itype_tag_loc = mc->make_local(get_int_type());
+  auto itype_tag_loc = mc->make_local(known_types::_int());
   // CHECK_CAST obj to merger type.
   instance_of_block->check_cast(obj_loc, const_cast<DexType*>(merger_type));
   instance_of_block->iget(type_tag_field, obj_loc, itype_tag_loc);

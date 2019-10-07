@@ -36,13 +36,13 @@ FixpointIterator::FixpointIterator(const cfg::ControlFlowGraph& cfg)
   always_assert(m_stringbuilder_init_with_string != nullptr);
   always_assert(m_append_str != nullptr);
 
-  m_immutable_types.emplace(get_boolean_type());
-  m_immutable_types.emplace(get_char_type());
-  m_immutable_types.emplace(get_double_type());
-  m_immutable_types.emplace(get_float_type());
-  m_immutable_types.emplace(get_int_type());
-  m_immutable_types.emplace(get_long_type());
-  m_immutable_types.emplace(get_string_type());
+  m_immutable_types.emplace(known_types::_boolean());
+  m_immutable_types.emplace(known_types::_char());
+  m_immutable_types.emplace(known_types::_double());
+  m_immutable_types.emplace(known_types::_float());
+  m_immutable_types.emplace(known_types::_int());
+  m_immutable_types.emplace(known_types::_long());
+  m_immutable_types.emplace(known_types::java_lang_String());
 }
 
 /*
@@ -233,7 +233,7 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
   auto string_ty = DexType::make_type("Ljava/lang/String;");
 
   ClassCreator cc(outline_helper_cls);
-  cc.set_super(get_object_type());
+  cc.set_super(known_types::java_lang_Object());
   bool did_create_helper{false};
   for (const auto& p : m_outline_typelists) {
     const auto* typelist = p.first;

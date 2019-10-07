@@ -688,7 +688,7 @@ DexProto* make_proto_for(DexClass* cls) {
   }
 
   auto fields_list = DexTypeList::make_type_list(std::move(dfields));
-  return DexProto::make_proto(get_void_type(), fields_list);
+  return DexProto::make_proto(known_types::_void(), fields_list);
 }
 
 /**
@@ -842,7 +842,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   DexMethodRef* buildee_constr_ref = DexMethod::get_method(
       buildee,
       DexString::make_string("<init>"),
-      DexProto::make_proto(get_void_type(),
+      DexProto::make_proto(known_types::_void(),
                            DexTypeList::make_type_list({builder->get_type()})));
   if (!buildee_constr_ref) {
     // Nothing to search for.
@@ -1202,7 +1202,7 @@ bool remove_builder_from(DexMethod* method,
                              : builder->get_super_class();
 
   // TODO(emmasevastian): extend it.
-  static DexType* object_type = get_object_type();
+  static DexType* object_type = known_types::java_lang_Object();
   if (super_class != object_type) {
     return false;
   }

@@ -409,7 +409,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_MOVE_EXCEPTION: {
     // We don't know where to grab the type of the just-caught exception.
     // Simply set to j.l.Throwable here.
-    set_reference(current_state, insn->dest(), get_throwable_type());
+    set_reference(current_state, insn->dest(),
+                  known_types::java_lang_Throwable());
     break;
   }
   case OPCODE_RETURN_VOID: {
@@ -442,11 +443,13 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_STRING: {
-    set_reference(current_state, RESULT_REGISTER, get_string_type());
+    set_reference(current_state, RESULT_REGISTER,
+                  known_types::java_lang_String());
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER, get_class_type());
+    set_reference(current_state, RESULT_REGISTER,
+                  known_types::java_lang_Class());
     break;
   }
   case OPCODE_MONITOR_ENTER:

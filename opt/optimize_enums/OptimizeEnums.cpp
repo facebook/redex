@@ -233,7 +233,7 @@ void collect_generated_switch_cases(
  * Details: https://developer.android.com/reference/java/lang/Enum.html
  */
 DexMethod* get_java_enum_ctor() {
-  DexType* java_enum_type = get_enum_type();
+  DexType* java_enum_type = known_types::java_lang_Enum();
   DexClass* java_enum_cls = type_class(java_enum_type);
   const std::vector<DexMethod*>& java_enum_ctors = java_enum_cls->get_ctors();
 
@@ -338,7 +338,7 @@ class OptimizeEnums {
         const auto& ifields = cls->get_ifields();
         return std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
           auto type = field->get_type();
-          return is_primitive(type) || type == get_string_type();
+          return is_primitive(type) || type == known_types::java_lang_String();
         });
       }
       return false;
@@ -469,7 +469,8 @@ class OptimizeEnums {
     } else {
       const DexMethodRef* ref = it->insn->get_method();
       // Enum.<init>
-      if (ref->get_class() != get_enum_type() || !is_constructor(ref)) {
+      if (ref->get_class() != known_types::java_lang_Enum() ||
+          !is_constructor(ref)) {
         return false;
       }
     }
@@ -661,8 +662,8 @@ class OptimizeEnums {
     auto invoke_ordinal = (*info.invoke)->insn;
     auto invoke_type = invoke_ordinal->get_method()->get_class();
     auto invoke_cls = type_class(invoke_type);
-    if (!invoke_cls ||
-        (invoke_type != get_enum_type() && !is_enum(invoke_cls))) {
+    if (!invoke_cls || (invoke_type != known_types::java_lang_Enum() &&
+                        !is_enum(invoke_cls))) {
       return false;
     }
 
@@ -673,7 +674,8 @@ class OptimizeEnums {
 
     // Check the current enum corresponds.
     auto current_enum = lookup_table_to_enum.at(lookup_table);
-    if (invoke_type != get_enum_type() && current_enum != invoke_type) {
+    if (invoke_type != known_types::java_lang_Enum() &&
+        current_enum != invoke_type) {
       return false;
     }
     return true;

@@ -16,13 +16,14 @@ using namespace dex_asm;
 
 MethodCreator make_method_creator() {
 
-  MethodCreator mc(DexType::make_type("Lfoo;"),
-                   DexString::make_string("bar"),
-                   DexProto::make_proto(get_void_type(),
+  MethodCreator mc(
+      DexType::make_type("Lfoo;"),
+      DexString::make_string("bar"),
+      DexProto::make_proto(known_types::_void(),
 
-                                        DexTypeList::make_type_list(
-                                            {get_int_type(), get_long_type()})),
-                   ACC_PUBLIC);
+                           DexTypeList::make_type_list(
+                               {known_types::_int(), known_types::_long()})),
+      ACC_PUBLIC);
   return mc;
 }
 
@@ -46,7 +47,7 @@ TEST_F(CreatorsTest, Alloc) {
 
 TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   auto mc = make_method_creator();
-  auto idx_loc = mc.make_local(get_int_type());
+  auto idx_loc = mc.make_local(known_types::_int());
   auto param_loc = mc.get_local(1);
   auto mb = mc.get_main_block();
   mb->load_const(idx_loc, 1);
@@ -119,7 +120,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
 TEST_F(CreatorsTest, ClassCreator) {
   std::string foo("Lfoo;");
   ClassCreator cc(DexType::make_type(foo.c_str()));
-  cc.set_super(get_object_type());
+  cc.set_super(known_types::java_lang_Object());
   auto cls = cc.create();
   std::string bar("Lbar;");
   cls->set_deobfuscated_name(bar);

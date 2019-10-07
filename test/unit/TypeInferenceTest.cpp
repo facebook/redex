@@ -39,7 +39,7 @@ TEST_F(TypeInferenceTest, const0) {
     if (is_invoke(insn->opcode())) {
       auto& env = envs.at(insn);
       auto dex_type = env.get_dex_type(insn->src(0));
-      if (dex_type && *dex_type != get_object_type()) {
+      if (dex_type && *dex_type != known_types::java_lang_Object()) {
         EXPECT_TRUE(DexType::get_type("LBar;") != *dex_type);
       }
     }

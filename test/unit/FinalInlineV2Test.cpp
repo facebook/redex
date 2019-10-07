@@ -17,13 +17,13 @@ struct FinalInlineTest : public RedexTest {
  public:
   void SetUp() override {
     m_cc = std::make_unique<ClassCreator>(DexType::make_type("LFoo;"));
-    m_cc->set_super(get_object_type());
+    m_cc->set_super(known_types::java_lang_Object());
   }
 
  protected:
   DexField* create_field_with_value(const char* name, uint32_t value) {
     auto field = static_cast<DexField*>(DexField::make_field(name));
-    auto encoded_value = DexEncodedValue::zero_for_type(get_int_type());
+    auto encoded_value = DexEncodedValue::zero_for_type(known_types::_int());
     encoded_value->value(value);
     field->make_concrete(ACC_PUBLIC | ACC_STATIC, encoded_value);
     m_cc->add_field(field);

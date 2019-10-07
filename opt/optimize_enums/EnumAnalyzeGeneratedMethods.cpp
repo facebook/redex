@@ -140,7 +140,8 @@ void EnumAnalyzeGeneratedMethods::process_invocation(
   };
 
   if (m_candidate_types.count(callee_class) ||
-      get_enum_type() == callee_class || get_object_type() == callee_class) {
+      known_types::java_lang_Enum() == callee_class ||
+      known_types::java_lang_Object() == callee_class) {
     for (auto whitelisted_method : whitelisted_methods) {
       if (signatures_match(callee_ref, whitelisted_method)) {
         TRACE(ENUM, 9, "Skipping whitelisted invocation %s", SHOW(insn));

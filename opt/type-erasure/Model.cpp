@@ -300,7 +300,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    redex_assert(super != nullptr && super != get_object_type());
+    redex_assert(super != nullptr && super != known_types::java_lang_Object());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -620,7 +620,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
 
   TRACE(TERA, 4, "Non mergeables (opcodes) %ld", m_non_mergeables.size());
 
-  static DexType* string_type = get_string_type();
+  static DexType* string_type = known_types::java_lang_String();
 
   if (!m_spec.merge_types_with_static_fields) {
     walk::fields(scope, [&](DexField* field) {
@@ -731,7 +731,7 @@ void Model::shape_merger(const MergerType& merger,
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
       const auto field_type = field->get_type();
-      if (field_type == get_string_type()) {
+      if (field_type == known_types::java_lang_String()) {
         shape.string_fields++;
         continue;
       }

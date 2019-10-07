@@ -557,8 +557,9 @@ TEST_F(RenamerTest, Interface3IntfOverEscape) {
   // add static void A() {} in class A
   auto cls = type_class(DexType::get_type("LA;"));
   create_empty_method(cls, "A",
-      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({})),
-      ACC_PUBLIC | ACC_STATIC);
+                      DexProto::make_proto(known_types::_void(),
+                                           DexTypeList::make_type_list({})),
+                      ACC_PUBLIC | ACC_STATIC);
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));

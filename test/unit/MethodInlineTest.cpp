@@ -37,7 +37,7 @@ void test_inliner(const std::string& caller_str,
 
 DexClass* create_a_class(const char* description) {
   ClassCreator cc(DexType::make_type(description));
-  cc.set_super(get_object_type());
+  cc.set_super(known_types::java_lang_Object());
   return cc.create();
 }
 
@@ -48,13 +48,13 @@ DexClass* create_a_class(const char* description) {
  * }
  */
 DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
-  auto proto =
-      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+  auto proto = DexProto::make_proto(known_types::_void(),
+                                    DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_PUBLIC);
   auto main_block = mc.get_main_block();
-  auto loc = mc.make_local(get_int_type());
+  auto loc = mc.make_local(known_types::_int());
   main_block->load_const(loc, val);
   main_block->ret_void();
   auto method = mc.create();
@@ -73,8 +73,8 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
 DexMethod* make_a_method_calls_others(DexClass* cls,
                                       const char* name,
                                       std::vector<DexMethod*> methods) {
-  auto proto =
-      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+  auto proto = DexProto::make_proto(known_types::_void(),
+                                    DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(
       cls->get_type(), DexString::make_string(name), proto);
   MethodCreator mc(ref, ACC_PUBLIC);

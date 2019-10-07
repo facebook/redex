@@ -15,95 +15,9 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
+#include "TypeUtil.h"
 
 using TypeVector = std::vector<const DexType*>;
-
-/**
- * Return the DexType for java.lang.Object.
- */
-DexType* get_object_type();
-
-/**
- * Return the DexType for a void (V) type.
- */
-DexType* get_void_type();
-
-/**
- * Return the DexType for a byte (B) type.
- */
-DexType* get_byte_type();
-
-/**
- * Return the DexType for a char (C) type.
- */
-DexType* get_char_type();
-
-/**
- * Return the DexType for a short (S) type.
- */
-DexType* get_short_type();
-
-/**
- * Return the DexType for an int (I) type.
- */
-DexType* get_int_type();
-
-/**
- * Return the DexType for a long (J) type.
- */
-DexType* get_long_type();
-
-/**
- * Return the DexType for a boolean (Z) type.
- */
-DexType* get_boolean_type();
-
-/**
- * Return the DexType for a float (F) type.
- */
-DexType* get_float_type();
-
-/**
- * Return the DexType for a double (D) type.
- */
-DexType* get_double_type();
-
-/**
- * Return the DexType for an java.lang.String type.
- */
-DexType* get_string_type();
-
-/**
- * Return the DexType for an java.lang.Class type.
- */
-DexType* get_class_type();
-
-/**
- * Return the DexType for an java.lang.Enum type.
- */
-DexType* get_enum_type();
-
-/**
- * Return the DexType for an java.lang.Integer type.
- */
-DexType* get_integer_type();
-
-/**
- * Return the DexType for an java.lang.Throwable type.
- */
-DexType* get_throwable_type();
-
-/**
- * Return the reference type wrappers for primitive types
- */
-DexType* get_java_lang_boolean_type();
-DexType* get_java_lang_byte_type();
-DexType* get_java_lang_short_type();
-DexType* get_java_lang_character_type();
-DexType* get_java_lang_integer_type();
-DexType* get_java_lang_long_type();
-DexType* get_java_lang_float_type();
-DexType* get_java_lang_double_type();
 
 struct ClassSerdes {
   std::vector<DexType*> serdes;

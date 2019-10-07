@@ -21,72 +21,6 @@
 #include "Resolver.h"
 #include "UnknownVirtuals.h"
 
-DexType* get_object_type() { return DexType::make_type("Ljava/lang/Object;"); }
-
-DexType* get_void_type() { return DexType::make_type("V"); }
-
-DexType* get_byte_type() { return DexType::make_type("B"); }
-
-DexType* get_char_type() { return DexType::make_type("C"); }
-
-DexType* get_short_type() { return DexType::make_type("S"); }
-
-DexType* get_int_type() { return DexType::make_type("I"); }
-
-DexType* get_long_type() { return DexType::make_type("J"); }
-
-DexType* get_boolean_type() { return DexType::make_type("Z"); }
-
-DexType* get_float_type() { return DexType::make_type("F"); }
-
-DexType* get_double_type() { return DexType::make_type("D"); }
-
-DexType* get_string_type() { return DexType::make_type("Ljava/lang/String;"); }
-
-DexType* get_class_type() { return DexType::make_type("Ljava/lang/Class;"); }
-
-DexType* get_enum_type() { return DexType::make_type("Ljava/lang/Enum;"); }
-
-DexType* get_integer_type() {
-  return DexType::make_type("Ljava/lang/Integer;");
-}
-
-DexType* get_throwable_type() {
-  return DexType::make_type("Ljava/lang/Throwable;");
-}
-
-DexType* get_java_lang_boolean_type() {
-  return DexType::make_type("Ljava/lang/Boolean;");
-}
-
-DexType* get_java_lang_byte_type() {
-  return DexType::make_type("Ljava/lang/Byte;");
-}
-
-DexType* get_java_lang_short_type() {
-  return DexType::make_type("Ljava/lang/Short;");
-}
-
-DexType* get_java_lang_character_type() {
-  return DexType::make_type("Ljava/lang/Character;");
-}
-
-DexType* get_java_lang_integer_type() {
-  return DexType::make_type("Ljava/lang/Integer;");
-}
-
-DexType* get_java_lang_long_type() {
-  return DexType::make_type("Ljava/lang/Long;");
-}
-
-DexType* get_java_lang_float_type() {
-  return DexType::make_type("Ljava/lang/Float;");
-}
-
-DexType* get_java_lang_double_type() {
-  return DexType::make_type("Ljava/lang/Double;");
-}
-
 ClassSerdes get_class_serdes(const DexClass* cls) {
   std::string name = cls->get_name()->str();
   name.pop_back();
@@ -112,8 +46,8 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
   using namespace dex_asm;
 
   auto clinit_name = DexString::make_string("<clinit>");
-  auto clinit_proto =
-      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+  auto clinit_proto = DexProto::make_proto(known_types::_void(),
+                                           DexTypeList::make_type_list({}));
 
   DexMethod* clinit = static_cast<DexMethod*>(
       DexMethod::get_method(cls->get_type(), clinit_name, clinit_proto));
@@ -237,21 +171,21 @@ char type_shorty(const DexType* type) {
 DexType* get_boxed_reference_type(const DexType* type) {
   switch (type_shorty(type)) {
   case 'Z':
-    return get_java_lang_boolean_type();
+    return known_types::java_lang_Boolean();
   case 'B':
-    return get_java_lang_byte_type();
+    return known_types::java_lang_Byte();
   case 'S':
-    return get_java_lang_short_type();
+    return known_types::java_lang_Short();
   case 'C':
-    return get_java_lang_character_type();
+    return known_types::java_lang_Character();
   case 'I':
-    return get_java_lang_integer_type();
+    return known_types::java_lang_Integer();
   case 'J':
-    return get_java_lang_long_type();
+    return known_types::java_lang_Long();
   case 'F':
-    return get_java_lang_float_type();
+    return known_types::java_lang_Float();
   case 'D':
-    return get_java_lang_double_type();
+    return known_types::java_lang_Double();
   default:
     return nullptr;
   }
@@ -259,21 +193,21 @@ DexType* get_boxed_reference_type(const DexType* type) {
 
 // Takes a reference type, returns its corresponding unboxing method
 DexMethodRef* get_unboxing_method_for_type(const DexType* type) {
-  if (type == get_java_lang_boolean_type()) {
+  if (type == known_types::java_lang_Boolean()) {
     return DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z");
-  } else if (type == get_java_lang_byte_type()) {
+  } else if (type == known_types::java_lang_Byte()) {
     return DexMethod::make_method("Ljava/lang/Byte;.byteValue:()B");
-  } else if (type == get_java_lang_short_type()) {
+  } else if (type == known_types::java_lang_Short()) {
     return DexMethod::make_method("Ljava/lang/Short;.shortValue:()S");
-  } else if (type == get_java_lang_character_type()) {
+  } else if (type == known_types::java_lang_Character()) {
     return DexMethod::make_method("Ljava/lang/Character;.charValue:()C");
-  } else if (type == get_java_lang_integer_type()) {
+  } else if (type == known_types::java_lang_Integer()) {
     return DexMethod::make_method("Ljava/lang/Integer;.intValue:()I");
-  } else if (type == get_java_lang_long_type()) {
+  } else if (type == known_types::java_lang_Long()) {
     return DexMethod::make_method("Ljava/lang/Long;.longValue:()J");
-  } else if (type == get_java_lang_float_type()) {
+  } else if (type == known_types::java_lang_Float()) {
     return DexMethod::make_method("Ljava/lang/Float;.floatValue:()F");
-  } else if (type == get_java_lang_double_type()) {
+  } else if (type == known_types::java_lang_Double()) {
     return DexMethod::make_method("Ljava/lang/Double;.doubleValue:()D");
   }
   return nullptr;
@@ -281,28 +215,28 @@ DexMethodRef* get_unboxing_method_for_type(const DexType* type) {
 
 // Take a reference type, returns its valueOf function
 DexMethodRef* get_value_of_method_for_type(const DexType* type) {
-  if (type == get_java_lang_boolean_type()) {
+  if (type == known_types::java_lang_Boolean()) {
     return DexMethod::make_method(
         "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;");
-  } else if (type == get_java_lang_byte_type()) {
+  } else if (type == known_types::java_lang_Byte()) {
     return DexMethod::make_method(
         "Ljava/lang/Byte;.valueOf:(B)Ljava/lang/Byte;");
-  } else if (type == get_java_lang_short_type()) {
+  } else if (type == known_types::java_lang_Short()) {
     return DexMethod::make_method(
         "Ljava/lang/Short;.valueOf:(S)Ljava/lang/Short;");
-  } else if (type == get_java_lang_character_type()) {
+  } else if (type == known_types::java_lang_Character()) {
     return DexMethod::make_method(
         "Ljava/lang/Character;.valueOf:(C)Ljava/lang/Character;");
-  } else if (type == get_java_lang_integer_type()) {
+  } else if (type == known_types::java_lang_Integer()) {
     return DexMethod::make_method(
         "Ljava/lang/Integer;.valueOf:(I)Ljava/lang/Integer;");
-  } else if (type == get_java_lang_long_type()) {
+  } else if (type == known_types::java_lang_Long()) {
     return DexMethod::make_method(
         "Ljava/lang/Long;.valueOf:(J)Ljava/lang/Long;");
-  } else if (type == get_java_lang_float_type()) {
+  } else if (type == known_types::java_lang_Float()) {
     return DexMethod::make_method(
         "Ljava/lang/Float;.valueOf:(Z)Ljava/lang/Float;");
-  } else if (type == get_java_lang_double_type()) {
+  } else if (type == known_types::java_lang_Double()) {
     return DexMethod::make_method(
         "Ljava/lang/Double;.valueOf:(D)Ljava/lang/Double;");
   }
@@ -328,7 +262,7 @@ bool has_hierarchy_in_scope(DexClass* cls) {
     super = super_cls->get_super_class();
     super_cls = type_class_internal(super);
   }
-  return super == get_object_type();
+  return super == known_types::java_lang_Object();
 }
 
 bool is_trivial_clinit(const DexMethod* method) {

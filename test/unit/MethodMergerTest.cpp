@@ -21,7 +21,7 @@ struct MethodMergerTest : RedexTest {
 
   MethodMergerTest() : RedexTest() {
     ClassCreator cc(DexType::make_type("Lfoo;"));
-    cc.set_super(get_object_type());
+    cc.set_super(known_types::java_lang_Object());
     m_cls = cc.create();
     scope.push_back(m_cls);
   }
@@ -31,7 +31,7 @@ struct MethodMergerTest : RedexTest {
                                     int ret_value) {
     auto ref = DexMethod::make_method(full_descriptor);
     MethodCreator mc(ref, access);
-    auto res_loc = mc.make_local(get_int_type());
+    auto res_loc = mc.make_local(known_types::_int());
     auto main_block = mc.get_main_block();
     main_block->load_const(res_loc, ret_value);
     main_block->ret(res_loc);
@@ -55,7 +55,7 @@ TEST_F(MethodMergerTest, merge_methods_within_class) {
   {
     // method6's proto is different and it calls 0-5 methods.
     MethodCreator mc(DexMethod::make_method("Lfoo;.method_6:()V"), access);
-    auto loc = mc.make_local(get_int_type());
+    auto loc = mc.make_local(known_types::_int());
     auto main_block = mc.get_main_block();
     main_block->load_const(loc, 0);
     // At least two callsites for each methods.

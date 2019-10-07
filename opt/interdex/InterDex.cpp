@@ -807,7 +807,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
     if (!canary_cls) {
       ClassCreator cc(canary_type);
       cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
-      cc.set_super(get_object_type());
+      cc.set_super(known_types::java_lang_Object());
       canary_cls = cc.create();
       // Don't rename the Canary we've created
       canary_cls->rstate.set_has_keep();

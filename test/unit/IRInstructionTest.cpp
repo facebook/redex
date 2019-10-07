@@ -211,7 +211,8 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
   method->make_concrete(ACC_STATIC, 0);
   method->set_code(std::make_unique<IRCode>(method, 0));
   auto code = method->get_code();
-  code->push_back(dasm(OPCODE_CHECK_CAST, get_object_type(), {1_v}));
+  code->push_back(
+      dasm(OPCODE_CHECK_CAST, known_types::java_lang_Object(), {1_v}));
   code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
   instruction_lowering::lower(method);
 
@@ -221,9 +222,10 @@ TEST_F(IRInstructionTest, SelectCheckCast) {
       *it->dex_insn,
       *(new DexInstruction(DOPCODE_MOVE_OBJECT))->set_dest(0)->set_src(0, 1));
   ++it;
-  EXPECT_EQ(*it->dex_insn,
-            *(new DexOpcodeType(DOPCODE_CHECK_CAST, get_object_type()))
-                 ->set_src(0, 0));
+  EXPECT_EQ(
+      *it->dex_insn,
+      *(new DexOpcodeType(DOPCODE_CHECK_CAST, known_types::java_lang_Object()))
+           ->set_src(0, 0));
 }
 
 TEST_F(IRInstructionTest, SelectMove) {

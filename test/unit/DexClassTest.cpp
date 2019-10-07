@@ -36,7 +36,7 @@ TEST_F(DexClassTest, testUniqueMethodName) {
 TEST_F(DexClassTest, testUniqueFieldName) {
   auto class_type = DexType::make_type(DexString::make_string("LFoo;"));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(get_object_type());
+  class_creator.set_super(known_types::java_lang_Object());
   class_creator.create();
   auto type = DexType::make_type("LFoo;");
   DexString* newname = DexField::get_unique_name(

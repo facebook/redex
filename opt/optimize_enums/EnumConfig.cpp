@@ -146,7 +146,7 @@ ParamSummary calculate_param_summary(DexMethod* method,
  * java.lang.Object type. Then convert the escape summaries to param summaries.
  */
 void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map) {
-  auto object_type = get_object_type();
+  auto object_type = known_types::java_lang_Object();
   walk::parallel::code(
       scope,
       [object_type](DexMethod* method) {

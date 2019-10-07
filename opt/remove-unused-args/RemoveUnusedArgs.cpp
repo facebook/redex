@@ -197,7 +197,7 @@ bool RemoveArgs::update_method_signature(
   auto live_args = get_live_arg_type_list(method, live_arg_idxs);
   auto live_args_list = DexTypeList::make_type_list(std::move(live_args));
   DexType* rtype =
-      remove_result ? get_void_type() : method->get_proto()->get_rtype();
+      remove_result ? known_types::_void() : method->get_proto()->get_rtype();
   auto updated_proto = DexProto::make_proto(rtype, live_args_list);
   always_assert(updated_proto != method->get_proto());
 

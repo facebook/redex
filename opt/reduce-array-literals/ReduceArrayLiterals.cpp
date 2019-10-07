@@ -446,7 +446,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (is_primitive(element_type) && element_type != get_int_type()) {
+    if (is_primitive(element_type) && element_type != known_types::_int()) {
       // Somewhat surprising random implementation limitation in all known
       // ART versions:
       // https://android.googlesource.com/platform/art/+/400455c23d6a9a849d090b9e60ff53c4422e461b/runtime/interpreter/interpreter_common.cc#189

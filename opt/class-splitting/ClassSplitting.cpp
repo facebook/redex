@@ -115,7 +115,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         ++m_stats.relocation_classes;
         ClassCreator cc(target_type);
         cc.set_access(ACC_PUBLIC | ACC_FINAL);
-        cc.set_super(get_object_type());
+        cc.set_super(known_types::java_lang_Object());
         DexClass* target_cls = cc.create();
         target_cls->rstate.set_generated();
         target_class_info.target_cls = target_cls;

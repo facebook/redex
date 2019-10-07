@@ -22,7 +22,7 @@ std::unique_ptr<ReachableObjectGraph> generate_graph() {
   auto seed = ReachableObject();
 
   ClassCreator cc(DexType::make_type("LFoo;"));
-  cc.set_super(get_object_type());
+  cc.set_super(known_types::java_lang_Object());
   auto cls = ReachableObject(cc.create());
 
   auto field = ReachableObject(DexField::make_field("LFoo;.field1:I"));

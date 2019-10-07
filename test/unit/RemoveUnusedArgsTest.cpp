@@ -25,7 +25,7 @@ struct RemoveUnusedArgsTest : public RedexTest {
 
   RemoveUnusedArgsTest() {
     Scope dummy_scope;
-    auto obj_t = get_object_type();
+    auto obj_t = known_types::java_lang_Object();
     auto dummy_t = DexType::make_type("LA;");
     auto dummy_cls = create_internal_class(dummy_t, obj_t, {});
     dummy_scope.push_back(dummy_cls);

@@ -17,7 +17,7 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
  public:
   BoxedBooleanTest() {
     ClassCreator creator(DexType::make_type("Ljava/lang/Boolean;"));
-    creator.set_super(get_object_type());
+    creator.set_super(known_types::java_lang_Object());
 
     auto boolean_true =
         DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean")

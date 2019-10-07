@@ -19,7 +19,7 @@ using namespace testing;
 
 void setup() {
   ClassCreator cc(DexType::make_type("LFoo;"));
-  cc.set_super(get_object_type());
+  cc.set_super(known_types::java_lang_Object());
   auto field = DexField::make_field("LFoo;.table:[LBar;")
                    ->make_concrete(ACC_PUBLIC | ACC_STATIC);
   cc.add_field(field);
@@ -591,7 +591,8 @@ TEST_F(OptimizeEnumsTest, divergent_leaf_entry_state) {
 
 optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
   auto method = assembler::method_from_string(s_expr);
-  return optimize_enums::calculate_param_summary(method, get_object_type());
+  return optimize_enums::calculate_param_summary(
+      method, known_types::java_lang_Object());
 }
 
 TEST_F(OptimizeEnumsTest, test_param_summary_generating) {

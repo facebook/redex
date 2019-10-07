@@ -1312,12 +1312,12 @@ DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
   for (auto t : type_list) {
     new_arg_list.push_back(t);
   }
-  new_arg_list.push_back(get_int_type());
+  new_arg_list.push_back(known_types::_int());
   DexTypeList* new_args = DexTypeList::make_type_list(std::move(new_arg_list));
   DexProto* new_proto = DexProto::make_proto(rtype, new_args);
   methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
   while (methodref_in_context) {
-    new_arg_list.push_back(get_int_type());
+    new_arg_list.push_back(known_types::_int());
     new_args = DexTypeList::make_type_list(std::move(new_arg_list));
     new_proto = DexProto::make_proto(rtype, new_args);
     methodref_in_context = DexMethod::get_method(this, method_name, new_proto);

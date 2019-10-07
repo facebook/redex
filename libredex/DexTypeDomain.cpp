@@ -23,7 +23,7 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   const DexClass* other_cls =
       const_cast<const DexClass*>(type_class(other.get_dex_type()));
   if (!this_cls || !other_cls) {
-    m_dex_type = get_object_type();
+    m_dex_type = known_types::java_lang_Object();
     return sparta::AbstractValueKind::Value;
   }
   // Direct subclass relation.
@@ -45,7 +45,7 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
   }
 
   // Give up. Rewrite to java.lang.Object.
-  m_dex_type = get_object_type();
+  m_dex_type = known_types::java_lang_Object();
   return sparta::AbstractValueKind::Value;
 }
 

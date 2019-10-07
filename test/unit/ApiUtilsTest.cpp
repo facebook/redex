@@ -16,7 +16,7 @@ namespace {
 
 std::vector<DexClass*> create_scope(bool extra_class) {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = get_object_type();
+  auto obj_t = known_types::java_lang_Object();
 
   auto a_t = DexType::make_type("LA;");
   auto a_cls = create_internal_class(a_t, obj_t, {});

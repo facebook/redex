@@ -23,14 +23,14 @@ void fix_colliding_dmethods(
   for (auto it : colliding_methods) {
     auto meth = it.first;
     auto new_proto = it.second;
-    auto new_arg_list =
-        type_reference::append_and_make(new_proto->get_args(), get_int_type());
+    auto new_arg_list = type_reference::append_and_make(new_proto->get_args(),
+                                                        known_types::_int());
     new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
     size_t arg_count = 1;
     while (DexMethod::get_method(
                meth->get_class(), meth->get_name(), new_proto) != nullptr) {
       new_arg_list = type_reference::append_and_make(new_proto->get_args(),
-                                                     get_int_type());
+                                                     known_types::_int());
       new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
       ++arg_count;
     }

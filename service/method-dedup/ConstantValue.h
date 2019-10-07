@@ -64,9 +64,9 @@ class ConstantValue {
   }
   DexType* get_constant_type() const {
     if (is_int_value()) {
-      return get_int_type();
+      return known_types::_int();
     } else {
-      return get_string_type();
+      return known_types::java_lang_String();
     }
   }
 

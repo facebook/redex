@@ -733,7 +733,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                                DexType* type) const {
     auto dest_reg =
         insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
-    if (type == get_class_type()) {
+    if (type == known_types::java_lang_Class()) {
       // We don't have precise type information to which the Class obj refers
       // to.
       current_state->set_abstract_obj(dest_reg,
@@ -879,8 +879,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(
-                AbstractObject(AbstractObjectKind::CLASS, get_string_type())));
+            AbstractObjectDomain(AbstractObject(
+                AbstractObjectKind::CLASS, known_types::java_lang_String())));
         current_state->set_class_source(
             RESULT_REGISTER,
             ClassObjectSourceDomain(ClassObjectSource::REFLECTION));

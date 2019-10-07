@@ -32,9 +32,9 @@ class ReflectionAnalysisTest : public RedexTest {
 
   ReflectionAnalysisTest() {
     auto args = DexTypeList::make_type_list({
-        get_object_type() // v5
+        known_types::java_lang_Object() // v5
     });
-    auto proto = DexProto::make_proto(get_void_type(), args);
+    auto proto = DexProto::make_proto(known_types::_void(), args);
     m_method = DexMethod::make_method(DexType::make_type("Lbar;"),
                                       DexString::make_string("testMethod"),
                                       proto)
