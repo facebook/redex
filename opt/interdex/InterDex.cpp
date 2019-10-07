@@ -809,6 +809,9 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
       cc.set_access(ACC_PUBLIC | ACC_INTERFACE | ACC_ABSTRACT);
       cc.set_super(get_object_type());
       canary_cls = cc.create();
+      // Don't rename the Canary we've created
+      canary_cls->rstate.set_has_keep();
+      canary_cls->rstate.set_allowshrinking();
     }
     m_dexes_structure.add_class_no_checks(canary_cls);
 
