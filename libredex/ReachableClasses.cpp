@@ -310,15 +310,6 @@ void mark_reachable_by_classname(DexType* dtype) {
   mark_reachable_by_classname(type_class_internal(dtype));
 }
 
-void mark_reachable_by_classname(std::string& classname) {
-  DexString* dstring =
-      DexString::get_string(classname.c_str(), (uint32_t)classname.size());
-  DexType* dtype = DexType::get_type(dstring);
-  if (dtype == nullptr) return;
-  DexClass* dclass = type_class_internal(dtype);
-  mark_reachable_by_classname(dclass);
-}
-
 // Possible methods for an android:onClick accept 1 argument that is a View.
 // Source:
 // https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r15/core/java/android/view/View.java#5331
@@ -699,7 +690,6 @@ void init_permanently_reachable_classes(
   std::vector<std::string> methods;
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
-  bool legacy_reflection_reachability;
   bool analyze_native_lib_reachability;
 
   config.get("apk_dir", "", apk_dir);
@@ -708,42 +698,9 @@ void init_permanently_reachable_classes(
   config.get("keep_class_members", {}, class_members);
   config.get("keep_methods", {}, methods);
   config.get("compute_xml_reachability", true, compute_xml_reachability);
-  config.get("legacy_reflection_reachability", false,
-             legacy_reflection_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
   config.get("analyze_native_lib_reachability", true,
              analyze_native_lib_reachability);
-
-  if (legacy_reflection_reachability) {
-    auto match = std::make_tuple(
-        m::const_string(/* const-string {vX}, <any string> */),
-        m::move_result_pseudo(/* const-string {vX}, <any string> */),
-        m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
-                         m::opcode_method(
-                             m::named<DexMethodRef>("forName") &&
-                             m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
-                         m::has_n_args(1)));
-
-    walk::parallel::matching_opcodes(
-        scope,
-        match,
-        [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
-          auto const_string = insns[0];
-          auto move_result_pseudo = insns[1];
-          auto invoke_static = insns[2];
-          // Make sure that the registers agree
-          if (move_result_pseudo->dest() == invoke_static->src(0)) {
-            auto classname = JavaNameUtil::external_to_internal(
-                const_string->get_string()->c_str());
-            TRACE(PGR,
-                  4,
-                  "Found Class.forName of: %s, marking %s reachable",
-                  const_string->get_string()->c_str(),
-                  classname.c_str());
-            mark_reachable_by_classname(classname);
-          }
-        });
-  }
 
   std::unordered_set<DexType*> annotation_types(no_optimizations_anno.begin(),
                                                 no_optimizations_anno.end());
