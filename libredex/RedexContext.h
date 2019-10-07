@@ -98,7 +98,13 @@ struct RedexContext {
   DexDebugEntry* make_dbg_entry(DexDebugInstruction* opcode);
   DexDebugEntry* make_dbg_entry(DexPosition* pos);
 
-  void publish_class(DexClass*);
+  // Return false on unique classes
+  // Return true on benign duplicate classes
+  // Throw RedexException on problematic duplicate classes
+  bool class_already_loaded(DexClass* cls);
+
+  void publish_class(DexClass* cls);
+
   DexClass* type_class(const DexType* t);
   template <class TypeClassWalkerFn = void(const DexType*, const DexClass*)>
   void walk_type_class(TypeClassWalkerFn walker) {

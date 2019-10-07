@@ -1086,11 +1086,17 @@ class DexClass {
 
   friend struct ClassCreator;
 
- public:
-  ReferencedState rstate;
+  // This constructor is private on purpose, use DexClass::create instead
   DexClass(DexIdx* idx, const dex_class_def* cdef, const std::string& location);
 
  public:
+  ReferencedState rstate;
+
+  // May return nullptr on benign duplicate class
+  static DexClass* create(DexIdx* idx,
+                          const dex_class_def* cdef,
+                          const std::string& location);
+
   const std::vector<DexMethod*>& get_dmethods() const { return m_dmethods; }
   std::vector<DexMethod*>& get_dmethods() {
     always_assert_log(!m_external,

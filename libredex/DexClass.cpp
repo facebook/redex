@@ -14,6 +14,7 @@
 #include "DexMemberRefs.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "DuplicateClasses.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "StringBuilder.h"
@@ -1026,6 +1027,25 @@ DexAnnotationDirectory* DexClass::get_annotation_directory() {
   return nullptr;
 }
 
+DexClass* DexClass::create(DexIdx* idx,
+                           const dex_class_def* cdef,
+                           const std::string& location) {
+  DexClass* cls = new DexClass(idx, cdef, location);
+  if (g_redex->class_already_loaded(cls)) {
+    // FIXME: This isn't deterministic. We're keeping whichever class we loaded
+    // first, which may not always be from the same dex (if we load them in
+    // parallel, for example).
+    delete cls;
+    return nullptr;
+  }
+  cls->load_class_annotations(idx, cdef->annotations_off);
+  auto deva = std::unique_ptr<DexEncodedValueArray>(
+      load_static_values(idx, cdef->static_values_off));
+  cls->load_class_data_item(idx, cdef->class_data_offset, deva.get());
+  g_redex->publish_class(cls);
+  return cls;
+}
+
 DexClass::DexClass(DexIdx* idx,
                    const dex_class_def* cdef,
                    const std::string& location)
@@ -1038,11 +1058,6 @@ DexClass::DexClass(DexIdx* idx,
       m_external(false),
       m_perf_sensitive(false),
       m_location(location) {
-  load_class_annotations(idx, cdef->annotations_off);
-  auto deva = std::unique_ptr<DexEncodedValueArray>(
-      load_static_values(idx, cdef->static_values_off));
-  load_class_data_item(idx, cdef->class_data_offset, deva.get());
-  g_redex->publish_class(this);
 }
 
 void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {

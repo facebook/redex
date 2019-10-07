@@ -20,6 +20,7 @@
 
 #include "Creators.h"
 #include "DexClass.h"
+#include "DuplicateClasses.h"
 #include "JarLoader.h"
 #include "Trace.h"
 #include "Util.h"
@@ -343,31 +344,6 @@ static DexMethod *make_dexmethod(std::vector<cp_entry> &cpool,
   return method;
 }
 
-// Global whitelist for duplicated classes
-std::vector<std::string> g_dup_class_whitelist;
-
-// Return true if the cls is among one of the known whitelisted duplicated
-// classes.
-static bool is_known_dup(DexClass* cls) {
-  return std::find_if(g_dup_class_whitelist.begin(), g_dup_class_whitelist.end(),
-                      [=](const std::string& name) {
-                        return cls->get_name()->str() == name;
-                      }) != g_dup_class_whitelist.end();
-}
-
-// Read whitelisted duplicate class list from config.
-void read_dup_class_whitelist(const JsonWrapper& json_cfg) {
-  std::vector<std::string> default_whitelist = {
-      "Lcom/facebook/soloader/MergedSoMapping;", "Ljunit/framework/TestSuite;"};
-
-  json_cfg.get("dup_class_whitelist", default_whitelist, g_dup_class_whitelist);
-  TRACE(MAIN, 1, "dup_class_whitelist: { \n");
-  for (auto whitelist_name : g_dup_class_whitelist) {
-    TRACE(MAIN, 1, "  %s\n", whitelist_name.c_str());
-  }
-  TRACE(MAIN, 1, "}\n");
-}
-
 static bool parse_class(uint8_t* buffer,
                         Scope* classes,
                         attribute_hook_t attr_hook,
@@ -408,7 +384,7 @@ static bool parse_class(uint8_t* buffer,
             "  Current: '%s'\n"
             "  Previous: '%s'\n",
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());
-    } else if (!is_known_dup(cls)) {
+    } else if (!dup_classes::is_known_dup(cls)) {
       TRACE(MAIN, 1,
             "Warning: Found a duplicate class '%s' in .dex and .jar file.\n"
             "  Current: '%s'\n"

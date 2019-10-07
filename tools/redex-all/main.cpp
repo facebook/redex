@@ -37,6 +37,7 @@
 #include "DexHasher.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
+#include "DuplicateClasses.h"
 #include "GlobalConfig.h"
 #include "IODIMetadata.h"
 #include "InstructionLowering.h"
@@ -736,6 +737,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
   root_store.set_dex_magic(get_dex_magic(args.dex_files));
   stores.emplace_back(std::move(root_store));
 
+  const JsonWrapper& json_config = conf.get_json_config();
+  dup_classes::read_dup_class_whitelist(json_config);
+
   {
     Timer t("Load classes from dexes");
     dex_stats_t input_totals;
@@ -777,8 +781,6 @@ void redex_frontend(ConfigFiles& conf, /* input */
   args.entry_data["jars"] = Json::arrayValue;
   if (!library_jars.empty()) {
     Timer t("Load library jars");
-    const JsonWrapper& json_cfg = conf.get_json_config();
-    read_dup_class_whitelist(json_cfg);
 
     for (const auto& library_jar : library_jars) {
       TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
@@ -811,8 +813,8 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Processing proguard rules");
 
     bool keep_all_annotation_classes;
-    conf.get_json_config().get("keep_all_annotation_classes", true,
-                               keep_all_annotation_classes);
+    json_config.get("keep_all_annotation_classes", true,
+                    keep_all_annotation_classes);
     process_proguard_rules(conf.get_proguard_map(), scope, external_classes,
                            pg_config, keep_all_annotation_classes);
   }
@@ -826,7 +828,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, conf.get_json_config(),
+    init_reachable_classes(scope, json_config,
                            conf.get_no_optimizations_annos());
   }
 }
@@ -852,13 +854,13 @@ void redex_backend(const PassManager& manager,
   }
 
   TRACE(MAIN, 1, "Writing out new DexClasses...\n");
-  const JsonWrapper& json_cfg = conf.get_json_config();
+  const JsonWrapper& json_config = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
   bool emit_name_based_locators = false;
-  if (json_cfg.get("emit_locator_strings", false)) {
+  if (json_config.get("emit_locator_strings", false)) {
     emit_name_based_locators =
-        json_cfg.get("emit_name_based_locator_strings", false);
+        json_config.get("emit_name_based_locator_strings", false);
     TRACE(LOC, 1,
           "Will emit%s class-locator strings for classloader optimization\n",
           emit_name_based_locators ? " name-based" : "");
@@ -876,7 +878,7 @@ void redex_backend(const PassManager& manager,
   auto dik = redex_options.debug_info_kind;
   bool needs_addresses = dik == DebugInfoKind::NoPositions || is_iodi(dik);
   bool iodi_enable_overloaded_methods =
-      json_cfg.get("iodi_enable_overloaded_methods", false);
+      json_config.get("iodi_enable_overloaded_methods", false);
 
   TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
         iodi_enable_overloaded_methods ? "yes" : "no");
@@ -935,8 +937,7 @@ void redex_backend(const PassManager& manager,
 
   {
     Timer t("Writing opt decisions data");
-    const Json::Value& opt_decisions_args =
-        conf.get_json_config()["opt_decisions"];
+    const Json::Value& opt_decisions_args = json_config["opt_decisions"];
     if (opt_decisions_args.get("enable_logs", false).asBool()) {
       auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
       auto opt_data =
@@ -952,7 +953,7 @@ void redex_backend(const PassManager& manager,
   {
     Timer t("Writing stats");
     auto method_move_map =
-        conf.metafile(json_cfg.get("method_move_map", std::string()));
+        conf.metafile(json_config.get("method_move_map", std::string()));
     if (needs_addresses) {
       write_debug_line_mapping(debug_line_map_filename, method_to_id,
                                code_debug_lines, stores);

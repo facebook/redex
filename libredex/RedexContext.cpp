@@ -14,6 +14,7 @@
 
 #include "Debug.h"
 #include "DexClass.h"
+#include "DuplicateClasses.h"
 
 RedexContext* g_redex;
 
@@ -369,36 +370,48 @@ void RedexContext::mutate_method(DexMethodRef* method,
   }
 }
 
-void RedexContext::publish_class(DexClass* cls) {
+// Return false on unique classes
+// Return true on benign duplicate classes
+// Throw RedexException on problematic duplicate classes
+bool RedexContext::class_already_loaded(DexClass* cls) {
   std::lock_guard<std::mutex> l(m_type_system_mutex);
   const DexType* type = cls->get_type();
-  if (m_type_to_class.find(type) != end(m_type_to_class)) {
-    const auto& prev_loc = m_type_to_class[type]->get_location();
+  const auto& it = m_type_to_class.find(type);
+  if (it == m_type_to_class.end()) {
+    return false;
+  } else {
+    const auto& prev_loc = it->second->get_location();
     const auto& cur_loc = cls->get_location();
-    if (prev_loc == cur_loc) {
+    if (prev_loc == cur_loc || dup_classes::is_known_dup(cls)) {
+      // benign duplicates
       TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
     } else {
-      std::string class_name = show(cls);
-      std::string dex_1 = m_type_to_class[type]->get_location();
-      std::string dex_2 = cls->get_location();
-
+      const std::string& class_name = show(cls);
       TRACE(MAIN,
             1,
             "Found a duplicate class: %s in two dexes:\ndex 1: %s\ndex "
             "2: %s\n",
             class_name.c_str(),
-            dex_1.c_str(),
-            dex_2.c_str());
+            prev_loc.c_str(),
+            cur_loc.c_str());
 
       if (!m_allow_class_duplicates) {
         throw RedexException(
             RedexError::DUPLICATE_CLASSES,
             "Found duplicate class in two different files.",
-            {{"class", class_name}, {"dex1", dex_1}, {"dex2", dex_2}});
+            {{"class", class_name}, {"dex1", prev_loc}, {"dex2", cur_loc}});
       }
     }
+    return true;
   }
-  m_type_to_class.emplace(type, cls);
+}
+
+void RedexContext::publish_class(DexClass* cls) {
+  std::lock_guard<std::mutex> l(m_type_system_mutex);
+  const DexType* type = cls->get_type();
+  const auto& pair = m_type_to_class.emplace(type, cls);
+  bool insertion_took_place = pair.second;
+  always_assert(insertion_took_place);
 }
 
 DexClass* RedexContext::type_class(const DexType* t) {
