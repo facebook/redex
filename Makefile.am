@@ -136,6 +136,7 @@ libredex_la_SOURCES = \
 	libredex/DexTypeDomain.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
+	libredex/DuplicateClasses.cpp \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/GlobalConfig.cpp \

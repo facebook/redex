@@ -30,6 +30,4 @@ bool load_jar_file(const char* location,
                    Scope* classes = nullptr,
                    attribute_hook_t = nullptr);
 
-void read_dup_class_whitelist(const JsonWrapper& json_cfg);
-
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);

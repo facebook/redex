@@ -124,6 +124,10 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   std::unordered_set<uint32_t> anno_offsets;
   for (uint32_t cidx = 0; cidx < dh->class_defs_size; ++cidx) {
     auto* clz = m_classes->at(cidx);
+    if (clz == nullptr) {
+      // Skip nulls, they may have been introduced by benign duplicate classes
+      continue;
+    }
     auto* class_def = &m_class_defs[cidx];
     auto anno_off = class_def->annotations_off;
     if (anno_off) {
@@ -452,7 +456,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
 void DexLoader::load_dex_class(int num) {
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = new DexClass(m_idx, cdef, m_dex_location);
+  DexClass* dc = DexClass::create(m_idx, cdef, m_dex_location);
+  // We may be inserting a nullptr here. Need to remove them later
+  //
+  // We're inserting nullptr because we can't mess up the indices of the other
+  // classes in the vector. This vector is used via random access.
   m_classes->at(num) = dc;
 }
 
@@ -503,6 +511,11 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   }
 
   gather_input_stats(stats, dh);
+
+  // Remove nulls from the classes list. They may have been introduced by benign
+  // duplicate classes.
+  classes.erase(std::remove(classes.begin(), classes.end(), nullptr),
+                classes.end());
 
   return classes;
 }
