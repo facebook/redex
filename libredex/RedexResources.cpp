@@ -102,6 +102,15 @@ bool has_raw_attribute_value(const android::ResXMLTree& parser,
   return false;
 }
 
+bool has_bool_attribute(const android::ResXMLTree& parser,
+                        const android::String16& attribute_name) {
+  android::Res_value raw_value;
+  if (has_raw_attribute_value(parser, attribute_name, raw_value)) {
+    return raw_value.dataType == android::Res_value::TYPE_INT_BOOLEAN;
+  }
+  return false;
+}
+
 bool get_bool_attribute_value(const android::ResXMLTree& parser,
                               const android::String16& attribute_name,
                               bool default_value) {
@@ -386,10 +395,25 @@ ManifestClassInfo extract_classes_from_manifest(
             parser, tag != activity_alias ? name : target_activity);
         always_assert(classname.size());
 
+        bool has_exported_attribute = has_bool_attribute(parser, exported);
         bool is_exported = get_bool_attribute_value(parser, exported,
                                                     /* default_value */ false);
+
+        BooleanXMLAttribute export_attribute;
+        if (has_exported_attribute) {
+          if (is_exported) {
+            export_attribute = BooleanXMLAttribute::True;
+          } else {
+            export_attribute = BooleanXMLAttribute::False;
+          }
+        } else {
+          export_attribute = BooleanXMLAttribute::Undefined;
+        }
+
         ComponentTagInfo tag_info(string_to_tag.at(tag),
-                                  dotname_to_dexname(classname), is_exported);
+                                  dotname_to_dexname(classname),
+                                  export_attribute);
+
         if (tag == provider) {
           std::string text = get_string_attribute_value(parser, authorities);
           size_t start = 0;

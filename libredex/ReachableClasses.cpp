@@ -444,7 +444,8 @@ void analyze_reachable_from_manifest(
     switch (tag_info.tag) {
     case ComponentTag::Activity:
     case ComponentTag::ActivityAlias: {
-      if (tag_info.is_exported || tag_info.has_intent_filters ||
+      if (tag_info.is_exported == BooleanXMLAttribute::True ||
+          tag_info.has_intent_filters ||
           !prune_unexported_components.count(tag_info.tag)) {
         mark_manifest_root(tag_info.classname);
       } else {

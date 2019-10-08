@@ -19,27 +19,27 @@ TEST(ManifestClassesTest, exported) {
 
   EXPECT_EQ(tag_infos[0].tag, ComponentTag::Activity);
   EXPECT_EQ(tag_infos[0].classname, "Ltest1;");
-  EXPECT_TRUE(tag_infos[0].is_exported);
+  EXPECT_EQ(tag_infos[0].is_exported, BooleanXMLAttribute::True);
   EXPECT_FALSE(tag_infos[0].has_intent_filters);
 
   EXPECT_EQ(tag_infos[1].tag, ComponentTag::Activity);
   EXPECT_EQ(tag_infos[1].classname, "Ltest2;");
-  EXPECT_FALSE(tag_infos[1].is_exported);
+  EXPECT_EQ(tag_infos[1].is_exported, BooleanXMLAttribute::Undefined);
   EXPECT_FALSE(tag_infos[1].has_intent_filters);
 
   EXPECT_EQ(tag_infos[2].tag, ComponentTag::Activity);
   EXPECT_EQ(tag_infos[2].classname, "Ltest3;");
-  EXPECT_FALSE(tag_infos[2].is_exported);
+  EXPECT_EQ(tag_infos[2].is_exported, BooleanXMLAttribute::Undefined);
   EXPECT_TRUE(tag_infos[2].has_intent_filters);
 
   EXPECT_EQ(tag_infos[3].tag, ComponentTag::Activity);
   EXPECT_EQ(tag_infos[3].classname, "Ltest4;");
-  EXPECT_TRUE(tag_infos[3].is_exported);
+  EXPECT_EQ(tag_infos[3].is_exported, BooleanXMLAttribute::False);
   EXPECT_FALSE(tag_infos[3].has_intent_filters);
 
   EXPECT_EQ(tag_infos[4].tag, ComponentTag::Provider);
   EXPECT_EQ(tag_infos[4].classname, "Lcom/example/x/Foo;");
-  EXPECT_FALSE(tag_infos[4].is_exported);
+  EXPECT_EQ(tag_infos[4].is_exported == BooleanXMLAttribute::Undefined);
   EXPECT_THAT(tag_infos[4].authority_classes,
               ::testing::UnorderedElementsAre("Lcom/example/x/Foo;",
                                               "Lcom/example/y/Bar;"));
