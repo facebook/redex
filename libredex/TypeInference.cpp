@@ -209,8 +209,8 @@ void TypeInference::refine_type(TypeEnvironment* state,
                                 register_t reg,
                                 IRType expected) const {
   state->update_type(reg, [this, expected](const TypeDomain& type) {
-    return refine_type(
-        type, expected, /* const_type */ CONST, /* scalar_type */ SCALAR);
+    return refine_type(type, expected, /* const_type */ CONST,
+                       /* scalar_type */ SCALAR);
   });
 }
 
@@ -257,8 +257,8 @@ void TypeInference::refine_float(TypeEnvironment* state, register_t reg) const {
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
                                        register_t reg) const {
-  refine_wide_type(
-      state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
+  refine_wide_type(state, reg, /* expected1 */ SCALAR1,
+                   /* expected2 */ SCALAR2);
 }
 
 void TypeInference::refine_long(TypeEnvironment* state, register_t reg) const {
@@ -267,8 +267,8 @@ void TypeInference::refine_long(TypeEnvironment* state, register_t reg) const {
 
 void TypeInference::refine_double(TypeEnvironment* state,
                                   register_t reg) const {
-  refine_wide_type(
-      state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
+  refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
+                   /* expected2 */ DOUBLE2);
 }
 
 void TypeInference::run(DexMethod* dex_method) {
@@ -358,8 +358,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_MOVE: {
     refine_scalar(current_state, insn->src(0));
-    set_type(
-        current_state, insn->dest(), current_state->get_type(insn->src(0)));
+    set_type(current_state, insn->dest(),
+             current_state->get_type(insn->src(0)));
     break;
   }
   case OPCODE_MOVE_OBJECT: {
@@ -368,8 +368,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
       const auto& dex_type_opt = current_state->get_dex_type(insn->src(0));
       set_reference(current_state, insn->dest(), dex_type_opt);
     } else {
-      set_type(
-          current_state, insn->dest(), current_state->get_type(insn->src(0)));
+      set_type(current_state, insn->dest(),
+               current_state->get_type(insn->src(0)));
     }
     break;
   }
@@ -384,8 +384,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case IOPCODE_MOVE_RESULT_PSEUDO:
   case OPCODE_MOVE_RESULT: {
     refine_scalar(current_state, RESULT_REGISTER);
-    set_type(
-        current_state, insn->dest(), current_state->get_type(RESULT_REGISTER));
+    set_type(current_state, insn->dest(),
+             current_state->get_type(RESULT_REGISTER));
     break;
   }
   case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
@@ -399,8 +399,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
   case OPCODE_MOVE_RESULT_WIDE: {
     refine_wide_scalar(current_state, RESULT_REGISTER);
-    set_type(
-        current_state, insn->dest(), current_state->get_type(RESULT_REGISTER));
+    set_type(current_state, insn->dest(),
+             current_state->get_type(RESULT_REGISTER));
     set_type(current_state,
              insn->dest() + 1,
              current_state->get_type(RESULT_REGISTER + 1));
@@ -429,6 +429,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_CONST: {
     if (insn->get_literal() == 0) {
+      current_state->set_concrete_type(insn->dest(), DexTypeDomain::top());
       set_type(current_state, insn->dest(), TypeDomain(ZERO));
     } else {
       set_type(current_state, insn->dest(), TypeDomain(CONST));
@@ -445,7 +446,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER);
+    set_reference(current_state, RESULT_REGISTER, get_class_type());
     break;
   }
   case OPCODE_MONITOR_ENTER:
@@ -732,10 +733,11 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
+    const auto& arg_types =
+        dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    always_assert(insn->arg_word_count() == expected_args);
+    always_assert(insn->srcs_size() == expected_args);
 
     size_t src_idx{0};
     if (insn->opcode() != OPCODE_INVOKE_STATIC) {
@@ -990,7 +992,7 @@ void TypeInference::traceState(TypeEnvironment* state) const {
   }
   std::ostringstream out;
   out << *state << std::endl;
-  TRACE(TYPE, 9, "%s\n", out.str().c_str());
+  TRACE(TYPE, 9, "%s", out.str().c_str());
 }
 
 void TypeInference::populate_type_environments() {

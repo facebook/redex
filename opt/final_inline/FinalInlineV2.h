@@ -16,15 +16,13 @@ class FinalInlinePassV2 : public Pass {
   struct Config {
     std::unordered_set<const DexType*> black_list_types;
     std::unordered_set<std::string> whitelist_method_names;
-    bool aggressively_delete;
     bool inline_instance_field;
-    Config() : aggressively_delete(true), inline_instance_field(false) {}
+    Config() : inline_instance_field(false) {}
   };
 
   FinalInlinePassV2() : Pass("FinalInlinePassV2") {}
 
   void bind_config() override {
-    bind("aggressively_delete", true, m_config.aggressively_delete);
     bind("inline_instance_field", true, m_config.inline_instance_field);
     bind("black_list_types",
          {},

@@ -23,9 +23,7 @@ class PassManager;
 
 class Pass : public Configurable {
  public:
-
-  Pass(const std::string& name)
-     : m_name(name) {
+  Pass(const std::string& name) : m_name(name) {
     PassRegistry::get().register_pass(this);
   }
 
@@ -36,10 +34,11 @@ class Pass : public Configurable {
   std::string get_config_name() override { return name(); };
 
   /**
-   * All passes' eval_pass are run, and then all passes' run_pass are run. This allows each
-   * pass to evaluate its rules in terms of the original input, without other passes changing
-   * the identity of classes. You should NOT change anything in the dex stores in eval_pass.
-   * There is no protection against doing so, this is merely a convention.
+   * All passes' eval_pass are run, and then all passes' run_pass are run. This
+   * allows each pass to evaluate its rules in terms of the original input,
+   * without other passes changing the identity of classes. You should NOT
+   * change anything in the dex stores in eval_pass. There is no protection
+   * against doing so, this is merely a convention.
    */
 
   virtual void eval_pass(DexStoresVector& stores,

@@ -15,7 +15,8 @@ PluginRegistry& PluginRegistry::get() {
   return registry;
 }
 
-void PluginRegistry::register_pass(const std::string& pass, std::unique_ptr<Plugin> plugin_entry) {
+void PluginRegistry::register_pass(const std::string& pass,
+                                   std::unique_ptr<Plugin> plugin_entry) {
   always_assert_log(
       m_registered_passes.count(pass) == 0,
       "Bailing, plugin registration for pass has already happened :: %s\n",

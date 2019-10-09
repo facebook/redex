@@ -15,7 +15,6 @@
 #include "Resolver.h"
 #include "Trace.h"
 #include "TypeReference.h"
-#include "TypeSystem.h"
 #include "Walkers.h"
 
 namespace {
@@ -109,14 +108,14 @@ void get_call_to_super(
           (*init_callers)[insn_method_def].emplace(method->get_code());
           TRACE(VMERGE,
                 5,
-                "Changing init call %s:\n %s\n",
+                "Changing init call %s:\n %s",
                 SHOW(insn),
                 SHOW(insn_method_def->get_code()));
         } else {
           (*callee_to_insns)[insn_method_def].emplace(insn);
           TRACE(VMERGE,
                 5,
-                "Replacing super call %s:\n %s\n",
+                "Replacing super call %s:\n %s",
                 SHOW(insn),
                 SHOW(insn_method_def->get_code()));
         }
@@ -184,7 +183,7 @@ void handle_invoke_init(
             resolve_method(insn_method, MethodSearch::Direct);
         if (insn_method_def == callee) {
           size_t current_add = 0;
-          insn->set_arg_word_count(num_add_args + num_orig_src);
+          insn->set_srcs_size(num_add_args + num_orig_src);
           while (current_add < num_add_args) {
             auto temp = code->allocate_temp();
             IRInstruction* new_insn = new IRInstruction(OPCODE_CONST);
@@ -205,15 +204,6 @@ void handle_invoke_init(
     callee->change(spec,
                    false /* rename_on_collision */,
                    true /* update deobfuscated name */);
-    // If the debug info param count doesn't match the param count in the
-    // method signature, ART will not parse any of the debug info for the
-    // method. Note that this shows up as a runtime error and not a
-    // verification error. To avoid that, we insert nullptrs for added param.
-    auto debug = callee->get_code()->get_debug_item();
-    if (num_add_args > 0 && debug) {
-      auto& param_names = debug->get_param_names();
-      param_names.insert(param_names.end(), num_add_args, nullptr);
-    }
     merger->add_method(callee);
     callee->set_deobfuscated_name(show(callee));
   }
@@ -234,17 +224,17 @@ void collect_can_merge(
     const XStoreRefs& xstores,
     const std::unordered_map<const DexType*, DontMergeState>& dont_merge_status,
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
-  TypeSystem ts(scope);
+  ClassHierarchy ch = build_type_hierarchy(scope);
   for (DexClass* cls : scope) {
     if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
         can_rename_if_ignoring_blanket_keepnames(cls)) {
       DexType* cls_type = cls->get_type();
-      const auto& children_types = ts.get_children(cls->get_type());
+      const auto& children_types = get_children(ch, cls->get_type());
       if (children_types.size() != 1) {
         continue;
       }
       const DexType* child_type = *children_types.begin();
-      if (ts.get_children(child_type).size() != 0) {
+      if (get_children(ch, child_type).size() != 0) {
         // TODO(suree404): we are skipping pairs that child class still have
         // their subclasses, but we might still be able to optimize this case.
         continue;
@@ -257,8 +247,8 @@ void collect_can_merge(
       }
       DexClass* child_cls = type_class_internal(child_type);
       if (child_cls) {
-        check_dont_merge_list(
-            dont_merge_status, child_cls, cls, mergeable_to_merger);
+        check_dont_merge_list(dont_merge_status, child_cls, cls,
+                              mergeable_to_merger);
       }
     }
   }
@@ -293,7 +283,7 @@ void record_code_reference(
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(get_array_type_or_self(insn->get_type()),
+            record_dont_merge_state(get_element_type_if_array(insn->get_type()),
                                     STRICT,
                                     dont_merge_status);
             return;
@@ -310,13 +300,13 @@ void record_code_reference(
               // if having collision.
               // TODO(suree404): can improve.
               record_dont_merge_state(
-                  get_array_type_or_self(field->get_class()),
+                  get_element_type_if_array(field->get_class()),
                   CONDITIONAL,
                   dont_merge_status);
             }
           } else {
             record_dont_merge_state(
-                get_array_type_or_self(insn->get_field()->get_class()),
+                get_element_type_if_array(insn->get_field()->get_class()),
                 CONDITIONAL,
                 dont_merge_status);
           }
@@ -344,7 +334,7 @@ void record_code_reference(
               DexClass* callee_class = type_class(callee->get_class());
               if (callee_class && is_abstract(callee_class)) {
                 record_dont_merge_state(
-                    get_array_type_or_self(callee->get_class()),
+                    get_element_type_if_array(callee->get_class()),
                     CONDITIONAL,
                     dont_merge_status);
               }
@@ -366,7 +356,7 @@ void record_code_reference(
         }
 
         for (auto type_to_check : types_to_check) {
-          const DexType* self_type = get_array_type_or_self(type_to_check);
+          const DexType* self_type = get_element_type_if_array(type_to_check);
           DexClass* cls = type_class(self_type);
           if (cls && !is_abstract(cls)) {
             // If a type is referenced and not a abstract type then
@@ -403,11 +393,11 @@ void record_method_signature(
   };
   walk::methods(scope, [&](DexMethod* method) {
     DexProto* proto = method->get_proto();
-    const DexType* rtype = get_array_type_or_self(proto->get_rtype());
+    const DexType* rtype = get_element_type_if_array(proto->get_rtype());
     check_method_sig(rtype, method);
     DexTypeList* args = proto->get_args();
     for (const DexType* it : args->get_type_list()) {
-      const DexType* extracted_type = get_array_type_or_self(it);
+      const DexType* extracted_type = get_element_type_if_array(it);
       check_method_sig(extracted_type, method);
     }
   });
@@ -426,7 +416,7 @@ void record_black_list(
       if (strstr(cls->get_name()->c_str(), name.c_str()) != nullptr) {
         TRACE(VMERGE,
               5,
-              "%s | %s | %u\n",
+              "%s | %s | %u",
               SHOW(cls),
               cls->rstate.str().c_str(),
               can_delete(cls));
@@ -484,13 +474,13 @@ void record_referenced(
 void move_fields(DexClass* from_cls, DexClass* to_cls) {
   DexType* target_cls_type = to_cls->get_type();
   auto move_field = [&](DexField* field) {
-    TRACE(VMERGE, 5, "move field : %s \n", SHOW(field));
+    TRACE(VMERGE, 5, "move field : %s ", SHOW(field));
     from_cls->remove_field(field);
     DexFieldSpec field_spec;
     field_spec.cls = target_cls_type;
     field->change(field_spec, true /* rename_on_collision */);
 
-    TRACE(VMERGE, 5, "field after : %s \n", SHOW(field));
+    TRACE(VMERGE, 5, "field after : %s ", SHOW(field));
     to_cls->add_field(field);
     field->set_deobfuscated_name(show(field));
   };
@@ -520,7 +510,7 @@ void update_references(const Scope& scope,
         if (insn->has_type()) {
           auto ref_type = insn->get_type();
           DexType* type =
-              const_cast<DexType*>(get_array_type_or_self(ref_type));
+              const_cast<DexType*>(get_element_type_if_array(ref_type));
           if (update_map.count(type) == 0) {
             return;
           }
@@ -586,9 +576,9 @@ void update_references(const Scope& scope,
 
 void update_implements(DexClass* from_cls, DexClass* to_cls) {
   std::set<DexType*, dextypes_comparator> new_intfs;
-  TRACE(VMERGE, 5, "interface before : \n");
+  TRACE(VMERGE, 5, "interface before : ");
   for (const auto& cls_intf : to_cls->get_interfaces()->get_type_list()) {
-    TRACE(VMERGE, 5, "  %s\n", SHOW(cls_intf));
+    TRACE(VMERGE, 5, "  %s", SHOW(cls_intf));
     new_intfs.emplace(cls_intf);
   }
   for (const auto& cls_intf : from_cls->get_interfaces()->get_type_list()) {
@@ -596,9 +586,9 @@ void update_implements(DexClass* from_cls, DexClass* to_cls) {
   }
   std::deque<DexType*> deque;
 
-  TRACE(VMERGE, 5, "interface after : \n");
+  TRACE(VMERGE, 5, "interface after : ");
   for (const auto& intf : new_intfs) {
-    TRACE(VMERGE, 5, "  %s\n", SHOW(intf));
+    TRACE(VMERGE, 5, "  %s", SHOW(intf));
     deque.emplace_back(intf);
   }
 
@@ -615,7 +605,7 @@ void remove_merged(
   for (const auto& pair : mergeable_to_merger) {
     TRACE(VMERGE,
           5,
-          "Removing class | %s | merged into | %s\n",
+          "Removing class | %s | merged into | %s",
           SHOW(pair.first),
           SHOW(pair.second));
   }
@@ -669,7 +659,7 @@ void VerticalMergingPass::move_methods(
   auto move_method = [&](DexMethod* method) {
     TRACE(VMERGE,
           5,
-          "%s | %s | %s\n",
+          "%s | %s | %s",
           SHOW(from_cls),
           SHOW(to_cls),
           SHOW(method));
@@ -680,14 +670,14 @@ void VerticalMergingPass::move_methods(
       if (methodref_in_context) {
         TRACE(VMERGE,
               5,
-              "ALREADY EXISTED METHODREF %s\n",
+              "ALREADY EXISTED METHODREF %s",
               SHOW(methodref_in_context));
         DexMethod* method_def =
             resolve_method(methodref_in_context, MethodSearch::Any);
         always_assert_log(
             method_def != nullptr,
             "Found a method ref can't be resolve during merging.\n");
-        TRACE(VMERGE, 5, "RESOLVED to %s\n", SHOW(method_def));
+        TRACE(VMERGE, 5, "RESOLVED to %s", SHOW(method_def));
         if (method_def->get_class() != target_cls_type) {
           // the method resolved is not defined in target class, so the method
           // in mergeable class should have implementation for the method ref
@@ -695,7 +685,7 @@ void VerticalMergingPass::move_methods(
           // substitute it with real method implementation.
           (*methodref_update_map)[methodref_in_context] = method;
           DexMethodRef::erase_method(methodref_in_context);
-          TRACE(VMERGE, 5, "Erasing method ref.\n");
+          TRACE(VMERGE, 5, "Erasing method ref.");
         } else {
           if (referenced_methods.count(method)) {
             // Static or direct method. Safe to move
@@ -746,11 +736,11 @@ void VerticalMergingPass::move_methods(
   auto dmethod = from_cls->get_dmethods();
   auto vmethod = from_cls->get_vmethods();
   for (DexMethod* method : dmethod) {
-    TRACE(VMERGE, 5, "dmethods:\n");
+    TRACE(VMERGE, 5, "dmethods:");
     move_method(method);
   }
   for (DexMethod* method : vmethod) {
-    TRACE(VMERGE, 5, "vmethods:\n");
+    TRACE(VMERGE, 5, "vmethods:");
     move_method(method);
   }
 }

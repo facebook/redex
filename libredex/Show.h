@@ -37,7 +37,7 @@ class IRCode;
 namespace cfg {
 class Block;
 class ControlFlowGraph;
-}
+} // namespace cfg
 
 struct MethodItemEntry;
 struct DexDebugEntry;

@@ -106,9 +106,9 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
     auto last_prologue_insn = last_prologue_insn_it->insn;
     // If this method was compiled from a default-case-only switch, there will
     // be no branch opcode -- the method will always throw an
-    // IllegalArgumentException.
+    // IllegalArgumentException, or return when the switch is optimized.
     auto op = last_prologue_insn->opcode();
-    always_assert_log(!verify_default_case || is_branch(op) ||
+    always_assert_log(!verify_default_case || is_branch(op) || is_return(op) ||
                           op == OPCODE_THROW,
                       "%s in %s", SHOW(last_prologue_insn), SHOW(*cfg));
 

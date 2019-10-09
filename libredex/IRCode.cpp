@@ -11,10 +11,10 @@
 #include <boost/bimap/bimap.hpp>
 #include <boost/bimap/unordered_set_of.hpp>
 #include <boost/numeric/conversion/cast.hpp>
-#include <memory>
-#include <unordered_set>
 #include <limits>
 #include <list>
+#include <memory>
+#include <unordered_set>
 
 #include "ControlFlow.h"
 #include "Debug.h"
@@ -68,9 +68,8 @@ typedef bimap<tagged<MethodItemEntry*, Entry>,
 
 } // namespace
 
-static MethodItemEntry* get_target(
-    const MethodItemEntry* mei,
-    const EntryAddrBiMap& bm) {
+static MethodItemEntry* get_target(const MethodItemEntry* mei,
+                                   const EntryAddrBiMap& bm) {
   uint32_t base = bm.by<Entry>().at(const_cast<MethodItemEntry*>(mei));
   int offset = mei->dex_insn->offset();
   uint32_t target = base + offset;
@@ -93,9 +92,7 @@ static void insert_branch_target(IRList* ir,
 }
 
 // Returns true if the offset could be encoded without modifying ir.
-bool encode_offset(IRList* ir,
-                   MethodItemEntry* target_mie,
-                   int32_t offset) {
+bool encode_offset(IRList* ir, MethodItemEntry* target_mie, int32_t offset) {
   auto branch_op_mie = target_mie->target->src;
   auto insn = branch_op_mie->dex_insn;
   // A branch to the very next instruction does nothing. Replace with
@@ -199,7 +196,7 @@ static void shard_multi_target(IRList* ir,
       case_key++;
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
-    const uint16_t* tdata = data + 2 * entries;  // entries are 32b
+    const uint16_t* tdata = data + 2 * entries; // entries are 32b
     for (int i = 0; i < entries; i++) {
       int32_t case_key = read_int32(data);
       uint32_t targetaddr = base + read_int32(tdata);
@@ -278,7 +275,7 @@ static void associate_try_items(IRList* ir,
     CatchEntry* last_catch = nullptr;
     for (const auto& catz : tri->m_catches) {
       auto catzop = bm.by<Addr>().at(catz.second);
-      TRACE(MTRANS, 3, "try_catch %08x mei %p\n", catz.second, catzop);
+      TRACE(MTRANS, 3, "try_catch %08x mei %p", catz.second, catzop);
       auto catch_mie = new MethodItemEntry(catz.first);
       catch_start = catch_start == nullptr ? catch_mie : catch_start;
       if (last_catch != nullptr) {
@@ -290,12 +287,12 @@ static void associate_try_items(IRList* ir,
     }
 
     auto begin = bm.by<Addr>().at(tri->m_start_addr);
-    TRACE(MTRANS, 3, "try_start %08x mei %p\n", tri->m_start_addr, begin);
+    TRACE(MTRANS, 3, "try_start %08x mei %p", tri->m_start_addr, begin);
     auto try_start = new MethodItemEntry(TRY_START, catch_start);
     ir->insert_before(ir->iterator_to(*begin), *try_start);
     uint32_t lastaddr = tri->m_start_addr + tri->m_insn_count;
     auto end = bm.by<Addr>().at(lastaddr);
-    TRACE(MTRANS, 3, "try_end %08x mei %p\n", lastaddr, end);
+    TRACE(MTRANS, 3, "try_end %08x mei %p", lastaddr, end);
     auto try_end = new MethodItemEntry(TRY_END, catch_start);
     ir->insert_before(ir->iterator_to(*end), *try_end);
   }
@@ -355,14 +352,14 @@ void translate_dex_to_ir(
     auto* insn = new IRInstruction(op);
 
     IRInstruction* move_result_pseudo{nullptr};
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       insn->set_dest(dex_insn->dest());
     } else if (opcode::may_throw(op)) {
       if (op == OPCODE_CHECK_CAST) {
         move_result_pseudo =
             new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
         move_result_pseudo->set_dest(dex_insn->src(0));
-      } else if (dex_insn->dests_size()) {
+      } else if (dex_insn->has_dest()) {
         IROpcode move_op;
         if (opcode_impl::dest_is_wide(op)) {
           move_op = IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
@@ -376,12 +373,12 @@ void translate_dex_to_ir(
       }
     }
 
-    insn->set_arg_word_count(dex_insn->srcs_size()); // XXX: should we have a better API?
+    insn->set_srcs_size(dex_insn->srcs_size());
     for (size_t i = 0; i < dex_insn->srcs_size(); ++i) {
       insn->set_src(i, dex_insn->src(i));
     }
     if (dex_opcode::has_range(dex_op)) {
-      insn->set_arg_word_count(dex_insn->range_size());
+      insn->set_srcs_size(dex_insn->range_size());
       for (size_t i = 0; i < dex_insn->range_size(); ++i) {
         insn->set_src(i, dex_insn->range_base() + i);
       }
@@ -392,7 +389,8 @@ void translate_dex_to_ir(
     } else if (dex_insn->has_type()) {
       insn->set_type(static_cast<const DexOpcodeType*>(dex_insn)->get_type());
     } else if (dex_insn->has_field()) {
-      insn->set_field(static_cast<const DexOpcodeField*>(dex_insn)->get_field());
+      insn->set_field(
+          static_cast<const DexOpcodeField*>(dex_insn)->get_field());
     } else if (dex_insn->has_method()) {
       insn->set_method(
           static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
@@ -408,7 +406,7 @@ void translate_dex_to_ir(
     it->insn = insn;
     if (move_result_pseudo != nullptr) {
       it = ir_list->insert_before(std::next(it),
-                           *(new MethodItemEntry(move_result_pseudo)));
+                                  *(new MethodItemEntry(move_result_pseudo)));
     }
   }
 }
@@ -438,7 +436,7 @@ void balloon(DexMethod* method, IRList* ir_list) {
     }
     ir_list->push_back(*mei);
     bm.insert(EntryAddrBiMap::relation(mei, addr));
-    TRACE(MTRANS, 5, "%08x: %s[mei %p]\n", addr, SHOW(insn), mei);
+    TRACE(MTRANS, 5, "%08x: %s[mei %p]", addr, SHOW(insn), mei);
     addr += insn->size();
   }
   bm.insert(EntryAddrBiMap::relation(&*ir_list->end(), addr));
@@ -509,11 +507,10 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
     auto copy_mie = old_mentry_to_new.at(&mie);
     switch (mie.type) {
     case MFLOW_TRY:
-      copy_mie->tentry =
-          new TryEntry(mie.tentry->type,
-                       mie.tentry->catch_start
-                           ? old_mentry_to_new[mie.tentry->catch_start]
-                           : nullptr);
+      copy_mie->tentry = new TryEntry(
+          mie.tentry->type,
+          mie.tentry->catch_start ? old_mentry_to_new[mie.tentry->catch_start]
+                                  : nullptr);
       break;
     case MFLOW_CATCH:
       copy_mie->centry = new CatchEntry(mie.centry->catch_type);
@@ -552,14 +549,14 @@ IRList* deep_copy_ir_list(IRList* old_ir_list) {
 
 } // namespace
 
-IRCode::IRCode(): m_ir_list(new IRList()) {}
+IRCode::IRCode() : m_ir_list(new IRList()) {}
 
 IRCode::~IRCode() {
   m_ir_list->clear_and_dispose();
   delete m_ir_list;
 }
 
-IRCode::IRCode(DexMethod* method): m_ir_list(new IRList()) {
+IRCode::IRCode(DexMethod* method) : m_ir_list(new IRList()) {
   auto* dc = method->get_dex_code();
   generate_load_params(
       method, dc->get_registers_size() - dc->get_ins_size(), this);
@@ -567,8 +564,7 @@ IRCode::IRCode(DexMethod* method): m_ir_list(new IRList()) {
   m_dbg = dc->release_debug_item();
 }
 
-IRCode::IRCode(DexMethod* method, size_t temp_regs)
-    : m_ir_list(new IRList()) {
+IRCode::IRCode(DexMethod* method, size_t temp_regs) : m_ir_list(new IRList()) {
   always_assert(method->get_dex_code() == nullptr);
   generate_load_params(method, temp_regs, this);
 }
@@ -620,13 +616,13 @@ using RegMap = transform::RegMap;
 
 const char* DEBUG_ONLY show_reg_map(RegMap& map) {
   for (auto pair : map) {
-    TRACE(INL, 5, "%u -> %u\n", pair.first, pair.second);
+    TRACE(INL, 5, "%u -> %u", pair.first, pair.second);
   }
   return "";
 }
 
 uint16_t calc_outs_size(const IRCode* code) {
-  uint16_t size {0};
+  uint16_t size{0};
   for (auto& mie : *code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
@@ -790,13 +786,13 @@ bool IRCode::try_sync(DexCode* code) {
   uint32_t addr = 0;
   // Step 1, regenerate opcode list for the method, and
   // and calculate the opcode entries address offsets.
-  TRACE(MTRANS, 5, "Emitting opcodes\n");
+  TRACE(MTRANS, 5, "Emitting opcodes");
   for (auto miter = m_ir_list->begin(); miter != m_ir_list->end(); ++miter) {
     MethodItemEntry* mentry = &*miter;
-    TRACE(MTRANS, 5, "Analyzing mentry %p\n", mentry);
+    TRACE(MTRANS, 5, "Analyzing mentry %p", mentry);
     entry_to_addr[mentry] = addr;
     if (mentry->type == MFLOW_DEX_OPCODE) {
-      TRACE(MTRANS, 5, "Emitting mentry %p at %08x\n", mentry, addr);
+      TRACE(MTRANS, 5, "Emitting mentry %p at %08x", mentry, addr);
       addr += mentry->dex_insn->size();
     }
   }
@@ -807,7 +803,7 @@ bool IRCode::try_sync(DexCode* code) {
   // For instructions that use address offsets but never need resizing (i.e.
   // switch and fill-array-data opcodes), we calculate their offsets after
   // we have reached the fixed point.
-  TRACE(MTRANS, 5, "Recalculating branches\n");
+  TRACE(MTRANS, 5, "Recalculating branches");
   std::vector<MethodItemEntry*> multi_branches;
   std::unordered_map<MethodItemEntry*, std::vector<BranchTarget*>> multis;
   std::unordered_map<BranchTarget*, uint32_t> multi_targets;
@@ -871,12 +867,12 @@ bool IRCode::try_sync(DexCode* code) {
     if (mie.type != MFLOW_DEX_OPCODE) {
       continue;
     }
-    TRACE(MTRANS, 6, "Emitting insn %s\n", SHOW(mie.dex_insn));
+    TRACE(MTRANS, 6, "Emitting insn %s", SHOW(mie.dex_insn));
     opout.push_back(mie.dex_insn);
   }
   addr += num_align_nops;
 
-  TRACE(MTRANS, 5, "Emitting multi-branches\n");
+  TRACE(MTRANS, 5, "Emitting multi-branches");
   // Step 3, generate multi-branch fopcodes
   for (auto multiopcode : multi_branches) {
     auto& targets = multis[multiopcode];
@@ -956,13 +952,13 @@ bool IRCode::try_sync(DexCode* code) {
   }
 
   // Step 4, emit debug entries
-  TRACE(MTRANS, 5, "Emitting debug entries\n");
+  TRACE(MTRANS, 5, "Emitting debug entries");
   auto debugitem = code->get_debug_item();
   if (debugitem) {
     gather_debug_entries(m_ir_list, entry_to_addr, &debugitem->get_entries());
   }
   // Step 5, try/catch blocks
-  TRACE(MTRANS, 5, "Emitting try items & catch handlers\n");
+  TRACE(MTRANS, 5, "Emitting try items & catch handlers");
   auto& tries = code->get_tries();
   tries.clear();
   MethodItemEntry* active_try = nullptr;
@@ -995,9 +991,8 @@ bool IRCode::try_sync(DexCode* code) {
     }
 
     DexCatches catches;
-    for (auto mei = try_end->tentry->catch_start;
-        mei != nullptr;
-        mei = mei->centry->next) {
+    for (auto mei = try_end->tentry->catch_start; mei != nullptr;
+         mei = mei->centry->next) {
       if (mei->centry->next != nullptr) {
         always_assert(mei->centry->catch_type != nullptr);
       }
@@ -1014,4 +1009,46 @@ bool IRCode::try_sync(DexCode* code) {
               return a->m_start_addr < b->m_start_addr;
             });
   return true;
+}
+
+void IRCode::gather_catch_types(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_catch_types(ltype);
+  } else {
+    m_ir_list->gather_catch_types(ltype);
+  }
+  if (m_dbg) m_dbg->gather_types(ltype);
+}
+
+void IRCode::gather_strings(std::vector<DexString*>& lstring) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_strings(lstring);
+  } else {
+    m_ir_list->gather_strings(lstring);
+  }
+  if (m_dbg) m_dbg->gather_strings(lstring);
+}
+
+void IRCode::gather_types(std::vector<DexType*>& ltype) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_types(ltype);
+  } else {
+    m_ir_list->gather_types(ltype);
+  }
+}
+
+void IRCode::gather_fields(std::vector<DexFieldRef*>& lfield) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_fields(lfield);
+  } else {
+    m_ir_list->gather_fields(lfield);
+  }
+}
+
+void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_methods(lmethod);
+  } else {
+    m_ir_list->gather_methods(lmethod);
+  }
 }

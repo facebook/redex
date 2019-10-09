@@ -12,13 +12,16 @@
 #include <sstream>
 
 #include "IRAssembler.h"
+#include "RedexTest.h"
 
 using ::testing::AllOf;
 using ::testing::Pointee;
 using ::testing::SizeIs;
 using ::testing::UnorderedElementsAre;
 
-TEST(ProguardMapTest, empty) {
+class ProguardMapTest : public RedexTest {};
+
+TEST_F(ProguardMapTest, empty) {
   std::stringstream ss(
     "com.foo.bar -> A:\n"
     "    int do1 -> a\n"
@@ -54,7 +57,7 @@ TEST(ProguardMapTest, empty) {
   EXPECT_EQ(false, pm.is_special_interface("Lcom/not/Found;"));
 }
 
-TEST(ProguardMapTest, HandlesGeneratedComments) {
+TEST_F(ProguardMapTest, HandlesGeneratedComments) {
   std::stringstream ss(
       "# compiler: R8\n"
       "# compiler_version: 1.3.23\n"
@@ -66,7 +69,7 @@ TEST(ProguardMapTest, HandlesGeneratedComments) {
   EXPECT_EQ("LA;.a:I", pm.translate_field("Lcom/foo/bar;.do1:I"));
 }
 
-TEST(ProguardMapTest, LineNumbers) {
+TEST_F(ProguardMapTest, LineNumbers) {
   std::stringstream ss(
       "com.foo.bar -> A:\n"
       "    int do1 -> a\n"
@@ -196,15 +199,15 @@ TEST(ProguardMapTest, LineNumbers) {
                 "foo/bar;Lcom/foo/bar;)Lcom/foo/bar;")))));
 }
 
-TEST(ProguardMapTest, LinesKey) {
+TEST_F(ProguardMapTest, LinesKey) {
   EXPECT_EQ("LA;.o", pg_impl::lines_key("LA;.o:()V"));
   EXPECT_EQ(
       "Landroid/support/v4/app/Fragment;.o",
       pg_impl::lines_key("Landroid/support/v4/app/Fragment;.o:(LA;LA;)LA;"));
 }
 
-TEST(ProguardMapTest, FileNameFromMethodString) {
-  g_redex = new RedexContext();
+TEST_F(ProguardMapTest, FileNameFromMethodString) {
+
   {
     auto method_string = DexString::make_string(
         "Landroid/support/v4/app/Fragment;.stuff:(Lcom/foo/bar;Lcom/foo/"
@@ -218,11 +221,9 @@ TEST(ProguardMapTest, FileNameFromMethodString) {
     EXPECT_EQ(pg_impl::file_name_from_method_string(method_string),
               DexString::make_string("Bar.java"));
   }
-  delete g_redex;
 }
 
-TEST(ProguardMapTest, DeobfuscateFrameWithRelocation) {
-  g_redex = new RedexContext();
+TEST_F(ProguardMapTest, DeobfuscateFrameWithRelocation) {
 
   std::stringstream ss(
       "com.foo.Bar -> X.A:\n"
@@ -251,15 +252,10 @@ TEST(ProguardMapTest, DeobfuscateFrameWithRelocation) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
-
-  delete g_redex;
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ProguardMapTest, DeobfuscateFramesWithInlining) {
-  g_redex = new RedexContext();
+TEST_F(ProguardMapTest, DeobfuscateFramesWithInlining) {
 
   std::stringstream ss(
       "com.foo.Bar -> X.A:\n"
@@ -290,15 +286,10 @@ TEST(ProguardMapTest, DeobfuscateFramesWithInlining) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
-
-  delete g_redex;
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
-TEST(ProguardMapTest, DeobfuscateFramesWithoutLineRange) {
-  g_redex = new RedexContext();
+TEST_F(ProguardMapTest, DeobfuscateFramesWithoutLineRange) {
 
   std::stringstream ss(
       "com.foo.Bar -> X.A:\n"
@@ -328,9 +319,5 @@ TEST(ProguardMapTest, DeobfuscateFramesWithoutLineRange) {
     )
 )");
 
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()))
-      << assembler::to_s_expr(code.get()).str();
-
-  delete g_redex;
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }

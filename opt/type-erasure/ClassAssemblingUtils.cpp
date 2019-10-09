@@ -48,7 +48,7 @@ void change_super_class(DexClass* cls, DexType* super_type) {
   // NOTE: we are not parallelizing this since the ctor is very short.
   size_t num_insn_fixed = 0;
   for (auto ctor : cls->get_ctors()) {
-    TRACE(TERA, 5, "Fixing ctor: %s\n", SHOW(ctor));
+    TRACE(TERA, 5, "Fixing ctor: %s", SHOW(ctor));
     auto code = ctor->get_code();
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
@@ -60,15 +60,15 @@ void change_super_class(DexClass* cls, DexType* super_type) {
       if (insn->get_method() == old_super_ctors[0]) {
         TRACE(TERA, 9, "  - Replacing call: %s with", SHOW(insn));
         insn->set_method(super_ctors[0]);
-        TRACE(TERA, 9, " %s\n", SHOW(insn));
+        TRACE(TERA, 9, " %s", SHOW(insn));
         num_insn_fixed++;
       }
     }
   }
-  TRACE(TERA, 5, "Fixed %ld instructions\n", num_insn_fixed);
+  TRACE(TERA, 5, "Fixed %ld instructions", num_insn_fixed);
 
   cls->set_super_class(super_type);
-  TRACE(TERA, 5, "Added super class %s to %s\n", SHOW(super_type), SHOW(cls));
+  TRACE(TERA, 5, "Added super class %s to %s", SHOW(super_type), SHOW(cls));
 }
 
 std::string get_merger_package_name(const DexType* type) {
@@ -91,12 +91,18 @@ DexType* create_empty_base_type(const ModelSpec& spec,
     return nullptr;
   }
   if (!is_interface(cls)) {
-    TRACE(TERA, 1, "root %s is not an interface!\n", SHOW(interface_root));
+    TRACE(TERA, 1, "root %s is not an interface!", SHOW(interface_root));
     return nullptr;
   }
 
-  // Build a temporary type system.
-  TypeSystem type_system(scope);
+  ClassHierarchy ch = build_type_hierarchy(scope);
+  InterfaceMap intf_map = build_interface_map(ch);
+  std::unordered_map<const DexType*, TypeSet> implements;
+  for (const auto& pair : intf_map) {
+    for (const auto& type : pair.second) {
+      implements[type].emplace(pair.first);
+    }
+  }
 
   // Create an empty base and add to the scope. Put the base class in the same
   // package as the root interface.
@@ -109,19 +115,19 @@ DexType* create_empty_base_type(const ModelSpec& spec,
                                  TypeSet(),
                                  true);
 
-  TRACE(TERA, 3, "Created an empty base class %s for interface %s.\n",
-        SHOW(cls), SHOW(interface_root));
+  TRACE(TERA, 3, "Created an empty base class %s for interface %s.", SHOW(cls),
+        SHOW(interface_root));
 
   // Set it as the super class of implementors.
   size_t num = 0;
   XStoreRefs xstores(stores);
 
-  for (auto impl_type : type_system.get_implementors(interface_root)) {
+  for (auto impl_type : get_all_implementors(intf_map, interface_root)) {
     if (type_class(impl_type)->is_external()) {
-      TRACE(TERA, 3, "Skip external implementer %s\n", SHOW(impl_type));
+      TRACE(TERA, 3, "Skip external implementer %s", SHOW(impl_type));
       continue;
     }
-    auto& ifcs = type_system.get_implemented_interfaces(impl_type);
+    auto& ifcs = implements.at(impl_type);
     // Add an empty base class to qualified implementors
     auto impl_cls = type_class(impl_type);
     if (ifcs.size() == 1 && impl_cls &&
@@ -185,7 +191,7 @@ DexClass* create_class(const DexType* type,
     mb->invoke(OPCODE_INVOKE_DIRECT, super_ctor, args);
     mb->ret_void();
     auto ctor = mc->create();
-    TRACE(TERA, 4, " default ctor created %s\n", SHOW(ctor));
+    TRACE(TERA, 4, " default ctor created %s", SHOW(ctor));
     cls->add_method(ctor);
   }
   return cls;
@@ -228,14 +234,13 @@ std::vector<DexField*> create_merger_fields(
     }
 
     name = name + std::to_string(cnt);
-    auto field = static_cast<DexField*>(
-        DexField::make_field(owner, DexString::make_string(name), type));
-    field->make_concrete(ACC_PUBLIC);
+    auto field = DexField::make_field(owner, DexString::make_string(name), type)
+                     ->make_concrete(ACC_PUBLIC);
     res.push_back(field);
     cnt++;
   }
 
-  TRACE(TERA, 8, "  created merger fields %d \n", res.size());
+  TRACE(TERA, 8, "  created merger fields %d ", res.size());
   return res;
 }
 
@@ -264,10 +269,11 @@ DexClass* create_merger_class(const DexType* type,
   std::vector<DexField*> fields;
 
   if (add_type_tag_field) {
-    auto type_tag_field = static_cast<DexField*>(DexField::make_field(
-        type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
-        get_int_type()));
-    type_tag_field->make_concrete(ACC_PUBLIC | ACC_FINAL);
+    auto type_tag_field =
+        DexField::make_field(
+            type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
+            get_int_type())
+            ->make_concrete(ACC_PUBLIC | ACC_FINAL);
     fields.push_back(type_tag_field);
   }
 
@@ -278,7 +284,7 @@ DexClass* create_merger_class(const DexType* type,
   auto pkg_name = get_merger_package_name(super_type);
   auto cls = create_class(type, super_type, pkg_name, fields, interfaces,
                           with_default_ctor);
-  TRACE(TERA, 3, "  created merger class w/ fields %s \n", SHOW(cls));
+  TRACE(TERA, 3, "  created merger class w/ fields %s ", SHOW(cls));
   return cls;
 }
 
@@ -339,7 +345,7 @@ void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores) {
   scope.push_back(new_cls);
   TRACE(TERA,
         4,
-        " TERA Adding class %s to scope %d \n",
+        " TERA Adding class %s to scope %d ",
         SHOW(new_cls),
         scope.size());
 
@@ -372,7 +378,7 @@ void handle_interface_as_root(ModelSpec& spec,
     auto empty_base =
         create_empty_base_type(spec, interface_root, scope, stores);
     if (empty_base != nullptr) {
-      TRACE(TERA, 3, "Changing the root from %s to %s.\n", SHOW(interface_root),
+      TRACE(TERA, 3, "Changing the root from %s to %s.", SHOW(interface_root),
             SHOW(empty_base));
       spec.roots.insert(empty_base);
       add_class(type_class(empty_base), scope, stores);

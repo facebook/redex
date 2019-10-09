@@ -1,11 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import argparse
 import distutils.version
@@ -59,7 +57,7 @@ per_file_compression = {}
 
 
 def find_android_build_tools():
-    VERSION_REGEXP = "\d+\.\d+(\.\d+)$"
+    VERSION_REGEXP = r"\d+\.\d+(\.\d+)$"
     android_home = os.environ["ANDROID_SDK"]
     build_tools = join(android_home, "build-tools")
     version = max(
@@ -111,6 +109,10 @@ def add_extra_environment_args(env):
             "MALLOC_CONF"
         ] = "prof:true,prof_prefix:jeprof.out,prof_gdump:true,prof_active:false"
 
+    # If we haven't set MALLOC_CONF, tune MALLOC_CONF for better perf
+    if "MALLOC_CONF" not in env:
+        env["MALLOC_CONF"] = "background_thread:true,metadata_thp:always,thp:always"
+
 
 def get_stop_pass_idx(passes_list, pass_name_and_num):
     # Get the stop position
@@ -141,12 +143,8 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
 
 def run_redex_binary(state):
     if state.args.redex_binary is None:
-        try:
-            state.args.redex_binary = (
-                subprocess.check_output(["which", "redex-all"]).rstrip().decode("ascii")
-            )
-        except subprocess.CalledProcessError:
-            pass
+        state.args.redex_binary = shutil.which("redex-all")
+
     if state.args.redex_binary is None:
         # __file__ can be /path/fb-redex.pex/redex.pyc
         dir_name = dirname(abspath(__file__))
@@ -175,6 +173,9 @@ def run_redex_binary(state):
 
     if state.args.is_art_build:
         args += ["--is-art-build"]
+
+    if state.args.disable_dex_hasher:
+        args += ["--disable-dex-hasher"]
 
     if state.args.enable_instrument_pass or state.config_dict.get(
         "enable_instrument_pass"
@@ -229,7 +230,7 @@ def run_redex_binary(state):
     # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
     for i in range(5):
         try:
-            subprocess.check_call(args, env=env)
+            subprocess.check_call(args, env=env, pass_fds=(logger.trace_fp.fileno(),))
         except OSError as err:
             if err.errno == errno.ETXTBSY:
                 if i < 4:
@@ -252,7 +253,7 @@ def run_redex_binary(state):
 
 
 def extract_dex_number(dexfilename):
-    m = re.search("(classes|.*-)(\d+)", basename(dexfilename))
+    m = re.search(r"(classes|.*-)(\d+)", basename(dexfilename))
     if m is None:
         raise Exception("Bad secondary dex name: " + dexfilename)
     return int(m.group(2))
@@ -552,6 +553,9 @@ Given an APK, produce a better APK!
         "--is-art-build",
         action="store_true",
         help="States that this is an art only build",
+    )
+    parser.add_argument(
+        "--disable-dex-hasher", action="store_true", help="Disable DexHasher"
     )
     parser.add_argument(
         "--page-align-libs",

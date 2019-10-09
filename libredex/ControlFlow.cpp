@@ -80,10 +80,20 @@ bool cannot_throw(cfg::Block* b) {
 }
 
 /*
- * Return true if the block does not contain any instruction.
+ * Return true if the block does not contain anything we need.
  */
-bool is_effectively_empty(cfg::Block* b) {
-  return b->get_first_insn() == b->end();
+bool is_effectively_empty(
+    cfg::Block* b, const std::unordered_set<DexPosition*>& keep_positions) {
+  if (b->get_first_insn() != b->end()) {
+    return false;
+  }
+  for (const auto& mie : *b) {
+    if (mie.type == MFLOW_POSITION &&
+        keep_positions.count(mie.pos.get()) != 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /*
@@ -94,8 +104,7 @@ IRList::iterator insn_before_position(cfg::Block* b) {
   for (auto it = b->begin(); it != b->end(); ++it) {
     if (it->type == MFLOW_OPCODE) {
       auto op = it->insn->opcode();
-      if (!is_move_result(op) && !opcode::is_move_result_pseudo(op) &&
-          !is_goto(op)) {
+      if (!opcode::is_move_result_any(op) && !is_goto(op)) {
         return it;
       }
     } else if (it->type == MFLOW_POSITION) {
@@ -306,11 +315,23 @@ IRList::iterator Block::get_first_insn() {
   return end();
 }
 
+IRList::iterator Block::get_first_non_param_loading_insn() {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (!opcode::is_load_param(it->insn->opcode())) {
+      return it;
+    }
+  }
+  return end();
+}
+
 bool Block::starts_with_move_result() {
   auto first_it = get_first_insn();
   if (first_it != end()) {
     auto first_op = first_it->insn->opcode();
-    if (is_move_result(first_op) || opcode::is_move_result_pseudo(first_op)) {
+    if (opcode::is_move_result_any(first_op)) {
       return true;
     }
   }
@@ -484,14 +505,14 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
     // TODO: fix the optimizations that don't track registers size correctly.
     recompute_registers_size();
 
-    TRACE(CFG, 5, "before simplify:\n%s", SHOW(*this));
+    TRACE_NO_LINE(CFG, 5, "before simplify:\n%s", SHOW(*this));
     simplify();
-    TRACE(CFG, 5, "after simplify:\n%s", SHOW(*this));
+    TRACE_NO_LINE(CFG, 5, "after simplify:\n%s", SHOW(*this));
   } else {
     remove_unreachable_succ_edges();
   }
 
-  TRACE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
+  TRACE_NO_LINE(CFG, 5, "editable %d, %s", m_editable, SHOW(*this));
 }
 
 void ControlFlowGraph::find_block_boundaries(IRList* ir,
@@ -576,7 +597,7 @@ void ControlFlowGraph::find_block_boundaries(IRList* ir,
       block->m_begin = next;
     }
   }
-  TRACE(CFG, 5, "  build: boundaries found\n");
+  TRACE(CFG, 5, "  build: boundaries found");
 }
 
 // Link the blocks together with edges. If the CFG is editable, also insert
@@ -622,12 +643,11 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     auto next = std::next(it);
     Block* next_b = next->second;
     if (fallthrough && next != m_blocks.end()) {
-      TRACE(CFG, 6, "adding fallthrough goto %d -> %d\n", b->id(),
-            next_b->id());
+      TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(), next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
     }
   }
-  TRACE(CFG, 5, "  build: edges added\n");
+  TRACE(CFG, 5, "  build: edges added");
 }
 
 void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
@@ -671,7 +691,7 @@ void ControlFlowGraph::add_catch_edges(TryEnds& try_ends,
       --bid;
     }
   }
-  TRACE(CFG, 5, "  build: catch edges added\n");
+  TRACE(CFG, 5, "  build: catch edges added");
 }
 
 BlockId ControlFlowGraph::next_block_id() const {
@@ -699,10 +719,10 @@ void ControlFlowGraph::remove_unreachable_succ_edges() {
       continue;
     }
 
-    TRACE(CFG, 5, "  build: removing succ edges from block %d\n", b->id());
+    TRACE(CFG, 5, "  build: removing succ edges from block %d", b->id());
     delete_succ_edges(b);
   }
-  TRACE(CFG, 5, "  build: unreachables removed\n");
+  TRACE(CFG, 5, "  build: unreachables removed");
 }
 
 /*
@@ -749,7 +769,7 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
           deleted_positions.insert(mie.pos.get());
         } else if (mie.type == MFLOW_OPCODE) {
           auto insn = mie.insn;
-          if (insn->dests_size()) {
+          if (insn->has_dest()) {
             // +1 because registers start at zero
             auto size_required = insn->dest() + insn->dest_is_wide() + 1;
             if (size_required >= m_registers_size) {
@@ -794,10 +814,19 @@ void ControlFlowGraph::remove_dangling_parents(
 }
 void ControlFlowGraph::remove_empty_blocks() {
   always_assert(editable());
+  std::unordered_set<DexPosition*> keep_positions;
+  for (auto it = m_blocks.begin(); it != m_blocks.end(); ++it) {
+    Block* b = it->second;
+    for (auto& mie : *b) {
+      if (mie.type == MFLOW_POSITION && mie.pos->parent != nullptr) {
+        keep_positions.insert(mie.pos->parent);
+      }
+    }
+  }
   std::unordered_set<DexPosition*> deleted_positions;
   for (auto it = m_blocks.begin(); it != m_blocks.end();) {
     Block* b = it->second;
-    if (!is_effectively_empty(b) || b == exit_block()) {
+    if (!is_effectively_empty(b, keep_positions) || b == exit_block()) {
       ++it;
       continue;
     }
@@ -989,7 +1018,7 @@ uint16_t ControlFlowGraph::compute_registers_size() const {
   uint16_t num_regs = 0;
   for (const auto& mie : cfg::ConstInstructionIterable(*this)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       // +1 because registers start at v0
       uint16_t size_required = insn->dest() + insn->dest_is_wide() + 1;
       num_regs = std::max(size_required, num_regs);
@@ -1118,8 +1147,7 @@ void ControlFlowGraph::gather_methods(
 cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) {
   auto move_result_insn = it->insn;
-  always_assert(
-      opcode::is_move_result_or_move_result_pseudo(move_result_insn->opcode()));
+  always_assert(opcode::is_move_result_any(move_result_insn->opcode()));
   auto block = const_cast<Block*>(it.block());
   if (block->get_first_insn()->insn == move_result_insn) {
     auto& preds = block->preds();
@@ -1128,12 +1156,12 @@ cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     auto res = previous_block->to_cfg_instruction_iterator(
         previous_block->get_last_insn());
     auto insn = res->insn;
-    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    always_assert(insn->has_move_result_any());
     return res;
   } else {
     auto res = std::prev(it.unwrap());
     auto insn = res->insn;
-    always_assert(insn->has_move_result() || insn->has_move_result_pseudo());
+    always_assert(insn->has_move_result_any());
     return block->to_cfg_instruction_iterator(res);
   }
 }
@@ -1145,7 +1173,7 @@ cfg::InstructionIterator ControlFlowGraph::move_result_of(
   if (next_insn != end && it.block() == next_insn.block()) {
     // The easy case where the move result is in the same block
     auto op = next_insn->insn->opcode();
-    if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+    if (opcode::is_move_result_any(op)) {
       always_assert(primary_instruction_of_move_result(next_insn) == it);
       return next_insn;
     }
@@ -1427,7 +1455,7 @@ IRList* ControlFlowGraph::linearize() {
   sanity_check();
   IRList* result = new IRList;
 
-  TRACE(CFG, 5, "before linearize:\n%s", SHOW(*this));
+  TRACE_NO_LINE(CFG, 5, "before linearize:\n%s", SHOW(*this));
 
   const std::vector<Block*>& ordering = order();
   insert_branches_and_targets(ordering);
@@ -2038,8 +2066,15 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
   always_assert_log(op != OPCODE_GOTO,
                     "There are no GOTO instructions in the CFG");
   Block* block = it.block();
+
   auto last_it = block->get_last_insn();
   always_assert_log(last_it != block->end(), "cannot remove from empty block");
+  if (insn == last_it->insn && (opcode::may_throw(op) || op == OPCODE_THROW)) {
+    // We're deleting the last instruction that may throw, this block no longer
+    // throws. We should remove the throw edges
+    delete_succ_edge_if(block,
+                        [](const Edge* e) { return e->type() == EDGE_THROW; });
+  }
 
   if (is_conditional_branch(op) || is_switch(op)) {
     // Remove all outgoing EDGE_BRANCHes
@@ -2050,12 +2085,12 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
     free_edges(remove_succ_edge_if(
         block, [](const Edge* e) { return e->type() == EDGE_BRANCH; },
         /* cleanup */ false));
-  } else if (insn->has_move_result_pseudo()) {
-    // delete the move-result-pseudo too
+  } else if (insn->has_move_result_any()) {
+    // delete the move-result(-pseudo) too
     if (insn == last_it->insn) {
-      // The move-result-pseudo is in the next (runtime) block.
+      // The move-result(-pseudo) is in the next (runtime) block.
       // We follow the goto edge to the block that should have the
-      // move-result-pseudo.
+      // move-result(-pseudo).
       //
       // We can't use std::next because that goes to the next block in ID order,
       // which may not be the next runtime block.
@@ -2064,32 +2099,26 @@ void ControlFlowGraph::remove_insn(const InstructionIterator& it) {
                         "Cannot follow goto of B%u in %s", block->id(),
                         SHOW(*this));
       auto first_it = move_result_block->get_first_insn();
-      always_assert(first_it != move_result_block->end());
-      always_assert_log(opcode::is_move_result_pseudo(first_it->insn->opcode()),
-                        "%d -> %d in %s", block->id(), move_result_block->id(),
-                        SHOW(*this));
-      // We can safely delete this move-result-pseudo because it cannot be the
-      // move-result-pseudo of more than one primary instruction. A CFG with
-      // multiple edges to a block beginning with a move-result-pseudo is a
-      // malformed CFG.
-      always_assert_log(move_result_block->preds().size() == 1,
-                        "Multiple edges to a move-result-pseudo in %d. %s",
-                        move_result_block->id(), SHOW(*this));
-      move_result_block->m_entries.erase_and_dispose(first_it);
+      if (first_it != move_result_block->end() &&
+          opcode::is_move_result_any(first_it->insn->opcode())) {
+        // We can safely delete this move-result(-pseudo) because it cannot be
+        // the move-result(-pseudo) of more than one primary instruction. A CFG
+        // with multiple edges to a block beginning with a move-result(-pseudo)
+        // is a malformed CFG.
+        always_assert_log(move_result_block->preds().size() == 1,
+                          "Multiple edges to a move-result-pseudo in %d. %s",
+                          move_result_block->id(), SHOW(*this));
+        move_result_block->m_entries.erase_and_dispose(first_it);
+      }
     } else {
-      // The move-result-pseudo is in the same block as this one.
+      // The move-result(-pseudo) is in the same block as this one.
       // This occurs when we're not in a try region.
       auto mrp_it = std::next(it);
       always_assert(mrp_it.block() == block);
-      block->m_entries.erase_and_dispose(mrp_it.unwrap());
+      if (opcode::is_move_result_any(mrp_it->insn->opcode())) {
+        block->m_entries.erase_and_dispose(mrp_it.unwrap());
+      }
     }
-  }
-
-  if (insn == last_it->insn && (opcode::may_throw(op) || op == OPCODE_THROW)) {
-    // We're deleting the last instruction that may throw, this block no longer
-    // throws. We should remove the throw edges
-    delete_succ_edge_if(block,
-                        [](const Edge* e) { return e->type() == EDGE_THROW; });
   }
 
   // delete the requested instruction

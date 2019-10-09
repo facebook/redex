@@ -88,7 +88,7 @@ void build_dispatcher(DexStoresVector& stores,
     always_assert(str);
     TRACE(OUTLINE,
           1,
-          "Outlined: %d %s %s\n",
+          "Outlined: %d %s %s",
           case_entry.first,
           SHOW(type),
           SHOW(str));
@@ -100,7 +100,7 @@ void build_dispatcher(DexStoresVector& stores,
   }
   mb->throwex(ex_local);
 
-  TRACE(OUTLINE, 1, "Method creator: %s\n", SHOW(mc));
+  TRACE(OUTLINE, 1, "Method creator: %s", SHOW(mc));
 
   // create outline class and dispatch method
   auto dispatch_cls = new ClassCreator(dispatch_method->get_class());
@@ -115,7 +115,7 @@ void build_dispatcher(DexStoresVector& stores,
 IRInstruction* make_invoke(const DexMethodRef* meth, uint16_t v0) {
   auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke->set_method(const_cast<DexMethodRef*>(meth))
-      ->set_arg_word_count(1)
+      ->set_srcs_size(1)
       ->set_src(0, v0);
   return invoke;
 }
@@ -179,16 +179,17 @@ void Outliner::run_pass(DexStoresVector& stores,
             new_instance_result->dest() == throwex->src(0)) {
           TRACE(OUTLINE,
                 1,
-                "Found pattern in %s:\n  %s\n  %s\n  %s\n  %s\n",
+                "Found pattern in %s:\n  %s\n  %s\n  %s\n  %s",
                 SHOW(method),
                 SHOW(new_instance),
                 SHOW(const_string),
                 SHOW(invoke_direct),
                 SHOW(throwex));
 
-          auto const_int_extype = dasm(OPCODE_CONST,
-                                       {{VREG, new_instance_result->dest()},
-                                        {LITERAL, outlined_throws.size()}});
+          auto const_int_extype =
+              dasm(OPCODE_CONST,
+                   {{VREG, new_instance_result->dest()},
+                    {LITERAL, static_cast<int64_t>(outlined_throws.size())}});
           IRInstruction* invoke_static =
               make_invoke(dispatch_method, new_instance_result->dest());
 

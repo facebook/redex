@@ -82,15 +82,15 @@ std::vector<DexClassSet> collect_can_merge(
       }
     }
     for (const auto& cls : ifaces) {
-      TRACE(MEINT, 7, "interfaces: %p\n", cls->get_type());
+      TRACE(MEINT, 7, "interfaces: %p", cls->get_type());
       const TypeSet& implementors =
           type_system.get_implementors(cls->get_type());
-      TRACE(MEINT, 7, "implementors : ");
+      TRACE_NO_LINE(MEINT, 7, "implementors : ");
       TRACE(MEINT, 7, SHOW(implementors));
       // Need to find common interfaces that implement this interface too.
       const TypeSet& intf_children =
           type_system.get_interface_children(cls->get_type());
-      TRACE(MEINT, 7, "children intfs : ");
+      TRACE_NO_LINE(MEINT, 7, "children intfs : ");
       TRACE(MEINT, 7, SHOW(intf_children));
       TypeSet implementors_and_intfs;
       // TODO(suree404): This merge interfaces that have same implementors and
@@ -194,18 +194,18 @@ void strip_out_collision(const Scope& scope,
       // to be I3 will cause conflict.
       DexMethodRef* fake_new_meth =
           DexMethod::make_method(type, name, new_proto);
-      TRACE(MEINT, 7, "Making fake method\n");
+      TRACE(MEINT, 7, "Making fake method");
       TRACE(MEINT, 7, SHOW(fake_new_meth));
-      TRACE(MEINT, 7, "\n");
+      TRACE(MEINT, 7, "");
       fake_sets.emplace(fake_new_meth);
       return;
     }
-    const DexType* rtype = get_array_type_or_self(proto->get_rtype());
+    const DexType* rtype = get_element_type_if_array(proto->get_rtype());
     if (mergeables.count(rtype) > 0) {
       to_delete.emplace(rtype);
     }
     for (const auto arg_type : proto->get_args()->get_type_list()) {
-      const DexType* extracted_arg_type = get_array_type_or_self(arg_type);
+      const DexType* extracted_arg_type = get_element_type_if_array(arg_type);
       if (mergeables.count(extracted_arg_type) > 0) {
         to_delete.emplace(extracted_arg_type);
       }
@@ -214,9 +214,9 @@ void strip_out_collision(const Scope& scope,
 
   walk::methods(scope, fake_update);
   for (DexMethodRef* fake_method : fake_sets) {
-    TRACE(MEINT, 7, "Erasing fake method\n");
+    TRACE(MEINT, 7, "Erasing fake method");
     TRACE(MEINT, 7, SHOW(fake_method));
-    TRACE(MEINT, 7, "\n");
+    TRACE(MEINT, 7, "");
     DexMethod::erase_method(fake_method);
   }
 
@@ -286,7 +286,7 @@ void strip_out_dmethod_relo_problem_intf(const Scope& scope,
     }
   }
   for (DexClass* intf : to_delete) {
-    TRACE(MEINT, 7, "Excluding interface %s because of dmethod relocation.\n",
+    TRACE(MEINT, 7, "Excluding interface %s because of dmethod relocation.",
           SHOW(intf->get_type()));
     for (auto it = candidates->begin(); it != candidates->end(); ++it) {
       if (it->find(intf) != it->end()) {
@@ -328,17 +328,17 @@ void move_methods_to_interface(
       always_assert_log(existed_method->get_code() == nullptr,
                         "Interface vmethod %s has implementation.",
                         SHOW(existed_method));
-      TRACE(MEINT, 7, "Virtual method existed:\n");
+      TRACE(MEINT, 7, "Virtual method existed:");
       TRACE(MEINT, 7, SHOW(existed_method));
-      TRACE(MEINT, 7, "\n");
+      TRACE(MEINT, 7, "");
       // Keep track of mapping of kept DexMethod and deleted DexMethod
       // so that we can also replace the deleted DexMethodRef in code.
       (*old_to_new_method)[method_to_move] = existed_method;
       continue;
     }
-    TRACE(MEINT, 7, "Virtual method moved:\n");
+    TRACE(MEINT, 7, "Virtual method moved:");
     TRACE(MEINT, 7, SHOW(method_to_move));
-    TRACE(MEINT, 7, "\n");
+    TRACE(MEINT, 7, "");
     DexMethodRef* methodref_in_context =
         DexMethod::get_method(target_intf_type,
                               method_to_move->get_name(),
@@ -365,9 +365,9 @@ void move_fields_to_interface(DexClass* from_interface,
   DexType* target_intf_type = target_interface->get_type();
   auto sfields = from_interface->get_sfields();
   for (DexField* field : sfields) {
-    TRACE(MEINT, 7, "Moving field ");
+    TRACE_NO_LINE(MEINT, 7, "Moving field ");
     TRACE(MEINT, 7, SHOW(field));
-    TRACE(MEINT, 7, "\n");
+    TRACE(MEINT, 7, "");
     from_interface->remove_field(field);
     set_public(field);
     DexFieldSpec field_spec;
@@ -398,7 +398,7 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     DexClass* merge_to_intf = *set_start;
     TRACE(MEINT, 3, "merger:   %p\n    ", merge_to_intf->get_type());
     TRACE(MEINT, 3, SHOW(merge_to_intf));
-    TRACE(MEINT, 3, "\n");
+    TRACE(MEINT, 3, "");
 
     // Get original interfaces of target interface and use that as the start
     // point of its new interfaces.
@@ -411,9 +411,9 @@ std::unordered_map<const DexType*, DexType*> merge_interfaces(
     // Merge other interfaces into the interface we chose.
     for (auto set_it = set_start; set_it != intf_set.end(); ++set_it) {
       DexClass* interface_to_copy = (*set_it);
-      TRACE(MEINT, 3, "merged:   %p\n    ", interface_to_copy->get_type());
+      TRACE_NO_LINE(MEINT, 3, "merged:   %p", interface_to_copy->get_type());
       TRACE(MEINT, 3, SHOW(interface_to_copy));
-      TRACE(MEINT, 3, "\n");
+      TRACE(MEINT, 3, "");
       intf_merge_map[interface_to_copy->get_type()] = merge_to_intf->get_type();
       // copy the methods
       move_methods_to_interface(interface_to_copy, merge_to_intf,
@@ -493,7 +493,7 @@ void update_reference_for_code(
         continue;
       }
       DexType* ref_type = insn->get_type();
-      const DexType* type = get_array_type_or_self(ref_type);
+      const DexType* type = get_element_type_if_array(ref_type);
       if (intf_merge_map.count(type) == 0) {
         continue;
       }
@@ -525,11 +525,11 @@ void remove_implements(
     if (!got_one) {
       continue;
     }
-    TRACE(MEINT, 9, "Updating interface for %p\n", cls->get_type());
+    TRACE(MEINT, 9, "Updating interface for %p", cls->get_type());
     std::unordered_set<DexType*> new_intfs;
-    TRACE(MEINT, 9, "Original was:\n");
+    TRACE_NO_LINE(MEINT, 9, "Original was:");
     for (DexType* cls_intf : cls->get_interfaces()->get_type_list()) {
-      TRACE(MEINT, 9, "%p ", cls_intf);
+      TRACE_NO_LINE(MEINT, 9, "%p ", cls_intf);
       const auto& find_intf = intf_merge_map.find(cls_intf);
       if (find_intf != intf_merge_map.end()) {
         // This interface is merged interface, add its merger interface instead
@@ -542,12 +542,12 @@ void remove_implements(
       }
     }
     std::deque<DexType*> deque;
-    TRACE(MEINT, 9, "\nAfter is:\n");
+    TRACE_NO_LINE(MEINT, 9, "\nAfter is:");
     for (DexType* intf : new_intfs) {
-      TRACE(MEINT, 9, "%p ", intf);
+      TRACE_NO_LINE(MEINT, 9, "%p ", intf);
       deque.emplace_back(intf);
     }
-    TRACE(MEINT, 9, "\n");
+    TRACE(MEINT, 9, "");
     DexTypeList* implements = DexTypeList::make_type_list(std::move(deque));
     cls->set_interfaces(implements);
   }
@@ -574,7 +574,7 @@ void remove_merged_interfaces(
   scope.clear();
   for (DexClass* cls : tscope) {
     if (intf_merge_map.find(cls->get_type()) != intf_merge_map.end()) {
-      TRACE(MEINT, 3, "Removing interface %s\n", SHOW(cls));
+      TRACE(MEINT, 3, "Removing interface %s", SHOW(cls));
     } else {
       scope.push_back(cls);
     }
@@ -585,7 +585,7 @@ void write_interface_merging_mapping_file(
     const std::unordered_map<const DexType*, DexType*>& intf_merge_map,
     const std::string& mapping_file) {
   if (mapping_file.empty()) {
-    TRACE(MEINT, 1, "Interface merging mapping file not provided\n");
+    TRACE(MEINT, 1, "Interface merging mapping file not provided");
     return;
   }
   FILE* fd = fopen(mapping_file.c_str(), "w");
@@ -595,7 +595,7 @@ void write_interface_merging_mapping_file(
   }
   fprintf(fd, "%s", out.str().c_str());
   fclose(fd);
-  TRACE(MEINT, 1, "Writting interface merging mapping file finished\n");
+  TRACE(MEINT, 1, "Writting interface merging mapping file finished");
 }
 
 } // namespace

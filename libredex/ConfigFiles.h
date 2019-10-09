@@ -7,10 +7,10 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
 #include <map>
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 #include <json/json.h>
 
@@ -44,7 +44,8 @@ struct ConfigFiles {
     }
   }
 
-  const std::unordered_map<std::string, std::vector<std::string> >& get_all_class_lists() {
+  const std::unordered_map<std::string, std::vector<std::string>>&
+  get_all_class_lists() {
     ensure_class_lists_loaded();
     return m_class_lists;
   }
@@ -60,6 +61,7 @@ struct ConfigFiles {
   }
 
   const std::unordered_set<DexType*>& get_no_optimizations_annos();
+  const std::unordered_set<DexMethodRef*>& get_pure_methods();
 
   const std::unordered_map<std::string, unsigned int>& get_method_to_weight()
       const {
@@ -78,13 +80,9 @@ struct ConfigFiles {
     return outdir + "/meta/" + basename;
   }
 
-  std::string get_outdir() const {
-    return outdir;
-  }
+  std::string get_outdir() const { return outdir; }
 
-  const ProguardMap& get_proguard_map() const {
-    return m_proguard_map;
-  }
+  const ProguardMap& get_proguard_map() const { return m_proguard_map; }
 
   const std::string& get_printseeds() const { return m_printseeds; }
 
@@ -117,7 +115,7 @@ struct ConfigFiles {
   std::string outdir;
 
   std::vector<std::string> load_coldstart_classes();
-  std::unordered_map<std::string, std::vector<std::string> > load_class_lists();
+  std::unordered_map<std::string, std::vector<std::string>> load_class_lists();
   void load_method_to_weight();
   void load_method_sorting_whitelisted_substrings();
   void load_inliner_config(inliner::InlinerConfig*);
@@ -127,7 +125,7 @@ struct ConfigFiles {
   std::string m_coldstart_class_filename;
   std::string m_profiled_methods_filename;
   std::vector<std::string> m_coldstart_classes;
-  std::unordered_map<std::string, std::vector<std::string> > m_class_lists;
+  std::unordered_map<std::string, std::vector<std::string>> m_class_lists;
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
   std::string m_printseeds; // Filename to dump computed seeds.
@@ -138,6 +136,8 @@ struct ConfigFiles {
 
   // global no optimizations annotations
   std::unordered_set<DexType*> m_no_optimizations_annos;
+  // global pure methods
+  std::unordered_set<DexMethodRef*> m_pure_methods;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config{nullptr};
 };

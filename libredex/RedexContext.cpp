@@ -412,6 +412,9 @@ void RedexContext::publish_class(DexClass* cls) {
   const auto& pair = m_type_to_class.emplace(type, cls);
   bool insertion_took_place = pair.second;
   always_assert(insertion_took_place);
+  if (cls->is_external()) {
+    m_external_classes.emplace_back(cls);
+  }
 }
 
 DexClass* RedexContext::type_class(const DexType* t) {

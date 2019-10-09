@@ -22,7 +22,7 @@ Timer::~Timer() {
   --s_indent;
   auto end = std::chrono::high_resolution_clock::now();
   auto duration_s = std::chrono::duration<double>(end - m_start).count();
-  TRACE(TIME, 1, "%*s%s completed in %.1lf seconds\n", 4 * s_indent, "",
+  TRACE(TIME, 1, "%*s%s completed in %.1lf seconds", 4 * s_indent, "",
         m_msg.c_str(), duration_s);
 
   {

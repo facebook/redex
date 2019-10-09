@@ -41,14 +41,14 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
       }
       auto insn = it->insn;
       // Add store cost for each define.
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         split_costs->increase_store(insn->dest());
         // Since move-result must immediately follow invoke-xxx or
         // fill-new-array, so if there is a def of move-result kind, we need to
         // store it and take care of it later to avoid splitting a value s0
         // around another value s1 where s0 is in invoke-xxx and s1 is in
         // move-result.
-        if (is_move_result(insn->opcode())) {
+        if (opcode::is_move_result(insn->opcode())) {
           auto prev_insn = std::prev(it.base(), 2);
           while (prev_insn->type != MFLOW_OPCODE) {
             --prev_insn;
@@ -243,7 +243,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         std::unordered_map<reg_t, reg_t>* load_store_reg,
                         IRList::iterator it) {
   size_t split_move = 0;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     auto dest = insn->dest();
     // Avoid case like:
     //  Def s0
@@ -257,7 +257,7 @@ size_t split_for_define(const SplitPlan& split_plan,
     }
     auto split_it = split_plan.split_around.find(dest);
     if (split_it != split_plan.split_around.end() && dest_not_src) {
-      if (is_move_result(insn->opcode())) {
+      if (opcode::is_move_result(insn->opcode())) {
         // Move-result must follow instruction that write
         // result register, so insert before invoke-xxx or
         // filled-new-array instead.
@@ -338,7 +338,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
         IRInstruction* mov = gen_load_for_split(ig, l, load_store_reg, code);
         if (writes_result_register(insn->opcode()) &&
             it.base()->type == MFLOW_OPCODE &&
-            is_move_result(it.base()->insn->opcode())) {
+            opcode::is_move_result(it.base()->insn->opcode())) {
           // Move-result must follow instruction that write
           // result register, so insert after move-result instead.
           code->insert_after(it.base(), mov);

@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "Mutators.h"
+
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "Mutators.h"
 
 namespace {
 void drop_this(DexMethod* method) {
@@ -22,7 +23,7 @@ void drop_this(DexMethod* method) {
   code->remove_opcode(ii.begin().unwrap());
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       auto dest = insn->dest();
       redex_assert(dest != this_reg);
       // Make sure the `this` register isn't the upper half of a wide pair.
@@ -50,7 +51,7 @@ void drop_this(DexMethod* method) {
     }
   }
 }
-}
+} // namespace
 
 namespace mutators {
 
@@ -68,19 +69,6 @@ void make_static(DexMethod* method, KeepThis keep /* = Yes */) {
     method->change(spec,
                    true /* rename on collision */,
                    true /* update deobfuscated name */);
-
-    auto code = method->get_code();
-    // If the debug info param count doesn't match the param count in the
-    // method signature, ART will not parse any of the debug info for the
-    // method. Note that this shows up as a runtime error and not a
-    // verification error. To avoid that, we insert a nullptr here.
-    if (code) {
-      auto debug = code->get_debug_item();
-      if (debug) {
-        auto& param_names = debug->get_param_names();
-        param_names.insert(param_names.begin(), nullptr);
-      }
-    }
   } else {
     drop_this(method);
   }
@@ -111,18 +99,6 @@ void make_non_static(DexMethod* method, bool make_virtual) {
                  true /* rename on collision */,
                  true /* update deobfuscated name */);
 
-  auto code = method->get_code();
-  // If the debug info param count doesn't match the param count in the
-  // method signature, ART will not parse any of the debug info for the
-  // method. Note that this shows up as a runtime error and not a
-  // verification error. To avoid that, we insert a nullptr here.
-  if (code) {
-    auto debug = code->get_debug_item();
-    if (debug) {
-      auto& param_names = debug->get_param_names();
-      param_names.erase(param_names.begin());
-    }
-  }
   method->set_access(method->get_access() & ~ACC_STATIC);
 
   // changing the method proto means that we need to change its position in the
@@ -134,4 +110,4 @@ void make_non_static(DexMethod* method, bool make_virtual) {
   }
   cls->add_method(method);
 }
-}
+} // namespace mutators

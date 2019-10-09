@@ -184,7 +184,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_linear_alloc_size + laclazz > linear_alloc_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the linear alloc limit: %s\n",
+          "over the linear alloc limit: %s",
           SHOW(clazz));
     return false;
   }
@@ -196,7 +196,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_mrefs.size() + extra_mrefs.size() >= method_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the method refs limit: %d >= %d: %s\n",
+          "over the method refs limit: %d >= %d: %s",
           m_mrefs.size() + extra_mrefs.size(), method_refs_limit, SHOW(clazz));
     return false;
   }
@@ -204,7 +204,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_frefs.size() + extra_frefs.size() >= MAX_FIELD_REFS) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the field refs limit: %d >= %d: %s\n",
+          "over the field refs limit: %d >= %d: %s",
           m_frefs.size() + extra_frefs.size(), MAX_FIELD_REFS, SHOW(clazz));
     return false;
   }
@@ -212,7 +212,7 @@ bool DexStructure::add_class_if_fits(const MethodRefs& clazz_mrefs,
   if (m_trefs.size() + extra_trefs.size() >= type_refs_limit) {
     TRACE(IDEX, 6,
           "[warning]: Class won't fit current dex since it will go "
-          "over the type refs limit: %d >= %d: %s\n",
+          "over the type refs limit: %d >= %d: %s",
           m_trefs.size() + extra_trefs.size(), type_refs_limit, SHOW(clazz));
     return false;
   }
@@ -226,7 +226,7 @@ void DexStructure::add_class_no_checks(const MethodRefs& clazz_mrefs,
                                        const TypeRefs& clazz_trefs,
                                        unsigned laclazz,
                                        DexClass* clazz) {
-  TRACE(IDEX, 7, "Adding class: %s\n", SHOW(clazz));
+  TRACE(IDEX, 7, "Adding class: %s", SHOW(clazz));
   m_mrefs.insert(clazz_mrefs.begin(), clazz_mrefs.end());
   m_frefs.insert(clazz_frefs.begin(), clazz_frefs.end());
   m_trefs.insert(clazz_trefs.begin(), clazz_trefs.end());
@@ -247,7 +247,7 @@ void DexStructure::check_refs_count() {
   if (mrefs_set.size() > m_mrefs.size()) {
     for (DexMethodRef* mr : mrefs_set) {
       if (!m_mrefs.count(mr)) {
-        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set\n",
+        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted mrefs set",
               SHOW(mr));
       }
     }
@@ -261,7 +261,7 @@ void DexStructure::check_refs_count() {
   if (frefs_set.size() > m_frefs.size()) {
     for (auto* fr : frefs_set) {
       if (!m_frefs.count(fr)) {
-        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set\n",
+        TRACE(IDEX, 4, "WARNING: Could not find %s in predicted frefs set",
               SHOW(fr));
       }
     }

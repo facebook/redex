@@ -87,7 +87,8 @@ void Graph::add_edge(reg_t u, reg_t v, bool can_coalesce) {
   //
   // then the final state of the edge between s0 and s1 must be
   // non-coalesceable.
-  m_adj_matrix[Edge(u, v)] = m_adj_matrix[Edge(u, v)] || !can_coalesce;
+  m_adj_matrix[build_edge(u, v)] =
+      m_adj_matrix[build_edge(u, v)] || !can_coalesce;
 }
 
 uint32_t Node::colorable_limit() const {
@@ -187,7 +188,7 @@ void GraphBuilder::update_node_constraints(IRList::iterator it,
                                            Graph* graph) {
   auto insn = it->insn;
   auto op = insn->opcode();
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     auto dest = insn->dest();
     auto& node = graph->m_nodes[dest];
     if (opcode::is_load_param(op)) {
@@ -286,7 +287,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       if (opcode::has_range_form(op)) {
         graph.m_range_liveness.emplace(insn, live_out);
       }
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           if (is_move(op) && reg == insn->src(0)) {
             continue;
@@ -317,7 +318,7 @@ Graph GraphBuilder::build(const LivenessFixpointIterator& fixpoint_iter,
       }
       // adding containment edge between liverange defined in insn and elements
       // in live-out set of insn
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         for (auto reg : live_out.elements()) {
           graph.add_containment_edge(insn->dest(), reg);
         }
@@ -363,8 +364,8 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
 
   o << "containment graph {\n";
   for (const auto& pair : m_containment_graph) {
-    auto reg1 = pair.first;
-    auto reg2 = pair.second;
+    reg_t reg1 = static_cast<reg_t>((pair & 0xFFFF0000) >> 16);
+    reg_t reg2 = static_cast<reg_t>(pair & 0x0000FFFF);
     o << reg1 << " -- " << reg2 << "\n";
   }
   o << "}\n";

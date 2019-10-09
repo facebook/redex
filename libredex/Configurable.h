@@ -24,41 +24,42 @@ class DexClass;
 class DexMethod;
 class DexType;
 
+// clang-format off
 /**
  * HOWTO Use Configurable
  *
  * // Derive from Configurable
  * class MyConfigurablePass : public Configurable {
- * public:
- *  // Override get_config_name to give your class a human readable name for
- * reflection std::string get_config_name() override { return
- * "MyConfigurablePass";
- *  }
- *  // Override get_config_doc to provide a docoumentation string explaining the
- *  // overall purpose of the Configurable (e.g. your pass)
- *  std::string get_config_doc() override {
- *    return "Shrink the app by doing xyz"
- *  };
- *  // Override bind_config to declare all the parameters on your Configurable
- *  void bind_config() override {
- *    // Bind the parameter named "param_name" to param_field, with a default
- *    // value of default_param_value, should the parameter be absent when
- * parsing
- *    // the config. The 4th parameter is a help string explaining the purpose
- * of the
- *    // Configurable parameter.
- *    //
- *    // bind() can bind any type that has intrinsic support (see
- *    // DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file), or
- * any
- *    // type itself which derives from Configurable.
- *    bind("para_name", default_param_value, &param_field, "Help doc explaining
- * param");
- *  }
- * private:
- *  param_type_t param_field;
- * }
+ *  public:
+ *   // Override get_config_name to give your class a human readable name for
+ *   // reflection
+ *   std::string get_config_name() override { return "MyConfigurablePass"; }
+ *
+ *   // Override get_config_doc to provide a docoumentation string explaining
+ *   // the overall purpose of the Configurable (e.g. your pass)
+ *   std::string get_config_doc() override {
+ *     return "Shrink the app by doing xyz"
+ *   };
+ *
+ *   // Override bind_config to declare all the parameters on your Configurable
+ *   void bind_config() override {
+ *     // Bind the parameter named "param_name" to param_field, with a default
+ *     // value of default_param_value, should the parameter be absent when
+ *     // parsing the config. The 4th parameter is a help string explaining the
+ *     // purpose of the Configurable parameter.
+ *     //
+ *     // bind() can bind any type that has intrinsic support (see
+ *     // DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file), or
+ *     // any type itself which derives from Configurable.
+ *     bind("para_name", default_param_value, &param_field,
+ *          "Help doc explaining param");
+ *   }
+ *
+ *  private:
+ *    param_type_t param_field;
+ * };
  */
+// clang-format on
 class Configurable {
  public:
   // Binding flags
@@ -70,7 +71,7 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable types
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
     struct classes {
       static constexpr int shift = 2;
@@ -78,7 +79,7 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable classes
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
     };
     struct methods {
       static constexpr int shift = 4;
@@ -86,10 +87,10 @@ class Configurable {
       static constexpr bindflags_t mask = {0xffL << shift};
       // error or warn on unsresolvable methods
       static constexpr bindflags_t error_if_unresolvable = {0x01L << shift};
-      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};      
+      static constexpr bindflags_t warn_if_unresolvable = {0x02L << shift};
       // error or warn if method is not a def
       static constexpr bindflags_t error_if_not_def = {0x04L << shift};
-      static constexpr bindflags_t warn_if_not_def = {0x08L << shift};      
+      static constexpr bindflags_t warn_if_not_def = {0x08L << shift};
     };
     struct optionals {
       static constexpr int shift = 6;
@@ -111,17 +112,20 @@ class Configurable {
   struct ReflectionParam {
     ReflectionParam() {}
 
-    explicit ReflectionParam(const std::string& name,
-                             const std::string& doc,
-                             const bool is_required,
-                             const bindflags_t bindflags,
-                             const std::string& primitive) {
+    explicit ReflectionParam(
+        const std::string& name,
+        const std::string& doc,
+        const bool is_required,
+        const bindflags_t bindflags,
+        const std::string& primitive,
+        const Json::Value default_value = Json::nullValue) {
       this->name = name;
       this->doc = doc;
       this->is_required = is_required;
       this->bindflags = bindflags;
       this->type = Type::PRIMITIVE;
       this->variant = std::make_tuple(primitive, Reflection());
+      this->default_value = default_value;
     }
 
     explicit ReflectionParam(const std::string& name,
@@ -139,7 +143,7 @@ class Configurable {
 
     enum Type {
       /**
-       *  Primtives are types we support intrinsically, e.g. scalars or arrays
+       * Primitives are types we support intrinsically, e.g. scalars or arrays
        * of scalars. The primitives we support are defined by
        * DEFINE_CONFIGURABLE_PRIMITIVE macros at the bottom of this file. */
       PRIMITIVE = 0,
@@ -158,6 +162,7 @@ class Configurable {
     // n.b. make this a std::variant after c++17
     Type type;
     std::tuple<std::string, Reflection> variant;
+    Json::Value default_value;
   };
 
  public:
@@ -221,7 +226,7 @@ class Configurable {
     m_after_configuration = after_configuration_fn;
   }
 
-  /** 
+  /**
    * Default behavior for all json -> data type coercions. this template
    * handles the case for composites (e.g. all Configurables). Primitives
    * will have specializations provided in Configurable.cpp
@@ -238,35 +243,35 @@ class Configurable {
     return t;
   }
 
-  /** 
+  typedef std::function<void(
+      const std::string& param_name,
+      const std::string& param_doc,
+      const bool param_is_required,
+      const bindflags_t param_bindflags,
+      const Configurable::ReflectionParam::Type param_type_tag,
+      const std::tuple<std::string, Configurable::Reflection>& param_type,
+      const Json::Value)>
+      ReflectorFunc;
+
+  /**
    * Default behavior for all parameter reflections. this template
    * handles the case for composites (e.g. all Configurables). Primitives
    * will have specializations provided in Configurable.cpp
    */
   template <typename T>
-  void reflect(
-      std::function<void(
-          const std::string& param_name,
-          const std::string& param_doc,
-          const bool param_is_required,
-          const bindflags_t param_bindflags,
-          const Configurable::ReflectionParam::Type param_type_tag,
-          const std::tuple<std::string, Configurable::Reflection>& param_type)>&
-          reflector,
-      const std::string& param_name,
-      const std::string& param_doc,
-      const bool param_is_required,
-      const bindflags_t param_bindflags,
-      T& param) {
+  void reflect(ReflectorFunc& reflector,
+               const std::string& param_name,
+               const std::string& param_doc,
+               const bool param_is_required,
+               const bindflags_t param_bindflags,
+               T& param,
+               T default_value) {
     static_assert(
         std::is_base_of<Configurable, T>::value,
         "T must be a supported primitive or derive from Configurable");
-    reflector(param_name,
-              param_doc,
-              param_is_required,
-              param_bindflags,
+    reflector(param_name, param_doc, param_is_required, param_bindflags,
               ReflectionParam::Type::COMPOSITE,
-              std::make_tuple("", param.reflect()));
+              std::make_tuple("", param.reflect()), Json::nullValue);
   }
 
   template <typename T>
@@ -281,7 +286,8 @@ class Configurable {
               doc,
               false /* param_is_required */,
               bindflags,
-              dest);
+              dest,
+              defaultValue);
     } else {
       parse(name, defaultValue, dest, bindflags);
     }
@@ -294,12 +300,8 @@ class Configurable {
                      bindflags_t bindflags = 0) {
     // TODO(T44504176): we could reflect the requiredness here
     if (m_reflecting) {
-      reflect(m_reflector,
-              name,
-              doc,
-              true /* param_is_required */,
-              bindflags,
-              dest);
+      reflect(m_reflector, name, doc, true /* param_is_required */, bindflags,
+              dest, static_cast<T>(0));
     } else {
       parse_required(name, dest, bindflags);
     }
@@ -344,14 +346,7 @@ class Configurable {
   std::function<void()> m_after_configuration;
   std::function<boost::optional<const Json::Value&>(const std::string& name)>
       m_parser;
-  std::function<void(
-      const std::string& param_name,
-      const std::string& param_doc,
-      const bool param_is_required,
-      const Configurable::bindflags_t param_bindflags,
-      const Configurable::ReflectionParam::Type param_type_tag,
-      const std::tuple<std::string, Configurable::Reflection>& param_type)>
-      m_reflector;
+  ReflectorFunc m_reflector;
   bool m_reflecting;
 };
 
@@ -363,19 +358,10 @@ class Configurable {
                               bindflags_t bindflags);               \
   template <>                                                       \
   void Configurable::reflect(                                       \
-      std::function<void(                                           \
-          const std::string& param_name,                            \
-          const std::string& param_doc,                             \
-          const bool param_is_required,                             \
-          const Configurable::bindflags_t param_bindflags,          \
-          const Configurable::ReflectionParam::Type param_type_tag, \
-          const std::tuple<std::string, Configurable::Reflection>&  \
-              param_type)>& reflector,                              \
-      const std::string& param_name,                                \
-      const std::string& param_doc,                                 \
-      const bool param_is_required,                                 \
-      const Configurable::bindflags_t param_bindflags,              \
-      type& param);
+      ReflectorFunc& reflector, const std::string& param_name,      \
+      const std::string& param_doc, const bool param_is_required,   \
+      const Configurable::bindflags_t param_bindflags, type& param, \
+      type default_value);
 
 DEFINE_CONFIGURABLE_PRIMITIVE(float)
 DEFINE_CONFIGURABLE_PRIMITIVE(bool)

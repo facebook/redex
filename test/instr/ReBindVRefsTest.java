@@ -27,6 +27,8 @@ class Root implements RootInterface {
   public int foo() { return 53; }
 
   public int bar() { return 123; }
+
+  public final int final_method() { return 42; }
 }
 
 class Body extends Root implements BodyInterface {
@@ -39,6 +41,12 @@ class Body extends Root implements BodyInterface {
   public int car() { return 23; }
 
   public int dar() { return fooRes; }
+
+  public int invoke_super_final() { return super.final_method(); }
+
+  public int invoke_super_nonfinal() { return super.bar(); }
+
+  public void invoke_super_external_final() { super.getClass(); }
 
   public int fooRes;
 }

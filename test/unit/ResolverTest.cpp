@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <memory>
 #include <gtest/gtest.h>
+#include <memory>
 
-#include "DexClass.h"
-#include "Resolver.h"
 #include "Creators.h"
+#include "DexClass.h"
+#include "RedexTest.h"
+#include "Resolver.h"
 
 /**
  * Create the following hierarchy
@@ -94,8 +95,9 @@ void create_scope() {
   auto cls_E = create_class(e, obj_t, no_fields);
 }
 
-TEST(ResolveField, empty) {
-  g_redex = new RedexContext();
+class ResolverTest : public RedexTest {};
+
+TEST_F(ResolverTest, ResolveField) {
   create_scope();
 
   // different cases for int A.f1
@@ -207,6 +209,4 @@ TEST(ResolveField, empty) {
   EXPECT_TRUE(resolve_field(DexType::get_type("E"),
       DexString::get_string("f1"),
       DexType::get_type("I")) == nullptr);
-
-  delete g_redex;
 }

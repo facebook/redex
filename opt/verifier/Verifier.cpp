@@ -120,7 +120,7 @@ void verifyStore(DexStoresVector& stores, DexStore& store, class_to_store_map_t 
         TRACE(
           VERIFY,
           5,
-          "BAD REFERENCE from %s %s to %s %s\n",
+          "BAD REFERENCE from %s %s to %s %s",
           store.get_name().c_str(),
           source->get_deobfuscated_name().c_str(),
           target_store_name.c_str(),

@@ -20,6 +20,7 @@
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "LocalDce.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -107,11 +108,11 @@ Scope reverse_tsort_by_init_deps(const Scope& scope) {
       return;
     }
     if (visiting.count(cls) != 0) {
-      TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):\n");
+      TRACE(FINALINLINE, 1, "Possible class init cycle (could be benign):");
       for (auto visiting_cls : visiting) {
-        TRACE(FINALINLINE, 1, "  %s\n", SHOW(visiting_cls));
+        TRACE(FINALINLINE, 1, "  %s", SHOW(visiting_cls));
       }
-      TRACE(FINALINLINE, 1, "  %s\n", SHOW(cls));
+      TRACE(FINALINLINE, 1, "  %s", SHOW(cls));
       fprintf(stderr,
               "WARNING: Possible class init cycle found in FinalInlineV2. "
               "To check re-run with TRACE=FINALINLINE:1.\n");
@@ -155,15 +156,6 @@ using CombinedInitAnalyzer =
                                 cp::WholeProgramAwareAnalyzer,
                                 cp::StringAnalyzer,
                                 cp::PrimitiveAnalyzer>;
-
-// A trivial clinit should only contain a return-void instruction.
-bool is_trivial_clinit(const DexMethod* method) {
-  auto ii = InstructionIterable(method->get_code());
-  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
-    return mie.insn->opcode() != OPCODE_RETURN_VOID;
-  });
-}
-
 /*
  * Converts a ConstantValue into its equivalent encoded_value. Returns null if
  * no such encoding is known.
@@ -219,7 +211,7 @@ std::unordered_set<const DexFieldRef*> gather_read_static_fields(
       auto insn = mie.insn;
       if (is_sget(insn->opcode())) {
         read_fields.emplace(insn->get_field());
-        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s\n",
+        TRACE(FINALINLINE, 3, "Found static field read in clinit: %s",
               SHOW(insn->get_field()));
       }
     }
@@ -240,8 +232,8 @@ void encode_values(DexClass* cls,
     if (encoded_value == nullptr) {
       continue;
     }
-    field->make_concrete(field->get_access(), encoded_value);
-    TRACE(FINALINLINE, 2, "Found encodable field: %s %s\n", SHOW(field),
+    field->set_value(encoded_value);
+    TRACE(FINALINLINE, 2, "Found encodable field: %s %s", SHOW(field),
           SHOW(value));
   }
 }
@@ -258,6 +250,7 @@ namespace final_inline {
  * as part of the WholeProgramState object.
  */
 cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
+  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_clinit_deps(scope)) {
     ConstantEnvironment env;
@@ -286,7 +279,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       transform_config.class_under_init = cls->get_type();
       cp::Transform(transform_config).apply(intra_cp, wps, code);
       // Delete the instructions rendered dead by the removal of those sputs.
-      LocalDcePass::run(code);
+      LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
       if (is_trivial_clinit(clinit)) {
         cls->remove_method(clinit);
@@ -310,6 +303,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
  */
 cp::WholeProgramState analyze_and_simplify_inits(
     const Scope& scope, const cp::EligibleIfields& eligible_ifields) {
+  const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
   cp::WholeProgramState wps;
   for (DexClass* cls : reverse_tsort_by_init_deps(scope)) {
     if (cls->is_external()) {
@@ -338,7 +332,7 @@ cp::WholeProgramState analyze_and_simplify_inits(
         transform_config.class_under_init = cls->get_type();
         cp::Transform(transform_config).apply(intra_cp, wps, code);
         // Delete the instructions rendered dead by the removal of those iputs.
-        LocalDcePass::run(code);
+        LocalDce(pure_methods).dce(code);
       }
     }
     wps.collect_instance_finals(cls, eligible_ifields,
@@ -438,9 +432,9 @@ class ThisObjectAnalysis final
  private:
   void analyze_instruction(IRInstruction* insn, ThisEnvironment* env) const {
     auto default_case = [&]() {
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         env->set(insn->dest(), ThisDomain(false));
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         env->set(RESULT_REGISTER, ThisDomain(false));
       }
     };
@@ -754,36 +748,6 @@ size_t inline_final_gets(
   return inlined_count;
 }
 
-// XXX(jezng): In principle, we should avoid deleting a field if
-// can_delete(field) is false, even if can_delete(containing class) is true.
-// However, the previous implementation of FinalInline did this more aggressive
-// deletion -- deleting as long as either can_delete(field) or can_delete(cls)
-// is true -- and I'm following it so as not to cause a regression. The right
-// long-term fix is to clean up the proguard keep rules -- then we can just rely
-// on RMU to delete these fields.
-void aggressively_delete_static_finals(const Scope& scope) {
-  std::unordered_set<const DexField*> referenced_fields;
-  walk::opcodes(scope, [&](const DexMethod*, const IRInstruction* insn) {
-    if (!insn->has_field()) {
-      return;
-    }
-    auto field = resolve_field(insn->get_field(), FieldSearch::Static);
-    referenced_fields.emplace(field);
-  });
-  for (auto* cls : scope) {
-    auto& sfields = cls->get_sfields();
-    sfields.erase(
-        std::remove_if(sfields.begin(),
-                       sfields.end(),
-                       [&](DexField* field) {
-                         return is_final(field) && !field->is_external() &&
-                                referenced_fields.count(field) == 0 &&
-                                (can_delete(cls) || can_delete(field));
-                       }),
-        sfields.end());
-  }
-}
-
 } // namespace
 
 size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
@@ -824,9 +788,6 @@ void FinalInlinePassV2::run_pass(DexStoresVector& stores,
         gather_ifield_candidates(scope, m_config.whitelist_method_names);
     inlined_ifields_count =
         run_inline_ifields(scope, eligible_ifields, m_config);
-  }
-  if (m_config.aggressively_delete) {
-    aggressively_delete_static_finals(scope);
   }
   mgr.incr_metric("num_static_finals_inlined", inlined_sfields_count);
   mgr.incr_metric("num_instance_finals_inlined", inlined_ifields_count);

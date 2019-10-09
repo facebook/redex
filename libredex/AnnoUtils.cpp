@@ -18,14 +18,14 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
     if (anno->type() != target_anno) {
       continue;
     }
-    TRACE(ANNO, 9, "   anno %s\n", SHOW(anno));
+    TRACE(ANNO, 9, "   anno %s", SHOW(anno));
     auto& elems = anno->anno_elems();
     if (elem_str.empty()) {
       always_assert(elems.size() == 1);
       auto& elem = elems[0];
       always_assert(elem.encoded_value->evtype() == type);
       auto val = elem.encoded_value->value();
-      TRACE(ANNO, 9, " parsed annotation value: %d\n", val);
+      TRACE(ANNO, 9, " parsed annotation value: %d", val);
       return elem.encoded_value;
     }
 
@@ -34,8 +34,15 @@ const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
         continue;
       }
       always_assert(elem.encoded_value->evtype() == type);
-      TRACE(ANNO, 9, " parsed annotation elem: %d\n", SHOW(elem.encoded_value));
+      TRACE(ANNO, 9, " parsed annotation elem: %d", SHOW(elem.encoded_value));
       return elem.encoded_value;
+    }
+
+    const DexEncodedValue* default_value =
+        parse_default_anno_value(target_anno, elem_str);
+
+    if (default_value != nullptr) {
+      return default_value;
     }
   }
 
@@ -54,7 +61,7 @@ uint32_t parse_anno_value(const DexMember* member,
   always_assert(anno_set != nullptr);
   TRACE(ANNO,
         9,
-        " Parsing annotations elem %s on %s: %s\n",
+        " Parsing annotations elem %s on %s: %s",
         elem_str.c_str(),
         SHOW(member),
         SHOW(anno_set));
@@ -73,7 +80,7 @@ std::string parse_str_anno_value(const DexMember* member,
   always_assert(anno_set != nullptr);
   TRACE(ANNO,
         9,
-        " Parsing annotations elem %s on %s: %s\n",
+        " Parsing annotations elem %s on %s: %s",
         elem_str.c_str(),
         SHOW(member),
         SHOW(anno_set));
@@ -83,6 +90,54 @@ std::string parse_str_anno_value(const DexMember* member,
 }
 
 } // namespace
+
+const DexEncodedValue* parse_default_anno_value(
+    const DexType* target_anno_type,
+    const std::string& target_anno_element_name) {
+
+  if (target_anno_type == nullptr || target_anno_element_name.empty()) {
+    return nullptr;
+  }
+  TRACE(ANNO, 9, "Looking up default value for anno [%s], element_name %s \n",
+        SHOW(target_anno_type), target_anno_element_name.c_str());
+  DexClass* target_anno_class = type_class(target_anno_type);
+  const auto* target_anno_class_annoset = target_anno_class->get_anno_set();
+  if (!target_anno_class_annoset) {
+    return nullptr;
+  }
+  auto& target_anno_class_annos = target_anno_class_annoset->get_annotations();
+
+  const auto default_annotation_dextype =
+      DexType::get_type("Ldalvik/annotation/AnnotationDefault;");
+
+  for (const auto& target_anno_class_anno : target_anno_class_annos) {
+    if (target_anno_class_anno->type() != default_annotation_dextype) {
+      continue;
+    }
+    always_assert(target_anno_class_anno->system_visible());
+    auto& target_elems = target_anno_class_anno->anno_elems();
+    const std::string VALUE_ELEM_STR = "value";
+    for (auto& target_elem : target_elems) {
+      if (target_elem.string->str() != VALUE_ELEM_STR) {
+        continue;
+      }
+      DexEncodedValueAnnotation* default_values =
+          static_cast<DexEncodedValueAnnotation*>(target_elem.encoded_value);
+      TRACE(ANNO, 9, "default values: %s type %d\n", SHOW(default_values),
+            target_elem.encoded_value->evtype());
+      always_assert(target_elem.encoded_value->evtype() == DEVT_ANNOTATION);
+
+      auto default_value_annos = default_values->annotations();
+      for (const auto& default_value_anno : *default_value_annos) {
+        if (default_value_anno.string->str() != target_anno_element_name) {
+          continue;
+        }
+        return default_value_anno.encoded_value;
+      }
+    }
+  }
+  return nullptr;
+}
 
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,

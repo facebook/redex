@@ -196,7 +196,9 @@ void deserialize_class_data(std::ifstream& istrm, uint32_t data_size) {
       deserialize_name_and_rstate((const char**)&ptr, method);
       break;
     }
-    default: { always_assert(false); }
+    default: {
+      always_assert(false);
+    }
     }
   }
 }

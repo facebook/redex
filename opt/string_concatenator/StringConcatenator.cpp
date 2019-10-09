@@ -96,7 +96,7 @@ struct Stats {
     mgr.set_metric("string_fields_resolved", string_fields_resolved);
     TRACE(
         STR_CAT, 1,
-        "insns removed: %d, methods rewritten %d, string fields resolved %d\n",
+        "insns removed: %d, methods rewritten %d, string fields resolved %d",
         insns_removed, clinits_emptied, string_fields_resolved);
   }
 };
@@ -314,9 +314,7 @@ class Concatenator {
       DexField* field = resolve_field(entry.first, FieldSearch::Static);
       always_assert(field != nullptr);
       const std::string& str = entry.second;
-      field->make_concrete(
-          field->get_access(),
-          new DexEncodedValueString(DexString::make_string(str)));
+      field->set_value(new DexEncodedValueString(DexString::make_string(str)));
     }
   }
 
@@ -361,7 +359,7 @@ class Concatenator {
     stats.clinits_emptied += 1;
     stats.string_fields_resolved += fields.size();
 
-    TRACE(STR_CAT, 2, "optimize %s from %d to %d\n", SHOW(method), before_size,
+    TRACE(STR_CAT, 2, "optimize %s from %d to %d", SHOW(method), before_size,
           block->num_opcodes());
     return stats;
   }
@@ -401,7 +399,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         return a;
       },
       Stats{},
-      DEBUG ? 1 : walk::parallel::default_num_threads());
+      DEBUG ? 1 : redex_parallel::default_num_threads());
 
   for (DexMethod* method : methods_to_remove.get()) {
     // We can delete the method without finding callsites because these are all

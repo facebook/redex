@@ -128,7 +128,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // have a unique predecessor.
   if (branch_block->branchingness() != opcode::BRANCH_GOTO ||
       branch_block->preds().size() != 1) {
-    TRACE(UCM, 5, "[up code motion] giving up: branch block\n");
+    TRACE(UCM, 5, "[up code motion] giving up: branch block");
     return false;
   }
 
@@ -137,7 +137,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
   // target block; give up when there are any other instructions.
   if (!gather_movable_instructions(branch_block,
                                    &ordered_branch_instructions)) {
-    TRACE(UCM, 5, "[up code motion] giving up: gather\n");
+    TRACE(UCM, 5, "[up code motion] giving up: gather");
     return false;
   }
 
@@ -166,7 +166,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
     if (it == goto_instruction_ends.end()) {
       TRACE(UCM, 5,
             "[up code motion] giving up: branch instruction assigns to "
-            "dest with no corresponding goto instructions\n");
+            "dest with no corresponding goto instructions");
       return false;
     }
     ordered_instructions_in_goto_block_index_end =
@@ -185,7 +185,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
       if (destroyed_dests.count(src)) {
         TRACE(UCM, 5,
               "[up code motion] giving up: goto source overlaps with "
-              "branch dest\n");
+              "branch dest");
         return false;
       }
     }
@@ -353,7 +353,7 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
           TRACE(UCM, 3,
                 "[up code motion] Moved %u instructions over %u conditional "
                 "branches while inverting %u conditional branches and dealing "
-                "with %u clobbered registers in {%s}\n",
+                "with %u clobbered registers in {%s}",
                 stats.instructions_moved, stats.branches_moved_over,
                 stats.inverted_conditional_branches, stats.clobbered_registers,
                 SHOW(method));
@@ -378,7 +378,7 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
   TRACE(UCM, 1,
         "[up code motion] Moved %u instructions over %u conditional branches "
         "while inverting %u conditional branches and dealing with %u clobbered "
-        "registers in total\n",
+        "registers in total",
         stats.instructions_moved, stats.branches_moved_over,
         stats.inverted_conditional_branches, stats.clobbered_registers);
 }

@@ -427,73 +427,15 @@ class ClassScopes {
   void build_interface_scopes();
 };
 
-//
-// Helpers
-//
-
-/**
- * Given a scope find all virtual methods that can be devirtualized.
- * That is, methods that have a unique definition in the vmethods across
- * a hierarchy. Basically all methods that are virtual because of visibility
- * (public, package and protected) and not because they need to be virtual.
- */
-inline std::vector<DexMethod*> devirtualize(const SignatureMap& sig_map) {
-  Timer timer("Devirtualizer inner");
-  std::vector<DexMethod*> non_virtual;
-  for (const auto& proto_it : sig_map) {
-    for (const auto& scopes : proto_it.second) {
-      for (const auto& scope : scopes.second) {
-        if (type_class(scope.type) == nullptr ||
-            is_interface(type_class(scope.type)) ||
-            scope.interfaces.size() > 0) {
-          continue;
-        }
-        for (const auto& meth : scope.methods) {
-          if (!meth.first->is_concrete()) continue;
-          if (meth.second != FINAL) {
-            break;
-          }
-          always_assert(scope.interfaces.size() == 0);
-          non_virtual.push_back(meth.first);
-        }
-      }
-    }
-  }
-  return non_virtual;
-}
-
-inline std::vector<DexMethod*> devirtualize(
-    const std::vector<DexClass*>& scope) {
-  Timer timer("Devirtualizer");
-  ClassHierarchy class_hierarchy = build_type_hierarchy(scope);
-  auto signature_map = build_signature_map(class_hierarchy);
-  return devirtualize(signature_map);
-}
-
-inline bool can_devirtualize(SignatureMap& sig_map, DexMethod* meth) {
-  always_assert(meth->is_virtual());
-  auto& proto_map = sig_map[meth->get_name()];
-  auto& scopes = proto_map[meth->get_proto()];
-  for (const auto& scope : scopes) {
-    if (scope.type != meth->get_class()) {
-      continue;
-    }
-
-    for (const auto& m : scope.methods) {
-      if (!m.first->is_concrete()) continue;
-      if (m.second != FINAL) {
-        break;
-      }
-      always_assert(scope.interfaces.size() == 0);
-      return true;
-    }
-  }
-  return false;
-}
-
 /**
  * Return the list of virtual methods for a given type.
  * If the type is java.lang.Object and it is not known (no DexClass for it)
  * it generates fictional methods for it.
  */
 const std::vector<DexMethod*>& get_vmethods(const DexType* type);
+
+struct virtualscopes_comparator {
+  bool operator()(const VirtualScope* a, const VirtualScope* b) const {
+    return compare_dexmethods(a->methods.at(0).first, b->methods.at(0).first);
+  }
+};

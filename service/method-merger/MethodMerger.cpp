@@ -8,11 +8,13 @@
 #include "MethodMerger.h"
 
 #include "DexAsm.h"
+#include "MethodOverrideGraph.h"
 #include "MethodReference.h"
 #include "Resolver.h"
 #include "SwitchDispatch.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace {
 
@@ -174,15 +176,15 @@ Stats merge_methods(const MethodGroups& method_groups,
     }
     auto& new_callee = old_to_new.at(old_callee);
     method_reference::patch_callsite(callsite, new_callee);
-    TRACE(METH_MERGER, 9, "\t%s => %d %s\n", SHOW(old_callee),
+    TRACE(METH_MERGER, 9, "\t%s => %d %s", SHOW(old_callee),
           new_callee.additional_args.get()[0], SHOW(new_callee.method));
   }
   if (traceEnabled(METH_MERGER, 3)) {
-    TRACE(METH_MERGER, 3, "merged static methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged static methods : %u",
           stats.num_merged_static_methods);
-    TRACE(METH_MERGER, 3, "merged direct methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged direct methods : %u",
           stats.num_merged_direct_methods);
-    TRACE(METH_MERGER, 3, "merged virtual methods : %u\n",
+    TRACE(METH_MERGER, 3, "merged virtual methods : %u",
           stats.num_merged_nonvirt_methods);
   }
   return stats;
@@ -198,7 +200,7 @@ Stats merge_methods_within_class(const DexClasses& classes,
     std::unordered_map<DexType*, std::vector<DexMethod*>> methods;
     std::for_each(classes.begin(), classes.end(),
                   [&methods](DexClass* clazz) { methods[clazz->get_type()]; });
-    auto non_virtuals = devirtualize(scope);
+    auto non_virtuals = mog::get_non_true_virtuals(scope);
     std::for_each(non_virtuals.begin(), non_virtuals.end(),
                   [&methods](DexMethod* method) {
                     auto type = method->get_class();

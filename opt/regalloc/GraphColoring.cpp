@@ -393,7 +393,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
       }
       // Merge the child's node into the parent's
       ig->combine(parent, child);
-      TRACE(REG, 7, "Coalescing v%u and v%u because of %s\n", parent, child,
+      TRACE(REG, 7, "Coalescing v%u and v%u because of %s", parent, child,
             SHOW(insn));
       if (is_move(op)) {
         ++m_stats.moves_coalesced;
@@ -450,7 +450,7 @@ void Allocator::simplify(interference::Graph* ig,
     while (low.size() > 0) {
       auto reg = *low.begin();
       const auto& node = ig->get_node(reg);
-      TRACE(REG, 6, "Removing %u\n", reg);
+      TRACE(REG, 6, "Removing %u", reg);
       if (node.max_vreg() < max_unsigned_value(16)) {
         select_stack->push(reg);
       } else {
@@ -504,7 +504,7 @@ void Allocator::simplify(interference::Graph* ig,
           }
           return !node_a.is_spilt() && node_b.is_spilt();
         });
-    TRACE(REG, 6, "Potentially spilling %u\n", *spill_candidate_it);
+    TRACE(REG, 6, "Potentially spilling %u", *spill_candidate_it);
     // Our spill candidate has too many neighbors for us to be certain that we
     // can color it. Instead of spilling it immediately, we put it into `low`,
     // which will ensure that it ends up on the stack before any of the
@@ -627,7 +627,7 @@ void Allocator::select_ranges(const IRCode* code,
                               RegisterTransform* reg_transform,
                               SpillPlan* spill_plan) {
   for (auto* insn : range_set) {
-    TRACE(REG, 5, "Allocating %s as range kind\n", SHOW(insn));
+    TRACE(REG, 5, "Allocating %s as range kind", SHOW(insn));
     std::unordered_map<reg_t, VirtualRegistersFile> vreg_files;
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       VirtualRegistersFile vreg_file;
@@ -837,7 +837,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
     if (opcode::is_load_param(insn->opcode())) {
       continue;
     }
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       auto dest = insn->dest();
       if (params.find(dest) != params.end()) {
         params.erase(dest);
@@ -866,7 +866,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       for (size_t index = 1; index < block_uses.size(); ++index) {
         idom = cfg.idom_intersect(postorder_dominator, idom, block_uses[index]);
       }
-      TRACE(REG, 5, "Inserting param load of v%u in B%u\n", param, idom->id());
+      TRACE(REG, 5, "Inserting param load of v%u in B%u", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
       // insert load after branches.
       auto insn_it = idom->get_last_insn();
@@ -876,7 +876,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       }
       load_locations[param] = insn_it;
     } else {
-      TRACE(REG, 5, "Inserting param load of v%u in B%u\n", param,
+      TRACE(REG, 5, "Inserting param load of v%u in B%u", param,
             block_uses[0]->id());
       load_locations[param] = find_first_use_in_block(param, block_uses[0]);
     }
@@ -990,7 +990,7 @@ void Allocator::spill(const interference::Graph& ig,
           code->insert_before(it.unwrap(), mov);
         }
       }
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         auto dest = insn->dest();
         auto sp_it = spill_plan.global_spills.find(dest);
         if (sp_it != spill_plan.global_spills.end() &&
@@ -1037,7 +1037,7 @@ static void dedicate_this_register(DexMethod* method) {
   bool this_needs_split{false};
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->dests_size() && insn->dest() == this_insn->dest() &&
+    if (insn->has_dest() && insn->dest() == this_insn->dest() &&
         insn != this_insn) {
       this_needs_split = true;
       break;
@@ -1096,7 +1096,7 @@ void Allocator::allocate(DexMethod* method) {
     LivenessFixpointIterator fixpoint_iter(cfg);
     fixpoint_iter.run(LivenessDomain());
 
-    TRACE(REG, 5, "Allocating:\n%s\n", ::SHOW(code->cfg()));
+    TRACE(REG, 5, "Allocating:\n%s", ::SHOW(code->cfg()));
     auto ig =
         interference::build_graph(fixpoint_iter, code, initial_regs, range_set);
 
@@ -1117,7 +1117,7 @@ void Allocator::allocate(DexMethod* method) {
       // After coalesce the live_out and live_in of blocks may change, so run
       // LivenessFixpointIterator again.
       fixpoint_iter.run(LivenessDomain());
-      TRACE(REG, 5, "Post-coalesce:\n%s\n", ::SHOW(code->cfg()));
+      TRACE(REG, 5, "Post-coalesce:\n%s", ::SHOW(code->cfg()));
     } else {
       // TODO we should coalesce here too, but we'll need to avoid removing
       // moves that were inserted by spilling
@@ -1133,7 +1133,7 @@ void Allocator::allocate(DexMethod* method) {
     simplify(&ig, &select_stack, &spilled_select_stack);
     select(code, ig, &select_stack, &reg_transform, &spill_plan);
 
-    TRACE(REG, 5, "Transform before range alloc:\n%s\n", SHOW(reg_transform));
+    TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
     choose_range_promotions(code, ig, spill_plan, &range_set);
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.
@@ -1145,10 +1145,10 @@ void Allocator::allocate(DexMethod* method) {
     // last.
     select(code, ig, &spilled_select_stack, &reg_transform, &spill_plan);
     select_params(method, ig, &reg_transform, &spill_plan);
-    TRACE(REG, 5, "Transform after range alloc:\n%s\n", SHOW(reg_transform));
+    TRACE(REG, 5, "Transform after range alloc:\n%s", SHOW(reg_transform));
 
     if (!spill_plan.empty()) {
-      TRACE(REG, 5, "Spill plan:\n%s\n", SHOW(spill_plan));
+      TRACE(REG, 5, "Spill plan:\n%s", SHOW(spill_plan));
       if (m_config.use_splitting) {
         calc_split_costs(fixpoint_iter, code, &split_costs);
         find_split(ig, split_costs, &reg_transform, &spill_plan, &split_plan);
@@ -1157,7 +1157,7 @@ void Allocator::allocate(DexMethod* method) {
       spill(ig, spill_plan, range_set, code);
 
       if (split_plan.split_around.size() > 0) {
-        TRACE(REG, 5, "Split plan:\n%s\n", SHOW(split_plan));
+        TRACE(REG, 5, "Split plan:\n%s", SHOW(split_plan));
         m_stats.split_moves +=
             split(fixpoint_iter, split_plan, split_costs, ig, code);
       }
@@ -1172,15 +1172,15 @@ void Allocator::allocate(DexMethod* method) {
     }
   }
 
-  TRACE(REG, 3, "Reiteration count: %lu\n", m_stats.reiteration_count);
-  TRACE(REG, 3, "Spill count: %lu\n", m_stats.moves_inserted());
-  TRACE(REG, 3, "  Param spills: %lu\n", m_stats.param_spill_moves);
-  TRACE(REG, 3, "  Range spills: %lu\n", m_stats.range_spill_moves);
-  TRACE(REG, 3, "  Global spills: %lu\n", m_stats.global_spill_moves);
-  TRACE(REG, 3, "  splits: %lu\n", m_stats.split_moves);
-  TRACE(REG, 3, "Coalesce count: %lu\n", m_stats.moves_coalesced);
-  TRACE(REG, 3, "Params spilled too early: %lu\n", m_stats.params_spill_early);
-  TRACE(REG, 3, "Net moves: %ld\n", m_stats.net_moves());
+  TRACE(REG, 3, "Reiteration count: %lu", m_stats.reiteration_count);
+  TRACE(REG, 3, "Spill count: %lu", m_stats.moves_inserted());
+  TRACE(REG, 3, "  Param spills: %lu", m_stats.param_spill_moves);
+  TRACE(REG, 3, "  Range spills: %lu", m_stats.range_spill_moves);
+  TRACE(REG, 3, "  Global spills: %lu", m_stats.global_spill_moves);
+  TRACE(REG, 3, "  splits: %lu", m_stats.split_moves);
+  TRACE(REG, 3, "Coalesce count: %lu", m_stats.moves_coalesced);
+  TRACE(REG, 3, "Params spilled too early: %lu", m_stats.params_spill_early);
+  TRACE(REG, 3, "Net moves: %ld", m_stats.net_moves());
 }
 
 } // namespace graph_coloring

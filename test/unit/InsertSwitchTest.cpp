@@ -14,20 +14,21 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IntroduceSwitch.h"
+#include "RedexTest.h"
 
-struct InsertSwitchTest : testing::Test {
+struct InsertSwitchTest : public RedexTest {
   DexMethod* m_method;
 
   InsertSwitchTest() {
-    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method = static_cast<DexMethod*>(DexMethod::make_method(
-        get_object_type(), DexString::make_string("testMethod"), proto));
-    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_method =
+        DexMethod::make_method(get_object_type(),
+                               DexString::make_string("testMethod"), proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   }
 
-  ~InsertSwitchTest() { delete g_redex; }
+  ~InsertSwitchTest() {}
 };
 
 // Code:    if r == i then A else if r == i+1 then B else if r == i+2 then C; D
@@ -101,8 +102,7 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(m_method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), m_method->get_code());
 }
 
 // Code:    if r==i A else if r==i+10 B else if r==i+2 C
@@ -175,8 +175,7 @@ TEST_F(InsertSwitchTest, simplifySparseSwitch) {
     )
   )");
 
-  EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(m_method->get_code()));
+  EXPECT_CODE_EQ(expected_code.get(), m_method->get_code());
 }
 
 // Code:    if r==i A else if r==i+10 B

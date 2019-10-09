@@ -21,6 +21,7 @@ class DedupBlocksPass : public Pass {
          Config::DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT,
          m_config.block_split_min_opcode_count);
     bind("split_postfix", true, m_config.split_postfix);
+    bind("debug", false, m_config.debug);
   }
 
   struct Config {
@@ -29,5 +30,6 @@ class DedupBlocksPass : public Pass {
     unsigned int block_split_min_opcode_count =
         DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
     bool split_postfix = true;
+    bool debug = false;
   } m_config;
 };

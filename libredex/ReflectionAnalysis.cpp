@@ -48,6 +48,10 @@ std::ostream& operator<<(std::ostream& out,
     out << "OBJECT{" << SHOW(x.dex_type) << x.potential_dex_types << "}";
     break;
   }
+  case reflection::INT: {
+    out << "INT{" << (x.dex_int ? std::to_string(*x.dex_int) : "none") << "}";
+    break;
+  }
   case reflection::STRING: {
     if (x.dex_string != nullptr) {
       const std::string& str = x.dex_string->str();
@@ -70,7 +74,17 @@ std::ostream& operator<<(std::ostream& out,
   }
   case reflection::METHOD: {
     out << "METHOD{" << SHOW(x.dex_type) << x.potential_dex_types << ":"
-        << SHOW(x.dex_string) << "}";
+        << SHOW(x.dex_string);
+
+    if (x.dex_type_array) {
+      out << "(";
+      for (auto type : *x.dex_type_array) {
+        out << type->str();
+      }
+      out << ")";
+    }
+
+    out << "}";
     break;
   }
   }
@@ -103,8 +117,20 @@ std::ostream& operator<<(std::ostream& out,
 
 namespace reflection {
 
+AbstractHeapAddress allocate_heap_address() {
+  static AbstractHeapAddress addr = 1;
+  return addr++;
+}
+
 bool is_not_reflection_output(const AbstractObject& obj) {
-  return obj.obj_kind == OBJECT || obj.obj_kind == STRING;
+  switch (obj.obj_kind) {
+  case reflection::OBJECT:
+  case reflection::INT:
+  case reflection::STRING:
+    return true;
+  default:
+    return false;
+  }
 }
 
 bool operator==(const AbstractObject& x, const AbstractObject& y) {
@@ -112,7 +138,15 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
     return false;
   }
   switch (x.obj_kind) {
-  case OBJECT:
+  case INT: {
+    return x.dex_int == y.dex_int;
+  }
+  case OBJECT: {
+    return x.dex_type == y.dex_type &&
+           x.potential_dex_types == y.potential_dex_types &&
+           x.heap_address == y.heap_address &&
+           x.dex_type_array == y.dex_type_array;
+  }
   case CLASS: {
     return x.dex_type == y.dex_type &&
            x.potential_dex_types == y.potential_dex_types;
@@ -120,11 +154,15 @@ bool operator==(const AbstractObject& x, const AbstractObject& y) {
   case STRING: {
     return x.dex_string == y.dex_string;
   }
-  case FIELD:
-  case METHOD: {
+  case FIELD: {
     return x.dex_type == y.dex_type &&
            x.potential_dex_types == y.potential_dex_types &&
            x.dex_string == y.dex_string;
+  }
+  case METHOD: {
+    return x.dex_type == y.dex_type &&
+           x.potential_dex_types == y.potential_dex_types &&
+           x.dex_string == y.dex_string && x.dex_type_array == y.dex_type_array;
   }
   }
 }
@@ -137,9 +175,21 @@ bool AbstractObject::leq(const AbstractObject& other) const {
   // Check if `other` is a general CLASS or OBJECT
   if (obj_kind == other.obj_kind) {
     switch (obj_kind) {
+    case AbstractObjectKind::INT: {
+      if (other.dex_int == boost::none) {
+        return true;
+      }
+      break;
+    }
     case AbstractObjectKind::CLASS:
     case AbstractObjectKind::OBJECT:
-      if (other.dex_type == nullptr) {
+      if (dex_type && other.dex_type == nullptr) {
+        return true;
+      }
+      if (dex_type_array && other.dex_type_array == boost::none) {
+        return true;
+      }
+      if (heap_address && other.heap_address == 0) {
         return true;
       }
       break;
@@ -149,8 +199,15 @@ bool AbstractObject::leq(const AbstractObject& other) const {
       }
       break;
     case AbstractObjectKind::FIELD:
+      if (other.dex_type == nullptr && other.dex_string == nullptr) {
+        return true;
+      }
+      break;
     case AbstractObjectKind::METHOD:
       if (other.dex_type == nullptr && other.dex_string == nullptr) {
+        return true;
+      }
+      if (dex_type_array && other.dex_type_array == boost::none) {
         return true;
       }
       break;
@@ -174,10 +231,16 @@ sparta::AbstractValueKind AbstractObject::join_with(
   }
 
   switch (obj_kind) {
+  case AbstractObjectKind::INT:
+    // Be conservative and drop the int
+    dex_int = boost::none;
+    break;
   case AbstractObjectKind::OBJECT:
   case AbstractObjectKind::CLASS:
     // Be conservative and drop the type info
     dex_type = nullptr;
+    heap_address = 0;
+    dex_type_array = boost::none;
     potential_dex_types.clear();
     break;
   case AbstractObjectKind::STRING:
@@ -189,6 +252,7 @@ sparta::AbstractValueKind AbstractObject::join_with(
     // Be conservative and drop the field and method info
     dex_type = nullptr;
     dex_string = nullptr;
+    dex_type_array = boost::none;
     potential_dex_types.clear();
     break;
   }
@@ -241,16 +305,22 @@ using BasicAbstractObjectEnvironment =
 using ClassObjectSourceEnvironment =
     PatriciaTreeMapAbstractEnvironment<register_t, ClassObjectSourceDomain>;
 
+using HeapClassArrayEnvironment = PatriciaTreeMapAbstractEnvironment<
+    AbstractHeapAddress,
+    ConstantAbstractDomain<std::vector<DexType*>>>;
+
 class AbstractObjectEnvironment final
     : public ReducedProductAbstractDomain<AbstractObjectEnvironment,
                                           BasicAbstractObjectEnvironment,
-                                          ClassObjectSourceEnvironment> {
+                                          ClassObjectSourceEnvironment,
+                                          HeapClassArrayEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
 
   static void reduce_product(
       std::tuple<BasicAbstractObjectEnvironment,
-                 ClassObjectSourceEnvironment>& /* product */) {}
+                 ClassObjectSourceEnvironment,
+                 HeapClassArrayEnvironment>& /* product */) {}
 
   const AbstractObjectDomain get_abstract_obj(register_t reg) const {
     return get<0>().get(reg);
@@ -273,6 +343,23 @@ class AbstractObjectEnvironment final
 
   void set_class_source(register_t reg, const ClassObjectSourceDomain cls_src) {
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
+  }
+
+  const ConstantAbstractDomain<std::vector<DexType*>> get_heap_class_array(
+      AbstractHeapAddress addr) const {
+    return get<2>().get(addr);
+  }
+
+  void set_heap_class_array(
+      AbstractHeapAddress addr,
+      const ConstantAbstractDomain<std::vector<DexType*>>& array) {
+    apply<2>([=](auto env) { env->set(addr, array); }, true);
+  }
+
+  void set_heap_addr_to_top(AbstractHeapAddress addr) {
+    auto domain = get_heap_class_array(addr);
+    domain.set_to_top();
+    set_heap_class_array(addr, domain);
   }
 };
 
@@ -345,6 +432,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       // analysis.
       break;
     }
+    case OPCODE_MOVE:
     case OPCODE_MOVE_OBJECT: {
       const auto aobj = current_state->get_abstract_obj(insn->src(0));
       current_state->set_abstract_obj(insn->dest(), aobj);
@@ -364,6 +452,12 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         current_state->set_class_source(
             insn->dest(), current_state->get_class_source(RESULT_REGISTER));
       }
+      break;
+    }
+    case OPCODE_CONST: {
+      current_state->set_abstract_obj(
+          insn->dest(),
+          AbstractObjectDomain(AbstractObject(insn->get_literal())));
       break;
     }
     case OPCODE_CONST_STRING: {
@@ -434,27 +528,137 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       default_semantics(insn, current_state);
       break;
     }
+    case OPCODE_APUT_OBJECT: {
+      // insn format: aput <source> <array> <offset>
+      const auto source_object =
+          current_state->get_abstract_obj(insn->src(0)).get_object();
+      const auto array_object =
+          current_state->get_abstract_obj(insn->src(1)).get_object();
+      const auto offset_object =
+          current_state->get_abstract_obj(insn->src(2)).get_object();
+
+      if (source_object && source_object->obj_kind == CLASS && array_object &&
+          array_object->is_known_class_array() && offset_object &&
+          offset_object->obj_kind == INT) {
+
+        auto type = source_object->dex_type;
+        boost::optional<int64_t> offset = offset_object->dex_int;
+        boost::optional<std::vector<DexType*>> class_array =
+            current_state->get_heap_class_array(array_object->heap_address)
+                .get_constant();
+
+        if (offset && class_array && *offset >= 0 &&
+            class_array->size() > (size_t)*offset) {
+          (*class_array)[*offset] = type;
+          current_state->set_heap_class_array(
+              array_object->heap_address,
+              ConstantAbstractDomain<std::vector<DexType*>>(*class_array));
+        }
+      }
+      if (source_object && source_object->is_known_class_array()) {
+        current_state->set_heap_addr_to_top(source_object->heap_address);
+      }
+      default_semantics(insn, current_state);
+      break;
+    }
+    case OPCODE_IPUT_OBJECT:
+    case OPCODE_SPUT_OBJECT: {
+      const auto source_object =
+          current_state->get_abstract_obj(insn->src(0)).get_object();
+      if (source_object && source_object->is_known_class_array()) {
+        current_state->set_heap_addr_to_top(source_object->heap_address);
+      }
+      break;
+    }
     case OPCODE_IGET_OBJECT:
     case OPCODE_SGET_OBJECT: {
       always_assert(insn->has_field());
       const auto field = insn->get_field();
-      update_non_string_input(current_state, insn, field->get_type());
+      DexType* primitive_type = check_primitive_type_class(field);
+      if (primitive_type) {
+        // The field being accessed is a Class object to a primitive type
+        // likely being used for reflection
+        auto aobj = AbstractObject(AbstractObjectKind::CLASS, primitive_type);
+        current_state->set_abstract_obj(RESULT_REGISTER,
+                                        AbstractObjectDomain(aobj));
+        current_state->set_class_source(
+            RESULT_REGISTER,
+            ClassObjectSourceDomain(ClassObjectSource::REFLECTION));
+      } else {
+        update_non_string_input(current_state, insn, field->get_type());
+      }
       break;
     }
-    case OPCODE_NEW_INSTANCE:
-    case OPCODE_NEW_ARRAY:
-    case OPCODE_FILLED_NEW_ARRAY: {
+    case OPCODE_NEW_INSTANCE: {
       current_state->set_abstract_obj(
           RESULT_REGISTER,
           AbstractObjectDomain(
               AbstractObject(AbstractObjectKind::OBJECT, insn->get_type())));
       break;
     }
+    case OPCODE_NEW_ARRAY: {
+      auto array_type = insn->get_type();
+      always_assert(is_array(array_type));
+      auto component_type = get_array_component_type(array_type);
+      if (component_type ==
+          DexType::make_type(DexString::make_string("Ljava/lang/Class;"))) {
+        const auto aobj =
+            current_state->get_abstract_obj(insn->src(0)).get_object();
+
+        if (aobj && aobj->obj_kind == INT && aobj->dex_int) {
+          AbstractHeapAddress addr = allocate_heap_address();
+          int64_t size = *(aobj->dex_int);
+          std::vector<DexType*> array(size);
+          ConstantAbstractDomain<std::vector<DexType*>> heap_array(array);
+          current_state->set_heap_class_array(addr, heap_array);
+          current_state->set_abstract_obj(
+              RESULT_REGISTER,
+              AbstractObjectDomain(
+                  AbstractObject(AbstractObjectKind::OBJECT, addr)));
+          break;
+        }
+      }
+      current_state->set_abstract_obj(
+          RESULT_REGISTER,
+          AbstractObjectDomain(
+              AbstractObject(AbstractObjectKind::OBJECT, insn->get_type())));
+      break;
+    }
+    case OPCODE_FILLED_NEW_ARRAY: {
+      auto array_type = insn->get_type();
+      always_assert(is_array(array_type));
+      auto component_type = get_array_component_type(array_type);
+      AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
+      if (component_type == DexType::make_type("Ljava/lang/Class;")) {
+        auto arg_count = insn->srcs_size();
+        std::vector<DexType*> known_types;
+        known_types.reserve(arg_count);
+
+        // collect known types from the filled new array
+        for (auto src_reg : insn->srcs()) {
+          auto reg_obj = current_state->get_abstract_obj(src_reg).get_object();
+          if (reg_obj && reg_obj->obj_kind == CLASS && reg_obj->dex_type) {
+            known_types.push_back(reg_obj->dex_type);
+          }
+        }
+
+        if (known_types.size() == arg_count) {
+          AbstractHeapAddress addr = allocate_heap_address();
+          ConstantAbstractDomain<std::vector<DexType*>> heap_array(known_types);
+          current_state->set_heap_class_array(addr, heap_array);
+          aobj = AbstractObject(AbstractObjectKind::OBJECT, addr);
+        }
+      }
+
+      current_state->set_abstract_obj(RESULT_REGISTER,
+                                      AbstractObjectDomain(aobj));
+      break;
+    }
     case OPCODE_INVOKE_VIRTUAL: {
       auto receiver =
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (!receiver) {
-        update_return_object(current_state, insn);
+        update_return_object_and_invalidate_heap_args(current_state, insn);
         break;
       }
       process_virtual_call(insn, *receiver, current_state);
@@ -487,13 +691,13 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           break;
         }
       }
-      update_return_object(current_state, insn);
+      update_return_object_and_invalidate_heap_args(current_state, insn);
       break;
     }
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT: {
-      update_return_object(current_state, insn);
+      update_return_object_and_invalidate_heap_args(current_state, insn);
       break;
     }
     default: {
@@ -527,7 +731,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   void update_non_string_input(AbstractObjectEnvironment* current_state,
                                IRInstruction* insn,
                                DexType* type) const {
-    auto dest_reg = insn->has_move_result() ? RESULT_REGISTER : insn->dest();
+    auto dest_reg =
+        insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
     if (type == get_class_type()) {
       // We don't have precise type information to which the Class obj refers
       // to.
@@ -543,8 +748,37 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  void update_return_object(AbstractObjectEnvironment* current_state,
-                            IRInstruction* insn) const {
+  DexType* check_primitive_type_class(const DexFieldRef* field) const {
+    std::map<const DexFieldRef*, DexType*, dexfields_comparator> field_to_type{
+        {DexField::make_field("Ljava/lang/Boolean;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("Z")},
+        {DexField::make_field("Ljava/lang/Byte;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("B")},
+        {DexField::make_field("Ljava/lang/Character;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("C")},
+        {DexField::make_field("Ljava/lang/Short;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("S")},
+        {DexField::make_field("Ljava/lang/Integer;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("I")},
+        {DexField::make_field("Ljava/lang/Long;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("J")},
+        {DexField::make_field("Ljava/lang/Float;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("F")},
+        {DexField::make_field("Ljava/lang/Double;.TYPE:Ljava/lang/Class;"),
+         DexType::make_type("D")},
+    };
+    auto type = field_to_type.find(field);
+    if (type != field_to_type.end()) {
+      return type->second;
+    } else {
+      return nullptr;
+    }
+  }
+
+  void update_return_object_and_invalidate_heap_args(
+      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+
+    invalidate_argument_heap_objects(current_state, insn);
     DexMethodRef* callee = insn->get_method();
     DexType* return_type = callee->get_proto()->get_rtype();
     if (is_void(return_type) || !is_object(return_type)) {
@@ -561,7 +795,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     // instructions following operations that are not considered by this
     // analysis. Hence, the effect of those operations is correctly abstracted
     // away regardless of the size of the destination register.
-    if (insn->dests_size() > 0) {
+    if (insn->has_dest()) {
       current_state->set_abstract_obj(insn->dest(),
                                       AbstractObjectDomain::top());
       if (insn->dest_is_wide()) {
@@ -571,7 +805,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     // We need to invalidate RESULT_REGISTER if the instruction writes into
     // this register.
-    if (insn->has_move_result()) {
+    if (insn->has_move_result_any()) {
       current_state->set_abstract_obj(RESULT_REGISTER,
                                       AbstractObjectDomain::top());
     }
@@ -589,11 +823,44 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
+  bool is_method_known_to_preserve_args(DexMethodRef* method) const {
+    const std::set<DexMethodRef*, dexmethods_comparator> known_methods{
+        m_get_method,
+        m_get_declared_method,
+    };
+    return known_methods.count(method);
+  }
+
+  void invalidate_argument_heap_objects(
+      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+
+    if (!insn->has_method() ||
+        is_method_known_to_preserve_args(insn->get_method())) {
+      return;
+    }
+
+    for (const auto reg : insn->srcs()) {
+      auto aobj = current_state->get_abstract_obj(reg).get_object();
+      if (!aobj) {
+        continue;
+      }
+      auto addr = aobj->heap_address;
+      if (!addr) {
+        continue;
+      }
+      current_state->set_heap_addr_to_top(addr);
+    }
+  }
+
   void process_virtual_call(IRInstruction* insn,
                             const AbstractObject& receiver,
                             AbstractObjectEnvironment* current_state) const {
     DexMethodRef* callee = insn->get_method();
     switch (receiver.obj_kind) {
+    case INT: {
+      // calling on int, not valid
+      break;
+    }
     case OBJECT: {
       if (callee == m_get_class) {
         current_state->set_abstract_obj(
@@ -624,14 +891,34 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     case CLASS: {
       AbstractObjectKind element_kind;
       DexString* element_name = nullptr;
+      boost::optional<std::vector<DexType*>> method_param_types = boost::none;
       if (callee == m_get_method || callee == m_get_declared_method) {
         element_kind = METHOD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
-      } else if (m_ctor_lookup_vmethods.count(callee) > 0) {
+        auto arr_reg = insn->src(2); // holds java.lang.Class array
+        auto arr_obj = current_state->get_abstract_obj(arr_reg).get_object();
+        if (arr_obj && arr_obj->is_known_class_array()) {
+          auto maybe_array =
+              current_state->get_heap_class_array(arr_obj->heap_address)
+                  .get_constant();
+          if (maybe_array) {
+            method_param_types = *maybe_array;
+          }
+        }
+      } else if (callee == m_get_constructor ||
+                 callee == m_get_declared_constructor) {
         element_kind = METHOD;
-        // Hard code the <init> method name, to continue on treating this as
-        // no different than a method.
         element_name = DexString::get_string("<init>");
+        auto arr_reg = insn->src(1);
+        auto arr_obj = current_state->get_abstract_obj(arr_reg).get_object();
+        if (arr_obj && arr_obj->is_known_class_array()) {
+          auto maybe_array =
+              current_state->get_heap_class_array(arr_obj->heap_address)
+                  .get_constant();
+          if (maybe_array) {
+            method_param_types = *maybe_array;
+          }
+        }
       } else if (callee == m_get_field || callee == m_get_declared_field) {
         element_kind = FIELD;
         element_name = get_dex_string_from_insn(current_state, insn, 1);
@@ -641,16 +928,23 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       } else if (callee == m_get_methods || callee == m_get_declared_methods) {
         element_kind = METHOD;
         element_name = DexString::get_string("");
+      } else if (callee == m_get_constructors ||
+                 callee == m_get_declared_constructors) {
+        element_kind = METHOD;
+        element_name = DexString::get_string("<init>");
       }
       if (element_name == nullptr) {
         break;
       }
-      current_state->set_abstract_obj(
-          RESULT_REGISTER,
-          AbstractObjectDomain(AbstractObject(element_kind,
-                                              receiver.dex_type,
-                                              element_name,
-                                              receiver.potential_dex_types)));
+      AbstractObject aobj(element_kind,
+                          receiver.dex_type,
+                          element_name,
+                          receiver.potential_dex_types);
+      if (method_param_types) {
+        aobj.dex_type_array = method_param_types;
+      }
+      current_state->set_abstract_obj(RESULT_REGISTER,
+                                      AbstractObjectDomain(aobj));
       return;
     }
     case FIELD:
@@ -665,7 +959,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       break;
     }
     }
-    update_return_object(current_state, insn);
+    update_return_object_and_invalidate_heap_args(current_state, insn);
   }
 
   // After the fixpoint iteration completes, we replay the analysis on all
@@ -727,13 +1021,6 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                              "getDeclaredConstructors",
                              {},
                              "[Ljava/lang/reflect/Constructor;")};
-  // Set of vmethods on java.lang.Class that can find constructors.
-  std::unordered_set<DexMethodRef*> m_ctor_lookup_vmethods{{
-      m_get_constructor,
-      m_get_declared_constructor,
-      m_get_constructors,
-      m_get_declared_constructors,
-  }};
   DexMethodRef* m_get_field{
       DexMethod::make_method("Ljava/lang/Class;",
                              "getField",
@@ -805,7 +1092,7 @@ void ReflectionAnalysis::get_reflection_site(
       out << *cls_src;
     }
     out << std::endl;
-    TRACE(REFL, 5, " reflection site: %s\n", out.str().c_str());
+    TRACE(REFL, 5, " reflection site: %s", out.str().c_str());
   }
   (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }
@@ -830,6 +1117,30 @@ const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
     }
   }
   return reflection_sites;
+}
+
+boost::optional<std::vector<DexType*>> ReflectionAnalysis::get_method_params(
+    IRInstruction* invoke_insn) const {
+  auto code = m_dex_method->get_code();
+  IRInstruction* move_result_insn = nullptr;
+  auto ii = InstructionIterable(code);
+  for (auto it = ii.begin(); it != ii.end(); ++it) {
+    auto* insn = it->insn;
+    if (insn == invoke_insn) {
+      move_result_insn = std::next(it)->insn;
+      break;
+    }
+  }
+  if (!move_result_insn ||
+      !opcode::is_move_result(move_result_insn->opcode())) {
+    return boost::none;
+  }
+  auto arg_param = get_abstract_object(impl::RESULT_REGISTER, move_result_insn);
+  if (!arg_param ||
+      arg_param->obj_kind != reflection::AbstractObjectKind::METHOD) {
+    return boost::none;
+  }
+  return arg_param->dex_type_array;
 }
 
 bool ReflectionAnalysis::has_found_reflection() const {

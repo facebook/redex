@@ -33,9 +33,10 @@ struct StaticReloV2Test : public RedexTest {
   DexMethod* create_method(DexClass* cls,
                            const char* method_name,
                            DexAccessFlags access) {
-    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
-        cls->get_type(), DexString::make_string(method_name), m_proto));
-    method->make_concrete(access, false);
+    DexMethod* method =
+        DexMethod::make_method(
+            cls->get_type(), DexString::make_string(method_name), m_proto)
+            ->make_concrete(access, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
     cls->add_method(method);
     return method;
@@ -208,8 +209,7 @@ TEST_F(StaticReloV2Test, staticMethodRefedByMany) {
   DexClass* classA = create_class("A");
   DexMethod* method_a = create_method(classA, "a", ACC_PUBLIC | ACC_STATIC);
   DexClass* classOther1 = create_class("Other1");
-  DexMethod* method_b =
-      create_method(classOther1, "b", ACC_PUBLIC);
+  DexMethod* method_b = create_method(classOther1, "b", ACC_PUBLIC);
   DexClass* classOther2 = create_class("Other2");
   DexMethod* method_c = create_method(classOther2, "c", ACC_PUBLIC);
 

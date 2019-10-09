@@ -67,7 +67,8 @@ class PluginRegistry {
    */
   static PluginRegistry& get();
 
-  void register_pass(const std::string& pass, std::unique_ptr<Plugin> plugin_entry);
+  void register_pass(const std::string& pass,
+                     std::unique_ptr<Plugin> plugin_entry);
   Plugin* pass_registry(const std::string& pass);
 
  private:

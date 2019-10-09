@@ -214,3 +214,49 @@ TEST_F(PostVerify, testInvokeInterfaceSkipped) {
   method->balloon();
   EXPECT_TRUE(has_method_invoke(method, dar_body_intf_method));
 }
+
+TEST_F(PreVerify, testInvokeSuperReplaced) {
+  auto body = find_class_named(classes, "Lcom/facebook/redextest/rebind/Body;");
+  auto invoke_super_final = find_vmethod_named(*body, "invoke_super_final");
+  auto invoke = static_cast<DexOpcodeMethod*>(
+      find_instruction(invoke_super_final, DOPCODE_INVOKE_SUPER));
+  ASSERT_NE(invoke, nullptr);
+  EXPECT_EQ(invoke->get_method(),
+            DexMethod::get_method(
+                "Lcom/facebook/redextest/rebind/Root;.final_method:()I"));
+}
+
+TEST_F(PostVerify, testInvokeSuperReplaced) {
+  auto body = find_class_named(classes, "Lcom/facebook/redextest/rebind/Body;");
+  auto invoke_super_final = find_vmethod_named(*body, "invoke_super_final");
+  auto invoke = static_cast<DexOpcodeMethod*>(
+      find_instruction(invoke_super_final, DOPCODE_INVOKE_VIRTUAL));
+  ASSERT_NE(invoke, nullptr);
+  EXPECT_EQ(invoke->get_method(),
+            DexMethod::get_method(
+                "Lcom/facebook/redextest/rebind/Root;.final_method:()I"));
+}
+
+TEST_F(PostVerify, testInvokeSuperNotReplaced) {
+  auto body = find_class_named(classes, "Lcom/facebook/redextest/rebind/Body;");
+  auto invoke_super_nonfinal =
+      find_vmethod_named(*body, "invoke_super_nonfinal");
+  auto invoke = static_cast<DexOpcodeMethod*>(
+      find_instruction(invoke_super_nonfinal, DOPCODE_INVOKE_SUPER));
+  ASSERT_NE(invoke, nullptr);
+  EXPECT_EQ(
+      invoke->get_method(),
+      DexMethod::get_method("Lcom/facebook/redextest/rebind/Root;.bar:()I"));
+}
+
+TEST_F(PostVerify, testInvokeSuperExternalFinalNotReplaced) {
+  auto body = find_class_named(classes, "Lcom/facebook/redextest/rebind/Body;");
+  auto invoke_super_nonfinal =
+      find_vmethod_named(*body, "invoke_super_external_final");
+  auto invoke = static_cast<DexOpcodeMethod*>(
+      find_instruction(invoke_super_nonfinal, DOPCODE_INVOKE_SUPER));
+  ASSERT_NE(invoke, nullptr);
+  EXPECT_EQ(
+      invoke->get_method(),
+      DexMethod::get_method("Ljava/lang/Object;.getClass:()Ljava/lang/Class;"));
+}

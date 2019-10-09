@@ -16,17 +16,8 @@
 
 -optimizations !method/inlining/*
 
--dontwarn org.fest.**
--dontwarn org.junit.**
--dontwarn junit.**
--dontwarn sun.misc.**
--dontwarn android.test.**
--dontwarn android.support.test.**
--dontwarn androidx.test.**
 
 -keepattributes SourceFile,LineNumberTable,Signature
 
 -printmapping
--dontwarn android.content.**
 
--dontwarn org.xmlpull.v1.**

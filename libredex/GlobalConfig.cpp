@@ -8,6 +8,7 @@
 #include "GlobalConfig.h"
 
 void InlinerConfig::bind_config() {
+  bind("true_virtual_inline", true_virtual_inline, true_virtual_inline);
   bind("use_cfg_inliner", use_cfg_inliner, use_cfg_inliner);
   bind("enforce_method_size_limit", enforce_method_size_limit,
        enforce_method_size_limit);
@@ -31,6 +32,7 @@ void IRTypeCheckerConfig::bind_config() {
   bind("run_after_each_pass", {}, run_after_each_pass);
   bind("verify_moves", {}, verify_moves);
   bind("run_after_passes", {}, run_after_passes);
+  bind("check_no_overwrite_this", {}, check_no_overwrite_this);
 }
 
 void GlobalConfig::bind_config() {
@@ -45,19 +47,24 @@ void GlobalConfig::bind_config() {
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("lower_with_cfg", {}, bool_param);
   bind("emit_locator_strings", {}, bool_param);
+  bind("force_single_dex", false, bool_param);
   bind("emit_name_based_locator_strings", {}, bool_param);
   bind("record_keep_reasons", {}, bool_param);
   bind("debug_info_kind", "", string_param);
   bind("emit_class_method_info_map", false, bool_param);
   bind("bytecode_sort_mode", {}, string_vector_param);
+  bind("keep_all_annotation_classes", true, bool_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("keep_annotations", {}, string_vector_param);
   bind("keep_class_members", {}, string_vector_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("no_optimizations_annotations", {}, string_vector_param);
+  bind("pure_methods", {}, string_vector_param);
   bind("method_sorting_whitelisted_substrings", {}, string_vector_param);
   bind("prune_unexported_components", {}, string_vector_param);
   bind("coldstart_classes", "", string_param);
   bind("string_sort_mode", "", string_param);
+  bind("compute_xml_reachability", false, bool_param);
+  bind("legacy_reflection_reachability", false, bool_param);
 }

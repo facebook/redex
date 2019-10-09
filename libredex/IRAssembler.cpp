@@ -17,6 +17,7 @@ using namespace sparta;
 
 namespace {
 
+// clang-format off
 #define OP(OP, KIND, STR) {OPCODE_##OP, STR},
 std::unordered_map<IROpcode, std::string, boost::hash<IROpcode>>
     opcode_to_string_table = {
@@ -41,6 +42,7 @@ std::unordered_map<std::string, IROpcode> string_to_opcode_table = {
     {"move-result-pseudo-wide", IOPCODE_MOVE_RESULT_PSEUDO_WIDE},
 };
 #undef OP
+// clang-format on
 
 using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
 using LabelRefs =
@@ -59,7 +61,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
   auto opcode_str = opcode_to_string_table.at(op);
   std::vector<s_expr> s_exprs{s_expr(opcode_str)};
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     s_exprs.emplace_back(reg_to_str(insn->dest()));
   }
   if (opcode::has_variable_srcs_size(op)) {
@@ -129,7 +131,7 @@ s_expr _to_s_expr(const DexPosition* pos, uint32_t idx, uint32_t parent_idx) {
       s_expr(parent_idx_str),
   });
 }
-}
+} // namespace
 
 std::vector<s_expr> to_s_exprs(
     const DexPosition* pos,
@@ -175,7 +177,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   auto insn = std::make_unique<IRInstruction>(op);
   std::string reg_str;
   s_expr tail = e;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     s_patn({s_patn(&reg_str)}, tail)
         .must_match(tail, "Expected dest reg for " + opcode_str);
     insn->set_dest(reg_from_str(reg_str));
@@ -183,7 +185,7 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   if (opcode::has_variable_srcs_size(op)) {
     auto srcs = tail[0];
     tail = tail.tail(1);
-    insn->set_arg_word_count(srcs.size());
+    insn->set_srcs_size(srcs.size());
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, reg_from_str(srcs[i].get_string()));
     }
@@ -267,6 +269,93 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
   return insn;
 }
 
+std::string string_from_s_expr(const s_expr& arg) {
+  std::string arg_str;
+  s_patn(&arg_str).must_match(arg, "Expecting a string for " + arg.str());
+  return arg_str;
+}
+
+template <typename T>
+T integer_from_s_expr(const s_expr& arg) {
+  std::istringstream in(string_from_s_expr(arg));
+  T num;
+  in >> num;
+  // Check if there are bytes left in the string.
+  always_assert_log(in.rdbuf()->in_avail() == 0,
+                    "Found unexpected non-integers for %s",
+                    arg.str().c_str());
+  return num;
+}
+
+std::unique_ptr<DexDebugInstruction> debug_info_from_s_expr(const s_expr& e) {
+  std::string opcode;
+  s_expr tail;
+  s_patn({s_patn(&opcode)}, tail)
+      .must_match(e, "Expecting at least one opcode for .dbg instruction");
+  auto check_arg_num = [&](const s_expr& tail, uint32_t n) {
+    always_assert_log(tail.size() == n,
+                      "Expecting %d arguments for opcode %s",
+                      n,
+                      opcode.c_str());
+  };
+
+  if (opcode == "DBG_END_SEQUENCE") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_END_SEQUENCE);
+  } else if (opcode == "DBG_ADVANCE_PC") {
+    check_arg_num(tail, 1);
+    uint32_t addr_diff = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_ADVANCE_PC, addr_diff);
+  } else if (opcode == "DBG_ADVANCE_LINE") {
+    check_arg_num(tail, 1);
+    int32_t line_diff = integer_from_s_expr<int32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_ADVANCE_LINE, line_diff);
+  } else if (opcode == "DBG_START_LOCAL") {
+    check_arg_num(tail, 3);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
+    return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
+                                                      type_idx);
+  } else if (opcode == "DBG_START_LOCAL_EXTENDED") {
+    check_arg_num(tail, 4);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[1]));
+    DexType* type_idx = DexType::make_type(string_from_s_expr(tail[2]).c_str());
+    DexString* sig_idx = DexString::make_string(string_from_s_expr(tail[3]));
+    return std::make_unique<DexDebugOpcodeStartLocal>(register_num, name_idx,
+                                                      type_idx, sig_idx);
+  } else if (opcode == "DBG_END_LOCAL") {
+    check_arg_num(tail, 1);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_END_LOCAL, register_num);
+  } else if (opcode == "DBG_RESTART_LOCAL") {
+    check_arg_num(tail, 1);
+    uint32_t register_num = integer_from_s_expr<uint32_t>(tail[0]);
+    return std::make_unique<DexDebugInstruction>(DBG_RESTART_LOCAL,
+                                                 register_num);
+  } else if (opcode == "DBG_SET_PROLOGUE_END") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_SET_PROLOGUE_END);
+  } else if (opcode == "DBG_SET_EPILOGUE_BEGIN") {
+    check_arg_num(tail, 0);
+    return std::make_unique<DexDebugInstruction>(DBG_SET_EPILOGUE_BEGIN);
+  } else if (opcode == "DBG_SET_FILE") {
+    check_arg_num(tail, 1);
+    DexString* name_idx = DexString::make_string(string_from_s_expr(tail[0]));
+    return std::make_unique<DexDebugOpcodeSetFile>(name_idx);
+  } else {
+    always_assert_log(opcode == "EMIT", "Unknown opcode: %s", opcode.c_str());
+    check_arg_num(tail, 1);
+    uint32_t special_opcode = integer_from_s_expr<uint32_t>(tail[0]);
+    always_assert_log(special_opcode >= DBG_FIRST_SPECIAL &&
+                          special_opcode <= DBG_LAST_SPECIAL,
+                      "Special opcode value (%d) is out of range.",
+                      special_opcode);
+    return std::make_unique<DexDebugInstruction>(special_opcode);
+  }
+}
+
 std::unique_ptr<DexPosition> position_from_s_expr(
     const s_expr& e,
     const std::unordered_map<std::string, DexPosition*>& positions) {
@@ -274,11 +363,14 @@ std::unique_ptr<DexPosition> position_from_s_expr(
   std::string file_str;
   std::string line_str;
   s_expr parent_expr;
-  s_patn({
-      s_patn(&method_str),
-      s_patn(&file_str),
-      s_patn(&line_str),
-  }, parent_expr).must_match(e, "Expected 3 or 4 args for position directive");
+  s_patn(
+      {
+          s_patn(&method_str),
+          s_patn(&file_str),
+          s_patn(&line_str),
+      },
+      parent_expr)
+      .must_match(e, "Expected 3 or 4 args for position directive");
   auto* file = DexString::make_string(file_str);
   uint32_t line;
   std::istringstream in(line_str);
@@ -365,9 +457,8 @@ std::unordered_map<std::string, MethodItemEntry*> get_catch_name_map(
         s_patn({s_patn({s_patn(&this_catch)}, maybe_next)}, type_expr)
             .must_match(tail, "catch marker missing a name list");
         // FIXME?
-        result.emplace(
-            this_catch,
-            new MethodItemEntry(static_cast<DexType*>(nullptr)));
+        result.emplace(this_catch,
+                       new MethodItemEntry(static_cast<DexType*>(nullptr)));
       }
     }
   }
@@ -412,6 +503,73 @@ s_expr create_catch_expr(const MethodItemEntry* mie,
   return s_expr(result);
 }
 
+s_expr create_dbg_expr(const MethodItemEntry* mie) {
+  std::vector<s_expr> result;
+  result.emplace_back(".dbg");
+  const DexDebugInstruction* dbg = mie->dbgop.get();
+  uint32_t op = dbg->opcode();
+  switch (op) {
+  case DBG_END_SEQUENCE:
+    result.emplace_back("DBG_END_SEQUENCE");
+    break;
+  case DBG_ADVANCE_PC:
+    result.emplace_back("DBG_ADVANCE_PC");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_ADVANCE_LINE:
+    result.emplace_back("DBG_ADVANCE_LINE");
+    result.emplace_back(std::to_string(dbg->value()));
+    break;
+  case DBG_START_LOCAL: {
+    result.emplace_back("DBG_START_LOCAL");
+    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    always_assert(start_local != nullptr);
+    result.emplace_back(std::to_string(start_local->uvalue()));
+    result.emplace_back(start_local->name()->str());
+    result.emplace_back(start_local->type()->str());
+    break;
+  }
+  case DBG_START_LOCAL_EXTENDED: {
+    result.emplace_back("DBG_START_LOCAL_EXTENDED");
+    auto start_local = dynamic_cast<const DexDebugOpcodeStartLocal*>(dbg);
+    always_assert(start_local != nullptr);
+    result.emplace_back(std::to_string(start_local->uvalue()));
+    result.emplace_back(start_local->name()->str());
+    result.emplace_back(start_local->type()->str());
+    result.emplace_back(start_local->sig()->str());
+    break;
+  }
+  case DBG_END_LOCAL:
+    result.emplace_back("DBG_END_LOCAL");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_RESTART_LOCAL:
+    result.emplace_back("DBG_RESTART_LOCAL");
+    result.emplace_back(std::to_string(dbg->uvalue()));
+    break;
+  case DBG_SET_PROLOGUE_END:
+    result.emplace_back("DBG_SET_PROLOGUE_END");
+    break;
+  case DBG_SET_EPILOGUE_BEGIN:
+    result.emplace_back("DBG_SET_EPILOGUE_BEGIN");
+    break;
+  case DBG_SET_FILE: {
+    result.emplace_back("DBG_SET_FILE");
+    auto set_file = dynamic_cast<const DexDebugOpcodeSetFile*>(dbg);
+    always_assert(set_file != nullptr);
+    result.emplace_back(set_file->file()->str());
+    break;
+  }
+  default:
+    always_assert_log(DBG_FIRST_SPECIAL <= op && op <= DBG_LAST_SPECIAL,
+                      "Special opcode (%d) is out of range");
+    result.emplace_back("EMIT");
+    result.emplace_back(std::to_string(dbg->opcode()));
+    break;
+  }
+  return s_expr(result);
+}
+
 } // namespace
 
 namespace assembler {
@@ -434,31 +592,31 @@ s_expr to_s_expr(const IRCode* code) {
   // Gather jump targets and give them string names
   for (auto it = code->cbegin(); it != code->cend(); ++it) {
     switch (it->type) {
-      case MFLOW_TARGET: {
-        auto bt = it->target;
-        always_assert_log(bt->src != nullptr, "%s", SHOW(code));
+    case MFLOW_TARGET: {
+      auto bt = it->target;
+      always_assert_log(bt->src != nullptr, "%s", SHOW(code));
 
-        // Don't generate redundant labels. If we would duplicate the previous
-        // label, steal its name instead of generating another
-        if (it != code->begin()) {
-          auto prev = std::prev(it);
-          if (can_merge(prev, it)) {
-            auto& label_strs = label_refs.at(prev->target->src->insn);
-            if (label_strs.size() > 0) {
-              const auto& label_name = label_strs.back();
-              label_refs[bt->src->insn].push_back(label_name);
-              break;
-            }
+      // Don't generate redundant labels. If we would duplicate the previous
+      // label, steal its name instead of generating another
+      if (it != code->begin()) {
+        auto prev = std::prev(it);
+        if (can_merge(prev, it)) {
+          auto& label_strs = label_refs.at(prev->target->src->insn);
+          if (label_strs.size() > 0) {
+            const auto& label_name = label_strs.back();
+            label_refs[bt->src->insn].push_back(label_name);
+            break;
           }
         }
-        label_refs[bt->src->insn].push_back(generate_label_name());
-        break;
       }
-      case MFLOW_CATCH:
-        catch_names.emplace(&*it, generate_catch_name());
-        break;
-      default:
-        break;
+      label_refs[bt->src->insn].push_back(generate_label_name());
+      break;
+    }
+    case MFLOW_CATCH:
+      catch_names.emplace(&*it, generate_catch_name());
+      break;
+    default:
+      break;
     }
   }
 
@@ -467,74 +625,76 @@ s_expr to_s_expr(const IRCode* code) {
   std::vector<const DexPosition*> positions_emitted;
   for (auto it = code->begin(); it != code->end(); ++it) {
     switch (it->type) {
-      case MFLOW_OPCODE:
-        exprs.emplace_back(::to_s_expr(it->insn, label_refs));
-        break;
-      case MFLOW_TRY:
-        exprs.emplace_back(create_try_expr(
-            it->tentry->type, catch_names.at(it->tentry->catch_start)));
-        break;
-      case MFLOW_CATCH:
-        exprs.emplace_back(create_catch_expr(&*it, catch_names));
-        break;
-      case MFLOW_DEBUG:
-        always_assert_log(false, "Not yet implemented");
-      case MFLOW_POSITION:
-        for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
-          exprs.push_back(e);
-        }
-        break;
-      case MFLOW_TARGET: {
-        auto branch_target = it->target;
-        auto insn = branch_target->src->insn;
-        const auto& label_strs = label_refs.at(insn);
-
-        if (branch_target->type == BRANCH_MULTI) {
-          // Claim one of the labels.
-          // Doesn't matter which one as long as no other s_expr re-uses it.
-          auto& index = unused_label_index[insn];
-          auto label_str = label_strs[index];
-          ++index;
-
-          const s_expr& label =
-              s_expr({s_expr(label_str),
-                      s_expr(std::to_string(branch_target->case_key))});
-
-          // Don't duplicate labels even if some crazy person has two switches
-          // that share targets :O
-          if (exprs.empty() || exprs.back() != label) {
-            exprs.emplace_back(label);
-          }
-        } else {
-          always_assert(branch_target->type == BRANCH_SIMPLE);
-          always_assert_log(
-              label_strs.size() == 1,
-              "Expecting 1 label string, actually have %d. code:\n%s",
-              label_strs.size(),
-              SHOW(code));
-          const s_expr& label = s_expr({s_expr(label_strs[0])});
-
-          // Two gotos to the same destination will produce two MFLOW_TARGETs
-          // but we only need one label in the s expression syntax.
-          if (exprs.empty() || exprs.back() != label) {
-            exprs.push_back(label);
-          }
-        }
-        break;
+    case MFLOW_OPCODE:
+      exprs.emplace_back(::to_s_expr(it->insn, label_refs));
+      break;
+    case MFLOW_TRY:
+      exprs.emplace_back(create_try_expr(
+          it->tentry->type, catch_names.at(it->tentry->catch_start)));
+      break;
+    case MFLOW_CATCH:
+      exprs.emplace_back(create_catch_expr(&*it, catch_names));
+      break;
+    case MFLOW_DEBUG:
+      exprs.emplace_back(create_dbg_expr(&*it));
+      break;
+    case MFLOW_POSITION:
+      for (const auto& e : ::to_s_exprs(it->pos.get(), &positions_emitted)) {
+        exprs.push_back(e);
       }
-      case MFLOW_FALLTHROUGH:
-        break;
-      case MFLOW_DEX_OPCODE:
-        not_reached();
+      break;
+    case MFLOW_TARGET: {
+      auto branch_target = it->target;
+      auto insn = branch_target->src->insn;
+      const auto& label_strs = label_refs.at(insn);
+
+      if (branch_target->type == BRANCH_MULTI) {
+        // Claim one of the labels.
+        // Doesn't matter which one as long as no other s_expr re-uses it.
+        auto& index = unused_label_index[insn];
+        auto label_str = label_strs[index];
+        ++index;
+
+        const s_expr& label =
+            s_expr({s_expr(label_str),
+                    s_expr(std::to_string(branch_target->case_key))});
+
+        // Don't duplicate labels even if some crazy person has two switches
+        // that share targets :O
+        if (exprs.empty() || exprs.back() != label) {
+          exprs.emplace_back(label);
+        }
+      } else {
+        always_assert(branch_target->type == BRANCH_SIMPLE);
+        always_assert_log(
+            label_strs.size() == 1,
+            "Expecting 1 label string, actually have %d. code:\n%s",
+            label_strs.size(),
+            SHOW(code));
+        const s_expr& label = s_expr({s_expr(label_strs[0])});
+
+        // Two gotos to the same destination will produce two MFLOW_TARGETs
+        // but we only need one label in the s expression syntax.
+        if (exprs.empty() || exprs.back() != label) {
+          exprs.push_back(label);
+        }
+      }
+      break;
+    }
+    case MFLOW_FALLTHROUGH:
+      break;
+    case MFLOW_DEX_OPCODE:
+      not_reached();
     }
   }
 
   return s_expr(exprs);
 }
 
-static boost::optional<uint16_t> largest_reg_operand(const IRInstruction* insn) {
+static boost::optional<uint16_t> largest_reg_operand(
+    const IRInstruction* insn) {
   boost::optional<uint16_t> max_reg;
-  if (insn->dests_size()) {
+  if (insn->has_dest()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
@@ -620,10 +780,14 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         }
         code->push_back(*catch_marker);
 
+      } else if (keyword == ".dbg") {
+        auto dbg_insn = debug_info_from_s_expr(tail);
+        always_assert(dbg_insn != nullptr);
+        code->push_back(std::move(dbg_insn));
       } else if (keyword[0] == ':') {
         const auto& label = keyword;
-        always_assert_log(
-            label_defs.count(label) == 0, "Duplicate label %s", label.c_str());
+        always_assert_log(label_defs.count(label) == 0, "Duplicate label %s",
+                          label.c_str());
 
         // We insert a MFLOW_TARGET with an empty source mie that may be filled
         // in later if something points to it
@@ -665,8 +829,8 @@ std::unique_ptr<IRCode> ircode_from_string(const std::string& s) {
     if (s_expr_input.eoi()) {
       break;
     }
-    always_assert_log(
-        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+    always_assert_log(!s_expr_input.fail(), "%s\n",
+                      s_expr_input.what().c_str());
   }
   return ircode_from_s_expr(expr);
 }
@@ -691,7 +855,7 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(access_tokens), s_patn(&method_name)}, tail)
       .must_match(tail, "Expecting access list and method name");
 
-  auto method = static_cast<DexMethod*>(DexMethod::make_method(method_name));
+  auto method = DexMethod::make_method(method_name);
   DexAccessFlags access_flags = static_cast<DexAccessFlags>(0);
   for (size_t i = 0; i < access_tokens.size(); ++i) {
     access_flags |= string_to_access_table.at(access_tokens[i].str());
@@ -701,10 +865,8 @@ DexMethod* method_from_s_expr(const s_expr& e) {
   s_patn({s_patn(code_expr)}, tail).match_with(tail);
   always_assert_log(code_expr.is_list(), "Expecting code listing");
   bool is_virtual = !is_static(access_flags) && !is_private(access_flags);
-  method->make_concrete(
-      access_flags, ircode_from_s_expr(code_expr), is_virtual);
-
-  return method;
+  return method->make_concrete(access_flags, ircode_from_s_expr(code_expr),
+                               is_virtual);
 }
 
 DexMethod* method_from_string(const std::string& s) {
@@ -716,10 +878,33 @@ DexMethod* method_from_string(const std::string& s) {
     if (s_expr_input.eoi()) {
       break;
     }
-    always_assert_log(
-        !s_expr_input.fail(), "%s\n", s_expr_input.what().c_str());
+    always_assert_log(!s_expr_input.fail(), "%s\n",
+                      s_expr_input.what().c_str());
   }
   return method_from_s_expr(expr);
+}
+
+DexMethod* class_with_method(const std::string& class_name,
+                             const std::string& method_instructions) {
+  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  ClassCreator class_creator(class_type);
+  class_creator.set_super(get_object_type());
+  auto method = assembler::method_from_string(method_instructions);
+  class_creator.add_method(method);
+  class_creator.create();
+  return method;
+}
+
+DexClass* class_with_methods(const std::string& class_name,
+                             const std::vector<DexMethod*>& methods) {
+  auto class_type = DexType::make_type(DexString::make_string(class_name));
+  ClassCreator class_creator(class_type);
+  class_creator.set_super(get_object_type());
+  for (const auto& method : methods) {
+    class_creator.add_method(method);
+  }
+  class_creator.create();
+  return class_creator.get_class();
 }
 
 } // namespace assembler

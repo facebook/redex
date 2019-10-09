@@ -48,7 +48,7 @@ IROpcode move_result_to_move(IROpcode op) {
 void patch_move_result_to_move(IRInstruction* move_result_inst, uint16_t reg) {
   const auto op = move_result_inst->opcode();
   move_result_inst->set_opcode(move_result_to_move(op));
-  move_result_inst->set_arg_word_count(1);
+  move_result_inst->set_srcs_size(1);
   move_result_inst->set_src(0, reg);
 }
 
@@ -132,10 +132,10 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
 
     const auto default_case = [&]() {
       // If we get here, reset destination.
-      if (insn->dests_size()) {
+      if (insn->has_dest()) {
         set_current_state_at(insn->dest(), insn->dest_is_wide(),
                              ParamDomain::top());
-      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+      } else if (insn->has_move_result_any()) {
         current_state->set(RESULT_REGISTER, ParamDomain::top());
       }
     };
@@ -426,7 +426,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       continue;
     }
     const auto peek = next->insn;
-    if (!is_move_result(peek->opcode())) {
+    if (!opcode::is_move_result(peek->opcode())) {
       continue;
     }
     // do we know the invoked method always returns a particular parameter?
@@ -506,7 +506,7 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   TRACE(RP, 1,
         "result propagation --- potential methods: %d, erased moves: %d, "
         "patched moves: %d, "
-        "unverifiable moves: %d\n",
+        "unverifiable moves: %d",
         methods_which_return_parameter.size(), stats.erased_move_results,
         stats.patched_move_results, stats.unverifiable_move_results);
 }

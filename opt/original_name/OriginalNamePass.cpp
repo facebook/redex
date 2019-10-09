@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "DexUtil.h"
 #include "OriginalNamePass.h"
 #include "ClassHierarchy.h"
+#include "DexUtil.h"
 
 #define METRIC_MISSING_ORIGINAL_NAME_ROOT "num_missing_original_name_root"
 #define METRIC_ORIGINAL_NAME_COUNT "num_original_name"
@@ -29,7 +29,7 @@ void OriginalNamePass::build_hierarchies(
     auto base_class = base_type != nullptr ? type_class(base_type) : nullptr;
     if (base_class == nullptr) {
       TRACE(ORIGINALNAME, 2,
-            "Can't find class for annotate_original_name rule %s\n",
+            "Can't find class for annotate_original_name rule %s",
             base.c_str());
       mgr.incr_metric(METRIC_MISSING_ORIGINAL_NAME_ROOT, 1);
     } else {
@@ -40,8 +40,8 @@ void OriginalNamePass::build_hierarchies(
     auto base_name = base_class->get_deobfuscated_name();
     hierarchies->emplace(base_class->get_type(), base_name);
     TypeSet children_and_implementors;
-    get_all_children_or_implementors(
-        ch, scope, base_class, children_and_implementors);
+    get_all_children_or_implementors(ch, scope, base_class,
+                                     children_and_implementors);
     for (const auto& cls : children_and_implementors) {
       hierarchies->emplace(cls, base_name);
     }
@@ -71,10 +71,10 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
                           nullptr,
                       "field %s already exists!",
                       redex_field_name);
-    DexField* f = static_cast<DexField*>(
-        DexField::make_field(cls_type, field_name, string_type));
-    f->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
-                     new DexEncodedValueString(external_name_s));
+    DexField* f =
+        DexField::make_field(cls_type, field_name, string_type)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
+                            new DexEncodedValueString(external_name_s));
     // These fields are accessed reflectively, so make sure we do not remove
     // them.
     f->rstate.set_root();

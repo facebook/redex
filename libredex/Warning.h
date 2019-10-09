@@ -10,9 +10,9 @@
 #define OPT_WARNINGS                                                     \
   OPT_WARN(NON_JUMBO_STRING, "Non-jumbo string encoded in jumbo opcode") \
   OPT_WARN(PURE_ABSTRACT_CLASS, "Pure abstract class passed to encode")  \
-  OPT_WARN(UNSHORTENED_SRC_STRING, "Could not find replacement for src " \
-                                   "string") \
-  OPT_WARN(COLDSTART_STATIC, "Unknown method in coldstart list") \
+  OPT_WARN(UNSHORTENED_SRC_STRING,                                       \
+           "Could not find replacement for src string")                  \
+  OPT_WARN(COLDSTART_STATIC, "Unknown method in coldstart list")         \
   OPT_WARN(CANT_RUN_PASS, "Cannot run pass ")                            \
   OPT_WARN(CANT_WRITE_FILE, "Unable to write to file")
 

@@ -14,20 +14,16 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "Peephole.h"
+#include "RedexTest.h"
 #include "ScopeHelper.h"
 
-struct PeepholeTestB : public testing::Test {
-  PeepholeTestB() { g_redex = new RedexContext(); }
-
-  ~PeepholeTestB() { delete g_redex; }
-};
+class PeepholeTestB : public RedexTest {};
 
 TEST_F(PeepholeTestB, StringBuilderInit) {
   ClassCreator creator(DexType::make_type("LFoo;"));
   creator.set_super(get_object_type());
-  auto method_1 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
-  method_1->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method_1 = DexMethod::make_method("LFoo;.b:()V")
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto original_code_1 = R"(
      (
       (new-instance "Ljava/lang/StringBuilder;")
@@ -43,9 +39,8 @@ TEST_F(PeepholeTestB, StringBuilderInit) {
   method_1->set_code(assembler::ircode_from_string(original_code_1));
   creator.add_method(method_1);
 
-  auto method_2 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.c:()V"));
-  method_2->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method_2 = DexMethod::make_method("LFoo;.c:()V")
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto original_code_2 = R"(
     (
      (new-instance "Ljava/lang/StringBuilder;")
@@ -60,9 +55,8 @@ TEST_F(PeepholeTestB, StringBuilderInit) {
   method_2->set_code(assembler::ircode_from_string(original_code_2));
   creator.add_method(method_2);
 
-  auto method_3 =
-      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.d:()V"));
-  method_3->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method_3 = DexMethod::make_method("LFoo;.d:()V")
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
   auto original_code_3 = R"(
     (
      (new-instance "Ljava/lang/StringBuilder;")
@@ -86,7 +80,7 @@ TEST_F(PeepholeTestB, StringBuilderInit) {
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
   manager.run_passes(stores, config);
-  TRACE(PEEPHOLE, 1, "\n\n\n\nfinished\n\n\n\n");
+  TRACE(PEEPHOLE, 1, "\n\n\n\nfinished\n\n\n");
   auto expected_code_1 = assembler::ircode_from_string(R"(
        (
         (new-instance "Ljava/lang/StringBuilder;")

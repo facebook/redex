@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -443,7 +445,7 @@ class XZSDexMode(BaseDexMode):
             for line in dex_metadata.read().splitlines():
                 if line[0] != ".":
                     tokens = line.split()
-                    search_pattern = self._store_name + "-(\d+)\.dex\.jar\.xzs\.tmp~"
+                    search_pattern = self._store_name + r"-(\d+)\.dex\.jar\.xzs\.tmp~"
                     match = re.search(search_pattern, tokens[0])
                     if match is None:
                         raise Exception(
@@ -456,7 +458,7 @@ class XZSDexMode(BaseDexMode):
 
         # Sizes of the concatenated .dex.jar files are stored in .meta files.
         # Read the sizes of each .dex.jar file and un-concatenate them.
-        jar_size_regex = "jar:(\d+)"
+        jar_size_regex = r"jar:(\d+)"
         secondary_dir = join(extracted_apk_dir, self._xzs_dir)
         jar_sizes = {}
         for i in dex_order:

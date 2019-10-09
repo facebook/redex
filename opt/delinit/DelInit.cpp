@@ -30,12 +30,9 @@
 
 namespace {
 
-constexpr const char* METRIC_INIT_METHODS_REMOVED =
-  "num_init_methods_removed";
-constexpr const char* METRIC_VMETHODS_REMOVED =
-  "num_vmethods_removed";
-constexpr const char* METRIC_IFIELDS_REMOVED =
-  "num_ifields_removed";
+constexpr const char* METRIC_INIT_METHODS_REMOVED = "num_init_methods_removed";
+constexpr const char* METRIC_VMETHODS_REMOVED = "num_vmethods_removed";
+constexpr const char* METRIC_IFIELDS_REMOVED = "num_ifields_removed";
 constexpr const char* METRIC_DMETHODS_REMOVED = "num_dmethods_removed";
 
 static ConcurrentSet<const DexClass*> referenced_classes;
@@ -57,7 +54,8 @@ DexType* get_dextype_from_dotname(const char* dotname) {
   return DexType::get_type(buf.c_str());
 }
 
-// Search a class name in a list of package names, return true if there is a match
+// Search a class name in a list of package names, return true if there is a
+// match
 bool find_package(const char* name) {
   // If there's no whitelisted package, optimize every package by default
   if (package_filter.size() == 0) {
@@ -138,11 +136,11 @@ void find_referenced_classes(const Scope& scope) {
             DexString* dsclzref = opcode->get_string();
             DexType* dtexclude = get_dextype_from_dotname(dsclzref->c_str());
             if (dtexclude == nullptr) continue;
-            TRACE(PGR, 3, "string_ref: %s\n", SHOW(dtexclude));
+            TRACE(PGR, 3, "string_ref: %s", SHOW(dtexclude));
             referenced_classes.insert(type_class(dtexclude));
           }
           if (opcode->has_type()) {
-            TRACE(PGR, 3, "type_ref: %s\n", SHOW(opcode->get_type()));
+            TRACE(PGR, 3, "type_ref: %s", SHOW(opcode->get_type()));
             referenced_classes.insert(type_class(opcode->get_type()));
           }
         }
@@ -150,12 +148,12 @@ void find_referenced_classes(const Scope& scope) {
 }
 
 bool can_remove(const DexClass* cls) {
-  return can_delete(cls) && !referenced_classes.count_unsafe(cls);
+  return !root_or_string(cls) && !referenced_classes.count_unsafe(cls);
 }
 
 bool can_remove(const DexMethod* m, const ConcurrentSet<DexMethod*>& callers) {
   return callers.count_unsafe(const_cast<DexMethod*>(m)) == 0 &&
-         (can_remove(type_class(m->get_class())) || can_delete(m));
+         (can_remove(type_class(m->get_class())) || !root_or_string(m));
 }
 
 /**
@@ -176,7 +174,7 @@ bool can_remove_init(const DexMethod* m,
     return false;
   }
 
-  if (!can_delete(m)) {
+  if (root_or_string(m)) {
     return false;
   }
 
@@ -194,7 +192,7 @@ bool can_remove_init(const DexMethod* m,
 }
 
 bool can_remove(const DexField* f) {
-  return can_remove(type_class(f->get_class())) || can_delete(f);
+  return can_remove(type_class(f->get_class())) || !root_or_string(f);
 }
 
 /**
@@ -272,7 +270,7 @@ void DeadRefs::delinit(Scope& scope) {
 
   do {
     passnum++;
-    TRACE(DELINIT, 2, "Summary for pass %d\n", passnum);
+    TRACE(DELINIT, 2, "Summary for pass %d", passnum);
     removed = find_new_unreachable(scope);
     collect_dmethods(scope);
     track_callers(scope);
@@ -305,7 +303,7 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
       }
       always_assert(clazz == type_class(init->get_class()));
       clazz->remove_method(init);
-      TRACE(DELINIT, 5, "Delete init %s.%s %s\n", SHOW(init->get_class()),
+      TRACE(DELINIT, 5, "Delete init %s.%s %s", SHOW(init->get_class()),
             SHOW(init->get_name()), SHOW(init->get_proto()));
       stats.init_deleted++;
     }
@@ -317,9 +315,9 @@ int DeadRefs::find_new_unreachable(Scope& scope) {
     acc.init_cant_delete += p.second.init_cant_delete;
     acc.init_deleted += p.second.init_deleted;
   }
-  TRACE(DELINIT, 2, "Removed %d <init> methods\n", acc.init_deleted);
-  TRACE(DELINIT, 3, "%d <init> methods called\n", acc.init_called);
-  TRACE(DELINIT, 3, "%d <init> methods do not delete\n", acc.init_cant_delete);
+  TRACE(DELINIT, 2, "Removed %d <init> methods", acc.init_deleted);
+  TRACE(DELINIT, 3, "%d <init> methods called", acc.init_called);
+  TRACE(DELINIT, 3, "%d <init> methods do not delete", acc.init_cant_delete);
   find_unreachable(scope);
   del_init_res.deleted_inits += acc.init_deleted;
   return acc.init_deleted;
@@ -354,7 +352,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
     vmethods += p.second.vmethods.size();
     ifields += p.second.ifields.size();
   }
-  TRACE(DELINIT, 2, "Uninstantiable classes %ld: vmethods %ld, ifields %ld\n",
+  TRACE(DELINIT, 2, "Uninstantiable classes %ld: vmethods %ld, ifields %ld",
         classes.size(), vmethods, ifields);
 }
 
@@ -417,7 +415,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
     acc.initmethods += p.second.initmethods;
     acc.dmethods += p.second.dmethods;
   }
-  TRACE(DELINIT, 3, "Found %ld init and %ld dmethods\n", acc.initmethods,
+  TRACE(DELINIT, 3, "Found %ld init and %ld dmethods", acc.initmethods,
         acc.dmethods);
 }
 
@@ -492,7 +490,7 @@ void DeadRefs::track_callers(Scope& scope) {
       }
     }
   });
-  TRACE(DELINIT, 3, "Unreachable (not called) %ld vmethods and %ld ifields\n",
+  TRACE(DELINIT, 3, "Unreachable (not called) %ld vmethods and %ld ifields",
         vmethods, ifields);
 }
 
@@ -520,7 +518,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
 
       methods.erase(meth_it);
       stats.vmethodcnt++;
-      TRACE(DELINIT, 6, "Delete vmethod: %s.%s %s\n", SHOW(meth->get_class()),
+      TRACE(DELINIT, 6, "Delete vmethod: %s.%s %s", SHOW(meth->get_class()),
             SHOW(meth->get_name()), SHOW(meth->get_proto()));
     }
 
@@ -533,7 +531,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
 
       fields.erase(field_it);
       stats.ifieldcnt++;
-      TRACE(DELINIT, 6, "Delete ifield: %s.%s %s\n", SHOW(field->get_class()),
+      TRACE(DELINIT, 6, "Delete ifield: %s.%s %s", SHOW(field->get_class()),
             SHOW(field->get_name()), SHOW(field->get_type()));
     }
 
@@ -550,7 +548,7 @@ int DeadRefs::remove_unreachable(Scope& scope) {
       auto clazz = type_class(meth->get_class());
       clazz->remove_method(meth);
       stats.dmethodcnt++;
-      TRACE(DELINIT, 6, "Delete dmethod: %s.%s %s\n", SHOW(meth->get_class()),
+      TRACE(DELINIT, 6, "Delete dmethod: %s.%s %s", SHOW(meth->get_class()),
             SHOW(meth->get_name()), SHOW(meth->get_proto()));
     }
 
@@ -568,14 +566,14 @@ int DeadRefs::remove_unreachable(Scope& scope) {
     acc.dont_delete_dmeths += p.second.dont_delete_dmeths;
   }
   del_init_res.deleted_vmeths += acc.vmethodcnt;
-  TRACE(DELINIT, 2, "Removed %d vmethods\n", acc.vmethodcnt);
+  TRACE(DELINIT, 2, "Removed %d vmethods", acc.vmethodcnt);
   del_init_res.deleted_ifields += acc.ifieldcnt;
-  TRACE(DELINIT, 2, "Removed %d ifields\n", acc.ifieldcnt);
+  TRACE(DELINIT, 2, "Removed %d ifields", acc.ifieldcnt);
 
   del_init_res.deleted_dmeths += acc.dmethodcnt;
-  TRACE(DELINIT, 2, "Removed %d dmethods\n", acc.dmethodcnt);
-  TRACE(DELINIT, 3, "%d called dmethods\n", acc.called_dmeths);
-  TRACE(DELINIT, 3, "%d don't delete dmethods\n", acc.dont_delete_dmeths);
+  TRACE(DELINIT, 2, "Removed %d dmethods", acc.dmethodcnt);
+  TRACE(DELINIT, 3, "%d called dmethods", acc.called_dmeths);
+  TRACE(DELINIT, 3, "%d don't delete dmethods", acc.dont_delete_dmeths);
 
   return acc.vmethodcnt + acc.ifieldcnt + acc.dmethodcnt;
 }
@@ -586,7 +584,9 @@ void DelInitPass::run_pass(DexStoresVector& stores,
                            ConfigFiles& /* conf */,
                            PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(DELINIT, 1, "DelInitPass not run because no ProGuard configuration was provided.");
+    TRACE(
+        DELINIT, 1,
+        "DelInitPass not run because no ProGuard configuration was provided.");
     return;
   }
   package_filter = m_package_filter;
@@ -594,23 +594,17 @@ void DelInitPass::run_pass(DexStoresVector& stores,
   find_referenced_classes(scope);
   DeadRefs drefs;
   drefs.delinit(scope);
-  TRACE(DELINIT, 1, "Removed %d <init> methods\n",
-      drefs.del_init_res.deleted_inits);
-  TRACE(DELINIT, 1, "Removed %d vmethods\n",
-      drefs.del_init_res.deleted_vmeths);
-  TRACE(DELINIT, 1, "Removed %d ifields\n",
-      drefs.del_init_res.deleted_ifields);
-  TRACE(DELINIT, 1, "Removed %d dmethods\n",
-      drefs.del_init_res.deleted_dmeths);
+  TRACE(DELINIT, 1, "Removed %d <init> methods",
+        drefs.del_init_res.deleted_inits);
+  TRACE(DELINIT, 1, "Removed %d vmethods", drefs.del_init_res.deleted_vmeths);
+  TRACE(DELINIT, 1, "Removed %d ifields", drefs.del_init_res.deleted_ifields);
+  TRACE(DELINIT, 1, "Removed %d dmethods", drefs.del_init_res.deleted_dmeths);
 
   mgr.incr_metric(METRIC_INIT_METHODS_REMOVED,
                   drefs.del_init_res.deleted_inits);
-  mgr.incr_metric(METRIC_VMETHODS_REMOVED,
-                  drefs.del_init_res.deleted_vmeths);
-  mgr.incr_metric(METRIC_IFIELDS_REMOVED,
-                  drefs.del_init_res.deleted_ifields);
-  mgr.incr_metric(METRIC_DMETHODS_REMOVED,
-                  drefs.del_init_res.deleted_dmeths);
+  mgr.incr_metric(METRIC_VMETHODS_REMOVED, drefs.del_init_res.deleted_vmeths);
+  mgr.incr_metric(METRIC_IFIELDS_REMOVED, drefs.del_init_res.deleted_ifields);
+  mgr.incr_metric(METRIC_DMETHODS_REMOVED, drefs.del_init_res.deleted_dmeths);
 
   post_dexen_changes(scope, stores);
 }

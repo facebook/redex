@@ -64,6 +64,24 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
 }
 
 /**
+ * This function relies on the g_redex.
+ */
+const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
+  if (m_pure_methods.empty()) {
+    Json::Value pure_methods;
+    m_json.get("pure_methods", Json::nullValue, pure_methods);
+    if (pure_methods != Json::nullValue) {
+      for (auto const& method_name : pure_methods) {
+        std::string name = method_name.asString();
+        DexMethodRef* method = DexMethod::get_method(name);
+        if (method) m_pure_methods.insert(method);
+      }
+    }
+  }
+  return m_pure_methods;
+}
+
+/**
  * Read an interdex list file and return as a vector of appropriately-formatted
  * classname strings.
  */
@@ -75,17 +93,18 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
   std::vector<std::string> coldstart_classes;
 
   std::ifstream input(file);
-  if (!input){
+  if (!input) {
     return std::vector<std::string>();
   }
   std::string clzname;
   while (input >> clzname) {
-		long position = clzname.length() - lentail;
+    long position = clzname.length() - lentail;
     always_assert_log(position >= 0,
                       "Bailing, invalid class spec '%s' in interdex file %s\n",
                       clzname.c_str(), file);
     clzname.replace(position, lentail, ";");
-    coldstart_classes.emplace_back(m_proguard_map.translate_class("L" + clzname));
+    coldstart_classes.emplace_back(
+        m_proguard_map.translate_class("L" + clzname));
   }
   return coldstart_classes;
 }
@@ -93,8 +112,9 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 /**
  * Read a map of {list_name : class_list} from json
  */
-std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_class_lists() {
-  std::unordered_map<std::string, std::vector<std::string> > lists;
+std::unordered_map<std::string, std::vector<std::string>>
+ConfigFiles::load_class_lists() {
+  std::unordered_map<std::string, std::vector<std::string>> lists;
   std::string class_lists_filename;
   this->m_json.get("class_lists", "", class_lists_filename);
 
@@ -106,14 +126,16 @@ std::unordered_map<std::string, std::vector<std::string> > ConfigFiles::load_cla
   Json::Reader reader;
   Json::Value root;
   bool parsing_succeeded = reader.parse(input, root);
-  always_assert_log(parsing_succeeded, "Failed to parse class list json from file: %s\n%s",
-                    class_lists_filename.c_str(),
-                    reader.getFormattedErrorMessages().c_str());
+  always_assert_log(
+      parsing_succeeded, "Failed to parse class list json from file: %s\n%s",
+      class_lists_filename.c_str(), reader.getFormattedErrorMessages().c_str());
 
   for (Json::ValueIterator it = root.begin(); it != root.end(); ++it) {
     std::vector<std::string> class_list;
     Json::Value current_list = *it;
-    for (Json::ValueIterator list_it = current_list.begin(); list_it != current_list.end(); ++list_it) {
+    for (Json::ValueIterator list_it = current_list.begin();
+         list_it != current_list.end();
+         ++list_it) {
       lists[it.key().asString()].push_back((*list_it).asString());
     }
   }
@@ -130,7 +152,7 @@ void ConfigFiles::load_method_to_weight() {
 
   std::string deobfuscated_name;
   unsigned int weight;
-  TRACE(CUSTOMSORT, 2, "Setting sort start file %s\n",
+  TRACE(CUSTOMSORT, 2, "Setting sort start file %s",
         m_profiled_methods_filename.c_str());
 
   unsigned int count = 0;
@@ -141,7 +163,7 @@ void ConfigFiles::load_method_to_weight() {
 
   assert_log(count > 0, "Method profile file %s didn't contain valid entries\n",
              m_profiled_methods_filename.c_str());
-  TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d\n", count);
+  TRACE(CUSTOMSORT, 2, "Preset sort weight count=%d", count);
 }
 
 void ConfigFiles::load_method_sorting_whitelisted_substrings() {
@@ -168,6 +190,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   }
   JsonWrapper jw(config);
   jw.get("virtual", true, inliner_config->virtual_inline);
+  jw.get("true_virtual_inline", false, inliner_config->true_virtual_inline);
   jw.get("throws", false, inliner_config->throws_inline);
   jw.get("enforce_method_size_limit",
          true,
@@ -175,7 +198,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("use_cfg_inliner", true, inliner_config->use_cfg_inliner);
   jw.get("multiple_callers", false, inliner_config->multiple_callers);
   jw.get("inline_small_non_deletables",
-         false,
+         true,
          inliner_config->inline_small_non_deletables);
 
   jw.get("black_list", {}, inliner_config->m_black_list);
