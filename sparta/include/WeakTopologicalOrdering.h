@@ -220,6 +220,23 @@ class WeakTopologicalOrdering final {
     return iterator(end_ptr, end_ptr);
   }
 
+  // Recursively iterate through the wto order and invoke a callback for each
+  // node.
+  void visit_depth_first(std::function<void(const NodeId&)> f) {
+    std::function<void(const WtoComponent<NodeId>&)> visit_component;
+    visit_component = [&visit_component, &f](const WtoComponent<NodeId>& v) {
+      f(v.head_node());
+      if (v.is_scc()) {
+        for (const auto& inner : v) {
+          visit_component(inner);
+        }
+      }
+    };
+    for (const auto& v : *this) {
+      visit_component(v);
+    }
+  }
+
  private:
   // We store all the components of a WTO inside a vector. This is more
   // efficient than allocating each component individually on the heap.
