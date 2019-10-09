@@ -11,6 +11,7 @@
 #include "IRInstruction.h"
 #include "Resolver.h"
 #include "Walkers.h"
+#include "WeakTopologicalOrdering.h"
 
 std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
   switch (l.special_location) {
@@ -403,33 +404,47 @@ size_t compute_locations_closure(
   //    point. Methods for which information is directly or indirectly absent
   //    are equivalent to a general memory barrier, and are systematically
   //    pruned.
+
+  // TODO: Instead of custom fixpoint computation using WTO, consider using the
+  // MonotonicFixpointIterator, operating on a callgraph, capture the
+  // dependencies, and have the Locations as the abstract domain.
+
   size_t iterations = 0;
   while (impacted_methods.size()) {
     iterations++;
     // We order the impacted methods in a deterministic way that's likely
     // helping to reduce the number of needed iterations.
-    // TODO: Do a proper (weak) topological ordering
-    std::vector<const DexMethod*> ordered_impacted_methods(
-        impacted_methods.begin(), impacted_methods.end());
-    impacted_methods.clear();
-    std::sort(ordered_impacted_methods.begin(), ordered_impacted_methods.end(),
-              [&](const DexMethod* a, const DexMethod* b) {
-                auto& a_lads = method_lads.at(a);
-                auto& b_lads = method_lads.at(b);
-                if (a_lads.dependencies.size() != b_lads.dependencies.size()) {
-                  // put methods with fewer dependencies first
-                  return a_lads.dependencies.size() <
-                         b_lads.dependencies.size();
+    sparta::WeakTopologicalOrdering<const DexMethod*> wto(
+        nullptr,
+        [&impacted_methods, &inverse_dependencies](const DexMethod* const& m) {
+          std::vector<const DexMethod*> successors;
+          if (m == nullptr) {
+            std::copy(impacted_methods.begin(), impacted_methods.end(),
+                      std::back_inserter(successors));
+          } else {
+            auto it = inverse_dependencies.find(m);
+            if (it != inverse_dependencies.end()) {
+              for (auto n : it->second) {
+                if (impacted_methods.count(n)) {
+                  successors.push_back(n);
                 }
-                if (a_lads.locations.size() != b_lads.locations.size()) {
-                  // put methods with fewer locations first
-                  return a_lads.locations.size() < b_lads.locations.size();
-                }
-                // tie breaker: method order
-                return compare_dexmethods(a, b);
-              });
+              }
+            }
+          }
+          // Make number of iterations deterministic
+          std::sort(successors.begin(), successors.end(), compare_dexmethods);
+          return successors;
+        });
 
-    std::unordered_set<const DexMethod*> changed_methods;
+    std::vector<const DexMethod*> ordered_impacted_methods;
+    wto.visit_depth_first([&ordered_impacted_methods](const DexMethod* m) {
+      if (m) {
+        ordered_impacted_methods.push_back(m);
+      }
+    });
+    impacted_methods.clear();
+
+    std::vector<const DexMethod*> changed_methods;
     for (const DexMethod* method : ordered_impacted_methods) {
       auto& lads = method_lads.at(method);
       bool unknown = false;
@@ -448,7 +463,7 @@ size_t compute_locations_closure(
       }
       if (unknown || lads_locations_size < lads.locations.size()) {
         // something changed
-        changed_methods.insert(method);
+        changed_methods.push_back(method);
         if (unknown) {
           method_lads.erase(method);
         }

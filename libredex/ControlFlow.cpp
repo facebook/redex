@@ -1380,23 +1380,13 @@ std::vector<Block*> ControlFlowGraph::wto_chains(
         return result;
       });
 
-  // recursively iterate through the wto order and collect the blocks here
-  // This is a depth first traversal. TODO: would breadth first be better?
+  // TODO: would breadth first be better?
   std::vector<Block*> wto_order;
-  std::function<void(const sparta::WtoComponent<Chain*>&)> get_order;
-  get_order = [&get_order, &wto_order](const sparta::WtoComponent<Chain*>& v) {
-    for (Block* b : *v.head_node()) {
+  wto.visit_depth_first([&wto_order](Chain* c) {
+    for (Block* b : *c) {
       wto_order.push_back(b);
     }
-    if (v.is_scc()) {
-      for (const auto& inner : v) {
-        get_order(inner);
-      }
-    }
-  };
-  for (const auto& v : wto) {
-    get_order(v);
-  }
+  });
   return wto_order;
 }
 
