@@ -21,7 +21,7 @@ class LivenessFixpointIterator final
 
   void analyze_instruction(IRInstruction* insn,
                            LivenessDomain* current_state) const override {
-    if (insn->has_dest()) {
+    if (insn->dests_size()) {
       current_state->remove(insn->dest());
     }
     for (size_t i = 0; i < insn->srcs_size(); ++i) {

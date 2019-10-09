@@ -9,10 +9,8 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
-#include "DexAsm.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "RedexTest.h"
 
 namespace cfg {
 
@@ -23,11 +21,8 @@ std::ostream& operator<<(std::ostream& os, const Block* b) {
 } // namespace cfg
 
 using namespace cfg;
-using namespace dex_asm;
 
-class ControlFlowTest : public RedexTest {};
-
-TEST_F(ControlFlowTest, findExitBlocks) {
+TEST(ControlFlow, findExitBlocks) {
   {
     ControlFlowGraph cfg;
     auto b0 = cfg.create_block();
@@ -223,7 +218,7 @@ TEST_F(ControlFlowTest, findExitBlocks) {
   }
 }
 
-TEST_F(ControlFlowTest, findImmediateDominator) {
+TEST(ControlFlow, findImmediateDominator) {
   {
     //                 +---------+
     //                 v         |
@@ -299,7 +294,7 @@ TEST_F(ControlFlowTest, findImmediateDominator) {
   }
 }
 
-TEST_F(ControlFlowTest, iterate1) {
+TEST(ControlFlow, iterate1) {
   auto code = assembler::ircode_from_string(R"(
     (
       (return-void)
@@ -314,7 +309,7 @@ TEST_F(ControlFlowTest, iterate1) {
   }
 }
 
-TEST_F(ControlFlowTest, iterate2) {
+TEST(ControlFlow, iterate2) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -359,7 +354,7 @@ TEST_F(ControlFlowTest, iterate2) {
 // to other default constructed InstructionIterator
 //
 // boost.org/doc/libs/1_58_0/doc/html/container/Cpp11_conformance.html
-TEST_F(ControlFlowTest, nullForwardIterators) {
+TEST(ControlFlow, nullForwardIterators) {
   auto code = assembler::ircode_from_string(R"(
     (
       (return-void)
@@ -396,7 +391,7 @@ TEST_F(ControlFlowTest, nullForwardIterators) {
   }
 }
 
-TEST_F(ControlFlowTest, copyConstructibleIterator) {
+TEST(ControlFlow, copyConstructibleIterator) {
   auto code = assembler::ircode_from_string(R"(
     (
       (return-void)
@@ -411,7 +406,7 @@ TEST_F(ControlFlowTest, copyConstructibleIterator) {
   }
 }
 
-TEST_F(ControlFlowTest, editableBuildAndLinearizeNoChange) {
+TEST(ControlFlow, editableBuildAndLinearizeNoChange) {
   auto str = R"(
     (
       (const v0 0)
@@ -426,10 +421,15 @@ TEST_F(ControlFlowTest, editableBuildAndLinearizeNoChange) {
   input_code->build_cfg(/* editable */ true);
   input_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST_F(ControlFlowTest, infinite) {
+TEST(ControlFlow, infinite) {
   auto str = R"(
     (
       (:lbl)
@@ -444,10 +444,15 @@ TEST_F(ControlFlowTest, infinite) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST_F(ControlFlowTest, infinite2) {
+TEST(ControlFlow, infinite2) {
   auto str = R"(
     (
       (:lbl)
@@ -462,10 +467,15 @@ TEST_F(ControlFlowTest, infinite2) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST_F(ControlFlowTest, unreachable) {
+TEST(ControlFlow, unreachable) {
   auto input_code = assembler::ircode_from_string(R"(
     (
       (:lbl)
@@ -485,10 +495,15 @@ TEST_F(ControlFlowTest, unreachable) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST_F(ControlFlowTest, unreachable2) {
+TEST(ControlFlow, unreachable2) {
   auto input_code = assembler::ircode_from_string(R"(
     (
       (:lbl)
@@ -509,10 +524,15 @@ TEST_F(ControlFlowTest, unreachable2) {
   TRACE(CFG, 1, "%s", SHOW(input_code->cfg()));
   input_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expected_code.get(), input_code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(input_code.get()))
+      << "expected:\n"
+      << show(expected_code) << "\n"
+      << "actual:\n"
+      << show(input_code) << "\n";
 }
 
-TEST_F(ControlFlowTest, remove_non_branch) {
+TEST(ControlFlow, remove_non_branch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -545,7 +565,8 @@ TEST_F(ControlFlowTest, remove_non_branch) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
@@ -563,7 +584,7 @@ void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
   cfg.recompute_registers_size();
 }
 
-TEST_F(ControlFlowTest, remove_non_branch_with_loop) {
+TEST(ControlFlow, remove_non_branch_with_loop) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -597,10 +618,11 @@ TEST_F(ControlFlowTest, remove_non_branch_with_loop) {
      (return-void)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_branch) {
+TEST(ControlFlow, remove_branch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -624,10 +646,11 @@ TEST_F(ControlFlowTest, remove_branch) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_branch_with_loop) {
+TEST(ControlFlow, remove_branch_with_loop) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -652,10 +675,11 @@ TEST_F(ControlFlowTest, remove_branch_with_loop) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_all_but_return) {
+TEST(ControlFlow, remove_all_but_return) {
   auto code = assembler::ircode_from_string(R"(
     (
      (load-param v0)
@@ -678,10 +702,11 @@ TEST_F(ControlFlowTest, remove_all_but_return) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_switch) {
+TEST(ControlFlow, remove_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (switch v0 (:a :b))
@@ -709,10 +734,11 @@ TEST_F(ControlFlowTest, remove_switch) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_switch2) {
+TEST(ControlFlow, remove_switch2) {
   auto code = assembler::ircode_from_string(R"(
     (
       (switch v0 (:a :b))
@@ -741,10 +767,11 @@ TEST_F(ControlFlowTest, remove_switch2) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_pred_edge_if) {
+TEST(ControlFlow, remove_pred_edge_if) {
   auto code = assembler::ircode_from_string(R"(
     (
       (:a 0)
@@ -788,10 +815,11 @@ TEST_F(ControlFlowTest, remove_pred_edge_if) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, cleanup_after_deleting_branch) {
+TEST(ControlFlow, cleanup_after_deleting_branch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -820,10 +848,11 @@ TEST_F(ControlFlowTest, cleanup_after_deleting_branch) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, cleanup_after_deleting_goto) {
+TEST(ControlFlow, cleanup_after_deleting_goto) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 1)
@@ -853,11 +882,12 @@ TEST_F(ControlFlowTest, cleanup_after_deleting_goto) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
-TEST_F(ControlFlowTest, remove_sget) {
-
+TEST(ControlFlow, remove_sget) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (sget Lcom/Foo.bar:I)
@@ -888,11 +918,13 @@ TEST_F(ControlFlowTest, remove_sget) {
       (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, branchingness) {
-
+TEST(ControlFlow, branchingness) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (const-string "one")
@@ -933,9 +965,10 @@ TEST_F(ControlFlowTest, branchingness) {
     }
   }
   EXPECT_EQ(4, blocks_checked);
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, empty_first_block) {
+TEST(ControlFlow, empty_first_block) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -969,7 +1002,7 @@ TEST_F(ControlFlowTest, empty_first_block) {
   }
 }
 
-TEST_F(ControlFlowTest, exit_blocks) {
+TEST(ControlFlow, exit_blocks) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -987,7 +1020,7 @@ TEST_F(ControlFlowTest, exit_blocks) {
   code->clear_cfg();
 }
 
-TEST_F(ControlFlowTest, exit_blocks_change) {
+TEST(ControlFlow, exit_blocks_change) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1018,7 +1051,7 @@ TEST_F(ControlFlowTest, exit_blocks_change) {
   code->clear_cfg();
 }
 
-TEST_F(ControlFlowTest, deep_copy1) {
+TEST(ControlFlow, deep_copy1) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1042,7 +1075,8 @@ TEST_F(ControlFlowTest, deep_copy1) {
   EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
 }
 
-TEST_F(ControlFlowTest, deep_copy2) {
+TEST(ControlFlow, deep_copy2) {
+  g_redex = new RedexContext();
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -1071,9 +1105,11 @@ TEST_F(ControlFlowTest, deep_copy2) {
   auto orig_iterable = ir_list::InstructionIterable(orig_list);
   auto copy_iterable = ir_list::InstructionIterable(copy_list);
   EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
+
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, deep_copy3) {
+TEST(ControlFlow, deep_copy3) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 10)
@@ -1113,10 +1149,11 @@ TEST_F(ControlFlowTest, deep_copy3) {
   EXPECT_TRUE(orig_iterable.structural_equals(copy_iterable));
 }
 
-TEST_F(ControlFlowTest, line_numbers) {
+TEST(ControlFlow, line_numbers) {
+  g_redex = new RedexContext();
 
-  DexMethod* m = DexMethod::make_method("LFoo;.m:()V")
-                     ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  DexMethod* m = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.m:()V"));
+  m->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -1157,10 +1194,13 @@ TEST_F(ControlFlowTest, line_numbers) {
       (goto :exit)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, simple_push_back) {
+TEST(ControlFlow, simple_push_back) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
   cfg.set_entry_block(entry);
@@ -1173,7 +1213,7 @@ TEST_F(ControlFlowTest, simple_push_back) {
   }
 }
 
-TEST_F(ControlFlowTest, simple_push_back_it) {
+TEST(ControlFlow, simple_push_back_it) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
   cfg.set_entry_block(entry);
@@ -1194,7 +1234,7 @@ TEST_F(ControlFlowTest, simple_push_back_it) {
   }
 }
 
-TEST_F(ControlFlowTest, simple_push_front) {
+TEST(ControlFlow, simple_push_front) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
   cfg.set_entry_block(entry);
@@ -1207,7 +1247,7 @@ TEST_F(ControlFlowTest, simple_push_front) {
   }
 }
 
-TEST_F(ControlFlowTest, simple_push_front_it) {
+TEST(ControlFlow, simple_push_front_it) {
   ControlFlowGraph cfg{};
   Block* entry = cfg.create_block();
   cfg.set_entry_block(entry);
@@ -1228,7 +1268,7 @@ TEST_F(ControlFlowTest, simple_push_front_it) {
   }
 }
 
-TEST_F(ControlFlowTest, insertion) {
+TEST(ControlFlow, insertion) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1278,10 +1318,11 @@ TEST_F(ControlFlowTest, insertion) {
       (goto :exit)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, insertion_it) {
+TEST(ControlFlow, insertion_it) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1338,10 +1379,11 @@ TEST_F(ControlFlowTest, insertion_it) {
       (goto :exit)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, insertion_after_may_throw) {
+TEST(ControlFlow, insertion_after_may_throw) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1387,10 +1429,11 @@ TEST_F(ControlFlowTest, insertion_after_may_throw) {
       (return v1)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
+TEST(ControlFlow, insertion_after_may_throw_with_move_result) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param-object v0)
@@ -1415,7 +1458,7 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
     if (is_aput(insn->opcode())) {
       std::vector<IRInstruction*> new_insns;
       auto new_insn = new IRInstruction(OPCODE_DIV_INT);
-      new_insn->set_srcs_size(2);
+      new_insn->set_arg_word_count(2);
       new_insn->set_src(0, 2);
       new_insn->set_src(1, 2);
       new_insns.push_back(new_insn);
@@ -1445,11 +1488,12 @@ TEST_F(ControlFlowTest, insertion_after_may_throw_with_move_result) {
       (return v1)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, add_sget) {
-
+TEST(ControlFlow, add_sget) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1500,11 +1544,13 @@ TEST_F(ControlFlowTest, add_sget) {
       (goto :exit)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, add_return) {
-
+TEST(ControlFlow, add_return) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -1540,11 +1586,13 @@ TEST_F(ControlFlowTest, add_return) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, add_throw) {
-
+TEST(ControlFlow, add_throw) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (.try_start foo)
@@ -1594,10 +1642,12 @@ TEST_F(ControlFlowTest, add_throw) {
       (return v1)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, add_branch) {
+TEST(ControlFlow, add_branch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1645,36 +1695,8 @@ TEST_F(ControlFlowTest, add_branch) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
-}
-
-/**
- * Construct new code but keeping param loading instructions.
- */
-TEST_F(ControlFlowTest, test_first_non_param_loading_insn) {
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (const v1 1)
-      (return v1)
-    )
-  )");
-  code->build_cfg(/* editable */ true);
-  auto& cfg = code->cfg();
-  auto entry_block = cfg.entry_block();
-
-  auto it = entry_block->get_first_non_param_loading_insn();
-  auto non_param = entry_block->to_cfg_instruction_iterator(it);
-  entry_block->insert_before(non_param, {dasm(OPCODE_RETURN, {0_v})});
-  code->clear_cfg();
-
-  auto expected = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (return v0)
-    )
-  )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
 Block* create_ret_const_block(ControlFlowGraph& cfg, uint64_t lit) {
@@ -1689,7 +1711,7 @@ Block* create_ret_const_block(ControlFlowGraph& cfg, uint64_t lit) {
   return b;
 }
 
-TEST_F(ControlFlowTest, add_branch_null_goto_block) {
+TEST(ControlFlow, add_branch_null_goto_block) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1741,10 +1763,11 @@ TEST_F(ControlFlowTest, add_branch_null_goto_block) {
       (return v2)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, add_branch_redirect_goto_block) {
+TEST(ControlFlow, add_branch_redirect_goto_block) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1797,10 +1820,11 @@ TEST_F(ControlFlowTest, add_branch_redirect_goto_block) {
       (return v1)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, add_switch) {
+TEST(ControlFlow, add_switch) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1849,10 +1873,11 @@ TEST_F(ControlFlowTest, add_switch) {
       (return v1)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, replace_insn_basic) {
+TEST(ControlFlow, replace_insn_basic) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1886,11 +1911,12 @@ TEST_F(ControlFlowTest, replace_insn_basic) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }
 
-TEST_F(ControlFlowTest, replace_insn_may_throw) {
-
+TEST(ControlFlow, replace_insn_may_throw) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1936,11 +1962,13 @@ TEST_F(ControlFlowTest, replace_insn_may_throw) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, replace_insn_may_throw2) {
-
+TEST(ControlFlow, replace_insn_may_throw2) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -1982,11 +2010,13 @@ TEST_F(ControlFlowTest, replace_insn_may_throw2) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, replace_insn_may_throw3) {
-
+TEST(ControlFlow, replace_insn_may_throw3) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -2035,42 +2065,12 @@ TEST_F(ControlFlowTest, replace_insn_may_throw3) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
+  delete g_redex;
 }
 
-TEST_F(ControlFlowTest, replace_insn_invoke) {
-
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (invoke-virtual (v0) "LFoo;.bar:()I")
-      (move-result v0)
-      (return v0)
-    )
-  )");
-  code->build_cfg(/* editable */ true);
-  auto& cfg = code->cfg();
-
-  auto ii = cfg::InstructionIterable(cfg);
-  for (auto it = ii.begin(); it != ii.end(); ++it) {
-    if (it->insn->opcode() == OPCODE_INVOKE_VIRTUAL) {
-      cfg.replace_insn(it, dasm(OPCODE_NOP));
-      break;
-    }
-  }
-  code->clear_cfg();
-
-  auto expected = assembler::ircode_from_string(R"(
-    (
-      (load-param v0)
-      (nop)
-      (return v0)
-    )
-  )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
-}
-
-TEST_F(ControlFlowTest, replace_if_with_return) {
+TEST(ControlFlow, replace_if_with_return) {
   auto code = assembler::ircode_from_string(R"(
     (
       (load-param v0)
@@ -2104,5 +2104,6 @@ TEST_F(ControlFlowTest, replace_if_with_return) {
       (return v0)
     )
   )");
-  EXPECT_CODE_EQ(expected.get(), code.get());
+  EXPECT_EQ(assembler::to_string(expected.get()),
+            assembler::to_string(code.get()));
 }

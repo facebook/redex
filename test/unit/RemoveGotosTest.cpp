@@ -12,19 +12,18 @@
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "RedexTest.h"
 #include "RemoveGotos.h"
 
-struct RemoveGotosTest : public RedexTest {
+struct RemoveGotosTest : testing::Test {
   DexMethod* m_method;
 
   RemoveGotosTest() {
+    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method =
-        DexMethod::make_method(get_object_type(),
-                               DexString::make_string("testMethod"), proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_method = static_cast<DexMethod*>(DexMethod::make_method(
+        get_object_type(), DexString::make_string("testMethod"), proto));
+    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
@@ -40,7 +39,7 @@ struct RemoveGotosTest : public RedexTest {
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
-  ~RemoveGotosTest() {}
+  ~RemoveGotosTest() { delete g_redex; }
 };
 
 // Code:    A B C D

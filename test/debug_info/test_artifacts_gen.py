@@ -37,7 +37,7 @@ class TestArtifactsGeneration(ArtifactsTestFixture):
             "opt_decisions": {
                 "enable_logs": True,
             },
-            "debug_info_kind": "iodi",
+            "debug_info_kind": "iodi_per_arity",
             "emit_class_method_info_map": True,
         }
 

@@ -10,6 +10,18 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
+DexOpcode convert_2to3addr(DexOpcode op) {
+  always_assert(op >= DOPCODE_ADD_INT_2ADDR && op <= DOPCODE_REM_DOUBLE_2ADDR);
+  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
+  return (DexOpcode)(op - offset);
+}
+
+DexOpcode convert_3to2addr(DexOpcode op) {
+  always_assert(op >= DOPCODE_ADD_INT && op <= DOPCODE_REM_DOUBLE);
+  constexpr uint16_t offset = DOPCODE_ADD_INT_2ADDR - DOPCODE_ADD_INT;
+  return (DexOpcode)(op + offset);
+}
+
 IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
   m_srcs.resize(opcode_impl::min_srcs_size(op));
 }
@@ -18,8 +30,10 @@ IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
 // because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
   return m_opcode == that.m_opcode &&
-         m_literal == that.m_literal && // just test one member of the union
-         m_srcs == that.m_srcs && m_dest == that.m_dest;
+    m_string == that.m_string && // just test one member of the union
+    m_srcs == that.m_srcs &&
+    m_dest == that.m_dest &&
+    m_literal == that.m_literal;
 }
 
 uint16_t IRInstruction::size() const {
@@ -173,7 +187,7 @@ void IRInstruction::normalize_registers() {
       old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
     always_assert(old_srcs_idx == srcs_size());
-    set_srcs_size(srcs_idx);
+    set_arg_word_count(srcs_idx);
   }
 }
 
@@ -181,12 +195,12 @@ void IRInstruction::denormalize_registers() {
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
     std::vector<uint16_t> srcs;
-    size_t args_idx{0};
-    size_t srcs_idx{0};
+    size_t args_idx {0};
+    size_t srcs_idx {0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       srcs.push_back(src(srcs_idx++));
     }
-    bool has_wide{false};
+    bool has_wide {false};
     for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
       if (is_wide_type(args.at(args_idx))) {
@@ -201,11 +215,25 @@ void IRInstruction::denormalize_registers() {
 }
 
 bit_width_t required_bit_width(uint16_t v) {
-  bit_width_t result{1};
+  bit_width_t result {1};
   while (v >>= 1) {
     ++result;
   }
   return result;
+}
+
+bool has_contiguous_srcs(const IRInstruction* insn) {
+  if (insn->srcs_size() == 0) {
+    return true;
+  }
+  auto last = insn->src(0);
+  for (size_t i = 1; i < insn->srcs_size(); ++i) {
+    if (insn->src(i) - last != 1) {
+      return false;
+    }
+    last = insn->src(i);
+  }
+  return true;
 }
 
 bool needs_range_conversion(const IRInstruction* insn) {
@@ -228,36 +256,44 @@ bool needs_range_conversion(const IRInstruction* insn) {
 }
 
 uint64_t IRInstruction::hash() const {
-  uint64_t result = opcode();
+  std::vector<uint64_t> bits;
+  bits.push_back(opcode());
 
   for (size_t i = 0; i < srcs_size(); i++) {
-    result ^= src(i);
+    bits.push_back(src(i));
   }
 
-  if (has_dest()) {
-    result ^= dest();
+  if (dests_size() > 0) {
+    bits.push_back(dest());
   }
 
-  switch (opcode::ref(opcode())) {
-  case opcode::Ref::Data: {
+  if (has_data()) {
     size_t size = get_data()->data_size();
     const auto& data = get_data()->data();
     for (size_t i = 0; i < size; i++) {
-      result ^= data[i];
+      bits.push_back(data[i]);
     }
-    break;
-  }
-  case opcode::Ref::Field:
-  case opcode::Ref::Method:
-  case opcode::Ref::Literal:
-  case opcode::Ref::String:
-  case opcode::Ref::Type: {
-    result ^= m_literal;
-    break;
-  }
-  case opcode::Ref::None:
-    break;
   }
 
+  if (has_type()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_type()));
+  }
+  if (has_field()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_field()));
+  }
+  if (has_method()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_method()));
+  }
+  if (has_string()) {
+    bits.push_back(reinterpret_cast<uint64_t>(get_string()));
+  }
+  if (has_literal()) {
+    bits.push_back(get_literal());
+  }
+
+  uint64_t result = 0;
+  for (uint64_t elem : bits) {
+    result ^= elem;
+  }
   return result;
 }

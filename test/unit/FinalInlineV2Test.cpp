@@ -137,7 +137,8 @@ TEST_F(FinalInlineTest, dominatedSget) {
 
   auto original = assembler::to_s_expr(cls->get_clinit()->get_code());
   FinalInlinePassV2::run({cls});
-  EXPECT_CODE_EQ(cls->get_clinit()->get_code(), expected.get());
+  EXPECT_EQ(assembler::to_s_expr(cls->get_clinit()->get_code()),
+            assembler::to_s_expr(expected.get()));
   EXPECT_EQ(field_bar->get_static_value()->value(), 0);
   EXPECT_EQ(field_baz->get_static_value()->value(), 1);
 }

@@ -16,7 +16,7 @@ static void test_opcode(DexOpcode opcode) {
   DexInstruction insn(opcode);
   const std::string text = std::string("for opcode ") + show(opcode);
   const size_t src_count = insn.srcs_size();
-  const bool has_dest = (insn.has_dest() > 0);
+  const bool has_dest = (insn.dests_size() > 0);
   const int dest_width =
       has_dest ? dex_opcode::dest_bit_width(insn.opcode()) : 0;
   const bool dest_is_src0 = dex_opcode::dest_is_src(insn.opcode());

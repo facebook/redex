@@ -59,25 +59,6 @@ public class SimplifyString {
     assertThat(a).isEqualTo(31);
   }
 
-  private int string_hash_code(String s) {
-    // Since `s` is a variable, `String.hashCode()` will not be optimized away
-    return s.hashCode();
-  }
-
-  @Test
-  public void test_CompileTime_StringHashCode() {
-    assertThat("".hashCode())
-      .isEqualTo(string_hash_code(""));
-    assertThat("Redex".hashCode())
-      .isEqualTo(string_hash_code("Redex"));
-    assertThat("IAmAVeryLongString".hashCode())
-      .isEqualTo(string_hash_code("IAmAVeryLongString"));
-    assertThat("ABC\u00ea\u1234\u03bb".hashCode())
-      .isEqualTo(string_hash_code("ABC\u00ea\u1234\u03bb"));
-    assertThat("ABC\u00ea\u1234\u03bbDEF".hashCode())
-      .isEqualTo(string_hash_code("ABC\u00ea\u1234\u03bbDEF"));
-  }
-
   @Test
   public void test_Remove_AppendEmptyString() {
     StringBuilder a, b;

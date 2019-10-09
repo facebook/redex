@@ -37,3 +37,14 @@
 -keep class androidx.test.** { *; }
 
 -optimizations !method/inlining/*
+
+-dontwarn org.fest.**
+-dontwarn org.junit.**
+-dontwarn junit.**
+-dontwarn sun.misc.**
+-dontwarn android.test.**
+-dontwarn android.support.test.**
+-dontwarn androidx.test.**
+-dontwarn android.content.**
+
+-dontwarn org.xmlpull.v1.**

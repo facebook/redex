@@ -6,9 +6,9 @@
  */
 
 #include <algorithm>
+#include <cstring>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
-#include <cstring>
 #include <gtest/gtest.h>
 #include <sstream>
 
@@ -16,37 +16,10 @@
 #include "VerifyUtil.h"
 
 DexClass* find_class_named(const DexClasses& classes, const char* name) {
-  auto it =
-      std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls) {
-        return !strcmp(name, cls->get_name()->c_str());
-      });
+  auto it = std::find_if(classes.begin(), classes.end(), [&name](DexClass* cls){
+    return !strcmp(name, cls->get_name()->c_str());
+  });
   return it == classes.end() ? nullptr : *it;
-}
-
-DexField* find_ifield_named(const DexClass& cls, const char* name) {
-  auto fields = cls.get_ifields();
-  auto it =
-      std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
-        return strcmp(name, f->get_name()->c_str()) == 0;
-      });
-  return it == fields.end() ? nullptr : *it;
-}
-
-DexField* find_sfield_named(const DexClass& cls, const char* name) {
-  auto fields = cls.get_sfields();
-  auto it =
-      std::find_if(fields.begin(), fields.end(), [&name](const DexField* f) {
-        return strcmp(name, f->get_name()->c_str()) == 0;
-      });
-  return it == fields.end() ? nullptr : *it;
-}
-
-DexField* find_field_named(const DexClass& cls, const char* name) {
-  auto ret = find_ifield_named(cls, name);
-  if (ret) {
-    return ret;
-  }
-  return find_sfield_named(cls, name);
 }
 
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name) {
@@ -75,33 +48,26 @@ DexMethod* find_method_named(const DexClass& cls, const char* name) {
   return find_vmethod_named(cls, name);
 }
 
-DexOpcodeMethod* find_invoke(const DexMethod* m,
-                             DexOpcode opcode,
-                             const char* target_mname,
-                             DexType* receiver) {
+DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
+    const char* target_mname) {
   auto insns = m->get_dex_code()->get_instructions();
-  return find_invoke(
-      insns.begin(), insns.end(), opcode, target_mname, receiver);
+  return find_invoke(insns.begin(), insns.end(), opcode, target_mname);
 }
 
-DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
-                             std::vector<DexInstruction*>::iterator end,
-                             DexOpcode opcode,
-                             const char* target_mname,
-                             DexType* receiver) {
-  auto it = std::find_if(
-      begin, end, [opcode, target_mname, receiver](DexInstruction* insn) {
-        if (insn->opcode() != opcode) {
-          return false;
-        }
-        auto meth = static_cast<DexOpcodeMethod*>(insn)->get_method();
-        if (receiver && meth->get_class() != receiver) {
-          return false;
-        }
-        auto mname =
-            static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
-        return mname == DexString::get_string(target_mname);
-      });
+DexOpcodeMethod* find_invoke(
+    std::vector<DexInstruction*>::iterator begin,
+    std::vector<DexInstruction*>::iterator end,
+    DexOpcode opcode,
+    const char* target_mname) {
+  auto it = std::find_if(begin, end,
+    [opcode, target_mname](DexInstruction* insn) {
+      if (insn->opcode() != opcode) {
+        return false;
+      }
+      auto mname =
+        static_cast<DexOpcodeMethod*>(insn)->get_method()->get_name();
+      return mname == DexString::get_string(target_mname);
+    });
   return it == end ? nullptr : static_cast<DexOpcodeMethod*>(*it);
 }
 

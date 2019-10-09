@@ -32,7 +32,7 @@ void remap_debug(DexDebugInstruction& dbgop, const RegMap& reg_map) {
 }
 
 void remap_dest(IRInstruction* inst, const RegMap& reg_map) {
-  if (!inst->has_dest()) return;
+  if (!inst->dests_size()) return;
   auto it = reg_map.find(inst->dest());
   if (it == reg_map.end()) return;
   inst->set_dest(it->second);
@@ -67,6 +67,7 @@ void remap_registers(MethodItemEntry& mei, const RegMap& reg_map) {
     break;
   }
 }
+
 
 void remap_registers(IRCode* code, const RegMap& reg_map) {
   for (auto& mei : *code) {

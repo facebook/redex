@@ -22,7 +22,6 @@ public class FinalInlineV2Test {
     assertThat(Encodable.S_LONG).isEqualTo(0x1000200030004000L);
     assertThat(Encodable.S_DOUBLE).isEqualTo(1.0000000000000002);
     assertThat(Encodable.S_FLOAT).isEqualTo(-2.0f);
-    assertThat(FinalInlineV2ClinitReadAndWriteTest.getLength()).isEqualTo(3);
   }
 }
 
@@ -47,17 +46,4 @@ class UnEncodable {
 class HasCharSequence {
   // CharSequence must not be processed because DalvikVM can't handle it.
   public static CharSequence S_CHARSEQ = "SEQ";
-}
-
-class FinalInlineV2ClinitReadAndWriteTest {
-  private static int sCount = 0;
-  private static final int TYPE_ZERO = sCount++;
-  private static final int TYPE_ONE  = sCount++;
-  private static final int TYPE_TWO  = sCount++;
-
-  private static final String[] TYPES_TO_STR = new String[sCount];
-
-  public static int getLength() {
-    return TYPES_TO_STR.length;
-  }
 }

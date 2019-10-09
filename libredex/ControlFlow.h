@@ -245,9 +245,6 @@ class Block final {
   IRList::iterator get_last_insn();
   // return an iterator to the first MFLOW_OPCODE, or end() if there are none
   IRList::iterator get_first_insn();
-  // return an iterator to the first non-param-loading MFLOW_OPCODE, or end() if
-  // there are none.
-  IRList::iterator get_first_non_param_loading_insn();
 
   // including move-result-pseudo
   bool starts_with_move_result();
@@ -1173,6 +1170,7 @@ bool ControlFlowGraph::replace_insns(const InstructionIterator& it,
 
   // Save these values before we insert in case the insertion causes iterator
   // invalidation.
+  auto orig_block = it.block();
   auto insn_to_del = it->insn;
 
   bool invalidated = insert(it, begin, end, true /* before */);
@@ -1227,7 +1225,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
         // a new block. We also copy over all throw-edges. See FIXME below for
         // a discussion about try-regions in general.
         if (!throws.empty()) {
-          always_assert_log(!existing_last->insn->has_move_result_any(),
+          always_assert_log(!existing_last->insn->has_move_result(),
                             "Can't add instructions after throwing instruction "
                             "%s with move-result in Block %d in %s",
                             SHOW(existing_last->insn), b->id(), SHOW(*this));

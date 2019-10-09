@@ -11,7 +11,6 @@
 
 #include "Configurable.h"
 #include "DexClass.h"
-#include "RedexTest.h"
 
 struct Base : public Configurable {
   std::string get_config_name() override { return ""; }
@@ -38,9 +37,7 @@ struct BadBindFlags : public Base {
   bindflags_t m_bindflags;
 };
 
-class ConfigurableTest : public RedexTest {};
-
-TEST_F(ConfigurableTest, BadBindFlags) {
+TEST(Configurable, BadBindFlags) {
   Json::Value json;
   json["int_param"] = 10;
 
@@ -83,7 +80,7 @@ struct OptionalBindings : public Base {
   bindflags_t m_optional_string_bindflags;
 };
 
-TEST_F(ConfigurableTest, OptionalBindings) {
+TEST(Configurable, OptionalBindings) {
   {
     Json::Value json;
     OptionalBindings c(0);
@@ -147,7 +144,8 @@ Json::Value getFooBarObject() {
   return obj;
 }
 
-TEST_F(ConfigurableTest, PrimitiveBindings) {
+TEST(Configurable, PrimitiveBindings) {
+  g_redex = new RedexContext();
   DexType::make_type("Ltype1;");
 
   Json::Value json;
@@ -193,7 +191,7 @@ struct DefaultBindings : public Base {
   }
 };
 
-TEST_F(ConfigurableTest, DefaultBindings) {
+TEST(Configurable, DefaultBindings) {
   Json::Value json;
 
   DefaultBindings c;
@@ -217,7 +215,7 @@ struct CompositeBindings : public Configurable {
   DefaultBindings m_contained;
 };
 
-TEST_F(ConfigurableTest, CompositeBindings) {
+TEST(Configurable, CompositeBindings) {
   Json::Value json;
   json["contained"]["uint64_param"] = 7000000000;
   json["contained"]["string_param"] = "a different string";
@@ -244,7 +242,8 @@ struct TypesBindFlags : public Base {
   std::unordered_set<DexType*> m_types_param;
 };
 
-TEST_F(ConfigurableTest, TypesBindFlags) {
+TEST(Configurable, TypesBindFlags) {
+  g_redex = new RedexContext();
   DexType::make_type("Ltype1;");
   DexType::make_type("Ltype3;");
 
@@ -293,11 +292,12 @@ struct MethodsBindFlags : public Base {
   std::unordered_set<DexMethod*> m_methods_param;
 };
 
-TEST_F(ConfigurableTest, MethodsBindFlags) {
+TEST(Configurable, MethodsBindFlags) {
   auto m1desc = "Ltype1;.foo:()V";
   auto m2desc = "Ltype2;.foo:()V";
   auto m3desc = "Ltype3;.foo:()V";
 
+  g_redex = new RedexContext();
   DexMethod::make_method(m1desc);
   DexMethod::make_method(m3desc);
 
@@ -311,9 +311,9 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
   json["methods_param"] = array;
 
   DexMethodRef* m1 = DexMethod::get_method(m1desc);
-  DexMethod* m3 =
-      DexMethod::get_method(m3desc)->make_concrete((DexAccessFlags)0, false);
-  std::unordered_set<DexMethod*> resolved_methods = {m3};
+  DexMethodRef* m3 = DexMethod::get_method(m3desc);
+  static_cast<DexMethod*>(m3)->make_concrete((DexAccessFlags)0, false);
+  std::unordered_set<DexMethod*> resolved_methods = { static_cast<DexMethod*>(m3) };
 
   EXPECT_EQ(false, DexMethod::get_method(m1desc)->is_def());
   EXPECT_EQ(true, DexMethod::get_method(m3desc)->is_def());
@@ -337,8 +337,7 @@ TEST_F(ConfigurableTest, MethodsBindFlags) {
     EXPECT_THROW({ c.parse_config(JsonWrapper(json)); }, RedexException);
   }
   {
-    MethodsBindFlags c(Configurable::bindflags::methods::warn_if_not_def |
-                       Configurable::bindflags::methods::warn_if_unresolvable);
+    MethodsBindFlags c(Configurable::bindflags::methods::warn_if_not_def|Configurable::bindflags::methods::warn_if_unresolvable);
     c.parse_config(JsonWrapper(json));
     EXPECT_EQ(resolved_methods, c.m_methods_param);
   }
@@ -361,7 +360,7 @@ struct AfterConfiguration : public Base {
   int m_iterations;
 };
 
-TEST_F(ConfigurableTest, AfterConfiguration) {
+TEST(Configurable, AfterConfiguration) {
   Json::Value json;
 
   {
@@ -404,9 +403,10 @@ struct RequiredBinds : public Base {
   }
 };
 
-TEST_F(ConfigurableTest, RequiredBinds) {
+TEST(Configurable, RequiredBinds) {
   const char* type1 = "Ltype1;";
   const char* type2 = "Ltype2;";
+  g_redex = new RedexContext();
   DexType::make_type(type1);
 
   {

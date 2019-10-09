@@ -7,8 +7,8 @@
 
 #include "IRList.h"
 
-#include <iterator>
 #include <vector>
+#include <iterator>
 
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -44,26 +44,26 @@ MethodItemEntry::MethodItemEntry(const MethodItemEntry& that)
 
 MethodItemEntry::~MethodItemEntry() {
   switch (type) {
-  case MFLOW_TRY:
-    delete tentry;
-    break;
-  case MFLOW_CATCH:
-    delete centry;
-    break;
-  case MFLOW_TARGET:
-    delete target;
-    break;
-  case MFLOW_DEBUG:
-    dbgop.~unique_ptr<DexDebugInstruction>();
-    break;
-  case MFLOW_POSITION:
-    pos.~unique_ptr<DexPosition>();
-    break;
-  case MFLOW_OPCODE:
-  case MFLOW_DEX_OPCODE:
-  case MFLOW_FALLTHROUGH:
-    /* nothing to delete */
-    break;
+    case MFLOW_TRY:
+      delete tentry;
+      break;
+    case MFLOW_CATCH:
+      delete centry;
+      break;
+    case MFLOW_TARGET:
+      delete target;
+      break;
+    case MFLOW_DEBUG:
+      dbgop.~unique_ptr<DexDebugInstruction>();
+      break;
+    case MFLOW_POSITION:
+      pos.~unique_ptr<DexPosition>();
+      break;
+    case MFLOW_OPCODE:
+    case MFLOW_DEX_OPCODE:
+    case MFLOW_FALLTHROUGH:
+      /* nothing to delete */
+      break;
   }
 }
 
@@ -93,8 +93,7 @@ void MethodItemEntry::gather_strings(std::vector<DexString*>& lstring) const {
   }
 }
 
-void MethodItemEntry::gather_methods(
-    std::vector<DexMethodRef*>& lmethod) const {
+void MethodItemEntry::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   switch (type) {
   case MFLOW_TRY:
     break;
@@ -277,10 +276,11 @@ void IRList::replace_opcode_with_infinite_loop(IRInstruction* from) {
       break;
     }
   }
-  always_assert_log(miter != m_list.end(),
-                    "No match found while replacing '%s' with '%s'",
-                    SHOW(from),
-                    SHOW(to));
+  always_assert_log(
+      miter != m_list.end(),
+      "No match found while replacing '%s' with '%s'",
+      SHOW(from),
+      SHOW(to));
   auto target = new BranchTarget(&*miter);
   m_list.insert(miter, *(new MethodItemEntry(target)));
 }
@@ -295,10 +295,11 @@ void IRList::replace_branch(IRInstruction* from, IRInstruction* to) {
       return;
     }
   }
-  always_assert_log(false,
-                    "No match found while replacing '%s' with '%s'",
-                    SHOW(from),
-                    SHOW(to));
+  always_assert_log(
+      false,
+      "No match found while replacing '%s' with '%s'",
+      SHOW(from),
+      SHOW(to));
 }
 
 void IRList::insert_after(IRInstruction* position,
@@ -329,13 +330,13 @@ void IRList::insert_after(IRInstruction* position,
   always_assert_log(false, "No match found");
 }
 
-IRList::iterator IRList::insert_before(const IRList::iterator& position,
-                                       MethodItemEntry& mie) {
+IRList::iterator IRList::insert_before(
+    const IRList::iterator& position, MethodItemEntry& mie) {
   return m_list.insert(position, mie);
 }
 
-IRList::iterator IRList::insert_after(const IRList::iterator& position,
-                                      MethodItemEntry& mie) {
+IRList::iterator IRList::insert_after(
+    const IRList::iterator& position, MethodItemEntry& mie) {
   always_assert(position != m_list.end());
   return m_list.insert(std::next(position), mie);
 }
@@ -371,12 +372,13 @@ void IRList::remove_opcode(IRInstruction* insn) {
       return;
     }
   }
-  always_assert_log(false, "No match found while removing '%s' from method",
+  always_assert_log(false,
+                    "No match found while removing '%s' from method",
                     SHOW(insn));
 }
 
 size_t IRList::sum_opcode_sizes() const {
-  size_t size{0};
+  size_t size {0};
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_OPCODE) {
       size += mie.insn->size();
@@ -388,7 +390,7 @@ size_t IRList::sum_opcode_sizes() const {
 // TODO(jhendrick): Keep naming consistent with "count_opcodes" in handling
 // internal opcodes.
 size_t IRList::sum_non_internal_opcode_sizes() const {
-  size_t size{0};
+  size_t size {0};
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
       size += mie.insn->size();
@@ -409,7 +411,7 @@ size_t IRList::sum_dex_opcode_sizes() const {
 }
 
 size_t IRList::count_opcodes() const {
-  size_t count{0};
+  size_t count {0};
   for (const auto& mie : m_list) {
     if (mie.type == MFLOW_OPCODE && !opcode::is_internal(mie.insn->opcode())) {
       ++count;
@@ -434,7 +436,7 @@ void IRList::sanity_check() const {
  * This method fixes the goto branches when the instruction is removed or
  * replaced by another instruction.
  */
-void IRList::remove_branch_targets(IRInstruction* branch_inst) {
+void IRList::remove_branch_targets(IRInstruction *branch_inst) {
   always_assert_log(is_branch(branch_inst->opcode()),
                     "Instruction is not a branch instruction.");
   for (auto miter = m_list.begin(); miter != m_list.end(); miter++) {
@@ -455,7 +457,8 @@ IRList::difference_type IRList::index_of(const MethodItemEntry& mie) const {
 }
 
 bool IRList::structural_equals(
-    const IRList& other, const InstructionEquality& instruction_equals) const {
+    const IRList& other,
+    const InstructionEquality& instruction_equals) const {
   auto it1 = m_list.begin();
   auto it2 = other.begin();
 
@@ -587,9 +590,10 @@ IRList::iterator IRList::main_block() {
   return std::prev(get_param_instructions().end());
 }
 
-IRList::iterator IRList::make_if_block(IRList::iterator cur,
-                                       IRInstruction* insn,
-                                       IRList::iterator* false_block) {
+IRList::iterator IRList::make_if_block(
+    IRList::iterator cur,
+    IRInstruction* insn,
+    IRList::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
   auto bt = new BranchTarget(if_entry);
@@ -597,10 +601,11 @@ IRList::iterator IRList::make_if_block(IRList::iterator cur,
   return m_list.insert(m_list.end(), *bentry);
 }
 
-IRList::iterator IRList::make_if_else_block(IRList::iterator cur,
-                                            IRInstruction* insn,
-                                            IRList::iterator* false_block,
-                                            IRList::iterator* true_block) {
+IRList::iterator IRList::make_if_else_block(
+    IRList::iterator cur,
+    IRInstruction* insn,
+    IRList::iterator* false_block,
+    IRList::iterator* true_block) {
   // if block
   auto if_entry = new MethodItemEntry(insn);
   *false_block = m_list.insert(cur, *if_entry);
@@ -652,7 +657,8 @@ IRList::iterator IRList::make_switch_block(
 
 namespace ir_list {
 
-IRInstruction* primary_instruction_of_move_result_pseudo(IRList::iterator it) {
+IRInstruction* primary_instruction_of_move_result_pseudo(
+    IRList::iterator it) {
   --it;
   always_assert_log(it->type == MFLOW_OPCODE &&
                         it->insn->has_move_result_pseudo(),

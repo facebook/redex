@@ -9,27 +9,28 @@
 
 #include "Creators.h"
 #include "DexAsm.h"
-#include "IRCode.h"
 #include "Inliner.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
 #include "Util.h"
 
 class InlinerTestAliasedInputs : public EquivalenceTest {
   DexMethod* m_callee;
-
  public:
-  std::string test_name() override { return "InlinerTestAliasedInputs"; }
+  std::string test_name() override {
+    return "InlinerTestAliasedInputs";
+  }
 
   void setup(DexClass* cls) override {
     auto ret = DexType::make_type("I");
     auto arg = DexType::make_type("I");
     auto args = DexTypeList::make_type_list({arg, arg});
     auto proto = DexProto::make_proto(ret, args); // I(I, I)
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+                               proto));
+    m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 0));
     {
       using namespace dex_asm;
@@ -49,7 +50,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
     mt->push_back(dasm(OPCODE_CONST, {0_v, 0x1_L}));
 
     auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-    invoke->set_method(m_callee)->set_srcs_size(2);
+    invoke->set_method(m_callee)->set_arg_word_count(2);
     // reusing the same register for two separate arguments
     invoke->set_src(0, 0);
     invoke->set_src(1, 0);
@@ -80,20 +81,18 @@ REGISTER_TEST(InlinerTestAliasedInputs);
 
 class InlinerTestLargeIfOffset : public EquivalenceTest {
   const size_t NOP_COUNT = 1 << 15;
-
  protected:
   DexMethod* m_callee;
-
  public:
   void setup(DexClass* cls) override {
     auto ret = DexType::make_type("V");
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // V()
-    m_callee =
+    m_callee = static_cast<DexMethod*>(
         DexMethod::make_method(cls->get_type(),
                                DexString::make_string("callee_" + test_name()),
-                               proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+                               proto));
+    m_callee->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_callee->set_code(std::make_unique<IRCode>(m_callee, 1));
     using namespace dex_asm;
     auto mt = m_callee->get_code();
@@ -120,7 +119,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
     auto branch = new MethodItemEntry(dasm(if_op(), {1_v}));
     mt->push_back(*branch);
     auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-    invoke->set_method(m_callee)->set_srcs_size(0);
+    invoke->set_method(m_callee)->set_arg_word_count(0);
     mt->push_back(invoke);
     mt->push_back(dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}));
     // fallthrough to main block

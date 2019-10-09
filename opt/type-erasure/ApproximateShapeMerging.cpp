@@ -47,7 +47,7 @@ void merge_shapes(const Shape& from_shape,
     // Make sure shapes have not been broken into groups yet.
     always_assert(from_it->second.groups.size() == 0);
     always_assert(to_it->second.groups.size() == 0);
-    TRACE(TERA, 9, "            - Merge shape %s into %s",
+    TRACE(TERA, 9, "            - Merge shape %s into %s\n",
           from_it->first.to_string().c_str(), to_it->first.to_string().c_str());
     to_it->second.types.insert(from_it->second.types.begin(),
                                from_it->second.types.end());
@@ -70,7 +70,7 @@ void build_DAG(MergerType::ShapeCollector& shapes,
                std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
                std::unordered_map<Shape, std::unordered_set<Shape>>& succ_map,
                std::unordered_map<Shape, size_t>& mergeable_count) {
-  TRACE(TERA, 5, "[approx] Building Shape DAG");
+  TRACE(TERA, 5, "[approx] Building Shape DAG\n");
   for (const auto& lhs : shapes) {
     for (const auto& rhs : shapes) {
       if (lhs.first == rhs.first) {
@@ -81,7 +81,7 @@ void build_DAG(MergerType::ShapeCollector& shapes,
         if (dist > max_distance) {
           continue;
         }
-        TRACE(TERA, 9, "         - Edge: %s -> %s, dist = %zu",
+        TRACE(TERA, 9, "         - Edge: %s -> %s, dist = %zu\n",
               rhs.first.to_string().c_str(), lhs.first.to_string().c_str(),
               dist);
         // if lhs shape includes rhs, add lhs to rhs's succ_map
@@ -229,11 +229,11 @@ void write_shape_graph(
     const std::string& graph_file_name,
     const std::unordered_map<Shape, std::unordered_set<Shape>>& pred_map,
     const std::unordered_map<Shape, size_t>& num_mergeables) {
-  TRACE(TERA, 5, "[approx] printing dot graph to: %s.",
+  TRACE(TERA, 5, "[approx] printing dot graph to: %s.\n",
         graph_file_name.c_str());
   std::ofstream os(graph_file_name, std::ios::app);
   if (!os.is_open()) {
-    TRACE(TERA, 5, "         Cannot open file.");
+    TRACE(TERA, 5, "         Cannot open file.\n");
     return;
   }
   os << "digraph G {" << std::endl;
@@ -261,8 +261,8 @@ void simple_greedy_approximation(const JsonWrapper& specs,
                                  ApproximateStats& stats) {
   size_t max_distance;
   specs.get("distance", 0, max_distance);
-  TRACE(TERA, 3, "[approx] Using simple greedy algorithm.");
-  TRACE(TERA, 3, "         distance = %ld.", max_distance);
+  TRACE(TERA, 3, "[approx] Using simple greedy algorithm.\n");
+  TRACE(TERA, 3, "         distance = %ld.\n\n", max_distance);
 
   // Sort shapes by the number of fields.
   std::vector<Shape> shapes_list;
@@ -274,7 +274,7 @@ void simple_greedy_approximation(const JsonWrapper& specs,
               return lhs.field_count() > rhs.field_count();
             });
 
-  TRACE(TERA, 3, "[approx] Finding approximation:");
+  TRACE(TERA, 3, "[approx] Finding approximation:\n");
   // From the beginining of the list, try all pairs of shapes.
   while (shapes_list.size() > 0) {
     Shape s0 = shapes_list.front();
@@ -290,7 +290,7 @@ void simple_greedy_approximation(const JsonWrapper& specs,
         }
 
         always_assert(shapes.find(*it) != shapes.end());
-        TRACE(TERA, 9, "          - distance between %s and %s = %zu",
+        TRACE(TERA, 9, "          - distance between %s and %s = %zu\n",
               s0.to_string().c_str(), it->to_string().c_str(), dist);
         stats.shapes_merged++;
         stats.mergeables += shapes[*it].types.size();
@@ -321,7 +321,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
   size_t max_mergeable_threshold = 0;
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
-  TRACE(TERA, 3, "[approx] Using max-mergeable greedy algorithm.");
+  TRACE(TERA, 3, "[approx] Using max-mergeable greedy algorithm.\n");
   std::unordered_map<Shape, std::unordered_set<Shape>> succ_map;
   std::unordered_map<Shape, std::unordered_set<Shape>> pred_map;
   // mergealbe_count[A] = mergeables in shape A + the sum of mergeables in all
@@ -376,7 +376,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
       continue;
     }
 
-    TRACE(TERA, 5, "        Merging %zu mergeables into one shape",
+    TRACE(TERA, 5, "        Merging %zu mergeables into one shape\n",
           mergeable_count[to_shape]);
 
     // Update mergeable_count of to_shape's successors
@@ -437,7 +437,7 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
   size_t max_mergeable_threshold = 0;
   specs.get("max_mergeable_threshold", 0, max_mergeable_threshold);
 
-  TRACE(TERA, 3, "[approx] Using max-shape-merged greedy algorithm.");
+  TRACE(TERA, 3, "[approx] Using max-shape-merged greedy algorithm.\n");
   std::unordered_map<Shape, std::unordered_set<Shape>> succ_map;
   std::unordered_map<Shape, std::unordered_set<Shape>> pred_map;
   std::unordered_map<Shape, size_t> mergeable_count;

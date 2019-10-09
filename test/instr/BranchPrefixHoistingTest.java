@@ -9,8 +9,9 @@ package redex;
 
 import java.util.Random;
 
-import static org.fest.assertions.api.Assertions.assertThat;
+import static org.fest.assertions.api.Assertions.*;
 
+import org.junit.Before;
 import org.junit.Test;
 
 public class BranchPrefixHoistingTest {
@@ -18,19 +19,16 @@ public class BranchPrefixHoistingTest {
     return new Random().nextInt();
   }
 
-  // CHECK-LABEL: method: virtual redex.BranchPrefixHoistingTest.testPrefixHoisting
+  long getLong() {
+    return new Random().nextLong();
+  }
+
   @Test
-  public void testPrefixHoisting() {
-    // CHECK: invoke-virtual {{.*}} redex.BranchPrefixHoistingTest.getInt
-    // CHECK: invoke-virtual {{.*}} redex.BranchPrefixHoistingTest.getInt
-    // CHECK: invoke-virtual {{.*}} redex.BranchPrefixHoistingTest.getInt
-    // CHECK: invoke-virtual {{.*}} redex.BranchPrefixHoistingTest.getInt
+  public void testPrefixHoisting1() {
     int i = getInt();
     int j = getInt();
     int k = j;
-    // All `getInt()` invocations are hoisted out of the branches.
     if (i > j) {
-      // CHECK-NOT: invoke-virtual {{.*}} redex.BranchPrefixHoistingTest.getInt
       int i1 = getInt();
       int j1 = getInt();
       System.out.println(i1 + j1);
@@ -46,6 +44,5 @@ public class BranchPrefixHoistingTest {
     }
     System.out.println(i + j);
     assertThat(j).isEqualTo(k + 1);
-    // CHECK: return-void
   }
 }

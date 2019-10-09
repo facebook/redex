@@ -45,8 +45,11 @@ class MethodDevirtualizer {
                       bool dmethods_not_using_this,
                       bool dmethods_using_this,
                       bool ignore_keep) {
-    m_config = {vmethods_not_using_this, vmethods_using_this,
-                dmethods_not_using_this, dmethods_using_this, ignore_keep};
+    m_config = {vmethods_not_using_this,
+                vmethods_using_this,
+                dmethods_not_using_this,
+                dmethods_using_this,
+                ignore_keep};
   }
 
   DevirtualizerMetrics devirtualize_methods(const Scope& scope) {
@@ -55,6 +58,10 @@ class MethodDevirtualizer {
 
   DevirtualizerMetrics devirtualize_methods(
       const Scope& scope, const std::vector<DexClass*>& target_classes);
+
+  // Assuming vmethods.
+  DevirtualizerMetrics devirtualize_vmethods(
+      const Scope& scope, const std::vector<DexMethod*>& methods);
 
  private:
   DevirtualizerConfigs m_config;

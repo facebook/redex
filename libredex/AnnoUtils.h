@@ -13,30 +13,6 @@
 
 #include <unordered_set>
 
-/**
- * Parses the default value of an annotation given the annotation and the
- * element name.
- *
- * For any annotation Foo, the default values for the annotation elements are
- * stored under a system annotation, namely dalvik.annotation.AnnotationDefault,
- * in Foo. The default values are stored under this annotation with the element
- * name "value" and have the value type VALUE_ANNOTATION.
- *
- * See
- * https://source.android.com/devices/tech/dalvik/dex-format#dalvik-annotation-default
- * for more details on annotaion defaults encoding.
- *
- * Params
- *   target_anno_type - DexType of anno for which default is being looked up
- *   lookup_anno_element_name - The element name which is being lookedup
- *
- * Return
- *   The DexEncodedValue of the default value. Caller has to appropriately
- *   extract the value from the encoded result. See integ test for examples
- */
-const DexEncodedValue* parse_default_anno_value(
-    const DexType* target_anno, const std::string& anno_element_name);
-
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,
                            std::string name = "");
@@ -86,9 +62,9 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
   return nullptr;
 }
 
-template <class DexMember>
-bool has_any_annotation(DexMember* member,
-                        std::unordered_set<DexType*> anno_types) {
+template<class DexMember>
+bool has_any_annotation(
+    DexMember* member, std::unordered_set<DexType*> anno_types) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return false;

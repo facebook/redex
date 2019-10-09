@@ -14,10 +14,13 @@
 #include <string>
 #include <vector>
 
+#include "DexClass.h"
+#include "DexLoader.h"
+#include "DexStore.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "JarLoader.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 
 using namespace sparta;
 
@@ -301,9 +304,19 @@ void patch_filled_new_array_test(Scope& scope) {
   }
 }
 
-class PointsToSemanticsTest : public RedexIntegrationTest {};
+TEST(PointsToSemanticsTest, semanticActionGeneration) {
+  g_redex = new RedexContext();
 
-TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
+  std::vector<DexStore> stores;
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  stores.emplace_back(std::move(root_store));
+
   const char* android_env_sdk = std::getenv("ANDROID_SDK");
   const char* android_config_sdk = std::getenv("sdk_path");
 
@@ -361,4 +374,6 @@ TEST_F(PointsToSemanticsTest, semanticActionGeneration) {
     deserialization.insert(out.str());
   }
   EXPECT_THAT(deserialization, ::testing::ContainerEq(method_semantics));
+
+  delete g_redex;
 }

@@ -192,24 +192,6 @@ inline uint32_t length_of_utf8_string(const char* s) {
   return len;
 }
 
-// https://docs.oracle.com/javase/8/docs/api/java/lang/String.html#hashCode--
-inline int32_t java_hashcode_of_utf8_string(const char* s) {
-  if (s == nullptr) {
-    return 0;
-  }
-
-  union {
-    int32_t hash;
-    int64_t wide;
-  } ret;
-
-  ret.wide = 0;
-  while (*s != '\0') {
-    ret.wide = (ret.wide * 31 + mutf8_next_code_point(s)) & 0xFFFFFFFFll;
-  }
-  return ret.hash;
-}
-
 inline uint32_t size_of_utf8_char(const int32_t ival) {
   if (ival >= 0x00 && ival <= 0x7F) {
     return 1;

@@ -6,16 +6,13 @@
  */
 
 #include "DexAsm.h"
-#include "DexUtil.h"
-#include "IRCode.h"
 #include "LocalDce.h"
-#include "Purity.h"
+#include "IRCode.h"
 #include "TestGenerator.h"
 
 class DceTest : public EquivalenceTest {
   void transform_method(DexMethod* m) override {
-    const std::unordered_set<DexMethodRef*> pure_methods = get_pure_methods();
-    LocalDce(pure_methods).dce(m->get_code());
+    LocalDcePass::run(m->get_code());
   }
 };
 

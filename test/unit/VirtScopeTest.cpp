@@ -5,18 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
 #include <memory>
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-#include "Creators.h"
 #include "DexClass.h"
+#include "Creators.h"
 #include "DexUtil.h"
-#include "RedexTest.h"
-#include "ScopeHelper.h"
-#include "TypeSystem.h"
-#include "VirtScopeHelper.h"
 #include "VirtualScope.h"
+#include "TypeSystem.h"
+#include "ScopeHelper.h"
+#include "VirtScopeHelper.h"
 
 namespace {
 
@@ -192,8 +191,6 @@ void check_expected_methods_only(
 // Tests
 //
 
-class VirtScopeTest : public RedexTest {};
-
 /**
  * Simple class hierarchy
  *
@@ -201,7 +198,8 @@ class VirtScopeTest : public RedexTest {};
  * class A { void f() {} }
  * class B { void g() {} }
  */
-TEST_F(VirtScopeTest, NoOverload) {
+TEST(NoOverload, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_1();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -257,6 +255,8 @@ TEST_F(VirtScopeTest, NoOverload) {
         count++;
       });
   ASSERT_EQ(count, 0);
+
+  delete g_redex;
 }
 
 /**
@@ -269,7 +269,8 @@ TEST_F(VirtScopeTest, NoOverload) {
  *     class D extends C { void f() {} }
  *     class E extends C { void g() {} }
  */
-TEST_F(VirtScopeTest, Override) {
+TEST(Override, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_2();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -363,6 +364,8 @@ TEST_F(VirtScopeTest, Override) {
   } else {
     SUCCEED(); // cannot be
   }
+
+  delete g_redex;
 }
 
 /**
@@ -376,7 +379,8 @@ TEST_F(VirtScopeTest, Override) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(VirtScopeTest, OverrideOverload) {
+TEST(OverrideOverload, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_3();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -510,6 +514,8 @@ TEST_F(VirtScopeTest, OverrideOverload) {
   const auto& found_scope = cs.find_virtual_scope(
       static_cast<DexMethod*>(DexMethod::get_method(e_t, g, void_int)));
   ASSERT_EQ(c_scopes[0]->type, found_scope.type);
+
+  delete g_redex;
 }
 
 /**
@@ -524,7 +530,8 @@ TEST_F(VirtScopeTest, OverrideOverload) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(VirtScopeTest, Interface) {
+TEST(Interface, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_4();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -600,6 +607,8 @@ TEST_F(VirtScopeTest, Interface) {
         count++;
       });
   ASSERT_EQ(count, 1);
+
+  delete g_redex;
 }
 
 /**
@@ -621,7 +630,8 @@ TEST_F(VirtScopeTest, Interface) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(VirtScopeTest, Interface1) {
+TEST(Interface1, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_5();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -731,6 +741,8 @@ TEST_F(VirtScopeTest, Interface1) {
     ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 4);
     ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 3);
   }
+
+  delete g_redex;
 }
 
 /**
@@ -752,7 +764,8 @@ TEST_F(VirtScopeTest, Interface1) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(VirtScopeTest, Interface2) {
+TEST(Interface2, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_6();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -863,6 +876,8 @@ TEST_F(VirtScopeTest, Interface2) {
     ASSERT_EQ(intf2_scopes[0][0]->methods.size(), 4);
     ASSERT_EQ(intf2_scopes[0][1]->methods.size(), 3);
   }
+
+  delete g_redex;
 }
 
 /**
@@ -885,7 +900,8 @@ TEST_F(VirtScopeTest, Interface2) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(VirtScopeTest, Interface3) {
+TEST(Interface3, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_7();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -971,6 +987,8 @@ TEST_F(VirtScopeTest, Interface3) {
   expected_methods[static_cast<DexMethod*>(
       DexMethod::get_method(e_t, g, void_int))] = OVERRIDE | IMPL | FINAL;
   check_expected_methods(sm, expected_methods);
+
+  delete g_redex;
 }
 
 /**
@@ -993,7 +1011,8 @@ TEST_F(VirtScopeTest, Interface3) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(VirtScopeTest, Interface3Miranda) {
+TEST(Interface3Miranda, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_8();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -1079,6 +1098,8 @@ TEST_F(VirtScopeTest, Interface3Miranda) {
   expected_methods[static_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
+
+  delete g_redex;
 }
 
 /**
@@ -1101,7 +1122,8 @@ TEST_F(VirtScopeTest, Interface3Miranda) {
  *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(VirtScopeTest, Interface3MirandaMultiIntf) {
+TEST(Interface3MirandaMultiIntf, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_9();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -1189,6 +1211,8 @@ TEST_F(VirtScopeTest, Interface3MirandaMultiIntf) {
   expected_methods[static_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
+
+  delete g_redex;
 }
 
 /**
@@ -1211,7 +1235,8 @@ TEST_F(VirtScopeTest, Interface3MirandaMultiIntf) {
  *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(VirtScopeTest, Interface3IntfOverride) {
+TEST(Interface3IntfOverride, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_10();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -1301,6 +1326,8 @@ TEST_F(VirtScopeTest, Interface3IntfOverride) {
   expected_methods[static_cast<DexMethod*>(
       DexMethod::get_method(h_t, g, void_int))] = OVERRIDE | IMPL | MIRANDA;
   check_expected_methods(sm, expected_methods);
+
+  delete g_redex;
 }
 
 /**
@@ -1324,7 +1351,8 @@ TEST_F(VirtScopeTest, Interface3IntfOverride) {
  * class M { void f(int) {} }
  *   class N externds M implements EscIntf { void h(int) {}}
  */
-TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
+TEST(Interface3IntfOverEscape, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_11();
   ClassHierarchy ch = build_type_hierarchy(scope);
   SignatureMap sm = build_signature_map(ch);
@@ -1477,6 +1505,8 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
       static_cast<DexMethod*>(DexMethod::get_method(h_t, g, void_int)),
       static_cast<DexMethod*>(DexMethod::get_method(i_t, g, void_int)),
       static_cast<DexMethod*>(DexMethod::get_method(k_t, g, void_int))));
+
+  delete g_redex;
 }
 
 /**
@@ -1499,7 +1529,8 @@ TEST_F(VirtScopeTest, Interface3IntfOverEscape) {
  *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
+TEST(VitualInterfaceResolutionTest, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_10();
   TypeSystem type_system(scope);
   auto eq = DexString::get_string("equals");
@@ -1588,4 +1619,6 @@ TEST_F(VirtScopeTest, VitualInterfaceResolutionTest) {
   EXPECT_EQ(methods.size(), 1);
   EXPECT_EQ(*methods.begin(), DexMethod::get_method(g_t, g, void_int));
   methods.clear();
+
+  delete g_redex;
 }

@@ -9,8 +9,8 @@
 
 #include <algorithm>
 #include <functional>
-#include <unordered_set>
 #include <vector>
+#include <unordered_set>
 
 #include "DexClass.h"
 #include "IRInstruction.h"
@@ -106,12 +106,6 @@ struct ClassSerdes {
 };
 
 /**
- * Looks for a <clinit> method for the given class, creates a new one if it
- * does not exist
- */
-DexMethod* get_or_create_clinit(DexClass* cls);
-
-/**
  * Return possible deserializer and serializer classes of the given class
  * 'class$Deserializer;', 'class_Deserializer;', 'class$Serializer;',
  * 'class_Serializer;'
@@ -161,26 +155,10 @@ inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
 char type_shorty(const DexType* type);
 
 /**
- * Returns the corresponding wrapper type of primitive types
- * e.g.
- *   I -> Ljava/lang/Integer;
- *   Z -> Ljava/lang/Boolean;
- *   ... etc.
- * returns nullptr if argument `type` is not a primitive type or is void
- */
-DexType* get_boxed_reference_type(const DexType* type);
-
-/**
  * Return true if the parent chain leads to known classes.
  * False if one of the parent is in a scope unknown to redex.
  */
 bool has_hierarchy_in_scope(DexClass* cls);
-
-/**
- * Return true if the clinit is Trivial.
- * A trivial clinit should only contain a return-void instruction.
- */
-bool is_trivial_clinit(const DexMethod* method);
 
 /**
  * Basic datatypes used by bytecode.
@@ -248,40 +226,31 @@ bool is_void(const DexType* type);
 uint32_t get_array_level(const DexType* type);
 
 /**
- * The component type of an array is the type of the values contained in the
- * array. E.g.:
- *
- * [LFoo; -> LFoo;
- * [[LFoo; -> [LFoo;
- */
-DexType* get_array_component_type(const DexType*);
-
-/**
- * An array's component type may also be an array. Recursively unwrapping these
- * array types will give us the element type. E.g.:
- *
- * [LFoo; -> LFoo;
- * [[LFoo; -> LFoo;
- *
- * If the input argument is not an array type, this returns null.
- *
- * The terms "component type" and "element type" are defined in the JLS:
- * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html
- */
-DexType* get_array_element_type(const DexType*);
-
-/**
- * Return the element type of a given array type or the type itself if it's not
- * an array.
+ * Return the type of a given array type or the type itself if it's not an array
  *
  * Examples:
  *   [java.lang.String -> java.lang.String
  *   java.lang.Integer -> java.lang.Integer
  */
-const DexType* get_element_type_if_array(const DexType*);
+const DexType* get_array_type_or_self(const DexType*);
 
 /**
- * Return the (level 1) array type of a given type.
+ * Return the type of a given array type or nullptr if the type is not
+ * an array.
+ */
+DexType* get_array_type(const DexType*);
+
+/**
+ * According to the description in the Java 7 spec:
+ * https://docs.oracle.com/javase/specs/jls/se7/html/jls-10.html Given an array
+ * type, it's components are referenced directly via array access expressions
+ * that use integer index values. The component type of an array may itself be
+ * an array type.
+ */
+DexType* get_array_component_type(const DexType*);
+
+/**
+ * Return the array type of a given type.
  */
 DexType* make_array_type(const DexType*);
 
@@ -411,10 +380,13 @@ void post_dexen_changes(const Scope& v, T& dexen) {
   std::unordered_set<DexClass*> clookup(v.begin(), v.end());
   for (auto& classes : dexen) {
     classes.erase(
-        std::remove_if(classes.begin(),
-                       classes.end(),
-                       [&](DexClass* cls) { return !clookup.count(cls); }),
-        classes.end());
+      std::remove_if(
+        classes.begin(),
+        classes.end(),
+        [&](DexClass* cls) {
+          return !clookup.count(cls);
+        }),
+      classes.end());
   }
   if (debug) {
     std::unordered_set<DexClass*> dlookup;
@@ -484,8 +456,6 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   return false;
 }
 
-bool references_external(DexMethodRef* mref);
-
 struct dex_stats_t {
   int num_types = 0;
   int num_classes = 0;
@@ -515,67 +485,10 @@ struct dex_stats_t {
 
   int num_dbg_items = 0;
   int dbg_total_size = 0;
-
-  /* Stats collected from the Map List section of a Dex. */
-  int string_id_count = 0;
-  int string_id_bytes = 0;
-
-  int type_id_count = 0;
-  int type_id_bytes = 0;
-
-  int proto_id_count = 0;
-  int proto_id_bytes = 0;
-
-  int field_id_count = 0;
-  int field_id_bytes = 0;
-
-  int method_id_count = 0;
-  int method_id_bytes = 0;
-
-  int class_def_count = 0;
-  int class_def_bytes = 0;
-
-  int call_site_id_count = 0;
-  int call_site_id_bytes = 0;
-
-  int method_handle_count = 0;
-  int method_handle_bytes = 0;
-
-  int map_list_count = 0;
-  int map_list_bytes = 0;
-
-  int type_list_count = 0;
-  int type_list_bytes = 0;
-
-  int annotation_set_ref_list_count = 0;
-  int annotation_set_ref_list_bytes = 0;
-
-  int annotation_set_count = 0;
-  int annotation_set_bytes = 0;
-
-  int class_data_count = 0;
-  int class_data_bytes = 0;
-
-  int code_count = 0;
-  int code_bytes = 0;
-
-  int string_data_count = 0;
-  int string_data_bytes = 0;
-
-  int debug_info_count = 0;
-  int debug_info_bytes = 0;
-
-  int annotation_count = 0;
-  int annotation_bytes = 0;
-
-  int encoded_array_count = 0;
-  int encoded_array_bytes = 0;
-
-  int annotations_directory_count = 0;
-  int annotations_directory_bytes = 0;
 };
 
-dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
+dex_stats_t&
+  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
 namespace JavaNameUtil {
 
@@ -603,4 +516,4 @@ inline std::string package_name(const std::string& type_name) {
     return nice_name;
   }
 }
-} // namespace JavaNameUtil
+}

@@ -20,4 +20,4 @@ void make_static(DexMethod* method, KeepThis = KeepThis::Yes);
 // Makes a static method into a non-static direct or virtual method.
 // Limitation: First parameter must be of class type.
 void make_non_static(DexMethod* method, bool make_virtual);
-} // namespace mutators
+}

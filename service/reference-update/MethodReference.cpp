@@ -24,7 +24,7 @@ IRInstruction* make_invoke(DexMethod* callee,
                            std::vector<uint16_t> args) {
   always_assert(callee->is_def() && is_public(callee));
   auto invoke = (new IRInstruction(opcode))->set_method(callee);
-  invoke->set_srcs_size(args.size());
+  invoke->set_arg_word_count(args.size());
   for (size_t i = 0; i < args.size(); i++) {
     invoke->set_src(i, args.at(i));
   }
@@ -48,7 +48,7 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
   if (new_callee.additional_args != boost::none) {
     const auto& args = new_callee.additional_args.get();
     auto old_size = insn->srcs_size();
-    insn->set_srcs_size(old_size + args.size());
+    insn->set_arg_word_count(old_size + args.size());
     size_t pos = old_size;
     for (uint32_t arg : args) {
       auto reg = code->allocate_temp();
@@ -82,7 +82,7 @@ void update_call_refs_simple(
       always_assert_log(!is_private(new_callee) || is_static(new_callee),
                         "%s\n",
                         vshow(new_callee).c_str());
-      TRACE(REFU, 9, " Updated call %s to %s", SHOW(insn), SHOW(new_callee));
+      TRACE(REFU, 9, " Updated call %s to %s\n", SHOW(insn), SHOW(new_callee));
       insn->set_method(new_callee);
       if (new_callee->is_virtual()) {
         always_assert_log(is_invoke_virtual(insn->opcode()),
@@ -125,7 +125,7 @@ CallSites collect_call_refs(const Scope& scope,
       }
 
       call_sites.emplace_back(caller, &mie, callee);
-      TRACE(REFU, 9, "  Found call %s from %s", SHOW(insn), SHOW(caller));
+      TRACE(REFU, 9, "  Found call %s from %s\n", SHOW(insn), SHOW(caller));
     }
 
     return call_sites;

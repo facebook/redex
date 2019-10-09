@@ -126,8 +126,7 @@ std::string form_java_args(const ProguardMap& pg_map,
   return s;
 }
 
-std::string java_args(const ProguardMap& pg_map,
-                      const std::deque<DexType*>& args) {
+std::string java_args(const ProguardMap& pg_map, const std::deque<DexType*>& args) {
   std::string str = "(";
   str += form_java_args(pg_map, args);
   str += ")";

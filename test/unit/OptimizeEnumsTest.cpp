@@ -12,7 +12,6 @@
 #include "EnumConfig.h"
 #include "EnumInSwitch.h"
 #include "IRAssembler.h"
-#include "RedexTest.h"
 #include "SwitchEquivFinder.h"
 
 using namespace testing;
@@ -20,8 +19,11 @@ using namespace testing;
 void setup() {
   ClassCreator cc(DexType::make_type("LFoo;"));
   cc.set_super(get_object_type());
-  auto field = DexField::make_field("LFoo;.table:[LBar;")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto field =
+      static_cast<DexField*>(DexField::make_field("LFoo;.table:[LBar;"));
+  field->make_concrete(
+      ACC_PUBLIC | ACC_STATIC,
+      DexEncodedValue::zero_for_type(get_array_type(get_object_type())));
   cc.add_field(field);
   cc.create();
 }
@@ -33,9 +35,7 @@ std::vector<optimize_enums::Info> find_enums(cfg::ControlFlowGraph* cfg) {
   return fixpoint.collect();
 }
 
-class OptimizeEnumsTest : public RedexTest {};
-
-TEST_F(OptimizeEnumsTest, basic_neg) {
+TEST(OptimizeEnums, basic_neg) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -48,7 +48,8 @@ TEST_F(OptimizeEnumsTest, basic_neg) {
   code->clear_cfg();
 }
 
-TEST_F(OptimizeEnumsTest, basic_pos) {
+TEST(OptimizeEnums, basic_pos) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -70,9 +71,11 @@ TEST_F(OptimizeEnumsTest, basic_pos) {
   code->build_cfg();
   EXPECT_EQ(1, find_enums(&code->cfg()).size());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, overwritten) {
+TEST(OptimizeEnums, overwritten) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -95,9 +98,11 @@ TEST_F(OptimizeEnumsTest, overwritten) {
   code->build_cfg();
   EXPECT_EQ(0, find_enums(&code->cfg()).size());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, nested) {
+TEST(OptimizeEnums, nested) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -132,9 +137,11 @@ TEST_F(OptimizeEnumsTest, nested) {
   code->build_cfg();
   EXPECT_EQ(1, find_enums(&code->cfg()).size());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, if_chain) {
+TEST(OptimizeEnums, if_chain) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -200,9 +207,11 @@ TEST_F(OptimizeEnumsTest, if_chain) {
   EXPECT_TRUE(checked_one);
   EXPECT_TRUE(checked_zero);
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, extra_loads_intersect) {
+TEST(OptimizeEnums, extra_loads_intersect) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -245,9 +254,11 @@ TEST_F(OptimizeEnumsTest, extra_loads_intersect) {
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, extra_loads_wide) {
+TEST(OptimizeEnums, extra_loads_wide) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -292,9 +303,11 @@ TEST_F(OptimizeEnumsTest, extra_loads_wide) {
   const auto& info = results[0];
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, extra_loads_wide2) {
+TEST(OptimizeEnums, extra_loads_wide2) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -331,9 +344,11 @@ TEST_F(OptimizeEnumsTest, extra_loads_wide2) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, overwrite) {
+TEST(OptimizeEnums, overwrite) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -367,9 +382,11 @@ TEST_F(OptimizeEnumsTest, overwrite) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, overwrite_wide) {
+TEST(OptimizeEnums, overwrite_wide) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -404,9 +421,11 @@ TEST_F(OptimizeEnumsTest, overwrite_wide) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, loop) {
+TEST(OptimizeEnums, loop) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -437,9 +456,11 @@ TEST_F(OptimizeEnumsTest, loop) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, other_entry_points) {
+TEST(OptimizeEnums, other_entry_points) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -476,9 +497,11 @@ TEST_F(OptimizeEnumsTest, other_entry_points) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, other_entry_points2) {
+TEST(OptimizeEnums, other_entry_points2) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -516,9 +539,11 @@ TEST_F(OptimizeEnumsTest, other_entry_points2) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, goto_default) {
+TEST(OptimizeEnums, goto_default) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -552,9 +577,11 @@ TEST_F(OptimizeEnumsTest, goto_default) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_TRUE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
-TEST_F(OptimizeEnumsTest, divergent_leaf_entry_state) {
+TEST(OptimizeEnums, divergent_leaf_entry_state) {
+  g_redex = new RedexContext();
   setup();
 
   auto code = assembler::ircode_from_string(R"(
@@ -587,6 +614,7 @@ TEST_F(OptimizeEnumsTest, divergent_leaf_entry_state) {
   SwitchEquivFinder finder(&info.branch->cfg(), *info.branch, *info.reg);
   ASSERT_FALSE(finder.success());
   code->clear_cfg();
+  delete g_redex;
 }
 
 optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
@@ -594,7 +622,10 @@ optimize_enums::ParamSummary get_summary(const std::string& s_expr) {
   return optimize_enums::calculate_param_summary(method, get_object_type());
 }
 
-TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
+TEST(OptimizeEnums, test_param_summary_generating) {
+  auto redex_context = std::make_unique<RedexContext>();
+  g_redex = redex_context.get();
+
   auto summary = get_summary(R"(
     (method (static) "LFoo;.upcast_when_return:(Ljava/lang/Enum;)Ljava/lang/Object;"
       (

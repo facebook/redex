@@ -50,13 +50,13 @@ boost::optional<Info> get_enum_reg(const Environment& env,
 
 void analyze_default(cfg::InstructionIterator it, Environment* env) {
   auto insn = it->insn;
-  if (insn->has_dest()) {
+  if (insn->dests_size()) {
     env->set(insn->dest(), Domain::top());
     if (insn->dest_is_wide()) {
       env->set(insn->dest() + 1, Domain::top());
     }
   }
-  if (insn->has_move_result_any()) {
+  if (insn->has_move_result()) {
     env->set(RESULT_REGISTER, Domain::top());
   }
 }

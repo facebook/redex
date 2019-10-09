@@ -10,13 +10,13 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
-#include "RedexTest.h"
 
-class DexPositionTest : public RedexTest {};
+TEST(DexPositionTest, multiplePositionBeforeOpcode) {
+  g_redex = new RedexContext();
 
-TEST_F(DexPositionTest, multiplePositionBeforeOpcode) {
-  auto method = DexMethod::make_method("LFoo;.bar:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -41,12 +41,18 @@ TEST_F(DexPositionTest, multiplePositionBeforeOpcode) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
 }
 
-TEST_F(DexPositionTest, consecutiveIdenticalPositions) {
-  auto method = DexMethod::make_method("LFoo;.bar:()V")
-                    ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+TEST(DexPositionTest, consecutiveIdenticalPositions) {
+  g_redex = new RedexContext();
+
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:()V"));
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -73,5 +79,8 @@ TEST_F(DexPositionTest, consecutiveIdenticalPositions) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
 }

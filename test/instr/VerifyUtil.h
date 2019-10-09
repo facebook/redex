@@ -23,8 +23,8 @@ struct PreVerify : public RedexTest {
   PreVerify()
       : classes(load_classes_from_dex(std::getenv("dex_pre"),
                                       /* balloon */ false)),
-        resources(
-            decode_resource_paths(std::getenv("extracted_resources"), "pre")) {}
+        resources(decode_resource_paths(std::getenv("extracted_resources"),
+                                        "pre")) {}
 };
 
 struct PostVerify : public RedexTest {
@@ -38,22 +38,16 @@ struct PostVerify : public RedexTest {
 };
 
 DexClass* find_class_named(const DexClasses& classes, const char* name);
-DexField* find_ifield_named(const DexClass& cls, const char* name);
-DexField* find_sfield_named(const DexClass& cls, const char* name);
-DexField* find_field_named(const DexClass& cls, const char* name);
 DexMethod* find_vmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_dmethod_named(const DexClass& cls, const char* name);
 DexMethod* find_method_named(const DexClass& cls, const char* name);
 /* Find the first invoke instruction that calls a particular method name */
-DexOpcodeMethod* find_invoke(const DexMethod* m,
-                             DexOpcode opcode,
-                             const char* mname,
-                             DexType* receiver = nullptr);
+DexOpcodeMethod* find_invoke(const DexMethod* m, DexOpcode opcode,
+    const char* mname);
 DexOpcodeMethod* find_invoke(std::vector<DexInstruction*>::iterator begin,
                              std::vector<DexInstruction*>::iterator end,
                              DexOpcode opcode,
-                             const char* target_mname,
-                             DexType* receiver = nullptr);
+                             const char* target_mname);
 DexInstruction* find_instruction(DexMethod* m, DexOpcode opcode);
 
 void verify_type_erased(const DexClass* cls, size_t num_dmethods = 0);

@@ -44,7 +44,7 @@ void TestCFGPass::run_pass(DexStoresVector& stores,
     if (!checker.good()) {
       std::string msg = checker.what();
       TRACE(CFG, 1,
-            "%s: Inconsistency in Dex code. %s"
+            "%s: Inconsistency in Dex code. %s\n"
             "Before Code:\n%s\n"
             "After Code:\n%s\n",
             SHOW(m), msg.c_str(), before_code.c_str(), SHOW(&code));

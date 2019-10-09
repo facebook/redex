@@ -686,4 +686,4 @@ class EndOfFile : public Token {
 vector<unique_ptr<Token>> lex(istream& config);
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespeace redex

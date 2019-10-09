@@ -40,7 +40,6 @@ class PassImpl : public Pass {
     bind("replace_moves_with_consts",
          true,
          m_config.transform.replace_moves_with_consts);
-    bind("remove_dead_switch", true, m_config.transform.remove_dead_switch);
     bind("include_virtuals", false, m_config.include_virtuals);
     bind("create_runtime_asserts", false, m_config.create_runtime_asserts);
     bind("max_heap_analysis_iterations",

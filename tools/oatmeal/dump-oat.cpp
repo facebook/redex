@@ -9,7 +9,6 @@
 // OatFile::build and OatFile::parse, below.
 
 #if __ANDROID__
-#include <museum/5.0.0/bionic/libc/android/legacy_stdlib_inlines.h>
 #include <museum/5.0.0/bionic/libc/ctype.h>
 #include <museum/5.0.0/bionic/libc/errno.h>
 #include <museum/5.0.0/bionic/libc/locale.h>
@@ -18,9 +17,7 @@
 #include <museum/5.0.0/bionic/libc/stdlib.h>
 #include <museum/5.0.0/bionic/libc/sys/stat.h>
 #include <museum/5.0.0/bionic/libc/wchar.h>
-#include <museum/5.0.0/bionic/libc/wctype.h>
-#include <museum/5.0.0/external/libcxx/support/android/locale_bionic.h>
-#endif // __ANDROID__
+#endif
 
 #include "dump-oat.h"
 #include "OatmealUtil.h"
@@ -38,7 +35,6 @@
 #include <cstring>
 #include <memory>
 #include <string>
-#include <sys/stat.h>
 #include <vector>
 
 #define PACK __attribute__((packed))

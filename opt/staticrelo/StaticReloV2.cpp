@@ -7,8 +7,8 @@
 
 #include "StaticReloV2.h"
 
-#include "ClassHierarchy.h"
 #include "Resolver.h"
+#include "TypeSystem.h"
 #include "Walkers.h"
 
 /**
@@ -190,7 +190,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       TRACE(STATIC_RELO, 4,
             "method %s has %d static method callers, and the method and its "
             "callers are all unreachable from other classes. Enable "
-            "RemoveUnreachablePass to remove them.",
+            "RemoveUnreachablePass to remove them.\n",
             show(vertex.method).c_str(), number_of_callers);
       if (number_of_callers == 1) {
         // Relocate the unreachable method to its caller class if only one
@@ -220,9 +220,10 @@ namespace static_relo_v2 {
  */
 std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
   std::vector<DexClass*> candidate_classes;
-  ClassHierarchy ch = build_type_hierarchy(scope);
+  TypeSystem typesystem(scope);
   walk::classes(scope, [&](DexClass* cls) {
-    if (!cls->is_external() && get_children(ch, cls->get_type()).empty() &&
+    if (!cls->is_external() &&
+        typesystem.get_children(cls->get_type()).empty() &&
         !is_interface(cls) && cls->get_ifields().empty() &&
         cls->get_sfields().empty() && cls->get_vmethods().empty()) {
       for (const auto& method : cls->get_dmethods()) {
@@ -260,22 +261,22 @@ void StaticReloPassV2::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   std::vector<DexClass*> candidate_classes = gen_candidates(scope);
-  TRACE(STATIC_RELO, 2, "candidate_classes %d", candidate_classes.size());
+  TRACE(STATIC_RELO, 2, "candidate_classes %d\n", candidate_classes.size());
 
   int relocated_methods = run_relocation(scope, candidate_classes);
   int empty_classes = 0;
-  TRACE(STATIC_RELO, 4, "\tEmpty classes after relocation:");
+  TRACE(STATIC_RELO, 4, "\tEmpty classes after relocation:\n");
   for (DexClass* cls : candidate_classes) {
     if (cls->get_dmethods().empty()) {
       empty_classes++;
-      TRACE(STATIC_RELO, 4, "\t\t%s", show(cls).c_str());
+      TRACE(STATIC_RELO, 4, "\t\t%s\n", show(cls).c_str());
     }
   }
 
   mgr.set_metric(METRIC_RELOCATED, relocated_methods);
   mgr.set_metric(METRIC_EMPTY_CLASSES, empty_classes);
-  TRACE(STATIC_RELO, 2, "\trelocate %d static methods", relocated_methods);
-  TRACE(STATIC_RELO, 2, "\tGenerate %d empty classes", empty_classes);
+  TRACE(STATIC_RELO, 2, "\trelocate %d static methods\n", relocated_methods);
+  TRACE(STATIC_RELO, 2, "\tGenerate %d empty classes\n", empty_classes);
 }
 
 static StaticReloPassV2 s_pass;

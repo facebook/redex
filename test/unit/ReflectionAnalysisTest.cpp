@@ -20,26 +20,28 @@
 #include "IRCode.h"
 #include "IROpcode.h"
 #include "LocalDce.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 #include "ReflectionAnalysis.h"
 
 using namespace testing;
 using namespace reflection;
 
-class ReflectionAnalysisTest : public RedexTest {
+class ReflectionAnalysisTest : public ::testing::Test {
  public:
-  ~ReflectionAnalysisTest() {}
+  ~ReflectionAnalysisTest() { delete g_redex; }
 
   ReflectionAnalysisTest() {
+    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({
         get_object_type() // v5
     });
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method = DexMethod::make_method(DexType::make_type("Lbar;"),
-                                      DexString::make_string("testMethod"),
-                                      proto)
-                   ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    m_method = static_cast<DexMethod*>(
+        DexMethod::make_method(DexType::make_type("Lbar;"),
+                               DexString::make_string("testMethod"),
+                               proto));
     m_method->set_deobfuscated_name("testMethod");
+    m_method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
   }
 

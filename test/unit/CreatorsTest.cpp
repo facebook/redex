@@ -10,7 +10,6 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
-#include "RedexTest.h"
 
 using namespace dex_asm;
 
@@ -26,9 +25,9 @@ MethodCreator make_method_creator() {
   return mc;
 }
 
-class CreatorsTest : public RedexTest {};
+TEST(CreatorsTest, Alloc) {
+  g_redex = new RedexContext();
 
-TEST_F(CreatorsTest, Alloc) {
   auto mc = make_method_creator();
   auto loc = mc.make_local(DexType::make_type("I"));
   mc.get_main_block()->load_const(loc, 123);
@@ -42,9 +41,12 @@ TEST_F(CreatorsTest, Alloc) {
   EXPECT_EQ(*it->insn, *dasm(IOPCODE_LOAD_PARAM_WIDE, {3_v}));
   ++it;
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {0_v, 123_L}));
+
+  delete g_redex;
 }
 
-TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
+TEST(MakeSwitch, MultiIndices) {
+  g_redex = new RedexContext();
   auto mc = make_method_creator();
   auto idx_loc = mc.make_local(get_int_type());
   auto param_loc = mc.get_local(1);
@@ -114,9 +116,12 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
     EXPECT_EQ(*data32++, 8); // case 2
     EXPECT_EQ(*data32++, 11); // case 3
   }
+
+  delete g_redex;
 }
 
-TEST_F(CreatorsTest, ClassCreator) {
+TEST(CreatorsTest, ClassCreator) {
+  g_redex = new RedexContext();
   std::string foo("Lfoo;");
   ClassCreator cc(DexType::make_type(foo.c_str()));
   cc.set_super(get_object_type());
@@ -128,4 +133,6 @@ TEST_F(CreatorsTest, ClassCreator) {
   auto bar_type = DexType::get_type(bar);
   EXPECT_EQ(foo_type, cls->get_type());
   EXPECT_EQ(bar_type, cls->get_type());
+
+  delete g_redex;
 }

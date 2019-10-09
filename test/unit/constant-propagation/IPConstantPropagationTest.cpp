@@ -72,68 +72,6 @@ TEST_F(InterproceduralConstantPropagationTest, constantArgument) {
     (
      (load-param v0)
      (load-param v1)
-     (const v1 0)
-     (goto :label)
-     (const v0 0)
-     (:label)
-     (return-void)
-    )
-  )");
-
-  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
-}
-
-TEST_F(InterproceduralConstantPropagationTest, constantTwoArgument) {
-  // Let bar() be the only method calling baz(ILjava/lang/String;)V, passing it
-  // a constant argument. baz() should be optimized for constant arguments.
-
-  Scope scope;
-  auto cls_ty = DexType::make_type("LFoo;");
-  ClassCreator creator(cls_ty);
-  creator.set_super(get_object_type());
-
-  auto m1 = assembler::method_from_string(R"(
-    (method (public) "LFoo;.bar:()V"
-     (
-      (load-param v0) ; the `this` argument
-      (const v1 0)
-      (const-string "hello")
-      (move-result-pseudo-object v2)
-      (invoke-direct (v0 v1 v2) "LFoo;.baz:(ILjava/lang/String;)V")
-      (return-void)
-     )
-    )
-  )");
-  m1->rstate.set_root();
-  creator.add_method(m1);
-
-  auto m2 = assembler::method_from_string(R"(
-    (method (private) "LFoo;.baz:(ILjava/lang/String;)V"
-     (
-      (load-param v0) ; the `this` argument
-      (load-param v1)
-      (load-param-object v2)
-      (if-eqz v1 :label)
-      (const v0 0)
-      (:label)
-      (return-void)
-     )
-    )
-  )");
-  creator.add_method(m2);
-
-  auto cls = creator.create();
-  scope.push_back(cls);
-  InterproceduralConstantPropagationPass().run(scope);
-
-  auto expected_code2 = assembler::ircode_from_string(R"(
-    (
-     (load-param v0)
-     (load-param v1)
-     (load-param-object v2)
-     (const v1 0)
-     (const-string "hello")
-     (move-result-pseudo-object v2)
      (goto :label)
      (const v0 0)
      (:label)
@@ -267,7 +205,8 @@ TEST_F(InterproceduralConstantPropagationTest, argumentsGreaterThanZero) {
     )
   )");
 
-  EXPECT_CODE_EQ(m3->get_code(), expected_code3.get());
+  EXPECT_EQ(assembler::to_s_expr(m3->get_code()),
+            assembler::to_s_expr(expected_code3.get()));
 }
 
 // We had a bug where an invoke instruction inside an unreachable block of code
@@ -318,9 +257,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
   scope.push_back(cls);
 
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
   FixpointIterator fp_iter(
       cg,
       [](const DexMethod* method,
@@ -396,7 +333,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertEquality) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
@@ -438,7 +376,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertSign) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
@@ -476,7 +415,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckIntOnly) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
@@ -513,7 +453,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertCheckVirtualMethod) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertField) {
@@ -524,9 +465,9 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
   // We must create a field def and attach it to the DexClass instance (instead
   // of just creating an unattached field ref) so that when IPC calls
   // resolve_field() on Foo.qux, they will find it and treat it as a known field
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
   creator.add_field(field);
 
   auto method = assembler::method_from_string(R"(
@@ -559,7 +500,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertField) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
@@ -607,7 +549,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertConstantReturnValue) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
@@ -650,7 +593,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsVoid) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
@@ -695,7 +639,8 @@ TEST_F(RuntimeAssertTest, RuntimeAssertNeverReturnsConstant) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, constantField) {
@@ -703,9 +648,9 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -736,9 +681,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -754,7 +697,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantField) {
     )
   )");
 
-  EXPECT_CODE_EQ(m2->get_code(), expected_code2.get());
+  EXPECT_EQ(assembler::to_s_expr(m2->get_code()),
+            assembler::to_s_expr(expected_code2.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
@@ -762,9 +706,9 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -795,9 +739,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantField) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto expected = assembler::to_s_expr(m2->get_code());
 
@@ -813,9 +755,9 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
-  auto field = DexField::make_field("LFoo;.qux:I")
-                   ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                   new DexEncodedValueBit(DEVT_INT, 1));
+  auto field = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                       new DexEncodedValueBit(DEVT_INT, 1));
   creator.add_field(field);
 
   auto m1 = assembler::method_from_string(R"(
@@ -851,9 +793,7 @@ TEST_F(InterproceduralConstantPropagationTest, nonConstantFieldDueToKeep) {
   auto expected = assembler::to_s_expr(m2->get_code());
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -867,13 +807,14 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
-  auto field_qux = DexField::make_field("LFoo;.qux:I")
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                       new DexEncodedValueBit(DEVT_INT, 1));
+  auto field_qux = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field_qux->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                           new DexEncodedValueBit(DEVT_INT, 1));
   creator.add_field(field_qux);
 
-  auto field_corge = DexField::make_field("LFoo;.corge:I")
-                         ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+  auto field_corge =
+      static_cast<DexField*>(DexField::make_field("LFoo;.corge:I"));
+  field_corge->make_concrete(ACC_PUBLIC | ACC_STATIC);
   creator.add_field(field_corge);
 
   auto clinit = assembler::method_from_string(R"(
@@ -936,7 +877,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
      )
   )");
 
-  EXPECT_CODE_EQ(clinit->get_code(), expected_clinit_code.get());
+  EXPECT_EQ(assembler::to_s_expr(clinit->get_code()),
+            assembler::to_s_expr(expected_clinit_code.get()));
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -946,7 +888,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantFieldAfterClinit) {
     )
   )");
 
-  EXPECT_CODE_EQ(m->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(m->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
@@ -955,9 +898,9 @@ TEST_F(InterproceduralConstantPropagationTest,
   ClassCreator creator(cls_ty);
   creator.set_super(get_object_type());
 
-  auto field_qux = DexField::make_field("LFoo;.qux:I")
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC,
-                                       new DexEncodedValueBit(DEVT_INT, 0));
+  auto field_qux = static_cast<DexField*>(DexField::make_field("LFoo;.qux:I"));
+  field_qux->make_concrete(ACC_PUBLIC | ACC_STATIC,
+                           new DexEncodedValueBit(DEVT_INT, 0));
   creator.add_field(field_qux);
 
   auto clinit = assembler::method_from_string(R"(
@@ -1047,9 +990,7 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
   creator.add_method(m2);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1066,7 +1007,8 @@ TEST_F(InterproceduralConstantPropagationTest, constantReturnValue) {
     )
   )");
 
-  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
@@ -1118,7 +1060,8 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
-  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
@@ -1171,7 +1114,8 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
   InterproceduralConstantPropagationPass(config).run(scope);
-  EXPECT_CODE_EQ(m1->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(m1->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest,
@@ -1224,9 +1168,7 @@ TEST_F(InterproceduralConstantPropagationTest,
   std::vector<DexStore> stores;
   stores.emplace_back(std::move(store));
   auto scope = build_class_scope(stores);
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   auto expected = assembler::to_s_expr(m1->get_code());
 
@@ -1275,9 +1217,7 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
   creator.add_method(never_returns);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;
@@ -1302,7 +1242,8 @@ TEST_F(InterproceduralConstantPropagationTest, neverReturns) {
     )
   )");
 
-  EXPECT_CODE_EQ(method->get_code(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(method->get_code()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
@@ -1339,14 +1280,13 @@ TEST_F(InterproceduralConstantPropagationTest, whiteBoxReturnValues) {
   )");
   creator.add_method(returns_constant);
 
-  auto no_code = DexMethod::make_method("LFoo;.no_code:()V")
-                     ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE, true);
+  auto no_code =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.no_code:()V"));
+  no_code->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_NATIVE, true);
   creator.add_method(no_code);
 
   Scope scope{creator.create()};
-  walk::code(scope, [](DexMethod*, IRCode& code) {
-    code.build_cfg(/* editable */ false);
-  });
+  walk::code(scope, [](DexMethod*, IRCode& code) { code.build_cfg(/* editable */ false); });
 
   InterproceduralConstantPropagationPass::Config config;
   config.max_heap_analysis_iterations = 1;

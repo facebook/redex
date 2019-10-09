@@ -8,8 +8,8 @@
 #include "ClassHierarchy.h"
 
 #include "DexUtil.h"
-#include "Resolver.h"
 #include "Timer.h"
+#include "Resolver.h"
 
 namespace {
 
@@ -56,10 +56,11 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
 }
 
 void build_external_hierarchy(ClassHierarchy& hierarchy) {
-  g_redex->walk_type_class([&](const DexType* type, const DexClass* cls) {
-    if (!cls->is_external() || is_interface(cls)) return;
-    build_class_hierarchy(hierarchy, cls);
-  });
+  g_redex->walk_type_class(
+      [&](const DexType* type, const DexClass* cls) {
+        if (!cls->is_external() || is_interface(cls)) return;
+        build_class_hierarchy(hierarchy, cls);
+      });
 }
 
 // Find all the interfaces that extend 'intf'
@@ -102,7 +103,7 @@ void build_interface_map(InterfaceMap& interfaces,
   }
 }
 
-} // namespace
+}
 
 ClassHierarchy build_type_hierarchy(const Scope& scope) {
   ClassHierarchy hierarchy;
@@ -130,9 +131,10 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
   return interfaces;
 }
 
-void get_all_children(const ClassHierarchy& hierarchy,
-                      const DexType* type,
-                      TypeSet& children) {
+void get_all_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type,
+    TypeSet& children) {
   const auto& direct = get_children(hierarchy, type);
   for (const auto& child : direct) {
     children.insert(child);

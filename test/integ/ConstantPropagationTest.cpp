@@ -12,7 +12,8 @@
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "RedexTest.h"
+#include "PassManager.h"
+#include "RedexContext.h"
 
 #include "LocalDce.h"
 #include "DelInit.h"
@@ -83,22 +84,32 @@ ClassType filter_test_classes(const DexString *cls_name) {
   return OTHERCLASS;
 }
 
-class ConstantPropagationTest : public RedexIntegrationTest {};
+TEST(ConstantPropagationTest, constantPropagation) {
+  g_redex = new RedexContext();
 
-TEST_F(ConstantPropagationTest, constantPropagation) {
-  std::cout << "Loaded classes: " << classes->size() << std::endl;
+  const char* dexfile = std::getenv("dexfile");
+  EXPECT_NE(nullptr, dexfile);
 
-  TRACE(CONSTP, 1, "Code before:");
-  for (const auto& cls : *classes) {
-    TRACE(CONSTP, 1, "Class %s", SHOW(cls));
+  std::vector<DexStore> stores;
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
+  std::cout << "Loaded classes: " << classes.size() << std::endl;
+
+  TRACE(CONSTP, 1, "Code before:\n");
+  for(const auto& cls : classes) {
+    TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) < 2) {
-      TRACE(CONSTP, 1, "Class %s", SHOW(cls));
+      TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 1, "dmethod: %s",  dm->get_name()->c_str());
+        TRACE(CONSTP, 1, "dmethod: %s\n",  dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "if_false") == 0 ||
             strcmp(dm->get_name()->c_str(), "if_true") == 0 ||
             strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
-          TRACE(CONSTP, 1, "%s", SHOW(InstructionIterable(dm->get_code())));
+          TRACE(CONSTP, 1, "%s\n", SHOW(InstructionIterable(dm->get_code())));
         }
       }
     }
@@ -110,31 +121,36 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
     constp
   };
 
-  run_passes(passes);
+  PassManager manager(passes);
+  manager.set_testing_mode();
 
-  TRACE(CONSTP, 1, "Code after:");
-  for (const auto& cls : *classes) {
-    TRACE(CONSTP, 1, "Class %s", SHOW(cls));
+  Json::Value conf_obj = Json::nullValue;
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(stores, dummy_cfg);
+
+  TRACE(CONSTP, 1, "Code after:\n");
+  for(const auto& cls : classes) {
+    TRACE(CONSTP, 1, "Class %s\n", SHOW(cls));
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 1, "dmethod: %s",  dm->get_name()->c_str());
+        TRACE(CONSTP, 1, "dmethod: %s\n",  dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "if_false") == 0) {
           const auto& insns = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s", SHOW(insns));
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
           for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_true") == 0) {
           const auto& insns = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s", SHOW(insns));
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
           for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();
             EXPECT_NE(op, OPCODE_IF_EQZ);
           }
         } else if (strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
           const auto& insns = InstructionIterable(dm->get_code());
-          TRACE(CONSTP, 1, "%s", SHOW(insns));
+          TRACE(CONSTP, 1, "%s\n", SHOW(insns));
           bool has_if = false;
           for (auto& mie : insns) {
             IROpcode op = mie.insn->opcode();

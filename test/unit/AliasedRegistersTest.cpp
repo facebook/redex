@@ -20,7 +20,7 @@ Value two = Value::create_register(2);
 Value three = Value::create_register(3);
 Value four = Value::create_register(4);
 
-Value int_one_lit = Value::create_literal(1, constant_uses::TypeDemand::Int);
+Value one_lit = Value::create_literal(1);
 
 TEST(AliasedRegistersTest, identity) {
   AliasedRegisters a;
@@ -223,7 +223,7 @@ TEST(AliasedRegistersTest, getRepresentativeTwoComponents) {
 
 TEST(AliasedRegistersTest, getRepresentativeNoLits) {
   AliasedRegisters a;
-  a.move(two, int_one_lit);
+  a.move(two, one_lit);
   auto two_rep = a.get_representative(two);
   EXPECT_EQ(2, two_rep);
 }

@@ -10,7 +10,6 @@
 #include "Creators.h"
 #include "DexClass.h"
 #include "RedexContext.h"
-#include "RedexTest.h"
 
 DexFieldRef* make_field_ref(DexType* cls, const char* name, DexType* type) {
   return DexField::make_field(cls, DexString::make_string(name), type);
@@ -49,9 +48,8 @@ DexClass* create_class(DexType* type,
   return creator.create();
 }
 
-class RenameMembersTest : public RedexTest {};
-
-TEST_F(RenameMembersTest, rename) {
+TEST(RenameMembers, rename) {
+  g_redex = new RedexContext();
   auto obj_t = DexType::make_type("Ljava/lang/Object;");
   auto int_t = DexType::make_type("I");
   auto a = DexType::make_type("A");

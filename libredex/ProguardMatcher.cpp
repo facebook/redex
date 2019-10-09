@@ -651,7 +651,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
     cls->rstate.set_has_keep(&m_keep_rule);
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(
-          PGR, 2, "whyareyoukeeping Class %s kept by %s",
+          PGR, 2, "whyareyoukeeping Class %s kept by %s\n",
           redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name()).c_str(),
           show_keep(m_keep_rule).c_str());
     }
@@ -706,7 +706,7 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
   case RuleType::KEEP: {
     member->rstate.set_has_keep(&m_keep_rule);
     if (member->rstate.report_whyareyoukeeping()) {
-      TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(member),
+      TRACE(PGR, 2, "whyareyoukeeping %s kept by %s\n", SHOW(member),
             show_keep(m_keep_rule).c_str());
     }
     break;
@@ -808,7 +808,7 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
       continue;
     }
 
-    TRACE(PGR, 2, "Slow rule: %s", show_keep(keep_rule).c_str());
+    TRACE(PGR, 2, "Slow rule: %s\n", show_keep(keep_rule).c_str());
     // Otherwise, it might take a longer time. Add to the work queue.
     wq.add_item(&keep_rule);
   }

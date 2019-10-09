@@ -31,7 +31,6 @@
   TM(CPG)            \
   TM(CS)             \
   TM(CSE)            \
-  TM(CU)             \
   TM(CUSTOMSORT)     \
   TM(DBGSTRIP)       \
   TM(DC)             \
@@ -83,13 +82,11 @@
   TM(REDEX)          \
   TM(REACH)          \
   TM(REACH_DUMP)     \
-  TM(CHECKRECURSION) \
   TM(REFU)           \
   TM(REFL)           \
   TM(REG)            \
   TM(RELO)           \
   TM(RENAME)         \
-  TM(RESO)           \
   TM(RG)             \
   TM(RME)            \
   TM(RMGOTO)         \
@@ -140,21 +137,13 @@ enum TraceModule : int {
 bool traceEnabled(TraceModule module, int level);
 #ifdef NDEBUG
 #define TRACE(...)
-#define TRACE_NO_LINE(...)
 #else
-void trace(
-    TraceModule module, int level, bool suppress_newline, const char* fmt, ...);
-#define TRACE(module, level, fmt, ...)                                        \
-  do {                                                                        \
-    if (traceEnabled(module, level)) {                                        \
-      trace(module, level, /* suppress_newline */ false, fmt, ##__VA_ARGS__); \
-    }                                                                         \
-  } while (0)
-#define TRACE_NO_LINE(module, level, fmt, ...)                               \
-  do {                                                                       \
-    if (traceEnabled(module, level)) {                                       \
-      trace(module, level, /* suppress_newline */ true, fmt, ##__VA_ARGS__); \
-    }                                                                        \
+void trace(TraceModule module, int level, const char* fmt, ...);
+#define TRACE(module, level, fmt, ...)          \
+  do {                                          \
+    if (traceEnabled(module, level)) {          \
+      trace(module, level, fmt, ##__VA_ARGS__); \
+    }                                           \
   } while (0)
 #endif // NDEBUG
 

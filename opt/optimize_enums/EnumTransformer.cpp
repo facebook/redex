@@ -9,8 +9,8 @@
 #include "Creators.h"
 #include "DexAsm.h"
 #include "DexClass.h"
+#include "EnumClinitAnalysis.h"
 #include "EnumUpcastAnalysis.h"
-#include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
 #include "TypeReference.h"
@@ -34,22 +34,11 @@
  *                    Ljava/lang/Integer;.equals:(Object)Z
  *  -- sget-object LCandidateEnum;.f:LCandidateEnum; =>
  *                 LEnumUtils;.f?:Ljava/lang/Integer;
- *  -- invoke-virtual LCandidateEnum;.name:()String =>
- *                    LCandidateEnum;.redex$OE$name:(Integer)String
- *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
- *                    LCandidateEnum;.redex$OE$hashCode:(Integer)I
+ *  -- invoke-virtual LCandidateEnum;.toString:()String or
+ *     invoke-virtual LCandidateEnum;.name:()String =>
+ *                    LCandidateEnum;.redex$OE$toString:(Integer)String
  *  -- invoke-static LCandidateEnum;.valueOf:(String)LCandidateEnum; =>
  *                   LCandidateEnum;.redex$OE$valueOf:(String)Integer
- *
- *  If CandidateEnum.toString() overrides Enum.toString()
- *  -- invoke-virtual LCandidateEnum;.toString:()String =>
- *                    LCandidateEnum;.toString$REDEX$YCYa1bLthVk:(Integer)String
- *  otherwise
- *  -- invoke-virtual LCandidateEnum;.toString:()String =>
- *                    LCandidateEnum;.redex$OE$name:(Integer)String
- *
- *  We also make all virtual methods static and keep them in their original
- * class while also changing their invocations to static.
  * 3. Clean the static fileds of candidate enums and update these enum classes
  * to inherit Object instead of Enum.
  * 4. Update specs of methods and fields based on name mangling.
@@ -58,8 +47,23 @@
 namespace {
 using namespace optimize_enums;
 using namespace dex_asm;
-using EnumAttributeMap = std::unordered_map<DexType*, EnumAttributes>;
+using EnumAttrMap =
+    std::unordered_map<DexType*, std::unordered_map<const DexField*, EnumAttr>>;
 namespace ptrs = local_pointers;
+
+std::vector<EnumAttr> sort_enum_values(
+    const std::unordered_map<const DexField*, EnumAttr>& enum_values) {
+  std::map<uint32_t, const EnumAttr&> enums;
+  for (auto& pair : enum_values) {
+    enums.emplace(pair.second.ordinal, pair.second);
+  }
+  std::vector<EnumAttr> sorted;
+  sorted.reserve(enums.size());
+  for (auto& pair : enums) {
+    sorted.emplace_back(pair.second);
+  }
+  return sorted;
+}
 
 /**
  * A structure holding the enum utils and constant values.
@@ -72,19 +76,12 @@ struct EnumUtil {
   // later.
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
-  // Store virtual methods of candidate enums that will be made static later.
-  ConcurrentSet<DexMethod*> m_virtual_methods;
-
-  // Store methods for getting instance fields to be generated later.
-  ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
-
   DexMethodRef* m_values_method_ref = nullptr;
 
   const Config& m_config;
 
   DexString* CLINIT_METHOD_STR = DexString::make_string("<clinit>");
-  DexString* REDEX_NAME = DexString::make_string("redex$OE$name");
-  DexString* REDEX_HASHCODE = DexString::make_string("redex$OE$hashCode");
+  DexString* REDEX_TOSTRING = DexString::make_string("redex$OE$toString");
   DexString* REDEX_STRING_VALUEOF =
       DexString::make_string("redex$OE$String_valueOf");
   DexString* REDEX_VALUEOF = DexString::make_string("redex$OE$valueOf");
@@ -95,12 +92,9 @@ struct EnumUtil {
   const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
 
   const DexType* ENUM_TYPE = get_enum_type();
-  DexType* INT_TYPE = get_int_type();
   DexType* INTEGER_TYPE = get_integer_type();
   DexType* OBJECT_TYPE = get_object_type();
   DexType* STRING_TYPE = get_string_type();
-  DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
-  DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
   DexType* RTEXCEPTION_TYPE =
       DexType::make_type("Ljava/lang/RuntimeException;");
   DexType* ILLEGAL_ARG_EXCP_TYPE =
@@ -114,17 +108,11 @@ struct EnumUtil {
       DexMethod::make_method("Ljava/lang/Enum;.compareTo:(Ljava/lang/Enum;)I");
   const DexMethodRef* ENUM_TOSTRING_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.toString:()Ljava/lang/String;");
-  const DexMethodRef* ENUM_HASHCODE_METHOD =
-      DexMethod::make_method("Ljava/lang/Enum;.hashCode:()I");
   const DexMethodRef* ENUM_NAME_METHOD =
       DexMethod::make_method("Ljava/lang/Enum;.name:()Ljava/lang/String;");
-  const DexMethodRef* STRING_VALUEOF_METHOD = DexMethod::make_method(
-      "Ljava/lang/String;.valueOf:(Ljava/lang/Object;)Ljava/lang/String;");
   const DexMethodRef* STRINGBUILDER_APPEND_OBJ_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/Object;)Ljava/lang/"
       "StringBuilder;");
-  DexMethodRef* STRING_HASHCODE_METHOD =
-      DexMethod::make_method("Ljava/lang/String;.hashCode:()I");
   DexMethodRef* STRINGBUILDER_APPEND_STR_METHOD = DexMethod::make_method(
       "Ljava/lang/StringBuilder;.append:(Ljava/lang/String;)Ljava/lang/"
       "StringBuilder;");
@@ -159,14 +147,14 @@ struct EnumUtil {
    *  ...
    * IF it is not a candidate enum, return nullptr.
    */
-  DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
+  DexType* try_convert_to_int_type(const EnumAttrMap& enums,
                                    DexType* type) const {
     uint32_t level = get_array_level(type);
     DexType* elem_type = type;
     if (level) {
-      elem_type = get_array_element_type(type);
+      elem_type = get_array_type(type);
     }
-    if (enum_attributes_map.count(elem_type)) {
+    if (enums.count(elem_type)) {
       return level ? make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
     }
     return nullptr;
@@ -182,11 +170,9 @@ struct EnumUtil {
    * method of LCandidateEnum;.toString:()String.
    */
   DexMethodRef* add_substitute_of_stringvalueof(DexType* enum_type) {
-    add_substitute_of_tostring(enum_type);
-    auto proto = DexProto::make_proto(
-        STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method =
-        DexMethod::make_method(enum_type, REDEX_STRING_VALUEOF, proto);
+    auto tostring_meth = add_substitute_of_tostring(enum_type);
+    auto method = DexMethod::make_method(enum_type, REDEX_STRING_VALUEOF,
+                                         tostring_meth->get_proto());
     m_substitute_methods.insert(method);
     return method;
   }
@@ -205,116 +191,24 @@ struct EnumUtil {
   }
 
   /**
-   * If `Enum.toString` is not overridden, return method ref to
-   * LCandidateEnum;.redex$OE$name:(Integer)String, a substitute for
-   * LCandidateEnum;.toString:()String. Otherwise return the overriding method.
+   * Return method ref to LCandidateEnum;.redex$OE$toString:(Integer)String, a
+   * substitute for LCandidateEnum;.toString:()String.
    * Store the method ref at the same time.
    */
   DexMethodRef* add_substitute_of_tostring(DexType* enum_type) {
-    auto method_ref = get_user_defined_tostring_method(type_class(enum_type));
-    if (!method_ref) {
-      return add_substitute_of_name(enum_type);
-    } else {
-      auto method = resolve_method(method_ref, MethodSearch::Virtual);
-      always_assert(method);
-      m_virtual_methods.insert(method);
-      return method_ref;
-    }
+    auto method = get_substitute_of_tostring(enum_type);
+    m_substitute_methods.insert(method);
+    return method;
   }
 
   /**
-   * If `Enum.toString` is not overridden, return method ref to
-   * LCandidateEnum;.redex$OE$name:(Integer)String. Otherwise return the
-   * overriding method.
+   * Return method ref to LCandidateEnum;.redex$OE$toString:(Integer)String
    */
   DexMethodRef* get_substitute_of_tostring(DexType* enum_type) {
-    DexMethodRef* method =
-        get_user_defined_tostring_method(type_class(enum_type));
-    if (!method) {
-      return get_substitute_of_name(enum_type);
-    }
-    return method;
-  }
-
-  /**
-   * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String, a
-   * substitute for LCandidateEnum;.name:()String.
-   * Store the method ref at the same time.
-   */
-  DexMethodRef* add_substitute_of_name(DexType* enum_type) {
-    auto method = get_substitute_of_name(enum_type);
-    m_substitute_methods.insert(method);
-    return method;
-  }
-
-  /**
-   * Return method ref to LCandidateEnum;.redex$OE$name:(Integer)String
-   */
-  DexMethodRef* get_substitute_of_name(DexType* enum_type) {
     auto proto = DexProto::make_proto(
         STRING_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method = DexMethod::make_method(enum_type, REDEX_NAME, proto);
+    auto method = DexMethod::make_method(enum_type, REDEX_TOSTRING, proto);
     return method;
-  }
-
-  /**
-   * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I, a
-   * substitute for LCandidateEnum;.hashCode:()I.
-   * Store the method ref at the same time.
-   */
-  DexMethodRef* add_substitute_of_hashcode(DexType* enum_type) {
-    // `redex$OE$hashCode()` uses `redex$OE$name()` so we better make sure
-    // the method exists.
-    add_substitute_of_name(enum_type);
-    auto method = get_substitute_of_hashcode(enum_type);
-    m_substitute_methods.insert(method);
-    return method;
-  }
-
-  /**
-   * Returns a method ref to LCandidateEnum;.redex$OE$hashCode:(Integer)I
-   */
-  DexMethodRef* get_substitute_of_hashcode(DexType* enum_type) {
-    auto proto = DexProto::make_proto(
-        INT_TYPE, DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method = DexMethod::make_method(enum_type, REDEX_HASHCODE, proto);
-    return method;
-  }
-
-  /**
-   * Returns a method ref to LCandidateEnum;.redex$OE$get_iField:(Integer)X
-   * where `X` is the type of the instance field `iField`.
-   * Store the method ref at the same time.
-   */
-  DexMethodRef* add_get_ifield_method(DexType* enum_type, DexFieldRef* ifield) {
-    if (m_get_instance_field_methods.count(ifield)) {
-      return m_get_instance_field_methods.at(ifield);
-    }
-    auto proto = DexProto::make_proto(
-        ifield->get_type(), DexTypeList::make_type_list({INTEGER_TYPE}));
-    auto method_name = DexString::make_string("redex$OE$get_" + ifield->str());
-    auto method = DexMethod::make_method(enum_type, method_name, proto);
-    m_get_instance_field_methods.insert(std::make_pair(ifield, method));
-    return method;
-  }
-
-  /**
-   * Returns the `LCandidateEnum.toString()` method that overrides
-   * `Enum.toString()`. Return `nullptr` if `Enum.toString()` is not overridden.
-   */
-  DexMethod* get_user_defined_tostring_method(DexClass* cls) {
-    static ConcurrentMap<DexClass*, DexMethod*> cache;
-    if (cache.count(cls)) {
-      return cache.at(cls);
-    }
-    for (auto vmethod : cls->get_vmethods()) {
-      if (signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
-        cache.insert(std::make_pair(cls, vmethod));
-        return vmethod;
-      }
-    }
-    cache.insert(std::make_pair(cls, nullptr));
-    return nullptr;
   }
 
  private:
@@ -356,9 +250,11 @@ struct EnumUtil {
    */
   DexFieldRef* make_values_field(DexClass* cls) {
     auto name = DexString::make_string("$VALUES");
-    auto field = DexField::make_field(cls->get_type(), name,
-                                      make_array_type(INTEGER_TYPE))
-                     ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC);
+    auto field = static_cast<DexField*>(DexField::make_field(
+        cls->get_type(), name, make_array_type(INTEGER_TYPE)));
+    field->make_concrete(
+        ACC_PRIVATE | ACC_FINAL | ACC_STATIC,
+        DexEncodedValue::zero_for_type(make_array_type(INTEGER_TYPE)));
     cls->add_field(field);
     return (DexFieldRef*)field;
   }
@@ -368,8 +264,10 @@ struct EnumUtil {
    */
   DexFieldRef* make_a_field(DexClass* cls, uint32_t value, IRCode* code) {
     auto name = DexString::make_string("f" + std::to_string(value));
-    auto field = DexField::make_field(cls->get_type(), name, INTEGER_TYPE)
-                     ->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC);
+    auto field = static_cast<DexField*>(
+        DexField::make_field(cls->get_type(), name, INTEGER_TYPE));
+    field->make_concrete(ACC_PUBLIC | ACC_FINAL | ACC_STATIC,
+                         DexEncodedValue::zero_for_type(INTEGER_TYPE));
     cls->add_field(field);
     code->push_back(dasm(OPCODE_CONST, {1_v, {LITERAL, value}}));
     code->push_back(dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {1_v}));
@@ -385,9 +283,9 @@ struct EnumUtil {
   DexMethod* make_clinit_method(DexClass* cls, uint32_t fields_count) {
     auto proto =
         DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
-    DexMethod* method =
-        DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto)
-            ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
+    DexMethod* method = static_cast<DexMethod*>(
+        DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto));
+    method->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
     method->set_code(std::make_unique<IRCode>());
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));
@@ -411,8 +309,9 @@ struct EnumUtil {
     DexProto* proto =
         DexProto::make_proto(make_array_type(INTEGER_TYPE),
                              DexTypeList::make_type_list({get_int_type()}));
-    DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
-                            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    DexMethod* method = static_cast<DexMethod*>(
+        DexMethod::make_method(cls->get_type(), name, proto));
+    method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>());
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));
@@ -440,45 +339,13 @@ struct EnumUtil {
 };
 
 struct InsnReplacement {
-  cfg::InstructionIterator original_insn;
+  MethodItemEntry* original_mie;
   std::vector<IRInstruction*> replacements;
 
-  InsnReplacement(cfg::ControlFlowGraph& cfg,
-                  cfg::Block* block,
-                  MethodItemEntry* mie,
-                  IRInstruction* new_insn,
-                  boost::optional<IROpcode> opcode = boost::none)
-      : original_insn(block->to_cfg_instruction_iterator(*mie)),
-        replacements{new_insn} {
-    push_back_move_result(cfg, mie, opcode);
-  }
-  InsnReplacement(cfg::ControlFlowGraph& cfg,
-                  cfg::Block* block,
-                  MethodItemEntry* mie,
-                  std::vector<IRInstruction*>& new_insns,
-                  boost::optional<IROpcode> opcode = boost::none)
-      : original_insn(block->to_cfg_instruction_iterator(*mie)),
-        replacements(std::move(new_insns)) {
-    push_back_move_result(cfg, mie, opcode);
-  }
-
- private:
-  /**
-   * If the original instruction was paired with a `move-result`, create a new
-   * one with the same destination register (and possibly the same opcode)
-   * because the original one will be removed.
-   */
-  void push_back_move_result(cfg::ControlFlowGraph& cfg,
-                             MethodItemEntry* mie,
-                             boost::optional<IROpcode> opcode) {
-    always_assert(mie->insn->has_move_result_any());
-    auto move_insn_it = cfg.move_result_of(original_insn);
-    if (!move_insn_it.is_end()) {
-      auto& move_insn = move_insn_it.unwrap()->insn;
-      replacements.push_back(dasm(opcode ? *opcode : move_insn->opcode(),
-                                  {{VREG, move_insn->dest()}}));
-    }
-  }
+  InsnReplacement(MethodItemEntry* mie, IRInstruction* new_insn)
+      : original_mie(mie), replacements{new_insn} {}
+  InsnReplacement(MethodItemEntry* mie, std::vector<IRInstruction*>& insns)
+      : original_mie(mie), replacements(std::move(insns)) {}
 };
 
 /**
@@ -486,12 +353,10 @@ struct InsnReplacement {
  */
 class CodeTransformer final {
  public:
-  CodeTransformer(const EnumAttributeMap& m_enum_attributes_map,
+  CodeTransformer(const EnumAttrMap& enum_attrs,
                   EnumUtil* enum_util,
                   DexMethod* method)
-      : m_enum_attributes_map(m_enum_attributes_map),
-        m_enum_util(enum_util),
-        m_method(method) {}
+      : m_enum_attrs(enum_attrs), m_enum_util(enum_util), m_method(method) {}
 
   void run() {
     optimize_enums::EnumTypeEnvironment start_env =
@@ -508,70 +373,63 @@ class CodeTransformer final {
       for (auto it = block->begin(); it != block->end(); ++it) {
         if (it->type == MFLOW_OPCODE) {
           engine.analyze_instruction(it->insn, &env);
-          update_instructions(env, cfg, block, &(*it));
+          update_instructions(env, block, &(*it));
         }
       }
     }
 
+    code->clear_cfg();
     // We could not insert invoke-kind instructions to editable cfg when we
     // iterate the cfg. If we're inside a try region, inserting invoke-kind will
     // split the block and insert a move-result in the new goto successor block,
     // thus invalidating iterators into the CFG. See the comment on the
     // insertion methods in ControlFlow.h for more details.
+    // TODO: We can use editable cfg API to upate the code when the APIs are
+    // ready, see T42743620.
     for (const auto& info : m_replacements) {
-      cfg.replace_insns(info.original_insn, info.replacements);
+      auto mie = info.original_mie;
+      auto iterator = code->iterator_to(*mie);
+      always_assert(iterator != code->end());
+      for (auto new_insn : info.replacements) {
+        code->insert_before(iterator, new_insn);
+      }
+      delete mie->insn;
+      mie->type = MFLOW_FALLTHROUGH;
+      mie->insn = nullptr;
+      code->erase(iterator);
     }
-    code->clear_cfg();
   }
 
  private:
   void update_instructions(const optimize_enums::EnumTypeEnvironment& env,
-                           cfg::ControlFlowGraph& cfg,
                            cfg::Block* block,
                            MethodItemEntry* mie) {
     auto insn = mie->insn;
     switch (insn->opcode()) {
     case OPCODE_SGET_OBJECT:
-      update_sget_object(env, cfg, block, mie);
-      break;
-    case OPCODE_IGET:
-    case OPCODE_IGET_WIDE:
-    case OPCODE_IGET_OBJECT:
-    case OPCODE_IGET_BOOLEAN:
-    case OPCODE_IGET_BYTE:
-    case OPCODE_IGET_CHAR:
-    case OPCODE_IGET_SHORT:
-      update_iget(cfg, block, mie);
+      update_sget_object(env, mie);
       break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
       if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
-        update_invoke_virtual(env, cfg, block, mie,
-                              m_enum_util->INTEGER_INTVALUE_METHOD);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_INTVALUE_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_EQUALS_METHOD)) {
-        update_invoke_virtual(env, cfg, block, mie,
-                              m_enum_util->INTEGER_EQUALS_METHOD);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_EQUALS_METHOD);
       } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
-        update_invoke_virtual(env, cfg, block, mie,
-                              m_enum_util->INTEGER_COMPARETO_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
-        update_invoke_name(env, cfg, block, mie);
-      } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
-        update_invoke_hashcode(env, cfg, block, mie);
+        update_invoke_virtual(env, mie, m_enum_util->INTEGER_COMPARETO_METHOD);
+      } else if (signatures_match(method, m_enum_util->ENUM_TOSTRING_METHOD) ||
+                 signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
+        update_invoke_tostring(env, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
-        update_invoke_stringbuilder_append(env, cfg, block, mie);
-      } else {
-        update_invoke_user_method(env, cfg, block, mie);
+        update_invoke_stringbuilder_append(env, mie);
       }
     } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
-      if (method == m_enum_util->STRING_VALUEOF_METHOD) {
-        update_invoke_string_valueof(env, cfg, block, mie);
-      } else if (is_enum_values(method)) {
-        update_invoke_values(env, cfg, block, mie);
+      if (is_enum_values(method)) {
+        update_invoke_values(env, block, mie);
       } else if (is_enum_valueof(method)) {
-        update_invoke_valueof(env, cfg, block, mie);
+        update_invoke_valueof(env, mie);
       }
     } break;
     case OPCODE_NEW_ARRAY: {
@@ -584,17 +442,12 @@ class CodeTransformer final {
     case OPCODE_CHECK_CAST: {
       auto type = insn->get_type();
       if (try_convert_to_int_type(type)) {
-        auto possible_src_types = env.get(insn->src(0));
-        if (possible_src_types.size() != 0) {
-          DexType* candidate_type =
-              extract_candidate_enum_type(possible_src_types);
-          always_assert(candidate_type == type);
-        }
-        // Empty src_types means the src register holds null object.
-        m_replacements.push_back(
-            InsnReplacement(cfg, block, mie,
-                            dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
-                                 {{VREG, insn->src(0)}})));
+        DexType* candidate_type =
+            extract_candidate_enum_type(env.get(insn->src(0)));
+        always_assert(candidate_type == type);
+        m_replacements.push_back(InsnReplacement(
+            mie, dasm(OPCODE_CHECK_CAST, m_enum_util->INTEGER_TYPE,
+                      {{VREG, insn->src(0)}})));
       } else if (type == m_enum_util->ENUM_TYPE) {
         always_assert(!extract_candidate_enum_type(env.get(insn->src(0))));
       }
@@ -616,60 +469,20 @@ class CodeTransformer final {
    *   sget-object LEnumUtils;.f?:Integer
    */
   void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
-                          cfg::ControlFlowGraph& cfg,
-                          cfg::Block* block,
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto field = static_cast<DexField*>(insn->get_field());
-    if (!m_enum_attributes_map.count(field->get_type())) {
+    if (!m_enum_attrs.count(field->get_type())) {
       return;
     }
-    auto& constants =
-        m_enum_attributes_map.at(field->get_type()).m_constants_map;
-    if (!constants.count(field)) {
+    auto& enum_attrs = m_enum_attrs.at(field->get_type());
+    if (!enum_attrs.count(field)) {
       return;
     }
-    auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
+    auto ord = enum_attrs.at(field).ordinal;
+    auto new_field = m_enum_util->m_fields[ord];
     auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
-  }
-
-  /**
-   * If the instance field belongs to a CandidateEnum, replace the `iget`
-   * instruction with a static call to the correct method.
-   *
-   * iget(-object|-wide)? vObj LCandidateEnum;.iField:Ltype;
-   * move-result-pseudo vDest
-   * =>
-   * invoke-static {vObj}, LCandidateEnum;.redex$OE$get_iField:(Integer;)Ltype;
-   * move-result(-object|-wide)? vDest
-   */
-  void update_iget(cfg::ControlFlowGraph& cfg,
-                   cfg::Block* block,
-                   MethodItemEntry* mie) {
-    auto insn = mie->insn;
-    auto ifield = insn->get_field();
-    auto enum_type = ifield->get_class();
-    if (m_enum_attributes_map.count(enum_type)) {
-      auto vObj = insn->src(0);
-      auto get_ifield_method =
-          m_enum_util->add_get_ifield_method(enum_type, ifield);
-      IROpcode opcode;
-      switch (insn->opcode()) {
-      case OPCODE_IGET_WIDE:
-        opcode = OPCODE_MOVE_RESULT_WIDE;
-        break;
-      case OPCODE_IGET_OBJECT:
-        opcode = OPCODE_MOVE_RESULT_OBJECT;
-        break;
-      default:
-        opcode = OPCODE_MOVE_RESULT;
-      }
-      m_replacements.push_back(InsnReplacement(
-          cfg, block, mie,
-          dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}),
-          opcode));
-    }
+    m_replacements.push_back(InsnReplacement(mie, new_insn));
   }
 
   /**
@@ -679,26 +492,24 @@ class CodeTransformer final {
    *   invoke-static vn LEnumUtils;.values:(I)[Integer
    */
   void update_invoke_values(const optimize_enums::EnumTypeEnvironment&,
-                            cfg::ControlFlowGraph& cfg,
                             cfg::Block* block,
                             MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto method = insn->get_method();
     auto container = method->get_class();
-    auto attributes_it = m_enum_attributes_map.find(container);
-    if (attributes_it != m_enum_attributes_map.end()) {
+    auto attrs_it = m_enum_attrs.find(container);
+    if (attrs_it != m_enum_attrs.end()) {
       auto reg = allocate_temp();
       auto cls = type_class(container);
-      uint64_t enum_size = attributes_it->second.m_constants_map.size();
+      uint64_t enum_size = attrs_it->second.size();
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
       new_insns.push_back(
-          dasm(OPCODE_CONST,
-               {{VREG, reg}, {LITERAL, static_cast<int64_t>(enum_size)}}));
+          dasm(OPCODE_CONST, {{VREG, reg}, {LITERAL, enum_size}}));
       new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
                                m_enum_util->m_values_method_ref,
                                {{VREG, reg}}));
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+      m_replacements.push_back(InsnReplacement(mie, new_insns));
     }
   }
 
@@ -708,107 +519,48 @@ class CodeTransformer final {
    *   invoke-static v0 LCandidateEnum;.redex$OE$valueOf:(String)Integer
    */
   void update_invoke_valueof(const optimize_enums::EnumTypeEnvironment&,
-                             cfg::ControlFlowGraph& cfg,
-                             cfg::Block* block,
                              MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (!m_enum_attributes_map.count(container)) {
+    if (!m_enum_attrs.count(container)) {
       return;
     }
     auto valueof_method = m_enum_util->add_substitute_of_valueof(container);
     auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
-        cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
+        mie, dasm(OPCODE_INVOKE_STATIC, valueof_method, {{VREG, reg}})));
   }
 
   /**
    * If v0 is a candidate enum,
-   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; or
-   * invoke-virtual v0 LCandidateEnum;.toString:()Ljava/lang/String; =>
-   *    invoke-static v0 LCandidateEnum;.redex$OE$name:(Integer)String
+   * invoke-virtual v0 LCandidateEnum;.toString:()Ljava/lang/String; or
+   * invoke-virtual v0 LCandidateEnum;.name:()Ljava/lang/String; =>
+   *    invoke-static v0 LCandidateEnum;.redex$OE$toString:(Integer)String
+   * Since we never optimize enums that override toString method,
+   * LCandidateEnum;.toString:()String and LCandidateEnum;.name:()String are the
+   * same when LCandidateEnum; is a candidate enum.
    */
-  void update_invoke_name(const optimize_enums::EnumTypeEnvironment& env,
-                          cfg::ControlFlowGraph& cfg,
-                          cfg::Block* block,
-                          MethodItemEntry* mie) {
-    auto insn = mie->insn;
-    auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    DexType* candidate_type =
-        extract_candidate_enum_type(env.get(insn->src(0)));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
-      return;
-    }
-    auto helper_method = m_enum_util->add_substitute_of_name(candidate_type);
-    auto reg = insn->src(0);
-    m_replacements.push_back(InsnReplacement(
-        cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
-  }
-
-  /**
-   * If v0 is a candidate enum,
-   * invoke-virtual v0 LCandidateEnum;.hashCode:()I =>
-   *    invoke-static v0 LCandidateEnum;.redex$OE$hashCode:(Integer)I
-   */
-  void update_invoke_hashcode(const optimize_enums::EnumTypeEnvironment& env,
-                              cfg::ControlFlowGraph& cfg,
-                              cfg::Block* block,
+  void update_invoke_tostring(const optimize_enums::EnumTypeEnvironment& env,
                               MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        m_enum_attributes_map.count(container) == 0) {
+        container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
       return;
     }
-    auto src_reg = insn->src(0);
-    DexType* candidate_type = extract_candidate_enum_type(env.get(src_reg));
-    if (m_enum_attributes_map.count(container)) {
+    DexType* candidate_type =
+        extract_candidate_enum_type(env.get(insn->src(0)));
+    if (m_enum_attrs.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
       candidate_type = container;
     } else if (!candidate_type) {
       return;
     }
     auto helper_method =
-        m_enum_util->add_substitute_of_hashcode(candidate_type);
+        m_enum_util->add_substitute_of_tostring(candidate_type);
+    auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
-        cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, src_reg}})));
-  }
-
-  /**
-   * If v0 is a candidate enum object,
-   * invoke-static v0 LString;.valueOf:(LObject;)LString;
-   * =>
-   *   invoke-static v0 LCandidateEnum;.redex$OE$String_valueOf:(Integer)String
-   */
-  void update_invoke_string_valueof(
-      const optimize_enums::EnumTypeEnvironment& env,
-      cfg::ControlFlowGraph& cfg,
-      cfg::Block* block,
-      MethodItemEntry* mie) {
-    auto insn = mie->insn;
-    DexType* candidate_type =
-        extract_candidate_enum_type(env.get(insn->src(0)));
-    if (candidate_type == nullptr) {
-      return;
-    }
-    DexMethodRef* string_valueof_meth =
-        m_enum_util->add_substitute_of_stringvalueof(candidate_type);
-    m_replacements.push_back(
-        InsnReplacement(cfg, block, mie,
-                        dasm(OPCODE_INVOKE_STATIC, string_valueof_meth,
-                             {{VREG, insn->src(0)}})));
+        mie, dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
   }
 
   /**
@@ -820,10 +572,7 @@ class CodeTransformer final {
    *   invoke-virtual v0 vn LStringBuilder;.append:(String)LStringBuilder;
    */
   void update_invoke_stringbuilder_append(
-      const optimize_enums::EnumTypeEnvironment& env,
-      cfg::ControlFlowGraph& cfg,
-      cfg::Block* block,
-      MethodItemEntry* mie) {
+      const optimize_enums::EnumTypeEnvironment& env, MethodItemEntry* mie) {
     auto insn = mie->insn;
     DexType* candidate_type =
         extract_candidate_enum_type(env.get(insn->src(1)));
@@ -832,8 +581,8 @@ class CodeTransformer final {
     }
     DexMethodRef* string_valueof_meth =
         m_enum_util->add_substitute_of_stringvalueof(candidate_type);
-    auto reg0 = insn->src(0);
-    auto reg1 = insn->src(1);
+    auto reg0 = mie->insn->src(0);
+    auto reg1 = mie->insn->src(1);
     auto str_reg = allocate_temp();
     std::vector<IRInstruction*> new_insns{
         dasm(OPCODE_INVOKE_STATIC, string_valueof_meth, {{VREG, reg1}}),
@@ -841,13 +590,13 @@ class CodeTransformer final {
         dasm(OPCODE_INVOKE_VIRTUAL,
              m_enum_util->STRINGBUILDER_APPEND_STR_METHOD,
              {{VREG, reg0}, {VREG, str_reg}})};
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+    m_replacements.push_back(InsnReplacement(mie, new_insns));
   }
 
   /**
    * If v0 is a candidate enum,
    * invoke-virtual v0 LCandidateEnum;.ordinal:()I =>
-   * invoke-virtual v0 Integer.intValue()I,
+   * invoke-virtual v0 Integer.intValue(),
    *
    * invoke-virtual v0, v1 LCandidateEnum;.equals:(Ljava/lang/Object;)Z =>
    * invoke-virtual v0, v1 Integer.equals(Ljava/lang/Object;)Z,
@@ -856,73 +605,27 @@ class CodeTransformer final {
    * invoke-virtual v0, v1 Integer.compareTo(Ljava/lang/Integer;)I
    */
   void update_invoke_virtual(const optimize_enums::EnumTypeEnvironment& env,
-                             cfg::ControlFlowGraph& cfg,
-                             cfg::Block* block,
                              MethodItemEntry* mie,
                              DexMethodRef* integer_meth) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
     if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
+        container != m_enum_util->ENUM_TYPE && !m_enum_attrs.count(container)) {
       return;
     }
     auto this_types = env.get(insn->src(0));
     DexType* candidate_type = extract_candidate_enum_type(this_types);
-    if (m_enum_attributes_map.count(container)) {
+    if (m_enum_attrs.count(container)) {
       always_assert(candidate_type == nullptr || candidate_type == container);
     } else if (!candidate_type) {
       return;
     }
     auto new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-    new_insn->set_method(integer_meth)->set_srcs_size(insn->srcs_size());
+    new_insn->set_method(integer_meth)->set_arg_word_count(insn->srcs_size());
     for (size_t id = 0; id < insn->srcs_size(); ++id) {
       new_insn->set_src(id, insn->src(id));
     }
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
-  }
-
-  /**
-   * If this is an invocation of a user-defined virtual method on a
-   * CandidateEnum, then we make that method static. If that method is
-   * toString(), then we call one of the appropriate methods Enum.name()
-   * or CandidateEnum.toString(). Otherwise we do nothing.
-   */
-  void update_invoke_user_method(const optimize_enums::EnumTypeEnvironment& env,
-                                 cfg::ControlFlowGraph& cfg,
-                                 cfg::Block* block,
-                                 MethodItemEntry* mie) {
-    auto insn = mie->insn;
-    auto method_ref = insn->get_method();
-    auto container_type = method_ref->get_class();
-    if (!m_enum_attributes_map.count(container_type)) {
-      if (container_type != m_enum_util->OBJECT_TYPE &&
-          container_type != m_enum_util->ENUM_TYPE &&
-          container_type != m_enum_util->SERIALIZABLE_TYPE &&
-          container_type != m_enum_util->COMPARABLE_TYPE) {
-        return;
-      }
-      container_type = extract_candidate_enum_type(env.get(insn->src(0)));
-      if (!m_enum_attributes_map.count(container_type)) {
-        return;
-      }
-    }
-
-    // If this is toString() and there is no CandidateEnum.toString(), then we
-    // call Enum.name() instead.
-    if (signatures_match(method_ref, m_enum_util->ENUM_TOSTRING_METHOD) &&
-        m_enum_util->get_user_defined_tostring_method(
-            type_class(container_type)) == nullptr) {
-      update_invoke_name(env, cfg, block, mie);
-    } else {
-      auto method = resolve_method(method_ref, MethodSearch::Virtual);
-      always_assert(method);
-      m_enum_util->m_virtual_methods.insert(method);
-      auto new_insn = (new IRInstruction(*insn))
-                          ->set_opcode(OPCODE_INVOKE_STATIC)
-                          ->set_method(method);
-      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
-    }
+    m_replacements.push_back(InsnReplacement(mie, new_insn));
   }
 
   /**
@@ -933,15 +636,14 @@ class CodeTransformer final {
    */
   DexType* extract_candidate_enum_type(const EnumTypes& types) {
     auto type_set = types.elements();
-    if (std::all_of(type_set.begin(), type_set.end(), [this](DexType* t) {
-          return !m_enum_attributes_map.count(t);
-        })) {
+    if (std::all_of(type_set.begin(), type_set.end(),
+                    [this](DexType* t) { return !m_enum_attrs.count(t); })) {
       return nullptr;
     }
     DexType* ret = nullptr;
 
     for (auto t : type_set) {
-      if (m_enum_attributes_map.count(t)) {
+      if (m_enum_attrs.count(t)) {
         always_assert_log(ret == nullptr,
                           "Multiple candidate enums %s and %s\n", SHOW(t),
                           SHOW(ret));
@@ -952,14 +654,14 @@ class CodeTransformer final {
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
-    return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
+    return m_enum_util->try_convert_to_int_type(m_enum_attrs, type);
   }
 
   inline uint16_t allocate_temp() {
     return m_method->get_code()->cfg().allocate_temp();
   }
 
-  const EnumAttributeMap& m_enum_attributes_map;
+  const EnumAttrMap& m_enum_attrs;
   EnumUtil* m_enum_util;
   DexMethod* m_method;
   std::vector<InsnReplacement> m_replacements;
@@ -980,19 +682,19 @@ class EnumTransformer final {
          it != config.candidate_enums.end();
          ++it) {
       auto enum_cls = type_class(*it);
-      auto attributes = optimize_enums::analyze_enum_clinit(enum_cls);
-      size_t num_enum_constants = attributes.m_constants_map.size();
-      if (num_enum_constants == 0) {
-        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
-              SHOW(enum_cls), num_enum_constants,
+      auto enum_attrs = optimize_enums::analyze_enum_clinit(enum_cls);
+      if (enum_attrs.empty()) {
+        TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu\n",
+              SHOW(enum_cls), enum_attrs.size(),
               enum_cls->get_sfields().size());
-      } else if (num_enum_constants > config.max_enum_size) {
-        TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
-              num_enum_constants);
+        continue;
+      } else if (enum_attrs.size() > config.max_enum_size) {
+        TRACE(ENUM, 2, "\tSkip %s %lu values\n", SHOW(enum_cls),
+              enum_attrs.size());
       } else {
-        m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
-        m_enum_objs += num_enum_constants;
-        m_enum_attributes_map.emplace(*it, attributes);
+        m_int_objs = std::max<uint32_t>(m_int_objs, enum_attrs.size());
+        m_enum_objs += enum_attrs.size();
+        m_enum_attrs.emplace(*it, enum_attrs);
         clean_generated_methods_fields(enum_cls);
         opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
       }
@@ -1008,40 +710,27 @@ class EnumTransformer final {
     walk::parallel::code(
         scope,
         [&](DexMethod* method) {
-          if (m_enum_attributes_map.count(method->get_class()) &&
+          if (m_enum_attrs.count(method->get_class()) &&
               is_generated_enum_method(method)) {
             return false;
           }
           std::vector<DexType*> types;
-          method->gather_types_shallow(types);
+          method->get_proto()->gather_types(types);
           method->gather_types(types);
           return std::any_of(types.begin(), types.end(), [this](DexType* type) {
             return (bool)try_convert_to_int_type(type);
           });
         },
         [&](DexMethod* method, IRCode& code) {
-          CodeTransformer code_updater(m_enum_attributes_map, m_enum_util.get(),
-                                       method);
+          CodeTransformer code_updater(m_enum_attrs, m_enum_util.get(), method);
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    std::set<DexMethod*, dexmethods_comparator> virtual_methods(
-        m_enum_util->m_virtual_methods.begin(),
-        m_enum_util->m_virtual_methods.end());
-    for (auto vmethod : virtual_methods) {
-      mutators::make_static(vmethod);
-    }
-    std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
-        m_enum_util->m_get_instance_field_methods.begin(),
-        m_enum_util->m_get_instance_field_methods.end());
-    for (auto& pair : field_to_method) {
-      create_get_instance_field_method(pair.second, pair.first);
-    }
     post_update_enum_classes(scope);
     // Update all methods and fields references by replacing the candidate enum
     // types with Integer type.
     std::unordered_map<DexType*, DexType*> type_mapping;
-    for (auto& pair : m_enum_attributes_map) {
+    for (auto& pair : m_enum_attrs) {
       type_mapping[pair.first] = m_enum_util->INTEGER_TYPE;
     }
     type_reference::TypeRefUpdater updater(type_mapping);
@@ -1053,44 +742,41 @@ class EnumTransformer final {
   uint32_t get_enum_objs_count() { return m_enum_objs; }
 
  private:
-  /**
-   * Go through all instructions and check that all the methods, fields, and
-   * types they reference actually exist.
-   */
   void sanity_check(Scope& scope) {
-    walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
-      for (auto& mie : InstructionIterable(code)) {
-        auto insn = mie.insn;
-        if (insn->has_method()) {
-          auto method_ref = insn->get_method();
-          auto container = method_ref->get_class();
-          if (m_enum_attributes_map.count(container)) {
-            always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
-                              SHOW(insn), SHOW(method));
+    // Only when trace level is 9.
+    if (traceEnabled(ENUM, 9)) {
+      walk::parallel::code(scope, [this](DexMethod* method, IRCode& code) {
+        for (auto& mie : InstructionIterable(code)) {
+          auto insn = mie.insn;
+          if (insn->has_method()) {
+            auto method_ref = insn->get_method();
+            auto container = method_ref->get_class();
+            if (m_enum_attrs.count(container)) {
+              always_assert_log(method_ref->is_def(), "Invalid insn %s in %s\n",
+                                SHOW(insn), SHOW(method));
+            }
+          } else if (insn->has_field()) {
+            auto field_ref = insn->get_field();
+            auto container = field_ref->get_class();
+            if (m_enum_attrs.count(container)) {
+              always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
+                                SHOW(insn), SHOW(method));
+            }
+          } else if (insn->has_type()) {
+            auto type_ref = insn->get_type();
+            always_assert_log(!m_enum_attrs.count(type_ref),
+                              "Invalid insn %s in %s\n", SHOW(insn),
+                              SHOW(method));
           }
-        } else if (insn->has_field()) {
-          auto field_ref = insn->get_field();
-          auto container = field_ref->get_class();
-          if (m_enum_attributes_map.count(container)) {
-            always_assert_log(field_ref->is_def(), "Invalid insn %s in %s\n",
-                              SHOW(insn), SHOW(method));
-          }
-        } else if (insn->has_type()) {
-          auto type_ref = insn->get_type();
-          always_assert_log(!m_enum_attributes_map.count(type_ref),
-                            "Invalid insn %s in %s\n", SHOW(insn),
-                            SHOW(method));
         }
-      }
-    });
+      });
+    }
   }
 
   void create_substitute_methods(const ConcurrentSet<DexMethodRef*>& methods) {
     for (auto ref : methods) {
-      if (ref->get_name() == m_enum_util->REDEX_NAME) {
-        create_name_method(ref);
-      } else if (ref->get_name() == m_enum_util->REDEX_HASHCODE) {
-        create_hashcode_method(ref);
+      if (ref->get_name() == m_enum_util->REDEX_TOSTRING) {
+        create_tostring_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_VALUEOF) {
         create_valueof_method(ref);
       } else if (ref->get_name() == m_enum_util->REDEX_STRING_VALUEOF) {
@@ -1106,7 +792,7 @@ class EnumTransformer final {
    *   if (obj == null) {
    *     return "null";
    *   }
-   *   return CandidateEnum.toString(obj);
+   *   return redex$OE$toString(obj);
    * }
    */
   void create_stringvalueof_method(DexMethodRef* ref) {
@@ -1163,10 +849,11 @@ class EnumTransformer final {
     code->build_cfg();
     auto& cfg = code->cfg();
     auto prev_block = cfg.entry_block();
-    for (auto& pair :
-         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
+    auto& enum_attrs = m_enum_attrs.at(ref->get_class());
+    auto sorted_values = sort_enum_values(enum_attrs);
+    for (auto& value : sorted_values) {
       prev_block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
            dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
            dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_EQ_METHOD,
                 {0_v, 1_v}),
@@ -1174,7 +861,7 @@ class EnumTransformer final {
 
       auto equal_block = cfg.create_block();
       {
-        auto obj_field = m_enum_util->m_fields[pair.first];
+        auto obj_field = m_enum_util->m_fields[value.ordinal];
         equal_block->push_back({dasm(OPCODE_SGET_OBJECT, obj_field),
                                 dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}),
                                 dasm(OPCODE_RETURN_OBJECT, {2_v})});
@@ -1196,9 +883,9 @@ class EnumTransformer final {
   }
 
   /**
-   * Substitute for LCandidateEnum;.name()
+   * Substitute for LCandidateEnum;.toString()
    *
-   * public static String redex$OE$name(Integer obj) {
+   * public static String redex$OE$toString(Integer obj) {
    *   switch(obj.intValue()) {
    *     case 0 : ...;
    *     case 1 : ...;
@@ -1206,7 +893,7 @@ class EnumTransformer final {
    *   }
    * }
    */
-  void create_name_method(DexMethodRef* ref) {
+  void create_tostring_method(DexMethodRef* ref) {
     MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
     auto method = mc.create();
     auto cls = type_class(ref->get_class());
@@ -1219,13 +906,14 @@ class EnumTransformer final {
                            m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
                       dasm(OPCODE_MOVE_RESULT, {0_v})});
 
+    auto& enum_attrs = m_enum_attrs.at(ref->get_class());
+    auto sorted_values = sort_enum_values(enum_attrs);
     std::vector<std::pair<int32_t, cfg::Block*>> cases;
-    for (auto& pair :
-         m_enum_attributes_map[ref->get_class()].get_ordered_names()) {
+    for (auto& value : sorted_values) {
       auto block = cfg.create_block();
-      cases.emplace_back(pair.first, block);
+      cases.emplace_back(value.ordinal, block);
       block->push_back(
-          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(pair.second)),
+          {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value.name)),
            dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
            dasm(OPCODE_RETURN_OBJECT, {1_v})});
     }
@@ -1242,108 +930,6 @@ class EnumTransformer final {
   }
 
   /**
-   * Substitute for LCandidateEnum:.hashCode()
-   *
-   * Since `Enum.hashCode()` is not in the Java spec so that different JVMs
-   * may have different implementations and since hashcodes are usually
-   * only used as keys to hash maps we can choose one implementation.
-   * https://android.googlesource.com/platform/libcore/+/9edf43dfcc35c761d97eb9156ac4254152ddbc55/libdvm/src/main/java/java/lang/Enum.java#118
-   *
-   *
-   * public static int redex$OE$hashCode(Integer obj) {
-   *   String name = CandidateEnum.name(obj);
-   *   return obj.intValue() + name.hashCode();
-   * }
-   */
-  void create_hashcode_method(DexMethodRef* ref) {
-    MethodCreator mc(ref, ACC_STATIC | ACC_PUBLIC);
-    auto method = mc.create();
-    auto cls = type_class(ref->get_class());
-    cls->add_method(method);
-    auto code = method->get_code();
-    code->build_cfg();
-    auto& cfg = code->cfg();
-    auto entry = cfg.entry_block();
-    auto name_method = m_enum_util->get_substitute_of_name(ref->get_class());
-    entry->push_back({
-        dasm(OPCODE_INVOKE_STATIC, name_method, {0_v}),
-        dasm(OPCODE_MOVE_RESULT_OBJECT, {1_v}),
-        dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->STRING_HASHCODE_METHOD, {1_v}),
-        dasm(OPCODE_MOVE_RESULT, {1_v}),
-        dasm(OPCODE_INVOKE_VIRTUAL, m_enum_util->INTEGER_INTVALUE_METHOD,
-             {0_v}),
-        dasm(OPCODE_MOVE_RESULT, {2_v}),
-        dasm(OPCODE_ADD_INT, {1_v, 1_v, 2_v}),
-        dasm(OPCODE_RETURN, {1_v}),
-    });
-    cfg.recompute_registers_size();
-    code->clear_cfg();
-  }
-
-  /**
-   * Create a helper method to replace `iget` instructions that returns an
-   * instance field value given the enum ordinal.
-   *
-   * public static [type] redex$OE$get_instanceField(Integer obj) {
-   *   switch (obj.intValue()) {
-   *     case 0: return value0;
-   *     case 1: return value1;
-   *     ...
-   *   }
-   * }
-   */
-  void create_get_instance_field_method(DexMethodRef* method_ref,
-                                        DexFieldRef* ifield_ref) {
-    MethodCreator mc(method_ref, ACC_STATIC | ACC_PUBLIC);
-    auto method = mc.create();
-    auto cls = type_class(method_ref->get_class());
-    cls->add_method(method);
-    auto code = method->get_code();
-    code->build_cfg();
-    auto& cfg = code->cfg();
-    auto entry = cfg.entry_block();
-    entry->push_back({dasm(OPCODE_INVOKE_VIRTUAL,
-                           m_enum_util->INTEGER_INTVALUE_METHOD, {0_v}),
-                      dasm(OPCODE_MOVE_RESULT, {0_v})});
-    auto ifield_type = ifield_ref->get_type();
-    std::vector<std::pair<int32_t, cfg::Block*>> cases;
-    for (auto& pair :
-         m_enum_attributes_map[cls->get_type()].m_field_map[ifield_ref]) {
-      auto ordinal = pair.first;
-      auto block = cfg.create_block();
-      cases.emplace_back(ordinal, block);
-      if (ifield_type == get_string_type()) {
-        const DexString* value = pair.second.string_value;
-        if (value) {
-          block->push_back(
-              {dasm(OPCODE_CONST_STRING, const_cast<DexString*>(value)),
-               dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
-               dasm(OPCODE_RETURN_OBJECT, {1_v})});
-        } else {
-          // The `Ljava/lang/String` value is a `null` constant.
-          block->push_back({dasm(OPCODE_CONST, {1_v, 0_L}),
-                            dasm(OPCODE_RETURN_OBJECT, {1_v})});
-        }
-      } else {
-        int64_t value = pair.second.primitive_value;
-        if (is_wide_type(ifield_type)) {
-          block->push_back({dasm(OPCODE_CONST_WIDE, {1_v, {LITERAL, value}}),
-                            dasm(OPCODE_RETURN_WIDE, {1_v})});
-        } else {
-          block->push_back({dasm(OPCODE_CONST, {1_v, {LITERAL, value}}),
-                            dasm(OPCODE_RETURN, {1_v})});
-        }
-      }
-    }
-    // Arbitrarily choose the first case block as the default case.
-    always_assert(cases.size() > 0);
-    cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
-                      cases);
-    cfg.recompute_registers_size();
-    code->clear_cfg();
-  }
-
-  /**
    * 1. Erase the enum instance fields and synthetic array field which is
    * usually `$VALUES`.
    * 2. Delete <init>, values() and valueOf(String) methods, and delete
@@ -1351,14 +937,13 @@ class EnumTransformer final {
    */
   void clean_generated_methods_fields(DexClass* enum_cls) {
     auto& sfields = enum_cls->get_sfields();
-    auto& enum_constants =
-        m_enum_attributes_map[enum_cls->get_type()].m_constants_map;
+    auto& attrs = m_enum_attrs.at(enum_cls->get_type());
     auto synth_field_access = synth_access();
     DexField* values_field = nullptr;
 
     for (auto fit = sfields.begin(); fit != sfields.end();) {
       auto field = *fit;
-      if (enum_constants.count(field)) {
+      if (attrs.count(field)) {
         fit = sfields.erase(fit);
       } else if (check_required_access_flags(synth_field_access,
                                              field->get_access())) {
@@ -1376,7 +961,7 @@ class EnumTransformer final {
     for (auto mit = dmethods.begin(); mit != dmethods.end();) {
       auto method = *mit;
       if (is_clinit(method)) {
-        clean_clinit(enum_constants, enum_cls, method, values_field);
+        clean_clinit(attrs, enum_cls, method, values_field);
         if (empty(method->get_code())) {
           mit = dmethods.erase(mit);
         } else {
@@ -1394,7 +979,7 @@ class EnumTransformer final {
    * Erase the put instructions that write enum values and synthetic $VALUES
    * array, then erase the dead instructions.
    */
-  void clean_clinit(const EnumConstantsMap& enum_constants,
+  void clean_clinit(const AttrMap& attrs,
                     DexClass* enum_cls,
                     DexMethod* clinit,
                     DexField* values_field) {
@@ -1412,7 +997,7 @@ class EnumTransformer final {
       auto insn = it->insn;
       if (is_sput(insn->opcode())) {
         auto field = resolve_field(insn->get_field());
-        if (field && (enum_constants.count(field) || field == values_field)) {
+        if (field && (attrs.count(field) || field == values_field)) {
           it = code->erase(it);
           continue;
         }
@@ -1460,7 +1045,7 @@ class EnumTransformer final {
    */
   void post_update_enum_classes(Scope& scope) {
     for (auto cls : scope) {
-      if (!m_enum_attributes_map.count(cls->get_type())) {
+      if (!m_enum_attrs.count(cls->get_type())) {
         continue;
       }
       always_assert_log(cls->get_super_class() == m_enum_util->ENUM_TYPE,
@@ -1473,13 +1058,13 @@ class EnumTransformer final {
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
-    return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
+    return m_enum_util->try_convert_to_int_type(m_enum_attrs, type);
   }
 
   DexStoresVector& m_stores;
   uint32_t m_int_objs{0}; // Generated Integer objects.
   uint32_t m_enum_objs{0}; // Eliminated Enum objects.
-  EnumAttributeMap m_enum_attributes_map;
+  EnumAttrMap m_enum_attrs;
   std::unique_ptr<EnumUtil> m_enum_util;
 };
 } // namespace

@@ -93,8 +93,7 @@ class IRCode {
   ~IRCode();
 
   bool structural_equals(const IRCode& other) {
-    return m_ir_list->structural_equals(*other.m_ir_list,
-                                        std::equal_to<const IRInstruction&>());
+    return m_ir_list->structural_equals(*other.m_ir_list, std::equal_to<const IRInstruction&>());
   }
 
   bool structural_equals(const IRCode& other,
@@ -131,11 +130,23 @@ class IRCode {
     return std::move(m_dbg);
   }
 
-  void gather_catch_types(std::vector<DexType*>& ltype) const;
-  void gather_strings(std::vector<DexString*>& lstring) const;
-  void gather_types(std::vector<DexType*>& ltype) const;
-  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
-  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_catch_types(std::vector<DexType*>& ltype) const {
+    m_ir_list->gather_catch_types(ltype);
+    if (m_dbg) m_dbg->gather_types(ltype);
+  }
+  void gather_strings(std::vector<DexString*>& lstring) const {
+    m_ir_list->gather_strings(lstring);
+    if (m_dbg) m_dbg->gather_strings(lstring);
+  }
+  void gather_types(std::vector<DexType*>& ltype) const {
+    m_ir_list->gather_types(ltype);
+  }
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const {
+    m_ir_list->gather_fields(lfield);
+  }
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const {
+    m_ir_list->gather_methods(lmethod);
+  }
 
   /* Return the control flow graph of this method as a vector of blocks. */
   cfg::ControlFlowGraph& cfg() { return *m_cfg; }

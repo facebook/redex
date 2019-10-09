@@ -89,7 +89,7 @@ void update_code_type_refs(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
   TRACE(TERA,
         8,
-        "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
+        "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS\n");
   TypeSet mergeables;
   for (const auto& pair : mergeable_to_merger) {
     mergeables.insert(pair.first);
@@ -148,7 +148,7 @@ void update_code_type_refs(
         continue;
       }
       const auto ref_type = insn->get_type();
-      auto type = get_element_type_if_array(ref_type);
+      auto type = get_array_type_or_self(ref_type);
       if (mergeable_to_merger.count(type) == 0) {
         continue;
       }
@@ -159,13 +159,13 @@ void update_code_type_refs(
         insn->set_type(array_merger_type);
         TRACE(TERA,
               9,
-              "  replacing %s referencing array type of %s",
+              "  replacing %s referencing array type of %s\n",
               SHOW(insn),
               SHOW(type));
       } else {
         insn->set_type(const_cast<DexType*>(merger_type));
         TRACE(
-            TERA, 9, "  replacing %s referencing %s", SHOW(insn), SHOW(type));
+            TERA, 9, "  replacing %s referencing %s\n", SHOW(insn), SHOW(type));
       }
     }
   };
@@ -183,7 +183,7 @@ void update_refs_to_mergeable_fields(
     cook_merger_fields_lookup(
         merger_fields.at(merger->type), merger->field_map, fields_lookup);
   }
-  TRACE(TERA, 8, "  Updating field refs");
+  TRACE(TERA, 8, "  Updating field refs\n");
   walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
     auto ii = InstructionIterable(code);
     for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -205,7 +205,7 @@ void update_refs_to_mergeable_fields(
       insn->set_field(new_field);
       TRACE(TERA,
             9,
-            "  replacing %s field ref %s (defined on mergeable)",
+            "  replacing %s field ref %s (defined on mergeable)\n",
             SHOW(insn),
             SHOW(field));
 
@@ -285,7 +285,7 @@ void update_instance_of(
       always_assert(type_class(type));
       TRACE(TERA,
             9,
-            " patching INSTANCE_OF at %s %s",
+            " patching INSTANCE_OF at %s %s\n",
             SHOW(insn),
             SHOW(caller));
       // Load type_tag.
@@ -309,7 +309,7 @@ void update_instance_of(
       // remove original INSTANCE_OF.
       code.remove_opcode(insn);
 
-      TRACE(TERA, 9, " patched INSTANCE_OF in \n%s", SHOW(&code));
+      TRACE(TERA, 9, " patched INSTANCE_OF in \n%s\n", SHOW(&code));
     }
   });
 }
@@ -332,7 +332,7 @@ void update_instance_of_no_type_tag(
       always_assert(type_class(type));
       auto merger_type = mergeable_to_merger.at(type);
       insn->set_type(merger_type);
-      TRACE(TERA, 9, " patched INSTANCE_OF no type tag in \n%s", SHOW(&code));
+      TRACE(TERA, 9, " patched INSTANCE_OF no type tag in \n%s\n", SHOW(&code));
     }
   });
 }
@@ -396,7 +396,7 @@ void update_const_string_type_refs(const Scope& scope,
         insn->set_string(dex_name_to);
         TRACE(TERA,
               8,
-              "Replace const-string from %s to %s",
+              "Replace const-string from %s to %s\n",
               dex_str->c_str(),
               dex_name_to->c_str());
       }
@@ -461,7 +461,7 @@ void fix_existing_merger_cls(const Model& model,
   }
   TRACE(TERA,
         5,
-        "create hierarhcy: updated DexClass from MergerType: %s",
+        "create hierarhcy: updated DexClass from MergerType: %s\n",
         SHOW(cls));
 }
 
@@ -469,7 +469,7 @@ void fix_existing_merger_cls(const Model& model,
 void trim_method_debug_map(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger,
     std::unordered_map<DexMethod*, std::string>& method_debug_map) {
-  TRACE(TERA, 5, "Method debug map un-trimmed %d", method_debug_map.size());
+  TRACE(TERA, 5, "Method debug map un-trimmed %d\n", method_debug_map.size());
   size_t trimmed_cnt = 0;
   for (auto it = method_debug_map.begin(); it != method_debug_map.end();) {
     auto owner_type = it->first->get_class();
@@ -481,7 +481,7 @@ void trim_method_debug_map(
     }
   }
 
-  TRACE(TERA, 5, "Method debug map trimmed %d", trimmed_cnt);
+  TRACE(TERA, 5, "Method debug map trimmed %d\n", trimmed_cnt);
 }
 
 void write_out_type_mapping(
@@ -511,7 +511,7 @@ void write_out_type_mapping(
   os << out.str();
   TRACE(TERA,
         4,
-        "Dumped type mapping (%d) to %s",
+        "Dumped type mapping (%d) to %s\n",
         out.str().size(),
         mapping_file.c_str());
 }
@@ -596,7 +596,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
       if (merger.vmethods.size() || merger.intfs_methods.size()) {
         TRACE(TERA,
               5,
-              "Bailing out: no type tag merger %s w/ true virtuals",
+              "Bailing out: no type tag merger %s w/ true virtuals\n",
               SHOW(merger.type));
         return;
       }
@@ -656,7 +656,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     post_process(model, type_tags, mergeable_to_merger_ctor);
   }
 
-  TRACE(TERA, 3, "created %d merger classes", merger_classes.size());
+  TRACE(TERA, 3, "created %d merger classes\n", merger_classes.size());
   m_stats.m_num_generated_classes = merger_classes.size();
   return merger_classes;
 }

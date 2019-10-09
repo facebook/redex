@@ -57,6 +57,8 @@ using Domain = sparta::
 
 using RegisterTypeDomain = register_type_impl::Domain;
 
+std::string show(RegisterType);
+
 RegisterType dest_reg_type(const IRInstruction*);
 
 RegisterType src_reg_type(const IRInstruction*, reg_t);
@@ -67,9 +69,3 @@ RegisterType src_reg_type(const IRInstruction*, reg_t);
 IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src);
 
 } // namespace regalloc
-
-// Declare this in the global namespace (instead of under the regalloc
-// namespace) so that it doesn't hide the other definitions of the overloaded
-// show() method. Otherwise code inside the regalloc namespace will have to use
-// ::show() to invoke the methods in the global namespace, which is ugly.
-std::string show(regalloc::RegisterType);

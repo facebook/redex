@@ -77,8 +77,6 @@ class Breadcrumbs {
   bool is_illegal_cross_store(const DexType* caller, const DexType* callee);
   const DexType* check_type(const DexType* type);
   const DexType* check_method(const DexMethodRef* method);
-  const DexType* check_anno(const DexAnnotationSet* anno);
-
   void bad_type(const DexType* type,
                 const DexMethod* method,
                 const IRInstruction* insn);

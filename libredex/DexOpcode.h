@@ -24,7 +24,7 @@ const size_t NON_RANGE_MAX = 5;
 
 OpcodeFormat format(DexOpcode opcode);
 
-bool has_dest(DexOpcode);
+unsigned dests_size(DexOpcode);
 // we can't tell the srcs size from the opcode alone -- format 35c opcodes
 // encode that separately. So this just returns the minimum.
 unsigned min_srcs_size(DexOpcode);

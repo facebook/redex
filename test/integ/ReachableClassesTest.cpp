@@ -44,10 +44,10 @@ TEST(ReachableClasses, ClassForNameStringLiteral) {
   DexClasses& classes = root_store.get_dexen().back();
   stores.emplace_back(std::move(root_store));
   size_t before = classes.size();
-  TRACE(EMPTY, 3, "Loaded classes: %ld", classes.size());
+  TRACE(EMPTY, 3, "Loaded classes: %ld\n", classes.size());
   // Report the classes that were loaded through tracing.
   for (const auto& cls : classes) {
-    TRACE(EMPTY, 3, "Input class: %s", cls->get_type()->get_name()->c_str());
+    TRACE(EMPTY, 3, "Input class: %s\n", cls->get_type()->get_name()->c_str());
   }
 
   std::vector<Pass*> passes;

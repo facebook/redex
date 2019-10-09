@@ -6,10 +6,6 @@
  */
 
 #include "ApiLevelChecker.h"
-
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-
 #include "Walkers.h"
 
 namespace api {
@@ -106,13 +102,13 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
     const std::string& outer_name = cls_name.substr(0, cash_idx) + ';';
     DexType* outer = DexType::get_type(outer_name);
     if (outer == nullptr) {
-      TRACE(MMINL, 4, "Can't find outer class! %s -> %s", cls_name.c_str(),
+      TRACE(MMINL, 4, "Can't find outer class! %s -> %s\n", cls_name.c_str(),
             outer_name.c_str());
       return nullptr;
     }
     DexClass* outer_cls = type_class(outer);
     if (cls == nullptr) {
-      TRACE(MMINL, 4, "outer class %s is external?", SHOW(outer));
+      TRACE(MMINL, 4, "outer class %s is external?\n", SHOW(outer));
       return nullptr;
     }
     return outer_cls;
@@ -123,12 +119,6 @@ DexClass* LevelChecker::get_outer_class(const DexClass* cls) {
 int32_t LevelChecker::get_min_level() {
   always_assert_log(s_has_been_init, "must call init first");
   return s_min_level;
-}
-
-bool is_android_sdk_type(const DexType* type) {
-  std::string android_sdk_prefix = "Landroid/";
-  const std::string& name = type->str();
-  return boost::starts_with(name, android_sdk_prefix);
 }
 
 } // namespace api

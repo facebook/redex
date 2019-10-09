@@ -129,7 +129,8 @@ TEST_F(ConstantNezTest, DeterminableNezTrue) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(ConstantNezTest, DeterminableNezFalse) {
@@ -161,7 +162,8 @@ TEST_F(ConstantNezTest, DeterminableNezFalse) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(ConstantNezTest, DeterminableEZFalse) {
@@ -190,7 +192,8 @@ TEST_F(ConstantNezTest, DeterminableEZFalse) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(ConstantNezTest, NonDeterminableNEZ) {
@@ -227,7 +230,8 @@ TEST_F(ConstantNezTest, NonDeterminableNEZ) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, IfToGoto) {
@@ -256,7 +260,8 @@ TEST(ConstantPropagation, IfToGoto) {
      (const v0 2)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldArithmeticAddLit) {
@@ -288,7 +293,8 @@ TEST(ConstantPropagation, FoldArithmeticAddLit) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, AnalyzeCmp) {
@@ -357,7 +363,8 @@ TEST(ConstantPropagation, AnalyzeCmp) {
       (return v2)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
@@ -396,7 +403,8 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysTrue) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
@@ -433,7 +441,8 @@ TEST(ConstantPropagation, ConditionalConstant_EqualsAlwaysFalse) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
@@ -470,7 +479,8 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysTrue) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
@@ -507,7 +517,8 @@ TEST(ConstantPropagation, ConditionalConstant_LessThanAlwaysFalse) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstantInferZero) {
@@ -540,7 +551,8 @@ TEST(ConstantPropagation, ConditionalConstantInferZero) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, ConditionalConstantInferInterval) {
@@ -573,7 +585,8 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseAndLit) {
@@ -594,7 +607,8 @@ TEST(ConstantPropagation, FoldBitwiseAndLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseOrLit) {
@@ -615,7 +629,8 @@ TEST(ConstantPropagation, FoldBitwiseOrLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseXorLit) {
@@ -636,7 +651,8 @@ TEST(ConstantPropagation, FoldBitwiseXorLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseShiftLeftOverflowLit) {
@@ -655,7 +671,8 @@ TEST(ConstantPropagation, FoldBitwiseShiftLeftOverflowLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseShiftLit) {
@@ -676,7 +693,8 @@ TEST(ConstantPropagation, FoldBitwiseShiftLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseOverShiftLit) {
@@ -697,7 +715,8 @@ TEST(ConstantPropagation, FoldBitwiseOverShiftLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldBitwiseArithAndLogicalRightShiftLit) {
@@ -718,7 +737,8 @@ TEST(ConstantPropagation, FoldBitwiseArithAndLogicalRightShiftLit) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST(ConstantPropagation, FoldDivIntLit) {
@@ -747,5 +767,6 @@ TEST(ConstantPropagation, FoldDivIntLit) {
       (return-void)
     )
   )"); // division by 0 should not be optimized out
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }

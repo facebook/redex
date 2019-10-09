@@ -171,7 +171,7 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
         "ERROR - Dangling References (contact redex@on-call):\n%s",
         ss.str().c_str());
   } else {
-    TRACE(BRCR, 1, "No dangling references");
+    TRACE(BRCR, 1, "No dangling references\n");
   }
   mgr.incr_metric(METRIC_BAD_FIELDS, bad_fields_count);
   mgr.incr_metric(METRIC_BAD_METHODS, bad_methods_count);
@@ -308,46 +308,23 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
                                               callee_store_idx);
 }
 
-/**
- * Return the type reference that is neither external nor defined, or return
- * null if the type reference is defined or external.
- */
 const DexType* Breadcrumbs::check_type(const DexType* type) {
-  auto type_ref = get_element_type_if_array(type);
-  const auto& cls = type_class(type_ref);
+  const auto& cls = type_class(type);
   if (cls == nullptr) return nullptr;
   if (cls->is_external()) return nullptr;
   if (m_classes.count(cls) > 0) return nullptr;
-  return type_ref;
+  return type;
 }
 
-/**
- * Return a type reference on the method ref if the definition of the type is
- * missing, or return null if all the type references are defined or external.
- */
 const DexType* Breadcrumbs::check_method(const DexMethodRef* method) {
-  std::vector<DexType*> type_refs;
-  method->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
-      return bad_ref;
-    }
-  }
-  return nullptr;
-}
-
-const DexType* Breadcrumbs::check_anno(const DexAnnotationSet* anno) {
-  if (!anno) {
-    return nullptr;
-  }
-  std::vector<DexType*> type_refs;
-  anno->gather_types(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
-      return bad_ref;
-    }
+  const auto& proto = method->get_proto();
+  auto type = check_type(proto->get_rtype());
+  if (type != nullptr) return type;
+  const auto& args = proto->get_args();
+  if (args == nullptr) return nullptr;
+  for (const auto& arg : args->get_type_list()) {
+    type = check_type(arg);
+    if (type != nullptr) return type;
   }
   return nullptr;
 }
@@ -358,20 +335,11 @@ void Breadcrumbs::bad_type(const DexType* type,
   m_bad_type_insns[type][method].emplace_back(insn);
 }
 
-// Verify that all field definitions reference types that are not deleted.
+// verify that all field definitions are of a type not deleted
 void Breadcrumbs::check_fields() {
   walk::fields(m_scope, [&](DexField* field) {
-    bool check_cross_store_ref = true;
-    std::vector<DexType*> type_refs;
-    field->gather_types(type_refs);
-    for (auto type : type_refs) {
-      auto bad_ref = check_type(type);
-      if (bad_ref) {
-        m_bad_fields[bad_ref].emplace_back(field);
-        check_cross_store_ref = false;
-      }
-    }
-    if (check_cross_store_ref) {
+    const auto& type = check_type(field->get_type());
+    if (type == nullptr) {
       const auto cls = field->get_class();
       const auto field_type = field->get_type();
       if (is_illegal_cross_store(cls, field_type)) {
@@ -379,30 +347,17 @@ void Breadcrumbs::check_fields() {
       }
       return;
     }
+    m_bad_fields[type].emplace_back(field);
   });
 }
 
-// Verify that all method definitions use not deleted types in their signatures
-// and annotations.
+// verify that all method definitions use not deleted types in their sig
 void Breadcrumbs::check_methods() {
   walk::methods(m_scope, [&](DexMethod* method) {
-    bool check_cross_store_ref = true;
-    // Check type references on the method signature.
-    const auto* bad_ref = check_method(method);
-    if (bad_ref) {
-      m_bad_methods[bad_ref].emplace_back(method);
-      check_cross_store_ref = false;
-    }
-    // Check type references on the annotations on the method.
-    bad_ref = check_anno(method->get_anno_set());
-    if (bad_ref) {
-      m_bad_methods[bad_ref].emplace_back(method);
-      check_cross_store_ref = false;
-    }
-
-    if (check_cross_store_ref) {
-      has_illegal_access(method);
-    }
+    const auto& type = check_method(method);
+    if (type == nullptr) return;
+    m_bad_methods[type].emplace_back(method);
+    has_illegal_access(method);
   });
 }
 
@@ -418,14 +373,12 @@ bool Breadcrumbs::check_field_accessibility(const DexMethod* method,
   return true;
 }
 
-bool Breadcrumbs::referenced_field_is_deleted(DexFieldRef* field_ref) {
-  auto field = field_ref->as_def();
-  return field && !class_contains(field);
+bool Breadcrumbs::referenced_field_is_deleted(DexFieldRef* field) {
+  return field->is_def() && !class_contains(static_cast<DexField*>(field));
 }
 
-bool Breadcrumbs::referenced_method_is_deleted(DexMethodRef* method_ref) {
-  auto method = method_ref->as_def();
-  return method && !class_contains(method);
+bool Breadcrumbs::referenced_method_is_deleted(DexMethodRef* method) {
+  return method->is_def() && !class_contains(static_cast<DexMethod*>(method));
 }
 
 /* verify that all method instructions that access methods are valid */
@@ -457,37 +410,35 @@ void Breadcrumbs::check_type_opcode(const DexMethod* method,
 
 void Breadcrumbs::check_field_opcode(const DexMethod* method,
                                      IRInstruction* insn) {
-  bool check_cross_store_ref = true;
-
   auto field = insn->get_field();
-  std::vector<DexType*> type_refs;
-  field->gather_types_shallow(type_refs);
-  for (auto type : type_refs) {
-    auto bad_ref = check_type(type);
-    if (bad_ref) {
-      bad_type(bad_ref, method, insn);
-      check_cross_store_ref = false;
-    }
+  const DexType* type = check_type(field->get_class());
+  if (type != nullptr) {
+    bad_type(type, method, insn);
+    return;
   }
 
-  if (check_cross_store_ref) {
-    auto cls = method->get_class();
-    if (is_illegal_cross_store(cls, field->get_class())) {
-      m_illegal_field_type[method].emplace_back(insn);
-    }
+  auto cls = method->get_class();
+  if (is_illegal_cross_store(cls, field->get_class())) {
+    m_illegal_field_type[method].emplace_back(insn);
+  }
 
-    if (is_illegal_cross_store(cls, field->get_type())) {
-      m_illegal_field_cls[method].emplace_back(insn);
-    }
+  type = check_type(field->get_type());
+  if (type != nullptr) {
+    bad_type(type, method, insn);
+    return;
+  }
+
+  if (is_illegal_cross_store(cls, field->get_type())) {
+    m_illegal_field_cls[method].emplace_back(insn);
   }
 
   auto res_field = resolve_field(field);
   if (res_field != nullptr) {
     // a resolved field can only differ in the owner class
     if (field != res_field) {
-      auto bad_ref = check_type(field->get_class());
-      if (bad_ref != nullptr) {
-        bad_type(bad_ref, method, insn);
+      type = check_type(field->get_class());
+      if (type != nullptr) {
+        bad_type(type, method, insn);
         return;
       }
     }

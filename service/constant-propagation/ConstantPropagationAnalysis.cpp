@@ -35,6 +35,7 @@ static Out reinterpret_bits(In in) {
   if (std::is_same<In, Out>::value) {
     return in;
   }
+  static_assert(sizeof(In) == sizeof(Out), "types must be same size");
   return *reinterpret_cast<Out*>(&in);
 }
 
@@ -79,7 +80,7 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
     }
     TRACE(CONSTP, 5,
           "Propagated constant in branch instruction %s, "
-          "Operands [%d] [%d] -> Result: [%d]",
+          "Operands [%d] [%d] -> Result: [%d]\n",
           SHOW(insn), l_val, r_val, result);
     env->set(insn->dest(), SignedConstantDomain(result));
   } else {
@@ -92,11 +93,10 @@ void analyze_compare(const IRInstruction* insn, ConstantEnvironment* env) {
 namespace constant_propagation {
 
 static void set_escaped(reg_t reg, ConstantEnvironment* env) {
-  if (auto ptr_opt = env->get(reg).maybe_get<AbstractHeapPointer>()) {
-    if (auto ptr_value = ptr_opt->get_constant()) {
-      env->mutate_heap(
-          [&](ConstantHeap* heap) { heap->set(*ptr_value, HeapValue::top()); });
-    }
+  auto ptr_opt = env->get<AbstractHeapPointer>(reg).get_constant();
+  if (ptr_opt) {
+    env->mutate_heap(
+        [&](ConstantHeap* heap) { heap->set(*ptr_opt, HeapValue::top()); });
   }
 }
 
@@ -205,11 +205,11 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
   default:
     break;
   }
-  if (insn->has_dest()) {
-    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]", insn->dest());
+  if (insn->dests_size()) {
+    TRACE(CONSTP, 5, "Marking value unknown [Reg: %d]\n", insn->dest());
     env->set(insn->dest(), ConstantValue::top());
-  } else if (insn->has_move_result_any()) {
-    TRACE(CONSTP, 5, "Clearing result register");
+  } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
+    TRACE(CONSTP, 5, "Clearing result register\n");
     env->set(RESULT_REGISTER, ConstantValue::top());
   }
   return true;
@@ -217,20 +217,10 @@ bool PrimitiveAnalyzer::analyze_default(const IRInstruction* insn,
 
 bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
                                       ConstantEnvironment* env) {
-  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld",
+  TRACE(CONSTP, 5, "Discovered new constant for reg: %d value: %ld\n",
         insn->dest(), insn->get_literal());
   env->set(insn->dest(), SignedConstantDomain(insn->get_literal()));
   return true;
-}
-
-bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
-                                            ConstantEnvironment* env) {
-  auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (src && src->get_constant() && *(src->get_constant()) == 0) {
-    env->set(RESULT_REGISTER, SignedConstantDomain(0));
-    return true;
-  }
-  return analyze_default(insn, env);
 }
 
 bool PrimitiveAnalyzer::analyze_move(const IRInstruction* insn,
@@ -277,7 +267,7 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
                                           ConstantEnvironment* env) {
   auto op = insn->opcode();
   int32_t lit = insn->get_literal();
-  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu", SHOW(insn), lit);
+  TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu\n", SHOW(insn), lit);
   auto cst = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
   boost::optional<int64_t> result = boost::none;
   if (cst) {
@@ -357,127 +347,6 @@ bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
     if (result != boost::none) {
       int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
       res_const_dom = SignedConstantDomain(result32);
-    }
-    env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
-    return true;
-  }
-  return analyze_default(insn, env);
-}
-
-bool is_binop64(IROpcode op) {
-  switch (op) {
-  case OPCODE_ADD_INT:
-  case OPCODE_SUB_INT:
-  case OPCODE_MUL_INT:
-  case OPCODE_DIV_INT:
-  case OPCODE_REM_INT:
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
-  case OPCODE_SHL_INT:
-  case OPCODE_SHR_INT:
-  case OPCODE_USHR_INT:
-  case OPCODE_ADD_FLOAT:
-  case OPCODE_SUB_FLOAT:
-  case OPCODE_MUL_FLOAT:
-  case OPCODE_DIV_FLOAT:
-  case OPCODE_REM_FLOAT: {
-    return false;
-    break;
-  }
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_DIV_LONG:
-  case OPCODE_REM_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG:
-  case OPCODE_SHL_LONG:
-  case OPCODE_SHR_LONG:
-  case OPCODE_USHR_LONG:
-  case OPCODE_ADD_DOUBLE:
-  case OPCODE_SUB_DOUBLE:
-  case OPCODE_MUL_DOUBLE:
-  case OPCODE_DIV_DOUBLE:
-  case OPCODE_REM_DOUBLE: {
-    return true;
-    break;
-  }
-  default: {
-    always_assert_log(false, "Unexpected opcode: %s\n", SHOW(op));
-    break;
-  }
-  }
-}
-
-bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
-                                      ConstantEnvironment* env) {
-  auto op = insn->opcode();
-  TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
-  auto cst_left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
-  auto cst_right = env->get<SignedConstantDomain>(insn->src(1)).get_constant();
-  boost::optional<int64_t> result = boost::none;
-  if (cst_left && cst_right) {
-    bool use_result_reg = false;
-    switch (op) {
-    case OPCODE_ADD_INT:
-    case OPCODE_ADD_LONG: {
-      result = (*cst_left) + (*cst_right);
-      break;
-    }
-    case OPCODE_SUB_INT:
-    case OPCODE_SUB_LONG: {
-      result = (*cst_left) - (*cst_right);
-      break;
-    }
-    case OPCODE_MUL_INT:
-    case OPCODE_MUL_LONG: {
-      result = (*cst_left) * (*cst_right);
-      break;
-    }
-    case OPCODE_DIV_INT:
-    case OPCODE_DIV_LONG: {
-      if ((*cst_right) != 0) {
-        result = (*cst_left) / (*cst_right);
-      }
-      use_result_reg = true;
-      break;
-    }
-    case OPCODE_REM_INT:
-    case OPCODE_REM_LONG: {
-      if ((*cst_right) != 0) {
-        result = (*cst_left) % (*cst_right);
-      }
-      use_result_reg = true;
-      break;
-    }
-    case OPCODE_AND_INT:
-    case OPCODE_AND_LONG: {
-      result = (*cst_left) & (*cst_right);
-      break;
-    }
-    case OPCODE_OR_INT:
-    case OPCODE_OR_LONG: {
-      result = (*cst_left) | (*cst_right);
-      break;
-    }
-    case OPCODE_XOR_INT:
-    case OPCODE_XOR_LONG: {
-      result = (*cst_left) ^ (*cst_right);
-      break;
-    }
-    default:
-      return analyze_default(insn, env);
-    }
-    auto res_const_dom = SignedConstantDomain::top();
-    if (result != boost::none) {
-      if (is_binop64(op)) {
-        res_const_dom = SignedConstantDomain(*result);
-      } else {
-        int32_t result32 = (int32_t)(*result & 0xFFFFFFFF);
-        res_const_dom = SignedConstantDomain(result32);
-      }
     }
     env->set(use_result_reg ? RESULT_REGISTER : insn->dest(), res_const_dom);
     return true;
@@ -728,13 +597,13 @@ namespace intraprocedural {
 
 void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            ConstantEnvironment* env) const {
-  TRACE(CONSTP, 5, "Analyzing instruction: %s", SHOW(insn));
+  TRACE(CONSTP, 5, "Analyzing instruction: %s\n", SHOW(insn));
   m_insn_analyzer(insn, env);
 }
 
 void FixpointIterator::analyze_node(const NodeId& block,
                                     ConstantEnvironment* state_at_entry) const {
-  TRACE(CONSTP, 5, "Analyzing block: %d", block->id());
+  TRACE(CONSTP, 5, "Analyzing block: %d\n", block->id());
   for (auto& mie : InstructionIterable(block)) {
     analyze_instruction(mie.insn, state_at_entry);
   }

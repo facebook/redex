@@ -105,8 +105,6 @@ enum class Literal {
   Compare_Strings_A_B,
   // Directive: Write the length of string A as a 16-bit integer.
   Length_String_A,
-  // Directive: Write the hashCode of string A as a 32-bit integer.
-  HashCode_String_A,
   // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
   Mul_Div_To_Shift_Log2,
 };
@@ -335,7 +333,7 @@ struct Matcher {
       if (dex_pattern.opcodes.find(insn->opcode()) ==
               end(dex_pattern.opcodes) ||
           dex_pattern.srcs.size() != insn->srcs_size() ||
-          dex_pattern.dests.size() != insn->has_dest()) {
+          dex_pattern.dests.size() != insn->dests_size()) {
         return false;
       }
 
@@ -378,7 +376,7 @@ struct Matcher {
       bool retry = (match_index == 1);
       TRACE(PEEPHOLE,
             8,
-            "Not Matched: %s[%lu] != %s",
+            "Not Matched: %s[%lu] != %s\n",
             pattern.name.c_str(),
             match_index,
             SHOW(insn));
@@ -395,7 +393,7 @@ struct Matcher {
 
     TRACE(PEEPHOLE,
           8,
-          "Matched [%lu/%lu]: %s",
+          "Matched [%lu/%lu]: %s\n",
           match_index + 1,
           pattern.match.size(),
           SHOW(insn));
@@ -427,7 +425,7 @@ struct Matcher {
       redex_assert(replace.kind == DexPattern::Kind::method);
       return (new IRInstruction((IROpcode)opcode))
           ->set_method(replace.method)
-          ->set_srcs_size(replace.srcs.size());
+          ->set_arg_word_count(replace.srcs.size());
 
     case OPCODE_MOVE:
     case OPCODE_MOVE_WIDE:
@@ -651,11 +649,6 @@ struct Matcher {
           replace->set_literal(a->length());
           break;
         }
-        case Literal::HashCode_String_A: {
-          auto a = matched_strings.at(String::A);
-          replace->set_literal(static_cast<int64_t>(a->java_hashcode()));
-          break;
-        }
         case Literal::A: {
           auto a = matched_literals.at(Literal::A);
           replace->set_literal(a);
@@ -779,13 +772,6 @@ DexPattern invoke_String_length(Register instance) {
           {instance},
           {},
           DexMethod::make_method(LjavaString, "length", "I", {})};
-};
-
-DexPattern invoke_String_hashCode(Register instance) {
-  return {{OPCODE_INVOKE_VIRTUAL},
-          {instance},
-          {},
-          DexMethod::make_method(LjavaString, "hashCode", "I", {})};
 };
 
 DexPattern const_string(String string) {
@@ -931,17 +917,6 @@ static const std::vector<Pattern>& get_string_patterns() {
        {const_string(String::A), // maybe dead
         move_result_pseudo_object(Register::A),
         const_literal(OPCODE_CONST, Register::B, Literal::Length_String_A)}},
-
-      // Evaluate the hashCode of a String at compile time.
-      // "stringA".hashCode() ==> hashcode_of_stringA
-      {"CompileTime_StringHashCode",
-        {const_string(String::A),
-         move_result_pseudo_object(Register::A),
-         invoke_String_hashCode(Register::A),
-         move_result(Register::B)},
-        {const_string(String::A), // maybe dead
-         move_result_pseudo_object(Register::A),
-         const_literal(OPCODE_CONST, Register::B, Literal::HashCode_String_A)}},
 
       // It removes an append call with an empty string.
       // StringBuilder.append("") = nothing
@@ -1663,7 +1638,7 @@ class PeepholeOptimizer {
         } else {
           TRACE(PEEPHOLE,
                 2,
-                "not running disabled peephole opt %s",
+                "not running disabled peephole opt %s\n",
                 pattern.name.c_str());
         }
       }
@@ -1696,7 +1671,7 @@ class PeepholeOptimizer {
             continue;
           }
           m_stats.at(i)++;
-          TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
+          TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!\n",
                 matcher.pattern.name.c_str());
           for (auto insn : matcher.matched_instructions) {
             if (opcode::is_move_result_pseudo(insn->opcode())) {
@@ -1707,7 +1682,7 @@ class PeepholeOptimizer {
 
           auto replace = matcher.get_replacements();
           for (const auto& r : replace) {
-            TRACE(PEEPHOLE, 8, "-- %s", SHOW(r));
+            TRACE(PEEPHOLE, 8, "-- %s\n", SHOW(r));
           }
 
           m_stats_inserted += replace.size();
@@ -1729,11 +1704,11 @@ class PeepholeOptimizer {
   }
 
   void print_stats() {
-    TRACE(PEEPHOLE, 1, "%d instructions removed", m_stats_removed);
-    TRACE(PEEPHOLE, 1, "%d instructions inserted", m_stats_inserted);
+    TRACE(PEEPHOLE, 1, "%d instructions removed\n", m_stats_removed);
+    TRACE(PEEPHOLE, 1, "%d instructions inserted\n", m_stats_inserted);
     TRACE(PEEPHOLE,
           1,
-          "%d net instruction change",
+          "%d net instruction change\n",
           m_stats_inserted - m_stats_removed);
     int num_patterns_matched = 0;
     for (size_t i = 0; i < m_matchers.size(); ++i) {
@@ -1742,14 +1717,14 @@ class PeepholeOptimizer {
     }
     TRACE(PEEPHOLE,
           1,
-          "%lu patterns matched and replaced",
+          "%lu patterns matched and replaced\n",
           num_patterns_matched);
-    TRACE(PEEPHOLE, 5, "Detailed pattern match stats:");
+    TRACE(PEEPHOLE, 5, "Detailed pattern match stats:\n");
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       std::string current_pattern_name = m_matchers[i].pattern.name;
       TRACE(PEEPHOLE,
             5,
-            "%s: %d",
+            "%s: %d\n",
             current_pattern_name.c_str(),
             m_mgr.get_metric(current_pattern_name.c_str()));
     }
@@ -1794,7 +1769,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
             mgr, config.disabled_peepholes));
         return helpers.back().get();
       },
-      redex_parallel::default_num_threads());
+      std::thread::hardware_concurrency() / 2);
   for (auto* cls : scope) {
     wq.add_item(cls);
   }
@@ -1810,7 +1785,7 @@ void PeepholePass::run_pass(DexStoresVector& stores,
   } else {
     TRACE(PEEPHOLE,
           2,
-          "not running disabled peephole opt %s",
+          "not running disabled peephole opt %s\n",
           RedundantCheckCastRemover::get_name().c_str());
   }
 }

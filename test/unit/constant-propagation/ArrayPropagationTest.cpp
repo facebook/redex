@@ -118,7 +118,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArray) {
      (const v0 2)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
@@ -161,7 +162,8 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayAliased) {
      (const v0 2)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {
@@ -169,11 +171,9 @@ TEST_F(ConstantPropagationTest, PrimitiveArrayEscapesViaCall) {
     (
      (const v0 0)
      (const v1 1)
-     (const v4 4)
      (new-array v1 "[I") ; create an array of length 1
      (move-result-pseudo-object v2)
      (aput v1 v2 v0) ; write 1 into arr[0]
-     (invoke-static (v4) "LFoo;.bar:(I)V")
      (invoke-static (v2) "LFoo;.bar:([I)V") ; bar() might modify the array
      (aget v2 v0)
      (move-result-pseudo v3)

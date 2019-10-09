@@ -179,11 +179,12 @@ using MarkWorkerState = WorkerState<ReachableObject, Stats*>;
  */
 class RootSetMarker {
  public:
-  RootSetMarker(const method_override_graph::Graph& method_override_graph,
-                bool record_reachability,
-                ConditionallyMarked* cond_marked,
-                ReachableObjects* reachable_objects,
-                ConcurrentSet<ReachableObject, ReachableObjectHash>* root_set)
+  RootSetMarker(
+      const method_override_graph::Graph& method_override_graph,
+      bool record_reachability,
+      ConditionallyMarked* cond_marked,
+      ReachableObjects* reachable_objects,
+      ConcurrentSet<ReachableObject, ReachableObjectHash>* root_set)
       : m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
         m_cond_marked(cond_marked),

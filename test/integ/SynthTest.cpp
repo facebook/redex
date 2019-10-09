@@ -13,13 +13,16 @@
 #include <string>
 #include <unistd.h>
 
+#include <json/json.h>
+
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
 #include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "RedexTest.h"
+#include "PassManager.h"
+#include "RedexContext.h"
 
 #include "ReBindRefs.h"
 #include "Synth.h"
@@ -47,29 +50,45 @@
 
  */
 
-class SynthTest1 : public RedexIntegrationTest {
- protected:
-  template <typename P>
-  bool assert_classes(const DexClasses& classes,
-                      const m::match_t<DexClass, P>& p) {
-    for (const auto& cls : classes) {
-      if (p.matches(cls)) {
-        return true;
-      }
+template <typename P>
+bool assert_classes(const DexClasses& classes,
+                    const m::match_t<DexClass, P>& p) {
+  for (const auto& cls : classes) {
+    if (p.matches(cls)) {
+      return true;
     }
-    return false;
   }
-};
+  return false;
+}
 
-TEST_F(SynthTest1, synthetic) {
+TEST(SynthTest1, synthetic) {
+  g_redex = new RedexContext();
+
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
+
+  std::vector<DexStore> stores;
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
+  std::cout << "Loaded classes: " << classes.size() << std::endl;
+
   std::vector<Pass*> passes = {
       new ReBindRefsPass(), new SynthPass(), new LocalDcePass(),
   };
 
-  run_passes(passes);
+  PassManager manager(passes);
+  manager.set_testing_mode();
+
+  Json::Value conf_obj = Json::nullValue;
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(stores, dummy_cfg);
 
   // Make sure synthetic method is removed from class Alpha.
-  for (const auto& cls : *classes) {
+  for (const auto& cls : classes) {
     const auto class_name = cls->get_type()->get_name()->c_str();
     // Make sure the synthetic method has been removed.
     if (strcmp(class_name, "Lcom/facebook/redextest/Alpha;") == 0) {
@@ -116,7 +135,7 @@ TEST_F(SynthTest1, synthetic) {
     if (strcmp(class_name, "Lcom/facebook/redextest/SyntheticConstructor$InnerClass;") == 0) {
       for (const auto& method : cls->get_dmethods()) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
-          TRACE(DCE, 2, "dmethod: %s",  SHOW(method->get_code()));
+          TRACE(DCE, 2, "dmethod: %s\n",  SHOW(method->get_code()));
           for (auto& mie : InstructionIterable(method->get_code())) {
             auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
@@ -132,6 +151,8 @@ TEST_F(SynthTest1, synthetic) {
         m::named<DexClass>("Lcom/facebook/redextest/Alpha;") &&
         !m::any_dmethods(m::named<DexMethod>("access$000"));
 
-    ASSERT_TRUE(assert_classes(*classes, has_alpha_access_gone));
+    ASSERT_TRUE(assert_classes(classes, has_alpha_access_gone));
   }
+
+  delete g_redex;
 }

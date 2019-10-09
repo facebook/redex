@@ -11,7 +11,6 @@
 #include <cstring>
 #include <list>
 #include <string>
-#include <type_traits>
 #include <utility>
 
 #include "Debug.h"
@@ -51,10 +50,6 @@ class DexInstruction : public Gatherable {
   // Holds formats:
   // 10x 11x 11n 12x 22x 21s 21h 31i 32x 51l
   DexInstruction(const uint16_t* opcodes, int count) : Gatherable() {
-    always_assert_log(count <= MAX_ARG_COUNT,
-                      "arg count %d exceeded the limit of %d",
-                      count,
-                      MAX_ARG_COUNT);
     m_opcode = *opcodes++;
     m_count = count;
     for (int i = 0; i < count; i++) {
@@ -100,7 +95,7 @@ class DexInstruction : public Gatherable {
   /*
    * Number of registers used.
    */
-  bool has_dest() const;
+  unsigned dests_size() const;
   unsigned srcs_size() const;
 
   /*
@@ -132,6 +127,8 @@ class DexInstruction : public Gatherable {
    * The number of shorts needed to encode the args.
    */
   uint16_t count() { return m_count; }
+
+  void verify_encoding() const;
 
   friend std::string show(const DexInstruction* op);
 
@@ -275,27 +272,6 @@ class DexOpcodeData : public DexInstruction {
   const uint16_t data_size() { return m_data_count; }
 };
 
-// helper function to create fill-array-data-payload according to
-// https://source.android.com/devices/tech/dalvik/dalvik-bytecode#fill-array
-template <typename IntType>
-DexOpcodeData* encode_fill_array_data_payload(const std::vector<IntType>& vec) {
-  static_assert(std::is_integral<IntType>::value,
-                "fill-array-data-payload can only contain integral values.");
-  int width = sizeof(IntType);
-  size_t total_copy_size = vec.size() * width;
-  // one "code unit" is a 2 byte word
-  int total_used_code_units =
-      (total_copy_size + 1 /* for rounding up int division */) / 2 + 4;
-  std::vector<uint16_t> data(total_used_code_units);
-  uint16_t* ptr = data.data();
-  ptr[0] = FOPCODE_FILLED_ARRAY; // header
-  ptr[1] = width;
-  *(uint32_t*)(ptr + 2) = vec.size();
-  uint8_t* data_bytes = (uint8_t*)(ptr + 4);
-  memcpy(data_bytes, (void*)vec.data(), total_copy_size);
-  return new DexOpcodeData(data);
-}
-
 /**
  * Return a copy of the instruction passed in.
  */
@@ -351,7 +327,13 @@ inline bool is_return_value(IROpcode op) {
   return op >= OPCODE_RETURN && op <= OPCODE_RETURN_OBJECT;
 }
 
-inline bool is_throw(IROpcode op) { return op == OPCODE_THROW; }
+inline bool is_throw(IROpcode op) {
+  return op == OPCODE_THROW;
+}
+
+inline bool is_move_result(IROpcode op) {
+  return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
+}
 
 inline bool is_invoke(IROpcode op) {
   return op >= OPCODE_INVOKE_VIRTUAL && op <= OPCODE_INVOKE_INTERFACE;
@@ -419,7 +401,9 @@ inline bool is_conditional_branch(IROpcode op) {
   }
 }
 
-inline bool is_goto(IROpcode op) { return op == OPCODE_GOTO; }
+inline bool is_goto(IROpcode op) {
+  return op == OPCODE_GOTO;
+}
 
 inline bool is_switch(IROpcode op) { return op == OPCODE_SWITCH; }
 
@@ -443,12 +427,4 @@ inline bool is_div_int_lit(IROpcode op) {
 
 inline bool is_rem_int_lit(IROpcode op) {
   return op == OPCODE_REM_INT_LIT16 || op == OPCODE_REM_INT_LIT8;
-}
-
-inline bool is_div_int_or_long(IROpcode op) {
-  return op == OPCODE_DIV_INT || op == OPCODE_DIV_LONG;
-}
-
-inline bool is_rem_int_or_long(IROpcode op) {
-  return op == OPCODE_REM_INT || op == OPCODE_REM_LONG;
 }

@@ -11,9 +11,11 @@
 
 #include "DexClass.h"
 #include "DexInstruction.h"
+#include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "RedexTest.h"
+#include "PassManager.h"
+#include "RedexContext.h"
 
 #include "Peephole.h"
 #include "LocalDce.h"
@@ -45,18 +47,28 @@ instructions in the optimized method.
 
 */
 
-class PropagationTest1 : public RedexIntegrationTest {};
+TEST(PropagationTest1, localDCE1) {
+  g_redex = new RedexContext();
 
-TEST_F(PropagationTest1, localDCE1) {
-  std::cout << "Loaded classes: " << classes->size() << std::endl;
+  const char* dexfile = std::getenv("dexfile");
+  ASSERT_NE(nullptr, dexfile);
 
-  TRACE(DCE, 2, "Code before:");
-  for (const auto& cls : *classes) {
-    TRACE(DCE, 2, "Class %s", SHOW(cls));
+  std::vector<DexStore> stores;
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
+  std::cout << "Loaded classes: " << classes.size() << std::endl ;
+
+  TRACE(DCE, 2, "Code before:\n");
+  for(const auto& cls : classes) {
+    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
       }
     }
   }
@@ -66,15 +78,20 @@ TEST_F(PropagationTest1, localDCE1) {
     new LocalDcePass(),
   };
 
-  run_passes(passes);
+  PassManager manager(passes);
+  manager.set_testing_mode();
 
-  TRACE(DCE, 2, "Code after:");
-  for (const auto& cls : *classes) {
-    TRACE(DCE, 2, "Class %s", SHOW(cls));
+  Json::Value conf_obj = Json::nullValue;
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(stores, dummy_cfg);
+
+  TRACE(DCE, 2, "Code after:\n");
+  for(const auto& cls : classes) {
+    TRACE(DCE, 2, "Class %s\n", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s\n",  dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s\n",  SHOW(dm->get_code()));
         for (auto& mie : InstructionIterable(dm->get_code())) {
           auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.
@@ -85,4 +102,5 @@ TEST_F(PropagationTest1, localDCE1) {
       }
     }
   }
+
 }

@@ -15,14 +15,14 @@ constexpr size_t NUM_THREADS = 10;
 constexpr size_t NUM_ITERS = 1'000;
 
 TEST(TraceMultithreadingTest, singleThread) {
-  TRACE(TIME, 1, "Test output!");
+  TRACE(TIME, 1, "Test output!\n");
 }
 
 TEST(TraceMultithreadingTest, multipleThreadsOnePrint) {
   std::vector<boost::thread> threads;
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
     threads.emplace_back(
-        boost::thread([]() { TRACE(TIME, 1, "Test output!"); }));
+        boost::thread([]() { TRACE(TIME, 1, "Test output!\n"); }));
   }
   for (auto& thread : threads) {
     thread.join();
@@ -34,7 +34,7 @@ TEST(TraceMultithreadingTest, multipleThreadsMultiplePrints) {
   for (size_t idx = 0; idx < NUM_THREADS; ++idx) {
     threads.emplace_back(boost::thread([]() {
       for (int j = 0; j < NUM_ITERS; ++j) {
-        TRACE(TIME, 1, "Test output count %d", j);
+        TRACE(TIME, 1, "Test output count %d\n", j);
       }
     }));
   }
@@ -49,9 +49,9 @@ TEST(TraceMultithreadingTest, localThreadContext) {
     threads.emplace_back(boost::thread([]() {
       for (int j = 0; j < NUM_ITERS; ++j) {
         TraceContext context("thread context");
-        TRACE(TIME, 1, "Test output count %d", j);
-        TRACE(TIME, 1, "Test output count %d", j);
-        TRACE(TIME, 1, "Test output count %d", j);
+        TRACE(TIME, 1, "Test output count %d\n", j);
+        TRACE(TIME, 1, "Test output count %d\n", j);
+        TRACE(TIME, 1, "Test output count %d\n", j);
       }
     }));
   }

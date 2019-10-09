@@ -32,11 +32,11 @@ void set_fields_in_partition(const DexClass* cls,
   for (auto& field : fields) {
     auto value = field_env.get(field);
     if (!value.is_top()) {
-      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>",
+      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>\n",
             SHOW(field), SHOW(value));
       always_assert(field->get_class() == cls->get_type());
     } else {
-      TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>",
+      TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>\n",
             SHOW(field));
     }
     field_partition->set(field, value);
@@ -116,7 +116,7 @@ namespace constant_propagation {
 WholeProgramState::WholeProgramState(
     const Scope& scope,
     const interprocedural::FixpointIterator& fp_iter,
-    const std::unordered_set<DexMethod*>& non_true_virtuals,
+    const std::vector<DexMethod*>& non_true_virtuals,
     const std::unordered_set<const DexType*>& field_black_list) {
   walk::fields(scope, [&](DexField* field) {
     // We exclude those marked by keep rules: keep-marked fields may be

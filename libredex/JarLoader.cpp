@@ -382,11 +382,11 @@ static bool parse_class(uint8_t* buffer,
       TRACE(MAIN, 1,
             "Warning: Found a duplicate class '%s' in two .jar files:\n "
             "  Current: '%s'\n"
-            "  Previous: '%s'",
+            "  Previous: '%s'\n",
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());
     } else if (!dup_classes::is_known_dup(cls)) {
       TRACE(MAIN, 1,
-            "Warning: Found a duplicate class '%s' in .dex and .jar file."
+            "Warning: Found a duplicate class '%s' in .dex and .jar file.\n"
             "  Current: '%s'\n"
             "  Previous: '%s'\n",
             SHOW(self), jar_location.c_str(), cls->get_location().c_str());

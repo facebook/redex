@@ -11,16 +11,16 @@
 
 #include "Creators.h"
 #include "DexClass.h"
-#include "RedexTest.h"
 
 using namespace type_reference;
 
-struct TypeReferenceTest : public RedexTest {
+struct TypeReferenceTest : public testing::Test {
   DexClass* m_class;
   std::unordered_map<const DexType*, DexType*> m_old_to_new;
   std::vector<DexClass*> m_scope;
 
   TypeReferenceTest() {
+    g_redex = new RedexContext();
     auto type = DexType::make_type("Lcom/TestClass;");
     ClassCreator creator(type);
     creator.set_super(get_object_type());
@@ -33,7 +33,7 @@ struct TypeReferenceTest : public RedexTest {
     m_old_to_new.emplace(get_char_type(), get_object_type());
   }
 
-  ~TypeReferenceTest() {}
+  ~TypeReferenceTest() { delete g_redex; }
 
   DexField* make_a_field(const std::string& name, const DexType* type) {
     auto fname = DexString::make_string(name);

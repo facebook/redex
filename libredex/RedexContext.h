@@ -38,10 +38,6 @@ struct RedexContext;
 
 extern RedexContext* g_redex;
 
-#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
-extern "C" bool strcmp_less(const char* str1, const char* str2);
-#endif
-
 struct RedexContext {
   RedexContext(bool allow_class_duplicates = false);
   ~RedexContext();
@@ -117,10 +113,6 @@ struct RedexContext {
     }
   }
 
-  const std::vector<DexClass*>& external_classes() const {
-    return m_external_classes;
-  }
-
   /*
    * This returns true if we want to preserve keep reasons for better
    * diagnostics.
@@ -164,11 +156,7 @@ struct RedexContext {
 
   struct Strcmp {
     bool operator()(const char* a, const char* b) const {
-#if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
-      return strcmp_less(a, b);
-#else
       return strcmp(a, b) < 0;
-#endif
     }
   };
 
@@ -213,10 +201,9 @@ struct RedexContext {
   ConcurrentMap<DexMethodSpec, DexMethodRef*> s_method_map;
   std::mutex s_method_lock;
 
-  // Type-to-class map
+  // Type-to-class map and class hierarchy
   std::mutex m_type_system_mutex;
   std::unordered_map<const DexType*, DexClass*> m_type_to_class;
-  std::vector<DexClass*> m_external_classes;
 
   const std::vector<const DexType*> m_empty_types;
 

@@ -79,7 +79,9 @@ DexInstruction* DexInstruction::set_opcode(DexOpcode op) {
   return this;
 }
 
-bool DexInstruction::has_dest() const { return dex_opcode::has_dest(opcode()); }
+unsigned DexInstruction::dests_size() const {
+  return dex_opcode::dests_size(opcode());
+}
 
 unsigned DexInstruction::srcs_size() const {
   auto format = dex_opcode::format(opcode());
@@ -280,7 +282,7 @@ uint16_t DexInstruction::src(int i) const {
     return m_arg[1];
   case FMT_f57c:
     redex_assert(i <= 6);
-    switch (i) {
+    switch(i) {
     case 0:
       return (m_arg[0] >> 4) & 0xf;
     case 1:
@@ -524,11 +526,11 @@ int32_t DexInstruction::offset() const {
   case FMT_f20t:
   case FMT_f21t:
   case FMT_f22t:
-    return (int32_t)signext<16>(m_arg[0]);
+    return (int32_t) signext<16>(m_arg[0]);
   case FMT_f30t:
   case FMT_f31t: {
     auto offset = uint32_t(m_arg[0]) | (uint32_t(m_arg[1]) << 16);
-    return (int32_t)signext<32>(offset);
+    return  (int32_t) signext<32>(offset);
   }
   default:
     redex_assert(false);
@@ -624,6 +626,37 @@ DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
     m_opcode = (m_opcode & 0x0fff) | (count << 12);
   }
   return this;
+}
+
+void DexInstruction::verify_encoding() const {
+  auto test = m_count ? new DexInstruction(opcode()) : new DexInstruction(opcode(), 0);
+  if (dests_size()) {
+    test->set_dest(dest());
+  }
+  for (unsigned i = 0; i < srcs_size(); i++) {
+    test->set_src(i, src(i));
+  }
+  auto op = opcode();
+  if (dex_opcode::has_range(op)) {
+    test->set_range_base(range_base());
+    test->set_range_size(range_size());
+  }
+  if (dex_opcode::has_arg_word_count(opcode()))
+    test->set_arg_word_count(arg_word_count());
+  if (dex_opcode::has_literal(op)) test->set_literal(get_literal());
+  if (dex_opcode::has_offset(op)) test->set_offset(offset());
+
+  assert_log(m_opcode == test->m_opcode, "%x %x\n", m_opcode, test->m_opcode);
+  for (unsigned i = 0; i < m_count; i++) {
+    assert_log(m_arg[i] == test->m_arg[i],
+               "(%x %x) (%x %x)",
+               m_opcode,
+               m_arg[i],
+               test->m_opcode,
+               test->m_arg[i]);
+  }
+
+  delete test;
 }
 
 void DexOpcodeString::gather_strings(std::vector<DexString*>& lstring) const {
@@ -1058,7 +1091,8 @@ DexInstruction* DexInstruction::make_instruction(DexOpcode op) {
 }
 
 bool DexInstruction::operator==(const DexInstruction& that) const {
-  if (m_ref_type != that.m_ref_type || m_opcode != that.m_opcode ||
+  if (m_ref_type != that.m_ref_type ||
+      m_opcode != that.m_opcode ||
       m_count != that.m_count) {
     return false;
   }

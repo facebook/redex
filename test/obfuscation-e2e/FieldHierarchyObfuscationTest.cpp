@@ -23,7 +23,7 @@
 #include "ProguardObfuscationTest.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 
 template<std::size_t SIZE>
 void testClass(
@@ -40,12 +40,12 @@ void testClass(
   }
 }
 
-class FieldHierarchyObfuscationTest : public RedexTest {};
-
 /**
  * Check renaming has been properly applied.
  */
-TEST_F(FieldHierarchyObfuscationTest, obfuscation) {
+TEST(ProguardTest, obfuscation) {
+  g_redex = new RedexContext();
+
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
   const char* configuration_file = std::getenv("pg_config_e2e_pgconfig");
@@ -92,4 +92,6 @@ TEST_F(FieldHierarchyObfuscationTest, obfuscation) {
   testClass(&tester,
     "Lcom/facebook/redex/test/proguard/SubSub;",
     subSubFields);
+
+  delete g_redex;
 }

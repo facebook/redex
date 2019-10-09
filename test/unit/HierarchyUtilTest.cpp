@@ -22,14 +22,15 @@ TEST_F(RedexTest, findNonOverriddenVirtuals) {
   cc.set_super(get_object_type());
 
   auto final_method =
-      DexMethod::make_method("LFoo;.final:()V")
-          ->make_concrete(ACC_PUBLIC | ACC_FINAL, /* is_virtual */ true);
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.final:()V"));
+  final_method->make_concrete(ACC_PUBLIC | ACC_FINAL, /* is_virtual */ true);
   cc.add_method(final_method);
 
   // This method is not explicitly marked as final, but no classes in scope
   // override its methods
-  auto nonfinal_method = DexMethod::make_method("LFoo;.nonfinal:()V")
-                             ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+  auto nonfinal_method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.nonfinal:()V"));
+  nonfinal_method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
   cc.add_method(nonfinal_method);
   auto cls = cc.create();
 

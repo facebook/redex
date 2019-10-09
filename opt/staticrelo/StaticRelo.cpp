@@ -223,7 +223,7 @@ candidates_t build_candidates(
         m::as_type<DexAnnotation>(m::in<DexType>(dont_optimize_annos)));
 
   visit_classes(scope, match, [&](DexClass* cls){
-    TRACE(RELO, 5, "RELO %s is a candidate", SHOW(cls->get_type()));
+    TRACE(RELO, 5, "RELO %s is a candidate\n", SHOW(cls->get_type()));
     candidates.insert(cls);
   });
 
@@ -249,7 +249,7 @@ std::unordered_map<size_t, DexClass*> build_dex_to_target_map(
   }
   for (const auto& it : map) {
     auto cls_name = SHOW(it.second->get_type());
-    TRACE(RELO, 5, "RELO %s is target for dex %d", cls_name, it.first);
+    TRACE(RELO, 5, "RELO %s is target for dex %d\n", cls_name, it.first);
   }
   return map;
 }
@@ -456,7 +456,7 @@ void make_references_public(const DexMethod* from_meth) {
     DexClass* default_relocation_target = dex_to_target.at(cls_to_dex.at(cls));
     always_assert(default_relocation_target);
     if (default_relocation_target == cls) {
-      TRACE(RELO, 5, "RELO %s is a relo target - not deleting", SHOW(cls));
+      TRACE(RELO, 5, "RELO %s is a relo target - not deleting\n", SHOW(cls));
       continue;
     }
 
@@ -470,7 +470,7 @@ void make_references_public(const DexMethod* from_meth) {
       if (dmethod_refs.find(meth) == dmethod_refs.end()) {
         // If the method is unreferenced, it may be deleted
         meth_deletes.insert(meth);
-        TRACE(RELO, 5, "RELO %s is unreferenced; deleting", SHOW(meth));
+        TRACE(RELO, 5, "RELO %s is unreferenced; deleting\n", SHOW(meth));
       } else {
         // Count single call site opportunities
         if (dmethod_refs.at(meth).size() == 1) {
@@ -533,7 +533,7 @@ void delete_classes(
     if (cls_deletes.find(cls) == cls_deletes.end()) {
       scope.push_back(cls);
     } else {
-      TRACE(RELO, 5, "RELO Deleting class %s", SHOW(cls));
+      TRACE(RELO, 5, "RELO Deleting class %s\n", SHOW(cls));
     }
   }
   post_dexen_changes(scope, dexen);
@@ -560,11 +560,11 @@ void do_mutations(PassManager& mgr,
     if (is_static(from_meth)) {
       auto from_cls = type_class(from_meth->get_class());
       always_assert(from_cls != to_cls);
-      TRACE(RELO, 5, "RELO Relocating %s to %s",
+      TRACE(RELO, 5, "RELO Relocating %s to %s\n",
         SHOW(from_meth), SHOW(to_cls->get_type()));
       if (from_cls->get_type()->get_name()->c_str() == nullptr ||
           from_meth->get_name()->c_str() == nullptr) {
-        TRACE(RELO, 5, "skipping class move");
+        TRACE(RELO, 5, "skipping class move\n");
         continue;
       }
       // Move the method to the target class
@@ -672,7 +672,7 @@ void StaticReloPass::run_pass(DexStoresVector& stores,
   TRACE(
     RELO,
     1,
-    "RELO :) Deleted %d methods"
+    "RELO :) Deleted %d methods\n"
     "RELO :) Moved %d methods\n"
     "RELO :) Deleted %d classes\n"
     "RELO :) Moved %d/%d methods to single call site targets\n"

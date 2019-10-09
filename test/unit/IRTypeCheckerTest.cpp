@@ -21,15 +21,16 @@
 #include "IROpcode.h"
 #include "IRTypeChecker.h"
 #include "LocalDce.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 
 using namespace testing;
 
-class IRTypeCheckerTest : public RedexTest {
+class IRTypeCheckerTest : public ::testing::Test {
  public:
-  ~IRTypeCheckerTest() {}
+  ~IRTypeCheckerTest() { delete g_redex; }
 
   IRTypeCheckerTest() {
+    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({
         DexType::make_type("I"), // v5
         DexType::make_type("B"), // v6
@@ -41,12 +42,12 @@ class IRTypeCheckerTest : public RedexTest {
         get_object_type() // v14
     });
     auto proto = DexProto::make_proto(get_boolean_type(), args);
-    m_method =
+    m_method = static_cast<DexMethod*>(
         DexMethod::make_method(DexType::make_type("Lbar;"),
                                DexString::make_string("testMethod"),
-                               proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+                               proto));
     m_method->set_deobfuscated_name("testMethod");
+    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
   }
 
@@ -88,7 +89,7 @@ TEST_F(IRTypeCheckerTest, move_result) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
       dasm(OPCODE_FILLED_NEW_ARRAY, DexType::make_type("I"))
-          ->set_srcs_size(1)
+          ->set_arg_word_count(1)
           ->set_src(0, 5),
       dasm(OPCODE_ADD_INT, {5_v, 5_v, 5_v}),
       dasm(OPCODE_MOVE_RESULT, {0_v}),
@@ -110,12 +111,12 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   // this one
   auto args = DexTypeList::make_type_list({});
   auto proto = DexProto::make_proto(get_boolean_type(), args);
-  auto method =
+  auto method = static_cast<DexMethod*>(
       DexMethod::make_method(DexType::make_type("Lbar;"),
                              DexString::make_string("testMethod2"),
-                             proto)
-          ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+                             proto));
   method->set_deobfuscated_name("testMethod2");
+  method->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
   method->set_code(std::make_unique<IRCode>(method, 0));
 
   IRCode* code = method->get_code();
@@ -349,7 +350,7 @@ TEST_F(IRTypeCheckerTest, signatureMismatch) {
 TEST_F(IRTypeCheckerTest, longInvoke) {
   using namespace dex_asm;
   IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke->set_srcs_size(7);
+  invoke->set_arg_word_count(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "D", "S", "F"}));
   invoke->set_src(0, 5);
@@ -369,7 +370,7 @@ TEST_F(IRTypeCheckerTest, longInvoke) {
 TEST_F(IRTypeCheckerTest, longSignatureMismatch) {
   using namespace dex_asm;
   IRInstruction* invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
-  invoke->set_srcs_size(7);
+  invoke->set_arg_word_count(7);
   invoke->set_method(DexMethod::make_method(
       "Lbar;", "foo", "V", {"I", "B", "J", "Z", "S", "D", "F"}));
   invoke->set_src(0, 5);
@@ -476,8 +477,10 @@ TEST_F(IRTypeCheckerTest, exceptionHandler) {
 TEST_F(IRTypeCheckerTest, overlappingMoveWide) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_MOVE_WIDE, {1_v, 7_v}),  dasm(OPCODE_MOVE_WIDE, {0_v, 1_v}),
-      dasm(OPCODE_MOVE_WIDE, {0_v, 10_v}), dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
+      dasm(OPCODE_MOVE_WIDE, {1_v, 7_v}),
+      dasm(OPCODE_MOVE_WIDE, {0_v, 1_v}),
+      dasm(OPCODE_MOVE_WIDE, {0_v, 10_v}),
+      dasm(OPCODE_MOVE_WIDE, {1_v, 0_v}),
       dasm(OPCODE_RETURN, {9_v}),
   };
   add_code(insns);
@@ -569,27 +572,30 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   ClassCreator cls_base_creator(type_base);
   cls_base_creator.set_super(get_object_type());
   auto base_foo =
-      DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
+      static_cast<DexMethod*>(DexMethod::make_method("LBase;.foo:()I"));
+  base_foo->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);
   cls_base_creator.create();
 
   ClassCreator cls_a_creator(type_a);
   cls_a_creator.set_super(type_base);
-  auto a_ctor = DexMethod::make_method("LA;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto a_ctor =
+      static_cast<DexMethod*>(DexMethod::make_method("LA;.<init>:()V"));
+  a_ctor->make_concrete(ACC_PUBLIC, false);
   cls_a_creator.add_method(a_ctor);
-  auto a_foo =
-      DexMethod::make_method("LA;.foo:()I")->make_concrete(ACC_PUBLIC, true);
+  auto a_foo = static_cast<DexMethod*>(DexMethod::make_method("LA;.foo:()I"));
+  a_foo->make_concrete(ACC_PUBLIC, true);
   cls_a_creator.add_method(a_foo);
   cls_a_creator.create();
 
   ClassCreator cls_b_creator(type_b);
   cls_b_creator.set_super(type_base);
-  auto b_ctor = DexMethod::make_method("LB;.<init>:()V")
-                    ->make_concrete(ACC_PUBLIC, false);
+  auto b_ctor =
+      static_cast<DexMethod*>(DexMethod::make_method("LB;.<init>:()V"));
+  b_ctor->make_concrete(ACC_PUBLIC, false);
   cls_b_creator.add_method(b_ctor);
-  auto b_foo =
-      DexMethod::make_method("LB;.foo:()I")->make_concrete(ACC_PUBLIC, true);
+  auto b_foo = static_cast<DexMethod*>(DexMethod::make_method("LB;.foo:()I"));
+  b_foo->make_concrete(ACC_PUBLIC, true);
   cls_b_creator.add_method(b_foo);
   cls_b_creator.create();
 
@@ -657,8 +663,9 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
 TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   // Good
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -673,8 +680,9 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: virtual method
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
@@ -692,8 +700,9 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   }
   // Bad: non-static (private) direct method
   {
-    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
-                      ->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
+    auto method = static_cast<DexMethod*>(
+        DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;"));
+    method->make_concrete(ACC_PRIVATE, /* is_virtual */ false);
     method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)

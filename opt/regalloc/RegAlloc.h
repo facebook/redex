@@ -12,8 +12,6 @@
 #include "GraphColoring.h"
 #include "PassManager.h"
 
-namespace regalloc {
-
 class RegAllocPass : public Pass {
  public:
   RegAllocPass() : Pass("RegAllocPass") {}
@@ -23,13 +21,5 @@ class RegAllocPass : public Pass {
     bind("live_range_splitting", false, unused);
   }
 
-  /*
-   * Allocate the code in a single method; exposed for unit tests.
-   */
-  static graph_coloring::Allocator::Stats allocate(
-      const graph_coloring::Allocator::Config&, DexMethod*);
-
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };
-
-} // namespace regalloc

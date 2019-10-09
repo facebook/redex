@@ -221,9 +221,9 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
             } else {
               it->second.join_with(escaped_array);
             }
-            TRACE(RAL, 4, "[RAL]   literal array escaped");
+            TRACE(RAL, 4, "[RAL]   literal array escaped\n");
           } else {
-            TRACE(RAL, 4, "[RAL]   non-literal array escaped");
+            TRACE(RAL, 4, "[RAL]   non-literal array escaped\n");
             m_escaped_arrays[value.new_array_insn] = EscapedArrayDomain::top();
           }
         }
@@ -237,15 +237,15 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       }
 
       // If we get here, reset destination.
-      if (insn->has_dest()) {
+      if (insn->dests_size()) {
         set_current_state_at(insn->dest(), insn->dest_is_wide(),
                              TrackedDomain(make_other()));
-      } else if (insn->has_move_result_any()) {
+      } else if (insn->has_move_result() || insn->has_move_result_pseudo()) {
         current_state->set(RESULT_REGISTER, TrackedDomain(make_other()));
       }
     };
 
-    TRACE(RAL, 3, "[RAL] %s", SHOW(insn));
+    TRACE(RAL, 3, "[RAL] %s\n", SHOW(insn));
     switch (insn->opcode()) {
     case OPCODE_CONST:
       set_current_state_at(insn->dest(), false /* is_wide */,
@@ -253,11 +253,11 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       break;
 
     case OPCODE_NEW_ARRAY: {
-      TRACE(RAL, 4, "[RAL]   new array of type %s", SHOW(insn->get_type()));
+      TRACE(RAL, 4, "[RAL]   new array of type %s\n", SHOW(insn->get_type()));
       const auto length = get_singleton(current_state->get(insn->src(0)));
       if (length && is_literal(*length)) {
         auto length_literal = get_literal(*length);
-        TRACE(RAL, 4, "[RAL]     with length %ld", length_literal);
+        TRACE(RAL, 4, "[RAL]     with length %ld\n", length_literal);
         always_assert(length_literal >= 0 && length_literal <= 2147483647);
         current_state->set(RESULT_REGISTER,
                            TrackedDomain(make_array(length_literal, insn)));
@@ -285,15 +285,15 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       escape_new_arrays(insn->src(0));
       const auto array = get_singleton(current_state->get(insn->src(1)));
       const auto index = get_singleton(current_state->get(insn->src(2)));
-      TRACE(RAL, 4, "[RAL]   aput: %d %d", array && is_new_array(*array),
+      TRACE(RAL, 4, "[RAL]   aput: %d %d\n", array && is_new_array(*array),
             index && is_literal(*index));
       if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
           is_literal(*index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal,
+        TRACE(RAL, 4, "[RAL]    index %ld of %u\n", index_literal,
               array->length);
         if (is_next_index(*array, index_literal)) {
-          TRACE(RAL, 4, "[RAL]    is next");
+          TRACE(RAL, 4, "[RAL]    is next\n");
           TrackedValue new_array = *array;
           if (add_element(new_array, index_literal, insn)) {
             current_state->set(insn->src(1), TrackedDomain(new_array));
@@ -530,7 +530,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   IRInstruction* filled_new_array_insn =
       new IRInstruction(OPCODE_FILLED_NEW_ARRAY);
   filled_new_array_insn->set_type(type);
-  filled_new_array_insn->set_srcs_size(chunk_size);
+  filled_new_array_insn->set_arg_word_count(chunk_size);
   for (size_t index = chunk_start; index < chunk_end; index++) {
     size_t temp_reg_index = index - chunk_start;
     if (temp_reg_index == temp_regs->size()) {
@@ -569,7 +569,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
         "(Ljava/lang/Object;ILjava/lang/Object;II)V");
     always_assert(arraycopy_method != nullptr);
     invoke_static_insn->set_method(arraycopy_method);
-    invoke_static_insn->set_srcs_size(5);
+    invoke_static_insn->set_arg_word_count(5);
     invoke_static_insn->set_src(0, *chunk_dest);
     invoke_static_insn->set_src(1, m_local_temp_regs[0]);
     invoke_static_insn->set_src(2, overall_dest);
@@ -652,7 +652,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
                                        PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   Architecture arch = mgr.get_redex_options().arch;
-  TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s", min_sdk,
+  TRACE(RAL, 1, "[RAL] min_sdk=%d, arch=%s\n", min_sdk,
         architecture_to_string(arch));
 
   const auto scope = build_class_scope(stores);
@@ -686,7 +686,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         return a;
       },
       ReduceArrayLiterals::Stats{},
-      m_debug ? 1 : redex_parallel::default_num_threads());
+      m_debug ? 1 : walk::parallel::default_num_threads());
   mgr.incr_metric(METRIC_FILLED_ARRAYS, stats.filled_arrays);
   mgr.incr_metric(METRIC_FILLED_ARRAY_ELEMENTS, stats.filled_array_elements);
   mgr.incr_metric(METRIC_FILLED_ARRAY_CHUNKS, stats.filled_array_chunks);

@@ -9,13 +9,10 @@
 
 #include "CopyPropagationPass.h"
 #include "IRAssembler.h"
-#include "RedexTest.h"
 
 using namespace copy_propagation_impl;
 
-class CopyPropagationTest : public RedexTest {};
-
-TEST_F(CopyPropagationTest, simple) {
+TEST(CopyPropagationTest, simple) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -40,10 +37,11 @@ TEST_F(CopyPropagationTest, simple) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, deleteRepeatedMove) {
+TEST(CopyPropagationTest, deleteRepeatedMove) {
   auto code = assembler::ircode_from_string(R"(
     (
      (const v0 0)
@@ -74,10 +72,12 @@ TEST_F(CopyPropagationTest, deleteRepeatedMove) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, noRemapRange) {
+TEST(CopyPropagationTest, noRemapRange) {
+  g_redex = new RedexContext();
 
   auto code = assembler::ircode_from_string(R"(
     (
@@ -105,10 +105,13 @@ TEST_F(CopyPropagationTest, noRemapRange) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
 }
 
-TEST_F(CopyPropagationTest, deleteSelfMove) {
+TEST(CopyPropagationTest, deleteSelfMove) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v1 0)
@@ -126,10 +129,12 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, representative) {
+TEST(CopyPropagationTest, representative) {
+  g_redex = new RedexContext();
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -152,10 +157,12 @@ TEST_F(CopyPropagationTest, representative) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+  delete g_redex;
 }
 
-TEST_F(CopyPropagationTest, verifyEnabled) {
+TEST(CopyPropagationTest, verifyEnabled) {
   // assuming verify-none is disabled for this test
   auto code = assembler::ircode_from_string(R"(
     (
@@ -173,195 +180,17 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (int-to-float v1 v0) ; use v0 as int
+      (int-to-float v1 v0) ; use v0 as float
       (const v0 0) ; DON'T delete this. Verifier needs it
-      (float-to-int v1 v0) ; use v0 as float
+      (float-to-int v1 v0) ; use v0 as int
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
-  // even with verify-none being disabled, the following is safe
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (const v0 0)
-      (int-to-float v1 v0) ; use v0 as int
-      (const v0 0)
-      (int-to-double v1 v0) ; use v0 as int
-    )
-)");
-  code->set_registers_size(2);
-
-  CopyPropagationPass::Config config;
-  CopyPropagation(config).run(code.get());
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (const v0 0)
-      (int-to-float v1 v0) ; use v0 as int
-      (int-to-double v1 v0) ; use v0 as int
-    )
-)");
-
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
-}
-
-TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
-
-  // even with verify-none being disabled, the following is safe
-
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()V"
-     (
-      (const v0 0)
-      (new-array v0 "[I")
-      (move-result-pseudo-object v1)
-      (const v0 0)
-      (const v2 0) ; can be deleted
-      (aput v0 v1 v2)
-      (const v0 0) ; can be deleted
-      (int-to-double v1 v0)
-     )
-    )
-)");
-  auto code = method->get_code();
-  code->set_registers_size(3);
-
-  CopyPropagationPass::Config config;
-  CopyPropagation(config).run(code, method);
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (const v0 0)
-      (new-array v0 "[I")
-      (move-result-pseudo-object v1)
-      (const v2 0) ; dead, and local-dce would delete later
-      (aput v0 v1 v0)
-      (int-to-double v1 v0)
-    )
-)");
-
-  EXPECT_CODE_EQ(code, expected_code.get());
-}
-
-TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
-
-  // the following is not safe, and shall not be fully optimized
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()V"
-     (
-      (const v0 0)
-      (new-array v0 "[F") ; array of float
-      (move-result-pseudo-object v1)
-      (const v0 0) ; used as float
-      (const v2 0) ; used as int
-      (aput v0 v1 v2)
-      (const v0 0) ; used as int
-      (int-to-double v1 v0)
-     )
-    )
-)");
-  auto code = method->get_code();
-  code->set_registers_size(3);
-
-  CopyPropagationPass::Config config;
-  CopyPropagation(config).run(code, method);
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (const v0 0)
-      (new-array v0 "[F") ; array of float
-      (move-result-pseudo-object v1)
-      (const v0 0) ; used as float
-      (const v2 0) ; used as int
-      (aput v0 v1 v2)
-      (const v0 0) ; used as int, redundant with v2!
-      (int-to-double v1 v2)
-      )
-)");
-
-  EXPECT_CODE_EQ(code, expected_code.get());
-}
-
-TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
-  // even with verify-none being disabled, the following is safe
-  auto code = assembler::ircode_from_string(R"(
-    (
-      (const-wide v0 0)
-      (long-to-float v2 v0) ; use v0 as long
-      (const-wide v0 0)
-      (long-to-double v2 v0) ; use v0 as long
-    )
-)");
-  code->set_registers_size(4);
-
-  CopyPropagationPass::Config config;
-  CopyPropagation(config).run(code.get());
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (const-wide v0 0)
-      (long-to-float v2 v0) ; use v0 as long
-      (long-to-double v2 v0) ; use v0 as long
-    )
-)");
-
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
-}
-
-TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
-
-  // if-eq and if-ne require that *both* of their incoming registers agree on
-  // either being an object reference, or an integer.
-  // This provides for further refinement of constant uses, allowing to
-  // copy-propagate in more cases (but also disallowing in others).
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()V"
-     (
-       (const v0 0)
-       (const v2 0)
-       (new-array v2 "[I")
-       (move-result-pseudo-object v1)
-       (if-eq v0 v1 :somewhere)
-
-       (const v4 0)
-       (move-object v3 v4) ; can be rewritten to refer to v0 instead of v4
-       (return-object v3) ; can be rewritten to refer to v0 instead of v3
-
-       (:somewhere)
-       (return-object v1)
-     )
-    )
-)");
-  auto code = method->get_code();
-  code->set_registers_size(4);
-
-  CopyPropagationPass::Config config;
-  CopyPropagation(config).run(code, method);
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-      (const v0 0)
-      (const v2 0)
-      (new-array v2 "[I")
-      (move-result-pseudo-object v1)
-      (if-eq v0 v1 :somewhere)
-
-      (const v4 0)
-      (move-object v3 v0)
-      (return-object v0)
-
-      (:somewhere)
-      (return-object v1)
-    )
-)");
-
-  EXPECT_CODE_EQ(code, expected_code.get());
-}
-
-TEST_F(CopyPropagationTest, cliqueAliasing) {
+TEST(CopyPropagationTest, cliqueAliasing) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v2)
@@ -384,10 +213,11 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, loopNoChange) {
+TEST(CopyPropagationTest, loopNoChange) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
@@ -422,10 +252,11 @@ TEST_F(CopyPropagationTest, loopNoChange) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, branchNoChange) {
+TEST(CopyPropagationTest, branchNoChange) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -462,10 +293,11 @@ TEST_F(CopyPropagationTest, branchNoChange) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, intersect1) {
+TEST(CopyPropagationTest, intersect1) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -501,10 +333,11 @@ TEST_F(CopyPropagationTest, intersect1) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, intersect2) {
+TEST(CopyPropagationTest, intersect2) {
   auto no_change = R"(
     (
       (move v0 v1)
@@ -530,10 +363,11 @@ TEST_F(CopyPropagationTest, intersect2) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, wide) {
+TEST(CopyPropagationTest, wide) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move-wide v0 v2)
@@ -552,10 +386,11 @@ TEST_F(CopyPropagationTest, wide) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, wideClobber) {
+TEST(CopyPropagationTest, wideClobber) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v4)
@@ -577,10 +412,11 @@ TEST_F(CopyPropagationTest, wideClobber) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, wideClobberWideTrue) {
+TEST(CopyPropagationTest, wideClobberWideTrue) {
   auto code = assembler::ircode_from_string(R"(
     (
       (move v1 v4)
@@ -602,10 +438,11 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, repWide) {
+TEST(CopyPropagationTest, repWide) {
   auto code = assembler::ircode_from_string(R"(
     (
       (const-wide v0 0)
@@ -631,12 +468,13 @@ TEST_F(CopyPropagationTest, repWide) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 // whichRep and whichRep2 make sure that we deterministically choose the
 // representative after a merge point.
-TEST_F(CopyPropagationTest, whichRep) {
+TEST(CopyPropagationTest, whichRep) {
   auto no_change = R"(
     (
       (if-eqz v0 :true)
@@ -660,10 +498,11 @@ TEST_F(CopyPropagationTest, whichRep) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, whichRep2) {
+TEST(CopyPropagationTest, whichRep2) {
   auto no_change = R"(
     (
       (if-eqz v0 :true)
@@ -689,7 +528,7 @@ TEST_F(CopyPropagationTest, whichRep2) {
 }
 
 // make sure we keep using the oldest representative even after a merge
-TEST_F(CopyPropagationTest, whichRepPreserve) {
+TEST(CopyPropagationTest, whichRepPreserve) {
   auto code = assembler::ircode_from_string(R"(
     (
       (if-eqz v0 :true)
@@ -725,10 +564,12 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
     )
   )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
-TEST_F(CopyPropagationTest, wideInvokeSources) {
+TEST(CopyPropagationTest, wideInvokeSources) {
+  g_redex = new RedexContext();
 
   auto no_change = R"(
     (
@@ -747,5 +588,8 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
 
   auto expected_code = assembler::ircode_from_string(no_change);
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
+
+  delete g_redex;
 }

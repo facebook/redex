@@ -8,10 +8,13 @@
 #include <gtest/gtest.h>
 
 #include "ControlFlow.h"
+#include "DexClass.h"
 #include "DexInstruction.h"
+#include "DexLoader.h"
 #include "DexUtil.h"
 #include "IRCode.h"
-#include "RedexTest.h"
+#include "PassManager.h"
+#include "RedexContext.h"
 #include "Transform.h"
 
 #include "DedupBlocksPass.h"
@@ -19,7 +22,7 @@
 int count_someFunc_calls(cfg::ControlFlowGraph& cfg) {
   int num_some_func_calls = 0;
   for (auto& mie : InstructionIterable(cfg)) {
-    TRACE(DEDUP_BLOCKS, 1, "%s", SHOW(mie.insn));
+    TRACE(DEDUP_BLOCKS, 1, "%s\n", SHOW(mie.insn));
     if (mie.insn->has_method()) {
       DexMethodRef* called = mie.insn->get_method();
       if (strcmp(called->get_name()->c_str(), "someFunc") == 0) {
@@ -30,13 +33,24 @@ int count_someFunc_calls(cfg::ControlFlowGraph& cfg) {
   return num_some_func_calls;
 }
 
-class DedupBlocksTest : public RedexIntegrationTest {};
+TEST(DedupBlocksTest, useSwitch) {
+  g_redex = new RedexContext();
 
-TEST_F(DedupBlocksTest, useSwitch) {
+  const char* dexfile = std::getenv("dexfile");
+  EXPECT_NE(nullptr, dexfile);
+
+  std::vector<DexStore> stores;
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+  root_store.add_classes(load_classes_from_dex(dexfile));
+  DexClasses& classes = root_store.get_dexen().back();
+  stores.emplace_back(std::move(root_store));
+
   bool code_checked_before = false;
-  TRACE(DEDUP_BLOCKS, 1, "Code before:");
-  for (const auto& cls : *classes) {
-    TRACE(DEDUP_BLOCKS, 1, "Class %s", SHOW(cls));
+  TRACE(DEDUP_BLOCKS, 1, "Code before:\n");
+  for (const auto& cls : classes) {
+    TRACE(DEDUP_BLOCKS, 1, "Class %s\n", SHOW(cls));
     for (const auto& m : cls->get_vmethods()) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_before = true;
@@ -53,11 +67,16 @@ TEST_F(DedupBlocksTest, useSwitch) {
       new DedupBlocksPass(),
   };
 
-  run_passes(passes);
+  PassManager manager(passes);
+  manager.set_testing_mode();
+
+  Json::Value conf_obj = Json::nullValue;
+  ConfigFiles dummy_cfg(conf_obj);
+  manager.run_passes(stores, dummy_cfg);
 
   bool code_checked_after = false;
-  TRACE(DEDUP_BLOCKS, 1, "Code after:");
-  for (const auto& cls : *classes) {
+  TRACE(DEDUP_BLOCKS, 1, "Code after:\n");
+  for (const auto& cls : classes) {
     for (const auto& m : cls->get_vmethods()) {
       if (strcmp(m->get_name()->c_str(), "useSwitch") == 0) {
         code_checked_after = true;

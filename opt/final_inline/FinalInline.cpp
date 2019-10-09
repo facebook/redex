@@ -107,7 +107,7 @@ class FinalInlineImpl {
           }
         }
         if (!found) {
-          TRACE(FINALINLINE, 2, "Cannot delete: %s", SHOW(clazz));
+          TRACE(FINALINLINE, 2, "Cannot delete: %s\n", SHOW(clazz));
           continue;
         }
       }
@@ -135,7 +135,7 @@ class FinalInlineImpl {
     }
     TRACE(FINALINLINE,
           1,
-          "Removable fields %lu/%lu",
+          "Removable fields %lu/%lu\n",
           dead_fields.size(),
           moveable_fields.size());
 
@@ -321,7 +321,7 @@ class FinalInlineImpl {
         field->get_type() != DexType::get_type("Ljava/lang/Class;")) {
       TRACE(FINALINLINE,
             8,
-            "Validating: reject SPUT_OBJECT with %s",
+            "Validating: reject SPUT_OBJECT with %s\n",
             SHOW(field));
       return false;
     }
@@ -344,7 +344,7 @@ class FinalInlineImpl {
         if (first_op->opcode() != OPCODE_RETURN_VOID) {
           TRACE(FINALINLINE,
                 8,
-                "Can't replace: %s :: Last opcode is not return void",
+                "Can't replace: %s :: Last opcode is not return void\n",
                 SHOW(clinit));
           return false;
         }
@@ -360,12 +360,12 @@ class FinalInlineImpl {
         TRACE(FINALINLINE,
               8,
               "Can't replace: %s :: Can't validate :: const :: %s :: sput :: "
-              "%s :: register match :: %s",
+              "%s :: register match :: %s\n",
               SHOW(clinit),
               condition_const ? "True" : "False",
               condition_sput ? "True" : "False",
               condition_register_match ? "True" : "False");
-        TRACE(FINALINLINE, 8, "%s", SHOW(clinit->get_code()));
+        TRACE(FINALINLINE, 8, "%s\n", SHOW(clinit->get_code()));
         return false;
       }
       const_sputs.emplace_back(first_op, sput_op);
@@ -374,7 +374,7 @@ class FinalInlineImpl {
     // Attach encoded values and remove the clinit
     TRACE(FINALINLINE,
           8,
-          "Replacing <clinit> %s: %lu pairs...",
+          "Replacing <clinit> %s: %lu pairs...\n",
           SHOW(clinit),
           const_sputs.size());
     for (auto& pair : const_sputs) {
@@ -385,20 +385,20 @@ class FinalInlineImpl {
       if (const_op->opcode() == OPCODE_CONST_STRING) {
         TRACE(FINALINLINE,
               8,
-              "- String Field: %s, \"%s\"",
+              "- String Field: %s, \"%s\"\n",
               SHOW(field),
               SHOW(const_op->get_string()));
         ev = new DexEncodedValueString(const_op->get_string());
       } else {
         TRACE(FINALINLINE,
               9,
-              "- Integer Field: %s, %lu",
+              "- Integer Field: %s, %lu\n",
               SHOW(field),
               static_cast<uint64_t>(const_op->get_literal()));
         ev = DexEncodedValue::zero_for_type(field->get_type());
         ev->value(static_cast<uint64_t>(const_op->get_literal()));
       }
-      field->set_value(ev);
+      field->make_concrete(field->get_access(), ev);
     }
     clazz->remove_method(clinit);
 
@@ -420,14 +420,14 @@ class FinalInlineImpl {
       if (try_replace_clinit(clazz, clinit)) {
         TRACE(FINALINLINE,
               2,
-              "Replaced clinit for class %s with encoded values",
+              "Replaced clinit for class %s with encoded values\n",
               SHOW(clazz));
         nreplaced++;
       }
     }
     TRACE(FINALINLINE,
           1,
-          "Replaced %lu/%lu clinits with encoded values",
+          "Replaced %lu/%lu clinits with encoded values\n",
           nreplaced,
           ntotal);
     return nreplaced;
@@ -445,7 +445,7 @@ class FinalInlineImpl {
       auto insn = jt->insn;
 
       // Check if the source register is overwritten
-      if (insn->has_dest()) {
+      if (insn->dests_size() > 0) {
         if (insn->dest() == reg ||
             (insn->dest_is_wide() && insn->dest() + 1 == reg)) {
           return false;
@@ -483,7 +483,7 @@ class FinalInlineImpl {
    */
   size_t propagate_constants() {
     // Build dependency map (static -> [statics] that depend on it)
-    TRACE(FINALINLINE, 2, "Building dependency map");
+    TRACE(FINALINLINE, 2, "Building dependency map\n");
     std::unordered_map<DexField*, std::vector<FieldDependency>> deps =
         find_dependencies(m_full_scope);
 
@@ -508,27 +508,27 @@ class FinalInlineImpl {
     size_t nresolved = 0;
     while (!resolved.empty()) {
       auto cur = resolved.front();
-      TRACE(FINALINLINE, 2, "Resolving deps of %s", SHOW(cur));
+      TRACE(FINALINLINE, 2, "Resolving deps of %s\n", SHOW(cur));
       resolved.pop_front();
       if (deps.count(cur) == 0) {
         continue;
       }
       auto val = cur->get_static_value();
       for (const auto& dep : deps[cur]) {
-        dep.field->set_value(val);
+        dep.field->make_concrete(dep.field->get_access(), val);
         auto code = dep.clinit->get_code();
-        TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sget->insn));
-        TRACE(FINALINLINE, 5, "Removing %s", SHOW(dep.sput->insn));
+        TRACE(FINALINLINE, 5, "Removing %s\n", SHOW(dep.sget->insn));
+        TRACE(FINALINLINE, 5, "Removing %s\n", SHOW(dep.sput->insn));
         code->remove_opcode(dep.sget);
         code->remove_opcode(dep.sput);
         ++nresolved;
         resolved.push_back(dep.field);
-        TRACE(FINALINLINE, 2, "Resolved field %s", SHOW(dep.field));
+        TRACE(FINALINLINE, 2, "Resolved field %s\n", SHOW(dep.field));
       }
     }
     TRACE(FINALINLINE,
           1,
-          "Resolved %lu static finals via const prop",
+          "Resolved %lu static finals via const prop\n",
           nresolved);
     return nresolved;
   }
@@ -607,7 +607,7 @@ class FinalInlineImpl {
            reg_reused(sget_move_result->dest() + 1, it, end))) {
         TRACE(FINALINLINE,
               2,
-              "Cannot propagate %s to %s. Source register reused.",
+              "Cannot propagate %s to %s. Source register reused.\n",
               SHOW(src_field),
               SHOW(dst_field));
         continue;
@@ -616,7 +616,7 @@ class FinalInlineImpl {
       // Yay, we found a dependency!
       TRACE(FINALINLINE,
             2,
-            "Field %s depends on %s",
+            "Field %s depends on %s\n",
             SHOW(dst_field),
             SHOW(src_field));
       deps[src_field].emplace_back(

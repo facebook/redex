@@ -29,15 +29,12 @@
 #include <mutex>
 #include <unordered_map>
 
+
 uint32_t DexString::length() const {
   if (is_simple()) {
     return size();
   }
   return length_of_utf8_string(c_str());
-}
-
-int32_t DexString::java_hashcode() const {
-  return java_hashcode_of_utf8_string(c_str());
 }
 
 int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
@@ -49,18 +46,11 @@ int DexTypeList::encode(DexOutputIdx* dodx, uint32_t* output) const {
   return (int)(((uint8_t*)typep) - (uint8_t*)output);
 }
 
-DexField* DexFieldRef::make_concrete(DexAccessFlags access_flags,
-                                     DexEncodedValue* v) {
+void DexField::make_concrete(DexAccessFlags access_flags, DexEncodedValue* v) {
   // FIXME assert if already concrete
-  auto that = static_cast<DexField*>(this);
-  that->m_access = access_flags;
-  that->m_concrete = true;
-  if (is_static(access_flags)) {
-    that->set_value(v);
-  } else {
-    always_assert(v == nullptr);
-  }
-  return that;
+  m_value = v;
+  m_access = access_flags;
+  m_concrete = true;
 }
 
 DexFieldRef* DexField::get_field(const std::string& full_descriptor) {
@@ -146,18 +136,13 @@ static std::vector<DexDebugEntry> eval_debug_instructions(
   return entries;
 }
 
-DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
-    : m_source_checksum(idx->get_checksum()), m_source_offset(offset) {
+DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset) {
   const uint8_t* encdata = idx->get_uleb_data(offset);
-  const uint8_t* base_encdata = encdata;
   uint32_t line_start = read_uleb128(&encdata);
   uint32_t paramcount = read_uleb128(&encdata);
   while (paramcount--) {
-    // We intentionally drop the parameter string name here because we don't
-    // have a convenient representation of it, and our internal tooling doesn't
-    // use this info anyway.
-    // We emit matching number of nulls as method arguments at the end.
-    decode_noindexable_string(idx, encdata);
+    DexString* str = decode_noindexable_string(idx, encdata);
+    m_param_names.push_back(str);
   }
   std::vector<std::unique_ptr<DexDebugInstruction>> insns;
   DexDebugInstruction* dbgp;
@@ -166,7 +151,6 @@ DexDebugItem::DexDebugItem(DexIdx* idx, uint32_t offset)
     insns.emplace_back(dbgp);
   }
   m_dbg_entries = eval_debug_instructions(this, insns, line_start);
-  m_on_disk_size = encdata - base_encdata;
 }
 
 uint32_t DexDebugItem::get_line_start() const {
@@ -182,7 +166,8 @@ uint32_t DexDebugItem::get_line_start() const {
   return 0;
 }
 
-DexDebugItem::DexDebugItem(const DexDebugItem& that) {
+DexDebugItem::DexDebugItem(const DexDebugItem& that)
+    : m_param_names(that.m_param_names) {
   std::unordered_map<DexPosition*, DexPosition*> pos_map;
   for (auto& entry : that.m_dbg_entries) {
     switch (entry.type) {
@@ -290,14 +275,18 @@ int DexDebugItem::encode(
     DexOutputIdx* dodx,
     uint8_t* output,
     uint32_t line_start,
-    uint32_t num_params,
+    const std::vector<DexString*>& parameters,
     const std::vector<std::unique_ptr<DexDebugInstruction>>& dbgops) {
   uint8_t* encdata = output;
   encdata = write_uleb128(encdata, line_start);
-  encdata = write_uleb128(encdata, num_params);
-  for (uint32_t i = 0; i < num_params; ++i) {
-    encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
-    continue;
+  encdata = write_uleb128(encdata, (uint32_t)parameters.size());
+  for (auto s : parameters) {
+    if (s == nullptr) {
+      encdata = write_uleb128p1(encdata, DEX_NO_INDEX);
+      continue;
+    }
+    uint32_t idx = dodx->stringidx(s);
+    encdata = write_uleb128p1(encdata, idx);
   }
   for (auto& dbgop : dbgops) {
     dbgop->encode(dodx, encdata);
@@ -326,6 +315,9 @@ void DexDebugItem::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 void DexDebugItem::gather_strings(std::vector<DexString*>& lstring) const {
+  for (auto p : m_param_names) {
+    if (p) lstring.push_back(p);
+  }
   for (auto& entry : m_dbg_entries) {
     entry.gather_strings(lstring);
   }
@@ -438,8 +430,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     auto& dextry = *it;
     always_assert(dextry->m_start_addr < code->insns_size);
     dti[tryno].start_addr = dextry->m_start_addr;
-    always_assert(dextry->m_start_addr + dextry->m_insn_count <=
-                  code->insns_size);
+    always_assert(dextry->m_start_addr + dextry->m_insn_count <= code->insns_size);
     dti[tryno].insn_count = dextry->m_insn_count;
     if (catches_map.find(dextry->m_catches) == catches_map.end()) {
       catches_map[dextry->m_catches] = hemit - handler_base;
@@ -658,30 +649,26 @@ void DexMethod::become_virtual() {
   insert_sorted(vmethods, this, compare_dexmethods);
 }
 
-DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
-                                       std::unique_ptr<DexCode> dc,
-                                       bool is_virtual) {
-  auto that = static_cast<DexMethod*>(this);
-  that->m_access = access;
-  that->m_dex_code = std::move(dc);
-  that->m_concrete = true;
-  that->m_virtual = is_virtual;
-  return that;
+void DexMethod::make_concrete(DexAccessFlags access,
+                              std::unique_ptr<DexCode> dc,
+                              bool is_virtual) {
+  m_access = access;
+  m_dex_code = std::move(dc);
+  m_concrete = true;
+  m_virtual = is_virtual;
 }
 
-DexMethod* DexMethodRef::make_concrete(DexAccessFlags access,
-                                       std::unique_ptr<IRCode> dc,
-                                       bool is_virtual) {
-  auto that = static_cast<DexMethod*>(this);
-  that->m_access = access;
-  that->m_code = std::move(dc);
-  that->m_concrete = true;
-  that->m_virtual = is_virtual;
-  return that;
+void DexMethod::make_concrete(DexAccessFlags access,
+                              std::unique_ptr<IRCode> dc,
+                              bool is_virtual) {
+  m_access = access;
+  m_code = std::move(dc);
+  m_concrete = true;
+  m_virtual = is_virtual;
 }
 
-DexMethod* DexMethodRef::make_concrete(DexAccessFlags access, bool is_virtual) {
-  return make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
+void DexMethod::make_concrete(DexAccessFlags access, bool is_virtual) {
+  make_concrete(access, std::unique_ptr<IRCode>(nullptr), is_virtual);
 }
 
 void DexMethod::make_non_concrete() {
@@ -712,6 +699,13 @@ void DexClass::load_class_data_item(DexIdx* idx,
     DexEncodedValue* ev = nullptr;
     if (svalues != nullptr) {
       ev = svalues->pop_next();
+    }
+    // The last contiguous block of static fields with null values are not
+    // represented in the encoded value array, so ev would be null for them.
+    // OTOH null-initialized static fields that appear earlier in the static
+    // field list have explicit values. Let's standardize things here.
+    if (ev == nullptr) {
+      ev = DexEncodedValue::zero_for_type(df->get_type());
     }
     df->make_concrete(access_flags, ev);
     m_sfields.push_back(df);
@@ -1073,14 +1067,15 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
 }
 
 static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
-  std::string s;
-  s.push_back(type_shorty(rtype));
+  std::ostringstream ss;
+  ss << type_shorty(rtype);
   if (args != nullptr) {
     for (auto arg : args->get_type_list()) {
-      s.push_back(type_shorty(arg));
+      ss << type_shorty(arg);
     }
   }
-  return DexString::make_string(s);
+  auto type_string = ss.str();
+  return DexString::make_string(type_string);
 }
 
 DexProto* DexProto::make_proto(const DexType* rtype, const DexTypeList* args) {
@@ -1180,22 +1175,6 @@ void DexClass::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   if (m_anno) m_anno->gather_methods(lmethod);
 }
 
-const DexField* DexFieldRef::as_def() const {
-  if (is_def()) {
-    return static_cast<const DexField*>(this);
-  } else {
-    return nullptr;
-  }
-}
-
-DexField* DexFieldRef::as_def() {
-  if (is_def()) {
-    return static_cast<DexField*>(this);
-  } else {
-    return nullptr;
-  }
-}
-
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);
@@ -1277,22 +1256,6 @@ void DexMethod::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   }
 }
 
-const DexMethod* DexMethodRef::as_def() const {
-  if (is_def()) {
-    return static_cast<const DexMethod*>(this);
-  } else {
-    return nullptr;
-  }
-}
-
-DexMethod* DexMethodRef::as_def() {
-  if (is_def()) {
-    return static_cast<DexMethod*>(this);
-  } else {
-    return nullptr;
-  }
-}
-
 void DexMethodRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   m_spec.proto->gather_types(ltype);
@@ -1344,6 +1307,7 @@ void DexMethod::add_load_params(size_t num_add_loads) {
   IRCode* code = this->get_code();
   always_assert_log(code, "Method don't have IRCode\n");
   auto callee_params = code->get_param_instructions();
+  auto param_ops = InstructionIterable(callee_params);
   size_t added_params = 0;
   while (added_params < num_add_loads) {
     ++added_params;

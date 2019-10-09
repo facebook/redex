@@ -9,6 +9,7 @@
 
 #include "MethodReference.h"
 #include "Resolver.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace {
@@ -18,7 +19,7 @@ void fix_colliding_dmethods(
     const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
         colliding_methods) {
   // Fix colliding methods by appending an additional param.
-  TRACE(REFU, 9, "sig: colliding_methods %d", colliding_methods.size());
+  TRACE(REFU, 9, "sig: colliding_methods %d\n", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
   for (auto it : colliding_methods) {
     auto meth = it.first;
@@ -52,7 +53,7 @@ void fix_colliding_dmethods(
     }
     TRACE(REFU,
           9,
-          "sig: patching colliding method %s with %d additional args",
+          "sig: patching colliding method %s with %d additional args\n",
           SHOW(meth),
           arg_count);
   }
@@ -79,7 +80,7 @@ void fix_colliding_dmethods(
       always_assert(callee != nullptr);
       TRACE(REFU,
             9,
-            "sig: patching colliding method callsite to %s in %s",
+            "sig: patching colliding method callsite to %s in %s\n",
             SHOW(callee),
             SHOW(meth));
       // 42 is a dummy int val as the additional argument to the patched
@@ -201,8 +202,7 @@ void add_vmethod_to_groups(
   auto possible_new_name = gen_new_name(method->str(), org_signature_hash);
 
   auto proto = method->get_proto();
-  auto rtype =
-      const_cast<DexType*>(get_element_type_if_array(proto->get_rtype()));
+  auto rtype = const_cast<DexType*>(get_array_type_or_self(proto->get_rtype()));
   if (old_to_new.count(rtype)) {
     VMethodGroupKey key = cal_group_key(rtype, org_signature_hash);
     auto& group = (*groups)[key];
@@ -211,7 +211,7 @@ void add_vmethod_to_groups(
   }
   for (const auto arg_type : proto->get_args()->get_type_list()) {
     auto extracted_arg_type =
-        const_cast<DexType*>(get_element_type_if_array(arg_type));
+        const_cast<DexType*>(get_array_type_or_self(arg_type));
     if (old_to_new.count(extracted_arg_type)) {
       VMethodGroupKey key =
           cal_group_key(extracted_arg_type, org_signature_hash);
@@ -270,7 +270,7 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   for (auto method : group.methods) {
     TRACE(REFU,
           8,
-          "sig: updating virtual method %s to %s:%s",
+          "sig: updating virtual method %s to %s:%s\n",
           SHOW(method),
           SHOW(spec.name),
           SHOW(spec.proto));
@@ -332,7 +332,7 @@ DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
   uint32_t level = get_array_level(type);
   DexType* elem_type = type;
   if (level) {
-    elem_type = get_array_element_type(type);
+    elem_type = get_array_type(type);
   }
   if (m_old_to_new.count(elem_type)) {
     auto new_type = m_old_to_new.at(elem_type);
@@ -351,7 +351,7 @@ bool TypeRefUpdater::mangling(DexFieldRef* field) {
     spec.name = gen_new_name(field->str(), seed);
     spec.type = new_type;
     field->change(spec);
-    TRACE(REFU, 9, "Update field %s ", SHOW(field));
+    TRACE(REFU, 9, "Update field %s \n", SHOW(field));
     return true;
   }
   return false;
@@ -397,7 +397,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   method->change(spec,
                  false /* rename on collision */,
                  true /* update deobfuscated name */);
-  TRACE(REFU, 9, "Update method %s ", SHOW(method));
+  TRACE(REFU, 9, "Update method %s \n", SHOW(method));
   return true;
 }
 
@@ -438,12 +438,12 @@ std::string get_method_signature(const DexMethod* method) {
 }
 
 bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
-  auto rtype = get_element_type_if_array(proto->get_rtype());
+  auto rtype = get_array_type_or_self(proto->get_rtype());
   if (targets.count(rtype)) {
     return true;
   }
   for (const auto arg_type : proto->get_args()->get_type_list()) {
-    auto extracted_arg_type = get_element_type_if_array(arg_type);
+    auto extracted_arg_type = get_array_type_or_self(arg_type);
     if (targets.count(extracted_arg_type)) {
       return true;
     }
@@ -454,7 +454,7 @@ bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
 DexProto* get_new_proto(
     const DexProto* proto,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
-  auto rtype = get_element_type_if_array(proto->get_rtype());
+  auto rtype = get_array_type_or_self(proto->get_rtype());
   if (old_to_new.count(rtype) > 0) {
     auto merger_type = old_to_new.at(rtype);
     auto level = get_array_level(proto->get_rtype());
@@ -464,7 +464,7 @@ DexProto* get_new_proto(
   }
   std::deque<DexType*> lst;
   for (const auto arg_type : proto->get_args()->get_type_list()) {
-    auto extracted_arg_type = get_element_type_if_array(arg_type);
+    auto extracted_arg_type = get_array_type_or_self(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto merger_type = old_to_new.at(extracted_arg_type);
       auto level = get_array_level(arg_type);
@@ -560,7 +560,7 @@ void update_method_signature_type_references(
       auto collision = DexMethod::get_method(
           method->get_class(), method->get_name(), new_proto);
       if (!collision || (!is_init(method) && can_rename(method))) {
-        TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
+        TRACE(REFU, 8, "sig: updating direct method %s\n", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;
         method->change(spec,
@@ -608,10 +608,10 @@ void update_method_signature_type_references(
 void update_field_type_references(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
-  TRACE(REFU, 4, " updating field refs");
+  TRACE(REFU, 4, " updating field refs\n");
   const auto update_field = [&](DexFieldRef* field) {
     const auto ref_type = field->get_type();
-    const auto type = get_element_type_if_array(ref_type);
+    const auto type = get_array_type_or_self(ref_type);
     if (old_to_new.count(type) == 0) {
       return;
     }
@@ -621,7 +621,7 @@ void update_field_type_references(
     auto new_type_incl_array = make_array_type(new_type, level);
     spec.type = new_type_incl_array;
     field->change(spec);
-    TRACE(REFU, 9, " updating field ref to %s", SHOW(type));
+    TRACE(REFU, 9, " updating field ref to %s\n", SHOW(type));
   };
   walk::parallel::fields(scope, update_field);
 
@@ -630,7 +630,7 @@ void update_field_type_references(
       auto insn = mie.insn;
       if (insn->has_field()) {
         const auto ref_type = insn->get_field()->get_type();
-        const auto type = get_element_type_if_array(ref_type);
+        const auto type = get_array_type_or_self(ref_type);
         always_assert_log(
             old_to_new.count(type) == 0,
             "Find old type in field reference %s, please make sure that "

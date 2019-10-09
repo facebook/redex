@@ -52,7 +52,7 @@ constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 
 bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
     const IRInstruction& insn, const std::unordered_set<uint16_t>& vregs) {
-  if (!insn.has_dest()) {
+  if (!insn.dests_size()) {
     // insn has no destination, can not have a side effect
     return false; // we need to return here, otherwise dest() will throw
   }
@@ -210,7 +210,7 @@ std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
 
     if (common_insn && is_insn_eligible(*common_insn)) {
       IRInstruction only_insn = *common_insn;
-      if (only_insn.has_move_result_any()) {
+      if (only_insn.has_move_result()) {
         // need to check, for all succ blocks, the associated move-result must:
         // 1. be in the same block
         // 2. be identical
@@ -272,7 +272,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
     for (auto insn : insns_to_hoist) {
-      if (opcode::is_move_result_any(insn.opcode())) {
+      if (opcode::is_move_result_pseudo(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
         continue;
       }
@@ -329,7 +329,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
         int insns_hoisted = BranchPrefixHoistingPass::process_code(code);
         if (insns_hoisted) {
           TRACE(BPH, 3,
-                "[branch prefix hoisting] Moved %u insns in method {%s}",
+                "[branch prefix hoisting] Moved %u insns in method {%s}\n",
                 insns_hoisted, SHOW(method));
         }
         return insns_hoisted;

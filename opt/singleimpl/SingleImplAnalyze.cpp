@@ -5,21 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <stdio.h>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
 
+#include "SingleImplDefs.h"
+#include "SingleImpl.h"
+#include "SingleImplUtil.h"
 #include "Debug.h"
+#include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexStore.h"
 #include "DexUtil.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
-#include "SingleImpl.h"
-#include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -62,13 +64,11 @@ struct AnalysisImpl : SingleImplAnalysis {
  * Return nullptr otherwise.
  */
 DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
-  if (exists(single_impls, type)) {
-    return type;
-  }
+  if (exists(single_impls, type)) return type;
   if (is_array(type)) {
-    auto element_type = get_array_element_type(type);
-    redex_assert(element_type);
-    const auto sit = single_impls.find(element_type);
+    auto array_type = get_array_type(type);
+    redex_assert(array_type);
+    const auto sit = single_impls.find(array_type);
     if (sit != single_impls.end()) {
       escape_interface(sit->first, HAS_ARRAY_TYPE);
       return sit->first;
@@ -105,8 +105,10 @@ void AnalysisImpl::create_single_impl(const TypeMap& single_impl,
 /**
  * Filter common function for both white and black list.
  */
-void AnalysisImpl::filter_list(const std::vector<std::string>& list,
-                               bool keep_match) {
+void AnalysisImpl::filter_list(
+  const std::vector<std::string>& list,
+  bool keep_match
+) {
   if (list.empty()) return;
 
   auto find_in_list = [&](const std::string& name) {
@@ -170,9 +172,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
   filter_list(config.package_black_list, false);
   filter_by_annotations(config.anno_black_list);
   // TODO(T33109158): Better way to eliminate VerifyError.
-  if (config.filter_proguard_special_interfaces) {
-    filter_proguard_special_interface();
-  }
+  if (config.filter_proguard_special_interfaces) filter_proguard_special_interface();
 }
 
 /**
@@ -288,13 +288,14 @@ void AnalysisImpl::remove_escaped() {
  * Find all fields typed with the single impl interface.
  */
 void AnalysisImpl::collect_field_defs() {
-  walk::fields(scope, [&](DexField* field) {
-    auto type = field->get_type();
-    auto intf = get_and_check_single_impl(type);
-    if (intf) {
-      single_impls[intf].fielddefs.push_back(field);
-    }
-  });
+  walk::fields(scope,
+              [&](DexField* field) {
+                auto type = field->get_type();
+                auto intf = get_and_check_single_impl(type);
+                if (intf) {
+                  single_impls[intf].fielddefs.push_back(field);
+                }
+              });
 }
 
 /**
@@ -313,15 +314,16 @@ void AnalysisImpl::collect_method_defs() {
     single_impls[intf].methoddefs.insert(method);
   };
 
-  walk::methods(scope, [&](DexMethod* method) {
-    auto proto = method->get_proto();
-    bool native = is_native(method);
-    check_method_arg(proto->get_rtype(), method, native);
-    auto args = proto->get_args();
-    for (const auto it : args->get_type_list()) {
-      check_method_arg(it, method, native);
-    }
-  });
+  walk::methods(scope,
+    [&](DexMethod* method) {
+      auto proto = method->get_proto();
+      bool native = is_native(method);
+      check_method_arg(proto->get_rtype(), method, native);
+      auto args = proto->get_args();
+      for (const auto it : args->get_type_list()) {
+        check_method_arg(it, method, native);
+      }
+    });
 }
 
 /**
@@ -361,96 +363,94 @@ void AnalysisImpl::analyze_opcodes() {
   };
 
   walk::opcodes(scope,
-                [](DexMethod* method) { return true; },
-                [&](DexMethod* method, IRInstruction* insn) {
-                  auto op = insn->opcode();
-                  switch (op) {
-                  // type ref
-                  case OPCODE_CONST_CLASS:
-                  case OPCODE_CHECK_CAST:
-                  case OPCODE_INSTANCE_OF:
-                  case OPCODE_NEW_INSTANCE:
-                  case OPCODE_NEW_ARRAY:
-                  case OPCODE_FILLED_NEW_ARRAY: {
-                    auto intf = get_and_check_single_impl(insn->get_type());
-                    if (intf) {
-                      single_impls[intf].typerefs.push_back(insn);
-                    }
-                    return;
-                  }
-                  // field ref
-                  case OPCODE_IGET:
-                  case OPCODE_IGET_WIDE:
-                  case OPCODE_IGET_OBJECT:
-                  case OPCODE_IPUT:
-                  case OPCODE_IPUT_WIDE:
-                  case OPCODE_IPUT_OBJECT: {
-                    DexFieldRef* field =
-                        resolve_field(insn->get_field(), FieldSearch::Instance);
-                    if (field == nullptr) {
-                      field = insn->get_field();
-                    }
-                    check_field(field, insn);
-                    return;
-                  }
-                  case OPCODE_SGET:
-                  case OPCODE_SGET_WIDE:
-                  case OPCODE_SGET_OBJECT:
-                  case OPCODE_SPUT:
-                  case OPCODE_SPUT_WIDE:
-                  case OPCODE_SPUT_OBJECT: {
-                    DexFieldRef* field =
-                        resolve_field(insn->get_field(), FieldSearch::Static);
-                    if (field == nullptr) {
-                      field = insn->get_field();
-                    }
-                    check_field(field, insn);
-                    return;
-                  }
-                  // method ref
-                  case OPCODE_INVOKE_INTERFACE: {
-                    // if it is an invoke on the interface method, collect it as
-                    // such
-                    const auto meth = insn->get_method();
-                    const auto owner = meth->get_class();
-                    const auto intf = get_and_check_single_impl(owner);
-                    if (intf) {
-                      // if the method ref is not defined on the interface
-                      // itself drop the optimization
-                      const auto& meths = type_class(intf)->get_vmethods();
-                      if (std::find(meths.begin(), meths.end(), meth) ==
-                          meths.end()) {
-                        escape_interface(intf, UNKNOWN_MREF);
-                      } else {
-                        single_impls[intf].intf_methodrefs[meth].insert(insn);
-                      }
-                    }
-                    check_sig(meth, insn);
-                    return;
-                  }
+               [](DexMethod* method) { return true; },
+               [&](DexMethod* method, IRInstruction* insn) {
+                 auto op = insn->opcode();
+                 switch (op) {
+                 // type ref
+                 case OPCODE_CONST_CLASS:
+                 case OPCODE_CHECK_CAST:
+                 case OPCODE_INSTANCE_OF:
+                 case OPCODE_NEW_INSTANCE:
+                 case OPCODE_NEW_ARRAY:
+                 case OPCODE_FILLED_NEW_ARRAY: {
+                   auto intf = get_and_check_single_impl(insn->get_type());
+                   if (intf) {
+                     single_impls[intf].typerefs.push_back(insn);
+                   }
+                   return;
+                 }
+                 // field ref
+                 case OPCODE_IGET:
+                 case OPCODE_IGET_WIDE:
+                 case OPCODE_IGET_OBJECT:
+                 case OPCODE_IPUT:
+                 case OPCODE_IPUT_WIDE:
+                 case OPCODE_IPUT_OBJECT: {
+                   DexFieldRef* field =
+                       resolve_field(insn->get_field(), FieldSearch::Instance);
+                   if (field == nullptr) {
+                     field = insn->get_field();
+                   }
+                   check_field(field, insn);
+                   return;
+                 }
+                 case OPCODE_SGET:
+                 case OPCODE_SGET_WIDE:
+                 case OPCODE_SGET_OBJECT:
+                 case OPCODE_SPUT:
+                 case OPCODE_SPUT_WIDE:
+                 case OPCODE_SPUT_OBJECT: {
+                   DexFieldRef* field =
+                       resolve_field(insn->get_field(), FieldSearch::Static);
+                   if (field == nullptr) {
+                     field = insn->get_field();
+                   }
+                   check_field(field, insn);
+                   return;
+                 }
+                 // method ref
+                 case OPCODE_INVOKE_INTERFACE: {
+                   // if it is an invoke on the interface method, collect it as
+                   // such
+                   const auto meth = insn->get_method();
+                   const auto owner = meth->get_class();
+                   const auto intf = get_and_check_single_impl(owner);
+                   if (intf) {
+                     // if the method ref is not defined on the interface itself
+                     // drop the optimization
+                     const auto& meths = type_class(intf)->get_vmethods();
+                     if (std::find(meths.begin(), meths.end(), meth) ==
+                         meths.end()) {
+                       escape_interface(intf, UNKNOWN_MREF);
+                     } else {
+                       single_impls[intf].intf_methodrefs[meth].insert(insn);
+                     }
+                   }
+                   check_sig(meth, insn);
+                   return;
+                 }
 
-                  case OPCODE_INVOKE_DIRECT:
-                  case OPCODE_INVOKE_STATIC:
-                  case OPCODE_INVOKE_VIRTUAL:
-                  case OPCODE_INVOKE_SUPER: {
-                    const auto meth = insn->get_method();
-                    check_sig(meth, insn);
-                    return;
-                  }
-                  default:
-                    return;
-                  }
-                });
+                 case OPCODE_INVOKE_DIRECT:
+                 case OPCODE_INVOKE_STATIC:
+                 case OPCODE_INVOKE_VIRTUAL:
+                 case OPCODE_INVOKE_SUPER: {
+                   const auto meth = insn->get_method();
+                   check_sig(meth, insn);
+                   return;
+                 }
+                 default:
+                   return;
+                 }
+               });
 }
 
 /**
  * Main analysis method
  */
 std::unique_ptr<SingleImplAnalysis> SingleImplAnalysis::analyze(
-    const Scope& scope,
-    const DexStoresVector& stores,
-    const TypeMap& single_impl,
-    const TypeSet& intfs,
+    const Scope& scope, const DexStoresVector& stores,
+    const TypeMap& single_impl, const TypeSet& intfs,
     const ProguardMap& pg_map,
     const SingleImplConfig& config) {
   std::unique_ptr<AnalysisImpl> single_impls(
@@ -468,7 +468,7 @@ void SingleImplAnalysis::escape_interface(DexType* intf, EscapeReason reason) {
   auto sit = single_impls.find(intf);
   if (sit == single_impls.end()) return;
   sit->second.escape |= reason;
-  TRACE(INTF, 5, "(ESC) Escape %s => 0x%X", SHOW(intf), reason);
+  TRACE(INTF, 5, "(ESC) Escape %s => 0x%X\n", SHOW(intf), reason);
   const auto intf_cls = type_class(intf);
   if (intf_cls) {
     const auto super_intfs = intf_cls->get_interfaces();
@@ -498,8 +498,9 @@ void SingleImplAnalysis::get_interfaces(TypeList& to_optimize) const {
             [](const DexType* type1, const DexType* type2) {
               auto size1 = type_class(type1)->get_vmethods().size();
               auto size2 = type_class(type2)->get_vmethods().size();
-              return size1 == size2 ? strcmp(type1->get_name()->c_str(),
-                                             type2->get_name()->c_str()) < 0
-                                    : size1 < size2;
+              return size1 == size2
+                         ? strcmp(type1->get_name()->c_str(),
+                                  type2->get_name()->c_str()) < 0
+                         : size1 < size2;
             });
 }

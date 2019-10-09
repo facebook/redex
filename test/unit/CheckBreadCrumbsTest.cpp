@@ -13,7 +13,6 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
-#include "RedexTest.h"
 
 // Create the following hierarchy
 //
@@ -169,14 +168,17 @@ DexClass* create_class_A() {
       make_field_def(a_t, "a_pro_field", int_t, ACC_PROTECTED | ACC_STATIC),
       make_field_def(a_t, "a_pri_field", int_t, ACC_PRIVATE | ACC_STATIC),
   };
-  auto a_pub_fun = DexMethod::make_method("LA;", "a_pub_fun", "V", {})
-                       ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+  auto a_pub_fun = static_cast<DexMethod*>(
+      DexMethod::make_method("LA;", "a_pub_fun", "V", {}));
+  a_pub_fun->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
 
-  auto a_pro_fun = DexMethod::make_method("LA;", "a_pro_fun", "V", {})
-                       ->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
+  auto a_pro_fun = static_cast<DexMethod*>(
+      DexMethod::make_method("LA;", "a_pro_fun", "V", {}));
+  a_pro_fun->make_concrete(ACC_PROTECTED | ACC_STATIC, false);
 
-  auto a_pri_fun = DexMethod::make_method("LA;", "a_pri_fun", "V", {})
-                       ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
+  auto a_pri_fun = static_cast<DexMethod*>(
+      DexMethod::make_method("LA;", "a_pri_fun", "V", {}));
+  a_pri_fun->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
   return create_class(a_t, get_object_type(), a_methods, a_fields, ACC_PUBLIC);
 }
@@ -200,10 +202,9 @@ std::vector<DexClass*> create_classes() {
   return classes;
 }
 
-class CheckBreadcrumbsTest : public RedexTest {};
-
 //========== Test Cases ==========
-TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
+TEST(CheckBreadcrumbs, AccessValidityTest) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> classes = create_classes();
   DexMetadata dm;
   dm.set_id("classes");
@@ -226,6 +227,7 @@ TEST_F(CheckBreadcrumbsTest, AccessValidityTest) {
            << "Bad field refs in method LB;.call_a_pri_field\n"
            << "\ta_pri_field\n\n";
   EXPECT_EQ(expected.str(), bc.get_methods_with_bad_refs());
+  delete g_redex;
 }
 
 } // namespace

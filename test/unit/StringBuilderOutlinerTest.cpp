@@ -166,7 +166,8 @@ TEST_F(StringBuilderOutlinerTest, outlineTwo) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -200,7 +201,8 @@ TEST_F(StringBuilderOutlinerTest, stringArgBuilderConstructor) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST_F(StringBuilderOutlinerTest, trackReturnedStringBuilders) {
@@ -234,7 +236,8 @@ TEST_F(StringBuilderOutlinerTest, trackReturnedStringBuilders) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST_F(StringBuilderOutlinerTest, outlineThree) {
@@ -268,7 +271,8 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 
   auto outline_cls =
       type_class(DexType::get_type("Lcom/redex/OutlinedStringBuilders;"));
@@ -295,9 +299,10 @@ TEST_F(StringBuilderOutlinerTest, outlineThree) {
   // ensures that running StringBuilderOutlinerPass before OSDCE won't
   // inadvertently cause dead code to be retained.
   auto outline_helper_code = outline_helper_method->get_code();
-  EXPECT_CODE_EQ(expected_outlined_code.get(), outline_helper_code);
+  EXPECT_EQ(assembler::to_s_expr(expected_outlined_code.get()),
+            assembler::to_s_expr(outline_helper_code));
 
-  outline_helper_code->build_cfg(false);
+  outline_helper_code->build_cfg();
   auto& outline_helper_cfg = outline_helper_code->cfg();
   outline_helper_cfg.calculate_exit_block();
 
@@ -356,7 +361,8 @@ TEST_F(StringBuilderOutlinerTest, outlineWide) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 TEST_F(StringBuilderOutlinerTest, builderUsedInBranches) {
@@ -418,7 +424,8 @@ TEST_F(StringBuilderOutlinerTest, builderUsedInBranches) {
       (goto :done)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -488,6 +495,7 @@ TEST_F(StringBuilderOutlinerTest, builderNotUsedinLoop) {
     )
   )");
 
+  auto expected = assembler::to_s_expr(code.get());
   run_outliner(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -511,7 +519,8 @@ TEST_F(StringBuilderOutlinerTest, builderNotUsedinLoop) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -611,7 +620,8 @@ TEST_F(StringBuilderOutlinerTest, builderAliasIsLiveOut) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -671,7 +681,8 @@ TEST_F(StringBuilderOutlinerTest, multipleToStringCalls) {
       (return-void)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -713,7 +724,8 @@ TEST_F(StringBuilderOutlinerTest, minCount) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }
 
 /*
@@ -757,5 +769,6 @@ TEST_F(StringBuilderOutlinerTest, maxLength) {
       (return-object v0)
     )
   )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(expected_code.get()),
+            assembler::to_s_expr(code.get()));
 }

@@ -39,7 +39,7 @@ IRInstruction* make_stringbuilder(uint16_t dest) {
 
 IRInstruction* make_constructor(uint16_t dest) {
   auto insn = new IRInstruction(OPCODE_INVOKE_DIRECT);
-  insn->set_srcs_size(1);
+  insn->set_arg_word_count(1);
   insn->set_src(0, dest);
   insn->set_method(
       DexMethod::make_method("Ljava/lang/StringBuilder;", "<init>", "V", {}));
@@ -48,7 +48,7 @@ IRInstruction* make_constructor(uint16_t dest) {
 
 IRInstruction* make_append_instruction(uint16_t vreg_sb, uint16_t vreg_str) {
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(2);
+  insn->set_arg_word_count(2);
   insn->set_src(0, vreg_sb);
   insn->set_src(1, vreg_str);
   insn->set_method(DexMethod::make_method("Ljava/lang/StringBuilder;",
@@ -60,7 +60,7 @@ IRInstruction* make_append_instruction(uint16_t vreg_sb, uint16_t vreg_str) {
 
 IRInstruction* make_to_string(uint16_t dest) {
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(1);
+  insn->set_arg_word_count(1);
   insn->set_src(0, dest);
   insn->set_method(DexMethod::make_method(
       "Ljava/lang/StringBuilder;", "toString", "Ljava/lang/String;", {}));
@@ -261,7 +261,7 @@ TEST(StringSimplification, testBranching) {
   code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(1);
+  insn->set_arg_word_count(1);
   insn->set_src(0, 6);
   insn->set_dest(6);
   insn->set_method(
@@ -344,7 +344,7 @@ TEST(StringSimplification, passStringBuilderInMethod) {
   code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(2);
+  insn->set_arg_word_count(2);
   insn->set_src(0, 6);
   insn->set_src(1, 3);
   insn->set_method(DexMethod::make_method(
@@ -445,7 +445,7 @@ TEST(StringSimplification, modificationOfBaseVariable) {
   code->push_back(dasm(OPCODE_CONST, {6_v, 0_L}));
 
   auto insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(1);
+  insn->set_arg_word_count(1);
   insn->set_src(0, 6);
   insn->set_method(DexMethod::make_method(
       "Ljava/lang/Funky;", "doTheThing", "Ljava/lang/String;", {}));
@@ -456,7 +456,7 @@ TEST(StringSimplification, modificationOfBaseVariable) {
   code->push_back(make_append_instruction(3, 1));
 
   insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
-  insn->set_srcs_size(1);
+  insn->set_arg_word_count(1);
   insn->set_src(0, 6);
   insn->set_method(DexMethod::make_method(
       "Ljava/lang/Funky;", "doTheThing2", "Ljava/lang/String;", {}));

@@ -53,7 +53,7 @@ TEST_F(RegAllocTest, RegTypeDestWide) {
   for (auto op : all_opcodes) {
     // We cannot create IRInstructions from these opcodes
     auto insn = std::make_unique<IRInstruction>(op);
-    if (insn->has_dest()) {
+    if (insn->dests_size()) {
       EXPECT_EQ(insn->dest_is_wide(),
                 regalloc::dest_reg_type(insn.get()) == RegisterType::WIDE)
           << "mismatch for " << show(op);
@@ -102,7 +102,8 @@ TEST_F(RegAllocTest, LiveRangeSingleBlock) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 3);
 }
 
@@ -152,7 +153,8 @@ TEST_F(RegAllocTest, LiveRange) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_string(code.get()),
+            assembler::to_string(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 6);
 }
 
@@ -184,7 +186,8 @@ TEST_F(RegAllocTest, WidthAwareLiveRange) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_EQ(code->get_registers_size(), 5);
 }
 
@@ -400,7 +403,8 @@ TEST_F(RegAllocTest, Coalesce) {
      (return v0)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, MoveWideCoalesce) {
@@ -435,7 +439,8 @@ TEST_F(RegAllocTest, MoveWideCoalesce) {
      (return-wide v0)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, NoCoalesceWide) {
@@ -468,35 +473,6 @@ TEST_F(RegAllocTest, NoCoalesceWide) {
   allocator.coalesce(&ig, code.get());
 
   EXPECT_EQ(assembler::to_s_expr(code.get()), original_code_s_expr);
-}
-
-TEST_F(RegAllocTest, NoOverlapWideSrcs) {
-  auto method = assembler::method_from_string(R"(
-    (method (public static) "LFoo;.bar:()Z"
-     (
-      (const-wide v0 0)
-      (const-wide v2 0)
-      (cmp-long v1 v0 v2)
-      (return v1)
-     )
-    )
-)");
-  method->get_code()->set_registers_size(4);
-
-  graph_coloring::Allocator::Config config;
-  RegAllocPass::allocate(config, method);
-
-  auto expected_code = assembler::ircode_from_string(R"(
-    (
-     (const-wide v3 0)
-     (const-wide v1 0)
-     ; dest register here must not overlap the high registers of the wide input values
-     (cmp-long v0 v3 v1)
-     (return v0)
-    )
-)");
-
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
 }
 
 static std::vector<reg_t> stack_to_vec(std::stack<reg_t> stack) {
@@ -656,7 +632,8 @@ TEST_F(RegAllocTest, SelectAliasedRange) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 /*
@@ -723,10 +700,10 @@ TEST_F(RegAllocTest, Spill) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
-      {0, 16},
-      {1, 16},
-      {2, 256},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
+    {0, 16},
+    {1, 16},
+    {2, 256},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
@@ -749,7 +726,8 @@ TEST_F(RegAllocTest, Spill) {
      (return v7)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
@@ -775,9 +753,9 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
-      {0, 16},
-      {1, 0},
+  spill_plan.global_spills = std::unordered_map<reg_t, reg_t> {
+    {0, 16},
+    {1, 0},
   };
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
@@ -791,7 +769,8 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
      (return-void)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, ContainmentGraph) {
@@ -844,7 +823,8 @@ TEST_F(RegAllocTest, ContainmentGraph) {
      (return v0)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
   EXPECT_TRUE(ig.has_containment_edge(1, 0));
   EXPECT_TRUE(ig.has_containment_edge(0, 1));
 }
@@ -932,7 +912,8 @@ TEST_F(RegAllocTest, Split) {
      (return v3)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, ParamFirstUse) {
@@ -980,28 +961,36 @@ TEST_F(RegAllocTest, ParamFirstUse) {
      (return v3)
     )
 )");
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(RegAllocTest, NoOverwriteThis) {
-  auto method = assembler::method_from_string(R"(
-    (method (public) "LFoo;.bar:(I)LFoo;"
-     (
-      (load-param-object v0)
-      (load-param v1)
-      (if-eqz v1 :true-label)
-      (sget-object "LFoo;.foo:LFoo;")
-      (move-result-object v0)
-      (:true-label)
-      (return-object v0)
-     )
+  auto method =
+      static_cast<DexMethod*>(DexMethod::make_method("LFoo;.bar:(I)LFoo;"));
+  method->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+
+  method->set_code(assembler::ircode_from_string(R"(
+    (
+     (load-param-object v0)
+     (load-param v1)
+     (if-eqz v1 :true-label)
+     (sget-object "LFoo;.foo:LFoo;")
+     (move-result-object v0)
+     (:true-label)
+     (return-object v0)
     )
-)");
-  method->get_code()->set_registers_size(2);
+)"));
+  auto code = method->get_code();
+  code->set_registers_size(2);
+  code->build_cfg(/* editable */ false);
+  auto& cfg = code->cfg();
+  cfg.calculate_exit_block();
 
   graph_coloring::Allocator::Config config;
   config.no_overwrite_this = true;
-  RegAllocPass::allocate(config, method);
+  graph_coloring::Allocator allocator(config);
+  allocator.allocate(method);
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
@@ -1015,5 +1004,7 @@ TEST_F(RegAllocTest, NoOverwriteThis) {
      (return-object v0)
     )
 )");
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_s_expr(code),
+            assembler::to_s_expr(expected_code.get()))
+      << show(code);
 }

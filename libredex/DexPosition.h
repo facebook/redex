@@ -52,11 +52,9 @@ class RealPositionMapper : public PositionMapper {
   std::string m_filename_v2;
   std::vector<DexPosition*> m_positions;
   std::unordered_map<DexPosition*, int64_t> m_pos_line_map;
-
  protected:
   uint32_t get_line(DexPosition*);
   void write_map_v2();
-
  public:
   RealPositionMapper(const std::string& filename_v2)
       : m_filename_v2(filename_v2) {}

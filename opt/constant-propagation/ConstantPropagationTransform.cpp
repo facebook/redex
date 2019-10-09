@@ -34,25 +34,6 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   ++m_stats.materialized_consts;
 }
 
-/*
- * Add an const after load param section for a known value load_param.
- * This will depend on future run of RemoveUnusedArgs pass to get the win of
- * removing not used arguments.
- */
-void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     IRList::iterator it) {
-  auto* insn = it->insn;
-  auto value = env.get(insn->dest());
-  auto replacement =
-      ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
-  if (replacement.size() == 0) {
-    return;
-  }
-  m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),
-                              replacement.end());
-  ++m_stats.added_param_const;
-}
-
 void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
                                         const WholeProgramState& wps,
                                         IRList::iterator it) {
@@ -86,7 +67,7 @@ void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
     auto new_val = env.get(insn->src(0));
     if (ConstantValue::apply_visitor(runtime_equals_visitor(), existing_val,
                                      new_val)) {
-      TRACE(FINALINLINE, 2, "%s has %s", SHOW(field), SHOW(existing_val));
+      TRACE(FINALINLINE, 2, "%s has %s\n", SHOW(field), SHOW(existing_val));
       // This field must already hold this value. We don't need to write to it
       // again.
       m_deletes.push_back(it);
@@ -102,12 +83,6 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      IRList::iterator it) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
-  case IOPCODE_LOAD_PARAM:
-  case IOPCODE_LOAD_PARAM_OBJECT:
-  case IOPCODE_LOAD_PARAM_WIDE: {
-    generate_const_param(env, it);
-    break;
-  }
   case OPCODE_MOVE:
   case OPCODE_MOVE_WIDE:
     if (m_config.replace_moves_with_consts) {
@@ -120,8 +95,7 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     auto* primary_insn = ir_list::primary_instruction_of_move_result_pseudo(it);
     auto op = primary_insn->opcode();
     if (is_sget(op) || is_iget(op) || is_aget(op) || is_div_int_lit(op) ||
-        is_rem_int_lit(op) || is_instance_of(op) || is_rem_int_or_long(op) ||
-        is_div_int_or_long(op)) {
+        is_rem_int_lit(op)) {
       replace_with_const(env, it);
     }
     break;
@@ -153,124 +127,13 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
   case OPCODE_XOR_INT_LIT8:
   case OPCODE_SHL_INT_LIT8:
   case OPCODE_SHR_INT_LIT8:
-  case OPCODE_USHR_INT_LIT8:
-  case OPCODE_ADD_INT:
-  case OPCODE_SUB_INT:
-  case OPCODE_MUL_INT:
-  case OPCODE_AND_INT:
-  case OPCODE_OR_INT:
-  case OPCODE_XOR_INT:
-  case OPCODE_ADD_LONG:
-  case OPCODE_SUB_LONG:
-  case OPCODE_MUL_LONG:
-  case OPCODE_AND_LONG:
-  case OPCODE_OR_LONG:
-  case OPCODE_XOR_LONG: {
+  case OPCODE_USHR_INT_LIT8: {
     replace_with_const(env, it);
     break;
   }
 
   default: {}
   }
-}
-
-void Transform::remove_dead_switch(const ConstantEnvironment& env,
-                                   cfg::ControlFlowGraph& cfg,
-                                   cfg::Block* block) {
-
-  if (!m_config.remove_dead_switch) {
-    return;
-  }
-
-  // TODO: The cfg for constant propagation is assumed to be non-editable.
-  // Once the editable cfg is used, the following optimization logic should be
-  // simpler.
-  if (cfg.editable()) {
-    return;
-  }
-
-  auto insn_it = block->get_last_insn();
-  always_assert(insn_it != block->end());
-  auto* insn = insn_it->insn;
-  always_assert(is_switch(insn->opcode()));
-
-  // Find successor blocks and a default block for switch
-  std::unordered_set<cfg::Block*> succs;
-  cfg::Block* def_block = nullptr;
-  for (auto& edge : block->succs()) {
-    auto type = edge->type();
-    auto target = edge->target();
-    if (type == cfg::EDGE_GOTO) {
-      always_assert(def_block == nullptr);
-      def_block = target;
-    } else {
-      always_assert(type == cfg::EDGE_BRANCH);
-    }
-    succs.insert(edge->target());
-  }
-  always_assert(def_block != nullptr);
-
-  auto is_switch_label = [=](MethodItemEntry& mie) {
-    return (mie.type == MFLOW_TARGET && mie.target->type == BRANCH_MULTI &&
-            mie.target->src->insn == insn);
-  };
-
-  // Find a non-default block which is uniquely reachable with a constant.
-  cfg::Block* reachable = nullptr;
-  auto eval_switch = env.get<SignedConstantDomain>(insn->src(0));
-  // If switch value is not an exact constant, do not replace the switch by a
-  // goto.
-  bool should_goto = eval_switch.constant_domain().is_value();
-  for (auto succ : succs) {
-    for (auto& mie : *succ) {
-      if (is_switch_label(mie)) {
-        auto eval_case =
-            eval_switch.meet(SignedConstantDomain(mie.target->case_key));
-        if (eval_case.is_bottom() || def_block == succ) {
-          // Unreachable label or any switch targeted label in default block is
-          // simply removed.
-          mie.type = MFLOW_FALLTHROUGH;
-          delete mie.target;
-        } else {
-          if (reachable != nullptr) {
-            should_goto = false;
-          } else {
-            reachable = succ;
-          }
-        }
-      }
-    }
-  }
-
-  // When non-default blocks are unreachable, simply remove the switch.
-  if (reachable == nullptr) {
-    m_deletes.emplace_back(insn_it);
-    ++m_stats.branches_removed;
-    return;
-  }
-
-  if (!should_goto) {
-    return;
-  }
-  ++m_stats.branches_removed;
-
-  // Replace the switch by a goto to the uniquely reachable block
-  m_replacements.push_back({insn, {new IRInstruction(OPCODE_GOTO)}});
-  // Change the first label for the goto.
-  bool has_changed = false;
-  for (auto& mie : *reachable) {
-    if (is_switch_label(mie)) {
-      if (!has_changed) {
-        mie.target->type = BRANCH_SIMPLE;
-        has_changed = true;
-      } else {
-        // From the second targets, just become a nop, if any.
-        mie.type = MFLOW_FALLTHROUGH;
-        delete mie.target;
-      }
-    }
-  }
-  always_assert(has_changed);
 }
 
 /*
@@ -281,32 +144,23 @@ void Transform::remove_dead_switch(const ConstantEnvironment& env,
 void Transform::eliminate_dead_branch(
     const intraprocedural::FixpointIterator& intra_cp,
     const ConstantEnvironment& env,
-    cfg::ControlFlowGraph& cfg,
     cfg::Block* block) {
   auto insn_it = block->get_last_insn();
   if (insn_it == block->end()) {
     return;
   }
   auto* insn = insn_it->insn;
-  if (is_switch(insn->opcode())) {
-    remove_dead_switch(env, cfg, block);
-    return;
-  }
-
   if (!is_conditional_branch(insn->opcode())) {
     return;
   }
-
-  const auto& succs = cfg.get_succ_edges_if(
-      block, [](const cfg::Edge* e) { return e->type() != cfg::EDGE_GHOST; });
-  always_assert_log(succs.size() == 2, "actually %d\n%s", succs.size(),
-                    SHOW(InstructionIterable(*block)));
-  for (auto& edge : succs) {
+  always_assert_log(block->succs().size() == 2, "actually %d\n%s",
+                    block->succs().size(), SHOW(InstructionIterable(*block)));
+  for (auto& edge : block->succs()) {
     // Check if the fixpoint analysis has determined the successors to be
     // unreachable
     if (intra_cp.analyze_edge(edge, env).is_bottom()) {
       auto is_fallthrough = edge->type() == cfg::EDGE_GOTO;
-      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s",
+      TRACE(CONSTP, 2, "Changed conditional branch %s as it is always %s\n",
             SHOW(insn), is_fallthrough ? "true" : "false");
       ++m_stats.branches_removed;
       if (is_fallthrough) {
@@ -333,12 +187,8 @@ void Transform::apply_changes(IRCode* code) {
     }
   }
   for (auto it : m_deletes) {
-    TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
+    TRACE(CONSTP, 4, "Removing instruction %s\n", SHOW(it->insn));
     code->remove_opcode(it);
-  }
-  auto params = code->get_param_instructions();
-  for (auto insn : m_added_param_values) {
-    code->insert_before(params.end(), insn);
   }
 }
 
@@ -359,7 +209,7 @@ Transform::Stats Transform::apply(
       intra_cp.analyze_instruction(mie.insn, &env);
       simplify_instruction(env, wps, code->iterator_to(mie));
     }
-    eliminate_dead_branch(intra_cp, env, cfg, block);
+    eliminate_dead_branch(intra_cp, env, block);
   }
   apply_changes(code);
   return m_stats;

@@ -30,8 +30,9 @@ ClassHierarchy build_type_hierarchy(const Scope& scope);
 /**
  * Return the direct children of a type.
  */
-inline const TypeSet get_children(const ClassHierarchy& hierarchy,
-                                  const DexType* type) {
+inline const TypeSet get_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type) {
   const auto& it = hierarchy.find(type);
   return it != hierarchy.end() ? it->second : TypeSet();
 }
@@ -39,9 +40,10 @@ inline const TypeSet get_children(const ClassHierarchy& hierarchy,
 /**
  * Return all children down the hierarchy of a given type.
  */
-void get_all_children(const ClassHierarchy& hierarchy,
-                      const DexType* type,
-                      TypeSet& children);
+void get_all_children(
+    const ClassHierarchy& hierarchy,
+    const DexType* type,
+    TypeSet& children);
 
 /**
  * Map from each interface to the classes implementing that interface.
@@ -62,9 +64,10 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy);
 /**
  * Return whether a given class implements a given interface.
  */
-inline bool implements(const InterfaceMap& interfaces,
-                       const DexType* cls,
-                       const DexType* intf) {
+inline bool implements(
+    const InterfaceMap& interfaces,
+    const DexType* cls,
+    const DexType* intf) {
   const auto& classes = interfaces.find(intf);
   return classes != interfaces.end() && classes->second.count(cls) > 0;
 }
@@ -77,15 +80,6 @@ void get_all_implementors(const Scope& scope,
                           const DexType* intf,
                           TypeSet& impls);
 
-inline TypeSet get_all_implementors(const InterfaceMap& interfaces,
-                                    const DexType* intf) {
-  const auto& implementors = interfaces.find(intf);
-  if (implementors == interfaces.end()) {
-    return TypeSet();
-  }
-  return implementors->second;
-}
-
 /**
  * Helper to retrieve either the children of a concrete type or
  * all implementors of an interface.
@@ -96,8 +90,8 @@ inline void get_all_children_or_implementors(
     const DexClass* base_class,
     TypeSet& children_or_implementors) {
   if (is_interface(base_class)) {
-    get_all_implementors(scope, base_class->get_type(),
-                         children_or_implementors);
+    get_all_implementors(
+        scope, base_class->get_type(), children_or_implementors);
   } else {
     get_all_children(ch, base_class->get_type(), children_or_implementors);
   }
@@ -106,13 +100,14 @@ inline void get_all_children_or_implementors(
 /**
  * Like find_collision, but don't report a match on `except`.
  */
-DexMethod* find_collision_excepting(const ClassHierarchy& ch,
-                                    const DexMethod* except,
-                                    const DexString* name,
-                                    const DexProto* proto,
-                                    const DexClass* cls,
-                                    bool is_virtual,
-                                    bool check_direct);
+DexMethod* find_collision_excepting(
+    const ClassHierarchy& ch,
+    const DexMethod* except,
+    const DexString* name,
+    const DexProto* proto,
+    const DexClass* cls,
+    bool is_virtual,
+    bool check_direct);
 
 /**
  * Given a name and a proto find a possible collision with methods with
@@ -123,11 +118,10 @@ DexMethod* find_collision_excepting(const ClassHierarchy& ch,
  * down the hierarchy chain. When in the direct method space only the current
  * class is searched.
  */
-inline DexMethod* find_collision(const ClassHierarchy& ch,
-                                 const DexString* name,
-                                 const DexProto* proto,
-                                 const DexClass* cls,
-                                 bool is_virtual) {
-  return find_collision_excepting(ch, nullptr, name, proto, cls, is_virtual,
-                                  false);
+inline DexMethod* find_collision(
+    const ClassHierarchy& ch,
+    const DexString* name, const DexProto* proto,
+    const DexClass* cls, bool is_virtual) {
+  return find_collision_excepting(
+      ch, nullptr, name, proto, cls, is_virtual, false);
 }

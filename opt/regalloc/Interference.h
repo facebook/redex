@@ -13,16 +13,13 @@
 #include <unordered_set>
 #include <vector>
 
-#include "IRCode.h"
 #include "Liveness.h"
+#include "IRCode.h"
 #include "RegisterType.h"
 
 namespace regalloc {
 
 using reg_t = uint16_t;
-using reg_pair_t = uint32_t;
-
-inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
 
 /*
  * Tracks which instructions that can be encoded in range form should take
@@ -65,19 +62,25 @@ namespace impl {
 
 class GraphBuilder;
 
-inline reg_pair_t build_containment_edge(reg_t u, reg_t v) {
-  reg_pair_t hi = static_cast<reg_pair_t>(u);
-  reg_pair_t lo = static_cast<reg_pair_t>(v);
-  return (hi << 16) | lo;
-}
+template <typename T>
+struct OrderedPair {
+  T first;
+  T second;
 
-inline reg_pair_t build_edge(reg_t u, reg_t v) {
-  reg_pair_t hi = static_cast<reg_pair_t>(u);
-  reg_pair_t lo = static_cast<reg_pair_t>(v);
-  if (u > v) {
-    std::swap(hi, lo);
+  OrderedPair(T u, T v)
+      : first(std::min(u, v)), second(std::max(u, v)) {}
+
+  bool operator==(const OrderedPair& that) const {
+    return first == that.first && second == that.second;
   }
-  return (hi << 16) | lo;
+};
+
+template <typename T>
+inline size_t hash_value(const OrderedPair<T>& pair) {
+  size_t seed{0};
+  boost::hash_combine(seed, pair.first);
+  boost::hash_combine(seed, pair.second);
+  return seed;
 }
 
 } // namespace impl
@@ -145,7 +148,13 @@ class Node {
 
   const std::vector<reg_t>& adjacent() const { return m_adjacent; }
 
-  enum Property { PARAM, RANGE, SPILL, ACTIVE, PROPS_SIZE };
+  enum Property {
+    PARAM,
+    RANGE,
+    SPILL,
+    ACTIVE,
+    PROPS_SIZE
+  };
 
  private:
   uint32_t m_weight{0};
@@ -183,15 +192,15 @@ class Graph {
   }
 
   bool is_adjacent(reg_t u, reg_t v) const {
-    return m_adj_matrix.find(impl::build_edge(u, v)) != m_adj_matrix.end();
+    return m_adj_matrix.find(Edge(u, v)) != m_adj_matrix.end();
   }
 
   bool is_coalesceable(reg_t u, reg_t v) const {
-    return !is_adjacent(u, v) || !m_adj_matrix.at(impl::build_edge(u, v));
+    return !is_adjacent(u, v) || !m_adj_matrix.at(Edge(u, v));
   }
 
   bool has_containment_edge(reg_t u, reg_t v) const {
-    return m_containment_graph.find(impl::build_containment_edge(u, v)) !=
+    return m_containment_graph.find(ContainmentEdge(u, v)) !=
            m_containment_graph.end();
   }
 
@@ -218,6 +227,7 @@ class Graph {
 
   uint32_t edge_weight(const Node&, const Node&) const;
 
+  using ContainmentEdge = std::pair<reg_t, reg_t>;
   Graph() = default;
   void add_edge(reg_t, reg_t, bool can_coalesce = false);
   void add_coalesceable_edge(reg_t u, reg_t v) { add_edge(u, v, true); }
@@ -225,13 +235,16 @@ class Graph {
     if (u == v) {
       return;
     }
-    m_containment_graph.emplace(impl::build_containment_edge(u, v));
+    m_containment_graph.emplace(ContainmentEdge(u, v));
   }
 
  private:
   std::unordered_map<reg_t, Node> m_nodes;
-  std::unordered_map<reg_pair_t, bool> m_adj_matrix;
-  std::unordered_set<reg_pair_t> m_containment_graph;
+  using Edge = impl::OrderedPair<reg_t>;
+  std::unordered_map<Edge, bool /* not_coalesceable */, boost::hash<Edge>>
+      m_adj_matrix;
+  std::unordered_set<ContainmentEdge, boost::hash<ContainmentEdge>>
+      m_containment_graph;
   // This map contains the LivenessDomains for all instructions which could
   // potentialy take on the /range format.
   std::unordered_map<IRInstruction*, LivenessDomain> m_range_liveness;
@@ -292,6 +305,6 @@ inline Graph build_graph(const LivenessFixpointIterator& fixpoint_iter,
       fixpoint_iter, code, initial_regs, range_set);
 }
 
-} // namespace interference
+} // interference
 
 } // namespace regalloc

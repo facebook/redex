@@ -171,7 +171,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
         "Matched on %d methods. Removed %d dbg line entries, %d dbg local var "
         "entries, %d dbg prologue start entries, %d "
         "epilogue end entries, %u empty dbg tables, "
-        "%d skipped due to inlining",
+        "%d skipped due to inlining\n",
         stats.num_matches,
         stats.num_pos_dropped,
         stats.num_var_dropped,
@@ -189,7 +189,7 @@ void StripDebugInfoPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_SKIPPED_INLINE, stats.num_skipped_due_to_inlining);
 
   if (m_config.drop_src_files) {
-    TRACE(DBGSTRIP, 1, "dropping src file strings");
+    TRACE(DBGSTRIP, 1, "dropping src file strings\n");
     for (auto& dex : scope)
       dex->set_source_file(nullptr);
   }

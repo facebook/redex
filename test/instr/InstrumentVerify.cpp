@@ -29,7 +29,7 @@ TEST_F(PreVerify, InstrumentVerify) {
 
   walk::code(std::vector<DexClass*>{cls}, [](DexMethod* method, IRCode& code) {
     // There should be no instrumentation.
-    TRACE(INSTRUMENT, 1, "%s:%d", SHOW(method), code.sum_opcode_sizes());
+    TRACE(INSTRUMENT, 1, "%s:%d\n", SHOW(method), code.sum_opcode_sizes());
   });
 }
 

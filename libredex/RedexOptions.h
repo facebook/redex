@@ -24,9 +24,11 @@ enum class DebugInfoKind : uint32_t {
   PerMethodDebug,
   // This will cause us not to emit a debug_info_item for any method.
   NoPositions,
+  // This will cause us not to emit single debug_info_item per dex.
+  InstructionOffsets,
   // This will cause us to emit just a few debug_info_items per dex, one for
   // each method parameter arity.
-  InstructionOffsets,
+  InstructionOffsetsPerArity,
   Size,
 };
 
@@ -34,7 +36,6 @@ class RedexOptions {
  public:
   bool verify_none_enabled{false};
   bool is_art_build{false};
-  bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
   int32_t min_sdk{0};
   Architecture arch{Architecture::UNKNOWN};

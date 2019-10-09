@@ -41,34 +41,21 @@ class TestB {
 
 public class IPConstantPropagationTest {
 
-  // CHECK: method: virtual redex.IPConstantPropagationTest.two_ctors
   @Test
   public void two_ctors() {
     TestA one = new TestA();
-    // PRECHECK: iget {{.*}} redex.TestA.a:int
-    // POSTCHECK-NOT: iget {{.*}} redex.TestA.a:int
     assertThat(one.a).isEqualTo(0);
-    // CHECK: iget {{.*}} redex.TestA.b:int
     assertThat(one.b).isEqualTo(1);
     TestA two = new TestA(0);
-    // PRECHECK: iget {{.*}} redex.TestA.a:int
-    // POSTCHECK-NOT: iget {{.*}} redex.TestA.a:int
     assertThat(two.a).isEqualTo(0);
-    // CHECK: iget {{.*}} redex.TestA.b:int
     assertThat(two.b).isEqualTo(0);
-    // CHECK: return-void
   }
 
-  // CHECK: method: virtual redex.IPConstantPropagationTest.modified_elsewhere
   @Test
   public void modified_elsewhere() {
     TestB one = new TestB();
     one.change_ifield();
-    // PRECHECK: iget {{.*}} redex.TestB.a:int
-    // POSTCHECK-NOT: iget {{.*}} redex.TestB.a:int
     assertThat(one.a).isEqualTo(0);
-    // CHECK: iget {{.*}} redex.TestB.b:int
     assertThat(one.b).isEqualTo(0);
-    // CHECK: return-void
   }
 }

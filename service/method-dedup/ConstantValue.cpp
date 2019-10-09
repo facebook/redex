@@ -44,19 +44,19 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
       m_kind = ConstantKind::TYPE;
       m_int_val = type_tags->get_type_tag(type_val);
       if (m_int_val == 0) {
-        TRACE(METH_DEDUP, 9, "const value: skipping type tag value of 0");
+        TRACE(METH_DEDUP, 9, "const value: skipping type tag value of 0\n");
         m_kind = ConstantKind::INVALID;
       }
       return;
     } else if (type_val == nullptr) {
       TRACE(METH_DEDUP,
             9,
-            "const value: unable to find type %s",
+            "const value: unable to find type %s\n",
             val_str.c_str());
     } else {
       TRACE(METH_DEDUP,
             9,
-            "const value: no type tag found %s",
+            "const value: no type tag found %s\n",
             val_str.c_str());
     }
     // Cannot find type or not type tag.
@@ -67,7 +67,7 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
   } else if (kind_str.size() > 1) {
     TRACE(METH_DEDUP,
           9,
-          "const lift: trying to decode more than one kind %s",
+          "const lift: trying to decode more than one kind %s\n",
           kind_str.c_str());
     m_kind = ConstantKind::INVALID;
   } else {
@@ -131,7 +131,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
   if (kinds_str.size() > MAX_NUM_CONST_VALUE) {
     TRACE(METH_DEDUP,
           8,
-          "const value: skip large number of const values %ld",
+          "const value: skip large number of const values %ld\n",
           kinds_str.size());
     return;
   }
@@ -154,7 +154,7 @@ ConstantValues::ConstantValues(const TypeTags* type_tags,
     m_const_vals.emplace_back(cval);
     if (cval.is_invalid()) {
       m_skip_multiple_const_0 = true;
-      TRACE(METH_DEDUP, 9, "const value: skip multiple const 0");
+      TRACE(METH_DEDUP, 9, "const value: skip multiple const 0\n");
     }
   }
 }
@@ -171,7 +171,7 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
     if (m_skip_multiple_const_0 && const_val.is_int_kind() &&
         const_val.get_int_value() == 0 && !const_loads.empty()) {
       const_val_loads.emplace_back(const_val, const_loads.front());
-      TRACE(METH_DEDUP, 9, "const value: skip const 0 loads");
+      TRACE(METH_DEDUP, 9, "const value: skip const 0 loads\n");
       continue;
     }
     for (auto& load : const_loads) {
@@ -184,7 +184,7 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
       const_val_loads.emplace_back(const_val, load);
       TRACE(METH_DEDUP,
             9,
-            "const value: %s matched with const-load %s",
+            "const value: %s matched with const-load %s\n",
             const_val.to_str().c_str(),
             SHOW(load.first));
       matched_loads.insert(load.first);
@@ -229,7 +229,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
       DexProto::make_proto(appended_proto->get_rtype(), stub_arg_list);
   auto name = DexString::make_string(callee->get_name()->str() + "$stub");
   name = DexMethod::get_unique_name(type, name, stub_proto);
-  TRACE(METH_DEDUP, 9, "const value: stub name %s", name->c_str());
+  TRACE(METH_DEDUP, 9, "const value: stub name %s\n", name->c_str());
   auto mc = new MethodCreator(type,
                               name,
                               stub_proto,
@@ -278,12 +278,12 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto new_name =
       orig_name.substr(0, pos) + "$stub" + ":" + show_deobfuscated(stub_proto);
   stub->set_deobfuscated_name(new_name);
-  TRACE(METH_DEDUP, 9, "stub's new deobfuscated name %s", new_name.c_str());
+  TRACE(METH_DEDUP, 9, "stub's new deobfuscated name %s\n", new_name.c_str());
   // Add stub to class
   type_class(type)->add_method(stub);
   TRACE(METH_DEDUP,
         9,
-        "const value: created stub %s\n%s",
+        "const value: created stub %s\n%s\n",
         SHOW(stub),
         SHOW(stub->get_code()));
   return stub;

@@ -66,7 +66,6 @@ class OatFile {
   OatFile() = default;
 
   UNCOPYABLE(OatFile);
-  MOVABLE(OatFile);
   virtual ~OatFile();
 
   // Reads magic number, returns correct oat file implementation.

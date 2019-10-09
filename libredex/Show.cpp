@@ -495,23 +495,19 @@ std::string show_opcode(const DexInstruction* insn) {
     ss << "invoke-interface " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_INVOKE_VIRTUAL_RANGE:
-    ss << "invoke-virtual/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-virtual/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_INVOKE_SUPER_RANGE:
     ss << "invoke-super/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_INVOKE_DIRECT_RANGE:
-    ss << "invoke-direct/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-direct/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_INVOKE_STATIC_RANGE:
-    ss << "invoke-static/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-static/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_INVOKE_INTERFACE_RANGE:
-    ss << "invoke-interface/range "
-       << show(((DexOpcodeMethod*)insn)->get_method());
+    ss << "invoke-interface/range " << show(((DexOpcodeMethod*)insn)->get_method());
     return ss.str();
   case DOPCODE_CONST_STRING:
     ss << "const-string " << show(((DexOpcodeString*)insn)->get_string());
@@ -547,7 +543,7 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
   std::ostringstream ss;
   ss << show(insn->opcode()) << " ";
   bool first = true;
-  if (insn->has_dest()) {
+  if (insn->dests_size()) {
     ss << "v" << insn->dest();
     first = false;
   }
@@ -619,16 +615,6 @@ std::ostream& operator<<(std::ostream& o, const DexString& str) {
 std::ostream& operator<<(std::ostream& o, const DexType& type) {
   o << *type.get_name();
   return o;
-}
-
-inline std::string show(DexString* p) {
-  if (!p) return "";
-  return p->str();
-}
-
-inline std::string show(DexType* p) {
-  if (!p) return "";
-  return p->get_name()->str();
 }
 
 // This format must match the proguard map format because it's used to look up
@@ -887,7 +873,7 @@ std::string show(const DexInstruction* insn) {
   std::ostringstream ss;
   ss << show_opcode(insn);
   bool first = true;
-  if (insn->has_dest()) {
+  if (insn->dests_size()) {
     ss << " v" << insn->dest();
     first = false;
   }

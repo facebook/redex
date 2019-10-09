@@ -8,7 +8,6 @@
 
 #include "DexClass.h"
 #include "DexStore.h"
-#include "EnumClinitAnalysis.h"
 #include "EnumConfig.h"
 
 namespace optimize_enums {

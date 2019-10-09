@@ -47,7 +47,7 @@ void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
     code->build_cfg(/* editable */ false);
     const auto& blocks = code->cfg().blocks();
 
-    TRACE(BBPROFILE, 5, "M,%s,%zu,%zu,%d",
+    TRACE(BBPROFILE, 5, "M,%s,%zu,%zu,%d\n",
           method->get_deobfuscated_name().c_str(), blocks.size(),
           code->count_opcodes(), method->is_virtual());
 
@@ -61,7 +61,7 @@ void BasicBlockProfilePass::run_pass(DexStoresVector& stores,
       }
       TRACE(BBPROFILE, 5,
             "B,%zu,%zu,%zu,"
-            "%zu,%d",
+            "%zu,%d\n",
             block->id(), num_opcodes_bb(block), block->succs().size(),
             block->preds().size(), bb_profiled.count(block) != 0);
     }

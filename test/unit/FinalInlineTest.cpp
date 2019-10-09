@@ -18,7 +18,6 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "IROpcode.h"
-#include "RedexTest.h"
 #include "Resolver.h"
 
 // Map of type string -> (sget opcode, sput opcode)
@@ -34,7 +33,7 @@ static std::unordered_map<std::string, std::pair<IROpcode, IROpcode>> init_ops =
         {"Ljava/lang/String;", {OPCODE_SGET_OBJECT, OPCODE_SPUT_OBJECT}},
 };
 
-struct ConstPropTest : public RedexTest {
+struct ConstPropTest : testing::Test {
   DexType* m_int_type;
   DexType* m_bool_type;
   DexType* m_byte_type;
@@ -45,6 +44,7 @@ struct ConstPropTest : public RedexTest {
   DexType* m_string_type;
 
   ConstPropTest() {
+    g_redex = new RedexContext();
     m_int_type = DexType::make_type("I");
     m_bool_type = DexType::make_type("Z");
     m_byte_type = DexType::make_type("B");
@@ -55,7 +55,7 @@ struct ConstPropTest : public RedexTest {
     m_string_type = DexType::make_type("Ljava/lang/String;");
   }
 
-  ~ConstPropTest() {}
+  ~ConstPropTest() { delete g_redex; }
 
   void expect_empty_clinit(DexClass* clazz) {
     auto clinit = clazz->get_clinit();

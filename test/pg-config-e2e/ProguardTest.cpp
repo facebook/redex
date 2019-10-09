@@ -22,7 +22,7 @@
 #include "ProguardMatcher.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 
 /**
 The objective of these tests are to make sure the ProGuard rules are
@@ -48,25 +48,25 @@ DexClass* find_class_named(const DexClasses& classes, const std::string name) {
 template <class Container>
 DexMethod* find_method_named(const Container& methods,
                              const std::string& name) {
-  TRACE(PGR, 8, "==> Searching for method %s", name.c_str());
+  TRACE(PGR, 8, "==> Searching for method %s\n", name.c_str());
   auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
     auto deobfuscated_method = m->get_deobfuscated_name();
     TRACE(PGR,
           8,
-          "====> Comparing against method %s [%s]",
+          "====> Comparing against method %s [%s]\n",
           m->c_str(),
           deobfuscated_method.c_str());
     bool found =
         (name == std::string(m->c_str()) || (name == deobfuscated_method));
     if (found) {
-      TRACE(PGR, 8, "=====> Found %s.", name.c_str());
+      TRACE(PGR, 8, "=====> Found %s.\n", name.c_str());
     }
     return found;
   });
   if (it == methods.end()) {
-    TRACE(PGR, 8, "===> %s not found.", name.c_str());
+    TRACE(PGR, 8, "===> %s not found.\n", name.c_str());
   } else {
-    TRACE(PGR, 8, "===> %s found.", name.c_str());
+    TRACE(PGR, 8, "===> %s found.\n", name.c_str());
   }
   return it == methods.end() ? nullptr : *it;
 }
@@ -80,20 +80,21 @@ DexMethod* find_dmethod_named(const DexClass* cls, const std::string& name) {
 }
 
 template <class Container>
-DexField* find_field_named(const Container& fields, const char* name) {
-  TRACE(PGR, 8, "==> Searching for field %s", name);
+DexField* find_field_named(const Container& fields,
+                           const char* name) {
+  TRACE(PGR, 8, "==> Searching for field %s\n", name);
   auto it = std::find_if(fields.begin(), fields.end(), [&name](DexField* f) {
     auto deobfuscated_field = f->get_deobfuscated_name();
     TRACE(PGR,
           8,
-          "====> Comparing against %s [%s] <%s>",
+          "====> Comparing against %s [%s] <%s>\n",
           f->c_str(),
           SHOW(f),
           deobfuscated_field.c_str());
     bool found =
         (name == std::string(f->c_str()) || (name == deobfuscated_field));
     if (found) {
-      TRACE(PGR, 8, "====> Matched.");
+      TRACE(PGR, 8, "====> Matched.\n");
     }
     return found;
   });
@@ -108,11 +109,12 @@ DexField* find_static_field_named(const DexClass* cls, const char* name) {
   return find_field_named(cls->get_sfields(), name);
 }
 
-class ProguardTest : public RedexTest {};
 /**
  * Ensure the ProGuard test rules are properly applied.
  */
-TEST_F(ProguardTest, assortment) {
+TEST(ProguardTest, assortment) {
+  g_redex = new RedexContext();
+
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   ASSERT_NE(nullptr, dexfile);
 
@@ -921,4 +923,6 @@ TEST_F(ProguardTest, assortment) {
     EXPECT_FALSE(root(omega_gamma));
    }
   }
+
+  delete g_redex;
 }

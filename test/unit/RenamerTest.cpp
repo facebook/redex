@@ -5,18 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <gtest/gtest.h>
 #include <memory>
+#include <gtest/gtest.h>
 
-#include "Creators.h"
 #include "DexClass.h"
+#include "Creators.h"
 #include "DexUtil.h"
-#include "RedexTest.h"
-#include "ScopeHelper.h"
-#include "Trace.h"
-#include "VirtScopeHelper.h"
-#include "VirtualRenamer.h"
 #include "Walkers.h"
+#include "VirtualRenamer.h"
+#include "ScopeHelper.h"
+#include "VirtScopeHelper.h"
+#include "Trace.h"
 
 namespace {
 
@@ -73,31 +72,31 @@ void check_intf_common(Scope& scope) {
 }
 
 void print_scope(Scope& scope) {
-  TRACE(OBFUSCATE, 2, "------------------------------------------------");
+  TRACE(OBFUSCATE, 2, "------------------------------------------------\n");
   for (const auto& cls : scope) {
-    TRACE_NO_LINE(OBFUSCATE, 2, "** %s extends %s", SHOW(cls),
-                  SHOW(cls->get_super_class()));
+    TRACE(OBFUSCATE, 2, "** %s extends %s",
+        SHOW(cls), SHOW(cls->get_super_class()));
     if (cls->get_interfaces()->get_type_list().size() > 0) {
-      TRACE_NO_LINE(OBFUSCATE, 2, " implements ");
+      TRACE(OBFUSCATE, 2, " implements ");
       for (const auto& intf : cls->get_interfaces()->get_type_list()) {
-        TRACE_NO_LINE(OBFUSCATE, 2, "%s, ", SHOW(intf));
+        TRACE(OBFUSCATE, 2, "%s, ", SHOW(intf));
       }
     }
-    TRACE(OBFUSCATE, 2, "");
+    TRACE(OBFUSCATE, 2, "\n");
     for (const auto& field : cls->get_sfields()) {
-      TRACE(OBFUSCATE, 2, "\t%s", SHOW(field));
+      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(field));
     }
     for (const auto& meth : cls->get_dmethods()) {
-      TRACE(OBFUSCATE, 2, "\t%s", SHOW(meth));
+      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(meth));
     }
     for (const auto& field : cls->get_ifields()) {
-      TRACE(OBFUSCATE, 2, "\t%s", SHOW(field));
+      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(field));
     }
     for (const auto& meth : cls->get_vmethods()) {
-      TRACE(OBFUSCATE, 2, "\t%s", SHOW(meth));
+      TRACE(OBFUSCATE, 2, "\t%s\n", SHOW(meth));
     }
   }
-  TRACE(OBFUSCATE, 2, "------------------------------------------------");
+  TRACE(OBFUSCATE, 2, "------------------------------------------------\n");
 }
 
 }
@@ -113,10 +112,8 @@ void print_scope(Scope& scope) {
  * class A { void f() {} }
  * class B { void g() {} }
  */
-
-class RenamerTest : public RedexTest {};
-
-TEST_F(RenamerTest, NoOverload) {
+TEST(NoOverload, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_1();
 
   print_scope(scope);
@@ -133,6 +130,8 @@ TEST_F(RenamerTest, NoOverload) {
       type_class(DexType::get_type("LA;"))->get_vmethods()[0]->get_name(),
       type_class(DexType::get_type("LB;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -145,7 +144,8 @@ TEST_F(RenamerTest, NoOverload) {
  *     class D extends C { void f() {} }
  *     class E extends C { void g() {} }
  */
-TEST_F(RenamerTest, Override) {
+TEST(Override, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_2();
 
   print_scope(scope);
@@ -168,6 +168,8 @@ TEST_F(RenamerTest, Override) {
       type_class(DexType::get_type("LE;"))->get_vmethods()[0]->get_name() ==
       type_class(DexType::get_type("LB;"))->get_vmethods()[1]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -181,7 +183,8 @@ TEST_F(RenamerTest, Override) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(RenamerTest, OverrideOverload) {
+TEST(OverrideOverload, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_3();
 
   print_scope(scope);
@@ -221,6 +224,8 @@ TEST_F(RenamerTest, OverrideOverload) {
       type_class(DexType::get_type("LB;"))->get_vmethods()[1]->get_name() !=
       type_class(DexType::get_type("LC;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -235,7 +240,8 @@ TEST_F(RenamerTest, OverrideOverload) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(RenamerTest, Interface) {
+TEST(Interface, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_4();
 
   print_scope(scope);
@@ -284,6 +290,7 @@ TEST_F(RenamerTest, Interface) {
       type_class(DexType::get_type("LIntf1;"))->get_vmethods()[0]->get_name());
 
   print_scope(scope);
+  delete g_redex;
 }
 
 /**
@@ -305,7 +312,8 @@ TEST_F(RenamerTest, Interface) {
  *     class D extends C { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(RenamerTest, Interface1) {
+TEST(Interface1, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_5();
 
   print_scope(scope);
@@ -321,6 +329,8 @@ TEST_F(RenamerTest, Interface1) {
       type_class(DexType::get_type("LH;"))->get_vmethods()[0]->get_name() ==
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -342,7 +352,8 @@ TEST_F(RenamerTest, Interface1) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(RenamerTest, Interface2) {
+TEST(Interface2, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_6();
 
   print_scope(scope);
@@ -358,6 +369,7 @@ TEST_F(RenamerTest, Interface2) {
       type_class(DexType::get_type("LH;"))->get_vmethods()[0]->get_name() ==
       type_class(DexType::get_type("LIntf2;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+  delete g_redex;
 }
 
 /**
@@ -380,7 +392,8 @@ TEST_F(RenamerTest, Interface2) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(RenamerTest, Interface3) {
+TEST(Interface3, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_7();
 
   print_scope(scope);
@@ -397,6 +410,8 @@ TEST_F(RenamerTest, Interface3) {
   EXPECT_TRUE(has_method(DexType::get_type("LF;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LH;"), name));
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -419,7 +434,8 @@ TEST_F(RenamerTest, Interface3) {
  *     class D extends C implements Intf2 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {}}
  */
-TEST_F(RenamerTest, Interface3Miranda) {
+TEST(Interface3Miranda, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_8();
 
   print_scope(scope);
@@ -438,6 +454,8 @@ TEST_F(RenamerTest, Interface3Miranda) {
   EXPECT_TRUE(has_method(DexType::get_type("LI;"), name));
   EXPECT_TRUE(has_method(DexType::get_type("LK;"), name));
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -460,7 +478,8 @@ TEST_F(RenamerTest, Interface3Miranda) {
  *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(RenamerTest, Interface3MirandaMultiIntf) {
+TEST(Interface3MirandaMultiIntf, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_9();
 
   print_scope(scope);
@@ -483,6 +502,8 @@ TEST_F(RenamerTest, Interface3MirandaMultiIntf) {
       type_class(DexType::get_type("LIntf1;"))->get_vmethods()[0]->get_name() ==
       type_class(DexType::get_type("LIntf3;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -506,7 +527,8 @@ TEST_F(RenamerTest, Interface3MirandaMultiIntf) {
  *     class D extends C implements Intf2, Intf3 { void f() {} void g(int) {} }
  *     class E extends C { void g() {} void g(int) {} }
  */
-TEST_F(RenamerTest, Interface3IntfOverride) {
+TEST(Interface3IntfOverride, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_10();
 
   print_scope(scope);
@@ -529,6 +551,8 @@ TEST_F(RenamerTest, Interface3IntfOverride) {
       type_class(DexType::get_type("LIntf1;"))->get_vmethods()[0]->get_name() ==
       type_class(DexType::get_type("LIntf3;"))->get_vmethods()[0]->get_name());
   print_scope(scope);
+
+  delete g_redex;
 }
 
 /**
@@ -552,7 +576,8 @@ TEST_F(RenamerTest, Interface3IntfOverride) {
  * class M { void f(int) {} }
  *   class N externds M implements EscIntf { void h(int) {}}
  */
-TEST_F(RenamerTest, Interface3IntfOverEscape) {
+TEST(Interface3IntfOverEscape, empty) {
+  g_redex = new RedexContext();
   std::vector<DexClass*> scope = create_scope_11();
   // add static void A() {} in class A
   auto cls = type_class(DexType::get_type("LA;"));
@@ -595,4 +620,6 @@ TEST_F(RenamerTest, Interface3IntfOverEscape) {
       type_class(DexType::get_type("LN;"))->get_vmethods()[0]->get_name() ==
       DexString::get_string("h"));
   print_scope(scope);
+
+  delete g_redex;
 }

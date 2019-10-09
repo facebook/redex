@@ -10,7 +10,6 @@
 #include "ControlFlow.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "RedexTest.h"
 #include "ResultPropagation.h"
 
 const DexMethodRef* get_invoked_method(cfg::ControlFlowGraph* cfg) {
@@ -25,6 +24,8 @@ const DexMethodRef* get_invoked_method(cfg::ControlFlowGraph* cfg) {
 
 void test_get_return_param_index(const std::string& code_str,
                                  boost::optional<ParamIndex> expected) {
+  g_redex = new RedexContext();
+
   auto code = assembler::ircode_from_string(code_str);
   code->build_cfg(true);
   auto& cfg = code->cfg();
@@ -37,11 +38,11 @@ void test_get_return_param_index(const std::string& code_str,
       resolver.get_return_param_index(cfg, methods_which_return_parameter);
 
   EXPECT_EQ(expected, actual);
+
+  delete g_redex;
 };
 
-class ResultPropagationTest : public RedexTest {};
-
-TEST_F(ResultPropagationTest, trivial) {
+TEST(CFGInliner, trivial) {
   const auto& code_str = R"(
     (
       (return-void)
@@ -50,7 +51,7 @@ TEST_F(ResultPropagationTest, trivial) {
   test_get_return_param_index(code_str, boost::none);
 }
 
-TEST_F(ResultPropagationTest, return_non_param) {
+TEST(CFGInliner, return_non_param) {
   const auto& code_str = R"(
     (
       (const v0 1)
@@ -60,7 +61,7 @@ TEST_F(ResultPropagationTest, return_non_param) {
   test_get_return_param_index(code_str, boost::none);
 }
 
-TEST_F(ResultPropagationTest, return_first_param) {
+TEST(CFGInliner, return_first_param) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -70,7 +71,7 @@ TEST_F(ResultPropagationTest, return_first_param) {
   test_get_return_param_index(code_str, 0);
 }
 
-TEST_F(ResultPropagationTest, return_second_param) {
+TEST(CFGInliner, return_second_param) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -81,7 +82,7 @@ TEST_F(ResultPropagationTest, return_second_param) {
   test_get_return_param_index(code_str, 1);
 }
 
-TEST_F(ResultPropagationTest, return_first_param_after_move) {
+TEST(CFGInliner, return_first_param_after_move) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -92,7 +93,7 @@ TEST_F(ResultPropagationTest, return_first_param_after_move) {
   test_get_return_param_index(code_str, 0);
 }
 
-TEST_F(ResultPropagationTest, return_second_param_wide) {
+TEST(CFGInliner, return_second_param_wide) {
   const auto& code_str = R"(
     (
       (load-param-wide v0)
@@ -103,7 +104,7 @@ TEST_F(ResultPropagationTest, return_second_param_wide) {
   test_get_return_param_index(code_str, 1);
 }
 
-TEST_F(ResultPropagationTest, return_second_param_wide_after_move) {
+TEST(CFGInliner, return_second_param_wide_after_move) {
   const auto& code_str = R"(
     (
       (load-param-wide v0)
@@ -115,7 +116,7 @@ TEST_F(ResultPropagationTest, return_second_param_wide_after_move) {
   test_get_return_param_index(code_str, 1);
 }
 
-TEST_F(ResultPropagationTest, return_second_param_wide_clobbered) {
+TEST(CFGInliner, return_second_param_wide_clobbered) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -127,7 +128,7 @@ TEST_F(ResultPropagationTest, return_second_param_wide_clobbered) {
   test_get_return_param_index(code_str, boost::none);
 }
 
-TEST_F(ResultPropagationTest, return_check_cast) {
+TEST(CFGInliner, return_check_cast) {
   const auto& code_str = R"(
     (
       (load-param-object v0)
@@ -139,7 +140,7 @@ TEST_F(ResultPropagationTest, return_check_cast) {
   test_get_return_param_index(code_str, 0);
 }
 
-TEST_F(ResultPropagationTest, return_unknown_invoke) {
+TEST(CFGInliner, return_unknown_invoke) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -151,7 +152,7 @@ TEST_F(ResultPropagationTest, return_unknown_invoke) {
   test_get_return_param_index(code_str, boost::none);
 }
 
-TEST_F(ResultPropagationTest, return_unknown_irrelevant_invoke) {
+TEST(CFGInliner, return_unknown_irrelevant_invoke) {
   const auto& code_str = R"(
     (
       (load-param v0)
@@ -164,7 +165,7 @@ TEST_F(ResultPropagationTest, return_unknown_irrelevant_invoke) {
   test_get_return_param_index(code_str, boost::none);
 }
 
-TEST_F(ResultPropagationTest, return_receiver_of_framework_method) {
+TEST(CFGInliner, return_receiver_of_framework_method) {
   const auto& code_str = R"(
     (
       (load-param-object v0)

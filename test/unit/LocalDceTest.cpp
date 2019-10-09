@@ -13,23 +13,24 @@
 #include "IRCode.h"
 #include "InstructionLowering.h"
 #include "LocalDce.h"
-#include "RedexTest.h"
 #include "ScopeHelper.h"
 
-struct LocalDceTryTest : public RedexTest {
+struct LocalDceTryTest : testing::Test {
   DexMethod* m_method;
 
   LocalDceTryTest() {
+    g_redex = new RedexContext();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(get_void_type(), args);
-    m_method =
-        DexMethod::make_method(get_object_type(),
-                               DexString::make_string("testMethod"), proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    m_method = static_cast<DexMethod*>(DexMethod::make_method(
+        get_object_type(), DexString::make_string("testMethod"), proto));
+    m_method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
   }
 
-  ~LocalDceTryTest() {}
+  ~LocalDceTryTest() {
+    delete g_redex;
+  }
 };
 
 // We used to wrongly delete try items when just one of the the TRY_START /
@@ -61,8 +62,7 @@ TEST_F(LocalDceTryTest, deadCodeAfterTry) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->set_registers_size(0);
 
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -97,8 +97,7 @@ TEST_F(LocalDceTryTest, unreachableTry) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->set_registers_size(0);
 
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -129,8 +128,7 @@ TEST_F(LocalDceTryTest, deadCatch) {
   code->push_back(dasm(OPCODE_INVOKE_STATIC, m_method, {}));
   code->set_registers_size(0);
 
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -163,8 +161,7 @@ TEST_F(LocalDceTryTest, tryNeverThrows) {
   code->push_back(dasm(OPCODE_RETURN_VOID));
   code->set_registers_size(1);
 
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   instruction_lowering::lower(m_method);
   m_method->sync();
 
@@ -185,8 +182,7 @@ TEST_F(LocalDceTryTest, deadIf) {
   code->set_registers_size(1);
 
   fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   auto has_if =
       std::find_if(code->begin(), code->end(), [if_mie](MethodItemEntry& mie) {
         return &mie == if_mie;
@@ -210,8 +206,7 @@ TEST_F(LocalDceTryTest, deadCast) {
   code->set_registers_size(1);
 
   fprintf(stderr, "BEFORE:\n%s\n", SHOW(code));
-  std::unordered_set<DexMethodRef*> pure_methods;
-  LocalDce(pure_methods).dce(code);
+  LocalDcePass().run(code);
   auto has_check_cast = std::find_if(code->begin(), code->end(),
                                      [check_cast_mie](MethodItemEntry& mie) {
                                        return &mie == check_cast_mie;
@@ -221,7 +216,11 @@ TEST_F(LocalDceTryTest, deadCast) {
   EXPECT_FALSE(has_check_cast);
 }
 
-struct LocalDceEnhanceTest : public RedexTest {};
+struct LocalDceEnhanceTest : public testing::Test {
+  LocalDceEnhanceTest() { g_redex = new RedexContext(); }
+
+  ~LocalDceEnhanceTest() { delete g_redex; }
+};
 
 TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   Scope scope = create_empty_scope();
@@ -250,11 +249,12 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_CODE_EQ(ircode, expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
@@ -294,11 +294,12 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_CODE_EQ(ircode, expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
@@ -331,11 +332,12 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_CODE_EQ(ircode, expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
@@ -369,9 +371,10 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
   )");
   LocalDcePass impl;
   impl.no_implementor_abstract_is_pure = 1;
-  const auto& pure_methods = impl.find_pure_methods(scope);
+  const auto& pure_methods = impl.find_no_sideeffect_methods(scope);
   LocalDce ldce(pure_methods);
   IRCode* ircode = code.get();
   ldce.dce(ircode);
-  EXPECT_CODE_EQ(ircode, expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(ircode),
+            assembler::to_s_expr(expected_code.get()));
 }

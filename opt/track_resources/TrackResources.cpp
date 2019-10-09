@@ -38,14 +38,14 @@ std::unordered_set<std::string> build_cls_set(const std::vector<std::string>& cl
 
 void write_found_fields(std::string path, std::unordered_set<DexField*>& recorded_fields) {
   if (!path.empty()) {
-    TRACE(TRACKRESOURCES, 1, "Writing tracked fields to %s", path.c_str());
+    TRACE(TRACKRESOURCES, 1, "Writing tracked fields to %s\n", path.c_str());
     FILE* fd = fopen(path.c_str(), "w");
     if (fd == nullptr) {
       perror("Error writing tracked fields file");
       return;
     }
     for (const auto &it : recorded_fields) {
-      TRACE(TRACKRESOURCES, 4, "recording %s -> %s",
+      TRACE(TRACKRESOURCES, 4, "recording %s -> %s\n",
           SHOW(it->get_class()->get_name()),
           SHOW(it->get_name()));
       fprintf(fd, "%s -> %s\n",
@@ -71,9 +71,9 @@ void check_if_tracked_sget(DexMethod* src_method,
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
     if (is_primitive(target_field->get_type())) {
       auto value = target_field->get_static_value();
-      TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s", value, SHOW(target_field), SHOW(src_method));
+      TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s\n", value, SHOW(target_field), SHOW(src_method));
     } else {
-      TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s", SHOW(target_field), SHOW(src_method));
+      TRACE(TRACKRESOURCES, 3, "(non-primitive) sget to %s from %s\n", SHOW(target_field), SHOW(src_method));
     }
     num_field_references++;
     recorded_fields.emplace(target_field);
@@ -122,10 +122,10 @@ void TrackResourcesPass::find_accessed_fields(
         }
       });
   TRACE(TRACKRESOURCES, 1,
-      "found %d total sgets to tracked classes", num_field_references);
+      "found %d total sgets to tracked classes\n", num_field_references);
   for (auto& it : per_cls_refs) {
     TRACE(TRACKRESOURCES, 3,
-        "%d sgets to %s ", it.second, SHOW(it.first->get_name()));
+        "%d sgets to %s \n", it.second, SHOW(it.first->get_name()));
   }
 }
 

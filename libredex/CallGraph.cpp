@@ -7,10 +7,8 @@
 
 #include "CallGraph.h"
 
-#include "MethodOverrideGraph.h"
+#include "VirtualScope.h"
 #include "Walkers.h"
-
-namespace mog = method_override_graph;
 
 namespace {
 
@@ -19,7 +17,7 @@ using namespace call_graph;
 class SingleCalleeStrategy final : public BuildStrategy {
  public:
   SingleCalleeStrategy(const Scope& scope) : m_scope(scope) {
-    auto non_virtual_vec = mog::get_non_true_virtuals(scope);
+    auto non_virtual_vec = devirtualize(scope);
     m_non_virtual.insert(non_virtual_vec.begin(), non_virtual_vec.end());
   }
 

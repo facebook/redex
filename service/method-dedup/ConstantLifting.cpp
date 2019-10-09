@@ -88,20 +88,20 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       // No matching constant found.
       TRACE(METH_DEDUP,
             5,
-            "  no matching constant %s found in %s",
+            "  no matching constant %s found in %s\n",
             const_vals.to_str().c_str(),
             SHOW(method));
-      TRACE(METH_DEDUP, 9, "%s", SHOW(method->get_code()));
+      TRACE(METH_DEDUP, 9, "%s\n", SHOW(method->get_code()));
       continue;
     }
     lifted.insert(method);
     lifted_constants.emplace(method, const_vals);
     TRACE(METH_DEDUP,
           5,
-          "constant lifting: const value %s",
+          "constant lifting: const value %s\n",
           const_vals.to_str().c_str());
-    TRACE(METH_DEDUP, 9, "    in %s", SHOW(method));
-    TRACE(METH_DEDUP, 9, "%s", SHOW(method->get_code()));
+    TRACE(METH_DEDUP, 9, "    in %s\n", SHOW(method));
+    TRACE(METH_DEDUP, 9, "%s\n", SHOW(method->get_code()));
 
     // Add constant to arg list.
     auto old_proto = method->get_proto();
@@ -118,7 +118,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       name = DexString::make_string(name->c_str() + suffix);
       TRACE(METH_DEDUP,
             9,
-            "constant lifting method name updated to %s",
+            "constant lifting method name updated to %s\n",
             name->c_str());
     }
 
@@ -162,7 +162,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
   }
   TRACE(METH_DEDUP,
         5,
-        "constant lifting applied to %ld among %ld",
+        "constant lifting applied to %ld among %ld\n",
         lifted.size(),
         methods.size());
   m_num_const_lifted_methods += lifted.size();
@@ -211,7 +211,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     }
     TRACE(METH_DEDUP,
           9,
-          " patched call site in %s\n%s",
+          " patched call site in %s\n%s\n",
           SHOW(meth),
           SHOW(code));
   }

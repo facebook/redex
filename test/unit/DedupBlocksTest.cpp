@@ -8,14 +8,13 @@
 #include <gtest/gtest.h>
 #include <iterator>
 
-#include "ControlFlow.h"
 #include "Creators.h"
+#include "ControlFlow.h"
 #include "DedupBlocksPass.h"
 #include "DexAsm.h"
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
-#include "RedexTest.h"
 
 struct Branch {
   MethodItemEntry* source;
@@ -37,7 +36,7 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   manager.run_passes(stores, dummy_config);
 }
 
-struct DedupBlocksTest : public RedexTest {
+struct DedupBlocksTest : testing::Test {
   DexClass* m_class;
   DexTypeList* m_args;
   DexProto* m_proto;
@@ -45,6 +44,7 @@ struct DedupBlocksTest : public RedexTest {
   ClassCreator* m_creator;
 
   DedupBlocksTest() {
+    g_redex = new RedexContext();
     m_args = DexTypeList::make_type_list({});
     m_proto = DexProto::make_proto(get_void_type(), m_args);
     m_type = DexType::make_type("testClass");
@@ -54,21 +54,25 @@ struct DedupBlocksTest : public RedexTest {
   }
 
   DexMethod* get_fresh_method(const std::string& name) {
-    DexMethod* method =
-        DexMethod::make_method(m_type, DexString::make_string(name), m_proto)
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    DexMethod* method = static_cast<DexMethod*>(DexMethod::make_method(
+        m_type, DexString::make_string(name), m_proto));
+    method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>(method, 1));
     m_creator->add_method(method);
     return method;
   }
 
   void run_dedup_blocks() {
-    std::vector<Pass*> passes = {new DedupBlocksPass()};
-    std::vector<DexClass*> classes = {m_class};
+    std::vector<Pass*> passes = {
+      new DedupBlocksPass()
+    };
+    std::vector<DexClass*> classes = {
+      m_class
+    };
     run_passes(passes, classes);
   }
 
-  ~DedupBlocksTest() {}
+  ~DedupBlocksTest() { delete g_redex; }
 };
 
 // in Code:     A B E C D          (where C == D)
@@ -133,7 +137,8 @@ TEST_F(DedupBlocksTest, simplestCase) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 // in Code:     A B E C D          (where C and D ends with same instructions)
@@ -211,7 +216,8 @@ TEST_F(DedupBlocksTest, simplestPostfixCase) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
@@ -296,7 +302,8 @@ TEST_F(DedupBlocksTest, postfixDiscardingOneCase) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
@@ -360,7 +367,13 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
       (return v0)
 
       (:f 5)
+      (const v0 0)
+      (goto :g)
+
       (:e 4)
+      (const v0 0)
+      (goto :g)
+
       (:d 3)
       (const v0 0)
       (goto :g)
@@ -380,7 +393,8 @@ TEST_F(DedupBlocksTest, deepestIsNotTheBestCase) {
   )";
 
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, postfixSwitchCase) {
@@ -441,7 +455,8 @@ TEST_F(DedupBlocksTest, postfixSwitchCase) {
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, noDups) {
@@ -465,7 +480,8 @@ TEST_F(DedupBlocksTest, noDups) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(method->get_code()));
 }
 
 TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
@@ -508,7 +524,8 @@ TEST_F(DedupBlocksTest, repeatedSwitchBlocks) {
     )
   )");
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
@@ -549,7 +566,8 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange1) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
@@ -588,7 +606,8 @@ TEST_F(DedupBlocksTest, diffSuccessorsNoChange2) {
 
   auto expected_code = assembler::ircode_from_string(str);
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, diamond) {
@@ -629,7 +648,8 @@ TEST_F(DedupBlocksTest, diamond) {
     )
   )");
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 // in Code:  A B C (where B == C,
@@ -682,7 +702,8 @@ TEST_F(DedupBlocksTest, blockWithNewInstanceAndConstroctor) {
     )
   )");
 
-  EXPECT_CODE_EQ(expected_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code));
 }
 
 // in Code: A B C D E (where C == E,
@@ -725,47 +746,8 @@ TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlock) {
   auto code = method->get_code();
   run_dedup_blocks();
   auto expect_code = assembler::ircode_from_string(str_code);
-  EXPECT_CODE_EQ(expect_code.get(), code);
-}
-
-// newly created instances may be moved around, but that doesn't change that
-// we must not dedup in the face of multiple new-instance instructions
-TEST_F(DedupBlocksTest, constructsObjectFromAnotherBlockViaMove) {
-  std::string str_code = R"(
-    (
-      (:a)
-      (const v0 0)
-      (if-eqz v0 :d)
-
-      (:b)
-      (new-instance "testClass")
-      (move-result-pseudo-object v2)
-
-      (:c)
-      (move-object v0 v2)
-      (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
-      (throw v0)
-
-      (:d)
-      (new-instance "testClass")
-      (move-result-pseudo-object v2)
-      (const v1 2)
-
-      (:e)
-      (move-object v0 v2)
-      (const v1 1)
-      (invoke-direct (v0 v1) "testClass.<init>:(I)V")
-      (throw v0)
-    )
-  )";
-  auto input_code = assembler::ircode_from_string(str_code);
-  auto method = get_fresh_method("constructsObjectFromAnotherBlock");
-  method->set_code(std::move(input_code));
-  auto code = method->get_code();
-  run_dedup_blocks();
-  auto expect_code = assembler::ircode_from_string(str_code);
-  EXPECT_CODE_EQ(expect_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, dedupCatchBlocks) {
@@ -844,7 +826,8 @@ TEST_F(DedupBlocksTest, dedupCatchBlocks) {
   expect_code->build_cfg(true);
   expect_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expect_code.get(), code);
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
 }
 
 TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
@@ -879,43 +862,6 @@ TEST_F(DedupBlocksTest, dontDedupCatchBlockAndNonCatchBlock) {
   expect_code->build_cfg(true);
   expect_code->clear_cfg();
 
-  EXPECT_CODE_EQ(expect_code.get(), code);
-}
-
-TEST_F(DedupBlocksTest, respectTypes) {
-  using namespace dex_asm;
-  DexMethod* method = get_fresh_method("v");
-
-  auto str = R"(
-    (
-      ; A
-      (const-string "hello")
-      (move-result-pseudo-object v0)
-      (if-eqz v0 :D)
-
-      ; B
-      (const v0 1)
-      (if-eqz v0 :C)
-
-      (:E)
-      (return-void)
-
-      (:C)
-      (if-nez v0 :E)
-      (goto :E)
-
-      (:D)
-      (if-nez v0 :E)
-      (goto :E)
-    )
-  )";
-
-  auto code = assembler::ircode_from_string(str);
-  method->set_code(std::move(code));
-
-  run_dedup_blocks();
-
-  auto expected_str = str;
-  auto expected_code = assembler::ircode_from_string(expected_str);
-  EXPECT_CODE_EQ(expected_code.get(), method->get_code());
+  EXPECT_EQ(assembler::to_string(expect_code.get()),
+            assembler::to_string(code));
 }

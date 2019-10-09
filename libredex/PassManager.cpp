@@ -116,7 +116,7 @@ void PassManager::init(const Json::Value& config) {
 
 hashing::DexHash PassManager::run_hasher(const char* pass_name,
                                          const Scope& scope) {
-  TRACE(PM, 2, "Running hasher...");
+  TRACE(PM, 2, "Running hasher...\n");
   Timer t("Hasher");
   hashing::DexScopeHasher hasher(scope);
   auto hash = hasher.run();
@@ -132,7 +132,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   auto registers_hash_string = hashing::hash_to_string(hash.registers_hash);
   auto code_hash_string = hashing::hash_to_string(hash.code_hash);
   auto signature_hash_string = hashing::hash_to_string(hash.signature_hash);
-  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s",
+  TRACE(PM, 3, "[scope hash] %s: registers#%s, code#%s, signature#%s\n",
         pass_name ? pass_name : "(initial)", registers_hash_string.c_str(),
         code_hash_string.c_str(), signature_hash_string.c_str());
   return hash;
@@ -141,7 +141,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
 void PassManager::run_type_checker(const Scope& scope,
                                    bool verify_moves,
                                    bool check_no_overwrite_this) {
-  TRACE(PM, 1, "Running IRTypeChecker...");
+  TRACE(PM, 1, "Running IRTypeChecker...\n");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method);
@@ -208,7 +208,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Evaluating %s...", pass->name().c_str());
+    TRACE(PM, 1, "Evaluating %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (eval)");
     m_current_pass_info = &m_pass_info[i];
     pass->eval_pass(stores, conf, *this);
@@ -219,10 +219,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   const Json::Value& hasher_args = conf.get_json_config()["hasher"];
   bool run_hasher_after_each_pass =
       hasher_args.get("run_after_each_pass", true).asBool();
-
-  if (get_redex_options().disable_dex_hasher) {
-    run_hasher_after_each_pass = false;
-  }
 
   // Retrieve the type checker's settings.
   const Json::Value& type_checker_args =
@@ -245,7 +241,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
-    TRACE(PM, 1, "Running %s...", pass->name().c_str());
+    TRACE(PM, 1, "Running %s...\n", pass->name().c_str());
     Timer t(pass->name() + " (run)");
     m_current_pass_info = &m_pass_info[i];
 
@@ -257,13 +253,6 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
-    walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
-                                                       IRCode& code) {
-      // Ensure that pass authors deconstructed the editable CFG at the end of
-      // their pass. Currently, passes assume the incoming code will be in
-      // IRCode form
-      always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
-    });
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = run_type_checker_after_each_pass ||

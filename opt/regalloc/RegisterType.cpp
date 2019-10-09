@@ -41,6 +41,26 @@ Lattice lattice({RegisterType::CONFLICT,
 
 } // namespace register_type_impl
 
+std::string show(RegisterType type) {
+  switch (type) {
+  case RegisterType::NORMAL:
+    return "NORMAL";
+  case RegisterType::OBJECT:
+    return "OBJECT";
+  case RegisterType::WIDE:
+    return "WIDE";
+  case RegisterType::ZERO:
+    return "ZERO";
+  case RegisterType::UNKNOWN:
+    return "UNKNOWN";
+  case RegisterType::CONFLICT:
+    return "CONFLICT";
+  case RegisterType::SIZE:
+    not_reached();
+  }
+  not_reached();
+}
+
 static IROpcode move_op_for_type(RegisterType type) {
   switch (type) {
   case RegisterType::ZERO:
@@ -596,25 +616,3 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
 }
 
 } // namespace regalloc
-
-using namespace regalloc;
-
-std::string show(RegisterType type) {
-  switch (type) {
-  case RegisterType::NORMAL:
-    return "NORMAL";
-  case RegisterType::OBJECT:
-    return "OBJECT";
-  case RegisterType::WIDE:
-    return "WIDE";
-  case RegisterType::ZERO:
-    return "ZERO";
-  case RegisterType::UNKNOWN:
-    return "UNKNOWN";
-  case RegisterType::CONFLICT:
-    return "CONFLICT";
-  case RegisterType::SIZE:
-    not_reached();
-  }
-  not_reached();
-}

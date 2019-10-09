@@ -96,7 +96,7 @@ void FixpointIterator::analyze_instruction(IRInstruction* insn,
         env->set_pointers(RESULT_REGISTER, env->get_pointers(insn->src(0)));
       }
     } else if (!is_eligible_init(method)) {
-      TRACE(STRBUILD, 5, "Unhandled SB method: %s", SHOW(insn));
+      TRACE(STRBUILD, 5, "Unhandled SB method: %s\n", SHOW(insn));
       ptrs::default_instruction_handler(insn, env);
     }
   } else if (op == OPCODE_NEW_INSTANCE && insn->get_type() == m_stringbuilder) {
@@ -155,14 +155,14 @@ BuilderStateMap Outliner::gather_builder_states(
       if (tostring_instructions.count(insn)) {
         const auto& pointers = env.get_pointers(insn->src(0));
         if (!pointers.is_value() || pointers.elements().size() != 1) {
-          TRACE(STRBUILD, 5, "Did not get single pointer for %s", SHOW(insn));
+          TRACE(STRBUILD, 5, "Did not get single pointer for %s\n", SHOW(insn));
           continue;
         }
         const auto& pointer = *pointers.elements().begin();
         const auto& builder = env.get_store().get(pointer);
         const auto& state_opt = builder.state();
         if (!state_opt) {
-          TRACE(STRBUILD, 5, "Did not get state for %s", SHOW(insn));
+          TRACE(STRBUILD, 5, "Did not get state for %s\n", SHOW(insn));
         } else {
           tostring_instruction_to_state.emplace_back(insn, *state_opt);
         }
@@ -245,8 +245,8 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
       continue;
     }
     TRACE(STRBUILD, 3,
-          "Outlining %lu StringBuilders of length %lu with typelist %s", count,
-          typelist->size(), SHOW(typelist));
+          "Outlining %lu StringBuilders of length %lu with typelist %s\n",
+          count, typelist->size(), SHOW(typelist));
     m_stats.stringbuilders_removed += count;
     m_stats.operations_removed += count * typelist->size();
 
@@ -255,10 +255,10 @@ void Outliner::create_outline_helpers(DexStoresVector* stores) {
     }
     m_stats.helper_methods_created += 1;
 
-    auto helper =
+    auto helper = static_cast<DexMethod*>(
         DexMethod::make_method(outline_helper_cls, concat_str,
-                               DexProto::make_proto(string_ty, typelist))
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+                               DexProto::make_proto(string_ty, typelist)));
+    helper->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     helper->set_code(create_outline_helper_code(helper));
     helper->set_deobfuscated_name(show(helper));
     cc.add_method(helper);
@@ -306,7 +306,7 @@ std::unique_ptr<IRCode> Outliner::create_outline_helper_code(
     always_assert_log(append_method, "Could not find append for %s", SHOW(ty));
     code->push_back((new IRInstruction(OPCODE_INVOKE_VIRTUAL))
                         ->set_method(append_method)
-                        ->set_srcs_size(2)
+                        ->set_arg_word_count(2)
                         ->set_src(0, 0)
                         ->set_src(1, reg));
   }
@@ -379,7 +379,7 @@ void Outliner::transform(IRCode* code) {
     auto* outline_helper = m_outline_helpers.at(typelist);
     auto invoke_outlined = new IRInstruction(invoke_for_method(outline_helper));
     invoke_outlined->set_method(outline_helper);
-    invoke_outlined->set_srcs_size(typelist->size());
+    invoke_outlined->set_arg_word_count(typelist->size());
 
     size_t idx{0};
     for (auto* insn : state) {

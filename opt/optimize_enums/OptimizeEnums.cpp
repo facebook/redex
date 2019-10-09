@@ -8,7 +8,6 @@
 #include "OptimizeEnums.h"
 
 #include "ClassAssemblingUtils.h"
-#include "EnumAnalyzeGeneratedMethods.h"
 #include "EnumClinitAnalysis.h"
 #include "EnumInSwitch.h"
 #include "EnumTransformer.h"
@@ -48,10 +47,6 @@ constexpr const char* METRIC_NUM_ENUM_OBJS = "num_erased_enum_objs";
 constexpr const char* METRIC_NUM_INT_OBJS = "num_generated_int_objs";
 constexpr const char* METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES =
     "num_switch_equiv_finder_failures";
-constexpr const char* METRIC_NUM_CANDIDATE_GENERATED_METHODS =
-    "num_candidate_generated_enum_methods";
-constexpr const char* METRIC_NUM_REMOVED_GENERATED_METHODS =
-    "num_removed_generated_enum_methods";
 
 /**
  * Get the instruction containing the constructor call. It can either
@@ -127,7 +122,7 @@ bool check_ordinal_usage(const DexMethod* method, size_t reg) {
       continue;
     }
 
-    if (insn->has_dest() && insn->dest() == reg) {
+    if (insn->dests_size() > 0 && insn->dest() == reg) {
       return false;
     }
   }
@@ -287,7 +282,7 @@ class OptimizeEnums {
   void stats(PassManager& mgr) {
     const auto& report = [&mgr](const char* name, size_t stat) {
       mgr.set_metric(name, stat);
-      TRACE(ENUM, 1, "\t%s : %u", name, stat);
+      TRACE(ENUM, 1, "\t%s : %u\n", name, stat);
     };
     report(METRIC_NUM_SYNTHETIC_CLASSES, m_stats.num_synthetic_classes);
     report(METRIC_NUM_LOOKUP_TABLES, m_stats.num_lookup_tables);
@@ -297,10 +292,6 @@ class OptimizeEnums {
     report(METRIC_NUM_INT_OBJS, m_stats.num_int_objs);
     report(METRIC_NUM_SWITCH_EQUIV_FINDER_FAILURES,
            m_stats.num_switch_equiv_finder_failures);
-    report(METRIC_NUM_CANDIDATE_GENERATED_METHODS,
-           m_stats.num_candidate_generated_methods);
-    report(METRIC_NUM_REMOVED_GENERATED_METHODS,
-           m_stats.num_removed_generated_methods);
   }
 
   /**
@@ -313,100 +304,17 @@ class OptimizeEnums {
     optimize_enums::Config config(max_enum_size);
     calculate_param_summaries(m_scope, &config.param_summary_map);
 
-    /**
-     * An enum is safe if it not external, has no interfaces, and has only one
-     * simple enum constructor. Static fields, primitive or string instance
-     * fields, and virtual methods are safe.
-     */
-    auto is_safe_enum = [this](const DexClass* cls) {
-      if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
-          can_delete(cls) && cls->get_interfaces()->size() == 0 &&
-          only_one_static_synth_field(cls)) {
-
-        const auto& ctors = cls->get_ctors();
-        if (ctors.size() != 1 ||
-            !is_simple_enum_constructor(cls, ctors.front())) {
-          return false;
-        }
-
-        for (auto& vmethod : cls->get_vmethods()) {
-          if (!can_rename(vmethod)) {
-            return false;
-          }
-        }
-
-        const auto& ifields = cls->get_ifields();
-        return std::all_of(ifields.begin(), ifields.end(), [](DexField* field) {
-          auto type = field->get_type();
-          return is_primitive(type) || type == get_string_type();
-        });
+    walk::classes(m_scope, [this, &config](DexClass* cls) {
+      if (!is_simple_enum(cls) || !only_one_static_synth_field(cls)) {
+        return;
       }
-      return false;
-    };
-
-    walk::parallel::classes(m_scope, [&config, is_safe_enum](DexClass* cls) {
-      if (is_safe_enum(cls)) {
-        config.candidate_enums.insert(cls->get_type());
-      }
+      config.candidate_enums.insert(cls->get_type());
     });
 
     optimize_enums::reject_unsafe_enums(m_scope, &config);
-    if (traceEnabled(ENUM, 4)) {
-      for (auto cls : config.candidate_enums) {
-        TRACE(ENUM, 4, "candidate_enum %s", SHOW(cls));
-      }
-    }
     m_stats.num_enum_objs = optimize_enums::transform_enums(
         config, &m_stores, &m_stats.num_int_objs);
     m_stats.num_enum_classes = config.candidate_enums.size();
-  }
-
-  /**
-   * Remove the static methods `valueOf()` and `values()` when safe.
-   */
-  void remove_enum_generated_methods() {
-    optimize_enums::EnumAnalyzeGeneratedMethods analyzer;
-
-    ConcurrentSet<const DexType*> types_used_in_serializable;
-    const auto class_hierarchy = build_type_hierarchy(m_scope);
-    const auto interface_map = build_interface_map(class_hierarchy);
-    const auto serializable_type = DexType::make_type("Ljava/io/Serializable;");
-    walk::parallel::classes(m_scope, [&](DexClass* cls) {
-      if (implements(interface_map, cls->get_type(), serializable_type)) {
-        // We reject all enums that are instance fields of serializable classes.
-        for (auto& ifield : cls->get_ifields()) {
-          types_used_in_serializable.insert(
-              get_element_type_if_array(ifield->get_type()));
-        }
-      }
-    });
-
-    auto should_consider_enum = [&](DexClass* cls) {
-      // Only consider enums that are final, not external, do not have
-      // interfaces, and are not instance fields of serializable classes.
-      return is_enum(cls) && !cls->is_external() && is_final(cls) &&
-             can_delete(cls) && cls->get_interfaces()->size() == 0 &&
-             !types_used_in_serializable.count(cls->get_type());
-    };
-
-    walk::parallel::classes(
-        m_scope, [&should_consider_enum, &analyzer](DexClass* cls) {
-          if (should_consider_enum(cls)) {
-            auto& dmethods = cls->get_dmethods();
-            auto valueof_mit = std::find_if(dmethods.begin(), dmethods.end(),
-                                            optimize_enums::is_enum_valueof);
-            auto values_mit = std::find_if(dmethods.begin(), dmethods.end(),
-                                           optimize_enums::is_enum_values);
-            if (valueof_mit != dmethods.end() && values_mit != dmethods.end()) {
-              analyzer.consider_enum_type(cls->get_type(), *valueof_mit,
-                                          *values_mit);
-            }
-          }
-        });
-
-    m_stats.num_candidate_generated_methods =
-        analyzer.num_candidate_enum_methods();
-    m_stats.num_removed_generated_methods = analyzer.transform_code(m_scope);
   }
 
  private:
@@ -416,13 +324,13 @@ class OptimizeEnums {
    * Return true if there is only one static synthetic field in the class,
    * otherwise return false.
    */
-  bool only_one_static_synth_field(const DexClass* cls) {
+  bool only_one_static_synth_field(DexClass* cls) {
     DexField* synth_field = nullptr;
     auto synth_access = optimize_enums::synth_access();
     for (auto field : cls->get_sfields()) {
       if (check_required_access_flags(synth_access, field->get_access())) {
         if (synth_field) {
-          TRACE(ENUM, 2, "Multiple synthetic fields %s %s", SHOW(synth_field),
+          TRACE(ENUM, 2, "Multiple synthetic fields %s %s\n", SHOW(synth_field),
                 SHOW(field));
           return false;
         }
@@ -430,29 +338,53 @@ class OptimizeEnums {
       }
     }
     if (!synth_field) {
-      TRACE(ENUM, 2, "No synthetic field found on %s", SHOW(cls));
+      TRACE(ENUM, 2, "No synthetic field found on %s\n", SHOW(cls));
       return false;
     }
     return true;
   }
 
-  /**
-   * Returns true if the constructor invokes `Enum.<init>`, sets its instance
-   * fields, and then returns. We want to make sure there are no side affects.
-   *
-   * SubEnum.<init>:(Ljava/lang/String;I[other parameters...])V
-   * load-param * // multiple load parameter instructions
-   * invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
-   * (iput|const) * // put/const instructions for primitive instance fields
-   * return-void
-   */
-  static bool is_simple_enum_constructor(const DexClass* cls,
-                                         const DexMethod* method) {
-    const auto& params = method->get_proto()->get_args()->get_type_list();
-    if (!is_private(method) || params.size() < 2) {
+  static bool is_simple_enum(const DexClass* cls) {
+    if (!is_enum(cls) || cls->is_external() || !is_final(cls) ||
+        !can_delete(cls) || cls->get_interfaces()->size() > 0 ||
+        !cls->get_ifields().empty() || !cls->get_vmethods().empty()) {
       return false;
     }
+    // Examine the constructors' instructions.
+    for (const DexMethod* method : cls->get_dmethods()) {
+      if (is_init(method) && !is_simple_enum_constructor(method)) {
+        return false;
+      }
+    }
+    // Static fields are allowed.
+    return true;
+  }
 
+  /**
+   * Detect if a constructor is a simple enum constructor.
+   * A simple enum constructor is
+   *  load_param * // multiple load parameter instructions
+   *  invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
+   *  return-void
+   */
+  static bool is_simple_enum_constructor(const DexMethod* method) {
+    if (!is_private(method)) {
+      return false;
+    }
+    const auto& args = method->get_proto()->get_args()->get_type_list();
+    if (args.size() != 2) {
+      return false;
+    }
+    // The two arguments should always be string and int.
+    {
+      auto it = args.begin();
+      if (*it != get_string_type()) {
+        return false;
+      }
+      if (*(++it) != get_int_type()) {
+        return false;
+      }
+    }
     auto code = InstructionIterable(method->get_code());
     auto it = code.begin();
     // Load parameter instructions.
@@ -462,7 +394,6 @@ class OptimizeEnums {
     if (it == code.end()) {
       return false;
     }
-
     // invoke-direct {} Ljava/lang/Enum;.<init>:(Ljava/lang/String;I)V
     if (!is_invoke_direct(it->insn->opcode())) {
       return false;
@@ -476,22 +407,12 @@ class OptimizeEnums {
     if (++it == code.end()) {
       return false;
     }
-
-    auto is_iput_or_const = [](IROpcode opcode) {
-      // `const-string` is followed by `move-result-pseudo-object`
-      return is_iput(opcode) || is_literal_const(opcode) ||
-             opcode == OPCODE_CONST_STRING ||
-             opcode == IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-    };
-    while (it != code.end() && is_iput_or_const(it->insn->opcode())) {
-      ++it;
-    }
-    if (it == code.end()) {
+    // return-void
+    if (!is_return_void(it->insn->opcode())) {
       return false;
     }
-
-    // return-void is the last instruction
-    return is_return_void(it->insn->opcode()) && (++it) == code.end();
+    // No more instructions.
+    return (++it) == code.end();
   }
 
   /**
@@ -661,8 +582,7 @@ class OptimizeEnums {
     auto invoke_ordinal = (*info.invoke)->insn;
     auto invoke_type = invoke_ordinal->get_method()->get_class();
     auto invoke_cls = type_class(invoke_type);
-    if (!invoke_cls ||
-        (invoke_type != get_enum_type() && !is_enum(invoke_cls))) {
+    if (!invoke_cls || !is_enum(invoke_cls)) {
       return false;
     }
 
@@ -673,7 +593,7 @@ class OptimizeEnums {
 
     // Check the current enum corresponds.
     auto current_enum = lookup_table_to_enum.at(lookup_table);
-    if (invoke_type != get_enum_type() && current_enum != invoke_type) {
+    if (current_enum != invoke_type) {
       return false;
     }
     return true;
@@ -744,7 +664,7 @@ class OptimizeEnums {
             // null instruction pointers are used to signify the upper half of a
             // wide load.
             auto copy = new IRInstruction(*insn);
-            TRACE(ENUM, 4, "adding %s to B%d", SHOW(copy), leaf->id());
+            TRACE(ENUM, 4, "adding %s to B%d\n", SHOW(copy), leaf->id());
             leaf->push_front(copy);
           }
         }
@@ -895,8 +815,6 @@ class OptimizeEnums {
     size_t num_enum_objs{0};
     size_t num_int_objs{0};
     size_t num_switch_equiv_finder_failures{0};
-    size_t num_candidate_generated_methods{0};
-    size_t num_removed_generated_methods{0};
   };
   Stats m_stats;
 
@@ -921,7 +839,6 @@ void OptimizeEnumsPass::run_pass(DexStoresVector& stores,
   OptimizeEnums opt_enums(stores, conf);
   opt_enums.remove_redundant_generated_classes();
   opt_enums.replace_enum_with_int(m_max_enum_size);
-  opt_enums.remove_enum_generated_methods();
   opt_enums.stats(mgr);
 }
 

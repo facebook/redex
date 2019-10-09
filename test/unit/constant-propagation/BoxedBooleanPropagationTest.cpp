@@ -19,21 +19,21 @@ struct BoxedBooleanTest : public ConstantPropagationTest {
     ClassCreator creator(DexType::make_type("Ljava/lang/Boolean;"));
     creator.set_super(get_object_type());
 
-    auto boolean_true =
-        DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean")
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
-    auto boolean_false =
-        DexField::make_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean")
-            ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    auto boolean_true = static_cast<DexField*>(
+        DexField::make_field("Ljava/lang/Boolean;.TRUE:Ljava/lang/Boolean"));
+    auto boolean_false = static_cast<DexField*>(
+        DexField::make_field("Ljava/lang/Boolean;.FALSE:Ljava/lang/Boolean"));
+    boolean_true->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
+    boolean_false->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL);
     creator.add_field(boolean_true);
     creator.add_field(boolean_false);
 
-    auto valueof = DexMethod::make_method(
-                       "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;")
-                       ->make_concrete(ACC_PUBLIC, true);
-    auto booleanvalue =
-        DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z")
-            ->make_concrete(ACC_PUBLIC, true);
+    auto valueof = static_cast<DexMethod*>(DexMethod::make_method(
+        "Ljava/lang/Boolean;.valueOf:(Z)Ljava/lang/Boolean;"));
+    valueof->make_concrete(ACC_PUBLIC, true);
+    auto booleanvalue = static_cast<DexMethod*>(
+        DexMethod::make_method("Ljava/lang/Boolean;.booleanValue:()Z"));
+    valueof->make_concrete(ACC_PUBLIC, true);
     creator.add_method(valueof);
     creator.add_method(valueof);
 
@@ -76,7 +76,8 @@ TEST_F(BoxedBooleanTest, booleanValue) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }
 
 TEST_F(BoxedBooleanTest, valueOf) {
@@ -112,5 +113,6 @@ TEST_F(BoxedBooleanTest, valueOf) {
     )
 )");
 
-  EXPECT_CODE_EQ(code.get(), expected_code.get());
+  EXPECT_EQ(assembler::to_s_expr(code.get()),
+            assembler::to_s_expr(expected_code.get()));
 }

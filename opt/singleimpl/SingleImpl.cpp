@@ -107,7 +107,7 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
   removed_count = 0;
   const auto& pg_map = conf.get_proguard_map();
   while (true) {
-    TRACE(INTF, 9, "\tOPTIMIZE ROUND %d", max_steps);
+    TRACE(INTF, 9, "\tOPTIMIZE ROUND %d\n", max_steps);
     DEBUG_ONLY size_t scope_size = scope.size();
     TypeToTypes intfs_to_classes;
     TypeSet intfs;
@@ -125,10 +125,10 @@ void SingleImplPass::run_pass(DexStoresVector& stores,
     redex_assert(scope_size > scope.size());
   }
 
-  TRACE(INTF, 2, "\ttotal steps %d", max_steps);
-  TRACE(INTF, 1, "Removed interfaces %ld", removed_count);
+  TRACE(INTF, 2, "\ttotal steps %d\n", max_steps);
+  TRACE(INTF, 1, "Removed interfaces %ld\n", removed_count);
   TRACE(INTF, 1,
-          "Updated invoke-interface to invoke-virtual %ld",
+          "Updated invoke-interface to invoke-virtual %ld\n",
           s_invoke_intf_count - previous_invoke_intf_count);
 
   mgr.incr_metric(METRIC_REMOVED_INTERFACES, removed_count);

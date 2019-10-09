@@ -106,6 +106,4 @@ class LevelChecker {
   static bool s_has_been_init;
 };
 
-bool is_android_sdk_type(const DexType* type);
-
 } // namespace api

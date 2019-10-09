@@ -31,8 +31,6 @@ class CopyPropagationPass : public Pass {
     //
     // TODO: detect the type of constant for each alias group
     bind("eliminate_const_literals", false, m_config.eliminate_const_literals);
-    bind("eliminate_const_literals_with_same_type_demands", true,
-         m_config.eliminate_const_literals_with_same_type_demands);
     bind("eliminate_const_strings", true, m_config.eliminate_const_strings);
     bind("eliminate_const_classes", true, m_config.eliminate_const_classes);
     bind("replace_with_representative", true,
@@ -45,7 +43,6 @@ class CopyPropagationPass : public Pass {
 
   struct Config {
     bool eliminate_const_literals{false};
-    bool eliminate_const_literals_with_same_type_demands{true};
     bool eliminate_const_strings{true};
     bool eliminate_const_classes{true};
     bool replace_with_representative{true};

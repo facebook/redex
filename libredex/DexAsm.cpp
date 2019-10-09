@@ -62,7 +62,7 @@ bool unsupported(IROpcode opcode) {
 
 void assemble(IRInstruction* insn, std::initializer_list<Operand> args) {
   auto arg = args.begin();
-  if (insn->has_dest()) {
+  if (insn->dests_size()) {
     always_assert(arg->tag == VREG);
     insn->set_dest(arg->v);
     ++arg;
@@ -128,8 +128,9 @@ IRInstruction* dasm(IROpcode opcode,
                     std::initializer_list<Operand> args) {
   auto insn = new IRInstruction(opcode);
   insn->set_method(method);
-  insn->set_srcs_size(args.size());
+  insn->set_arg_word_count(args.size());
   assemble(insn, args);
   return insn;
 }
-} // namespace dex_asm
+
+}

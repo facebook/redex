@@ -111,7 +111,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
         output_scope.push_back(type_class(cls));
       }
     }
-    TRACE(IDEX, 4, "Found %d classes in coldstart with no references.",
+    TRACE(IDEX, 4, "Found %d classes in coldstart with no references.\n",
           new_no_ref);
     input_scope = output_scope;
   }
@@ -151,26 +151,26 @@ void gather_refs(
 }
 
 void print_stats(interdex::DexesStructure* dexes_structure) {
-  TRACE(IDEX, 2, "InterDex Stats:");
-  TRACE(IDEX, 2, "\t dex count: %d", dexes_structure->get_num_dexes());
-  TRACE(IDEX, 2, "\t secondary dex count: %d",
+  TRACE(IDEX, 2, "InterDex Stats:\n");
+  TRACE(IDEX, 2, "\t dex count: %d\n", dexes_structure->get_num_dexes());
+  TRACE(IDEX, 2, "\t secondary dex count: %d\n",
         dexes_structure->get_num_secondary_dexes());
-  TRACE(IDEX, 2, "\t coldstart dex count: %d",
+  TRACE(IDEX, 2, "\t coldstart dex count: %d\n",
         dexes_structure->get_num_coldstart_dexes());
-  TRACE(IDEX, 2, "\t extendex dex count: %d",
+  TRACE(IDEX, 2, "\t extendex dex count: %d\n",
         dexes_structure->get_num_extended_dexes());
-  TRACE(IDEX, 2, "\t scroll dex count: %d",
+  TRACE(IDEX, 2, "\t scroll dex count: %d\n",
         dexes_structure->get_num_scroll_dexes());
-  TRACE(IDEX, 2, "\t mixedmode dex count: %d",
+  TRACE(IDEX, 2, "\t mixedmode dex count: %d\n",
         dexes_structure->get_num_mixedmode_dexes());
 
-  TRACE(IDEX, 2, "Global stats:");
-  TRACE(IDEX, 2, "\t %lu classes", dexes_structure->get_num_classes());
-  TRACE(IDEX, 2, "\t %lu mrefs", dexes_structure->get_num_mrefs());
-  TRACE(IDEX, 2, "\t %lu frefs", dexes_structure->get_num_frefs());
-  TRACE(IDEX, 2, "\t %lu dmethods", dexes_structure->get_num_dmethods());
-  TRACE(IDEX, 2, "\t %lu vmethods", dexes_structure->get_num_vmethods());
-  TRACE(IDEX, 2, "\t %lu mrefs", dexes_structure->get_num_mrefs());
+  TRACE(IDEX, 2, "Global stats:\n");
+  TRACE(IDEX, 2, "\t %lu classes\n", dexes_structure->get_num_classes());
+  TRACE(IDEX, 2, "\t %lu mrefs\n", dexes_structure->get_num_mrefs());
+  TRACE(IDEX, 2, "\t %lu frefs\n", dexes_structure->get_num_frefs());
+  TRACE(IDEX, 2, "\t %lu dmethods\n", dexes_structure->get_num_dmethods());
+  TRACE(IDEX, 2, "\t %lu vmethods\n", dexes_structure->get_num_vmethods());
+  TRACE(IDEX, 2, "\t %lu mrefs\n", dexes_structure->get_num_mrefs());
 }
 
 } // namespace
@@ -180,7 +180,7 @@ namespace interdex {
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Skipping class :: %s", SHOW(clazz));
+      TRACE(IDEX, 4, "IDEX: Skipping class :: %s\n", SHOW(clazz));
       return true;
     }
   }
@@ -197,7 +197,7 @@ void InterDex::add_to_scope(DexClass* cls) {
 bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_not_relocate_methods_of_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Not relocating methods of class :: %s",
+      TRACE(IDEX, 4, "IDEX: Not relocating methods of class :: %s\n",
             SHOW(clazz));
       return true;
     }
@@ -217,7 +217,7 @@ bool InterDex::emit_class(const DexInfo& dex_info,
   }
 
   if (m_dexes_structure.has_class(clazz)) {
-    TRACE(IDEX, 6, "Trying to re-add class %s!", SHOW(clazz));
+    TRACE(IDEX, 6, "Trying to re-add class %s!\n", SHOW(clazz));
     return false;
   }
 
@@ -286,7 +286,7 @@ void InterDex::emit_primary_dex(
 
     if (primary_dex_set.count(cls) > 0) {
       if (unreferenced_cls.count(cls) > 0) {
-        TRACE(IDEX, 5, "[primary dex]: %s no longer linked to coldstart set.",
+        TRACE(IDEX, 5, "[primary dex]: %s no longer linked to coldstart set.\n",
               SHOW(cls));
         coldstart_classes_skipped_in_primary++;
         continue;
@@ -305,11 +305,11 @@ void InterDex::emit_primary_dex(
   }
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex "
-        "from interdex list.",
+        "from interdex list.\n",
         coldstart_classes_in_primary, primary_dex.size());
   TRACE(IDEX, 2,
         "[primary dex]: %d out of %d classes in primary dex skipped "
-        "from interdex list.",
+        "from interdex list.\n",
         coldstart_classes_skipped_in_primary, primary_dex.size());
 
   flush_out_dex(primary_dex_info);
@@ -325,7 +325,7 @@ void InterDex::emit_interdex_classes(
     const std::vector<DexType*>& interdex_types,
     const std::unordered_set<DexClass*>& unreferenced_classes) {
   if (interdex_types.size() == 0) {
-    TRACE(IDEX, 2, "No interdex classes passed.");
+    TRACE(IDEX, 2, "No interdex classes passed.\n");
     return;
   }
 
@@ -359,12 +359,12 @@ void InterDex::emit_interdex_classes(
     DexClass* cls = type_class(type);
 
     if (!cls) {
-      TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
+      TRACE(IDEX, 5, "[interdex classes]: No such entry %s.\n", SHOW(type));
 
       auto end_marker =
           std::find(m_end_markers.begin(), m_end_markers.end(), type);
       if (end_marker != m_end_markers.end()) {
-        TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
+        TRACE(IDEX, 2, "Terminating dex due to %s\n", SHOW(type));
 
         flush_out_dex(dex_info);
 
@@ -385,7 +385,7 @@ void InterDex::emit_interdex_classes(
     }
 
     if (unreferenced_classes.count(cls)) {
-      TRACE(IDEX, 3, "%s no longer linked to coldstart set.", SHOW(cls));
+      TRACE(IDEX, 3, "%s no longer linked to coldstart set.\n", SHOW(cls));
       cls_skipped_in_secondary++;
       continue;
     }
@@ -406,7 +406,7 @@ void InterDex::emit_interdex_classes(
 
   TRACE(IDEX, 3,
         "[interdex order]: %d classes are unreferenced from the interdex order "
-        "in secondary dexes.",
+        "in secondary dexes.\n",
         cls_skipped_in_secondary);
 }
 
@@ -463,12 +463,12 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
           curr_interdex_group++;
         }
 
-        TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.",
+        TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.\n",
               entry.c_str());
       } else if (entry.find(SCROLL_MARKER_FORMAT) != std::string::npos) {
         type = DexType::make_type(entry.c_str());
         m_scroll_markers.emplace_back(type);
-        TRACE(IDEX, 4, "[interdex order]: Found scroll class marker %s.",
+        TRACE(IDEX, 4, "[interdex order]: Found scroll class marker %s.\n",
               entry.c_str());
       } else {
         continue;
@@ -519,7 +519,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%d, field ref weight %d, type ref weight %d, string ref weight %d, "
         "method seed weight %d, field seed weight %d, type seed weight %d, "
-        "string seed weight %d.",
+        "string seed weight %d.\n",
         m_cross_dex_ref_minimizer.get_config().method_ref_weight,
         m_cross_dex_ref_minimizer.get_config().field_ref_weight,
         m_cross_dex_ref_minimizer.get_config().type_ref_weight,
@@ -538,7 +538,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
     TRACE(IDEX, 2,
           "[dex ordering] Cross-dex-relocator active, max relocated methods "
           "per class: %zu, relocating static methods: %s, non-static direct "
-          "methods: %s, virtual methods: %s",
+          "methods: %s, virtual methods: %s\n",
           m_cross_dex_relocator_config.max_relocated_methods_per_class,
           m_cross_dex_relocator_config.relocate_static_methods ? "yes" : "no",
           m_cross_dex_relocator_config.relocate_non_static_direct_methods
@@ -640,7 +640,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
 
     // We can treat *refs owned by "erased classes" as effectively being emitted
     for (DexClass* erased_cls : erased_classes) {
-      TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}",
+      TRACE(IDEX, 3, "[dex ordering] Applying erased class {%s}\n",
             SHOW(erased_cls));
       always_assert(should_skip_class_due_to_plugin(erased_cls));
       m_cross_dex_ref_minimizer.insert(erased_cls);
@@ -659,42 +659,7 @@ void InterDex::cleanup(const Scope& final_scope) {
   }
 }
 
-void InterDex::run_in_force_single_dex_mode() {
-  auto scope = build_class_scope(m_dexen);
-
-  // Add all classes into m_dexes_structure without further checking when
-  // force_single_dex is on. The overflow checking will be done later on at
-  // the end of the pipeline (e.g. write_classes_to_dex).
-  for (DexClass* cls : scope) {
-    MethodRefs clazz_mrefs;
-    FieldRefs clazz_frefs;
-    TypeRefs clazz_trefs;
-    std::vector<DexClass*> erased_classes;
-
-    gather_refs(m_plugins, EMPTY_DEX_INFO, cls, &clazz_mrefs, &clazz_frefs,
-                &clazz_trefs, &erased_classes,
-                should_not_relocate_methods_of_class(cls));
-
-    m_dexes_structure.add_class_no_checks(clazz_mrefs, clazz_frefs, clazz_trefs,
-                                          cls);
-  }
-
-  // Emit all no matter what it is.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
-    flush_out_dex(EMPTY_DEX_INFO);
-  }
-
-  TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
-        m_dexes_structure.get_num_dexes());
-  print_stats(&m_dexes_structure);
-  return;
-}
-
 void InterDex::run() {
-  if (m_force_single_dex) {
-    run_in_force_single_dex_mode();
-    return;
-  }
   auto scope = build_class_scope(m_dexen);
 
   std::vector<DexType*> interdex_types = get_interdex_types(scope);
@@ -726,7 +691,7 @@ void InterDex::run() {
   for (const auto& plugin : m_plugins) {
     auto add_classes = plugin->leftover_classes();
     for (DexClass* add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s",
+      TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s\n",
             SHOW(add_class));
       emit_class(EMPTY_DEX_INFO, add_class, /* check_if_skip */ false,
                  /* perf_sensitive */ false);
@@ -764,12 +729,12 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
 
   int dexnum = m_dexes_structure.get_num_dexes();
   if (dex_info.primary) {
-    TRACE(IDEX, 2, "Writing out primary dex with %d classes.",
+    TRACE(IDEX, 2, "Writing out primary dex with %d classes.\n",
           m_dexes_structure.get_current_dex_classes().size());
   } else {
     TRACE(IDEX, 2,
           "Writing out secondary dex number %d, which is %s of coldstart, "
-          "%s of extended set, %s scroll classes and has %d classes.",
+          "%s of extended set, %s scroll classes and has %d classes.\n",
           m_dexes_structure.get_num_secondary_dexes() + 1,
           (dex_info.coldstart ? "part of" : "not part of"),
           (dex_info.extended ? "part of" : "not part of"),
@@ -784,7 +749,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
     std::string canary_name(buf);
     auto canary_type = DexType::get_type(canary_name);
     if (!canary_type) {
-      TRACE(IDEX, 4, "Warning, no canary class %s found.", buf);
+      TRACE(IDEX, 4, "Warning, no canary class %s found.\n", buf);
       canary_type = DexType::make_type(canary_name.c_str());
     }
     auto canary_cls = type_class(canary_type);
@@ -805,7 +770,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
 
       always_assert_log(m_dexes_structure.get_num_mixedmode_dexes() == 0,
                         "For now, we only accept 1 mixed mode dex.\n");
-      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode",
+      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode\n",
             m_dexes_structure.get_num_secondary_dexes() + 1);
 
       auto mixed_mode_file = m_apk_manager.new_asset_file("mixed_mode.txt");
@@ -824,7 +789,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
                    squashed_classes.end());
     auto add_classes = plugin->additional_classes(m_outdex, classes);
     for (auto add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s",
+      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s\n",
             SHOW(add_class));
       m_dexes_structure.add_class_no_checks(add_class);
     }

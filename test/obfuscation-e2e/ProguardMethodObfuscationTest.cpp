@@ -21,13 +21,14 @@
 #include "ProguardObfuscationTest.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexTest.h"
+#include "RedexContext.h"
 
-class ProguardMethodObfuscationTest : public RedexTest {};
 /**
  * Check renaming has been properly applied on methods.
  */
-TEST_F(ProguardMethodObfuscationTest, obfuscation) {
+TEST(ProguardTest, obfuscation) {
+  g_redex = new RedexContext();
+
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
   const char* configuration_file = std::getenv("pg_config_e2e_pgconfig");
@@ -92,4 +93,5 @@ TEST_F(ProguardMethodObfuscationTest, obfuscation) {
   ASSERT_FALSE(tester.method_is_renamed(beta,
     betaName + ".doubleWombatBeta:()I"));
   ASSERT_FALSE(tester.method_is_renamed(beta, betaName + ".<init>:()V"));
+  delete g_redex;
 }

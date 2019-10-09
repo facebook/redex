@@ -70,7 +70,7 @@ uint64_t CrossDexRefMinimizer::ClassInfo::get_priority() const {
 void CrossDexRefMinimizer::reprioritize(
     const std::unordered_map<DexClass*, CrossDexRefMinimizer::ClassInfoDelta>&
         affected_classes) {
-  TRACE(IDEX, 4, "[dex ordering] Reprioritizing %u classes",
+  TRACE(IDEX, 4, "[dex ordering] Reprioritizing %u classes\n",
         affected_classes.size());
   for (auto p : affected_classes) {
     ++m_stats.reprioritizations;
@@ -90,7 +90,7 @@ void CrossDexRefMinimizer::reprioritize(
         IDEX, 5,
         "[dex ordering] Reprioritized class {%s} with priority %016lx; "
         "index %u; %u (delta %d) applied refs weight, %s (delta %s) infrequent "
-        "refs weights, %u total refs",
+        "refs weights, %u total refs\n",
         SHOW(affected_class), priority, affected_class_info.index,
         affected_class_info.applied_refs_weight, delta.applied_refs_weight,
         format_infrequent_refs_array(affected_class_info.infrequent_refs_weight)
@@ -193,7 +193,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
     // - and those which appear extremely frequently (and are therefore likely
     //   to be referenced by every dex anyway)
     bool skipping = ref_count == 1 || frequency > (1.0 / 8);
-    TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s", ref_count,
+    TRACE(IDEX, 6, "[dex ordering] %zu/%zu = %lf %s\n", ref_count,
           max_ref_count, frequency, skipping ? "(skipping)" : "");
     if (!skipping) {
       refs.emplace_back(ref, item_weight);
@@ -260,7 +260,7 @@ void CrossDexRefMinimizer::insert(DexClass* cls) {
   m_prioritized_classes.insert(cls, priority);
   TRACE(IDEX, 4,
         "[dex ordering] Inserting class {%s} with priority %016lx; index %u; "
-        "%s infrequent refs weights, %u total refs",
+        "%s infrequent refs weights, %u total refs\n",
         SHOW(cls), priority, class_info.index,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
         refs.size());
@@ -311,7 +311,7 @@ DexClass* CrossDexRefMinimizer::worst(bool generated) {
 
   TRACE(IDEX, 3,
         "[dex ordering] Picked worst class {%s} with seed %u; "
-        "index %u",
+        "index %u\n",
         SHOW(max_it->first), max_value, max_it->second.index);
   m_stats.worst_classes.emplace_back(max_it->first, max_value);
   return max_it->first;
@@ -338,7 +338,7 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   TRACE(IDEX, 3,
         "[dex ordering] Processing class {%s} with priority %016lx; "
         "index %u; %u applied refs weight, %s infrequent refs weights, %u "
-        "total refs; emitted %d",
+        "total refs; emitted %d\n",
         SHOW(cls), class_info.get_priority(), class_info.index,
         class_info.applied_refs_weight,
         format_infrequent_refs_array(class_info.infrequent_refs_weight).c_str(),
@@ -348,7 +348,7 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
   // and gathering information on how this affects other classes
 
   if (reset) {
-    TRACE(IDEX, 3, "[dex ordering] Reset");
+    TRACE(IDEX, 3, "[dex ordering] Reset\n");
     ++m_stats.resets;
     m_applied_refs.clear();
   }
@@ -408,7 +408,7 @@ void CrossDexRefMinimizer::erase(DexClass* cls, bool emitted, bool reset) {
     }
   }
   if (emitted) {
-    TRACE(IDEX, 4, "[dex ordering] %u + %u = %u applied refs",
+    TRACE(IDEX, 4, "[dex ordering] %u + %u = %u applied refs\n",
           old_applied_refs, m_applied_refs.size() - old_applied_refs,
           m_applied_refs.size());
   }

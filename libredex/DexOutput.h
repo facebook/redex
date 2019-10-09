@@ -12,9 +12,9 @@
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "Trace.h"
 #include "Pass.h"
 #include "ProguardMap.h"
-#include "Trace.h"
 
 #include <locator.h>
 using facebook::Locator;
@@ -211,8 +211,6 @@ struct CodeItemEmit {
   CodeItemEmit(DexMethod* meth, DexCode* c, dex_code_item* ci);
 };
 
-struct DexOutputTestHelper;
-
 class DexOutput {
  public:
   dex_stats_t m_stats;
@@ -248,10 +246,7 @@ class DexOutput {
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
-  void insert_map_item(uint16_t typeidx,
-                       uint32_t size,
-                       uint32_t offset,
-                       uint32_t bytes);
+  void insert_map_item(uint16_t typeidx, uint32_t size, uint32_t offset);
   void generate_string_data(SortMode mode = SortMode::DEFAULT);
   void generate_type_data();
   void generate_proto_data();
@@ -290,8 +285,6 @@ class DexOutput {
   void emit_name_based_locators();
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
-
-  friend struct DexOutputTestHelper;
 
  public:
   DexOutput(const char* path,

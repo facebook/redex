@@ -25,6 +25,7 @@ void test(const std::string& code_str,
           size_t expected_remaining_trivial_switches = 0,
           size_t expected_removed_switch_cases = 0,
           size_t expected_replaced_trivial_switches = 0) {
+  g_redex = new RedexContext();
 
   auto code = assembler::ircode_from_string(code_str);
   auto expected = assembler::ircode_from_string(expected_str);
@@ -45,9 +46,11 @@ void test(const std::string& code_str,
 
   EXPECT_EQ(assembler::to_s_expr(code.get()),
             assembler::to_s_expr(expected.get()));
-}
 
-TEST_F(ReduceGotosTest, packed_switch_useless) {
+  delete g_redex;
+};
+
+TEST(ReduceGotosTest, packed_switch_useless) {
   auto code_str = R"(
     (
       (switch v0 (:b :a))
@@ -64,7 +67,7 @@ TEST_F(ReduceGotosTest, packed_switch_useless) {
   test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 2);
 }
 
-TEST_F(ReduceGotosTest, sparse_switch_useless) {
+TEST(ReduceGotosTest, sparse_switch_useless) {
   auto code_str = R"(
     (
       (switch v0 (:b :a))
@@ -81,7 +84,7 @@ TEST_F(ReduceGotosTest, sparse_switch_useless) {
   test(code_str, expected_str, 0, 0, 0, 1, 0, 0, 2);
 }
 
-TEST_F(ReduceGotosTest, sparse_switch_reducible) {
+TEST(ReduceGotosTest, sparse_switch_reducible) {
   auto code_str = R"(
     (
       (switch v0 (:a :b :c))
@@ -106,7 +109,7 @@ TEST_F(ReduceGotosTest, sparse_switch_reducible) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 1);
 }
 
-TEST_F(ReduceGotosTest, packed_switch_reducible) {
+TEST(ReduceGotosTest, packed_switch_reducible) {
   auto code_str = R"(
     (
       (switch v0 (:a :b :c))
@@ -131,7 +134,7 @@ TEST_F(ReduceGotosTest, packed_switch_reducible) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 1);
 }
 
-TEST_F(ReduceGotosTest, trivial_irreducible_remaining_switch) {
+TEST(ReduceGotosTest, trivial_irreducible_remaining_switch) {
   auto code_str = R"(
     (
       (load-param v0)
@@ -187,7 +190,7 @@ TEST_F(ReduceGotosTest, trivial_irreducible_remaining_switch) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 1, 2);
 }
 
-TEST_F(ReduceGotosTest, trivial_replaced_switch_nop) {
+TEST(ReduceGotosTest, trivial_replaced_switch_nop) {
   auto code_str = R"(
     (
       (switch v0 (:a :b :c))
@@ -211,7 +214,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_nop) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
-TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
+TEST(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
   auto code_str = R"(
     (
       (load-param v0)
@@ -238,7 +241,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub_lit8) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
-TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub) {
+TEST(ReduceGotosTest, trivial_replaced_switch_rsub) {
   auto code_str = R"(
     (
       (load-param v0)
@@ -265,7 +268,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_rsub) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
-TEST_F(ReduceGotosTest, trivial_replaced_switch_const) {
+TEST(ReduceGotosTest, trivial_replaced_switch_const) {
   auto code_str = R"(
     (
       (load-param v0)
@@ -292,7 +295,7 @@ TEST_F(ReduceGotosTest, trivial_replaced_switch_const) {
   test(code_str, expected_str, 0, 0, 0, 0, 1, 0, 2, 1);
 }
 
-TEST_F(ReduceGotosTest, trivial) {
+TEST(ReduceGotosTest, trivial) {
   const auto& code_str = R"(
     (
       (return-void)
@@ -306,7 +309,7 @@ TEST_F(ReduceGotosTest, trivial) {
   test(code_str, expected_str, 0, 0, 0);
 }
 
-TEST_F(ReduceGotosTest, basic) {
+TEST(ReduceGotosTest, basic) {
   const auto& code_str = R"(
     (
       (if-eqz v0 :true)
@@ -336,7 +339,7 @@ TEST_F(ReduceGotosTest, basic) {
   test(code_str, expected_str, 1, 0, 0);
 }
 
-TEST_F(ReduceGotosTest, move) {
+TEST(ReduceGotosTest, move) {
   const auto& code_str = R"(
     (
       (if-eqz v0 :true)
@@ -367,7 +370,7 @@ TEST_F(ReduceGotosTest, move) {
   test(code_str, expected_str, 2, 1, 0);
 }
 
-TEST_F(ReduceGotosTest, involved) {
+TEST(ReduceGotosTest, involved) {
   const auto& code_str = R"(
     (
       (if-eqz v0 :true)
@@ -412,7 +415,7 @@ TEST_F(ReduceGotosTest, involved) {
   test(code_str, expected_str, 2, 0, 0);
 }
 
-TEST_F(ReduceGotosTest, invert) {
+TEST(ReduceGotosTest, invert) {
   const auto& code_str = R"(
     (
       (const v2 0)

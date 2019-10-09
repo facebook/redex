@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <functional>
 #include <utility>
 
 #include "IRInstruction.h"

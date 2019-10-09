@@ -17,11 +17,10 @@ namespace inliner {
 struct InlinerConfig {
   // inline virtual methods
   bool virtual_inline{true};
-  bool true_virtual_inline{false};
   bool throws_inline{false};
   bool enforce_method_size_limit{true};
   bool multiple_callers{false};
-  bool inline_small_non_deletables{true};
+  bool inline_small_non_deletables{false};
   bool use_cfg_inliner{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;
   // We will populate the information to rstate of classes and methods.

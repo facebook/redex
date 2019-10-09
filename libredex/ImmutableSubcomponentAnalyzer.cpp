@@ -45,7 +45,9 @@ bool operator==(const AccessPath& x, const AccessPath& y) {
          x.field() == y.field() && x.getters() == y.getters();
 }
 
-bool operator!=(const AccessPath& x, const AccessPath& y) { return !(x == y); }
+bool operator!=(const AccessPath& x, const AccessPath& y) {
+  return !(x == y);
+}
 
 std::ostream& operator<<(std::ostream& o, const AccessPath& path) {
   auto kind = path.kind();
@@ -263,7 +265,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
     default: {
       // All other instructions are transparent for this analysis. We just need
       // to clobber the destination registers in the abstract environment.
-      if (insn->has_dest()) {
+      if (insn->dests_size() > 0) {
         current_state->set(insn->dest(), AbstractAccessPathDomain::top());
         if (insn->dest_is_wide()) {
           current_state->set(insn->dest() + 1, AbstractAccessPathDomain::top());
@@ -271,7 +273,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       }
       // We need to invalidate RESULT_REGISTER if the instruction writes into
       // this register.
-      if (insn->has_move_result_any()) {
+      if (insn->has_move_result()) {
         current_state->set(RESULT_REGISTER, AbstractAccessPathDomain::top());
       }
     }
@@ -308,8 +310,9 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
     return res;
   }
 
-  std::set<size_t> find_access_path_registers(IRInstruction* insn,
-                                              const AccessPath& path) const {
+  std::set<size_t> find_access_path_registers(
+      IRInstruction* insn,
+      const AccessPath& path) const {
     auto it = m_environments.find(insn);
     if (it == m_environments.end()) {
       return {};
@@ -350,15 +353,15 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
     return ret;
   }
 
-  std::unordered_map<cfg::BlockId, BlockStateSnapshot>
-  get_block_state_snapshot() {
+  std::unordered_map<cfg::BlockId, BlockStateSnapshot> get_block_state_snapshot() {
     std::unordered_map<cfg::BlockId, BlockStateSnapshot> ret;
     for (NodeId block : m_cfg.blocks()) {
       auto entry_state = get_entry_state_at(block);
       auto exit_state = get_exit_state_at(block);
       BlockStateSnapshot snapshot = {
-          get_known_access_path_bindings(entry_state),
-          get_known_access_path_bindings(exit_state)};
+        get_known_access_path_bindings(entry_state),
+        get_known_access_path_bindings(exit_state)
+      };
       ret.emplace(block->id(), snapshot);
     }
     return ret;
@@ -384,7 +387,7 @@ std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
   std::unordered_map<uint16_t, size_t> dest_freq;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->has_dest()) {
+    if (insn->dests_size() > 0) {
       auto dest = insn->dest();
       dest_freq[dest] = dest_freq[dest] + 1;
     }
@@ -417,7 +420,8 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   // pseudo-instructions.
   auto init = isa_impl::AbstractAccessPathEnvironment::top();
   size_t parameter = 0;
-  for (const auto& mie : InstructionIterable(code->get_param_instructions())) {
+  for (const auto& mie :
+       InstructionIterable(code->get_param_instructions())) {
     switch (mie.insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
       init.set(mie.insn->dest(),
@@ -450,15 +454,15 @@ boost::optional<AccessPath> ImmutableSubcomponentAnalyzer::get_access_path(
 }
 
 std::set<size_t> ImmutableSubcomponentAnalyzer::find_access_path_registers(
-    IRInstruction* insn, const AccessPath& path) const {
+    IRInstruction* insn,
+    const AccessPath& path) const {
   if (m_analyzer == nullptr) {
     return {};
   }
   return m_analyzer->find_access_path_registers(insn, path);
 }
 
-std::unordered_map<cfg::BlockId, BlockStateSnapshot>
-ImmutableSubcomponentAnalyzer::get_block_state_snapshot() const {
+std::unordered_map<cfg::BlockId, BlockStateSnapshot> ImmutableSubcomponentAnalyzer::get_block_state_snapshot() const {
   if (m_analyzer == nullptr) {
     return {{}};
   }

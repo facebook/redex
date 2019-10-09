@@ -713,6 +713,7 @@ TEST(ProguardParserTest, keepnames) {
   }
 }
 
+
 TEST(ProguardParserTest, keepclassmembernames) {
   {
     ProguardConfiguration config;
@@ -746,51 +747,13 @@ TEST(ProguardParserTest, keepclasseswithmembernames) {
 TEST(ProguardParserTest, keep_annotation_classes) {
   {
     ProguardConfiguration config;
-    std::istringstream ss("-keep @interface *");
+    std::istringstream ss(
+        "-keep @interface *");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     ASSERT_EQ(config.keep_rules.size(), 1);
     const auto& k = *config.keep_rules.begin();
     ASSERT_FALSE(k->allowshrinking);
     ASSERT_EQ(k->class_spec.setAccessFlags, ACC_ANNOTATION);
-  }
-}
-
-TEST(ProguardParserTest, remove_blanket_resource_keep) {
-  {
-    ProguardConfiguration config;
-    std::istringstream ss(R"(
-    -keep class Foo {}
-    -keepclassmembers class **.R$* {
-      public static <fields>;
-    }
-    -keep class Bar {}
-)");
-    proguard_parser::parse(ss, &config);
-    ASSERT_TRUE(config.ok);
-    EXPECT_EQ(config.keep_rules.size(), 3);
-    proguard_parser::remove_blanket_resource_keep(&config);
-    EXPECT_EQ(config.keep_rules.size(), 2);
-    // Check that we preserve the contents / order of the remaining rules.
-    auto it = config.keep_rules.begin();
-    const auto& k1 = *it++;
-    EXPECT_FALSE(k1->allowshrinking);
-    EXPECT_EQ(k1->class_spec.className, "Foo");
-    const auto& k2 = *it++;
-    EXPECT_FALSE(k2->allowshrinking);
-    EXPECT_EQ(k2->class_spec.className, "Bar");
-  }
-
-  {
-    ProguardConfiguration config;
-    std::istringstream ss(R"(
-    -keep class Foo {}
-    -keep class Bar {}
-)");
-    proguard_parser::parse(ss, &config);
-    ASSERT_TRUE(config.ok);
-    EXPECT_EQ(config.keep_rules.size(), 2);
-    proguard_parser::remove_blanket_resource_keep(&config);
-    EXPECT_EQ(config.keep_rules.size(), 2);
   }
 }

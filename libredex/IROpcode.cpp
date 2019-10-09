@@ -15,7 +15,6 @@
 
 namespace opcode {
 
-// clang-format off
 Ref ref(IROpcode opcode) {
   switch (opcode) {
 #define OP(op, ref, ...) \
@@ -33,7 +32,6 @@ Ref ref(IROpcode opcode) {
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
-// clang-format on
 
 IROpcode from_dex_opcode(DexOpcode op) {
   switch (op) {
@@ -476,7 +474,6 @@ IROpcode from_dex_opcode(DexOpcode op) {
   case FOPCODE_FILLED_ARRAY:
     always_assert_log(false, "Cannot create IROpcode from %s", SHOW(op));
     not_reached();
-    // clang-format off
   SWITCH_FORMAT_QUICK_FIELD_REF {
     always_assert_log(false, "Invalid use of a quick ref opcode %02x\n", op);
     not_reached();
@@ -489,7 +486,6 @@ IROpcode from_dex_opcode(DexOpcode op) {
     always_assert_log(false, "Invalid use of return-void-no-barrier opcode %02x\n", op);
     not_reached();
   }
-    // clang-format on
   }
   always_assert_log(false, "Unknown opcode %02x\n", op);
   not_reached();
@@ -1013,8 +1009,8 @@ bool is_move_result_pseudo(IROpcode op) {
          op <= IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
 }
 
-bool is_move_result_any(IROpcode op) {
-  return opcode::is_move_result(op) || is_move_result_pseudo(op);
+bool is_move_result_or_move_result_pseudo(IROpcode op) {
+  return is_move_result(op) || is_move_result_pseudo(op);
 }
 
 bool is_commutative(IROpcode opcode) {
@@ -1151,12 +1147,12 @@ IROpcode invert_conditional_branch(IROpcode op) {
 
 namespace opcode_impl {
 
-bool has_dest(IROpcode op) {
+unsigned dests_size(IROpcode op) {
   if (opcode::is_internal(op)) {
-    return true;
+    return 1;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return !opcode::may_throw(op) && dex_opcode::has_dest(dex_op);
+    return !opcode::may_throw(op) && dex_opcode::dests_size(dex_op);
   }
 }
 
@@ -1167,7 +1163,7 @@ bool has_move_result_pseudo(IROpcode op) {
     return true;
   } else {
     auto dex_op = opcode::to_dex_opcode(op);
-    return dex_opcode::has_dest(dex_op) && opcode::may_throw(op);
+    return dex_opcode::dests_size(dex_op) && opcode::may_throw(op);
   }
 }
 
