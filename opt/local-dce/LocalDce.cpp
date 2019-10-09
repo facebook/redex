@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "MethodOverrideGraph.h"
 #include "Purity.h"
 #include "Resolver.h"
 #include "Transform.h"
@@ -30,6 +31,8 @@ namespace {
 constexpr const char* METRIC_DEAD_INSTRUCTIONS = "num_dead_instructions";
 constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
+constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS =
+    "num_computed_no_side_effects_methods";
 
 /*
  * These instructions have observable side effects so must always be considered
@@ -327,6 +330,12 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
+  auto override_graph = method_override_graph::build_graph(scope);
+  auto computed_no_side_effects_methods = compute_no_side_effects_methods(
+      scope, override_graph.get(), pure_methods);
+  for (auto m : computed_no_side_effects_methods) {
+    pure_methods.insert(const_cast<DexMethod*>(m));
+  }
 
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
@@ -348,6 +357,9 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
+  mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS,
+                  computed_no_side_effects_methods.size());
+
   TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d",
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }

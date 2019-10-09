@@ -15,6 +15,7 @@
 #include "Purity.h"
 #include "RedexTest.h"
 #include "VirtualScope.h"
+#include "Walkers.h"
 
 class CommonSubexpressionEliminationTest : public RedexTest {
  public:
@@ -28,9 +29,7 @@ class CommonSubexpressionEliminationTest : public RedexTest {
 void test(const Scope& scope,
           const std::string& code_str,
           const std::string& expected_str,
-          size_t expected_instructions_eliminated,
-          size_t expected_inlined_barriers_into_methods = 0,
-          size_t expected_inlined_barriers_iterations = 0) {
+          size_t expected_instructions_eliminated) {
   auto field_a = DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
 
   auto field_b = DexField::make_field("LFoo;.b:I")->make_concrete(ACC_PUBLIC);
@@ -51,9 +50,13 @@ void test(const Scope& scope,
   auto expected = assembler::ircode_from_string(expected_str);
 
   code.get()->build_cfg(/* editable */ true);
+  walk::code(scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ true);
+  });
+
   auto pure_methods = get_pure_methods();
   cse_impl::SharedState shared_state(pure_methods);
-  auto method_barriers_stats = shared_state.init_method_barriers(scope);
+  shared_state.init_scope(scope);
   cse_impl::CommonSubexpressionElimination cse(&shared_state,
                                                code.get()->cfg());
   bool is_static = true;
@@ -61,17 +64,10 @@ void test(const Scope& scope,
   DexTypeList* args = DexTypeList::make_type_list({});
   cse.patch(is_static, declaring_type, args);
   code.get()->clear_cfg();
+  walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();
 
   EXPECT_EQ(expected_instructions_eliminated, stats.instructions_eliminated)
-      << assembler::to_string(code.get()).c_str();
-
-  EXPECT_EQ(expected_inlined_barriers_into_methods,
-            method_barriers_stats.inlined_barriers_into_methods)
-      << assembler::to_string(code.get()).c_str();
-
-  EXPECT_EQ(expected_inlined_barriers_iterations,
-            method_barriers_stats.inlined_barriers_iterations)
       << assembler::to_string(code.get()).c_str();
 
   EXPECT_CODE_EQ(code.get(), expected.get());
@@ -690,7 +686,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_once) {
 
   test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 1, 0, 1);
+       code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
@@ -761,7 +757,7 @@ TEST_F(CommonSubexpressionEliminationTest, benign_after_inlining_twice) {
 
   test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create(), c_creator.create()},
-       code_str, expected_str, 1, 0, 1);
+       code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
@@ -811,7 +807,7 @@ TEST_F(CommonSubexpressionEliminationTest, not_benign_after_inlining_once) {
 
   test(Scope{type_class(known_types::java_lang_Object()), a_creator.create(),
              b_creator.create()},
-       code_str, expected_str, 0, 1, 1);
+       code_str, expected_str, 0);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,
@@ -1359,7 +1355,7 @@ TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
   )";
 
   test(Scope{type_class(known_types::java_lang_Object()), a_creator.create()},
-       code_str, expected_str, 1, 0, 1);
+       code_str, expected_str, 1);
 }
 
 TEST_F(CommonSubexpressionEliminationTest,

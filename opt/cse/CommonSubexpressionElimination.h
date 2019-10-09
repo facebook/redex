@@ -11,64 +11,7 @@
 #include "MethodOverrideGraph.h"
 #include "Pass.h"
 #include "PassManager.h"
-
-enum CseSpecialLocations : size_t {
-  GENERAL_MEMORY_BARRIER,
-  ARRAY_COMPONENT_TYPE_INT,
-  ARRAY_COMPONENT_TYPE_BYTE,
-  ARRAY_COMPONENT_TYPE_CHAR,
-  ARRAY_COMPONENT_TYPE_WIDE,
-  ARRAY_COMPONENT_TYPE_SHORT,
-  ARRAY_COMPONENT_TYPE_OBJECT,
-  ARRAY_COMPONENT_TYPE_BOOLEAN,
-  END
-};
-
-// A (tracked) location is either a special location, or a field.
-// Stored in a union, special locations are effectively represented as illegal
-// pointer values.
-// The nullptr field and CseSpecialLocations::OTHER_LOCATION are in effect
-// aliases.
-struct CseLocation {
-  explicit CseLocation(const DexField* f) : field(f) {}
-  explicit CseLocation(CseSpecialLocations sl) : special_location(sl) {}
-  union {
-    const DexField* field;
-    CseSpecialLocations special_location;
-  };
-};
-
-inline bool operator==(const CseLocation& a, const CseLocation& b) {
-  return a.field == b.field;
-}
-
-inline bool operator!=(const CseLocation& a, const CseLocation& b) {
-  return !(a == b);
-}
-
-inline bool operator<(const CseLocation& a, const CseLocation& b) {
-  if (a.special_location < CseSpecialLocations::END) {
-    if (b.special_location < CseSpecialLocations::END) {
-      return a.special_location < b.special_location;
-    } else {
-      return true;
-    }
-  }
-  if (b.special_location < CseSpecialLocations::END) {
-    return false;
-  }
-  return dexfields_comparator()(a.field, b.field);
-}
-
-struct CseLocationHasher {
-  size_t operator()(const CseLocation& l) const { return (size_t)l.field; }
-};
-
-using CseUnorderedLocationSet =
-    std::unordered_set<CseLocation, CseLocationHasher>;
-
-std::ostream& operator<<(std::ostream&, const CseLocation&);
-std::ostream& operator<<(std::ostream&, const CseUnorderedLocationSet&);
+#include "Purity.h"
 
 namespace cse_impl {
 
@@ -83,9 +26,9 @@ struct Stats {
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
 };
 
-struct MethodBarriersStats {
-  size_t inlined_barriers_iterations{0};
-  size_t inlined_barriers_into_methods{0};
+struct SharedStateStats {
+  size_t method_barriers{0};
+  size_t conditionally_pure_methods{0};
 };
 
 // A barrier is defined by a particular opcode, and possibly some extra data
@@ -111,7 +54,7 @@ struct BarrierHasher {
 class SharedState {
  public:
   SharedState(const std::unordered_set<DexMethodRef*>& pure_methods);
-  MethodBarriersStats init_method_barriers(const Scope&);
+  void init_scope(const Scope&);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn,
       DexType* exact_virtual_scope,
@@ -119,6 +62,10 @@ class SharedState {
   void log_barrier(const Barrier& barrier);
   bool has_pure_method(const IRInstruction* insn) const;
   void cleanup();
+  const CseUnorderedLocationSet&
+  get_read_locations_of_conditionally_pure_method(
+      const DexMethodRef* method_ref, IROpcode opcode) const;
+  const SharedStateStats& get_stats() const { return m_stats; }
 
  private:
   bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
@@ -130,7 +77,10 @@ class SharedState {
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;
   std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
       m_method_written_locations;
+  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
+      m_conditionally_pure_methods;
   std::unique_ptr<const method_override_graph::Graph> m_method_override_graph;
+  SharedStateStats m_stats;
 };
 
 class CommonSubexpressionElimination {

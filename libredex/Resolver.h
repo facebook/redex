@@ -39,8 +39,7 @@ enum class MethodSearch {
 /**
  * Helper to map an opcode to a MethodSearch rule.
  */
-inline MethodSearch opcode_to_search(const IRInstruction* insn) {
-  auto opcode = insn->opcode();
+inline MethodSearch opcode_to_search(const IROpcode opcode) {
   always_assert(is_invoke(opcode));
   switch (opcode) {
   case OPCODE_INVOKE_DIRECT:
@@ -55,6 +54,13 @@ inline MethodSearch opcode_to_search(const IRInstruction* insn) {
   default:
     return MethodSearch::Any;
   }
+}
+
+/**
+ * Helper to map an opcode to a MethodSearch rule.
+ */
+inline MethodSearch opcode_to_search(const IRInstruction* insn) {
+  return opcode_to_search(insn->opcode());
 }
 
 /**

@@ -66,7 +66,6 @@
 #include "IRInstruction.h"
 #include "LocalDce.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
-#include "Purity.h"
 #include "ReducedProductAbstractDomain.h"
 #include "Resolver.h"
 #include "TypeInference.h"
@@ -83,14 +82,13 @@ constexpr const char* METRIC_ARRAY_LENGTHS_CAPTURED =
     "num_array_lengths_captured";
 constexpr const char* METRIC_ELIMINATED_INSTRUCTIONS =
     "num_eliminated_instructions";
-constexpr const char* METRIC_INLINED_BARRIERS_INTO_METHODS =
-    "num_inlined_barriers_into_methods";
-constexpr const char* METRIC_INLINED_BARRIERS_ITERATIONS =
-    "num_inlined_barriers_iterations";
 constexpr const char* METRIC_MAX_VALUE_IDS = "max_value_ids";
 constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
     "methods_using_other_tracked_location_bit";
 constexpr const char* METRIC_INSTR_PREFIX = "instr_";
+constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
+constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
+    "num_conditionally_pure_methods";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -217,39 +215,22 @@ static Barrier make_barrier(const IRInstruction* insn) {
   return b;
 }
 
-CseLocation get_field_location(IROpcode opcode, const DexField* field) {
-  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
-  if (field != nullptr && !is_volatile(field)) {
-    return CseLocation(field);
-  }
-
-  return CseLocation(GENERAL_MEMORY_BARRIER);
-}
-
-CseLocation get_field_location(IROpcode opcode, const DexFieldRef* field_ref) {
-  always_assert(is_ifield_op(opcode) || is_sfield_op(opcode));
-  DexField* field =
-      resolve_field(field_ref, is_sfield_op(opcode) ? FieldSearch::Static
-                                                    : FieldSearch::Instance);
-  return get_field_location(opcode, field);
-}
-
 CseLocation get_written_array_location(IROpcode opcode) {
   switch (opcode) {
   case OPCODE_APUT:
-    return CseLocation(ARRAY_COMPONENT_TYPE_INT);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_INT);
   case OPCODE_APUT_BYTE:
-    return CseLocation(ARRAY_COMPONENT_TYPE_BYTE);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_BYTE);
   case OPCODE_APUT_CHAR:
-    return CseLocation(ARRAY_COMPONENT_TYPE_CHAR);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_CHAR);
   case OPCODE_APUT_WIDE:
-    return CseLocation(ARRAY_COMPONENT_TYPE_WIDE);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_WIDE);
   case OPCODE_APUT_SHORT:
-    return CseLocation(ARRAY_COMPONENT_TYPE_SHORT);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_SHORT);
   case OPCODE_APUT_OBJECT:
-    return CseLocation(ARRAY_COMPONENT_TYPE_OBJECT);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_OBJECT);
   case OPCODE_APUT_BOOLEAN:
-    return CseLocation(ARRAY_COMPONENT_TYPE_BOOLEAN);
+    return CseLocation(CseSpecialLocations::ARRAY_COMPONENT_TYPE_BOOLEAN);
   default:
     always_assert(false);
   }
@@ -261,52 +242,22 @@ CseLocation get_written_location(const Barrier& barrier) {
   } else if (is_iput(barrier.opcode) || is_sput(barrier.opcode)) {
     return get_field_location(barrier.opcode, barrier.field);
   } else {
-    return CseLocation(GENERAL_MEMORY_BARRIER);
-  }
-}
-
-CseLocation get_read_array_location(IROpcode opcode) {
-  switch (opcode) {
-  case OPCODE_AGET:
-    return CseLocation(ARRAY_COMPONENT_TYPE_INT);
-  case OPCODE_AGET_BYTE:
-    return CseLocation(ARRAY_COMPONENT_TYPE_BYTE);
-  case OPCODE_AGET_CHAR:
-    return CseLocation(ARRAY_COMPONENT_TYPE_CHAR);
-  case OPCODE_AGET_WIDE:
-    return CseLocation(ARRAY_COMPONENT_TYPE_WIDE);
-  case OPCODE_AGET_SHORT:
-    return CseLocation(ARRAY_COMPONENT_TYPE_SHORT);
-  case OPCODE_AGET_OBJECT:
-    return CseLocation(ARRAY_COMPONENT_TYPE_OBJECT);
-  case OPCODE_AGET_BOOLEAN:
-    return CseLocation(ARRAY_COMPONENT_TYPE_BOOLEAN);
-  default:
-    always_assert(false);
-  }
-}
-
-CseLocation get_read_location(const IRInstruction* insn) {
-  if (is_aget(insn->opcode())) {
-    return get_read_array_location(insn->opcode());
-  } else if (is_iget(insn->opcode()) || is_sget(insn->opcode())) {
-    return get_field_location(insn->opcode(), insn->get_field());
-  } else {
-    return CseLocation(GENERAL_MEMORY_BARRIER);
+    return CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER);
   }
 }
 
 bool is_barrier_relevant(const Barrier& barrier,
                          const CseUnorderedLocationSet& read_locations) {
   auto location = get_written_location(barrier);
-  return location == CseLocation(GENERAL_MEMORY_BARRIER) ||
+  return location == CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER) ||
          read_locations.count(location);
 }
 
 const CseUnorderedLocationSet no_locations = CseUnorderedLocationSet();
 
 const CseUnorderedLocationSet general_memory_barrier_locations =
-    CseUnorderedLocationSet{CseLocation(GENERAL_MEMORY_BARRIER)};
+    CseUnorderedLocationSet{
+        CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)};
 
 class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
  public:
@@ -315,10 +266,20 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     std::unordered_map<CseLocation, size_t, CseLocationHasher>
         read_location_counts;
     for (auto& mie : cfg::InstructionIterable(cfg)) {
-      auto location = get_read_location(mie.insn);
-      if (location != CseLocation(GENERAL_MEMORY_BARRIER)) {
+      auto insn = mie.insn;
+      auto location = get_read_location(insn);
+      if (location !=
+          CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         read_location_counts[location]++;
         m_read_locations.insert(location);
+      } else if (is_invoke(insn->opcode()) &&
+                 shared_state->has_pure_method(insn)) {
+        for (auto l :
+             shared_state->get_read_locations_of_conditionally_pure_method(
+                 insn->get_method(), insn->opcode())) {
+          read_location_counts[l]++;
+          m_read_locations.insert(l);
+        }
       }
     }
 
@@ -327,7 +288,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     for (auto& mie : cfg::InstructionIterable(cfg)) {
       auto locations = shared_state->get_relevant_written_locations(
           mie.insn, nullptr /* exact_virtual_scope */, m_read_locations);
-      if (!locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
+      if (!locations.count(
+              CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER))) {
         for (const auto& location : locations) {
           written_location_counts[location]++;
         }
@@ -336,7 +298,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
     std::vector<CseLocation> read_and_written_locations;
     for (auto& p : written_location_counts) {
-      always_assert(p.first != CseLocation(GENERAL_MEMORY_BARRIER));
+      always_assert(p.first !=
+                    CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER));
       if (read_location_counts.count(p.first)) {
         read_and_written_locations.push_back(p.first);
       } else {
@@ -395,7 +358,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     value_id_t next_bit = ValueIdFlags::IS_FIRST_TRACKED_LOCATION;
     for (auto l : read_and_written_locations) {
       TRACE(CSE, 4, "[CSE]   %s: %u reads, %u writes",
-            l.special_location < END ? "array element" : SHOW(l.field),
+            l.special_location < CseSpecialLocations::END ? "array element"
+                                                          : SHOW(l.field),
             read_location_counts.at(l), written_location_counts.at(l));
       m_tracked_locations.emplace(l, next_bit);
       if (next_bit == ValueIdFlags::IS_OTHER_TRACKED_LOCATION) {
@@ -505,7 +469,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         m_shared_state->log_barrier(make_barrier(insn));
       }
 
-      if (!clobbered_locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
+      if (!clobbered_locations.count(
+              CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER))) {
         auto value = get_equivalent_put_value(insn, current_state);
         if (value) {
           TRACE(CSE, 4, "[CSE] installing store-to-load forwarding for %s",
@@ -584,10 +549,13 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       id |= get_location_value_id_mask(get_read_array_location(value.opcode));
     } else if (is_iget(value.opcode) || is_sget(value.opcode)) {
       auto location = get_field_location(value.opcode, value.field);
-      if (location == CseLocation(GENERAL_MEMORY_BARRIER)) {
+      if (location ==
+          CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         return boost::none;
       }
       id |= get_location_value_id_mask(location);
+    } else if (is_invoke(value.opcode)) {
+      id |= get_invoke_value_id_mask(value);
     }
     if (value.opcode != IOPCODE_PRE_STATE_SRC) {
       for (auto src : value.srcs) {
@@ -742,11 +710,22 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   }
 
   value_id_t get_location_value_id_mask(CseLocation l) const {
-    if (l == CseLocation(GENERAL_MEMORY_BARRIER)) {
+    if (l == CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
       return ValueIdFlags::IS_TRACKED_LOCATION_MASK;
     } else {
       return m_tracked_locations.at(l);
     }
+  }
+
+  value_id_t get_invoke_value_id_mask(const IRValue& value) const {
+    always_assert(is_invoke(value.opcode));
+    value_id_t mask = 0;
+    for (auto l :
+         m_shared_state->get_read_locations_of_conditionally_pure_method(
+             value.method, value.opcode)) {
+      mask |= get_location_value_id_mask(l);
+    }
+    return mask;
   }
 
   DexType* get_exact_type(value_id_t value_id) const {
@@ -777,54 +756,6 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 };
 
 } // namespace
-
-std::ostream& operator<<(std::ostream& o, const CseLocation& l) {
-  switch (l.special_location) {
-  case GENERAL_MEMORY_BARRIER:
-    o << "*";
-    break;
-  case ARRAY_COMPONENT_TYPE_INT:
-    o << "(int[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_BYTE:
-    o << "(byte[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_CHAR:
-    o << "(char[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_WIDE:
-    o << "(long|double[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_SHORT:
-    o << "(short[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_OBJECT:
-    o << "(Object[])[.]";
-    break;
-  case ARRAY_COMPONENT_TYPE_BOOLEAN:
-    o << "(boolean[])[.]";
-    break;
-  default:
-    o << SHOW(l.field);
-    break;
-  }
-  return o;
-}
-
-std::ostream& operator<<(std::ostream& o, const CseUnorderedLocationSet& ls) {
-  o << "{";
-  bool first = true;
-  for (const auto& l : ls) {
-    if (first) {
-      first = false;
-    } else {
-      o << ", ";
-    }
-    o << l;
-  }
-  o << "}";
-  return o;
-}
 
 namespace cse_impl {
 
@@ -967,189 +898,70 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
   }
 }
 
-MethodBarriersStats SharedState::init_method_barriers(const Scope& scope) {
+void SharedState::init_scope(const Scope& scope) {
+  always_assert(!m_method_override_graph);
   m_method_override_graph = method_override_graph::build_graph(scope);
 
-  struct WrittenLocationsAndDependencies {
-    CseUnorderedLocationSet written_locations;
-    std::unordered_set<const DexMethod*> dependencies;
-  };
+  m_method_written_locations = compute_locations_closure(
+      scope, m_method_override_graph.get(),
+      [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
+        auto action = get_base_or_overriding_method_action(
+            method, /* ignore_methods_with_assumenosideeffects */ true);
+        if (action == MethodOverrideAction::UNKNOWN) {
+          return boost::none;
+        }
+        LocationsAndDependencies lads;
+        if (action == MethodOverrideAction::EXCLUDE) {
+          return lads;
+        }
+        auto code = method->get_code();
+        for (auto& mie : cfg::InstructionIterable(code->cfg())) {
+          auto* insn = mie.insn;
+          if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
+            auto barrier = make_barrier(insn);
+            if (!is_invoke(barrier.opcode)) {
+              auto location = get_written_location(barrier);
+              if (location ==
+                  CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
+                return boost::none;
+              }
+              lads.locations.insert(location);
+              continue;
+            }
 
-  // 1. Let's initialize known method written locations and dependencies by
-  //    scanning method bodies
-  ConcurrentMap<const DexMethod*, WrittenLocationsAndDependencies>
-      concurrent_method_wlads;
-  walk::parallel::code(scope, [&](DexMethod* method, IRCode& code) {
-    if (method->rstate.no_optimizations()) {
-      return;
-    }
-    code.build_cfg(/* editable */ true);
-    WrittenLocationsAndDependencies wlads;
-    bool general_memory_barrier = false;
-    for (auto& mie : cfg::InstructionIterable(code.cfg())) {
-      auto* insn = mie.insn;
-      if (may_be_barrier(insn, nullptr /* exact_virtual_scope */)) {
-        auto barrier = make_barrier(insn);
-        if (!is_invoke(barrier.opcode)) {
-          auto location = get_written_location(barrier);
-          if (location == CseLocation(GENERAL_MEMORY_BARRIER)) {
-            general_memory_barrier = true;
-            break;
-          } else {
-            wlads.written_locations.insert(location);
-            continue;
+            if (barrier.opcode == OPCODE_INVOKE_SUPER) {
+              // TODO: Implement
+              return boost::none;
+            }
+
+            if (!process_base_and_overriding_methods(
+                    m_method_override_graph.get(), barrier.method,
+                    /* ignore_methods_with_assumenosideeffects */ true,
+                    [&](DexMethod* other_method) {
+                      if (other_method != method) {
+                        lads.dependencies.insert(other_method);
+                      }
+                      return true;
+                    })) {
+              return boost::none;
+            }
           }
         }
 
-        if (barrier.opcode == OPCODE_INVOKE_SUPER) {
-          // TODO: Implement
-          general_memory_barrier = true;
-          break;
-        }
+        return lads;
+      });
+  m_stats.method_barriers = m_method_written_locations.size();
 
-        auto process_method = [&](const DexMethod* other_method) {
-          if (other_method == nullptr) {
-            general_memory_barrier = true;
-          } else if (is_abstract(other_method) ||
-                     assumenosideeffects(other_method)) {
-            // nothing to do here
-          } else if (other_method->is_external() || is_native(other_method)) {
-            general_memory_barrier = true;
-          } else {
-            wlads.dependencies.insert(other_method);
-          }
-        };
-
-        process_method(barrier.method);
-
-        if ((barrier.opcode == OPCODE_INVOKE_VIRTUAL ||
-             barrier.opcode == OPCODE_INVOKE_INTERFACE) &&
-            !general_memory_barrier && !assumenosideeffects(barrier.method)) {
-          always_assert(barrier.method->is_virtual());
-          const auto overriding_methods =
-              method_override_graph::get_overriding_methods(
-                  *m_method_override_graph, barrier.method);
-          for (const DexMethod* overriding_method : overriding_methods) {
-            process_method(overriding_method);
-          }
-        }
-      }
-    }
-
-    if (!general_memory_barrier) {
-      concurrent_method_wlads.emplace(method, wlads);
-    }
-  });
-
-  std::unordered_map<const DexMethod*, WrittenLocationsAndDependencies>
-      method_wlads(concurrent_method_wlads.begin(),
-                   concurrent_method_wlads.end());
-
-  // 2. Compute inverse dependencies so that we know what needs to be recomputed
-  // during the fixpoint computation, and determine set of methods that are
-  // initially "impacted" in the sense that they have dependencies.
-  std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
-      inverse_dependencies;
-  std::unordered_set<const DexMethod*> impacted_methods;
-  for (auto p : method_wlads) {
+  for (auto& p : m_method_written_locations) {
     auto method = p.first;
-    auto& wlads = p.second;
-    if (wlads.dependencies.size()) {
-      for (auto d : wlads.dependencies) {
-        inverse_dependencies[d].insert(method);
-      }
-      impacted_methods.insert(method);
-    }
-  }
-
-  // 3. Let's try to (semantically) inline written locations, computing a fixed
-  //    point. Methods for which information is directly or indirectly absent
-  //    are equivalent to a general memory barrier, and are systematically
-  //    pruned.
-  MethodBarriersStats stats;
-  while (impacted_methods.size()) {
-    stats.inlined_barriers_iterations++;
-
-    // We order the impacted methods in a deterministic way that's likely
-    // helping to reduce the number of needed iterations.
-    // TODO: Do a proper (weak) topological ordering
-    std::vector<const DexMethod*> ordered_impacted_methods(
-        impacted_methods.begin(), impacted_methods.end());
-    impacted_methods.clear();
-    std::sort(
-        ordered_impacted_methods.begin(), ordered_impacted_methods.end(),
-        [&](const DexMethod* a, const DexMethod* b) {
-          auto& a_wlads = method_wlads.at(a);
-          auto& b_wlads = method_wlads.at(b);
-          if (a_wlads.dependencies.size() != b_wlads.dependencies.size()) {
-            // put methods with fewer dependencies first
-            return a_wlads.dependencies.size() < b_wlads.dependencies.size();
-          }
-          if (a_wlads.written_locations.size() !=
-              b_wlads.written_locations.size()) {
-            // put methods with fewer written locations first
-            return a_wlads.written_locations.size() <
-                   b_wlads.written_locations.size();
-          }
-          // tie breaker: method order
-          return compare_dexmethods(a, b);
-        });
-
-    std::unordered_set<const DexMethod*> changed_methods;
-    for (const DexMethod* method : ordered_impacted_methods) {
-      auto& wlads = method_wlads.at(method);
-      bool general_memory_barrier = false;
-      size_t wlads_written_locations_size = wlads.written_locations.size();
-      for (const DexMethod* d : wlads.dependencies) {
-        if (d == method) {
-          continue;
-        }
-        auto it = method_wlads.find(d);
-        if (it == method_wlads.end()) {
-          general_memory_barrier = true;
-          break;
-        }
-        const auto& other_written_locations = it->second.written_locations;
-        wlads.written_locations.insert(other_written_locations.begin(),
-                                       other_written_locations.end());
-      }
-      if (general_memory_barrier ||
-          wlads_written_locations_size < wlads.written_locations.size()) {
-        // something changed
-        stats.inlined_barriers_into_methods++;
-        changed_methods.insert(method);
-        if (general_memory_barrier) {
-          method_wlads.erase(method);
-        }
-      }
-    }
-
-    // Given set of changed methods, determine set of dependents for which
-    // we need to re-run the analysis in another iteration.
-    for (auto changed_method : changed_methods) {
-      auto it = inverse_dependencies.find(changed_method);
-      if (it != inverse_dependencies.end()) {
-        for (auto impacted_method : it->second) {
-          if (method_wlads.count(impacted_method)) {
-            impacted_methods.insert(impacted_method);
-          }
-        }
-      }
-    }
-  }
-
-  // For all methods which have a known set of written locations at this point,
-  // persist that information
-  for (auto& p : method_wlads) {
-    auto method = p.first;
-    auto& wlads = p.second;
+    auto& written_locations = p.second;
     TRACE(CSE, 4, "[CSE] inferred barrier for %s: %s", SHOW(method),
-          SHOW(&wlads.written_locations));
-    m_method_written_locations[method].insert(wlads.written_locations.begin(),
-                                              wlads.written_locations.end());
+          SHOW(&written_locations));
   }
 
-  return stats;
+  m_conditionally_pure_methods = compute_conditionally_pure_methods(
+      scope, m_method_override_graph.get(), m_pure_methods);
+  m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
 }
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
@@ -1186,7 +998,7 @@ bool SharedState::may_be_barrier(const IRInstruction* insn,
     if (insn->has_field()) {
       always_assert(is_iget(opcode) || is_sget(opcode));
       if (get_field_location(opcode, insn->get_field()) ==
-          CseLocation(GENERAL_MEMORY_BARRIER)) {
+          CseLocation(CseSpecialLocations::GENERAL_MEMORY_BARRIER)) {
         return true;
       }
     }
@@ -1260,34 +1072,19 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
 
   auto method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
-  if (method == nullptr) {
+  CseUnorderedLocationSet written_locations;
+  if (!process_base_and_overriding_methods(
+          m_method_override_graph.get(), method,
+          /* ignore_methods_with_assumenosideeffects */ true,
+          [&](DexMethod* other_method) {
+            auto it = m_method_written_locations.find(other_method);
+            if (it == m_method_written_locations.end()) {
+              return false;
+            }
+            written_locations.insert(it->second.begin(), it->second.end());
+            return true;
+          })) {
     return general_memory_barrier_locations;
-  }
-  auto written_locations = get_relevant_written_locations(method);
-  if (written_locations.count(CseLocation(GENERAL_MEMORY_BARRIER))) {
-    return general_memory_barrier_locations;
-  }
-
-  if ((opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) &&
-      !assumenosideeffects(method)) {
-    always_assert(method->is_virtual());
-    if (!m_method_override_graph) {
-      return general_memory_barrier_locations;
-    }
-    const auto overriding_methods =
-        method_override_graph::get_overriding_methods(*m_method_override_graph,
-                                                      method);
-    for (const DexMethod* overriding_method : overriding_methods) {
-      auto overriding_written_locations =
-          get_relevant_written_locations(overriding_method);
-      if (overriding_written_locations.count(
-              CseLocation(GENERAL_MEMORY_BARRIER))) {
-        return general_memory_barrier_locations;
-      }
-
-      written_locations.insert(overriding_written_locations.begin(),
-                               overriding_written_locations.end());
-    }
   }
 
   // Remove written locations that are not read
@@ -1309,6 +1106,22 @@ void SharedState::log_barrier(const Barrier& barrier) {
   }
 }
 
+const CseUnorderedLocationSet&
+SharedState::get_read_locations_of_conditionally_pure_method(
+    const DexMethodRef* method_ref, IROpcode opcode) const {
+  auto method = resolve_method(const_cast<DexMethodRef*>(method_ref),
+                               opcode_to_search(opcode));
+  if (method == nullptr) {
+    return no_locations;
+  }
+  auto it = m_conditionally_pure_methods.find(method);
+  if (it == m_conditionally_pure_methods.end()) {
+    return no_locations;
+  } else {
+    return it->second;
+  }
+}
+
 bool SharedState::has_pure_method(const IRInstruction* insn) const {
   auto method_ref = insn->get_method();
   if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
@@ -1319,7 +1132,9 @@ bool SharedState::has_pure_method(const IRInstruction* insn) const {
   auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
   if (method != nullptr &&
       m_pure_methods.find(method) != m_pure_methods.end()) {
-    TRACE(CSE, 4, "[CSE] resolved pure for %s", SHOW(method));
+    TRACE(CSE, 4, "[CSE] resolved %spure for %s",
+          m_conditionally_pure_methods.count(method) ? "conditionally " : "",
+          SHOW(method));
     return true;
   }
 
@@ -1664,18 +1479,27 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                                   PassManager& mgr) {
   const auto scope = build_class_scope(stores);
 
+  walk::parallel::code(scope, [&](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ true);
+  });
+
   auto pure_methods = /* Android framework */ get_pure_methods();
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
 
   auto shared_state = SharedState(pure_methods);
-  auto method_barriers_stats = shared_state.init_method_barriers(scope);
+  shared_state.init_scope(scope);
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
-        if (code == nullptr || method->rstate.no_optimizations()) {
+        if (code == nullptr) {
+          return Stats();
+        }
+
+        if (method->rstate.no_optimizations()) {
+          code->clear_cfg();
           return Stats();
         }
 
@@ -1726,13 +1550,13 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_ARRAY_LENGTHS_CAPTURED, stats.array_lengths_captured);
   mgr.incr_metric(METRIC_ELIMINATED_INSTRUCTIONS,
                   stats.instructions_eliminated);
-  mgr.incr_metric(METRIC_INLINED_BARRIERS_INTO_METHODS,
-                  method_barriers_stats.inlined_barriers_into_methods);
-  mgr.incr_metric(METRIC_INLINED_BARRIERS_ITERATIONS,
-                  method_barriers_stats.inlined_barriers_iterations);
   mgr.incr_metric(METRIC_MAX_VALUE_IDS, stats.max_value_ids);
   mgr.incr_metric(METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT,
                   stats.methods_using_other_tracked_location_bit);
+  auto& shared_state_stats = shared_state.get_stats();
+  mgr.incr_metric(METRIC_METHOD_BARRIERS, shared_state_stats.method_barriers);
+  mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS,
+                  shared_state_stats.conditionally_pure_methods);
   for (auto& p : stats.eliminated_opcodes) {
     std::string name = METRIC_INSTR_PREFIX;
     name += SHOW(static_cast<IROpcode>(p.first));
