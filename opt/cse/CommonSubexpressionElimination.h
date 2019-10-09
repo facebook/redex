@@ -28,7 +28,9 @@ struct Stats {
 
 struct SharedStateStats {
   size_t method_barriers{0};
+  size_t method_barriers_iterations{0};
   size_t conditionally_pure_methods{0};
+  size_t conditionally_pure_methods_iterations{0};
 };
 
 // A barrier is defined by a particular opcode, and possibly some extra data
@@ -68,6 +70,7 @@ class SharedState {
   const SharedStateStats& get_stats() const { return m_stats; }
 
  private:
+  void init_method_barriers(const Scope& scope);
   bool may_be_barrier(const IRInstruction* insn, DexType* exact_virtual_scope);
   bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
   CseUnorderedLocationSet get_relevant_written_locations(

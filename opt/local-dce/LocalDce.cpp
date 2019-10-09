@@ -33,6 +33,8 @@ constexpr const char* METRIC_UNREACHABLE_INSTRUCTIONS =
     "num_unreachable_instructions";
 constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS =
     "num_computed_no_side_effects_methods";
+constexpr const char* METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS =
+    "num_computed_no_side_effects_methods_iterations";
 
 /*
  * These instructions have observable side effects so must always be considered
@@ -331,8 +333,10 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
   auto override_graph = method_override_graph::build_graph(scope);
-  auto computed_no_side_effects_methods = compute_no_side_effects_methods(
-      scope, override_graph.get(), pure_methods);
+  std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
+  auto computed_no_side_effects_methods_iterations =
+      compute_no_side_effects_methods(scope, override_graph.get(), pure_methods,
+                                      &computed_no_side_effects_methods);
   for (auto m : computed_no_side_effects_methods) {
     pure_methods.insert(const_cast<DexMethod*>(m));
   }
@@ -359,6 +363,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
                   stats.unreachable_instruction_count);
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS,
                   computed_no_side_effects_methods.size());
+  mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS,
+                  computed_no_side_effects_methods_iterations);
 
   TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d",
         stats.dead_instruction_count, stats.unreachable_instruction_count);

@@ -362,12 +362,12 @@ bool process_base_and_overriding_methods(
   return true;
 }
 
-std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-compute_locations_closure(
+size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
-        init_func) {
+        init_func,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   // 1. Let's initialize known method read locations and dependencies by
   //    scanning method bodies
   ConcurrentMap<const DexMethod*, LocationsAndDependencies>
@@ -403,7 +403,9 @@ compute_locations_closure(
   //    point. Methods for which information is directly or indirectly absent
   //    are equivalent to a general memory barrier, and are systematically
   //    pruned.
+  size_t iterations = 0;
   while (impacted_methods.size()) {
+    iterations++;
     // We order the impacted methods in a deterministic way that's likely
     // helping to reduce the number of needed iterations.
     // TODO: Do a proper (weak) topological ordering
@@ -483,11 +485,11 @@ compute_locations_closure(
 
   // For all methods which have a known set of locations at this point,
   // persist that information
-  std::unordered_map<const DexMethod*, CseUnorderedLocationSet> res;
   for (auto& p : method_lads) {
-    res.emplace(p.first, p.second.locations);
+    result->emplace(p.first, p.second.locations);
   }
-  return res;
+
+  return iterations;
 }
 
 // Helper function that invokes compute_locations_closure, providing initial
@@ -503,14 +505,14 @@ compute_locations_closure(
 // - [compute_locations] the actual locations that are being read are computed
 //   and returned; if false, then an empty set indicates that a particular
 //   function only reads (some unknown set of) locations.
-static std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-analyze_read_locations(
+static size_t analyze_read_locations(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     bool ignore_methods_with_assumenosideeffects,
     bool for_conditional_purity,
-    bool compute_locations) {
+    bool compute_locations,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
   std::unordered_set<const DexMethod*> pure_methods_closure;
   for (auto pure_method_ref : pure_methods) {
     auto pure_method = pure_method_ref->as_def();
@@ -620,39 +622,44 @@ analyze_read_locations(
         }
 
         return lads;
-      });
+      },
+      result);
 }
 
-std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-compute_conditionally_pure_methods(
+size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::unordered_set<DexMethodRef*>& pure_methods) {
-  auto method_locations = analyze_read_locations(
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result) {
+  Timer t("compute_conditionally_pure_methods");
+  auto iterations = analyze_read_locations(
       scope, method_override_graph, pure_methods,
       /* ignore_methods_with_assumenosideeffects */ false,
       /* for_conditional_purity */ true,
-      /* compute_locations */ true);
-  for (auto& p : method_locations) {
+      /* compute_locations */ true, result);
+  for (auto& p : *result) {
     TRACE(CSE, 4, "[CSE] conditionally pure method %s: %s", SHOW(p.first),
           SHOW(&p.second));
   }
-  return method_locations;
+  return iterations;
 }
 
-std::unordered_set<const DexMethod*> compute_no_side_effects_methods(
+size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::unordered_set<DexMethodRef*>& pure_methods) {
-  auto method_locations =
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    std::unordered_set<const DexMethod*>* result) {
+  Timer t("compute_no_side_effects_methods");
+  std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
+      method_locations;
+  auto iterations =
       analyze_read_locations(scope, method_override_graph, pure_methods,
                              /* ignore_methods_with_assumenosideeffects */ true,
                              /* for_conditional_purity */ false,
-                             /* compute_locations */ false);
-  std::unordered_set<const DexMethod*> res;
+                             /* compute_locations */ false, &method_locations);
   for (auto& p : method_locations) {
     TRACE(CSE, 4, "[CSE] no side effects method %s", SHOW(p.first));
-    res.insert(p.first);
+    result->insert(p.first);
   }
-  return res;
+  return iterations;
 }

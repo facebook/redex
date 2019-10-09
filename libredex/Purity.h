@@ -131,26 +131,35 @@ bool process_base_and_overriding_methods(
 // account all overriding methods.
 // When encountering unknown method implementations, the resulting map will have
 // no entry for the relevant (base) methods.
-std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-compute_locations_closure(
+// The return value indicates how many iterations the fixed-point computation
+// required.
+size_t compute_locations_closure(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
     std::function<boost::optional<LocationsAndDependencies>(DexMethod*)>
-        init_func);
+        init_func,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all "conditionally pure" methods, i.e. methods which are pure except
 // that they may read from a set of well-known locations (not including
 // GENERAL_MEMORY_BARRIER). For each conditionally pure method, the returned
 // map indicates the set of read locations.
-std::unordered_map<const DexMethod*, CseUnorderedLocationSet>
-compute_conditionally_pure_methods(
+// The return value indicates how many iterations the fixed-point computation
+// required.
+size_t compute_conditionally_pure_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::unordered_set<DexMethodRef*>& pure_methods);
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    std::unordered_map<const DexMethod*, CseUnorderedLocationSet>* result);
 
 // Compute all methods with no side effects, i.e. methods which do not mutate
 // state and only call other methods which do not have side effects.
-std::unordered_set<const DexMethod*> compute_no_side_effects_methods(
+// The return value indicates how many iterations the fixed-point computation
+// required.
+// The return value indicates how many iterations the fixed-point computation
+// required.
+size_t compute_no_side_effects_methods(
     const Scope& scope,
     const method_override_graph::Graph* method_override_graph,
-    const std::unordered_set<DexMethodRef*>& pure_methods);
+    const std::unordered_set<DexMethodRef*>& pure_methods,
+    std::unordered_set<const DexMethod*>* result);

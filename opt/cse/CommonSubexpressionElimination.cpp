@@ -87,8 +87,12 @@ constexpr const char* METRIC_METHODS_USING_OTHER_TRACKED_LOCATION_BIT =
     "methods_using_other_tracked_location_bit";
 constexpr const char* METRIC_INSTR_PREFIX = "instr_";
 constexpr const char* METRIC_METHOD_BARRIERS = "num_method_barriers";
+constexpr const char* METRIC_METHOD_BARRIERS_ITERATIONS =
+    "num_method_barriers_iterations";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
+constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
+    "num_conditionally_pure_methods_iterations";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -898,11 +902,9 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
   }
 }
 
-void SharedState::init_scope(const Scope& scope) {
-  always_assert(!m_method_override_graph);
-  m_method_override_graph = method_override_graph::build_graph(scope);
-
-  m_method_written_locations = compute_locations_closure(
+void SharedState::init_method_barriers(const Scope& scope) {
+  Timer t("init_method_barriers");
+  auto iterations = compute_locations_closure(
       scope, m_method_override_graph.get(),
       [&](DexMethod* method) -> boost::optional<LocationsAndDependencies> {
         auto action = get_base_or_overriding_method_action(
@@ -949,7 +951,9 @@ void SharedState::init_scope(const Scope& scope) {
         }
 
         return lads;
-      });
+      },
+      &m_method_written_locations);
+  m_stats.method_barriers_iterations = iterations;
   m_stats.method_barriers = m_method_written_locations.size();
 
   for (auto& p : m_method_written_locations) {
@@ -958,10 +962,19 @@ void SharedState::init_scope(const Scope& scope) {
     TRACE(CSE, 4, "[CSE] inferred barrier for %s: %s", SHOW(method),
           SHOW(&written_locations));
   }
+}
 
-  m_conditionally_pure_methods = compute_conditionally_pure_methods(
-      scope, m_method_override_graph.get(), m_pure_methods);
+void SharedState::init_scope(const Scope& scope) {
+  always_assert(!m_method_override_graph);
+  m_method_override_graph = method_override_graph::build_graph(scope);
+
+  auto iterations = compute_conditionally_pure_methods(
+      scope, m_method_override_graph.get(), m_pure_methods,
+      &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
+  m_stats.conditionally_pure_methods_iterations = iterations;
+
+  init_method_barriers(scope);
 }
 
 CseUnorderedLocationSet SharedState::get_relevant_written_locations(
@@ -1555,8 +1568,12 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                   stats.methods_using_other_tracked_location_bit);
   auto& shared_state_stats = shared_state.get_stats();
   mgr.incr_metric(METRIC_METHOD_BARRIERS, shared_state_stats.method_barriers);
+  mgr.incr_metric(METRIC_METHOD_BARRIERS_ITERATIONS,
+                  shared_state_stats.method_barriers_iterations);
   mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS,
                   shared_state_stats.conditionally_pure_methods);
+  mgr.incr_metric(METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS,
+                  shared_state_stats.conditionally_pure_methods_iterations);
   for (auto& p : stats.eliminated_opcodes) {
     std::string name = METRIC_INSTR_PREFIX;
     name += SHOW(static_cast<IROpcode>(p.first));
