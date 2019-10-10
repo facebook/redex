@@ -1917,6 +1917,7 @@ std::vector<Edge*> ControlFlowGraph::get_pred_edges_of_type(
   return get_pred_edges_if(block,
                            [type](const Edge* e) { return e->type() == type; });
 }
+
 std::vector<Edge*> ControlFlowGraph::get_succ_edges_of_type(
     const Block* block, EdgeType type) const {
   return get_succ_edges_if(block,
@@ -2172,10 +2173,24 @@ void ControlFlowGraph::create_branch(
   }
 }
 
-void ControlFlowGraph::copy_succ_edges(Block* from, Block* to, EdgeType type) {
-  const auto& edges = get_succ_edges_of_type(from, type);
+void ControlFlowGraph::copy_succ_edges(Block* from, Block* to) {
+  copy_succ_edges_if(from, to, [](const Edge*) { return true; });
+}
 
-  for (const Edge* e : edges) {
+void ControlFlowGraph::copy_succ_edges_of_type(Block* from,
+                                               Block* to,
+                                               EdgeType type) {
+  copy_succ_edges_if(from, to,
+                     [type](const Edge* edge) { return edge->type() == type; });
+}
+
+template <typename EdgePredicate>
+void ControlFlowGraph::copy_succ_edges_if(Block* from,
+                                          Block* to,
+                                          EdgePredicate edge_predicate) {
+  const auto& edges = get_succ_edges_if(from, edge_predicate);
+
+  for (auto e : edges) {
     Edge* copy = new Edge(*e);
     copy->m_src = to;
     add_edge(copy);

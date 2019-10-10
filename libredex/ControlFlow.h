@@ -425,8 +425,15 @@ class ControlFlowGraph {
     e->target()->m_preds.emplace_back(e);
   }
 
+  // copies all edges from one block to another
+  void copy_succ_edges(Block* from, Block* to);
+
   // copies all edges of a certain type from one block to another
-  void copy_succ_edges(Block* from, Block* to, EdgeType type);
+  void copy_succ_edges_of_type(Block* from, Block* to, EdgeType type);
+
+  // copes all edges that match the predicate from one block to another
+  template <typename EdgePredicate>
+  void copy_succ_edges_if(Block* from, Block* to, EdgePredicate edge_predicate);
 
   using EdgeSet = std::unordered_set<Edge*>;
 
@@ -1233,7 +1240,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                             SHOW(existing_last->insn), b->id(), SHOW(*this));
           Block* new_block = create_block();
           if (opcode::may_throw(op)) {
-            copy_succ_edges(b, new_block, EDGE_THROW);
+            copy_succ_edges_of_type(b, new_block, EDGE_THROW);
           }
           const auto& existing_goto_edge = get_succ_edge_of_type(b, EDGE_GOTO);
           set_edge_source(existing_goto_edge, new_block);
@@ -1293,7 +1300,7 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
       if (!succ->empty()) {
         // Copy the outgoing throw edges of the new block back into the original
         // block
-        copy_succ_edges(succ, b, EDGE_THROW);
+        copy_succ_edges_of_type(succ, b, EDGE_THROW);
       }
 
       // Continue inserting in the successor block.
