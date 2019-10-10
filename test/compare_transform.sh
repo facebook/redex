@@ -15,6 +15,9 @@ then
   IGNORE_RENAME=true
 fi
 
+# The script requires dexdump.
+command -v dexdump >/dev/null 2>&1 || { echo "Dexdump not found!" ; exit 2; }
+
 TEMPDIR=`mktemp -d 2>/dev/null || mktemp -d -t 'extractdexdump'`
 
 function strip_cruft() {
