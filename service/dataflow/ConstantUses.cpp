@@ -207,8 +207,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_RETURN_OBJECT:
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
-  case OPCODE_CHECK_CAST:
-  case OPCODE_INSTANCE_OF:
   case OPCODE_ARRAY_LENGTH:
   case OPCODE_FILL_ARRAY_DATA:
   case OPCODE_THROW:
@@ -220,6 +218,21 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   case OPCODE_IGET_WIDE:
   case OPCODE_IGET_OBJECT:
     return TypeDemand::Object;
+
+  case OPCODE_CHECK_CAST:
+    // In the Android verifier, the check-cast instruction updates the assumed
+    // exact type on the incoming register, even in the case of a zero constant.
+    // We don't track exact types here, and just bail out.
+    return TypeDemand::Error;
+
+  case OPCODE_INSTANCE_OF:
+    // The Android verifier in some ART versions match a pattern of
+    // instance-of + ifXXX, and then may strengthen assumptions on the incoming
+    // register, even in the case of a zero constant.
+    // https://android.googlesource.com/platform/art/+/refs/tags/android-10.0.0_r5/runtime/verifier/method_verifier.cc#2683
+    // We don't track exact types here, and certainly don't want to deal with
+    // somewhat fragile pattern matching, and so just bail out.
+    return TypeDemand::Error;
 
   case OPCODE_NEW_ARRAY:
   case OPCODE_SWITCH:

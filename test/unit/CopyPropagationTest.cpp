@@ -749,3 +749,64 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
 
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
+
+TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (monitor-enter v0)
+       (monitor-exit v0)
+       (const v0 0) ; can be deleted
+       (return-object v0)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(2);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (monitor-enter v0)
+      (monitor-exit v0)
+      (return-object v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
+
+TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
+  auto method = assembler::method_from_string(R"(
+    (method (public static) "LFoo;.bar:()Ljava/lang/Object;"
+     (
+       (const v0 0)
+       (instance-of v0 "Ljava/lang/String;")
+       (move-result-pseudo v1)
+       (const v0 0) ; can not be deleted
+       (return-object v0)
+    )
+  )
+)");
+  auto code = method->get_code();
+  code->set_registers_size(2);
+
+  CopyPropagationPass::Config config;
+  CopyPropagation(config).run(code, method);
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (instance-of v0 "Ljava/lang/String;")
+      (move-result-pseudo v1)
+      (const v0 0) ; can not be deleted
+      (return-object v0)
+    )
+)");
+
+  EXPECT_CODE_EQ(code, expected_code.get());
+}
