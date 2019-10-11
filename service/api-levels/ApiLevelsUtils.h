@@ -24,7 +24,9 @@ class ApiLevelsUtils {
                  int api_level)
       : m_scope(scope),
         m_framework_api_info_filename(framework_api_info_filename),
-        m_api_level(api_level) {}
+        m_api_level(api_level) {
+    load_types_to_framework_api();
+  }
 
   const std::unordered_map<const DexType*, FrameworkAPI>&
   get_types_to_framework_api() {
@@ -33,9 +35,10 @@ class ApiLevelsUtils {
 
   std::unordered_map<DexType*, FrameworkAPI> get_framework_classes();
 
-  void load_types_to_framework_api();
-
  private:
+  void load_types_to_framework_api();
+  void check_and_update_release_to_framework();
+
   const Scope& m_scope;
   std::unordered_map<const DexType*, FrameworkAPI> m_types_to_framework_api;
   std::string m_framework_api_info_filename;
