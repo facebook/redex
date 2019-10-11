@@ -250,6 +250,9 @@ DexClasses TypeErasureInterDexPlugin::leftover_classes() {
     }
   }
 
+  // This output needs to be stable.
+  std::sort(additional_classes.begin(), additional_classes.end(),
+            compare_dexclasses);
   return additional_classes;
 }
 
