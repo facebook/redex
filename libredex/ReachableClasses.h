@@ -20,10 +20,6 @@ void init_reachable_classes(
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir);
 
-// Note: The lack of convenience functions for DexType* is intentional. By doing
-// so, it implies you need to nullptr check. Which is evil because it sprinkles
-// nullptr checks everywhere.
-
 template <class DexMember>
 inline bool can_delete(DexMember* member) {
   return !member->is_external() && member->rstate.can_delete();
@@ -40,6 +36,11 @@ inline bool can_rename(DexMember* member) {
 }
 
 template <class DexMember>
+inline bool can_rename_if_also_renaming_xml(DexMember* member) {
+  return member->rstate.can_rename_if_also_renaming_xml();
+}
+
+template <class DexMember>
 inline bool can_delete_DEPRECATED(DexMember* member) {
   return member->rstate.can_delete_DEPRECATED();
 }
@@ -52,14 +53,6 @@ inline bool can_rename_DEPRECATED(DexMember* member) {
 template <class DexMember>
 inline bool is_serde(DexMember* member) {
   return member->rstate.is_serde();
-}
-
-// A temporary measure to allow the RenamerV2 pass to rename classes that would
-// other not be renamable due to any top level blanket keep rules.
-template <class DexMember>
-inline bool can_rename_if_ignoring_blanket_keepnames(DexMember* member) {
-  return can_rename_DEPRECATED(member) ||
-         member->rstate.is_blanket_names_kept();
 }
 
 template <class DexMember>

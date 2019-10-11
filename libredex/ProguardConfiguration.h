@@ -17,7 +17,6 @@
 namespace redex {
 
 struct MemberSpecification {
-  mutable unsigned long count{0};
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
   DexAccessFlags requiredUnsetAccessFlags = DexAccessFlags(0);
   std::string annotationType;
@@ -49,7 +48,6 @@ struct ClassSpecification {
 size_t hash_value(const ClassSpecification&);
 
 struct KeepSpec {
-  mutable unsigned long count{0};
   // "includedescriptorclasses" is not implemented. We just parse this option
   // and save for the future, but the actual behavior is not implemented.
   bool includedescriptorclasses{false};

@@ -27,8 +27,7 @@ size_t mark_classes_final(const Scope& scope) {
   ClassHierarchy ch = build_type_hierarchy(scope);
   size_t n_classes_finalized = 0;
   for (auto const& cls : scope) {
-    if (!can_rename_if_ignoring_blanket_keepnames(cls) || is_abstract(cls) ||
-        is_final(cls)) {
+    if (!can_rename(cls) || is_abstract(cls) || is_final(cls)) {
       continue;
     }
     auto const& children = get_children(ch, cls->get_type());

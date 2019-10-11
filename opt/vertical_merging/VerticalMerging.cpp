@@ -63,8 +63,8 @@ void check_dont_merge_list(
     // can merge child class into parent class instead (which requires parent
     // class is not having STRICT don't merge status, and child class is
     // removable).
-    if (find_parent->second != STRICT && can_delete_DEPRECATED(child_cls) &&
-        can_rename_if_ignoring_blanket_keepnames(child_cls)) {
+    if (find_parent->second != STRICT && can_delete(child_cls) &&
+        can_rename(child_cls)) {
       if (is_abstract(child_cls)) {
         for (auto method : child_cls->get_vmethods()) {
           if (method->get_code()) {
@@ -226,9 +226,8 @@ void collect_can_merge(
     std::unordered_map<DexClass*, DexClass*>* mergeable_to_merger) {
   ClassHierarchy ch = build_type_hierarchy(scope);
   for (DexClass* cls : scope) {
-    if (cls && !cls->is_external() && !is_interface(cls) &&
-        can_delete_DEPRECATED(cls) &&
-        can_rename_if_ignoring_blanket_keepnames(cls)) {
+    if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
+        can_rename(cls)) {
       DexType* cls_type = cls->get_type();
       const auto& children_types = get_children(ch, cls->get_type());
       if (children_types.size() != 1) {
@@ -658,11 +657,7 @@ void VerticalMergingPass::move_methods(
     std::unordered_map<DexMethodRef*, DexMethodRef*>* methodref_update_map) {
   DexType* target_cls_type = to_cls->get_type();
   auto move_method = [&](DexMethod* method) {
-    TRACE(VMERGE,
-          5,
-          "%s | %s | %s",
-          SHOW(from_cls),
-          SHOW(to_cls),
+    TRACE(VMERGE, 5, "%s | %s | %s", SHOW(from_cls), SHOW(to_cls),
           SHOW(method));
     if (is_merging_super_to_sub) {
       // Super class is being merged into subclass

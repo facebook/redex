@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <atomic>
 #include <boost/optional.hpp>
 #include <mutex>
 #include <string>
@@ -42,9 +41,6 @@ class ReferencedState {
     bool m_keep{false};
     // assumenosideeffects allows certain methods to be removed.
     bool m_assumenosideeffects{false};
-    // Does this class have a blanket "-keepnames class *" applied to it?
-    // "-keepnames" is synonym with "-keep,allowshrinking".
-    bool m_blanket_keepnames{false};
     // If m_whyareyoukeeping is true then report debugging information
     // about why this class or member is being kept.
     bool m_whyareyoukeeping{false};
@@ -74,9 +70,6 @@ class ReferencedState {
   // NOTE: Will be set ONLY for generated classes.
   boost::optional<size_t> m_interdex_subgroup{boost::none};
 
-  // The number of keep rules that touch this class.
-  std::atomic<unsigned int> m_keep_count{0};
-
   std::mutex m_keep_reasons_mtx;
   keep_reason::ReasonPtrSet m_keep_reasons;
 
@@ -86,11 +79,9 @@ class ReferencedState {
  public:
   ReferencedState() = default;
 
-  // std::atomic requires an explicitly user-defined assignment operator.
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
       this->inner_struct = other.inner_struct;
-      this->m_keep_count = other.m_keep_count.load();
     }
     return *this;
   }
@@ -111,9 +102,6 @@ class ReferencedState {
       this->inner_struct.m_assumenosideeffects =
           this->inner_struct.m_assumenosideeffects &
           other.inner_struct.m_assumenosideeffects;
-      this->inner_struct.m_blanket_keepnames =
-          this->inner_struct.m_blanket_keepnames |
-          other.inner_struct.m_blanket_keepnames;
       this->inner_struct.m_whyareyoukeeping =
           this->inner_struct.m_whyareyoukeeping |
           other.inner_struct.m_whyareyoukeeping;
@@ -138,9 +126,6 @@ class ReferencedState {
           this->inner_struct.m_dont_inline | other.inner_struct.m_dont_inline;
       this->inner_struct.m_force_inline =
           this->inner_struct.m_force_inline & other.inner_struct.m_force_inline;
-
-      this->m_keep_count =
-          this->m_keep_count.load() + other.m_keep_count.load();
     }
   }
 
@@ -156,8 +141,16 @@ class ReferencedState {
 
   // -keepnames
   bool can_rename() const {
-    return (!inner_struct.m_keep || allowobfuscation()) &&
-           !inner_struct.m_by_resources;
+    return can_rename_if_also_renaming_xml() && !inner_struct.m_by_resources;
+  }
+
+  /*
+   * Returns whether :member can be renamed if references to it from XML
+   * resources are also updated accordingly. The optimizing pass in question
+   * will be responsible for updating the XML resources.
+   */
+  bool can_rename_if_also_renaming_xml() const {
+    return !inner_struct.m_keep || allowobfuscation();
   }
 
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
@@ -179,10 +172,6 @@ class ReferencedState {
 
   bool assumenosideeffects() const {
     return inner_struct.m_assumenosideeffects;
-  }
-
-  bool is_blanket_names_kept() const {
-    return inner_struct.m_blanket_keepnames && m_keep_count == 1;
   }
 
   bool report_whyareyoukeeping() const {
@@ -296,10 +285,6 @@ class ReferencedState {
   }
 
   void set_assumenosideeffects() { inner_struct.m_assumenosideeffects = true; }
-
-  void set_blanket_keepnames() { inner_struct.m_blanket_keepnames = true; }
-
-  void increment_keep_count() { m_keep_count++; }
 
   void set_whyareyoukeeping() { inner_struct.m_whyareyoukeeping = true; }
 

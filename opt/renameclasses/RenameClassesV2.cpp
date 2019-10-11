@@ -81,6 +81,8 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
   case DontRenameReasonCode::Hierarchy:
     // Set to true to add more detailed metrics for renamer if needed
     return false;
+  case DontRenameReasonCode::ProguardCantRename:
+    return RedexContext::record_keep_reasons();
   default:
     return false;
   }
@@ -528,6 +530,19 @@ DexString* lookup_signature_annotation(const AliasMap& aliases,
   return nullptr;
 }
 
+std::string get_keep_rule(const DexClass* clazz) {
+  if (RedexContext::record_keep_reasons()) {
+    const auto& keep_reasons = clazz->rstate.keep_reasons();
+    for (const auto* reason : keep_reasons) {
+      if (reason->type == keep_reason::KEEP_RULE &&
+          !reason->keep_rule->allowobfuscation) {
+        return show(*reason);
+      }
+    }
+  }
+  return "";
+}
+
 void RenameClassesPassV2::eval_classes(Scope& scope,
                                        const ClassHierarchy& class_hierarchy,
                                        ConfigFiles& conf,
@@ -645,9 +660,11 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
+    if (!can_rename_if_also_renaming_xml(clazz)) {
+      const auto& keep_reasons = clazz->rstate.keep_reasons();
+      auto rule = keep_reasons.size() > 0 ? show(*keep_reasons.begin()) : "";
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
-                                      norule};
+                                      get_keep_rule(clazz)};
       continue;
     }
   }
@@ -662,8 +679,6 @@ void RenameClassesPassV2::eval_classes_post(
     Scope& scope, const ClassHierarchy& class_hierarchy, PassManager& mgr) {
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
-  std::string norule = "";
-
   for (auto clazz : scope) {
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       continue;
@@ -698,9 +713,9 @@ void RenameClassesPassV2::eval_classes_post(
 
     // Don't rename anything if something changed and the class cannot be
     // renamed anymore.
-    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
+    if (!can_rename_if_also_renaming_xml(clazz)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
-                                      norule};
+                                      get_keep_rule(clazz)};
     }
   }
 }

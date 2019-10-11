@@ -405,8 +405,6 @@ void mark_manifest_root(const std::string& classname) {
   }
   TRACE(PGR, 3, "manifest: %s", classname.c_str());
   dclass->rstate.set_root(keep_reason::MANIFEST);
-  // Prevent renaming.
-  dclass->rstate.increment_keep_count();
   for (DexMethod* dmethod : dclass->get_ctors()) {
     dmethod->rstate.set_root(keep_reason::MANIFEST);
   }
@@ -472,7 +470,6 @@ void analyze_reachable_from_manifest(
         TRACE(PGR, 3, "%s not exported", tag_info.classname.c_str());
         auto dclass = maybe_class_from_string(tag_info.classname);
         if (dclass) {
-          dclass->rstate.increment_keep_count();
           dclass->rstate.set_keepnames();
         }
       }
@@ -833,9 +830,6 @@ std::string ReferencedState::str() const {
   s << allowshrinking();
   s << allowobfuscation();
   s << inner_struct.m_assumenosideeffects;
-  s << inner_struct.m_blanket_keepnames;
   s << inner_struct.m_whyareyoukeeping;
-  s << ' ';
-  s << m_keep_count;
   return s.str();
 }

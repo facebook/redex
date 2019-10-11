@@ -149,14 +149,6 @@ std::string show_methods(
 
 std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
   std::ostringstream text;
-  auto field_count = 0;
-  for (const auto& field_spec : keep_rule.class_spec.fieldSpecifications) {
-    field_count += field_spec.count;
-  }
-  auto method_count = 0;
-  for (const auto& method_spec : keep_rule.class_spec.methodSpecifications) {
-    method_count += method_spec.count;
-  }
   text << show_keep_style(keep_rule) << show_keep_modifiers(keep_rule) << " ";
   const auto class_spec = keep_rule.class_spec;
   if (!(class_spec.annotationType.empty())) {

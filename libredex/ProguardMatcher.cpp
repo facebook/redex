@@ -359,22 +359,6 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
   }
 }
 
-// Is this keep_rule an application of a blanket top-level keep
-// "-keep,allowshrinking class *" or "-keepnames class *" rule?
-// See keepclassnames.pro, or T1890454.
-inline bool is_blanket_keepnames_rule(const KeepSpec& keep_rule) {
-  if (keep_rule.allowshrinking) {
-    const auto& spec = keep_rule.class_spec;
-    if (spec.className == "*" && spec.annotationType == "" &&
-        spec.fieldSpecifications.empty() && spec.methodSpecifications.empty() &&
-        spec.extendsAnnotationType == "" && spec.extendsClassName == "" &&
-        spec.setAccessFlags == 0 && spec.unsetAccessFlags == 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
 template <class DexMember>
 bool KeepRuleMatcher::has_annotation(const DexMember* member,
                                      const std::string& annotation) const {
@@ -442,7 +426,6 @@ void KeepRuleMatcher::keep_fields(
       apply_keep_modifiers(m_keep_rule, field);
     }
     apply_rule(field);
-    fieldSpecification.count++;
   }
 }
 
@@ -494,7 +477,6 @@ void KeepRuleMatcher::keep_methods(
         apply_keep_modifiers(m_keep_rule, method);
       }
       apply_rule(method);
-      methodSpecification.count++;
     }
   }
 }
@@ -595,10 +577,9 @@ bool KeepRuleMatcher::process_mark_conditionally(const DexClass* cls) {
 //
 // Parallelization note: We parallelize process_keep, and this function will be
 // eventually executed concurrently. There are potential races in rstate:
-// (1) m_keep, (2) m_(un)set_allow(shrinking|obfuscation), (3)
-// m_blanket_keepnames, and (4) m_keep_count. We use an atomic value for
-// m_keep_count, but the other boolean values are always overwritten. These WAW
-// (write-after-write) races are benign and do not affect the results.
+// (1) m_keep and (2) m_(un)set_allow(shrinking|obfuscation). These values are
+// always overwritten. These WAW (write-after-write) races are benign and do not
+// affect the results.
 void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   // First check to see if we need to mark conditionally to see if all
   // field and method rules match i.e. we have a -keepclasseswithmembers
@@ -621,7 +602,6 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
         << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
         << redex::show_keep(m_keep_rule) << std::endl;
   }
-  m_keep_rule.count++;
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
     cls->rstate.set_has_keep(&m_keep_rule);
@@ -630,12 +610,6 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
           PGR, 2, "whyareyoukeeping Class %s kept by %s",
           redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name()).c_str(),
           show_keep(m_keep_rule).c_str());
-    }
-    if (!m_keep_rule.allowobfuscation) {
-      cls->rstate.increment_keep_count();
-    }
-    if (is_blanket_keepnames_rule(m_keep_rule)) {
-      cls->rstate.set_blanket_keepnames();
     }
   }
   // Walk up the hierarchy performing seed marking.
@@ -811,7 +785,6 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
               redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
                   .c_str());
       }
-      cls->rstate.increment_keep_count();
     }
   }
 }

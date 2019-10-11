@@ -756,7 +756,7 @@ TEST(ProguardParserTest, keep_annotation_classes) {
   }
 }
 
-TEST(ProguardParserTest, remove_blanket_resource_keep) {
+TEST(ProguardParserTest, remove_blacklisted_rules) {
   {
     ProguardConfiguration config;
     std::istringstream ss(R"(
@@ -765,11 +765,12 @@ TEST(ProguardParserTest, remove_blanket_resource_keep) {
       public static <fields>;
     }
     -keep class Bar {}
+    -keepnames class *
 )");
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
-    EXPECT_EQ(config.keep_rules.size(), 3);
-    proguard_parser::remove_blanket_resource_keep(&config);
+    EXPECT_EQ(config.keep_rules.size(), 4);
+    proguard_parser::remove_blacklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
     // Check that we preserve the contents / order of the remaining rules.
     auto it = config.keep_rules.begin();
@@ -790,7 +791,7 @@ TEST(ProguardParserTest, remove_blanket_resource_keep) {
     proguard_parser::parse(ss, &config);
     ASSERT_TRUE(config.ok);
     EXPECT_EQ(config.keep_rules.size(), 2);
-    proguard_parser::remove_blanket_resource_keep(&config);
+    proguard_parser::remove_blacklisted_rules(&config);
     EXPECT_EQ(config.keep_rules.size(), 2);
   }
 }
