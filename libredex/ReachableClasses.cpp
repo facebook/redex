@@ -296,6 +296,26 @@ void mark_reachable_by_classname(DexClass* dclass) {
   }
 }
 
+void mark_reachable_by_native(const DexType* dtype) {
+  auto dclass = type_class_internal(dtype);
+  if (dclass == nullptr) {
+    return;
+  }
+  dclass->rstate.set_keepnames(keep_reason::NATIVE);
+  for (DexMethod* dmethod : dclass->get_dmethods()) {
+    dmethod->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexMethod* vmethod : dclass->get_vmethods()) {
+    vmethod->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexField* sfield : dclass->get_sfields()) {
+    sfield->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexField* ifield : dclass->get_ifields()) {
+    ifield->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+}
+
 void mark_reachable_by_string(DexMethod* method) {
   if (method == nullptr) {
     return;
@@ -667,6 +687,8 @@ void analyze_serializable(const Scope& scope) {
   }
 }
 
+} // namespace
+
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -679,7 +701,7 @@ void analyze_serializable(const Scope& scope) {
  *  - Classes marked with special annotations (keep_annotations in config)
  *  - Classes reachable from native libraries
  */
-void init_permanently_reachable_classes(
+void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
@@ -735,8 +757,18 @@ void init_permanently_reachable_classes(
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);
+        mark_reachable_by_native(type);
       }
     }
+    walk::methods(scope, [&](DexMethod* meth) {
+      // These were probably already marked by the native lib reachability
+      // analysis above, but just to be doubly sure...
+      if (is_native(meth)) {
+        TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
+        mark_reachable_by_string(meth);
+        meth->rstate.set_keepnames(keep_reason::NATIVE);
+      }
+    });
   }
 
   analyze_reflection(scope);
@@ -765,27 +797,11 @@ void init_permanently_reachable_classes(
     }
   }
   analyze_serializable(scope);
-}
 
-/**
- * Walks all the code of the app, finding classes that are reachable from
- * code.
- *
- * Note that as code is changed or removed by Redex, this information will
- * become stale, so this method should be called periodically, for example
- * after each pass.
- */
-void recompute_classes_reachable_from_code(const Scope& scope) {
-  // Matches methods marked as native
-  walk::methods(scope, [&](DexMethod* meth) {
-    if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
-      TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
-      mark_reachable_by_string(meth);
-    }
-  });
+  std::vector<std::string> json_serde_supercls;
+  config.get("json_serde_supercls", {}, json_serde_supercls);
+  initialize_reachable_for_json_serde(scope, json_serde_supercls);
 }
-
-} // namespace
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir) {
@@ -805,26 +821,6 @@ void recompute_reachable_from_xml_layouts(const Scope& scope,
     }
   });
   analyze_reachable_from_xml_layouts(scope, apk_dir);
-}
-
-void init_reachable_classes(
-    const Scope& scope,
-    const JsonWrapper& config,
-    const std::unordered_set<DexType*>& no_optimizations_anno) {
-
-  // Find classes that are reachable in such a way that none of the redex
-  // passes will cause them to be no longer reachable.  For example, if a
-  // class is referenced from the manifest.
-  init_permanently_reachable_classes(scope, config, no_optimizations_anno);
-
-  // Classes that are reachable in ways that could change as Redex runs. For
-  // example, a class might be instantiated from a method, but if that method
-  // is later deleted then it might no longer be reachable.
-  recompute_classes_reachable_from_code(scope);
-
-  std::vector<std::string> json_serde_supercls;
-  config.get("json_serde_supercls", {}, json_serde_supercls);
-  initialize_reachable_for_json_serde(scope, json_serde_supercls);
 }
 
 std::string ReferencedState::str() const {

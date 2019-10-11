@@ -33,6 +33,7 @@ enum KeepReasonType {
   XML,
   ANNO,
   SERIALIZABLE,
+  NATIVE,
   UNKNOWN,
 };
 
