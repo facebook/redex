@@ -255,19 +255,17 @@ class KeepRuleMatcher {
   template <class DexMember>
   void apply_rule(DexMember*);
 
-  void apply_field_keeps(const DexClass* cls, bool apply_modifiers);
+  void apply_field_keeps(const DexClass* cls);
 
-  void apply_method_keeps(const DexClass* cls, bool apply_modifiers);
+  void apply_method_keeps(const DexClass* cls);
 
   template <class Container>
-  void keep_fields(bool apply_modifiers,
-                   const Container& fields,
+  void keep_fields(const Container& fields,
                    const redex::MemberSpecification& fieldSpecification,
                    const boost::regex& fieldname_regex);
 
   template <class Container>
-  void keep_methods(bool apply_modifiers,
-                    const redex::MemberSpecification& methodSpecification,
+  void keep_methods(const redex::MemberSpecification& methodSpecification,
                     const Container& methods,
                     const boost::regex& method_regex);
 
@@ -433,7 +431,6 @@ bool KeepRuleMatcher::field_level_match(
 
 template <class Container>
 void KeepRuleMatcher::keep_fields(
-    bool apply_modifiers,
     const Container& fields,
     const redex::MemberSpecification& fieldSpecification,
     const boost::regex& fieldname_regex) {
@@ -441,7 +438,7 @@ void KeepRuleMatcher::keep_fields(
     if (!field_level_match(fieldSpecification, field, fieldname_regex)) {
       continue;
     }
-    if (apply_modifiers) {
+    if (m_rule_type == RuleType::KEEP) {
       apply_keep_modifiers(m_keep_rule, field);
     }
     apply_rule(field);
@@ -457,13 +454,12 @@ std::string field_regex(const MemberSpecification& field_spec) {
   return ss.str();
 }
 
-void KeepRuleMatcher::apply_field_keeps(const DexClass* cls,
-                                        bool apply_modifiers) {
+void KeepRuleMatcher::apply_field_keeps(const DexClass* cls) {
   for (const auto& field_spec : m_keep_rule.class_spec.fieldSpecifications) {
     auto fieldname_regex = field_regex(field_spec);
     const boost::regex& matcher = register_matcher(fieldname_regex);
-    keep_fields(apply_modifiers, cls->get_ifields(), field_spec, matcher);
-    keep_fields(apply_modifiers, cls->get_sfields(), field_spec, matcher);
+    keep_fields(cls->get_ifields(), field_spec, matcher);
+    keep_fields(cls->get_sfields(), field_spec, matcher);
   }
 }
 
@@ -489,13 +485,12 @@ bool KeepRuleMatcher::method_level_match(
 
 template <class Container>
 void KeepRuleMatcher::keep_methods(
-    bool apply_modifiers,
     const redex::MemberSpecification& methodSpecification,
     const Container& methods,
     const boost::regex& method_regex) {
   for (DexMethod* method : methods) {
     if (method_level_match(methodSpecification, method, method_regex)) {
-      if (apply_modifiers) {
+      if (m_rule_type == RuleType::KEEP) {
         apply_keep_modifiers(m_keep_rule, method);
       }
       apply_rule(method);
@@ -513,16 +508,13 @@ std::string method_regex(const MemberSpecification& method_spec) {
   return qualified_method_regex;
 }
 
-void KeepRuleMatcher::apply_method_keeps(const DexClass* cls,
-                                         bool apply_modifiers) {
+void KeepRuleMatcher::apply_method_keeps(const DexClass* cls) {
   auto methodSpecifications = m_keep_rule.class_spec.methodSpecifications;
   for (auto& method_spec : methodSpecifications) {
     auto qualified_method_regex = method_regex(method_spec);
     const boost::regex& method_regex = register_matcher(qualified_method_regex);
-    keep_methods(apply_modifiers, method_spec, cls->get_vmethods(),
-                 method_regex);
-    keep_methods(apply_modifiers, method_spec, cls->get_dmethods(),
-                 method_regex);
+    keep_methods(method_spec, cls->get_vmethods(), method_regex);
+    keep_methods(method_spec, cls->get_dmethods(), method_regex);
   }
 }
 
@@ -648,12 +640,10 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   }
   // Walk up the hierarchy performing seed marking.
   DexClass* class_to_mark = cls;
-  bool apply_modifiers = true;
   while (class_to_mark != nullptr && !class_to_mark->is_external()) {
     // Mark unconditionally.
-    apply_field_keeps(class_to_mark, apply_modifiers);
-    apply_method_keeps(class_to_mark, apply_modifiers);
-    apply_modifiers = false;
+    apply_field_keeps(class_to_mark);
+    apply_method_keeps(class_to_mark);
     auto typ = class_to_mark->get_super_class();
     if (typ == nullptr) {
       break;
@@ -666,9 +656,9 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
 void KeepRuleMatcher::process_whyareyoukeeping(DexClass* cls) {
   cls->rstate.set_whyareyoukeeping();
 
-  apply_field_keeps(cls, false);
+  apply_field_keeps(cls);
   // Set any method-level keep whyareyoukeeping bits.
-  apply_method_keeps(cls, false);
+  apply_method_keeps(cls);
 }
 
 // This function is also executed concurrently.
@@ -676,7 +666,7 @@ void KeepRuleMatcher::process_assumenosideeffects(DexClass* cls) {
   cls->rstate.set_assumenosideeffects();
 
   // Apply any method-level keep specifications.
-  apply_method_keeps(cls, false);
+  apply_method_keeps(cls);
 }
 
 template <class DexMember>
