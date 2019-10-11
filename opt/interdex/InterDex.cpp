@@ -810,8 +810,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
       cc.set_super(known_types::java_lang_Object());
       canary_cls = cc.create();
       // Don't rename the Canary we've created
-      canary_cls->rstate.set_has_keep();
-      canary_cls->rstate.set_allowshrinking();
+      canary_cls->rstate.set_keepnames();
     }
     m_dexes_structure.add_class_no_checks(canary_cls);
 

@@ -274,6 +274,15 @@ class ReferencedState {
   void set_allowshrinking() { inner_struct.m_set_allowshrinking = true; }
   void unset_allowshrinking() { inner_struct.m_unset_allowshrinking = true; }
 
+  template <class... Args>
+  void set_keepnames(Args&&... args) {
+    set_has_keep(std::forward<Args>(args)...);
+    set_allowshrinking();
+    unset_allowobfuscation();
+  }
+
+  void set_keepnames() { set_keepnames(keep_reason::UNKNOWN); }
+
   // This one should only be used by UnmarkProguardKeepPass to unmark proguard
   // keep rule after proguard file processing is finished. Because
   // ProguardMatcher uses parallel processing, using this will result in race

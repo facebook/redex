@@ -453,7 +453,7 @@ void analyze_reachable_from_manifest(
         auto dclass = maybe_class_from_string(tag_info.classname);
         if (dclass) {
           dclass->rstate.increment_keep_count();
-          dclass->rstate.unset_allowobfuscation();
+          dclass->rstate.set_keepnames();
         }
       }
       break;
