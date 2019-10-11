@@ -1091,6 +1091,51 @@ IROpcode move_result_pseudo_for_sget(IROpcode op) {
   }
 }
 
+IROpcode move_result_for_invoke(const DexMethodRef* method) {
+  auto rtype = method->get_proto()->get_rtype();
+  return is_wide_type(rtype) ? OPCODE_MOVE_RESULT_WIDE
+                             : is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
+                                                : OPCODE_MOVE_RESULT;
+}
+
+IROpcode return_opcode(const DexType* type) {
+  return is_wide_type(type)
+             ? OPCODE_RETURN_WIDE
+             : is_object(type) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
+}
+
+IROpcode load_opcode(const DexType* type) {
+  return is_wide_type(type)
+             ? IOPCODE_LOAD_PARAM_WIDE
+             : is_object(type) ? IOPCODE_LOAD_PARAM_OBJECT : IOPCODE_LOAD_PARAM;
+}
+
+IROpcode move_result_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_MOVE_RESULT:
+    return OPCODE_MOVE;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
+IROpcode return_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_RETURN:
+    return OPCODE_MOVE;
+  case OPCODE_RETURN_WIDE:
+    return OPCODE_MOVE_WIDE;
+  case OPCODE_RETURN_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  default:
+    always_assert(false);
+  }
+}
+
 IROpcode sget_opcode_for_field(const DexField* field) {
   switch (type_to_datatype(field->get_type())) {
   case DataType::Array:

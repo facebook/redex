@@ -32,22 +32,9 @@ constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS =
     "num_methods_which_return_parameters_iterations";
 constexpr const ParamIndex WIDE_HIGH = 1 << 31;
 
-IROpcode move_result_to_move(IROpcode op) {
-  switch (op) {
-  case OPCODE_MOVE_RESULT:
-    return OPCODE_MOVE;
-  case OPCODE_MOVE_RESULT_OBJECT:
-    return OPCODE_MOVE_OBJECT;
-  case OPCODE_MOVE_RESULT_WIDE:
-    return OPCODE_MOVE_WIDE;
-  default:
-    always_assert(false);
-  }
-}
-
 void patch_move_result_to_move(IRInstruction* move_result_inst, uint16_t reg) {
   const auto op = move_result_inst->opcode();
-  move_result_inst->set_opcode(move_result_to_move(op));
+  move_result_inst->set_opcode(opcode::move_result_to_move(op));
   move_result_inst->set_srcs_size(1);
   move_result_inst->set_src(0, reg);
 }

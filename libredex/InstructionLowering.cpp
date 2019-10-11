@@ -240,13 +240,8 @@ void check_load_params(DexMethod* method) {
     // TODO: have load param opcodes store the actual type of the param and
     // check that they match the method prototype here
     always_assert(args_it != args_list.end());
-    if (is_wide_type(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM_WIDE);
-    } else if (is_primitive(*args_it)) {
-      always_assert(op == IOPCODE_LOAD_PARAM);
-    } else {
-      always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);
-    }
+    auto expected_op = opcode::load_opcode(*args_it);
+    always_assert(op == expected_op);
     ++args_it;
     next_ins += it->insn->dest_is_wide() ? 2 : 1;
   }

@@ -1071,19 +1071,10 @@ std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
  * a move-result instruction in a caller.
  */
 IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
-  auto opcode = res->opcode();
-  always_assert(opcode != OPCODE_RETURN_VOID);
-  IRInstruction* move;
-  if (opcode == OPCODE_RETURN_OBJECT) {
-    move = new IRInstruction(OPCODE_MOVE_OBJECT);
-  } else if (opcode == OPCODE_RETURN_WIDE) {
-    move = new IRInstruction(OPCODE_MOVE_WIDE);
-  } else {
-    always_assert(opcode == OPCODE_RETURN);
-    move = new IRInstruction(OPCODE_MOVE);
-  }
-  move->set_dest(move_res->dest());
-  move->set_src(0, res->src(0));
+  auto move_opcode = opcode::return_to_move(res->opcode());
+  IRInstruction* move = (new IRInstruction(move_opcode))
+                            ->set_dest(move_res->dest())
+                            ->set_src(0, res->src(0));
   return move;
 }
 

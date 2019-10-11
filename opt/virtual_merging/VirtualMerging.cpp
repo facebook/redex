@@ -541,19 +541,14 @@ void VirtualMerging::merge_methods() {
       } else {
         // move-result result_temp
         auto rtype = proto->get_rtype();
-        auto op = is_wide_type(rtype)
-                      ? OPCODE_MOVE_RESULT_WIDE
-                      : is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
-                                         : OPCODE_MOVE_RESULT;
+        auto op = opcode::move_result_for_invoke(overriding_method);
         auto move_result_insn = new IRInstruction(op);
         auto result_temp = op == OPCODE_MOVE_RESULT_WIDE ? allocate_wide_temp()
                                                          : allocate_temp();
         move_result_insn->set_dest(result_temp);
         push_insn(move_result_insn);
         // return result_temp
-        op = is_wide_type(rtype)
-                 ? OPCODE_RETURN_WIDE
-                 : is_object(rtype) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
+        op = opcode::return_opcode(rtype);
         auto return_insn = new IRInstruction(op);
         return_insn->set_src(0, result_temp);
         push_insn(return_insn);
