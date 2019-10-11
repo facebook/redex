@@ -63,8 +63,6 @@ class RenameClassesPassV2 : public Pass {
   std::unordered_map<const DexType*, std::string>
   build_force_rename_hierarchies(PassManager&, Scope&, const ClassHierarchy&);
 
-  std::unordered_set<std::string> build_dont_rename_resources(
-    PassManager&, std::unordered_map<const DexType*, std::string>&);
   std::unordered_set<std::string> build_dont_rename_class_name_literals(Scope&);
   std::unordered_set<std::string> build_dont_rename_for_types_with_reflection(
       Scope&, const ProguardMap&);

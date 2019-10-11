@@ -150,23 +150,6 @@ bool is_allowed_layout_class(
 }
 
 std::unordered_set<std::string>
-RenameClassesPassV2::build_dont_rename_resources(
-    PassManager& mgr,
-    std::unordered_map<const DexType*, std::string>& force_rename_classes) {
-  std::unordered_set<std::string> dont_rename_resources;
-  if (m_apk_dir.size()) {
-    // Classnames present in native libraries (lib/*/*.so)
-    for (std::string classname : get_native_classes(m_apk_dir)) {
-      auto type = DexType::get_type(classname);
-      if (type == nullptr) continue;
-      TRACE(RENAME, 4, "native_lib: %s", classname.c_str());
-      dont_rename_resources.insert(classname);
-    }
-  }
-  return dont_rename_resources;
-}
-
-std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
   std::vector<DexString*> all_strings;
@@ -553,8 +536,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
   auto dont_rename_serde_relationships =
       build_dont_rename_serde_relationships(scope);
-  auto dont_rename_resources =
-      build_dont_rename_resources(mgr, force_rename_hierarchies);
   auto dont_rename_class_name_literals =
       build_dont_rename_class_name_literals(scope);
   auto dont_rename_class_for_types_with_reflection =
@@ -600,9 +581,8 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     // Don't rename anything mentioned in resources. Two variants of checks here
     // to cover both configuration options (either we're relying on aapt to
     // compute resource reachability, or we're doing it ourselves).
-    if (dont_rename_resources.count(clsname) ||
-        (referenced_by_layouts(clazz) &&
-         !is_allowed_layout_class(clazz, m_allow_layout_rename_packages))) {
+    if (referenced_by_layouts(clazz) &&
+        !is_allowed_layout_class(clazz, m_allow_layout_rename_packages)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Resources, norule};
       continue;
     }
