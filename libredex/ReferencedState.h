@@ -146,40 +146,37 @@ class ReferencedState {
 
   std::string str() const;
 
-  /*** YOU PROBABLY SHOULDN'T USE THIS ***/
-  // This is a conservative estimate about what cannot be deleted. Not all
-  // passes respect this -- most critically, RMU doesn't. RMU uses root()
-  // instead, ignoring our over-conservative native libraries analysis. You
-  // probably don't want to use this method unless root() turns out to be
-  // somehow insufficient.
-  bool can_delete() const {
-    return !inner_struct.m_by_type && !inner_struct.m_by_resources &&
-           (!inner_struct.m_keep || allowshrinking());
-  }
-
-  // Like can_delete(), this is also over-conservative. We don't yet have a
-  // better alternative, but we should create one.
-  bool can_rename() const {
-    return !inner_struct.m_by_string &&
-           (!inner_struct.m_keep || allowobfuscation()) && !allowshrinking();
-  }
-
   // ProGuard keep options
+
+  // -keep
+  bool can_delete() const {
+    return (!inner_struct.m_keep || allowshrinking()) &&
+           !inner_struct.m_by_resources;
+  }
+
+  // -keepnames
+  bool can_rename() const {
+    return (!inner_struct.m_keep || allowobfuscation()) &&
+           !inner_struct.m_by_resources;
+  }
 
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
   bool has_keep() const {
     return inner_struct.m_keep || inner_struct.m_by_resources;
   }
 
-  // ProGuard keep option modifiers
+  // There's generally no need to call this; use can_delete() instead.
   bool allowshrinking() const {
     return !inner_struct.m_unset_allowshrinking &&
-           inner_struct.m_set_allowshrinking && !inner_struct.m_by_resources;
+           inner_struct.m_set_allowshrinking;
   }
+
+  // There's generally no need to call this; use can_rename() instead.
   bool allowobfuscation() const {
     return !inner_struct.m_unset_allowobfuscation &&
-           inner_struct.m_set_allowobfuscation && !inner_struct.m_by_resources;
+           inner_struct.m_set_allowobfuscation;
   }
+
   bool assumenosideeffects() const {
     return inner_struct.m_assumenosideeffects;
   }
@@ -197,6 +194,7 @@ class ReferencedState {
   void ref_by_string() {
     inner_struct.m_by_type = inner_struct.m_by_string = true;
   }
+
   bool is_referenced_by_string() const { return inner_struct.m_by_string; }
 
   // A class referenced by resource XML can take the following forms in .xml
@@ -329,6 +327,23 @@ class ReferencedState {
   void set_force_inline() { inner_struct.m_force_inline = true; }
   bool dont_inline() const { return inner_struct.m_dont_inline; }
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
+
+  /*** YOU PROBABLY SHOULDN'T USE THIS ***/
+  // This is a conservative estimate about what cannot be deleted. Not all
+  // passes respect this -- most critically, RMU doesn't. Use can_delete()
+  // instead, which ignores our over-conservative native libraries analysis.
+  bool can_delete_DEPRECATED() const {
+    return !inner_struct.m_by_type && !inner_struct.m_by_resources &&
+           (!inner_struct.m_keep || allowshrinking());
+  }
+
+  // Like can_delete_DEPRECATED(), this is also over-conservative. Weirdly, it
+  // also excludes things that are marked with allowshrinking. Use can_rename()
+  // instead.
+  bool can_rename_DEPRECATED() const {
+    return !inner_struct.m_by_string &&
+           (!inner_struct.m_keep || allowobfuscation()) && !allowshrinking();
+  }
 
  private:
   void add_keep_reason(const keep_reason::Reason* reason) {

@@ -467,7 +467,7 @@ bool can_update_wrappee(const ClassHierarchy& ch,
                                  true /* check_direct */)) {
       return false;
     }
-    return can_delete(wrapper);
+    return can_delete_DEPRECATED(wrapper);
   }
   return true;
 }
@@ -696,7 +696,7 @@ void remove_dead_methods(WrapperMethods& ssms,
       TRACE(SYNT, 2, "Retaining method: %s", SHOW(meth));
       return;
     }
-    if (!can_delete(meth)) {
+    if (!can_delete_DEPRECATED(meth)) {
       TRACE(SYNT, 2, "Do not strip: %s", SHOW(meth));
       return;
     }

@@ -34,8 +34,8 @@ void rename_method(DexMethod* method, const std::string& new_name);
 template <class T>
 bool should_rename_elem(const T* member) {
   auto cls = type_class(member->get_class());
-  return can_rename(member) && !member->is_external() &&
-      cls != nullptr && !cls->is_external();
+  return can_rename_DEPRECATED(member) && !member->is_external() &&
+         cls != nullptr && !cls->is_external();
 }
 
 /*
@@ -568,7 +568,7 @@ public:
                 "%s\n",
                 elem, SHOW(sig_getter_fn(elem)), SHOW(elem), wrap->get_name(),
                 type_class(elem->get_class())->is_external() ? "true" : "false",
-                can_rename(elem) ? "true" : "false");
+                can_rename_DEPRECATED(elem) ? "true" : "false");
           if (renamed_elems.count(elem) > 0) {
             TRACE(OBFUSCATE, 2, "Found elem we've already renamed %s",
                   SHOW(elem));
@@ -676,7 +676,9 @@ class RenamingContext {
   virtual ~RenamingContext() {}
 
   // Whether or not on this pass we should rename the member
-  virtual bool can_rename_elem(T elem) const { return can_rename(elem); }
+  virtual bool can_rename_elem(T elem) const {
+    return can_rename_DEPRECATED(elem);
+  }
 };
 
 typedef RenamingContext<DexField*> FieldRenamingContext;

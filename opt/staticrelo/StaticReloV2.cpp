@@ -226,7 +226,8 @@ std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
         !is_interface(cls) && cls->get_ifields().empty() &&
         cls->get_sfields().empty() && cls->get_vmethods().empty()) {
       for (const auto& method : cls->get_dmethods()) {
-        if (!is_static(method) || !can_rename(method) || !can_delete(method)) {
+        if (!is_static(method) || !can_rename_DEPRECATED(method) ||
+            !can_delete_DEPRECATED(method)) {
           return;
         }
         if (method->get_code() == nullptr) {

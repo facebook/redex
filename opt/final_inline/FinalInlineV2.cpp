@@ -646,8 +646,8 @@ cp::EligibleIfields gather_ifield_candidates(
   walk::fields(scope, [&](DexField* field) {
     // Collect non-final instance field candidates that are non external,
     // and can be deleted.
-    if (is_static(field) || field->is_external() || !can_delete(field) ||
-        is_volatile(field)) {
+    if (is_static(field) || field->is_external() ||
+        !can_delete_DEPRECATED(field) || is_volatile(field)) {
       return;
     }
     if (is_final(field)) {

@@ -278,7 +278,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
 
   bool can_relocate(const DexMethod* m) {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
-        !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
+        !can_rename_DEPRECATED(m) || root(m) || m->rstate.no_optimizations() ||
         !gather_invoked_methods_that_prevent_relocation(m) ||
         !no_invoke_super(m) || m->rstate.is_generated()) {
       return false;

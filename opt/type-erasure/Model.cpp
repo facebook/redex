@@ -552,7 +552,7 @@ bool Model::is_excluded(const DexType* type) const {
 void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   for (const auto& type : m_types) {
     const auto& cls = type_class(type);
-    if (!can_delete(cls)) {
+    if (!can_delete_DEPRECATED(cls)) {
       m_non_mergeables.insert(type);
       TRACE(TERA, 5, "Cannot delete %s", SHOW(type));
     }

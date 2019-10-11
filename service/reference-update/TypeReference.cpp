@@ -262,7 +262,7 @@ void update_vmethods_group_one_type_ref(const VMethodGroup& group,
   if (need_rename) {
     for (auto method : group.methods) {
       always_assert_log(
-          can_rename(method), "Can not rename %s\n", SHOW(method));
+          can_rename_DEPRECATED(method), "Can not rename %s\n", SHOW(method));
     }
     spec.name = group.possible_new_name;
   }
@@ -287,14 +287,16 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
   // any candidate types.
   walk::parallel::methods(scope, [this](DexMethod* method) {
     if (mangling(method)) {
-      always_assert_log(
-          can_rename(method), "Method %s can not be renamed\n", SHOW(method));
+      always_assert_log(can_rename_DEPRECATED(method),
+                        "Method %s can not be renamed\n",
+                        SHOW(method));
     }
   });
   walk::parallel::fields(scope, [this](DexField* field) {
     if (mangling(field)) {
-      always_assert_log(
-          can_rename(field), "Field %s can not be renamed\n", SHOW(field));
+      always_assert_log(can_rename_DEPRECATED(field),
+                        "Field %s can not be renamed\n",
+                        SHOW(field));
     }
   });
   // Update all the method refs and field refs.
@@ -559,7 +561,7 @@ void update_method_signature_type_references(
       // Otherwise, add it to colliding_directs.
       auto collision = DexMethod::get_method(
           method->get_class(), method->get_name(), new_proto);
-      if (!collision || (!is_init(method) && can_rename(method))) {
+      if (!collision || (!is_init(method) && can_rename_DEPRECATED(method))) {
         TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;

@@ -92,8 +92,8 @@ bool analyze_gets_helper(const WholeProgramState* whole_program_state,
 }
 
 bool not_eligible_ifield(DexField* field) {
-  return is_static(field) || field->is_external() || !can_delete(field) ||
-         is_volatile(field);
+  return is_static(field) || field->is_external() ||
+         !can_delete_DEPRECATED(field) || is_volatile(field);
 }
 
 /**

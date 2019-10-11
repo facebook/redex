@@ -76,7 +76,8 @@ std::vector<DexClassSet> collect_can_merge(
     std::unordered_set<DexClass*> ifaces;
     // Find interfaces that are not external, can be delete, can be renamed.
     for (auto cls : classes_group) {
-      if (is_interface(cls) && !cls->is_external() && can_delete(cls) &&
+      if (is_interface(cls) && !cls->is_external() &&
+          can_delete_DEPRECATED(cls) &&
           can_rename_if_ignoring_blanket_keepnames(cls)) {
         ifaces.emplace(cls);
       }
