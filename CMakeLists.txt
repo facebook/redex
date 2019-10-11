@@ -8,15 +8,21 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif ()
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+
 if(NOT BUILD_TYPE)
     set(BUILD_TYPE Shared)
 endif ()
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 if(BUILD_TYPE STREQUAL Static)
     set(ENABLE_STATIC ON CACHE BOOL "" FORCE)
 elseif (BUILD_TYPE STREQUAL Shared)
     set(ENABLE_STATIC OFF CACHE BOOL "" FORCE)
 endif ()
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
 set_common_cxx_flags_for_redex()
 add_dependent_packages_for_redex()
