@@ -9,12 +9,13 @@
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
+#include "RedexTest.h"
 
-TEST(Mutf8CompareTest, empty) {
-  g_redex = new RedexContext();
+class Mutf8CompareTest : public RedexTest {};
+
+TEST_F(Mutf8CompareTest, empty) {
   DexString* s1 = DexString::make_string(";");
   DexString* s2 = DexString::make_string(";\300\200", 2);
   EXPECT_TRUE(compare_dexstrings(s1, s2));
   EXPECT_FALSE(compare_dexstrings(s2, s1));
-  delete g_redex;
 }

@@ -20,7 +20,7 @@
 /*
  * This pass tries to identify writes to registers and objects that never get
  * read from. Modeling dead object field writes is particularly useful in
- * conjunction with RemoveUnreadFieldsPass. Suppose we have an unused field
+ * conjunction with RemoveUnusedFieldsPass. Suppose we have an unused field
  * Foo.x:
  *
  *   new-instance v0 LFoo;
@@ -157,19 +157,19 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
             code->cfg());
         used_vars_fp_iter.run(uv::UsedVarsSet());
 
-        TRACE(OSDCE, 5, "Transforming %s\n", SHOW(method));
-        TRACE(OSDCE, 5, "Before:\n%s\n", SHOW(code->cfg()));
+        TRACE(OSDCE, 5, "Transforming %s", SHOW(method));
+        TRACE(OSDCE, 5, "Before:\n%s", SHOW(code->cfg()));
         auto dead_instructions =
             used_vars::get_dead_instructions(*code, used_vars_fp_iter);
         for (auto dead : dead_instructions) {
           // This logging is useful for quantifying what gets removed. E.g. to
           // see all the removed callsites: grep "^DEAD.*INVOKE[^ ]*" log |
           // grep " L.*$" -Po | sort | uniq -c
-          TRACE(OSDCE, 3, "DEAD: %s\n", SHOW(dead->insn));
+          TRACE(OSDCE, 3, "DEAD: %s", SHOW(dead->insn));
           code->remove_opcode(dead);
         }
         transform::remove_unreachable_blocks(code);
-        TRACE(OSDCE, 5, "After:\n%s\n", SHOW(&code));
+        TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
         return dead_instructions.size();
       },
       std::plus<size_t>());

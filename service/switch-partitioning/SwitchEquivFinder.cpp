@@ -39,7 +39,7 @@ bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, uint16_t reg) {
       // non-leaf nodes only have const and branch instructions
       return true;
     }
-    if (insn->dests_size() &&
+    if (insn->has_dest() &&
         (insn->dest() == reg ||
          (insn->dest_is_wide() && insn->dest() + 1 == reg))) {
       // Overwriting the switching reg marks the end of the switch construct
@@ -153,7 +153,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
       uint16_t count = ++m_visit_count[next];
       if (count > next->preds().size()) {
         // Infinite loop. Bail
-        TRACE(SWITCH_EQUIV, 2, "Failure Reason: Detected loop\n");
+        TRACE(SWITCH_EQUIV, 2, "Failure Reason: Detected loop");
         TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
         return false;
       }
@@ -178,7 +178,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
               m_extra_loads.emplace(copy, loads);
             } else {
               TRACE(SWITCH_EQUIV, 2,
-                    "Failure Reason: divergent entry states\n");
+                    "Failure Reason: divergent entry states");
               TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
               return false;
             }
@@ -251,7 +251,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
       if (b->preds().size() > count) {
         TRACE(SWITCH_EQUIV,
               2,
-              "Failure Reason: Additional ways to reach blocks\n");
+              "Failure Reason: Additional ways to reach blocks");
         TRACE(SWITCH_EQUIV, 3,
               "  B%d has %d preds but was hit %d times in \n%s", b->id(),
               b->preds().size(), count, SHOW(*m_cfg));
@@ -266,7 +266,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
   }
 
   if (leaves.empty()) {
-    TRACE(SWITCH_EQUIV, 2, "Failure Reason: No leaves found\n");
+    TRACE(SWITCH_EQUIV, 2, "Failure Reason: No leaves found");
     TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
   }
   return leaves;
@@ -284,7 +284,7 @@ bool SwitchEquivFinder::move_edges(
           orig_succ->target()->starts_with_move_result()) {
         // Two blocks can't share a single move-result-psuedo
         TRACE(SWITCH_EQUIV, 2,
-              "Failure Reason: Can't share move-result-pseudo\n");
+              "Failure Reason: Can't share move-result-pseudo");
         TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
         return false;
       }
@@ -406,7 +406,7 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
     bool already_there = !pair.second;
     if (already_there && it->second != b) {
       TRACE(
-          SWITCH_EQUIV, 2, "Failure Reason: Divergent key to block mapping\n");
+          SWITCH_EQUIV, 2, "Failure Reason: Divergent key to block mapping");
       TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
       return false;
     }

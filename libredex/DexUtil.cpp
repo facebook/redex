@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "Debug.h"
+#include "DexAsm.h"
 #include "DexClass.h"
 #include "DexLoader.h"
 #include "EditableCfgAdapter.h"
@@ -20,57 +21,31 @@
 #include "Resolver.h"
 #include "UnknownVirtuals.h"
 
-DexType* get_object_type() {
-  return DexType::make_type("Ljava/lang/Object;");
-}
+DexType* get_object_type() { return DexType::make_type("Ljava/lang/Object;"); }
 
-DexType* get_void_type() {
-   return DexType::make_type("V");
-}
+DexType* get_void_type() { return DexType::make_type("V"); }
 
-DexType* get_byte_type() {
-  return DexType::make_type("B");
-}
+DexType* get_byte_type() { return DexType::make_type("B"); }
 
-DexType* get_char_type() {
-  return DexType::make_type("C");
-}
+DexType* get_char_type() { return DexType::make_type("C"); }
 
-DexType* get_short_type() {
-  return DexType::make_type("S");
-}
+DexType* get_short_type() { return DexType::make_type("S"); }
 
-DexType* get_int_type() {
-  return DexType::make_type("I");
-}
+DexType* get_int_type() { return DexType::make_type("I"); }
 
-DexType* get_long_type() {
-  return DexType::make_type("J");
-}
+DexType* get_long_type() { return DexType::make_type("J"); }
 
-DexType* get_boolean_type() {
-  return DexType::make_type("Z");
-}
+DexType* get_boolean_type() { return DexType::make_type("Z"); }
 
-DexType* get_float_type() {
-  return DexType::make_type("F");
-}
+DexType* get_float_type() { return DexType::make_type("F"); }
 
-DexType* get_double_type() {
-  return DexType::make_type("D");
-}
+DexType* get_double_type() { return DexType::make_type("D"); }
 
-DexType* get_string_type() {
-  return DexType::make_type("Ljava/lang/String;");
-}
+DexType* get_string_type() { return DexType::make_type("Ljava/lang/String;"); }
 
-DexType* get_class_type() {
-  return DexType::make_type("Ljava/lang/Class;");
-}
+DexType* get_class_type() { return DexType::make_type("Ljava/lang/Class;"); }
 
-DexType* get_enum_type() {
-  return DexType::make_type("Ljava/lang/Enum;");
-}
+DexType* get_enum_type() { return DexType::make_type("Ljava/lang/Enum;"); }
 
 DexType* get_integer_type() {
   return DexType::make_type("Ljava/lang/Integer;");
@@ -101,6 +76,32 @@ ClassSerdes get_class_serdes(const DexClass* cls) {
   return ClassSerdes(deser, flatbuf_deser, ser, flatbuf_ser);
 }
 
+DexMethod* get_or_create_clinit(DexClass* cls) {
+  using namespace dex_asm;
+
+  auto clinit_name = DexString::make_string("<clinit>");
+  auto clinit_proto =
+      DexProto::make_proto(get_void_type(), DexTypeList::make_type_list({}));
+
+  DexMethod* clinit = static_cast<DexMethod*>(
+      DexMethod::get_method(cls->get_type(), clinit_name, clinit_proto));
+
+  if (clinit) {
+    return clinit;
+  }
+
+  // clinit does not exist, create one
+  clinit =
+      DexMethod::make_method(cls->get_type(), clinit_name, clinit_proto)
+          ->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_CONSTRUCTOR, false);
+
+  auto ir_code = std::make_unique<IRCode>(clinit, 1);
+  ir_code->push_back(dasm(OPCODE_RETURN_VOID));
+  clinit->set_code(std::move(ir_code));
+  cls->add_method(clinit);
+  return clinit;
+}
+
 std::string get_package_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   if (name.find("/") == std::string::npos) {
@@ -123,19 +124,19 @@ std::string get_simple_name(const DexType* type) {
 bool is_primitive(const DexType* type) {
   auto* const name = type->get_name()->c_str();
   switch (name[0]) {
-    case 'Z':
-    case 'B':
-    case 'S':
-    case 'C':
-    case 'I':
-    case 'J':
-    case 'F':
-    case 'D':
-    case 'V':
-      return true;
-    case 'L':
-    case '[':
-      return false;
+  case 'Z':
+  case 'B':
+  case 'S':
+  case 'C':
+  case 'I':
+  case 'J':
+  case 'F':
+  case 'D':
+  case 'V':
+    return true;
+  case 'L':
+  case '[':
+    return false;
   }
   not_reached();
 }
@@ -201,6 +202,29 @@ char type_shorty(const DexType* type) {
   not_reached();
 }
 
+DexType* get_boxed_reference_type(const DexType* type) {
+  switch (type_shorty(type)) {
+  case 'Z':
+    return DexType::make_type("Ljava/lang/Boolean;");
+  case 'B':
+    return DexType::make_type("Ljava/lang/Byte;");
+  case 'S':
+    return DexType::make_type("Ljava/lang/Short;");
+  case 'C':
+    return DexType::make_type("Ljava/lang/Character;");
+  case 'I':
+    return DexType::make_type("Ljava/lang/Integer;");
+  case 'J':
+    return DexType::make_type("Ljava/lang/Long;");
+  case 'F':
+    return DexType::make_type("Ljava/lang/Float;");
+  case 'D':
+    return DexType::make_type("Ljava/lang/Double;");
+  default:
+    return nullptr;
+  }
+}
+
 bool check_cast(const DexType* type, const DexType* base_type) {
   if (type == base_type) return true;
   const auto cls = type_class(type);
@@ -221,6 +245,14 @@ bool has_hierarchy_in_scope(DexClass* cls) {
     super_cls = type_class_internal(super);
   }
   return super == get_object_type();
+}
+
+bool is_trivial_clinit(const DexMethod* method) {
+  always_assert(is_clinit(method));
+  auto ii = InstructionIterable(method->get_code());
+  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
+    return mie.insn->opcode() != OPCODE_RETURN_VOID;
+  });
 }
 
 bool is_init(const DexMethodRef* method) {
@@ -259,7 +291,9 @@ bool is_integer(const DexType* type) {
   case 'I': {
     return true;
   }
-  default: { return false; }
+  default: {
+    return false;
+  }
   }
 }
 
@@ -291,15 +325,17 @@ uint32_t get_array_level(const DexType* type) {
   return level;
 }
 
-const DexType* get_array_type_or_self(const DexType* type) {
+const DexType* get_element_type_if_array(const DexType* type) {
   if (is_array(type)) {
-    return get_array_type(type);
+    return get_array_element_type(type);
   }
   return type;
 }
 
-DexType* get_array_type(const DexType* type) {
-  if (!is_array(type)) return nullptr;
+DexType* get_array_element_type(const DexType* type) {
+  if (!is_array(type)) {
+    return nullptr;
+  }
   auto name = type->get_name()->c_str();
   while (*name == '[') {
     name++;
@@ -328,18 +364,20 @@ DexType* make_array_type(const DexType* type, uint32_t level) {
   const auto elem_name = type->str();
   const uint32_t size = elem_name.size() + level;
   std::string name;
-  name.reserve(size+1);
+  name.reserve(size + 1);
   name.append(level, '[');
   name.append(elem_name.begin(), elem_name.end());
   return DexType::make_type(name.c_str(), name.size());
 }
 
-void create_runtime_exception_block(
-    DexString* except_str, std::vector<IRInstruction*>& block) {
+void create_runtime_exception_block(DexString* except_str,
+                                    std::vector<IRInstruction*>& block) {
+  // clang-format off
   // new-instance v0, Ljava/lang/RuntimeException; // type@3852
   // const-string v1, "Exception String e.g. Too many args" // string@7a6d
   // invoke-direct {v0, v1}, Ljava/lang/RuntimeException;.<init>:(Ljava/lang/String;)V
   // throw v0
+  // clang-format on
   auto new_inst =
       (new IRInstruction(OPCODE_NEW_INSTANCE))
           ->set_type(DexType::make_type("Ljava/lang/RuntimeException;"));
@@ -351,13 +389,14 @@ void create_runtime_exception_block(
   auto arg = DexType::make_type("Ljava/lang/String;");
   auto args = DexTypeList::make_type_list({arg});
   auto proto = DexProto::make_proto(ret, args);
-  auto meth = DexMethod::make_method(
-    DexType::make_type("Ljava/lang/RuntimeException;"),
-    DexString::make_string("<init>"), proto);
+  auto meth =
+      DexMethod::make_method(DexType::make_type("Ljava/lang/RuntimeException;"),
+                             DexString::make_string("<init>"), proto);
   auto invk = new IRInstruction(OPCODE_INVOKE_DIRECT);
   invk->set_method(meth);
-  invk->set_arg_word_count(2);
-  invk->set_src(0, 0); invk->set_src(1, 1);
+  invk->set_srcs_size(2);
+  invk->set_src(0, 0);
+  invk->set_src(1, 1);
   IRInstruction* throwinst = new IRInstruction(OPCODE_THROW);
   block.emplace_back(new_inst);
   block.emplace_back(const_inst);
@@ -371,8 +410,7 @@ bool passes_args_through(IRInstruction* insn,
 ) {
   size_t src_idx{0};
   size_t param_count{0};
-  for (const auto& mie :
-       InstructionIterable(code.get_param_instructions())) {
+  for (const auto& mie : InstructionIterable(code.get_param_instructions())) {
     auto load_param = mie.insn;
     ++param_count;
     if (src_idx >= insn->srcs_size()) {
@@ -406,7 +444,7 @@ void load_root_dexen(DexStore& store,
   // Discover dex files
   auto end = fs::directory_iterator();
   std::vector<fs::path> dexen;
-  for (fs::directory_iterator it(dexen_dir_path) ; it != end ; ++it) {
+  for (fs::directory_iterator it(dexen_dir_path); it != end; ++it) {
     auto file = it->path();
     if (fs::is_regular_file(file) &&
         !file.extension().compare(std::string(".dex"))) {
@@ -418,7 +456,7 @@ void load_root_dexen(DexStore& store,
    * Comparator for dexen filename. 'classes.dex' should sort first,
    * followed by [^\d]*[\d]+.dex ordered by N numerically.
    */
-  auto dex_comparator = [](const fs::path& a, const fs::path& b){
+  auto dex_comparator = [](const fs::path& a, const fs::path& b) {
     boost::regex s_dex_regex("[^0-9]*([0-9]+)\\.dex");
 
     auto as = a.filename().string();
@@ -439,7 +477,7 @@ void load_root_dexen(DexStore& store,
       // Compare captures as integers
       auto anum = std::stoi(amatch[1]);
       auto bnum = std::stoi(bmatch[1]);
-      return bnum > anum ;
+      return bnum > anum;
     }
   };
 
@@ -448,7 +486,7 @@ void load_root_dexen(DexStore& store,
   // Load all discovered dex files
   for (const auto& dex : dexen) {
     if (verbose) {
-      TRACE(MAIN, 1, "Loading %s\n", dex.string().c_str());
+      TRACE(MAIN, 1, "Loading %s", dex.string().c_str());
     }
     // N.B. throaway stats for now
     DexClasses classes =
@@ -479,7 +517,7 @@ void create_store(const std::string& store_name,
  * use cases.
  */
 size_t sum_param_sizes(const IRCode* code) {
-  size_t size {0};
+  size_t size{0};
   auto param_ops = code->get_param_instructions();
   for (auto& mie : InstructionIterable(&param_ops)) {
     size += mie.insn->dest_is_wide() ? 2 : 1;
@@ -487,8 +525,7 @@ size_t sum_param_sizes(const IRCode* code) {
   return size;
 }
 
-dex_stats_t&
-  operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
+dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
   lhs.num_types += rhs.num_types;
   lhs.num_classes += rhs.num_classes;
   lhs.num_methods += rhs.num_methods;
@@ -514,6 +551,46 @@ dex_stats_t&
   lhs.field_refs_total_size += rhs.field_refs_total_size;
   lhs.num_dbg_items += rhs.num_dbg_items;
   lhs.dbg_total_size += rhs.dbg_total_size;
+
+  lhs.string_id_count += rhs.string_id_count;
+  lhs.string_id_bytes += rhs.string_id_bytes;
+  lhs.type_id_count += rhs.type_id_count;
+  lhs.type_id_bytes += rhs.type_id_bytes;
+  lhs.proto_id_count += rhs.proto_id_count;
+  lhs.proto_id_bytes += rhs.proto_id_bytes;
+  lhs.field_id_count += rhs.field_id_count;
+  lhs.field_id_bytes += rhs.field_id_bytes;
+  lhs.method_id_count += rhs.method_id_count;
+  lhs.method_id_bytes += rhs.method_id_bytes;
+  lhs.class_def_count += rhs.class_def_count;
+  lhs.class_def_bytes += rhs.class_def_bytes;
+  lhs.call_site_id_count += rhs.call_site_id_count;
+  lhs.call_site_id_bytes += rhs.call_site_id_bytes;
+  lhs.method_handle_count += rhs.method_handle_count;
+  lhs.method_handle_bytes += rhs.method_handle_bytes;
+  lhs.map_list_count += rhs.map_list_count;
+  lhs.map_list_bytes += rhs.map_list_bytes;
+  lhs.type_list_count += rhs.type_list_count;
+  lhs.type_list_bytes += rhs.type_list_bytes;
+  lhs.annotation_set_ref_list_count += rhs.annotation_set_ref_list_count;
+  lhs.annotation_set_ref_list_bytes += rhs.annotation_set_ref_list_bytes;
+  lhs.annotation_set_count += rhs.annotation_set_count;
+  lhs.annotation_set_bytes += rhs.annotation_set_bytes;
+  lhs.class_data_count += rhs.class_data_count;
+  lhs.class_data_bytes += rhs.class_data_bytes;
+  lhs.code_count += rhs.code_count;
+  lhs.code_bytes += rhs.code_bytes;
+  lhs.string_data_count += rhs.string_data_count;
+  lhs.string_data_bytes += rhs.string_data_bytes;
+  lhs.debug_info_count += rhs.debug_info_count;
+  lhs.debug_info_bytes += rhs.debug_info_bytes;
+  lhs.annotation_count += rhs.annotation_count;
+  lhs.annotation_bytes += rhs.annotation_bytes;
+  lhs.encoded_array_count += rhs.encoded_array_count;
+  lhs.encoded_array_bytes += rhs.encoded_array_bytes;
+  lhs.annotations_directory_count += rhs.annotations_directory_count;
+  lhs.annotations_directory_bytes += rhs.annotations_directory_bytes;
+
   return lhs;
 }
 
@@ -554,7 +631,8 @@ void change_visibility(DexMethod* method, DexType* scope) {
       }
       auto field =
           resolve_field(insn->get_field(), is_sfield_op(insn->opcode())
-              ? FieldSearch::Static : FieldSearch::Instance);
+                                               ? FieldSearch::Static
+                                               : FieldSearch::Instance);
       if (field != nullptr && field->is_concrete()) {
         set_public(field);
         set_public(type_class(field->get_class()));
@@ -566,8 +644,8 @@ void change_visibility(DexMethod* method, DexType* scope) {
       if (cls != nullptr && !cls->is_external()) {
         set_public(cls);
       }
-      auto current_method = resolve_method(
-          insn->get_method(), opcode_to_search(insn));
+      auto current_method =
+          resolve_method(insn->get_method(), opcode_to_search(insn));
       if (current_method != nullptr && current_method->is_concrete() &&
           (scope == nullptr || current_method->get_class() != scope)) {
         set_public(current_method);
@@ -662,4 +740,15 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   change_visibility(method);
 
   return true;
+}
+
+bool references_external(DexMethodRef* mref) {
+  if (mref->is_external()) {
+    return true;
+  }
+  auto ref_cls = type_class(mref->get_class());
+  if (ref_cls && ref_cls->is_external()) {
+    return true;
+  }
+  return false;
 }

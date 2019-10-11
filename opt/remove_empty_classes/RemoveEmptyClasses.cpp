@@ -17,6 +17,13 @@
 constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
   "num_empty_classes_removed";
 
+void remove_clinit_if_trivial(DexClass* cls) {
+  DexMethod* clinit = cls->get_clinit();
+  if (clinit && is_trivial_clinit(clinit)) {
+    cls->remove_method(clinit);
+  }
+}
+
 bool is_empty_class(DexClass* cls,
                     std::unordered_set<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
@@ -25,19 +32,19 @@ bool is_empty_class(DexClass* cls,
   cls->get_ifields().empty();
   uint32_t access = cls->get_access();
   auto name = cls->get_type()->get_name()->c_str();
-  TRACE(EMPTY, 4, ">> Empty Analysis for %s\n", name);
-  TRACE(EMPTY, 4, "   no methods or fields: %d\n", empty_class);
-  TRACE(EMPTY, 4, "   can delete: %d\n", can_delete(cls));
-  TRACE(EMPTY, 4, "   not interface: %d\n",
+  TRACE(EMPTY, 4, ">> Empty Analysis for %s", name);
+  TRACE(EMPTY, 4, "   no methods or fields: %d", empty_class);
+  TRACE(EMPTY, 4, "   can delete: %d", can_delete(cls));
+  TRACE(EMPTY, 4, "   not interface: %d",
       !(access & DexAccessFlags::ACC_INTERFACE));
-  TRACE(EMPTY, 4, "   references: %d\n",
+  TRACE(EMPTY, 4, "   references: %d",
       class_references.count(cls->get_type()));
   bool remove =
          empty_class &&
          can_delete(cls) &&
          !(access & DexAccessFlags::ACC_INTERFACE) &&
          class_references.count(cls->get_type()) == 0;
-  TRACE(EMPTY, 4, "   remove: %d\n", remove);
+  TRACE(EMPTY, 4, "   remove: %d", remove);
   return remove;
 }
 
@@ -47,26 +54,19 @@ void process_annotation(
   std::vector<DexType*> ltype;
   annotation->gather_types(ltype);
   for (DexType* dextype : ltype) {
-    TRACE(EMPTY, 4, "Adding type annotation to keep list: %s\n",
+    TRACE(EMPTY, 4, "Adding type annotation to keep list: %s",
           dextype->get_name()->c_str());
     class_references->insert(dextype);
   }
-}
-
-DexType* array_base_type(DexType* type) {
-  while (is_array(type)) {
-    type = get_array_type(type);
-  }
-  return type;
 }
 
 void process_proto(std::unordered_set<const DexType*>* class_references,
                    DexMethodRef* meth) {
   // Types referenced in protos.
   auto const& proto = meth->get_proto();
-  class_references->insert(array_base_type(proto->get_rtype()));
+  class_references->insert(get_element_type_if_array(proto->get_rtype()));
   for (auto const& ptype : proto->get_args()->get_type_list()) {
-    class_references->insert(array_base_type(ptype));
+    class_references->insert(get_element_type_if_array(ptype));
   }
 }
 
@@ -77,14 +77,14 @@ void process_code(std::unordered_set<const DexType*>* class_references,
   for (auto const& mie : InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_type()) {
-      auto typ = array_base_type(opcode->get_type());
-      TRACE(EMPTY, 4, "Adding type from code to keep list: %s\n",
+      auto typ = get_element_type_if_array(opcode->get_type());
+      TRACE(EMPTY, 4, "Adding type from code to keep list: %s",
             typ->get_name()->c_str());
       class_references->insert(typ);
     } else if (opcode->has_field()) {
       auto const& field = opcode->get_field();
-      class_references->insert(array_base_type(field->get_class()));
-      class_references->insert(array_base_type(field->get_type()));
+      class_references->insert(get_element_type_if_array(field->get_class()));
+      class_references->insert(get_element_type_if_array(field->get_type()));
     } else if (opcode->has_method()) {
       auto const& m = opcode->get_method();
       process_proto(class_references, m);
@@ -119,24 +119,25 @@ size_t remove_empty_classes(Scope& classes) {
 
   size_t classes_before_size = classes.size();
 
-  // Ennumerate super classes.
+  // Ennumerate super classes and remove trivial clinit if the class has any.
   for (auto& cls : classes) {
+    remove_clinit_if_trivial(cls);
     DexType* s = cls->get_super_class();
     class_references.insert(s);
   }
 
   // Ennumerate fields.
   walk::fields(classes, [&class_references](DexField* field) {
-    class_references.insert(array_base_type(field->get_type()));
+    class_references.insert(get_element_type_if_array(field->get_type()));
   });
 
-  TRACE(EMPTY, 3, "About to erase classes.\n");
+  TRACE(EMPTY, 3, "About to erase classes.");
   classes.erase(remove_if(classes.begin(), classes.end(),
     [&](DexClass* cls) { return is_empty_class(cls, class_references); }),
     classes.end());
 
   auto num_classes_removed = classes_before_size - classes.size();
-  TRACE(EMPTY, 1, "Empty classes removed: %ld\n", num_classes_removed);
+  TRACE(EMPTY, 1, "Empty classes removed: %ld", num_classes_removed);
   return num_classes_removed;
 }
 

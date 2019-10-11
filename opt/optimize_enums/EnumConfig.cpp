@@ -11,20 +11,67 @@
 
 namespace ptrs = local_pointers;
 
+namespace {
+// The structure is used for hardcoding external method param summaries.
+struct ExternalMethodData {
+  std::string method_name;
+  boost::optional<uint16_t> returned_param;
+  std::initializer_list<uint16_t> safe_params;
+  ExternalMethodData(std::string name,
+                     boost::optional<uint16_t> returned,
+                     std::initializer_list<uint16_t> params)
+      : method_name(name), returned_param(returned), safe_params(params) {}
+};
+/**
+ * Hardcode some empirical summaries for some external methods.
+ */
+void load_external_method_summaries(
+    const DexType* object_type, optimize_enums::SummaryMap* param_summary_map) {
+  std::vector<ExternalMethodData> methods({ExternalMethodData(
+      "Lcom/google/common/base/Objects;.equal:(Ljava/lang/Object;Ljava/lang/"
+      "Object;)Z",
+      boost::none, {0, 1})});
+  for (auto& item : methods) {
+    auto method = DexMethod::get_method(item.method_name);
+    if (!method) {
+      continue;
+    }
+    // Simple verification.
+    always_assert(!param_summary_map->count(method));
+    auto args = method->get_proto()->get_args();
+
+    optimize_enums::ParamSummary summary;
+    for (auto param : item.safe_params) {
+      always_assert_log(param < args->size() &&
+                            *(args->begin() + param) == object_type,
+                        "%u is not Object;\n", param);
+      summary.safe_params.insert(param);
+    }
+    if (item.returned_param) {
+      always_assert(summary.safe_params.count(*item.returned_param) &&
+                    method->get_proto()->get_rtype() == object_type);
+      summary.returned_param = *item.returned_param;
+    }
+    param_summary_map->emplace(method, summary);
+    summary.print(method);
+  }
+}
+} // namespace
+
 namespace optimize_enums {
 void ParamSummary::print(const DexMethodRef* method) const {
   if (!traceEnabled(ENUM, 9)) {
     return;
   }
-  TRACE(ENUM, 9, "summary of %s\n", SHOW(method));
-  TRACE(ENUM, 9, "safe_params: ");
+  TRACE(ENUM, 9, "summary of %s", SHOW(method));
+  TRACE_NO_LINE(ENUM, 9, "safe_params: ");
   for (auto param : safe_params) {
-    TRACE(ENUM, 9, "%d ", param);
+    TRACE_NO_LINE(ENUM, 9, "%d ", param);
   }
   if (returned_param) {
-    TRACE(ENUM, 9, "returned: %d\n", returned_param.get());
+    TRACE(ENUM, 9, "returned: %d", returned_param.get());
   } else {
-    TRACE(ENUM, 9, "returned: none\n");
+    TRACE(ENUM, 9, "returned: none");
   }
 }
 
@@ -113,5 +160,7 @@ void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map) {
         param_summary_map->emplace(method, summary);
         summary.print(method);
       });
+  TRACE(ENUM, 9, "External method summaries");
+  load_external_method_summaries(object_type, param_summary_map);
 }
 } // namespace optimize_enums

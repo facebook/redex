@@ -20,7 +20,7 @@
 #include "IROpcode.h"
 #include "ImmutableSubcomponentAnalyzer.h"
 #include "JarLoader.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 std::vector<std::vector<std::string>> expected_paths = {
     // First call to `check`
@@ -48,35 +48,9 @@ bool is_immutable_getter(DexMethodRef* method) {
   return boost::algorithm::starts_with(method->get_name()->str(), "get");
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, accessPaths) {
-  g_redex = new RedexContext();
+class ImmutableSubcomponentAnalyzerTest : public RedexIntegrationTest {};
 
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  stores.emplace_back(std::move(root_store));
-
-  const char* android_env_sdk = std::getenv("ANDROID_SDK");
-  const char* android_config_sdk = std::getenv("sdk_path");
-
-  const char* android_sdk = (strncmp(android_config_sdk, "None", 4) != 0)
-                                ? android_config_sdk
-                                : android_env_sdk;
-
-  ASSERT_NE(nullptr, android_sdk);
-  const char* android_target = std::getenv("android_target");
-  ASSERT_NE(nullptr, android_target);
-  std::string android_version(android_target);
-  ASSERT_NE("NotFound", android_version);
-  std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
-                        android_version + "/android.jar";
-  ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
-
+TEST_F(ImmutableSubcomponentAnalyzerTest, accessPaths) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   for (const auto& cls : scope) {
@@ -97,8 +71,6 @@ TEST(ImmutableSubcomponentAnalyzerTest, accessPaths) {
       }
     }
   }
-
-  delete g_redex;
 }
 
 // Stub out another test method, but with IR so we know exactly which register
@@ -124,8 +96,7 @@ DexMethod* make_ir_test_method() {
   )");
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
   auto method = make_ir_test_method();
   auto code = method->get_code();
   ImmutableSubcomponentAnalyzer analyzer(method, is_immutable_getter);
@@ -162,11 +133,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, findAccessPaths) {
     }
   }
   EXPECT_TRUE(found);
-  delete g_redex;
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   auto method = make_ir_test_method();
 
   auto get_a = DexMethod::make_method(
@@ -193,12 +162,9 @@ TEST(ImmutableSubcomponentAnalyzerTest, blockSnapshot) {
   EXPECT_EQ(
     state2.entry_state_bindings.find(0),
     state2.entry_state_bindings.end());
-
-  delete g_redex;
 }
 
-TEST(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
-  g_redex = new RedexContext();
+TEST_F(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
   AccessPath p0{AccessPathKind::Parameter, 0};
   AccessPath v0{AccessPathKind::Local, 0};
   EXPECT_NE(p0, v0);
@@ -230,5 +196,4 @@ TEST(ImmutableSubcomponentAnalyzerTest, accessPathEquality) {
     AccessPath f_b{AccessPathKind::FinalField, 0, field_c, {get_b}};
     EXPECT_NE(f_a, f_b);
   }
-  delete g_redex;
 }

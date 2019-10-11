@@ -29,8 +29,8 @@ struct Stats {
  *   - Pick the smallest opcode that can address its operands.
  *   - Insert move instructions as necessary for check-cast instructions that
  *     have different src and dest registers.
- *   - Record the number of instructions converted to /2ddr form, also the
- *     number of move instruction inserted because of check-cast.
+ *   - Record the number of instructions converted to /2addr form, and the
+ *     number of move instructions inserted because of check-casts.
  */
 Stats lower(DexMethod*, bool lower_with_cfg = false);
 

@@ -68,16 +68,3 @@ class TestDebugInfoKind(ArtifactsTestFixture):
                 self.METHOD_MAPPING,
             }
         )
-
-    def test_iodi_per_arity(self):
-        self.config["debug_info_kind"] = "iodi_per_arity"
-        self.run_redex()
-        self.check_artifacts(
-            {
-                self.LINE_NUMBER_MAP,
-                self.DEBUG_LINE_MAP,
-                self.IODI_METADATA,
-                self.CLASS_MAPPING,
-                self.METHOD_MAPPING,
-            }
-        )

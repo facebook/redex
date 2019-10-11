@@ -43,25 +43,22 @@ match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
 };
 
 match_t<IRInstruction> return_void() {
-  return {
-    [](const IRInstruction* insn) {
-      auto opcode = insn->opcode();
-      return opcode == OPCODE_RETURN_VOID;
-    }
-  };
+  return {[](const IRInstruction* insn) {
+    auto opcode = insn->opcode();
+    return opcode == OPCODE_RETURN_VOID;
+  }};
 }
 
-match_t<IRInstruction, std::tuple<int> > has_n_args(int n) {
-  return {
-    // N.B. "int n" must be const ref in order to appease N-ary matcher template
-    [](const IRInstruction* insn, const int& n) {
-      return insn->arg_word_count() == n;
-    },
-    n
-  };
+match_t<IRInstruction, std::tuple<size_t>> has_n_args(size_t n) {
+  return {// N.B. `n` must be const ref in order to appease N-ary matcher
+          // template
+          [](const IRInstruction* insn, const size_t& n) {
+            return insn->srcs_size() == n;
+          },
+          n};
 }
 
-match_t<DexClass, std::tuple<> > is_interface() {
+match_t<DexClass, std::tuple<>> is_interface() {
   return {
     [](const DexClass* cls) {
       return (bool)(cls->get_access() & ACC_INTERFACE);

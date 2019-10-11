@@ -119,7 +119,7 @@ void renumber_registers(IRCode* code, bool width_aware) {
   Parent parent;
   DefSets def_sets((RankPMap(rank)), (ParentPMap(parent)));
   for (const auto& mie : cfg::InstructionIterable(cfg)) {
-    if (mie.insn->dests_size()) {
+    if (mie.insn->has_dest()) {
       def_sets.make_set(mie.insn);
     }
   }
@@ -127,7 +127,7 @@ void renumber_registers(IRCode* code, bool width_aware) {
   SymRegMapper sym_reg_mapper(width_aware);
   for (auto& mie : cfg::InstructionIterable(cfg)) {
     auto insn = mie.insn;
-    if (insn->dests_size()) {
+    if (insn->has_dest()) {
       auto sym_reg = sym_reg_mapper.make(def_sets.find_set(insn));
       insn->set_dest(sym_reg);
     }

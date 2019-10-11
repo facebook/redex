@@ -69,6 +69,12 @@ class PrimitiveAnalyzer final
 
   static bool analyze_binop_lit(const IRInstruction* insn,
                                 ConstantEnvironment* env);
+
+  static bool analyze_binop(const IRInstruction* insn,
+                            ConstantEnvironment* env);
+
+  static bool analyze_instance_of(const IRInstruction* insn,
+                                  ConstantEnvironment* env);
 };
 
 // This is the most common use of constant propagation, so we define this alias

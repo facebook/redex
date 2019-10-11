@@ -57,11 +57,12 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
-	-I$(top_srcdir)/opt/remove_unused_args \
+	-I$(top_srcdir)/opt/remove-unused-args \
 	-I$(top_srcdir)/opt/renameclasses \
 	-I$(top_srcdir)/opt/reorder-interfaces \
 	-I$(top_srcdir)/opt/reduce-array-literals \
 	-I$(top_srcdir)/opt/reduce-gotos \
+	-I$(top_srcdir)/opt/resolve-refs \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/stringbuilder-outliner \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
@@ -84,6 +85,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/vertical_merging \
 	-I$(top_srcdir)/opt/virtual_merging \
 	-I$(top_srcdir)/opt/virtual_scope \
+	-I$(top_srcdir)/service/api-levels \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
@@ -177,6 +179,7 @@ libredex_la_SOURCES = \
 	libredex/ProguardPrintConfiguration.cpp \
 	libredex/ProguardRegex.cpp \
 	libredex/ProguardReporting.cpp \
+	libredex/Purity.cpp \
 	libredex/Reachability.cpp \
 	libredex/ReachableClasses.cpp \
 	libredex/RedexContext.cpp \
@@ -235,6 +238,7 @@ redex_all_SOURCES = \
 	opt/branch-prefix-hoisting/BranchPrefixHoisting.cpp \
 	opt/bridge/Bridge.cpp \
 	opt/check_breadcrumbs/CheckBreadcrumbs.cpp \
+	opt/check-recursion/CheckRecursion.cpp \
 	opt/class-splitting/ClassSplitting.cpp \
 	opt/constant-propagation/ConstantPropagation.cpp \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
@@ -268,6 +272,7 @@ redex_all_SOURCES = \
 	opt/optimize_enums/EnumClinitAnalysis.cpp \
 	opt/optimize_enums/EnumConfig.cpp \
 	opt/optimize_enums/EnumInSwitch.cpp \
+	opt/optimize_enums/EnumAnalyzeGeneratedMethods.cpp \
 	opt/optimize_enums/EnumTransformer.cpp \
 	opt/optimize_enums/EnumUpcastAnalysis.cpp \
 	opt/optimize_enums/OptimizeEnumsAnalysis.cpp \
@@ -292,14 +297,15 @@ redex_all_SOURCES = \
 	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
-	opt/remove-unread-fields/RemoveUnreadFields.cpp \
+	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
 	opt/remove_gotos/RemoveGotos.cpp \
-	opt/remove_unused_args/RemoveUnusedArgs.cpp \
+	opt/remove-unused-args/RemoveUnusedArgs.cpp \
 	opt/renameclasses/RenameClassesV2.cpp \
 	opt/reorder-interfaces/ReorderInterfaces.cpp \
 	opt/reduce-array-literals/ReduceArrayLiterals.cpp \
 	opt/reduce-gotos/ReduceGotos.cpp \
+	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
@@ -336,6 +342,7 @@ redex_all_SOURCES = \
 	opt/vertical_merging/VerticalMerging.cpp \
 	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
+	service/api-levels/ApiLevelsUtils.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
@@ -343,6 +350,7 @@ redex_all_SOURCES = \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
 	service/dataflow/LiveRange.cpp \
+	service/dataflow/ConstantUses.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \

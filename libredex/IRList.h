@@ -46,7 +46,8 @@ struct CatchEntry {
  */
 using SwitchIndices = std::set<int>;
 
-using InstructionEquality = std::function<bool(const IRInstruction&, const IRInstruction&)>;
+using InstructionEquality =
+    std::function<bool(const IRInstruction&, const IRInstruction&)>;
 
 /*
  * Multi is where an opcode encodes more than
@@ -204,9 +205,7 @@ class IRList {
   IntrusiveList m_list;
   void remove_branch_targets(IRInstruction* branch_inst);
 
-  static void disposer(MethodItemEntry* mie) {
-    delete mie;
-  }
+  static void disposer(MethodItemEntry* mie) { delete mie; }
 
  public:
   using iterator = IntrusiveList::iterator;
@@ -255,9 +254,8 @@ class IRList {
    */
   boost::sub_range<IRList> get_param_instructions();
 
-  bool structural_equals(
-      const IRList& other,
-      const InstructionEquality& instruction_equals) const;
+  bool structural_equals(const IRList& other,
+                         const InstructionEquality& instruction_equals) const;
 
   /* Passes memory ownership of "mie" to callee. */
   void push_back(MethodItemEntry& mie) { m_list.push_back(mie); }
@@ -338,7 +336,7 @@ class IRList {
     m_list.splice(pos, other.m_list, begin, end);
   }
 
-  template<typename Predicate>
+  template <typename Predicate>
   void remove_and_dispose_if(Predicate predicate) {
     m_list.remove_and_dispose_if(predicate, disposer);
   }
@@ -393,7 +391,6 @@ class InstructionIteratorImpl {
       conditional<is_const, const MethodItemEntry, MethodItemEntry>::type;
 
  private:
-
   Iterator m_it;
   Iterator m_end;
   /*
@@ -414,8 +411,7 @@ class InstructionIteratorImpl {
   using iterator_category = std::forward_iterator_tag;
 
   InstructionIteratorImpl() {}
-  InstructionIteratorImpl(Iterator it, Iterator end)
-      : m_it(it), m_end(end) {
+  InstructionIteratorImpl(Iterator it, Iterator end) : m_it(it), m_end(end) {
     to_next_instruction();
   }
 
@@ -462,17 +458,16 @@ class InstructionIterableImpl {
   // Only callable by ConstInstructionIterable. If this were public, we may try
   // to bind const iterators to non-const members
   template <class T>
-  InstructionIterableImpl(
-      const T& mentry_list,
-      // we add this unused parameter so we don't accidentally resolve to this
-      // constructor when we meant to call the non-const version
-      bool /* unused */)
+  InstructionIterableImpl(const T& mentry_list,
+                          // we add this unused parameter so we don't
+                          // accidentally resolve to this constructor when we
+                          // meant to call the non-const version
+                          bool /* unused */)
       : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {}
 
  public:
   template <class T>
-  explicit InstructionIterableImpl(
-      T& mentry_list)
+  explicit InstructionIterableImpl(T& mentry_list)
       : m_begin(mentry_list.begin()), m_end(mentry_list.end()) {}
 
   template <typename T>
@@ -515,13 +510,11 @@ class ConstInstructionIterable : public InstructionIterableImpl<true> {
   // We extend the Impl so we can add the const versions of the constructors.
   // We can't have the const constructors on the non-const iterables
   template <class T>
-  explicit ConstInstructionIterable(
-      const T& mentry_list)
+  explicit ConstInstructionIterable(const T& mentry_list)
       : InstructionIterableImpl<true>(mentry_list, false) {}
 
   template <class T>
-  explicit ConstInstructionIterable(
-      const T* mentry_list)
+  explicit ConstInstructionIterable(const T* mentry_list)
       : ConstInstructionIterable(*mentry_list) {}
 };
 

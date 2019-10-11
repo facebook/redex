@@ -793,7 +793,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
       // Since registers can be reused in different contexts, we need to
       // invalidate the corresponding anchor sets. Note that this case also
       // encompasses the initialization to null, like `const v1, 0`.
-      if (insn->dests_size() > 0) {
+      if (insn->has_dest()) {
         current_state->set(insn->dest(), AnchorDomain());
         if (insn->dest_is_wide()) {
           current_state->set(insn->dest() + 1, AnchorDomain());
@@ -1030,7 +1030,7 @@ class PointsToActionGenerator final {
           PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
           get_variable_from_anchor(insn)));
       if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
-        const DexType* element_type = get_array_type(insn->get_type());
+        const DexType* element_type = get_array_element_type(insn->get_type());
         if (!is_object(element_type)) {
           break;
         }
@@ -1227,7 +1227,7 @@ class PointsToActionGenerator final {
     always_assert(!s.is_top());
     if (s.is_bottom()) {
       // This means that some code in the method is unreachable.
-      TRACE(PTA, 2, "Unreachable code in %s\n", SHOW(m_dex_method));
+      TRACE(PTA, 2, "Unreachable code in %s", SHOW(m_dex_method));
       return PointsToVariable();
     }
     auto anchors = s.elements();
@@ -1590,7 +1590,7 @@ void PointsToSemantics::load_stubs(const std::string& file_name) {
     if (it == m_method_semantics.end()) {
       m_method_semantics.emplace(dex_method, *semantics_opt);
     } else {
-      TRACE(PTA, 2, "Collision with stub for method %s\n", SHOW(dex_method));
+      TRACE(PTA, 2, "Collision with stub for method %s", SHOW(dex_method));
     }
   }
 }

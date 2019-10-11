@@ -144,7 +144,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_field_assert(
       code->insert_after(fm_it,
                          ((new IRInstruction(OPCODE_INVOKE_STATIC))
                               ->set_method(m_config.field_assert_fail_handler)
-                              ->set_arg_word_count(1)
+                              ->set_srcs_size(1)
                               ->set_src(0, tmp)));
   auto bt = new BranchTarget(&*check_insn_it);
   fm_it = code->insert_after(fm_it, bt);
@@ -188,13 +188,13 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
         fm_it,
         ((new IRInstruction(OPCODE_INVOKE_STATIC))
              ->set_method(m_config.return_value_assert_fail_handler)
-             ->set_arg_word_count(1)
+             ->set_srcs_size(1)
              ->set_src(0, tmp)));
     return fm_it;
   };
   auto cst = wps.get_return_value(callee);
   if (cst.is_bottom()) {
-    if (is_move_result(std::next(it)->insn->opcode())) {
+    if (opcode::is_move_result(std::next(it)->insn->opcode())) {
       ++it;
     }
     it.reset(insert_assertion(it.unwrap()));
@@ -202,7 +202,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
   }
 
   ++it;
-  if (!is_move_result(it->insn->opcode())) {
+  if (!opcode::is_move_result(it->insn->opcode())) {
     return it;
   }
   auto reg = it->insn->dest();
@@ -296,7 +296,7 @@ void RuntimeAssertTransform::insert_param_asserts(
     code.insert_before(insert_it,
                        ((new IRInstruction(OPCODE_INVOKE_STATIC))
                             ->set_method(m_config.param_assert_fail_handler)
-                            ->set_arg_word_count(1)
+                            ->set_srcs_size(1)
                             ->set_src(0, tmp)));
     auto bt = new BranchTarget(&*check_insn_it);
     code.insert_before(insert_it, bt);

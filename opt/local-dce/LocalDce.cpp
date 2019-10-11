@@ -7,8 +7,8 @@
 
 #include "LocalDce.h"
 
-#include <iostream>
 #include <array>
+#include <iostream>
 #include <unordered_set>
 #include <vector>
 
@@ -19,6 +19,7 @@
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "Transform.h"
 #include "TypeSystem.h"
@@ -107,7 +108,7 @@ std::string show(const boost::dynamic_bitset<T...>& bits) {
 void update_liveness(const IRInstruction* inst,
                      boost::dynamic_bitset<>& bliveness) {
   // The destination register is killed, so it isn't live before this.
-  if (inst->dests_size()) {
+  if (inst->has_dest()) {
     bliveness.reset(inst->dest());
   }
   auto op = inst->opcode();
@@ -123,7 +124,7 @@ void update_liveness(const IRInstruction* inst,
   }
   // The source of a `move-result` is the return value of the prior call,
   // which is encoded as the max position in the bitvector.
-  if (is_move_result(op) || opcode::is_move_result_pseudo(op)) {
+  if (opcode::is_move_result_any(op)) {
     bliveness.set(bliveness.size() - 1);
   }
 }
@@ -193,7 +194,7 @@ void LocalDce::dce(IRCode* code) {
       auto prev_liveness = liveness.at(b->id());
       auto& bliveness = liveness.at(b->id());
       bliveness.reset();
-      TRACE(DCE, 5, "B%lu: %s\n", b->id(), show(bliveness).c_str());
+      TRACE(DCE, 5, "B%lu: %s", b->id(), show(bliveness).c_str());
 
       // Compute live-out for this block from its successors.
       for (auto& s : b->succs()) {
@@ -202,7 +203,7 @@ void LocalDce::dce(IRCode* code) {
         }
         TRACE(DCE,
               5,
-              "  S%lu: %s\n",
+              "  S%lu: %s",
               s->target()->id(),
               SHOW(liveness.at(s->target()->id())));
         bliveness |= liveness.at(s->target()->id());
@@ -225,10 +226,7 @@ void LocalDce::dce(IRCode* code) {
             dead_instructions.emplace_back(b, forward_it);
           }
         }
-        TRACE(CFG,
-              5,
-              "%s\n%s\n",
-              show(it->insn).c_str(),
+        TRACE(CFG, 5, "%s\n%s", show(it->insn).c_str(),
               show(bliveness).c_str());
       }
       if (bliveness != prev_liveness) {
@@ -245,7 +243,7 @@ void LocalDce::dce(IRCode* code) {
     if (seen.count(it->insn)) {
       continue;
     }
-    TRACE(DCE, 2, "DEAD: %s\n", SHOW(it->insn));
+    TRACE(DCE, 2, "DEAD: %s", SHOW(it->insn));
     seen.emplace(it->insn);
     b->remove_insn(it);
   }
@@ -255,7 +253,7 @@ void LocalDce::dce(IRCode* code) {
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 
-  TRACE(DCE, 5, "=== Post-DCE CFG ===\n");
+  TRACE(DCE, 5, "=== Post-DCE CFG ===");
   TRACE(DCE, 5, "%s", SHOW(code->cfg()));
   code->clear_cfg();
 }
@@ -275,7 +273,7 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
       if (meth == nullptr) {
         return true;
       }
-      if (!is_pure(inst->get_method(), meth)) {
+      if (!assumenosideeffects(inst->get_method(), meth)) {
         return true;
       }
       return bliveness.test(bliveness.size() - 1);
@@ -297,7 +295,7 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
       return false;
     }
     return true;
-  } else if (inst->dests_size()) {
+  } else if (inst->has_dest()) {
     return bliveness.test(inst->dest());
   } else if (is_filled_new_array(inst->opcode()) ||
              inst->has_move_result_pseudo()) {
@@ -308,28 +306,28 @@ bool LocalDce::is_required(cfg::ControlFlowGraph& cfg,
   return false;
 }
 
-bool LocalDce::is_pure(DexMethodRef* ref, DexMethod* meth) {
-  if (assumenosideeffects(meth)) {
+bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
+  if (::assumenosideeffects(meth)) {
     return true;
   }
   return m_pure_methods.find(ref) != m_pure_methods.end();
 }
 
-void LocalDcePass::run(IRCode* code) {
-  LocalDce(find_pure_methods()).dce(code);
-}
-
 void LocalDcePass::run_pass(DexStoresVector& stores,
-                            ConfigFiles& /* conf */,
+                            ConfigFiles& conf,
                             PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
     TRACE(DCE, 1,
           "LocalDcePass not run because no ProGuard configuration was "
-          "provided.\n");
+          "provided.");
     return;
   }
   auto scope = build_class_scope(stores);
-  const auto& pure_methods = find_no_sideeffect_methods(scope);
+  auto pure_methods = find_pure_methods(scope);
+  auto configured_pure_methods = conf.get_pure_methods();
+  pure_methods.insert(configured_pure_methods.begin(),
+                      configured_pure_methods.end());
+
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
       [&](DexMethod* m) {
@@ -350,27 +348,13 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
-  TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d\n",
+  TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d",
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
 
-std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods() {
-  /*
-   * Pure methods have no observable side effects, so they can be removed
-   * if their outputs are not used.
-   *
-   * TODO: Derive this list with static analysis rather than hard-coding
-   * it.
-   */
-  std::unordered_set<DexMethodRef*> pure_methods;
-  pure_methods.emplace(DexMethod::make_method(
-      "Ljava/lang/Class;", "getSimpleName", "Ljava/lang/String;", {}));
-  return pure_methods;
-}
-
-std::unordered_set<DexMethodRef*> LocalDcePass::find_no_sideeffect_methods(
+std::unordered_set<DexMethodRef*> LocalDcePass::find_pure_methods(
     const Scope& scope) {
-  auto pure_methods = find_pure_methods();
+  auto pure_methods = get_pure_methods();
   if (no_implementor_abstract_is_pure) {
     // Find abstract methods that have no implementors
     ConcurrentSet<DexMethod*> concurrent_method_set =

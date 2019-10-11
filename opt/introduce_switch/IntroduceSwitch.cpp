@@ -106,11 +106,11 @@ class IntroduceSwitch {
 
             // if the chain is too small, there's no benefit in compacting it
             if (key_to_case.size() >= MIN_SWITCH_LENGTH) {
-              TRACE(INTRO_SWITCH, 3, "Found switch-like chain: { ");
+              TRACE_NO_LINE(INTRO_SWITCH, 3, "Found switch-like chain: { ");
               for (const auto& b : key_to_case) {
-                TRACE(INTRO_SWITCH, 3, "%d ", b.second->id());
+                TRACE_NO_LINE(INTRO_SWITCH, 3, "%d ", b.second->id());
               }
-              TRACE(INTRO_SWITCH, 3, "}\n");
+              TRACE(INTRO_SWITCH, 3, "}");
               intro_switch++;
 
               IRInstruction* new_switch = new IRInstruction(OPCODE_SWITCH);
@@ -170,16 +170,16 @@ class IntroduceSwitch {
   static IntroduceSwitchPass::Metrics process_method(DexMethod* method) {
     auto code = method->get_code();
 
-    TRACE(INTRO_SWITCH, 4, "Class: %s\n", SHOW(method->get_class()));
-    TRACE(INTRO_SWITCH, 3, "Method: %s\n", SHOW(method->get_name()));
+    TRACE(INTRO_SWITCH, 4, "Class: %s", SHOW(method->get_class()));
+    TRACE(INTRO_SWITCH, 3, "Method: %s", SHOW(method->get_name()));
     auto init_opcode_count = code->count_opcodes();
-    TRACE(INTRO_SWITCH, 4, "Initial opcode count: %d\n", init_opcode_count);
+    TRACE(INTRO_SWITCH, 4, "Initial opcode count: %d", init_opcode_count);
 
     TRACE(INTRO_SWITCH, 3, "input code\n%s", SHOW(code));
     code->build_cfg(/* editable */ true);
     auto& cfg = code->cfg();
 
-    TRACE(INTRO_SWITCH, 3, "before %s\n", SHOW(cfg));
+    TRACE(INTRO_SWITCH, 3, "before %s", SHOW(cfg));
 
     IntroduceSwitchPass::Metrics switch_metrics = merge_blocks(cfg);
 
@@ -188,10 +188,10 @@ class IntroduceSwitch {
     if (switch_metrics.switch_intro > 0) {
       TRACE(INTRO_SWITCH,
             3,
-            "%d blocks transformed\n",
+            "%d blocks transformed",
             switch_metrics.switch_cases);
-      TRACE(INTRO_SWITCH, 3, "after %s\n", SHOW(cfg));
-      TRACE(INTRO_SWITCH, 5, "Opcode count: %d\n", init_opcode_count);
+      TRACE(INTRO_SWITCH, 3, "after %s", SHOW(cfg));
+      TRACE(INTRO_SWITCH, 5, "Opcode count: %d", init_opcode_count);
 
       auto final_opcode_count = code->count_opcodes();
       int32_t opcode_difference = init_opcode_count - final_opcode_count;
@@ -199,7 +199,7 @@ class IntroduceSwitch {
       if (opcode_difference < 0 && switch_metrics.switch_intro > 0) {
         TRACE(INTRO_SWITCH,
               3,
-              "method %s got larger: (%d -> %d)\n",
+              "method %s got larger: (%d -> %d)",
               SHOW(method),
               init_opcode_count,
               final_opcode_count);
@@ -207,7 +207,7 @@ class IntroduceSwitch {
       } else if (switch_metrics.switch_intro > 0) {
         switch_metrics.removed_instrs = opcode_difference;
       }
-      TRACE(INTRO_SWITCH, 4, "Final opcode count: %d\n", code->count_opcodes());
+      TRACE(INTRO_SWITCH, 4, "Final opcode count: %d", code->count_opcodes());
       TRACE(INTRO_SWITCH, 3, "output code\n%s", SHOW(code));
 
       return switch_metrics;
@@ -245,7 +245,7 @@ void IntroduceSwitchPass::run_pass(DexStoresVector& stores,
 
     TRACE(INTRO_SWITCH,
           1,
-          "Number of nested if elses converted to switches: %d\n",
+          "Number of nested if elses converted to switches: %d",
           total_switch_cases.switch_cases);
   }
 }

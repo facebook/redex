@@ -19,7 +19,7 @@ class DexMethod;
 namespace JarLoaderUtil {
 uint32_t read32(uint8_t*& buffer);
 uint32_t read16(uint8_t*& buffer);
-};
+}; // namespace JarLoaderUtil
 
 using attribute_hook_t =
     std::function<void(boost::variant<DexField*, DexMethod*> field_or_method,

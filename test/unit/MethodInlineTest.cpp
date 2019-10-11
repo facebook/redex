@@ -32,8 +32,7 @@ void test_inliner(const std::string& caller_str,
 
   auto expected = assembler::ircode_from_string(expected_str);
 
-  EXPECT_EQ(assembler::to_string(expected.get()),
-            assembler::to_string(caller.get()));
+  EXPECT_CODE_EQ(expected.get(), caller.get());
 }
 
 DexClass* create_a_class(const char* description) {
@@ -106,7 +105,7 @@ TEST_F(MethodInlineTest, insertMoves) {
   caller->set_code(std::make_unique<IRCode>(caller, 0));
 
   auto invoke = dasm(OPCODE_INVOKE_STATIC, callee, {});
-  invoke->set_arg_word_count(2);
+  invoke->set_srcs_size(2);
   invoke->set_src(0, 1);
   invoke->set_src(1, 2);
 

@@ -11,9 +11,11 @@
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationTransform.h"
 #include "IPConstantPropagationAnalysis.h"
+#include "MethodOverrideGraph.h"
 #include "Timer.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
+
+namespace mog = method_override_graph;
 
 namespace constant_propagation {
 
@@ -23,6 +25,7 @@ using CombinedAnalyzer = InstructionAnalyzerCombiner<ClinitFieldAnalyzer,
                                                      WholeProgramAwareAnalyzer,
                                                      EnumFieldAnalyzer,
                                                      BoxedBooleanAnalyzer,
+                                                     StringAnalyzer,
                                                      PrimitiveAnalyzer>;
 
 std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
@@ -37,7 +40,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
   if (args.is_bottom()) {
     args.set_to_top();
   } else if (!args.is_top()) {
-    TRACE(ICONSTP, 3, "Have args for %s: %s\n", SHOW(method), SHOW(args));
+    TRACE(ICONSTP, 3, "Have args for %s: %s", SHOW(method), SHOW(args));
   }
 
   auto env = env_with_params(&code, args);
@@ -46,7 +49,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
     class_under_init = method->get_class();
     set_encoded_values(type_class(class_under_init), &env);
   }
-  TRACE(ICONSTP, 5, "%s\n", SHOW(code.cfg()));
+  TRACE(ICONSTP, 5, "%s", SHOW(code.cfg()));
 
   auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(
       code.cfg(),
@@ -54,6 +57,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
                        &wps,
                        EnumFieldAnalyzerState(),
                        BoxedBooleanAnalyzerState(),
+                       nullptr,
                        nullptr));
   intra_cp->run(env);
 
@@ -86,7 +90,7 @@ std::unique_ptr<FixpointIterator> PassImpl::analyze(const Scope& scope) {
   // Run the bootstrap. All field value and method return values are
   // represented by Top.
   fp_iter->run({{CURRENT_PARTITION_LABEL, ArgumentDomain()}});
-  auto non_true_virtuals = devirtualize(scope);
+  auto non_true_virtuals = mog::get_non_true_virtuals(scope);
   for (size_t i = 0; i < m_config.max_heap_analysis_iterations; ++i) {
     // Build an approximation of all the field values and method return values.
     auto wps = std::make_unique<WholeProgramState>(
@@ -186,6 +190,7 @@ void PassImpl::run_pass(DexStoresVector& stores,
   run(scope);
   mgr.incr_metric("branches_removed", m_transform_stats.branches_removed);
   mgr.incr_metric("materialized_consts", m_transform_stats.materialized_consts);
+  mgr.incr_metric("added_param_const", m_transform_stats.added_param_const);
   mgr.incr_metric("constant_fields", m_stats.constant_fields);
   mgr.incr_metric("constant_methods", m_stats.constant_methods);
 }

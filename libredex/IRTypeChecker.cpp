@@ -244,7 +244,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
     if (check_no_overwrite_this) {
       if (op == IOPCODE_LOAD_PARAM_OBJECT && this_insn == nullptr) {
         this_insn = insn;
-      } else if (insn->dests_size() && insn->dest() == this_insn->dest()) {
+      } else if (insn->has_dest() && insn->dest() == this_insn->dest()) {
         return Result::make_error(
             "Encountered overwrite of `this` register by " + show(insn));
       }
@@ -252,7 +252,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
 
     // The instruction immediately before a move-result instruction must be
     // either an invoke-* or a filled-new-array instruction.
-    if (is_move_result(op)) {
+    if (opcode::is_move_result(op)) {
       auto prev = it;
       while (prev != code->begin()) {
         --prev;
@@ -352,7 +352,7 @@ void IRTypeChecker::run() {
   if (traceEnabled(TYPE, 5)) {
     std::ostringstream out;
     m_type_inference->print(out);
-    TRACE(TYPE, 5, "%s\n", out.str().c_str());
+    TRACE(TYPE, 5, "%s", out.str().c_str());
   }
 }
 
@@ -688,14 +688,15 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE: {
     DexMethodRef* dex_method = insn->get_method();
-    auto arg_types = dex_method->get_proto()->get_args()->get_type_list();
+    const auto& arg_types =
+        dex_method->get_proto()->get_args()->get_type_list();
     size_t expected_args =
         (insn->opcode() != OPCODE_INVOKE_STATIC ? 1 : 0) + arg_types.size();
-    if (insn->arg_word_count() != expected_args) {
+    if (insn->srcs_size() != expected_args) {
       std::ostringstream out;
       out << SHOW(insn) << ": argument count mismatch; "
           << "expected " << expected_args << ", "
-          << "but found " << insn->arg_word_count() << " instead";
+          << "but found " << insn->srcs_size() << " instead";
       throw TypeCheckingException(out.str());
     }
     size_t src_idx{0};

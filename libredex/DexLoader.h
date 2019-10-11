@@ -8,8 +8,8 @@
 #pragma once
 
 #include "DexClass.h"
-#include "DexIdx.h"
 #include "DexDefs.h"
+#include "DexIdx.h"
 #include "DexUtil.h"
 
 DexClasses load_classes_from_dex(const char* location,
@@ -19,5 +19,8 @@ DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon = true,
                                  bool support_dex_v37 = false);
+DexClasses load_classes_from_dex(const dex_header* dh,
+                                 const char* location,
+                                 bool balloon = true);
 const std::string load_dex_magic_from_dex(const char* location);
 void balloon_for_test(const Scope& scope);

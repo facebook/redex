@@ -6,10 +6,10 @@
  */
 
 #include "ObfuscateUtils.h"
-#include "Trace.h"
-#include <algorithm>
-#include "Walkers.h"
 #include "DexClass.h"
+#include "Trace.h"
+#include "Walkers.h"
+#include <algorithm>
 
 namespace obfuscate_utils {
 static inline char get_ident_52(int num) {

@@ -183,6 +183,7 @@ Json::Value reflect_config(const Configurable::Reflection& cr) {
     case Configurable::ReflectionParam::Type::PRIMITIVE:
       param["type"] = std::get<Configurable::ReflectionParam::Type::PRIMITIVE>(
           entry.second.variant);
+      param["default_value"] = entry.second.default_value;
       break;
     case Configurable::ReflectionParam::Type::COMPOSITE:
       param["type"] = reflect_config(
@@ -256,6 +257,11 @@ Arguments parse_args(int argc, char* argv[]) {
       "is-art-build",
       po::bool_switch(&args.redex_options.is_art_build)->default_value(false),
       "If specified, states that the current build is art specific.\n");
+  od.add_options()(
+      "disable-dex-hasher",
+      po::bool_switch(&args.redex_options.disable_dex_hasher)
+          ->default_value(false),
+      "If specified, states that the current run disables dex hasher.\n");
   od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
@@ -394,7 +400,7 @@ Arguments parse_args(int argc, char* argv[]) {
   if (vm.count("jarpath")) {
     const auto& jar_paths = vm["jarpath"].as<std::vector<std::string>>();
     for (const auto& e : jar_paths) {
-      TRACE(MAIN, 2, "Command line -j option: %s\n", e.c_str());
+      TRACE(MAIN, 2, "Command line -j option: %s", e.c_str());
       args.jar_paths.emplace(e);
     }
   }
@@ -491,11 +497,11 @@ Arguments parse_args(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  TRACE(MAIN, 2, "Verify-none mode: %s\n",
+  TRACE(MAIN, 2, "Verify-none mode: %s",
         args.redex_options.verify_none_enabled ? "Yes" : "No");
-  TRACE(MAIN, 2, "Art build: %s\n",
+  TRACE(MAIN, 2, "Art build: %s",
         args.redex_options.is_art_build ? "Yes" : "No");
-  TRACE(MAIN, 2, "Enable InstrumentPass: %s\n",
+  TRACE(MAIN, 2, "Enable InstrumentPass: %s",
         args.redex_options.instrument_pass_enabled ? "Yes" : "No");
 
   return args;
@@ -531,6 +537,46 @@ Json::Value get_stats(const dex_stats_t& stats) {
 
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
+
+  val["string_id_count"] = stats.string_id_count;
+  val["string_id_bytes"] = stats.string_id_bytes;
+  val["type_id_count"] = stats.type_id_count;
+  val["type_id_bytes"] = stats.type_id_bytes;
+  val["proto_id_count"] = stats.proto_id_count;
+  val["proto_id_bytes"] = stats.proto_id_bytes;
+  val["field_id_count"] = stats.field_id_count;
+  val["field_id_bytes"] = stats.field_id_bytes;
+  val["method_id_count"] = stats.method_id_count;
+  val["method_id_bytes"] = stats.method_id_bytes;
+  val["class_def_count"] = stats.class_def_count;
+  val["class_def_bytes"] = stats.class_def_bytes;
+  val["call_site_id_count"] = stats.call_site_id_count;
+  val["call_site_id_bytes"] = stats.call_site_id_bytes;
+  val["method_handle_count"] = stats.method_handle_count;
+  val["method_handle_bytes"] = stats.method_handle_bytes;
+  val["map_list_count"] = stats.map_list_count;
+  val["map_list_bytes"] = stats.map_list_bytes;
+  val["type_list_count"] = stats.type_list_count;
+  val["type_list_bytes"] = stats.type_list_bytes;
+  val["annotation_set_ref_list_count"] = stats.annotation_set_ref_list_count;
+  val["annotation_set_ref_list_bytes"] = stats.annotation_set_ref_list_bytes;
+  val["annotation_set_count"] = stats.annotation_set_count;
+  val["annotation_set_bytes"] = stats.annotation_set_bytes;
+  val["class_data_count"] = stats.class_data_count;
+  val["class_data_bytes"] = stats.class_data_bytes;
+  val["code_count"] = stats.code_count;
+  val["code_bytes"] = stats.code_bytes;
+  val["string_data_count"] = stats.string_data_count;
+  val["string_data_bytes"] = stats.string_data_bytes;
+  val["debug_info_count"] = stats.debug_info_count;
+  val["debug_info_bytes"] = stats.debug_info_bytes;
+  val["annotation_count"] = stats.annotation_count;
+  val["annotation_bytes"] = stats.annotation_bytes;
+  val["encoded_array_count"] = stats.encoded_array_count;
+  val["encoded_array_bytes"] = stats.encoded_array_bytes;
+  val["annotations_directory_count"] = stats.annotations_directory_count;
+  val["annotations_directory_bytes"] = stats.annotations_directory_bytes;
+
   return val;
 }
 
@@ -714,6 +760,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer time_pg_parsing("Parsed ProGuard config file");
     redex::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
+  redex::proguard_parser::remove_blanket_resource_keep(&pg_config);
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
@@ -725,7 +772,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     while (std::getline(jar_stream, dependent_jar_path, ':')) {
       TRACE(MAIN,
             2,
-            "Dependent JAR specified on command-line: %s\n",
+            "Dependent JAR specified on command-line: %s",
             dependent_jar_path.c_str());
       library_jars.emplace(dependent_jar_path);
     }
@@ -783,7 +830,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Load library jars");
 
     for (const auto& library_jar : library_jars) {
-      TRACE(MAIN, 1, "LIBRARY JAR: %s\n", library_jar.c_str());
+      TRACE(MAIN, 1, "LIBRARY JAR: %s", library_jar.c_str());
       if (!load_jar_file(library_jar.c_str(), &external_classes)) {
         // Try again with the basedir
         std::string basedir_path =
@@ -853,7 +900,7 @@ void redex_backend(const PassManager& manager,
         instruction_lowering::run(stores, lower_with_cfg);
   }
 
-  TRACE(MAIN, 1, "Writing out new DexClasses...\n");
+  TRACE(MAIN, 1, "Writing out new DexClasses...");
   const JsonWrapper& json_config = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
@@ -862,7 +909,7 @@ void redex_backend(const PassManager& manager,
     emit_name_based_locators =
         json_config.get("emit_name_based_locator_strings", false);
     TRACE(LOC, 1,
-          "Will emit%s class-locator strings for classloader optimization\n",
+          "Will emit%s class-locator strings for classloader optimization",
           emit_name_based_locators ? " name-based" : "");
     locator_index =
         new LocatorIndex(make_locator_index(stores, emit_name_based_locators));
@@ -877,18 +924,13 @@ void redex_backend(const PassManager& manager,
 
   auto dik = redex_options.debug_info_kind;
   bool needs_addresses = dik == DebugInfoKind::NoPositions || is_iodi(dik);
-  bool iodi_enable_overloaded_methods =
-      json_config.get("iodi_enable_overloaded_methods", false);
-
-  TRACE(IODI, 1, "Attempting to use IODI, enabling overloaded methods: %s\n",
-        iodi_enable_overloaded_methods ? "yes" : "no");
 
   std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(
       dik == DebugInfoKind::NoCustomSymbolication ? ""
                                                   : line_number_map_filename));
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
-  IODIMetadata iodi_metadata(iodi_enable_overloaded_methods);
+  IODIMetadata iodi_metadata;
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -928,11 +970,6 @@ void redex_backend(const PassManager& manager,
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
-  }
-
-  if (is_iodi(dik)) {
-    Timer t("Compute IODI caller metadata");
-    iodi_metadata.mark_callers();
   }
 
   {
@@ -1112,6 +1149,6 @@ int main(int argc, char* argv[]) {
     writer.write(out, stats);
   }
 
-  TRACE(MAIN, 1, "Done.\n");
+  TRACE(MAIN, 1, "Done.");
   return 0;
 }

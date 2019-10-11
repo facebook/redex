@@ -22,7 +22,7 @@
 #include "ProguardObfuscationTest.h"
 #include "ProguardParser.h"
 #include "ReachableClasses.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 void testClass(
     ProguardObfuscationTest* tester,
@@ -39,12 +39,12 @@ void testClass(
   }
 }
 
+class ProguardFieldObfuscationTest : public RedexTest {};
+
 /**
  * Check renaming has been properly applied.
  */
-TEST(ProguardTest, obfuscation) {
-  g_redex = new RedexContext();
-
+TEST_F(ProguardFieldObfuscationTest, obfuscation) {
   const char* dexfile = std::getenv("pg_config_e2e_dexfile");
   const char* mapping_file = std::getenv("pg_config_e2e_mapping");
   const char* configuration_file = std::getenv("pg_config_e2e_pgconfig");
@@ -109,6 +109,4 @@ TEST(ProguardTest, obfuscation) {
   ASSERT_TRUE(tester.field_found(
       beta->get_ifields(),
       "Lcom/facebook/redex/test/proguard/Beta;.wombatBeta:I"));
-
-  delete g_redex;
 }

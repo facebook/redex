@@ -92,10 +92,10 @@ void print_interface_maps(const TypeToTypeSet& intf_to_classes,
             });
   for (const auto& intf : intfs) {
     const auto& classes = intf_to_classes.at(intf);
-    TRACE(TERA, 8, "- interface %s -> %ld\n", SHOW(intf), classes.size());
+    TRACE(TERA, 8, "- interface %s -> %ld", SHOW(intf), classes.size());
     if (classes.size() <= 5) {
       for (const auto& cls : classes) {
-        TRACE(TERA, 8, "\t-(%ld) %s\n", types.count(cls), SHOW(cls));
+        TRACE(TERA, 8, "\t-(%ld) %s", types.count(cls), SHOW(cls));
       }
     }
   }
@@ -109,14 +109,14 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
     if (shape_it.second.types.size() >= min_count) {
-      TRACE(TERA, 7, "Keep shape %s (%ld)\n",
+      TRACE(TERA, 7, "Keep shape %s (%ld)",
             shape_it.first.to_string().c_str(), shape_it.second.types.size());
       continue;
     }
     shapes_to_remove.push_back(shape_it.first);
   }
   for (const auto& shape : shapes_to_remove) {
-    TRACE(TERA, 7, "Drop shape %s (%ld)\n", shape.to_string().c_str(),
+    TRACE(TERA, 7, "Drop shape %s (%ld)", shape.to_string().c_str(),
           shapes[shape].types.size());
     num_trimmed_types += shapes[shape].types.size();
     shapes.erase(shape);
@@ -129,12 +129,12 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
  */
 size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   size_t num_trimmed_types = 0;
-  TRACE(TERA, 5, "Trim groups with min_count %d\n", min_count);
+  TRACE(TERA, 5, "Trim groups with min_count %d", min_count);
   for (auto& shape_it : shapes) {
     std::vector<TypeSet> groups_to_remove;
     for (const auto& group_it : shape_it.second.groups) {
       if (group_it.second.size() >= min_count) {
-        TRACE(TERA, 7, "Keep group (%ld) on %s\n", group_it.second.size(),
+        TRACE(TERA, 7, "Keep group (%ld) on %s", group_it.second.size(),
               shape_it.first.to_string().c_str());
         continue;
       }
@@ -142,7 +142,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
     }
     for (const auto& group : groups_to_remove) {
       auto& types = shape_it.second.groups[group];
-      TRACE(TERA, 7, "Drop group (%ld) on %s\n", types.size(),
+      TRACE(TERA, 7, "Drop group (%ld) on %s", types.size(),
             shape_it.first.to_string().c_str());
       num_trimmed_types += types.size();
       for (const auto& type : types) {
@@ -180,12 +180,12 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
   bool enabled = false;
   spec.get("enabled", false, enabled);
   if (!enabled) {
-    TRACE(TERA, 5, "Non mergeable (android_sdk) not enabled\n");
+    TRACE(TERA, 5, "Non mergeable (android_sdk) not enabled");
     return;
   }
 
   std::string android_sdk_prefix = "Landroid/";
-  TRACE(TERA, 5, "Non mergeable (android_sdk) android_sdk_prefix %s\n",
+  TRACE(TERA, 5, "Non mergeable (android_sdk) android_sdk_prefix %s",
         android_sdk_prefix.c_str());
   const std::vector<std::string> acceptible_prefixes =
       get_acceptible_prefixes(spec);
@@ -200,7 +200,7 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
     auto type = field->get_type();
     if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes, type)) {
       auto mergeable = field->get_class();
-      TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s\n",
+      TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s",
             SHOW(mergeable), SHOW(type));
       non_mergeables.emplace(mergeable);
     }
@@ -221,7 +221,7 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
       for (const auto referenced_type : gathered) {
         if (is_android_sdk_type(android_sdk_prefix, acceptible_prefixes,
                                 referenced_type)) {
-          TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s\n",
+          TRACE(TERA, 5, "Non mergeable (android_sdk) %s referencing %s",
                 SHOW(mergeable), SHOW(referenced_type));
           current_excluded.insert(mergeable);
         }
@@ -287,7 +287,7 @@ void Model::init(const Scope& scope,
   // load all generated types and find non mergeables
   TypeSet generated;
   load_generated_types(spec, scope, type_system, m_types, generated);
-  TRACE(TERA, 4, "Generated types %ld\n", generated.size());
+  TRACE(TERA, 4, "Generated types %ld", generated.size());
   exclude_types(spec.exclude_types);
   find_non_mergeables(scope, generated);
   m_metric.all_types = m_types.size();
@@ -404,7 +404,7 @@ MergerType& Model::create_merger_shape(const DexType* shape_type,
                                        const DexType* parent,
                                        const TypeSet& intfs,
                                        const TypeSet& classes) {
-  TRACE(TERA, 7, "Create Shape %s - %s, parent %s, intfs %ld, classes %ld\n",
+  TRACE(TERA, 7, "Create Shape %s - %s, parent %s, intfs %ld, classes %ld",
         SHOW(shape_type), shape.to_string().c_str(), SHOW(parent), intfs.size(),
         classes.size());
   auto& merger = m_mergers[shape_type];
@@ -462,7 +462,7 @@ MergerType& Model::create_merger_helper(
       m_spec.class_name_prefix, merger_type, std::string("Shape"), group_count,
       dex_num, interdex_subgroup_idx, subgroup_idx);
   const auto& shape_type = DexType::make_type(name.c_str());
-  TRACE(TERA, 7, "Build shape type %s\n", SHOW(shape_type));
+  TRACE(TERA, 7, "Build shape type %s", SHOW(shape_type));
   auto& merger_shape = create_merger_shape(shape_type, shape, merger_type,
                                            group_key, group_values);
   merger_shape.interdex_subgroup = interdex_subgroup_idx;
@@ -525,7 +525,7 @@ void Model::exclude_types(const std::unordered_set<DexType*>& exclude_types) {
       m_type_system.get_all_children(type, m_excluded);
     }
   }
-  TRACE(TERA, 4, "Excluding types %ld\n", m_excluded.size());
+  TRACE(TERA, 4, "Excluding types %ld", m_excluded.size());
 }
 
 bool Model::is_excluded(const DexType* type) const {
@@ -554,10 +554,10 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     const auto& cls = type_class(type);
     if (!can_delete(cls)) {
       m_non_mergeables.insert(type);
-      TRACE(TERA, 5, "Cannot delete %s\n", SHOW(type));
+      TRACE(TERA, 5, "Cannot delete %s", SHOW(type));
     }
   }
-  TRACE(TERA, 4, "Non mergeables (no delete) %ld\n", m_non_mergeables.size());
+  TRACE(TERA, 4, "Non mergeables (no delete) %ld", m_non_mergeables.size());
 
   bool has_type_tag = m_spec.has_type_tag();
   const auto& const_generated = generated;
@@ -600,7 +600,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         continue;
       }
 
-      const auto& type = get_array_type_or_self(insn->get_type());
+      const auto& type = get_element_type_if_array(insn->get_type());
       if (const_types.count(type) > 0) {
         current_non_mergeables.insert(type);
       }
@@ -618,7 +618,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   m_non_mergeables.insert(non_mergeables_opcode.begin(),
                           non_mergeables_opcode.end());
 
-  TRACE(TERA, 4, "Non mergeables (opcodes) %ld\n", m_non_mergeables.size());
+  TRACE(TERA, 4, "Non mergeables (opcodes) %ld", m_non_mergeables.size());
 
   static DexType* string_type = get_string_type();
 
@@ -626,7 +626,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     walk::fields(scope, [&](DexField* field) {
       if (generated.count(field->get_class()) > 0) {
         if (is_static(field)) {
-          auto rtype = get_array_type_or_self(field->get_type());
+          auto rtype = get_element_type_if_array(field->get_type());
           if (!is_primitive(rtype) && rtype != string_type) {
             // If the type is either non-primitive or a list of
             // non-primitive types (excluding Strings), then exclude it as
@@ -634,7 +634,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
             TRACE(TERA,
                   5,
                   "[non mergeable] %s as it contains a non-primitive "
-                  "static field\n",
+                  "static field",
                   SHOW(field->get_class()));
             m_non_mergeables.emplace(field->get_class());
           }
@@ -649,7 +649,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
   }
 
   m_metric.non_mergeables = m_non_mergeables.size();
-  TRACE(TERA, 3, "Non mergeables %ld\n", m_non_mergeables.size());
+  TRACE(TERA, 3, "Non mergeables %ld", m_non_mergeables.size());
 }
 
 void Model::find_non_root_store_mergeables(const DexStoresVector& stores,
@@ -686,7 +686,7 @@ void Model::shape_model() {
   }
 
   for (auto merger : mergers) {
-    TRACE(TERA, 6, "Build shapes from %s\n", SHOW(merger->type));
+    TRACE(TERA, 6, "Build shapes from %s", SHOW(merger->type));
     MergerType::ShapeCollector shapes;
     shape_merger(*merger, shapes);
     approximate_shapes(shapes);
@@ -700,7 +700,7 @@ void Model::shape_model() {
 
   // Update excluded metrics
   m_metric.excluded = m_excluded.size();
-  TRACE(TERA, 4, "Excluded types total %ld\n", m_excluded.size());
+  TRACE(TERA, 4, "Excluded types total %ld", m_excluded.size());
 }
 
 void Model::shape_merger(const MergerType& merger,
@@ -764,7 +764,7 @@ void Model::shape_merger(const MergerType& merger,
       }
     }
 
-    TRACE(TERA, 9, "Shape of %s [%ld]: %s\n", SHOW(child),
+    TRACE(TERA, 9, "Shape of %s [%ld]: %s", SHOW(child),
           cls->get_ifields().size(), shape.to_string().c_str());
 
     shapes[shape].types.insert(child);
@@ -777,7 +777,7 @@ void Model::shape_merger(const MergerType& merger,
  */
 void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
   if (m_spec.approximate_shape_merging.isNull()) {
-    TRACE(TERA, 3, "[approx] No approximate shape merging specified.\n");
+    TRACE(TERA, 3, "[approx] No approximate shape merging specified.");
     return;
   }
 
@@ -788,14 +788,14 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
   // List shapes before approximation
   size_t num_total_mergeable = 0;
   size_t num_before_shapes = 0;
-  TRACE(TERA, 3, "[approx] Shapes before approximation:\n");
+  TRACE(TERA, 3, "[approx] Shapes before approximation:");
   for (const auto& s : shapes) {
-    TRACE(TERA, 3, "         Shape: %s, mergeables = %ld\n",
+    TRACE(TERA, 3, "         Shape: %s, mergeables = %ld",
           s.first.to_string().c_str(), s.second.types.size());
     num_before_shapes++;
     num_total_mergeable += s.second.types.size();
   }
-  TRACE(TERA, 3, "[approx] Total shapes before approximation = %zu\n",
+  TRACE(TERA, 3, "[approx] Total shapes before approximation = %zu",
         num_before_shapes);
 
   if (num_total_mergeable == 0) {
@@ -803,7 +803,7 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
   }
 
   always_assert(s_outdir != "");
-  TRACE(TERA, 3, "[approx] output dir is: %s\n", s_outdir.c_str());
+  TRACE(TERA, 3, "[approx] output dir is: %s", s_outdir.c_str());
 
   // Select an approximation algorithm
   if (algo_name == "simple_greedy") {
@@ -814,21 +814,21 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
     max_shape_merged_greedy(approx_spec, s_outdir, shapes, m_approx_stats);
   } else {
     TRACE(TERA, 3,
-          "[approx] Invalid approximate shape merging spec, skipping...\n");
+          "[approx] Invalid approximate shape merging spec, skipping...");
     return;
   }
 
   // List shapes after approximation
   size_t num_after_shapes = 0;
-  TRACE(TERA, 3, "[approx] Shapes after approximation:\n");
+  TRACE(TERA, 3, "[approx] Shapes after approximation:");
   for (const auto& s_pair : shapes) {
-    TRACE(TERA, 3, "         Shape: %s, mergeables = %ld\n",
+    TRACE(TERA, 3, "         Shape: %s, mergeables = %ld",
           s_pair.first.to_string().c_str(), s_pair.second.types.size());
     num_after_shapes++;
     num_total_mergeable -= s_pair.second.types.size();
   }
   always_assert(num_total_mergeable == 0);
-  TRACE(TERA, 3, "[approx] Total shapes after approximation = %zu\n",
+  TRACE(TERA, 3, "[approx] Total shapes after approximation = %zu",
         num_after_shapes);
 }
 
@@ -841,7 +841,7 @@ void Model::break_by_interface(const MergerType& merger,
                                MergerType::ShapeHierarchy& hier) {
   always_assert(!hier.types.empty());
   // group classes by interfaces implemented
-  TRACE(TERA, 7, "Break up shape %s parent %s\n", shape.to_string().c_str(),
+  TRACE(TERA, 7, "Break up shape %s parent %s", shape.to_string().c_str(),
         SHOW(merger.type));
   for (const auto& type : hier.types) {
     const auto& cls_intfs = m_class_to_intfs.find(type);
@@ -852,7 +852,7 @@ void Model::break_by_interface(const MergerType& merger,
     auto& intfs = cls_intfs->second;
     hier.groups[intfs].insert(type);
   }
-  TRACE(TERA, 7, "%ld groups created for shape %s (%ld)\n", hier.groups.size(),
+  TRACE(TERA, 7, "%ld groups created for shape %s (%ld)", hier.groups.size(),
         shape.to_string().c_str(), hier.types.size());
 }
 
@@ -1021,13 +1021,13 @@ void Model::flatten_shapes(const MergerType& merger,
 }
 
 void Model::map_fields(MergerType& merger, const TypeSet& classes) {
-  TRACE(TERA, 8, "Build field map for %s\n", SHOW(merger.type));
+  TRACE(TERA, 8, "Build field map for %s", SHOW(merger.type));
   always_assert(merger.is_shape());
   if (merger.field_count() == 0) return;
   // for each mergeable type build order the field accroding to the
   // shape. The field order shape is implicit and defined by the shape itself
   for (const auto& type : classes) {
-    TRACE(TERA, 8, "Collecting fields for %s\n", SHOW(type));
+    TRACE(TERA, 8, "Collecting fields for %s", SHOW(type));
     std::vector<DexField*> fields(merger.field_count());
     const DexClass* cls = type_class(type);
     for (const auto& field : cls->get_ifields()) {
@@ -1036,7 +1036,7 @@ void Model::map_fields(MergerType& merger, const TypeSet& classes) {
         if (fields[index] != nullptr) {
           continue;
         }
-        TRACE(TERA, 8, "Add field %s\n", show_deobfuscated(field).c_str());
+        TRACE(TERA, 8, "Add field %s", show_deobfuscated(field).c_str());
         fields[index] = field;
         break;
       }
@@ -1056,10 +1056,10 @@ void Model::map_fields(MergerType& merger, const TypeSet& classes) {
           type, DexString::make_string(ss.str()), field_type));
       TRACE(TERA, 9,
             "  -- A hole found at index %d, created a placeholder field of "
-            "type %s\n",
+            "type %s",
             index, field_type->c_str());
     }
-    TRACE(TERA, 8, "Add field map item [%ld]\n", fields.size());
+    TRACE(TERA, 8, "Add field map item [%ld]", fields.size());
     merger.field_map[type] = fields;
   }
 }
@@ -1075,17 +1075,17 @@ void Model::collect_methods() {
     if (merger.mergeables.empty()) continue;
     TRACE(TERA,
           8,
-          "Collect methods for merger %s [%ld]\n",
+          "Collect methods for merger %s [%ld]",
           SHOW(merger.type),
           merger.mergeables.size());
     for (const auto& type : merger.mergeables) {
       const auto& cls = type_class(type);
       always_assert(cls);
-      TRACE(TERA, 8, "Merge %s\n", SHOW(type));
+      TRACE(TERA, 8, "Merge %s", SHOW(type));
 
       TRACE(TERA,
             8,
-            "%ld dmethods in %s\n",
+            "%ld dmethods in %s",
             cls->get_dmethods().size(),
             SHOW(cls->get_type()));
       for (const auto& method : cls->get_dmethods()) {
@@ -1095,7 +1095,7 @@ void Model::collect_methods() {
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
       TRACE(TERA,
             8,
-            "%ld virtual scopes in %s\n",
+            "%ld virtual scopes in %s",
             virt_scopes.size(),
             SHOW(type));
       for (const auto& virt_scope : virt_scopes) {
@@ -1104,7 +1104,7 @@ void Model::collect_methods() {
         if (is_impl_scope(virt_scope)) {
           TRACE(TERA,
                 8,
-                "interface virtual scope [%ld]\n",
+                "interface virtual scope [%ld]",
                 virt_scope->methods.size());
           add_interface_scope(merger, *virt_scope);
           continue;
@@ -1114,7 +1114,7 @@ void Model::collect_methods() {
         if (is_non_virtual_scope(virt_scope)) {
           TRACE(TERA,
                 8,
-                "non virtual scope %s (%s)\n",
+                "non virtual scope %s (%s)",
                 virt_scope->methods[0].first->get_deobfuscated_name().c_str(),
                 SHOW(virt_scope->methods[0].first->get_name()));
           merger.non_virt_methods.emplace_back(virt_scope->methods[0].first);
@@ -1162,10 +1162,10 @@ void Model::add_virtual_scope(MergerType& merger,
                               const VirtualScope& virt_scope) {
   merger.vmethods.emplace_back(nullptr, std::vector<DexMethod*>());
   for (const auto& vmeth : virt_scope.methods) {
-    TRACE(TERA, 9, "check virtual method %s\n", SHOW(vmeth.first));
+    TRACE(TERA, 9, "check virtual method %s", SHOW(vmeth.first));
     always_assert_log(vmeth.first->is_def(), "not def %s", SHOW(vmeth.first));
     if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
-    TRACE(TERA, 8, "add virtual method %s\n", SHOW(vmeth.first));
+    TRACE(TERA, 8, "add virtual method %s", SHOW(vmeth.first));
     merger.vmethods.back().second.emplace_back(vmeth.first);
   }
 }
@@ -1181,7 +1181,7 @@ void Model::add_interface_scope(MergerType& merger,
       if (merger.mergeables.count(vmeth.first->get_class()) == 0) continue;
       TRACE(TERA,
             8,
-            "add interface method %s (%s)\n",
+            "add interface method %s (%s)",
             vmeth.first->get_deobfuscated_name().c_str(),
             SHOW(vmeth.first->get_name()));
       intf_meths.methods.emplace_back(vmeth.first);
@@ -1204,7 +1204,7 @@ void Model::distribute_virtual_methods(
     const DexType* type, std::vector<const VirtualScope*> base_scopes) {
   TRACE(TERA,
         8,
-        "distribute virtual methods for %s, parent virtual scope %ld\n",
+        "distribute virtual methods for %s, parent virtual scope %ld",
         SHOW(type),
         base_scopes.size());
   // add to the base_scope the class scope of the merger type
@@ -1214,7 +1214,7 @@ void Model::distribute_virtual_methods(
     if (virt_scope->methods.size() == 1) continue;
     TRACE(TERA,
           8,
-          "virtual scope found [%ld] %s\n",
+          "virtual scope found [%ld] %s",
           virt_scope->methods.size(),
           SHOW(virt_scope->methods[0].first));
     base_scopes.emplace_back(virt_scope);
@@ -1222,13 +1222,13 @@ void Model::distribute_virtual_methods(
 
   const auto& merger = m_mergers.find(type);
   if (merger != m_mergers.end() && !merger->second.mergeables.empty()) {
-    TRACE(TERA, 8, "merger found %s\n", SHOW(merger->second.type));
+    TRACE(TERA, 8, "merger found %s", SHOW(merger->second.type));
     // loop through the parent scopes of the mergeable types and
     // if a method is from a mergeable type add it to the merger
     for (const auto& virt_scope : base_scopes) {
       TRACE(TERA,
             8,
-            "walking virtual scope [%s, %ld] %s (%s)\n",
+            "walking virtual scope [%s, %ld] %s (%s)",
             SHOW(virt_scope->type),
             virt_scope->methods.size(),
             virt_scope->methods[0].first->get_deobfuscated_name().c_str(),
@@ -1249,7 +1249,7 @@ void Model::distribute_virtual_methods(
         }
         TRACE(TERA,
               9,
-              "method %s (%s)\n",
+              "method %s (%s)",
               vmeth.first->get_deobfuscated_name().c_str(),
               SHOW(vmeth.first->get_name()));
         if (is_interface) {
@@ -1257,7 +1257,7 @@ void Model::distribute_virtual_methods(
             // must be a new method
             TRACE(TERA,
                   8,
-                  "add interface method %s (%s) w/ overridden_meth %s\n",
+                  "add interface method %s (%s) w/ overridden_meth %s",
                   vmeth.first->get_deobfuscated_name().c_str(),
                   SHOW(vmeth.first->get_name()),
                   SHOW(overridden_meth));
@@ -1275,7 +1275,7 @@ void Model::distribute_virtual_methods(
             // must be a new method
             TRACE(TERA,
                   8,
-                  "add virtual method %s w/ overridden_meth %s\n",
+                  "add virtual method %s w/ overridden_meth %s",
                   SHOW(vmeth.first),
                   SHOW(overridden_meth));
             merger->second.vmethods.emplace_back(overridden_meth,
@@ -1453,13 +1453,13 @@ std::string Model::print(const DexType* type, int nest) const {
 }
 
 void Model::update_model(Model& model) {
-  TRACE(TERA, 3, "Shape Model\n");
+  TRACE(TERA, 3, "Shape Model");
   model.shape_model();
-  TRACE(TERA, 3, "Model:\n%s\nShape Model done\n", model.print().c_str());
+  TRACE(TERA, 3, "Model:\n%s\nShape Model done", model.print().c_str());
 
-  TRACE(TERA, 2, "Final Model\n");
+  TRACE(TERA, 2, "Final Model");
   model.collect_methods();
-  TRACE(TERA, 2, "Model:\n%s\nFinal Model done\n", model.print().c_str());
+  TRACE(TERA, 2, "Model:\n%s\nFinal Model done", model.print().c_str());
 }
 
 Model Model::build_model(const Scope& scope,
@@ -1469,9 +1469,9 @@ Model Model::build_model(const Scope& scope,
                          ConfigFiles& conf) {
   Timer t("build_model");
 
-  TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
+  TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
   Model model(scope, stores, spec, type_system, conf);
-  TRACE(TERA, 3, "Model:\n%s\nBuild Model done\n", model.print().c_str());
+  TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);
   return model;
@@ -1504,9 +1504,9 @@ Model Model::build_model(const Scope& scope,
                          const TypeSystem& type_system) {
   Timer t("build_model");
 
-  TRACE(TERA, 3, "Build Model for %s\n", to_string(spec).c_str());
+  TRACE(TERA, 3, "Build Model for %s", to_string(spec).c_str());
   Model model(scope, spec, type_system, types);
-  TRACE(TERA, 3, "Model:\n%s\nBuild Model done\n", model.print().c_str());
+  TRACE(TERA, 3, "Model:\n%s\nBuild Model done", model.print().c_str());
 
   update_model(model);
   return model;

@@ -18,8 +18,7 @@ void check_callsite_regs(DexMethod* method, int num_args_expected) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto actual_method = insn->get_method();
-      EXPECT_EQ(insn->arg_word_count(), num_args_expected)
-          << show(actual_method);
+      EXPECT_EQ(insn->srcs_size(), num_args_expected) << show(actual_method);
       break;
     }
   }

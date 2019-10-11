@@ -30,6 +30,7 @@ enum class Ref {
 
 } // namespace opcode
 
+// clang-format off
 #define OPS \
   OP(NOP               , Ref::None, "nop") \
   OP(MOVE              , Ref::None, "move") \
@@ -208,6 +209,7 @@ enum IROpcode : uint16_t {
   IOPCODE_MOVE_RESULT_PSEUDO_OBJECT,
   IOPCODE_MOVE_RESULT_PSEUDO_WIDE,
 };
+// clang-format on
 
 std::string show(IROpcode);
 
@@ -256,9 +258,13 @@ bool is_internal(IROpcode);
 
 bool is_load_param(IROpcode);
 
+inline bool is_move_result(IROpcode op) {
+  return op >= OPCODE_MOVE_RESULT && op <= OPCODE_MOVE_RESULT_OBJECT;
+}
+
 bool is_move_result_pseudo(IROpcode);
 
-bool is_move_result_or_move_result_pseudo(IROpcode op);
+bool is_move_result_any(IROpcode op);
 
 bool is_move(IROpcode);
 
@@ -295,7 +301,7 @@ Branchingness branchingness(IROpcode op);
  */
 namespace opcode_impl {
 
-unsigned dests_size(IROpcode);
+bool has_dest(IROpcode);
 
 bool has_move_result_pseudo(IROpcode);
 

@@ -17,11 +17,8 @@ void init_reachable_classes(
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno);
 
-void recompute_classes_reachable_from_code(const Scope& scope);
-
-void recompute_reachable_from_xml_layouts(
-  const Scope& scope,
-  const std::string& apk_dir);
+void recompute_reachable_from_xml_layouts(const Scope& scope,
+                                          const std::string& apk_dir);
 
 // Note: The lack of convenience functions for DexType* is intentional. By doing
 // so, it implies you need to nullptr check. Which is evil because it sprinkles
@@ -59,6 +56,11 @@ inline bool has_keep(DexMember* member) {
 }
 
 template <class DexMember>
+inline bool marked_by_string(DexMember* member) {
+  return member->rstate.is_referenced_by_string();
+}
+
+template <class DexMember>
 inline bool allowshrinking(DexMember* member) {
   return member->rstate.allowshrinking();
 }
@@ -82,4 +84,12 @@ inline bool assumenosideeffects(DexMember* member) {
 template <class DexMember>
 inline bool root(DexMember* member) {
   return has_keep(member) && !allowshrinking(member);
+}
+
+/**
+ * If this member is root or it has m_by_string be true.
+ */
+template <class DexMember>
+inline bool root_or_string(DexMember* member) {
+  return root(member) || marked_by_string(member);
 }

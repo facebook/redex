@@ -9,6 +9,7 @@
 
 #include "ControlFlow.h"
 #include "Creators.h"
+#include "RedexTest.h"
 #include "SwitchDispatch.h"
 
 DexMethod* make_a_method(const std::string& full_descriptor,
@@ -18,8 +19,9 @@ DexMethod* make_a_method(const std::string& full_descriptor,
   return mc.create();
 }
 
-TEST(SwitchDispatchTest, create_simple_dispatch) {
-  g_redex = new RedexContext();
+class SwitchDispatchTest : public RedexTest {};
+
+TEST_F(SwitchDispatchTest, create_simple_dispatch) {
   ClassCreator cc(DexType::make_type("Lfoo;"));
   cc.set_super(get_object_type());
   cc.create();
@@ -68,6 +70,4 @@ TEST(SwitchDispatchTest, create_simple_dispatch) {
     auto method = dispatch::create_simple_dispatch(indices_to_callee);
     ASSERT_EQ(method, nullptr);
   }
-
-  delete g_redex;
 }

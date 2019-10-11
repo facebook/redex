@@ -12,6 +12,7 @@
 
 namespace dex_opcode {
 
+// clang-format off
 OpcodeFormat format(DexOpcode opcode) {
   switch (opcode) {
 #define OP(op, code, fmt, ...) \
@@ -19,8 +20,7 @@ OpcodeFormat format(DexOpcode opcode) {
     return FMT_##fmt;
     DOPS
 #undef OP
-  case FOPCODE_PACKED_SWITCH :
-    return FMT_fopcode;
+  case FOPCODE_PACKED_SWITCH : return FMT_fopcode;
   case FOPCODE_SPARSE_SWITCH:
     return FMT_fopcode;
   case FOPCODE_FILLED_ARRAY:
@@ -34,10 +34,9 @@ OpcodeFormat format(DexOpcode opcode) {
   }
   always_assert_log(false, "Unexpected opcode 0x%x", opcode);
 }
+// clang-format on
 
-bool dest_is_src(DexOpcode op) {
-  return format(op) == FMT_f12x_2;
-}
+bool dest_is_src(DexOpcode op) { return format(op) == FMT_f12x_2; }
 
 bool has_literal(DexOpcode op) {
   auto fmt = format(op);
@@ -73,9 +72,7 @@ bool has_offset(DexOpcode op) {
 
 bool has_range(DexOpcode op) {
   auto fmt = format(op);
-  if (fmt == FMT_f3rc || fmt == FMT_f5rc)
-    return true;
-  return false;
+  return fmt == FMT_f3rc || fmt == FMT_f5rc;
 }
 
 bool is_commutative(DexOpcode op) {
@@ -294,10 +291,14 @@ bit_width_t dest_bit_width(DexOpcode op) {
     redex_assert(false);
   case FMT_f10x:
     redex_assert(false);
-  case FMT_f12x:    return 4;
-  case FMT_f12x_2:  return 4;
-  case FMT_f11n:    return 4;
-  case FMT_f11x_d:  return 8;
+  case FMT_f12x:
+    return 4;
+  case FMT_f12x_2:
+    return 4;
+  case FMT_f11n:
+    return 4;
+  case FMT_f11x_d:
+    return 8;
   case FMT_f11x_s:
     redex_assert(false);
   case FMT_f10t:
@@ -306,33 +307,44 @@ bit_width_t dest_bit_width(DexOpcode op) {
     redex_assert(false);
   case FMT_f20bc:
     redex_assert(false);
-  case FMT_f22x:    return 8;
+  case FMT_f22x:
+    return 8;
   case FMT_f21t:
     redex_assert(false);
-  case FMT_f21s:    return 8;
-  case FMT_f21h:    return 8;
-  case FMT_f21c_d:  return 8;
+  case FMT_f21s:
+    return 8;
+  case FMT_f21h:
+    return 8;
+  case FMT_f21c_d:
+    return 8;
   case FMT_f21c_s:
     redex_assert(false);
-  case FMT_f23x_d:  return 8;
+  case FMT_f23x_d:
+    return 8;
   case FMT_f23x_s:
     redex_assert(false);
-  case FMT_f22b:    return 8;
+  case FMT_f22b:
+    return 8;
   case FMT_f22t:
     redex_assert(false);
-  case FMT_f22s:    return 4;
-  case FMT_f22c_d:  return 4;
+  case FMT_f22s:
+    return 4;
+  case FMT_f22c_d:
+    return 4;
   case FMT_f22c_s:
     redex_assert(false);
   case FMT_f22cs:
     redex_assert(false);
   case FMT_f30t:
     redex_assert(false);
-  case FMT_f32x:    return 16;
-  case FMT_f31i:    return 8;
+  case FMT_f32x:
+    return 16;
+  case FMT_f31i:
+    return 8;
   case FMT_f31t:
     redex_assert(false);
-  case FMT_f31c:    return 8;
+  case FMT_f31c:
+    return 8;
   case FMT_f35c:
     redex_assert(false);
   case FMT_f35ms:
@@ -341,11 +353,14 @@ bit_width_t dest_bit_width(DexOpcode op) {
   case FMT_f3rms:
   case FMT_f3rmi:
     redex_assert(false);
-  case FMT_f51l:    return 8;
-  case FMT_f41c_d:  return 16;
+  case FMT_f51l:
+    return 8;
+  case FMT_f41c_d:
+    return 16;
   case FMT_f41c_s:
     redex_assert(false);
-  case FMT_f52c_d:  return 16;
+  case FMT_f52c_d:
+    return 16;
   case FMT_f52c_s:
     redex_assert(false);
   case FMT_f5rc:
@@ -354,12 +369,13 @@ bit_width_t dest_bit_width(DexOpcode op) {
     redex_assert(false);
   case FMT_fopcode:
     redex_assert(false);
-  case FMT_iopcode: return 16;
+  case FMT_iopcode:
+    return 16;
   }
   not_reached();
 }
 
-unsigned dests_size(DexOpcode op) {
+bool has_dest(DexOpcode op) {
   switch (dex_opcode::format(op)) {
   case FMT_f00x:
   case FMT_f10x:
@@ -380,7 +396,7 @@ unsigned dests_size(DexOpcode op) {
   case FMT_f5rc:
   case FMT_f57c:
   case FMT_fopcode:
-    return 0;
+    return false;
   case FMT_f12x:
   case FMT_f12x_2:
   case FMT_f11n:
@@ -400,7 +416,7 @@ unsigned dests_size(DexOpcode op) {
   case FMT_f41c_d:
   case FMT_f52c_d:
   case FMT_iopcode:
-    return 1;
+    return true;
   case FMT_f20bc:
   case FMT_f22cs:
   case FMT_f35ms:

@@ -27,4 +27,7 @@ using FieldStatsMap = std::unordered_map<DexField*, FieldStats>;
 
 FieldStatsMap analyze(const Scope& scope);
 
-}
+using NonZeroWrittenFields = std::unordered_set<DexField*>;
+
+NonZeroWrittenFields analyze_non_zero_writes(const Scope& scope);
+} // namespace field_op_tracker

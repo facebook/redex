@@ -434,7 +434,7 @@ class Model {
   }
 
   void move_child_to_mergeables(MergerType& merger, const DexType* child) {
-    TRACE(TERA, 3, "Adding child %s to merger %s\n", SHOW(child),
+    TRACE(TERA, 3, "Adding child %s to merger %s", SHOW(child),
           print(&merger).c_str());
     remove_child(child);
     merger.mergeables.insert(child);

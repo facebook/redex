@@ -22,7 +22,7 @@ void AddRedexTxtToApkPass::run_pass(DexStoresVector& /* unused */,
   conf.get_json_config().get("apk_dir", "", apk_dir);
 
   if (!apk_dir.size()) {
-    TRACE(ADD_REDEX_TXT, 2, "apk_dir not set, so not writing redex.txt\n");
+    TRACE(ADD_REDEX_TXT, 2, "apk_dir not set, so not writing redex.txt");
     return;
   }
   std::string out_file_name = apk_dir + "/redex.txt";

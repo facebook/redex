@@ -7,6 +7,7 @@
 
 #include "ProguardConfiguration.h"
 
+#include <algorithm>
 #include <boost/functional/hash.hpp>
 
 namespace redex {
@@ -69,6 +70,23 @@ size_t hash_value(const KeepSpec& spec) {
   boost::hash_combine(seed, spec.allowobfuscation);
   boost::hash_combine(seed, spec.class_spec);
   return seed;
+}
+
+void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
+  std::unordered_set<const KeepSpec*> erased;
+  for (auto it = m_unordered_set.begin(); it != m_unordered_set.end();) {
+    if (pred(**it)) {
+      erased.emplace(it->get());
+      it = m_unordered_set.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  m_ordered.erase(
+      std::remove_if(m_ordered.begin(),
+                     m_ordered.end(),
+                     [&](const KeepSpec* ks) { return erased.count(ks); }),
+      m_ordered.end());
 }
 
 } // namespace redex

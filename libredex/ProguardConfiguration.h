@@ -104,17 +104,13 @@ class KeepSpecSet {
 
   std::vector<KeepSpec*>::const_iterator end() const { return m_ordered.end(); }
 
-  const std::vector<KeepSpec*> elements() const {
-    return m_ordered;
-  }
+  const std::vector<KeepSpec*> elements() const { return m_ordered; }
 
-  size_t size() const {
-    return m_ordered.size();
-  }
+  size_t size() const { return m_ordered.size(); }
 
-  bool empty() const {
-    return begin() == end();
-  }
+  bool empty() const { return begin() == end(); }
+
+  void erase_if(const std::function<bool(const KeepSpec&)>&);
 
  private:
   std::vector<KeepSpec*> m_ordered;

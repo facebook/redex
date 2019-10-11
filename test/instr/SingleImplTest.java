@@ -9,7 +9,10 @@ package com.facebook.redextest;
 
 import org.junit.Test;
 import static org.fest.assertions.api.Assertions.assertThat;
-
+// TODO (fengliu): We may make the test tool to generate the PRECHECK directive
+// automatically.
+// PRECHECK: class: com.facebook.redextest.I_0
+// POSTCHECK-NOT: class: com.facebook.redextest.I_0
 interface I_0 {
   // I_0 and I_1 should not be optimized at the same time.
   I_1 get();
@@ -17,6 +20,8 @@ interface I_0 {
 
 abstract class Impl_0 implements I_0 {}
 
+// PRECHECK: class: com.facebook.redextest.I_1
+// POSTCHECK-NOT: class: com.facebook.redextest.I_1
 interface I_1 {
   // The interface contains a method which reference the interface itself.
   public I_1 get();
@@ -26,10 +31,14 @@ class Impl_1 implements I_1 {
   public Impl_1 get() { return this; }
 }
 
+// PRECHECK: class: com.facebook.redextest.I_2
+// POSTCHECK-NOT: class: com.facebook.redextest.I_2
 interface I_2 {
   public int get();
 }
 
+// PRECHECK: class: com.facebook.redextest.I_3
+// POSTCHECK-NOT: class: com.facebook.redextest.I_3
 interface I_3 {
   public int get_3(I_2 obj);
 }

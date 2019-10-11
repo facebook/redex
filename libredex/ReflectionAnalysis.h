@@ -54,6 +54,7 @@ class Analyzer;
  enum AbstractObjectKind {
    OBJECT, // An object instantiated locally, passed in as a param or read from
            // heap
+   INT,    // An integer literal
    STRING, // A string literal
    CLASS,  // A java.lang.Class object
    FIELD,  // A java.lang.reflect.Field object
@@ -70,12 +71,29 @@ class Analyzer;
  };
 
 /* clang-format on */
+
+using AbstractHeapAddress = uint64_t;
+
 struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObjectKind obj_kind;
   DexType* dex_type;
   DexString* dex_string;
+  boost::optional<int64_t> dex_int = boost::none;
   // Attaching a set of potential dex types.
   std::unordered_set<DexType*> potential_dex_types;
+
+  // for objects of Class[] type, we model the heap stored array with a
+  // HeapClassArrayEnvironment
+  AbstractHeapAddress heap_address = 0;
+
+  // dex_type_array is present when obj_kind is method
+  // Because overloaded methods are essentially different methods, we need to
+  // use the parameter types to precisely know the exact methods. In order to
+  // do that, we need to do 2 things:
+  // 1. We need to store information of arrays of Class objects.
+  // 2. Associate the parameterType argument of getDeclaredMethod to the Class
+  // arrays.
+  boost::optional<std::vector<DexType*>> dex_type_array = boost::none;
 
   // AbstractObject must be default constructible in order to be used as an
   // abstract value.
@@ -85,6 +103,13 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
       : obj_kind(STRING),
         dex_type(nullptr),
         dex_string(s),
+        potential_dex_types() {}
+
+  explicit AbstractObject(int64_t i)
+      : obj_kind(INT),
+        dex_type(nullptr),
+        dex_string(nullptr),
+        dex_int(i),
         potential_dex_types() {}
 
   AbstractObject(AbstractObjectKind k, DexType* t)
@@ -112,8 +137,24 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
     always_assert(k == FIELD || k == METHOD);
   }
 
+  AbstractObject(AbstractObjectKind k, AbstractHeapAddress addr)
+      : obj_kind(k),
+        dex_type(DexType::make_type("[Ljava/lang/Class;")),
+        dex_string(nullptr),
+        potential_dex_types() {
+    heap_address = addr;
+    always_assert(k == OBJECT);
+  }
+
   void add_potential_dex_type(DexType* type) {
     potential_dex_types.insert(type);
+  }
+
+  bool is_known_class_array() const {
+    const auto class_array_type =
+        DexType::get_type(DexString::make_string("[Ljava/lang/Class;"));
+    return this->obj_kind == OBJECT && this->dex_type == class_array_type &&
+           heap_address != 0;
   }
 
   void clear() override {}
@@ -163,6 +204,12 @@ class ReflectionAnalysis final {
   explicit ReflectionAnalysis(DexMethod* dex_method);
 
   const ReflectionSites get_reflection_sites() const;
+
+  /**
+   * Return a parameter type array for this invoke method instruction.
+   */
+  boost::optional<std::vector<DexType*>> get_method_params(
+      IRInstruction* invoke_insn) const;
 
   bool has_found_reflection() const;
 

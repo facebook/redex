@@ -15,15 +15,15 @@
 #include "DexUtil.h"
 #include "IRAssembler.h"
 #include "IRCode.h"
+#include "RedexTest.h"
 #include "RemoveUnusedArgs.h"
 #include "ScopeHelper.h"
 
-struct RemoveUnusedArgsTest : testing::Test {
+struct RemoveUnusedArgsTest : public RedexTest {
   remove_unused_args::RemoveArgs* m_remove_args;
   std::vector<std::string> m_black_list;
 
   RemoveUnusedArgsTest() {
-    g_redex = new RedexContext();
     Scope dummy_scope;
     auto obj_t = get_object_type();
     auto dummy_t = DexType::make_type("LA;");
@@ -33,7 +33,7 @@ struct RemoveUnusedArgsTest : testing::Test {
         new remove_unused_args::RemoveArgs(dummy_scope, m_black_list);
   }
 
-  ~RemoveUnusedArgsTest() { delete g_redex; }
+  ~RemoveUnusedArgsTest() {}
 };
 
 // Checks argument liveness on a method with no arguments

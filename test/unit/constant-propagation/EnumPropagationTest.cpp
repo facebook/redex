@@ -69,8 +69,7 @@ TEST_F(EnumTest, ReferencesEqual) {
       (return v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(EnumTest, ReferencesNotEqual) {
@@ -105,8 +104,7 @@ TEST_F(EnumTest, ReferencesNotEqual) {
       (return v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(EnumTest, EqualsMethod) {
@@ -145,6 +143,5 @@ TEST_F(EnumTest, EqualsMethod) {
       (return v0)
     )
 )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }

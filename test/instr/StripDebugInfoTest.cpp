@@ -17,9 +17,12 @@ TEST_F(PostVerify, StripDebugInfo) {
   for (const auto& cls : classes) {
     std::vector<DexMethodRef*> methods;
     cls->gather_methods(methods);
-    for (auto dm : methods) {
-      if (!dm->is_def()) continue;
-      auto code = static_cast<DexMethod*>(dm)->get_dex_code();
+    for (auto mref : methods) {
+      auto dm = mref->as_def();
+      if (!dm) {
+        continue;
+      }
+      auto code = dm->get_dex_code();
       if (!code) {
         continue;
       }

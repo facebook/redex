@@ -24,7 +24,7 @@ void update_scope(const TypeSet& removable, Scope& scope) {
   scope.clear();
   for (DexClass* cls : tscope) {
     if (removable.count(cls->get_type()) > 0) {
-      TRACE(UNREF_INTF, 3, "Removing interface %s\n", SHOW(cls));
+      TRACE(UNREF_INTF, 3, "Removing interface %s", SHOW(cls));
     } else {
       scope.push_back(cls);
     }
@@ -103,7 +103,7 @@ void remove_referenced(const Scope& scope,
                        UnreferencedInterfacesPass::Metric& metric) {
 
   const auto check_type = [&](DexType* t, size_t& count) {
-    const auto type = get_array_type_or_self(t);
+    const auto type = get_element_type_if_array(t);
     if (candidates.count(type) > 0) {
       candidates.erase(type);
       count++;
@@ -207,7 +207,7 @@ void get_impls(DexType* intf,
 };
 
 void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
-  TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s\n",
+  TRACE(UNREF_INTF, 3, "Changing implements for %s:\n\tfrom %s",
       SHOW(cls), SHOW(cls->get_interfaces()));
   std::set<DexType*, dextypes_comparator> new_intfs;
   for (const auto& intf : cls->get_interfaces()->get_type_list()) {
@@ -222,7 +222,7 @@ void set_new_impl_list(const TypeSet& removable, DexClass* cls) {
     deque.emplace_back(intf);
   }
   auto implements = DexTypeList::make_type_list(std::move(deque));
-  TRACE(UNREF_INTF, 3, "\tto %s\n", SHOW(implements));
+  TRACE(UNREF_INTF, 3, "\tto %s", SHOW(implements));
   cls->set_interfaces(implements);
 }
 
@@ -247,17 +247,17 @@ void UnreferencedInterfacesPass::run_pass(
   update_scope(removable, scope);
   post_dexen_changes(scope, stores);
 
-  TRACE(UNREF_INTF, 1, "candidates %ld\n", m_metric.candidates);
-  TRACE(UNREF_INTF, 1, "external %ld\n", m_metric.external);
-  TRACE(UNREF_INTF, 1, "on abstract classes %ld\n", m_metric.on_abstract_cls);
-  TRACE(UNREF_INTF, 1, "field references %ld\n", m_metric.field_refs);
-  TRACE(UNREF_INTF, 1, "signature references %ld\n", m_metric.sig_refs);
-  TRACE(UNREF_INTF, 1, "instruction references %ld\n", m_metric.insn_refs);
-  TRACE(UNREF_INTF, 1, "annotation references %ld\n", m_metric.anno_refs);
-  TRACE(UNREF_INTF, 1, "unresolved methods %ld\n",
+  TRACE(UNREF_INTF, 1, "candidates %ld", m_metric.candidates);
+  TRACE(UNREF_INTF, 1, "external %ld", m_metric.external);
+  TRACE(UNREF_INTF, 1, "on abstract classes %ld", m_metric.on_abstract_cls);
+  TRACE(UNREF_INTF, 1, "field references %ld", m_metric.field_refs);
+  TRACE(UNREF_INTF, 1, "signature references %ld", m_metric.sig_refs);
+  TRACE(UNREF_INTF, 1, "instruction references %ld", m_metric.insn_refs);
+  TRACE(UNREF_INTF, 1, "annotation references %ld", m_metric.anno_refs);
+  TRACE(UNREF_INTF, 1, "unresolved methods %ld",
       m_metric.unresolved_meths);
-  TRACE(UNREF_INTF, 1, "updated implementations %ld\n", m_metric.updated_impls);
-  TRACE(UNREF_INTF, 1, "removable %ld\n", m_metric.removed);
+  TRACE(UNREF_INTF, 1, "updated implementations %ld", m_metric.updated_impls);
+  TRACE(UNREF_INTF, 1, "removable %ld", m_metric.removed);
 
   mgr.set_metric("updated implementations", m_metric.updated_impls);
   mgr.set_metric("removed_interfaces", m_metric.removed);

@@ -53,9 +53,8 @@ void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
 DexClass* create_simple_class(const std::string& name) {
   ClassCreator cc(DexType::make_type(name.c_str()));
   cc.set_super(get_object_type());
-  auto* ctor =
-      static_cast<DexMethod*>(DexMethod::make_method(name + ".<init>:()V"));
-  ctor->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto* ctor = DexMethod::make_method(name + ".<init>:()V")
+                   ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   cc.add_method(ctor);
   return cc.create();
 }
@@ -93,8 +92,7 @@ TEST_F(UsedVarsTest, simple) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(UsedVarsTest, join) {
@@ -147,8 +145,7 @@ TEST_F(UsedVarsTest, join) {
       (return-void)
     )
   )");
-  EXPECT_EQ(assembler::to_s_expr(code.get()),
-            assembler::to_s_expr(expected_code.get()));
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
 TEST_F(UsedVarsTest, noDeleteInit) {
@@ -231,9 +228,9 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
 TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
   auto foo_cls = create_simple_class("LFoo;");
   // This method will only modify the `this` argument.
-  auto no_side_effects_method = static_cast<DexMethod*>(
-      DexMethod::make_method("LFoo;.nosideeffects:()V"));
-  no_side_effects_method->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
+  auto no_side_effects_method =
+      DexMethod::make_method("LFoo;.nosideeffects:()V")
+          ->make_concrete(ACC_PUBLIC, /* is_virtual */ false);
   foo_cls->get_dmethods().push_back(no_side_effects_method);
 
   // The object is never read or allowed to escape, but there's a non-removable

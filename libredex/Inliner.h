@@ -43,9 +43,7 @@ void inline_tail_call(DexMethod* caller,
  * Inline `callee` into `caller` at `pos`.
  * This is a general-purpose inliner.
  */
-void inline_method(IRCode* caller,
-                   IRCode* callee,
-                   IRList::iterator pos);
+void inline_method(IRCode* caller, IRCode* callee, IRList::iterator pos);
 
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
@@ -65,6 +63,10 @@ enum MultiMethodInlinerMode {
   InterDex,
   IntraDex,
 };
+
+using CalleeCallerInsns = std::unordered_map<
+    DexMethod*,
+    std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>>;
 
 /**
  * Helper class to inline a set of candidates.
@@ -88,11 +90,10 @@ class MultiMethodInliner {
       const std::unordered_set<DexMethod*>& candidates,
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const inliner::InlinerConfig& config,
-      MultiMethodInlinerMode mode = InterDex);
+      MultiMethodInlinerMode mode = InterDex,
+      const CalleeCallerInsns& true_virtual_callers = {});
 
-  ~MultiMethodInliner() {
-    invoke_direct_to_static();
-  }
+  ~MultiMethodInliner() { invoke_direct_to_static(); }
 
   /**
    * attempt inlining for all candidates.
@@ -102,9 +103,7 @@ class MultiMethodInliner {
   /**
    * Return the count of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const {
-    return inlined;
-  }
+  std::unordered_set<DexMethod*> get_inlined() const { return inlined; }
 
   /**
    * Inline callees in the caller if is_inlinable below returns true.
@@ -288,9 +287,11 @@ class MultiMethodInliner {
   std::map<DexMethod*, std::vector<DexMethod*>, dexmethods_comparator>
       caller_callee;
 
-  // Cache of the opcode counts of each method after all its eligible callsites
+  std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
+      caller_virtual_callee;
+  // Cache of the inlined costs of each method after all its eligible callsites
   // have been inlined.
-  mutable std::unordered_map<const DexMethod*, size_t> m_opcode_counts;
+  mutable std::unordered_map<const DexMethod*, size_t> m_inlined_costs;
 
   // Cache of whether all callers of a callee are in the same class.
   mutable std::unordered_map<const DexMethod*, bool> m_callers_in_same_class;
@@ -327,8 +328,8 @@ class MultiMethodInliner {
 
   std::unordered_set<DexMethod*> m_make_static;
 
+  const MultiMethodInlinerMode m_mode;
+
  public:
-  const InliningInfo& get_info() {
-    return info;
-  }
+  const InliningInfo& get_info() { return info; }
 };

@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "AliasedRegisters.h"
+#include "ConstantUses.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRInstruction.h"
@@ -46,7 +47,9 @@ using namespace sparta;
 // with a different value. Any move between registers that are already aliased
 // is unneccesary. Eliminate them.
 //
-// It can also do the same thing with constant loads, if enabled by the config.
+// It can also do the same thing with constant loads, if generally enabled by
+// the config, or if selectively enabled when deemed safe by our own
+// constant-uses analysis.
 //
 // This optimization can also replace source registers with a representative
 // register (a whole alias group has a single representative). The reason is
@@ -72,20 +75,40 @@ struct RegisterPair {
 class AliasFixpointIterator final
     : public MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain> {
  public:
+  cfg::ControlFlowGraph& m_cfg;
+  DexMethod* m_method;
   const CopyPropagationPass::Config& m_config;
   const std::unordered_set<const IRInstruction*>& m_range_set;
   Stats& m_stats;
+  mutable std::unique_ptr<constant_uses::ConstantUses> m_constant_uses;
 
   AliasFixpointIterator(
       cfg::ControlFlowGraph& cfg,
+      DexMethod* method,
       const CopyPropagationPass::Config& config,
       const std::unordered_set<const IRInstruction*>& range_set,
       Stats& stats)
       : MonotonicFixpointIterator<cfg::GraphInterface, AliasDomain>(
             cfg, cfg.blocks().size()),
+        m_cfg(cfg),
+        m_method(method),
         m_config(config),
         m_range_set(range_set),
         m_stats(stats) {}
+
+  constant_uses::TypeDemand get_constant_type_demand(
+      IRInstruction* insn) const {
+    if (m_config.eliminate_const_literals) {
+      return constant_uses::TypeDemand::None;
+    }
+    if (m_config.eliminate_const_literals_with_same_type_demands) {
+      if (!m_constant_uses) {
+        m_constant_uses.reset(new constant_uses::ConstantUses(m_cfg, m_method));
+      }
+      return m_constant_uses->get_constant_type_demand(insn);
+    }
+    return constant_uses::TypeDemand::Error;
+  }
 
   // An instruction can be removed if we know the source and destination are
   // aliases.
@@ -144,7 +167,7 @@ class AliasFixpointIterator final
 
       // Result register can only be used by move-result(-pseudo).
       // Clear it after the move-result(-pseudo) has been processed
-      if (opcode::is_move_result_pseudo(op) || is_move_result(op)) {
+      if (opcode::is_move_result_any(op)) {
         aliases.break_alias(Value::create_register(RESULT_REGISTER));
         if (insn->dest_is_wide()) {
           aliases.break_alias(Value::create_register(RESULT_REGISTER + 1));
@@ -258,13 +281,11 @@ class AliasFixpointIterator final
       // It's easier to check the following move-result for the width of the
       // RESULT_REGISTER
       auto next = std::next(it);
-      if (next != end &&
-          (is_move_result(next->insn->opcode()) ||
-           opcode::is_move_result_pseudo(next->insn->opcode())) &&
+      if (next != end && opcode::is_move_result_any(next->insn->opcode()) &&
           next->insn->dest_is_wide()) {
         dest.upper = Value::create_register(RESULT_REGISTER + 1);
       }
-    } else if (insn->dests_size()) {
+    } else if (insn->has_dest()) {
       dest.lower = Value::create_register(insn->dest());
       if (insn->dest_is_wide()) {
         dest.upper = Value::create_register(insn->dest() + 1);
@@ -302,15 +323,22 @@ class AliasFixpointIterator final
         source.upper = Value::create_register(RESULT_REGISTER + 1);
       }
       break;
-    case OPCODE_CONST:
-      if (m_config.eliminate_const_literals) {
-        source.lower = Value::create_literal(insn->get_literal());
+    case OPCODE_CONST: {
+      auto type_demand = get_constant_type_demand(insn);
+      if (type_demand != constant_uses::TypeDemand::Error) {
+        source.lower = Value::create_literal(insn->get_literal(), type_demand);
       }
       break;
+    }
     case OPCODE_CONST_WIDE:
-      if (m_config.eliminate_const_literals && m_config.wide_registers) {
-        source.lower = Value::create_literal(insn->get_literal());
-        source.upper = Value::create_literal_upper(insn->get_literal());
+      if (m_config.wide_registers) {
+        auto type_demand = get_constant_type_demand(insn);
+        if (type_demand != constant_uses::TypeDemand::Error) {
+          source.lower =
+              Value::create_literal(insn->get_literal(), type_demand);
+          source.upper =
+              Value::create_literal_upper(insn->get_literal(), type_demand);
+        }
       }
       break;
     case OPCODE_CONST_STRING: {
@@ -400,11 +428,11 @@ Stats CopyPropagation::run(Scope scope) {
             std::string msg = checker.what();
             TRACE(RME,
                   1,
-                  "%s: Inconsistency in Dex code. %s\n",
+                  "%s: Inconsistency in Dex code. %s",
                   SHOW(m),
                   msg.c_str());
-            TRACE(RME, 1, "before code:\n%s\n", before_code.c_str());
-            TRACE(RME, 1, "after  code:\n%s\n", SHOW(m->get_code()));
+            TRACE(RME, 1, "before code:\n%s", before_code.c_str());
+            TRACE(RME, 1, "after  code:\n%s", SHOW(m->get_code()));
             always_assert(false);
           }
         }
@@ -413,7 +441,7 @@ Stats CopyPropagation::run(Scope scope) {
       },
       [](Output a, Output b) { return a + b; },
       Output(),
-      m_config.debug ? 1 : walk::parallel::default_num_threads());
+      m_config.debug ? 1 : redex_parallel::default_num_threads());
 }
 
 Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
@@ -432,7 +460,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
       }
       insn->normalize_registers();
     }
-    if (insn->dests_size() && insn->dest() > max_dest) {
+    if (insn->has_dest() && insn->dest() > max_dest) {
       max_dest = insn->dest();
     }
   }
@@ -444,7 +472,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   if (max_dest > m_config.max_estimated_registers) {
     TRACE(RME,
           2,
-          "[RME] Skipping {%s} - too many registers: %u.\n",
+          "[RME] Skipping {%s} - too many registers: %u.",
           SHOW(method),
           (unsigned)max_dest);
     ++stats.skipped_due_to_too_many_registers;
@@ -455,7 +483,8 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks();
 
-  AliasFixpointIterator fixpoint(code->cfg(), m_config, range_set, stats);
+  AliasFixpointIterator fixpoint(
+      code->cfg(), method, m_config, range_set, stats);
 
   fixpoint.run(AliasDomain());
   for (auto block : blocks) {
@@ -486,7 +515,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
     TRACE(RME,
           1,
           "Ignoring eliminate_const_literals because verify-none is not "
-          "enabled.\n");
+          "enabled.");
   }
   m_config.regalloc_has_run = mgr.regalloc_has_run();
 
@@ -499,15 +528,15 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
                   stats.skipped_due_to_too_many_registers);
   TRACE(RME,
         1,
-        "%d redundant moves eliminated\n",
+        "%d redundant moves eliminated",
         mgr.get_metric("redundant_moves_eliminated"));
   TRACE(RME,
         1,
-        "%d source registers replaced with representative\n",
+        "%d source registers replaced with representative",
         mgr.get_metric("source_regs_replaced_with_representative"));
   TRACE(RME,
         1,
-        "%d methods skipped due to too many registers\n",
+        "%d methods skipped due to too many registers",
         mgr.get_metric("methods_skipped_due_to_too_many_registers"));
 }
 

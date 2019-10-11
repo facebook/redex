@@ -371,8 +371,8 @@ inline match_t<IRInstruction, std::tuple<match_t<IRInstruction> > >
 /** return-void */
 match_t<IRInstruction> return_void();
 
-/** Matches instructions with specified number of arguments. Supports /range. */
-match_t<IRInstruction, std::tuple<int>> has_n_args(int n);
+/** Matches instructions with specified number of arguments. */
+match_t<IRInstruction, std::tuple<size_t>> has_n_args(size_t n);
 
 /** Matches instructions with specified opcode */
 inline match_t<IRInstruction, std::tuple<IROpcode>> is_opcode(IROpcode opcode) {

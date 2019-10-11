@@ -132,28 +132,31 @@ class IRInstruction final {
   uint16_t size() const;
 
   bool operator==(const IRInstruction&) const;
-  bool operator!=(const IRInstruction& that) const {
-    return !(*this == that);
-  }
+
+  bool operator!=(const IRInstruction& that) const { return !(*this == that); }
 
   bool has_string() const {
     return opcode::ref(m_opcode) == opcode::Ref::String;
   }
+
   bool has_type() const { return opcode::ref(m_opcode) == opcode::Ref::Type; }
-  bool has_field() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Field;
-  }
+
+  bool has_field() const { return opcode::ref(m_opcode) == opcode::Ref::Field; }
+
   bool has_method() const {
     return opcode::ref(m_opcode) == opcode::Ref::Method;
   }
+
   bool has_literal() const {
     return opcode::ref(m_opcode) == opcode::Ref::Literal;
   }
 
+  bool has_data() const { return opcode::ref(m_opcode) == opcode::Ref::Data; }
+
   /*
    * Number of registers used.
    */
-  size_t dests_size() const { return opcode_impl::dests_size(m_opcode); }
+  bool has_dest() const { return opcode_impl::has_dest(m_opcode); }
 
   size_t srcs_size() const { return m_srcs.size(); }
 
@@ -161,7 +164,7 @@ class IRInstruction final {
     return opcode_impl::has_move_result_pseudo(m_opcode);
   }
 
-  bool has_move_result() const {
+  bool has_move_result_any() const {
     return has_method() || has_move_result_pseudo() ||
            m_opcode == OPCODE_FILLED_NEW_ARRAY;
   }
@@ -178,11 +181,11 @@ class IRInstruction final {
 
   bool src_is_wide(size_t i) const;
   bool dest_is_wide() const {
-    always_assert(dests_size());
+    always_assert(has_dest());
     return opcode_impl::dest_is_wide(m_opcode);
   }
   bool dest_is_object() const {
-    always_assert(dests_size());
+    always_assert(has_dest());
     return opcode_impl::dest_is_object(m_opcode);
   }
   bool is_wide() const {
@@ -191,7 +194,7 @@ class IRInstruction final {
         return true;
       }
     }
-    return dests_size() && dest_is_wide();
+    return has_dest() && dest_is_wide();
   }
 
   /*
@@ -199,12 +202,11 @@ class IRInstruction final {
    */
   IROpcode opcode() const { return m_opcode; }
   uint16_t dest() const {
-    always_assert_log(dests_size(), "No dest for %s", SHOW(m_opcode));
+    always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
   uint16_t src(size_t i) const { return m_srcs.at(i); }
   const std::vector<uint16_t>& srcs() const { return m_srcs; }
-  uint16_t arg_word_count() const { return m_srcs.size(); }
 
   /*
    * Setters for logical parts of the instruction.
@@ -214,7 +216,7 @@ class IRInstruction final {
     return this;
   }
   IRInstruction* set_dest(uint16_t vreg) {
-    always_assert(dests_size());
+    always_assert(has_dest());
     m_dest = vreg;
     return this;
   }
@@ -222,7 +224,7 @@ class IRInstruction final {
     m_srcs.at(i) = vreg;
     return this;
   }
-  IRInstruction* set_arg_word_count(uint16_t count) {
+  IRInstruction* set_srcs_size(uint16_t count) {
     m_srcs.resize(count);
     return this;
   }
@@ -282,10 +284,6 @@ class IRInstruction final {
     return this;
   }
 
-  bool has_data() const {
-    return opcode::ref(m_opcode) == opcode::Ref::Data;
-  }
-
   DexOpcodeData* get_data() const {
     always_assert(has_data());
     return m_data;
@@ -322,7 +320,6 @@ class IRInstruction final {
 
  private:
   IROpcode m_opcode;
-  std::vector<uint16_t> m_srcs;
   uint16_t m_dest{0};
   union {
     // Zero-initialize this union with the uint64_t member instead of a
@@ -334,6 +331,8 @@ class IRInstruction final {
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
   };
+  // Put m_srcs at the end for dense packing
+  std::vector<uint16_t> m_srcs;
 };
 
 /*
@@ -342,19 +341,8 @@ class IRInstruction final {
  */
 bit_width_t required_bit_width(uint16_t v);
 
-inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
-
-/*
- * Necessary condition for an instruction to be converted to /range form
- */
-bool has_contiguous_srcs(const IRInstruction*);
-
 /*
  * Whether instruction must be converted to /range form in order to encode it
  * as a DexInstruction
  */
 bool needs_range_conversion(const IRInstruction*);
-
-DexOpcode convert_2to3addr(DexOpcode op);
-
-DexOpcode convert_3to2addr(DexOpcode op);

@@ -63,7 +63,7 @@ void MethodBlock::invoke(IROpcode opcode,
   always_assert(is_invoke(opcode));
   auto invk = new IRInstruction(opcode);
   uint16_t arg_count = static_cast<uint16_t>(args.size());
-  invk->set_method(meth)->set_arg_word_count(arg_count);
+  invk->set_method(meth)->set_srcs_size(arg_count);
   for (uint16_t i = 0; i < arg_count; i++) {
     auto arg = args.at(i);
     invk->set_src(i, arg.get_reg());
@@ -84,7 +84,7 @@ void MethodBlock::new_array(DexType* type,
                             const Location& dst) {
   auto insn = new IRInstruction(OPCODE_NEW_ARRAY);
   insn->set_type(type);
-  insn->set_arg_word_count(1);
+  insn->set_srcs_size(1);
   insn->set_src(0, size.get_reg());
   push_instruction(insn);
   push_instruction((new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT))
@@ -355,7 +355,9 @@ void MethodBlock::ret(Location loc) {
   push_instruction(ret);
 }
 
-void MethodBlock::ret_void() { push_instruction(new IRInstruction(OPCODE_RETURN_VOID)); }
+void MethodBlock::ret_void() {
+  push_instruction(new IRInstruction(OPCODE_RETURN_VOID));
+}
 
 void MethodBlock::ret(DexType* rtype, Location loc) {
   if (rtype != get_void_type()) {
@@ -520,8 +522,7 @@ MethodBlock* MethodBlock::switch_op(
 }
 
 void MethodCreator::load_locals(DexMethod* meth) {
-  auto ii = InstructionIterable(
-      meth->get_code()->get_param_instructions());
+  auto ii = InstructionIterable(meth->get_code()->get_param_instructions());
   auto it = ii.begin();
   if (!is_static(meth)) {
     make_local_at(meth->get_class(), it->insn->dest());
@@ -558,10 +559,9 @@ MethodBlock* MethodBlock::make_if_block(IRInstruction* insn) {
   return new MethodBlock(false_block, mc);
 }
 
-IRList::iterator MethodCreator::make_if_block(
-    IRList::iterator curr,
-    IRInstruction* insn,
-    IRList::iterator* false_block) {
+IRList::iterator MethodCreator::make_if_block(IRList::iterator curr,
+                                              IRInstruction* insn,
+                                              IRList::iterator* false_block) {
   return meth_code->make_if_block(++curr, insn, false_block);
 }
 
@@ -615,10 +615,9 @@ std::vector<Location> MethodCreator::get_reg_args() {
 }
 
 MethodCreator::MethodCreator(DexMethod* meth)
-    : method(meth)
-    , meth_code(meth->get_code()) {
+    : method(meth), meth_code(meth->get_code()) {
   always_assert_log(meth->is_concrete(),
-      "Method must be concrete or use the other ctor");
+                    "Method must be concrete or use the other ctor");
   load_locals(meth);
   main_block = new MethodBlock(meth_code->main_block(), this);
 }

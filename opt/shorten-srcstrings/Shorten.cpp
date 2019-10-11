@@ -117,7 +117,7 @@ static void strip_src_strings(
     }
   }
 
-  TRACE(SHORTEN, 1, "src strings shortened %ld, %lu bytes saved\n", shortened,
+  TRACE(SHORTEN, 1, "src strings shortened %ld, %lu bytes saved", shortened,
       string_savings);
 
   mgr.incr_metric(METRIC_SHORTENED_STRINGS, shortened);

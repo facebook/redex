@@ -14,7 +14,6 @@
 #include "DexUtil.h"
 #include "Mutators.h"
 #include "ReachableClasses.h"
-#include "VirtualScope.h"
 #include "Walkers.h"
 
 namespace interdex {
@@ -62,11 +61,11 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
 }
 
 bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
-    DexMethod* m,
+    DexMethod* meth,
     std::unordered_map<DexMethod*, DexClass*>& relocated_methods) {
   std::unordered_set<DexMethodRef*> methods_preventing_relocation;
   if (gather_invoked_methods_that_prevent_relocation(
-          m, &methods_preventing_relocation)) {
+          meth, &methods_preventing_relocation)) {
     always_assert(methods_preventing_relocation.size() == 0);
     // No issues with direct methods.
     return true;
@@ -76,9 +75,11 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   if (std::any_of(methods_preventing_relocation.begin(),
                   methods_preventing_relocation.end(),
                   [&relocated_methods](DexMethodRef* mref) {
-                    return !mref->is_def() ||
-                           !relocated_methods.count(
-                               static_cast<DexMethod*>(mref));
+                    auto mdef = mref->as_def();
+                    if (mdef == nullptr) {
+                      return true;
+                    }
+                    return !relocated_methods.count(mdef);
                   })) {
     // If a problematic method that gets invoked isn't getting relocated itself,
     // then we give up
@@ -92,9 +93,9 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   // information to turn more eventually unrelocated static methods back into
   // non-static direct methods.
   for (DexMethodRef* mref : methods_preventing_relocation) {
-    always_assert(mref->is_def());
-    DexClass* relocated_cls =
-        relocated_methods.at(static_cast<DexMethod*>(mref));
+    auto mdef = mref->as_def();
+    always_assert(mdef);
+    DexClass* relocated_cls = relocated_methods.at(mdef);
     RelocatedMethodInfo& info = m_relocated_method_infos.at(relocated_cls);
     info.is_dependent_non_static_direct = true;
   }
@@ -152,7 +153,7 @@ void CrossDexRelocator::relocate_methods(
         }
 
         std::string new_type_name = create_new_type_name(kind);
-        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}\n",
+        TRACE(IDEX, 3, "[dex ordering] relocating {%s::%s} to {%s::%s}",
               m->get_class()->get_name()->c_str(), m->get_name()->c_str(),
               new_type_name.c_str(), m->get_name()->c_str());
 
@@ -192,7 +193,7 @@ void CrossDexRelocator::re_relocate_method(const RelocatedMethodInfo& info,
                                            DexClass* target_class) {
   DexMethod* method = info.method;
   always_assert(is_static(method));
-  TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}\n",
+  TRACE(IDEX, 4, "[dex ordering] re-relocating {%s::%s} %sto {%s::%s}",
         method->get_class()->get_name()->c_str(), method->get_name()->c_str(),
         target_class == info.source_class ? "back " : "",
         target_class->get_name()->c_str(), method->get_name()->c_str());
@@ -309,7 +310,7 @@ void CrossDexRelocator::add_to_current_dex(DexClass* cls) {
 }
 
 void CrossDexRelocator::cleanup(const Scope& final_scope) {
-  TRACE(IDEX, 2, "[dex ordering] %zu relocatable methods\n",
+  TRACE(IDEX, 2, "[dex ordering] %zu relocatable methods",
         m_relocated_method_infos.size());
 
   // We now rewrite all invoke-instructions as needed to reflect the fact that
@@ -321,19 +322,20 @@ void CrossDexRelocator::cleanup(const Scope& final_scope) {
         switch (op) {
         case OPCODE_INVOKE_DIRECT:
         case OPCODE_INVOKE_SUPER:
-        case OPCODE_INVOKE_VIRTUAL:
-          if (insn->get_method()->is_def() &&
-              m_relocated_non_static_methods.count(
-                  static_cast<DexMethod*>(insn->get_method()))) {
+        case OPCODE_INVOKE_VIRTUAL: {
+          auto method = insn->get_method()->as_def();
+          if (method && m_relocated_non_static_methods.count(method)) {
             insn->set_opcode(OPCODE_INVOKE_STATIC);
           }
           break;
+        }
         case OPCODE_INVOKE_STATIC:
-        case OPCODE_INVOKE_INTERFACE:
-          always_assert(!insn->get_method()->is_def() ||
-                        !m_relocated_non_static_methods.count(
-                            static_cast<DexMethod*>(insn->get_method())));
+        case OPCODE_INVOKE_INTERFACE: {
+          auto method = insn->get_method()->as_def();
+          always_assert(!method ||
+                        !m_relocated_non_static_methods.count(method));
           break;
+        }
         default:
           break;
         }

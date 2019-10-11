@@ -19,8 +19,7 @@
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
-#include "JarLoader.h"
-#include "RedexContext.h"
+#include "RedexTest.h"
 
 using namespace reflection;
 
@@ -55,35 +54,9 @@ void validate_arguments(IRInstruction* insn,
   EXPECT_EQ(it->second, actual_str);
 }
 
-TEST(SimpleReflectionAnalysisTest, nominalCases) {
-  g_redex = new RedexContext();
+class SimpleReflectionAnalysisTest : public RedexIntegrationTest {};
 
-  std::vector<DexStore> stores;
-  DexMetadata dm;
-  dm.set_id("classes");
-  DexStore root_store(dm);
-
-  const char* dexfile = std::getenv("dexfile");
-  ASSERT_NE(nullptr, dexfile);
-  root_store.add_classes(load_classes_from_dex(dexfile));
-  stores.emplace_back(std::move(root_store));
-
-  const char* android_env_sdk = std::getenv("ANDROID_SDK");
-  const char* android_config_sdk = std::getenv("sdk_path");
-
-  const char* android_sdk = (strncmp(android_config_sdk, "None", 4) != 0)
-                                ? android_config_sdk
-                                : android_env_sdk;
-
-  ASSERT_NE(nullptr, android_sdk);
-  const char* android_target = std::getenv("android_target");
-  ASSERT_NE(nullptr, android_target);
-  std::string android_version(android_target);
-  ASSERT_NE("NotFound", android_version);
-  std::string sdk_jar = std::string(android_sdk) + "/platforms/" +
-                        android_version + "/android.jar";
-  ASSERT_TRUE(load_jar_file(sdk_jar.c_str()));
-
+TEST_F(SimpleReflectionAnalysisTest, nominalCases) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
   for (const auto& cls : scope) {
@@ -103,6 +76,4 @@ TEST(SimpleReflectionAnalysisTest, nominalCases) {
       }
     }
   }
-
-  delete g_redex;
 }

@@ -132,6 +132,10 @@ class DexIdx {
     return m_dexbase + offset;
   }
 
+  uint32_t get_checksum() const {
+    return ((const dex_header*)m_dexbase)->checksum;
+  }
+
   DexTypeList* get_type_list(uint32_t offset);
 
   friend std::string show(DexIdx*);
