@@ -31,7 +31,6 @@ enum KeepReasonType {
   REFLECTION,
   MANIFEST,
   XML,
-  CLINIT,
   ANNO,
   SERIALIZABLE,
   UNKNOWN,

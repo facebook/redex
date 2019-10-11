@@ -25,8 +25,6 @@ std::ostream& operator<<(std::ostream& os, const Reason& reason) {
     return os << "MANIFEST";
   case XML:
     return os << "XML";
-  case CLINIT:
-    return os << "CLINIT";
   case ANNO:
     return os << "ANNO";
   case SERIALIZABLE:

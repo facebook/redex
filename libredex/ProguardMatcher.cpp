@@ -487,22 +487,6 @@ bool KeepRuleMatcher::method_level_match(
   return boost::regex_match(dequalified_name.c_str(), method_regex);
 }
 
-void keep_clinits(DexClass* cls) {
-  for (auto method : cls->get_dmethods()) {
-    if (is_clinit(method) && method->get_code()) {
-      auto ii = InstructionIterable(method->get_code());
-      auto it = ii.begin();
-      while (opcode::is_load_param(it->insn->opcode())) {
-        ++it;
-      }
-      if (!(it->insn->opcode() == OPCODE_RETURN_VOID && (++it) == ii.end())) {
-        method->rstate.set_has_keep(keep_reason::CLINIT);
-      }
-      break;
-    }
-  }
-}
-
 template <class Container>
 void KeepRuleMatcher::keep_methods(
     bool apply_modifiers,
@@ -661,8 +645,6 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
     if (is_blanket_keepnames_rule(m_keep_rule)) {
       cls->rstate.set_blanket_keepnames();
     }
-    // Mark non-empty <clinit> methods as seeds.
-    keep_clinits(cls);
   }
   // Walk up the hierarchy performing seed marking.
   DexClass* class_to_mark = cls;
