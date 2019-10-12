@@ -34,6 +34,7 @@ struct SynthConfig {
   bool synth_only;
   bool remove_pub;
   bool remove_constructors;
+  std::unordered_set<const DexType*> black_list_types;
 
   SynthConfig() {
     // defaults
