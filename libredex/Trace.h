@@ -16,6 +16,7 @@
 #define TMS          \
   TM(ADD_REDEX_TXT)  \
   TM(ACCESS)         \
+  TM(API_FLAG)       \
   TM(ANNO)           \
   TM(ARGS)           \
   TM(BBPROFILE)      \

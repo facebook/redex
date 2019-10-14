@@ -17,6 +17,8 @@ struct FrameworkAPI {
   std::unordered_set<DexFieldRef*> frefs;
 };
 
+using TypeToFrameworkAPI = std::unordered_map<const DexType*, FrameworkAPI>;
+
 class ApiLevelsUtils {
  public:
   ApiLevelsUtils(const Scope& scope,
@@ -28,19 +30,20 @@ class ApiLevelsUtils {
     load_types_to_framework_api();
   }
 
-  const std::unordered_map<const DexType*, FrameworkAPI>&
-  get_types_to_framework_api() {
+  const TypeToFrameworkAPI& get_types_to_framework_api() {
     return m_types_to_framework_api;
   }
 
   std::unordered_map<DexType*, FrameworkAPI> get_framework_classes();
+
+  void filter_types(const std::unordered_set<const DexType*>& types);
 
  private:
   void load_types_to_framework_api();
   void check_and_update_release_to_framework();
 
   const Scope& m_scope;
-  std::unordered_map<const DexType*, FrameworkAPI> m_types_to_framework_api;
+  TypeToFrameworkAPI m_types_to_framework_api;
   std::string m_framework_api_info_filename;
   uint32_t m_api_level;
 };

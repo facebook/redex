@@ -162,6 +162,8 @@ bool check_methods(
 
     auto* new_proto =
         type_reference::get_new_proto(meth->get_proto(), release_to_framework);
+    // NOTE: For now, this assumes no obfuscation happened. We need to update
+    //       it, if it runs later.
     if (!find_method(meth->get_name(), new_proto, framework_api.mrefs)) {
       return false;
     }
@@ -384,6 +386,16 @@ void ApiLevelsUtils::load_types_to_framework_api() {
   }
 
   // Checks and updates the mapping from release libraries to framework classes.
+  check_and_update_release_to_framework();
+}
+
+void ApiLevelsUtils::filter_types(
+    const std::unordered_set<const DexType*>& types) {
+  for (const auto* type : types) {
+    m_types_to_framework_api.erase(type);
+  }
+
+  // Make sure we clean up the dependencies.
   check_and_update_release_to_framework();
 }
 
