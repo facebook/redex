@@ -1,4 +1,19 @@
-/* your custom css */
+/**
+ * /src/css/custom.css
+ * You can override the default Infima variables here.
+ * Note: this is not a complete list of --ifm- variables.
+ */
+ :root {
+    --ifm-color-primary: #75c7a4;
+    --ifm-color-primary-dark: rgb(105, 173, 147);
+    --ifm-color-primary-darker: rgb(99, 163, 139);
+    --ifm-color-primary-darkest: rgb(82, 134, 115);
+    --ifm-color-primary-light: rgb(138, 201, 178);
+    --ifm-color-primary-lighter: rgb(158, 211, 191);
+    --ifm-color-primary-lightest: rgb(186, 224, 210);
+  }
+
+  /* your custom css */
 
 @font-face {
   font-family: 'Lato';
@@ -40,46 +55,3 @@
   font-style: normal;
 }
 
-.homeContainer {
-  background: $primaryColor;
-}
-
-.navPusher {
-  background: $secondaryColor;
-}
-
-.projectTitle {
-  color: #fff;
-}
-
-.homeContainer .homeWrapper {
-  padding: 6em 10px;
-}
-
-.button {
-  border: 1px solid #fff;
-  color: #fff;
-}
-
-.button:hover {
-  background: #fff;
-  color: $primaryColor;
-}
-
-body {
-  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
-}
-
-.navigationSlider .slidingNav ul {
-  color: $primaryColor;
-}
-
-.navigationSlider .slidingNav ul li:hover {
-  color: #fff;
-}
-
-.navigationSlider .slidingNav ul li a {
-  font-size: 1em;
-  font-weight: bold;
-  padding: 15px;
-}
