@@ -14,7 +14,7 @@
 
 #include "DexAccess.h"
 
-namespace redex {
+namespace keep_rules {
 
 struct MemberSpecification {
   DexAccessFlags requiredSetAccessFlags = DexAccessFlags(0);
@@ -150,4 +150,4 @@ struct ProguardConfiguration {
   ProguardConfiguration(const ProguardConfiguration&) = delete;
 };
 
-} // namespace redex
+} // namespace keep_rules

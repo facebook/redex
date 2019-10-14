@@ -14,8 +14,6 @@
 
 namespace redex {
 
-std::string dexdump_name_to_dot_name(const std::string& dexdump_name);
-
 template <class Container>
 void print_methods(std::ostream& output,
                    const ProguardMap& pg_map,

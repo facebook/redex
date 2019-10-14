@@ -65,7 +65,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
 
     DexClass* cls = type_class(cls_type);
     auto external_name =
-        JavaNameUtil::internal_to_external(cls->get_deobfuscated_name());
+        java_names::internal_to_external(cls->get_deobfuscated_name());
     auto external_name_s = DexString::make_string(external_name.c_str());
     always_assert_log(DexField::get_field(cls_type, field_name, string_type) ==
                           nullptr,

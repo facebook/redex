@@ -13,7 +13,7 @@
 #include "ProguardParser.h"
 #include "ProguardRegex.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 bool parse_boolean_command(std::vector<unique_ptr<Token>>::iterator* it,
@@ -1070,4 +1070,4 @@ void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
 }
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

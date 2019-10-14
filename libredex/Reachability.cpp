@@ -376,7 +376,7 @@ template <class Parent>
 void TransitiveClosureMarker::push_typelike_strings(
     const Parent* parent, const std::vector<DexString*>& strings) {
   for (auto const& str : strings) {
-    auto internal = JavaNameUtil::external_to_internal(str->c_str());
+    auto internal = java_names::external_to_internal(str->c_str());
     auto type = DexType::get_type(internal.c_str());
     if (!type) {
       continue;

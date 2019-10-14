@@ -83,7 +83,7 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
     for (auto& iter : method_to_id) {
       DexMethod* method = iter.first;
       std::string pretty_name =
-          JavaNameUtil::internal_to_external(method->get_class()->str());
+          java_names::internal_to_external(method->get_class()->str());
       pretty_name.push_back('.');
       pretty_name += method->str();
       auto mid_iter = mid->find(pretty_name);
@@ -411,7 +411,7 @@ TEST(IODITest, encodedMetadataContainsAllIODI) {
     }
     for (DexMethod* method : data.second) {
       std::string pretty_name =
-          JavaNameUtil::internal_to_external(method->get_class()->str());
+          java_names::internal_to_external(method->get_class()->str());
       pretty_name.push_back('.');
       pretty_name += method->str();
       auto iter = mid.find(pretty_name);

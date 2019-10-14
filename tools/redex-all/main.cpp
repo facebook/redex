@@ -752,15 +752,15 @@ static void assert_dex_magic_consistency(const std::string& source,
  */
 void redex_frontend(ConfigFiles& conf, /* input */
                     Arguments& args, /* inout */
-                    redex::ProguardConfiguration& pg_config,
+                    keep_rules::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
                     Json::Value& stats) {
   Timer redex_frontend_timer("Redex_frontend");
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
-    redex::proguard_parser::parse_file(pg_config_path, &pg_config);
+    keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  redex::proguard_parser::remove_blacklisted_rules(&pg_config);
+  keep_rules::proguard_parser::remove_blacklisted_rules(&pg_config);
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
@@ -868,8 +868,8 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
-    redex::process_no_optimizations_rules(conf.get_no_optimizations_annos(),
-                                          scope);
+    keep_rules::process_no_optimizations_rules(
+        conf.get_no_optimizations_annos(), scope);
     monitor_count::mark_sketchy_methods_with_no_optimize(scope);
   }
   {
@@ -1100,7 +1100,7 @@ int main(int argc, char* argv[]) {
     RedexContext::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
-    auto pg_config = std::make_unique<redex::ProguardConfiguration>();
+    auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles conf(args.config, args.out_dir);
 

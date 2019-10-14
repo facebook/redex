@@ -15,9 +15,9 @@
 
 class DexMethod;
 
-namespace redex {
+namespace keep_rules {
 struct KeepSpec;
-} // namespace redex
+} // namespace keep_rules
 
 /*
  * This module enumerates and defines the various reasons why we consider
@@ -40,7 +40,7 @@ enum KeepReasonType {
 struct Reason {
   KeepReasonType type;
   union {
-    const redex::KeepSpec* keep_rule{nullptr};
+    const keep_rules::KeepSpec* keep_rule{nullptr};
     const DexMethod* method;
   };
 
@@ -48,7 +48,7 @@ struct Reason {
     always_assert(type != KEEP_RULE && type != REFLECTION);
   }
 
-  explicit Reason(const redex::KeepSpec* keep_rule)
+  explicit Reason(const keep_rules::KeepSpec* keep_rule)
       : type(KEEP_RULE), keep_rule(keep_rule) {}
 
   explicit Reason(KeepReasonType type, const DexMethod* reflection_source)

@@ -31,7 +31,7 @@ std::string convert_scalar_type(std::string type) {
   if (it != prim_map.end()) {
     return it->second;
   }
-  return JavaNameUtil::external_to_internal(type);
+  return java_names::external_to_internal(type);
 }
 
 std::string convert_field(const std::string& cls,

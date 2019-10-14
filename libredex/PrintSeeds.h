@@ -12,7 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
-namespace redex {
+namespace keep_rules {
 
 void print_seeds(std::ostream& output,
                  const ProguardMap& pg_map,

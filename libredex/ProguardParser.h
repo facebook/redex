@@ -14,7 +14,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardLexer.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config);
@@ -29,4 +29,4 @@ void parse(istream& config,
 void remove_blacklisted_rules(ProguardConfiguration* pg_config);
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

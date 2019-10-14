@@ -13,7 +13,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardParser.h"
 
-using namespace redex;
+using namespace keep_rules;
 
 // Make sure we can parse an empty string
 TEST(ProguardParserTest, empty1) {

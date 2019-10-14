@@ -18,8 +18,8 @@ ProguardObfuscationTest::ProguardObfuscationTest(
 
 bool ProguardObfuscationTest::configure_proguard(
     const char* configuration_file) {
-  redex::ProguardConfiguration pg_config;
-  redex::proguard_parser::parse_file(configuration_file, &pg_config);
+  keep_rules::ProguardConfiguration pg_config;
+  keep_rules::proguard_parser::parse_file(configuration_file, &pg_config);
 
   if (!pg_config.ok) {
     return false;

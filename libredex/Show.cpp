@@ -47,7 +47,7 @@ std::string humanize(std::string const& type) {
     ss << humanize(type.substr(1)) << "[]";
     return ss.str();
   } else if (type[0] == 'L') {
-    return JavaNameUtil::internal_to_external(type);
+    return java_names::internal_to_external(type);
   }
   return "unknown";
 }

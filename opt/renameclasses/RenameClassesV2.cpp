@@ -165,7 +165,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   for (auto dex_str : all_strings) {
     const std::string& s = dex_str->str();
     if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
-      const std::string& internal_name = JavaNameUtil::external_to_internal(s);
+      const std::string& internal_name = java_names::external_to_internal(s);
       auto cls = type_class(DexType::get_type(internal_name));
       if (cls != nullptr && !cls->is_external()) {
         result.insert(internal_name);
@@ -432,8 +432,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
   for (const auto& it : aliases.get_class_map()) {
-    external_names.emplace(
-        JavaNameUtil::internal_to_external(it.first->c_str()));
+    external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
   std::vector<DexString*> all_strings;
   for (auto clazz : scope) {
@@ -809,7 +808,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
         // already exist, then there's no way it can match a class
         // that was renamed
         DexString* internal_str = DexString::get_string(
-            JavaNameUtil::external_to_internal(str->c_str()).c_str());
+            java_names::external_to_internal(str->c_str()));
         // Look up both str and intternal_str in the map; maybe str was
         // internal to begin with?
         DexString* alias_from = nullptr;
@@ -822,7 +821,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
           // make_string here because the external form of the name may not be
           // present in the string table
           alias_to = DexString::make_string(
-              JavaNameUtil::internal_to_external(alias_to->str()));
+              java_names::internal_to_external(alias_to->str()));
         } else if (aliases.has(str)) {
           alias_from = str;
           alias_to = aliases.at(str);
@@ -879,8 +878,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(const AliasMap& aliases,
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : aliases.get_class_map()) {
     aliases_for_layouts.emplace(
-        JavaNameUtil::internal_to_external(apair.first->str()),
-        JavaNameUtil::internal_to_external(apair.second->str()));
+        java_names::internal_to_external(apair.first->str()),
+        java_names::internal_to_external(apair.second->str()));
   }
   ssize_t layout_bytes_delta = 0;
   size_t num_layout_renamed = 0;

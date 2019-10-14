@@ -23,7 +23,7 @@
 #include "Timer.h"
 #include "WorkQueue.h"
 
-using namespace redex;
+using namespace keep_rules;
 
 namespace {
 
@@ -261,19 +261,19 @@ class KeepRuleMatcher {
 
   template <class Container>
   void keep_fields(const Container& fields,
-                   const redex::MemberSpecification& fieldSpecification,
+                   const MemberSpecification& fieldSpecification,
                    const boost::regex& fieldname_regex);
 
   template <class Container>
-  void keep_methods(const redex::MemberSpecification& methodSpecification,
+  void keep_methods(const MemberSpecification& methodSpecification,
                     const Container& methods,
                     const boost::regex& method_regex);
 
-  bool field_level_match(const redex::MemberSpecification& fieldSpecification,
+  bool field_level_match(const MemberSpecification& fieldSpecification,
                          const DexField* field,
                          const boost::regex& fieldname_regex);
 
-  bool method_level_match(const redex::MemberSpecification& methodSpecification,
+  bool method_level_match(const MemberSpecification& methodSpecification,
                           const DexMethod* method,
                           const boost::regex& method_regex);
 
@@ -393,7 +393,7 @@ std::string extract_method_name_and_type(std::string qualified_fieldname) {
 }
 
 bool KeepRuleMatcher::field_level_match(
-    const redex::MemberSpecification& fieldSpecification,
+    const MemberSpecification& fieldSpecification,
     const DexField* field,
     const boost::regex& fieldname_regex) {
   // Check for annotation guards.
@@ -414,10 +414,9 @@ bool KeepRuleMatcher::field_level_match(
 }
 
 template <class Container>
-void KeepRuleMatcher::keep_fields(
-    const Container& fields,
-    const redex::MemberSpecification& fieldSpecification,
-    const boost::regex& fieldname_regex) {
+void KeepRuleMatcher::keep_fields(const Container& fields,
+                                  const MemberSpecification& fieldSpecification,
+                                  const boost::regex& fieldname_regex) {
   for (DexField* field : fields) {
     if (!field_level_match(fieldSpecification, field, fieldname_regex)) {
       continue;
@@ -447,7 +446,7 @@ void KeepRuleMatcher::apply_field_keeps(const DexClass* cls) {
 }
 
 bool KeepRuleMatcher::method_level_match(
-    const redex::MemberSpecification& methodSpecification,
+    const MemberSpecification& methodSpecification,
     const DexMethod* method,
     const boost::regex& method_regex) {
   // Check to see if the method match is guarded by an annotation match.
@@ -468,7 +467,7 @@ bool KeepRuleMatcher::method_level_match(
 
 template <class Container>
 void KeepRuleMatcher::keep_methods(
-    const redex::MemberSpecification& methodSpecification,
+    const MemberSpecification& methodSpecification,
     const Container& methods,
     const boost::regex& method_regex) {
   for (DexMethod* method : methods) {
@@ -595,21 +594,21 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   if (m_keep_rule.includedescriptorclasses) {
     std::cerr << "WARNING: 'includedescriptorclasses' keep modifier is NOT "
                  "implemented: "
-              << redex::show_keep(m_keep_rule) << std::endl;
+              << show_keep(m_keep_rule) << std::endl;
   }
   if (m_keep_rule.allowoptimization) {
     std::cerr
         << "WARNING: 'allowoptimization' keep modifier is NOT implemented: "
-        << redex::show_keep(m_keep_rule) << std::endl;
+        << show_keep(m_keep_rule) << std::endl;
   }
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
     cls->rstate.set_has_keep(&m_keep_rule);
     if (cls->rstate.report_whyareyoukeeping()) {
-      TRACE(
-          PGR, 2, "whyareyoukeeping Class %s kept by %s",
-          redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name()).c_str(),
-          show_keep(m_keep_rule).c_str());
+      TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",
+            java_names::internal_to_external(cls->get_deobfuscated_name())
+                .c_str(),
+            show_keep(m_keep_rule).c_str());
     }
   }
   // Walk up the hierarchy performing seed marking.
@@ -679,7 +678,7 @@ void KeepRuleMatcher::keep_processor(DexClass* cls) {
 
 DexClass* ProguardMatcher::find_single_class(
     const std::string& descriptor) const {
-  auto const& dsc = JavaNameUtil::external_to_internal(descriptor);
+  auto const& dsc = java_names::external_to_internal(descriptor);
   DexType* typ = DexType::get_type(m_pg_map.translate_class(dsc).c_str());
   if (typ == nullptr) {
     typ = DexType::get_type(dsc.c_str());
@@ -782,7 +781,7 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
               2,
               "whyareyoukeeping Class %s kept because it is an annotation "
               "class\n",
-              redex::dexdump_name_to_dot_name(cls->get_deobfuscated_name())
+              java_names::internal_to_external(cls->get_deobfuscated_name())
                   .c_str());
       }
     }
@@ -791,7 +790,7 @@ void ProguardMatcher::mark_all_annotation_classes_as_keep() {
 
 } // namespace
 
-namespace redex {
+namespace keep_rules {
 
 void process_proguard_rules(const ProguardMap& pg_map,
                             const Scope& classes,
@@ -805,4 +804,4 @@ void process_proguard_rules(const ProguardMap& pg_map,
   }
 }
 
-} // namespace redex
+} // namespace keep_rules
