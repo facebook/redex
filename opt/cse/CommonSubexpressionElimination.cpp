@@ -167,43 +167,30 @@ using RefEnvironment =
 class CseEnvironment final
     : public sparta::ReducedProductAbstractDomain<CseEnvironment,
                                                   DefEnvironment,
-                                                  DefEnvironment,
                                                   RefEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
-  CseEnvironment() = default;
+  CseEnvironment()
+      : ReducedProductAbstractDomain(
+            std::make_tuple(DefEnvironment(), RefEnvironment())) {}
 
-  CseEnvironment(std::initializer_list<std::pair<register_t, ValueIdDomain>>)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            DefEnvironment(), DefEnvironment(), RefEnvironment())) {}
+  static void reduce_product(std::tuple<DefEnvironment, RefEnvironment>&) {}
 
-  static void reduce_product(
-      std::tuple<DefEnvironment, DefEnvironment, RefEnvironment>&) {}
-
-  const DefEnvironment& get_def_env(bool is_barrier_sensitive) const {
-    if (is_barrier_sensitive) {
-      return ReducedProductAbstractDomain::get<0>();
-    } else {
-      return ReducedProductAbstractDomain::get<1>();
-    }
+  const DefEnvironment& get_def_env() const {
+    return ReducedProductAbstractDomain::get<0>();
   }
 
   const RefEnvironment& get_ref_env() const {
-    return ReducedProductAbstractDomain::get<2>();
+    return ReducedProductAbstractDomain::get<1>();
   }
 
-  CseEnvironment& mutate_def_env(bool is_barrier_sensitive,
-                                 std::function<void(DefEnvironment*)> f) {
-    if (is_barrier_sensitive) {
-      apply<0>(f);
-    } else {
-      apply<1>(f);
-    }
+  CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
+    apply<0>(f);
     return *this;
   }
 
   CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
-    apply<2>(f);
+    apply<1>(f);
     return *this;
   }
 };
@@ -416,9 +403,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         auto c = domain.get_constant();
         if (c) {
           auto value_id = *c;
-          auto ibs = is_barrier_sensitive(value_id);
-          if (!current_state->get_def_env(ibs).get(value_id).get_constant()) {
-            current_state->mutate_def_env(ibs, [&](DefEnvironment* env) {
+          if (!current_state->get_def_env().get(value_id).get_constant()) {
+            current_state->mutate_def_env([&](DefEnvironment* env) {
               env->set(value_id, IRInstructionDomain(insn));
             });
           }
@@ -451,12 +437,11 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // the time this algorithm takes seems reasonable.)
 
       bool any_changes = false;
-      current_state->mutate_def_env(true /* is_barrier_sensitive */,
-                                    [mask, &any_changes](DefEnvironment* env) {
-                                      if (env->erase_all_matching(mask)) {
-                                        any_changes = true;
-                                      }
-                                    });
+      current_state->mutate_def_env([mask, &any_changes](DefEnvironment* env) {
+        if (env->erase_all_matching(mask)) {
+          any_changes = true;
+        }
+      });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
         bool any_map_changes = env->map([mask](ValueIdDomain domain) {
           auto c = domain.get_constant();
@@ -491,20 +476,14 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                           const IRValue& value,
                           CseEnvironment* current_state) const {
     auto value_id = *get_value_id(value);
-    auto ibs = is_barrier_sensitive(value_id);
     auto insn_domain = IRInstructionDomain(insn);
-    current_state->mutate_def_env(ibs,
-                                  [value_id, insn_domain](DefEnvironment* env) {
-                                    env->set(value_id, insn_domain);
-                                  });
+    current_state->mutate_def_env([value_id, insn_domain](DefEnvironment* env) {
+      env->set(value_id, insn_domain);
+    });
   }
 
   bool is_pre_state_src(value_id_t value_id) const {
     return !!m_pre_state_value_ids.count(value_id);
-  }
-
-  bool is_barrier_sensitive(value_id_t value_id) const {
-    return !!(value_id & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
   }
 
   size_t get_value_ids_size() { return m_value_ids.size(); }
@@ -1209,8 +1188,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
       auto value_id = *ref_c;
       always_assert(!analyzer.is_pre_state_src(value_id));
-      auto ibs = analyzer.is_barrier_sensitive(value_id);
-      auto def_c = env.get_def_env(ibs).get(value_id).get_constant();
+      auto def_c = env.get_def_env().get(value_id).get_constant();
       if (!def_c) {
         continue;
       }
