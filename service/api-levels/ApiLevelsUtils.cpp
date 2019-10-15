@@ -65,11 +65,7 @@ ApiLevelsUtils::get_framework_classes() {
       framework_api.frefs.emplace(fref);
     }
 
-    // NOTE: We are currently excluding classes outside of
-    //       android package. We might reconsider.
-    if (boost::starts_with(framework_cls_str, "Landroid")) {
-      framework_cls_to_api[framework_api.cls] = std::move(framework_api);
-    }
+    framework_cls_to_api[framework_api.cls] = std::move(framework_api);
   }
 
   return framework_cls_to_api;
@@ -159,8 +155,9 @@ bool check_methods(
 
   DexType* current_type = methods.at(0)->get_class();
   for (DexMethod* meth : methods) {
-    if (!is_public(meth)) {
+    if (!is_public(meth) || !meth->get_code()) {
       // TODO(emmasevastian): When should we check non-public methods?
+      // TODO(emmasevastian): When should we still check if it is abstract?
       continue;
     }
 
@@ -359,11 +356,22 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
  * Loads information regarding support libraries / androidX etc to framework
  * APIs.
  */
-void ApiLevelsUtils::load_types_to_framework_api() {
+void ApiLevelsUtils::load_framework_api() {
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api =
       get_framework_classes();
-  for (const auto& pair : framework_cls_to_api) {
-    m_framework_classes.emplace(pair.first);
+  for (auto it = framework_cls_to_api.begin();
+       it != framework_cls_to_api.end();) {
+    auto* framework_cls = it->first;
+    m_framework_classes.emplace(framework_cls);
+
+    // NOTE: We are currently excluding classes outside of
+    //       android package. We might reconsider.
+    const auto& framework_cls_str = framework_cls->str();
+    if (!boost::starts_with(framework_cls_str, "Landroid")) {
+      it = framework_cls_to_api.erase(it);
+    } else {
+      ++it;
+    }
   }
 
   std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
@@ -389,9 +397,13 @@ void ApiLevelsUtils::load_types_to_framework_api() {
       // TODO(emmasevastian): Reconsider this! For now, leaving it as using
       //                      simple name, since paths have changed between
       //                      release and compatibility libraries.
-      always_assert(simple_names_releases.count(simple_name) == 0);
-      m_types_to_framework_api[cls->get_type()] =
-          std::move(framework_cls_to_api[simple_cls_it->second]);
+      auto inserted = simple_names_releases.emplace(simple_name);
+      if (!inserted.second) {
+        m_types_to_framework_api.erase(cls->get_type());
+      } else {
+        m_types_to_framework_api[cls->get_type()] =
+            std::move(framework_cls_to_api[simple_cls_it->second]);
+      }
     }
   }
 

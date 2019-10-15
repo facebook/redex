@@ -10,6 +10,7 @@
 #include "ApiLevelsUtils.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "ScopeHelper.h"
 
 namespace {
@@ -121,6 +122,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
+  method->set_code(assembler::ircode_from_string("((return-void))"));
 
   auto a_cls = type_class(a_release);
   a_cls->add_method(method);

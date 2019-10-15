@@ -27,7 +27,8 @@ class ApiLevelsUtils {
       : m_scope(scope),
         m_framework_api_info_filename(framework_api_info_filename),
         m_api_level(api_level) {
-    load_types_to_framework_api();
+    // Setting up both m_types_to_framework_api and m_framework_classes
+    load_framework_api();
   }
 
   const TypeToFrameworkAPI& get_types_to_framework_api() {
@@ -39,7 +40,7 @@ class ApiLevelsUtils {
   void filter_types(const std::unordered_set<const DexType*>& types);
 
  private:
-  void load_types_to_framework_api();
+  void load_framework_api();
   void check_and_update_release_to_framework();
 
   const Scope& m_scope;
