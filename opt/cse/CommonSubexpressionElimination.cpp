@@ -1529,6 +1529,11 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           // to be cfg-based.
 
           CopyPropagationPass::Config config;
+          // The following default 'features' of copy propagation would only
+          // interfere with what CSE is trying to do.
+          config.eliminate_const_classes = false;
+          config.eliminate_const_strings = false;
+          config.static_finals = false;
           copy_propagation_impl::CopyPropagation copy_propagation(config);
           copy_propagation.run(code, method);
 
