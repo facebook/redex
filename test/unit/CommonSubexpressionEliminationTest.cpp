@@ -62,7 +62,7 @@ void test(const Scope& scope,
   bool is_static = true;
   DexType* declaring_type = nullptr;
   DexTypeList* args = DexTypeList::make_type_list({});
-  cse.patch(is_static, declaring_type, args);
+  cse.patch(is_static, declaring_type, args, /* max_estimated_registers */ 300);
   code.get()->clear_cfg();
   walk::code(scope, [&](DexMethod*, IRCode& code) { code.clear_cfg(); });
   auto stats = cse.get_stats();

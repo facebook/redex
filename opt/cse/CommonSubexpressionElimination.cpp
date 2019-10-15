@@ -93,6 +93,8 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
+constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
+    "num_skipped_due_to_too_many_registers";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -1229,15 +1231,54 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
 
       m_forward.emplace_back((Forward){earlier_insn, insn});
+      m_earlier_insns.insert(earlier_insn);
     }
+  }
+}
+
+static IROpcode get_move_opcode(IRInstruction* earlier_insn) {
+  if (earlier_insn->has_dest()) {
+    return earlier_insn->dest_is_wide()
+               ? OPCODE_MOVE_WIDE
+               : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
+                                                : OPCODE_MOVE;
+  } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+    return OPCODE_MOVE;
+  } else {
+    always_assert(is_aput(earlier_insn->opcode()) ||
+                  is_iput(earlier_insn->opcode()) ||
+                  is_sput(earlier_insn->opcode()));
+    return earlier_insn->src_is_wide(0)
+               ? OPCODE_MOVE_WIDE
+               : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
+                  earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
+                  earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
+                     ? OPCODE_MOVE_OBJECT
+                     : OPCODE_MOVE;
   }
 }
 
 bool CommonSubexpressionElimination::patch(bool is_static,
                                            DexType* declaring_type,
                                            DexTypeList* args,
+                                           unsigned int max_estimated_registers,
                                            bool runtime_assertions) {
   if (m_forward.size() == 0) {
+    return false;
+  }
+
+  unsigned int max_dest = 0;
+  for (auto& mie : cfg::InstructionIterable(m_cfg)) {
+    if (mie.insn->has_dest() && mie.insn->dest() > max_dest) {
+      max_dest = mie.insn->dest();
+    }
+  };
+  for (auto earlier_insn : m_earlier_insns) {
+    IROpcode move_opcode = get_move_opcode(earlier_insn);
+    max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
+  }
+  if (max_dest > max_estimated_registers) {
+    m_stats.skipped_due_to_too_many_registers += m_forward.size();
     return false;
   }
 
@@ -1250,31 +1291,15 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
     if (!temps.count(earlier_insn)) {
-      uint32_t src_reg;
-      IROpcode move_opcode;
+      IROpcode move_opcode = get_move_opcode(earlier_insn);
       if (earlier_insn->has_dest()) {
-        src_reg = earlier_insn->dest();
-        move_opcode = earlier_insn->dest_is_wide()
-                          ? OPCODE_MOVE_WIDE
-                          : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
-                                                           : OPCODE_MOVE;
         m_stats.results_captured++;
       } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
-        src_reg = earlier_insn->src(0);
-        move_opcode = OPCODE_MOVE;
         m_stats.array_lengths_captured++;
       } else {
         always_assert(is_aput(earlier_insn->opcode()) ||
                       is_iput(earlier_insn->opcode()) ||
                       is_sput(earlier_insn->opcode()));
-        src_reg = earlier_insn->src(0);
-        move_opcode = earlier_insn->src_is_wide(0)
-                          ? OPCODE_MOVE_WIDE
-                          : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
-                             earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
-                             earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
-                                ? OPCODE_MOVE_OBJECT
-                                : OPCODE_MOVE;
         m_stats.stores_captured++;
       }
       uint32_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
@@ -1503,6 +1528,10 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto shared_state = SharedState(pure_methods);
   shared_state.init_scope(scope);
+  CopyPropagationPass::Config copy_prop_config;
+  copy_prop_config.eliminate_const_classes = false;
+  copy_prop_config.eliminate_const_strings = false;
+  copy_prop_config.static_finals = false;
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
@@ -1519,22 +1548,21 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
         always_assert(code->editable_cfg_built());
         CommonSubexpressionElimination cse(&shared_state, code->cfg());
-        bool any_changes =
-            cse.patch(is_static(method), method->get_class(),
-                      method->get_proto()->get_args(), m_runtime_assertions);
+
+        bool any_changes = cse.patch(is_static(method), method->get_class(),
+                                     method->get_proto()->get_args(),
+                                     copy_prop_config.max_estimated_registers,
+                                     m_runtime_assertions);
         code->clear_cfg();
         if (any_changes) {
           // TODO: CopyPropagation and LocalDce will separately construct
           // an editable cfg. Don't do that, and fully convert those passes
           // to be cfg-based.
 
-          CopyPropagationPass::Config config;
           // The following default 'features' of copy propagation would only
           // interfere with what CSE is trying to do.
-          config.eliminate_const_classes = false;
-          config.eliminate_const_strings = false;
-          config.static_finals = false;
-          copy_propagation_impl::CopyPropagation copy_propagation(config);
+          copy_propagation_impl::CopyPropagation copy_propagation(
+              copy_prop_config);
           copy_propagation.run(code, method);
 
           auto local_dce = LocalDce(pure_methods);
@@ -1559,6 +1587,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
         for (auto& p : b.eliminated_opcodes) {
           a.eliminated_opcodes[p.first] += p.second;
         }
+        a.skipped_due_to_too_many_registers +=
+            b.skipped_due_to_too_many_registers;
         return a;
       },
       Stats{},
@@ -1584,6 +1614,8 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);
   }
+  mgr.incr_metric(METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS,
+                  stats.skipped_due_to_too_many_registers);
 
   shared_state.cleanup();
 }

@@ -24,6 +24,7 @@ struct Stats {
   size_t methods_using_other_tracked_location_bit{0};
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
+  size_t skipped_due_to_too_many_registers{0};
 };
 
 struct SharedStateStats {
@@ -99,6 +100,7 @@ class CommonSubexpressionElimination {
   bool patch(bool is_static,
              DexType* declaring_type,
              DexTypeList* args,
+             unsigned int max_estimated_registers,
              bool runtime_assertions = false);
 
  private:
@@ -110,6 +112,7 @@ class CommonSubexpressionElimination {
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
+  std::unordered_set<IRInstruction*> m_earlier_insns;
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
