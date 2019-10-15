@@ -65,7 +65,11 @@ ApiLevelsUtils::get_framework_classes() {
       framework_api.frefs.emplace(fref);
     }
 
-    framework_cls_to_api[framework_api.cls] = std::move(framework_api);
+    // NOTE: We are currently excluding classes outside of
+    //       android package. We might reconsider.
+    if (boost::starts_with(framework_cls_str, "Landroid")) {
+      framework_cls_to_api[framework_api.cls] = std::move(framework_api);
+    }
   }
 
   return framework_cls_to_api;
