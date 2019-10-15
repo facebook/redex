@@ -76,7 +76,7 @@ const siteConfig = {
 			title: "Redex",
 			logo: {
 				alt: "Redex Logo",
-				src: "img/redex.png"
+				src: "img/favicon.png"
 			},
 			links: [
 				{ to: "docs/installation", label: "Docs", position: "right" },
@@ -91,10 +91,34 @@ const siteConfig = {
 			]
 		},
 		footer: {
+			style:'dark',
 			logo: {
-				alt: "Redex Logo",
-				src: "img/redex.png"
+				alt: "Facebook Open Source Logo",
+				src: "img/oss_logo.png"
 			},
+			links:[
+				{
+					title:'Docs',
+					items:[
+						{
+							label:'Getting Started',
+							to:"docs/installation"
+						},
+						{
+							label:'Configuring',
+							to:"docs/configuring"
+						},
+						{
+							label:'Using',
+							to:"docs/usage"
+						},
+						{
+							label:'FAQ',
+							to:"docs/faq"
+						}
+					]
+				}
+			],
 			// This copyright info is used in /core/Footer.js and blog RSS/Atom feeds.
 			copyright: `Copyright © ${new Date().getFullYear()} Facebook Inc.`
 		},

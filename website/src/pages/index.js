@@ -5,155 +5,106 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import React from 'react';
-import classnames from 'classnames';
-import Layout from '@theme/Layout';
-// const CompLibrary = require('../../core/CompLibrary.js');
-// const GridBlock = CompLibrary.GridBlock;
-import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
-import styles from './index.module.css';
+import React from "react";
+import Layout from "@theme/Layout";
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
+import classnames from "classnames";
+import withBaseUrl from "@docusaurus/withBaseUrl";
 
-function imgUrl(img,siteConfig) {
-  return siteConfig.baseUrl + 'img/' + img;
-}
-
-function docUrl(doc, language,siteConfig) {
-  return siteConfig.baseUrl + 'docs/' + (language ? language + '/' : '') + doc;
-}
-
-function pageUrl(page, language,siteConfig) {
-  return siteConfig.baseUrl + (language ? language + '/' : '') + page;
-}
+const features = [
+	{
+		title: "Optimizing",
+		content:
+			"Redex provides a framework for reading, writing, and analyzing .dex files, and a set of optimization passes that use this framework to improve the bytecode. An APK optimized by Redex should be smaller and faster."
+	},
+	{
+		title: "Fast",
+		content:
+			"Fewer bytes also means faster download times, faster install times, and lower data usage for cell users. Lastly, less bytecode also typically translates into faster runtime performance."
+	},
+	{
+		title: "Buck Integration",
+		content:
+			"Redex has deep integration with Buck where your Redex config is passed as a parameter to the Buck android_binary rule when generating the APK."
+	}
+];
 
 class Button extends React.Component {
-  render() {
-    return (
-      <div className="pluginWrapper buttonWrapper">
-        <a className="button" href={this.props.href} target={this.props.target}>
-          {this.props.children}
-        </a>
-      </div>
-    );
-  }
+	render() {
+		return (
+			<div className="pluginWrapper buttonWrapper" style={{ padding: "0 2px" }}>
+				<a className="button" href={this.props.href} target={this.props.target}>
+					{this.props.children}
+				</a>
+			</div>
+		);
+	}
 }
 
 Button.defaultProps = {
-  target: '_self',
+	target: "_self"
 };
 
-const SplashContainer = props => (
-  <div className="homeContainer">
-    <div className="homeSplashFade">
-      <div className="wrapper homeWrapper">{props.children}</div>
-    </div>
-  </div>
-);
-
 const Logo = props => (
-  <div className={classnames("projectLogo")}>
-    <img src={props.img_src} />
-  </div>
+	<div className="projectLogo" style={{ padding: "0px 150px 70px 0px" }}>
+		<img src={props.img_src} />
+	</div>
 );
-
-const ProjectTitle = props => (
-  <h2 className={classnames("projectTitle")}>
-    {props.siteConfig.title}
-    <small>{props.siteConfig.tagline}</small>
-  </h2>
-);
-
-const PromoSection = props => (
-  <div className="section promoSection">
-    <div className="promoRow">
-      <div className="pluginRowBlock">{props.children}</div>
-    </div>
-  </div>
-);
-
-function HomeSplash(props){
-  
-    let language = props.language || '';
-    const context = useDocusaurusContext();
-    const { siteConfig = {} } = context;
-    console.log('Homesplash',context,siteConfig,language)
-    return (
-      <SplashContainer>
-        <Logo img_src={imgUrl('redex-hero.png',siteConfig)} />
-        <div className={classnames("inner")}>
-          <ProjectTitle siteConfig={siteConfig}/>
-          <PromoSection>
-            <Button href={docUrl('installation', language,siteConfig)}>Getting Started</Button>
-            <Button href='https://github.com/facebook/redex'>GitHub</Button>
-          </PromoSection>
-        </div>
-      </SplashContainer>
-    );
-
-}
-
-const Block = props => (
-  <Container
-    padding={['bottom', 'top']}
-    id={props.id}
-    background={props.background}>
-    <GridBlock align="left" contents={props.children} layout={props.layout} />
-  </Container>
-);
-
-const Container=(props)=>(
-  <div style={{backgroundColor:"pink"}}>
-    {props.children}
-  </div>
-)
-
-const GridBlock=props=>(
-  <div>
-    {
-      props.contents.map(contentItem=>{
-        <div>
-          <h3>
-            {contentItem.title}
-          </h3>
-          {contentItem.content}
-          </div>
-      })
-    }
-  </div>
-)
 
 function Index(props) {
-    let language = props.language || '';
-    console.log('Index',props)
-    const context = useDocusaurusContext();
-    const { siteConfig = {} } = context;
-    return (
-      <Layout
-        title={siteConfig.title}
-        description={siteConfig.description}  
-      >
-        <div>
-          <HomeSplash language={language} />
-          <div className={classnames("mainContainer")}>
-            <Container padding={['bottom', 'top']}>
-              <GridBlock align="center" layout="fourColumn" contents={[
-                  {
-                    title: 'Optimizing',
-                    content: 'Redex provides a framework for reading, writing, and analyzing .dex files, and a set of optimization passes that use this framework to improve the bytecode. An APK optimized by Redex should be smaller and faster.',
-                  },
-                  {
-                    title: 'Fast',
-                    content: 'Fewer bytes also means faster download times, faster install times, and lower data usage for cell users. Lastly, less bytecode also typically translates into faster runtime performance.',
-                  },
-                  {
-                    title: 'Buck Integration',
-                    content: 'Redex has deep integration with Buck where your Redex config is passed as a parameter to the Buck android_binary rule when generating the APK.',
-                  }
-                ]} />
-            </Container>
-          </div>
-        </div>
-      </Layout>
-    );
+	let language = props.language || "";
+	const context = useDocusaurusContext();
+	const { siteConfig = {} } = context;
+	return (
+		<Layout title={siteConfig.title} description={siteConfig.description}>
+			<div>
+				<header className={classnames("hero hero--primary")}>
+					<div className="container padding-vert--lg">
+						<div className="row">
+							<div className="col text--center">
+								<h1 className="hero__title">{siteConfig.title}</h1>
+								<p className="hero__subtitle">{siteConfig.tagline}</p>
+								<div className="buttons">
+									<Button href={withBaseUrl("docs/installation")}>
+										GETTING STARTED
+									</Button>
+									<Button href="https://github.com/facebook/redex">
+										GITHUB
+									</Button>
+								</div>
+							</div>
+							<Logo img_src={withBaseUrl("img/redex-hero.png")} />
+						</div>
+					</div>
+				</header>
+				<div className="mainContainer">
+					{features && features.length && (
+						<section className="features">
+							<div className="container">
+								<div className="row padding-vert--xl">
+									{features.map(({ imageUrl, title, content }, idx) => (
+										<div key={idx} className="col col--4 text--center">
+											{imageUrl && (
+												<div className="text--center margin-bottom--lg">
+													<img
+														className="featureImage"
+														src={withBaseUrl(imageUrl)}
+														alt={title}
+													/>
+												</div>
+											)}
+											<h3>{title}</h3>
+											<p>{content}</p>
+										</div>
+									))}
+								</div>
+							</div>
+						</section>
+					)}
+				</div>
+			</div>
+		</Layout>
+	);
 }
 
 export default Index;

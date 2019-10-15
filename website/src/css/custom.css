@@ -55,3 +55,92 @@
   font-style: normal;
 }
 
+.projectTitle {
+  color: #fff;
+}
+
+.homeContainer .homeWrapper {
+  padding: 6em 10px;
+}
+
+.button {
+  border: 1px solid #fff;
+  color: #fff;
+  border-radius: 3px;
+}
+
+.button:hover {
+  background: #fff;
+  color: var(--ifm-color-primary);
+}
+
+.button:focus{
+  outline: rgba(0, 150, 255, 1) solid 2px;
+}
+body {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.navigationSlider .slidingNav ul {
+  color: $primaryColor;
+}
+
+.navigationSlider .slidingNav ul li:hover {
+  color: #fff;
+}
+
+.navigationSlider .slidingNav ul li a {
+  font-size: 1em;
+  font-weight: bold;
+  padding: 15px;
+}
+
+.features {
+  display: flex;
+  align-items: center;
+  padding: 2rem 0;
+  width: 100%;
+}
+
+.featureImage {
+  height: 180px;
+  width: 180px;
+}
+
+.buttons{
+  display:flex;
+  justify-content: center;
+}
+
+.projectLogo {
+  display: none;
+  pointer-events: none;
+}
+
+.projectLogo img {
+  height: 100px;
+  margin-bottom: 0px;
+}
+
+@media only screen and (min-width: 1200px) {
+  .homeContainer .homeWrapper #inner {
+    max-width: 750px;
+  }
+
+  .projectLogo {
+    align-items: center;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    left: 0;
+    padding: 2em 100px 4em;
+    position: absolute;
+    right: 0;
+    top: 0;
+    border:'1px solid blue'
+  }
+  .projectLogo img {
+    height: 100%;
+    max-height: 250px;
+  }
+}
