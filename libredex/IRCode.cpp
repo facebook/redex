@@ -192,8 +192,7 @@ static void shard_multi_target(IRList* ir,
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
       auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key, target, src);
-      case_key++;
+      insert_multi_branch_target(ir, case_key + i, target, src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
