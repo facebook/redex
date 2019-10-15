@@ -321,12 +321,6 @@ bool LocalDce::assumenosideeffects(DexMethodRef* ref, DexMethod* meth) {
 void LocalDcePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& conf,
                             PassManager& mgr) {
-  if (mgr.no_proguard_rules()) {
-    TRACE(DCE, 1,
-          "LocalDcePass not run because no ProGuard configuration was "
-          "provided.");
-    return;
-  }
   auto scope = build_class_scope(stores);
   auto pure_methods = find_pure_methods(scope);
   auto configured_pure_methods = conf.get_pure_methods();
