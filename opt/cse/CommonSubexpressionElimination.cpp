@@ -95,6 +95,7 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
 constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
     "num_skipped_due_to_too_many_registers";
+constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -1510,6 +1511,21 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   copy_prop_config.eliminate_const_classes = false;
   copy_prop_config.eliminate_const_strings = false;
   copy_prop_config.static_finals = false;
+  auto aggregate_stats = [](Stats a, Stats b) {
+    a.results_captured += b.results_captured;
+    a.stores_captured += b.stores_captured;
+    a.array_lengths_captured += b.array_lengths_captured;
+    a.instructions_eliminated += b.instructions_eliminated;
+    a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+    a.methods_using_other_tracked_location_bit +=
+        b.methods_using_other_tracked_location_bit;
+    for (auto& p : b.eliminated_opcodes) {
+      a.eliminated_opcodes[p.first] += p.second;
+    }
+    a.skipped_due_to_too_many_registers += b.skipped_due_to_too_many_registers;
+    a.max_iterations = std::max(a.max_iterations, b.max_iterations);
+    return a;
+  };
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
@@ -1523,16 +1539,23 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           return Stats();
         }
 
-        TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
-        always_assert(code->editable_cfg_built());
-        CommonSubexpressionElimination cse(&shared_state, code->cfg());
+        Stats stats;
+        while (true) {
+          stats.max_iterations++;
+          TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
+          always_assert(code->editable_cfg_built());
+          CommonSubexpressionElimination cse(&shared_state, code->cfg());
+          bool any_changes = cse.patch(is_static(method), method->get_class(),
+                                       method->get_proto()->get_args(),
+                                       copy_prop_config.max_estimated_registers,
+                                       m_runtime_assertions);
+          stats = aggregate_stats(stats, cse.get_stats());
+          code->clear_cfg();
 
-        bool any_changes = cse.patch(is_static(method), method->get_class(),
-                                     method->get_proto()->get_args(),
-                                     copy_prop_config.max_estimated_registers,
-                                     m_runtime_assertions);
-        code->clear_cfg();
-        if (any_changes) {
+          if (!any_changes) {
+            return stats;
+          }
+
           // TODO: CopyPropagation and LocalDce will separately construct
           // an editable cfg. Don't do that, and fully convert those passes
           // to be cfg-based.
@@ -1546,29 +1569,13 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           auto local_dce = LocalDce(pure_methods);
           local_dce.dce(code);
 
+          code->build_cfg(/* editable */ true);
           if (traceEnabled(CSE, 5)) {
-            code->build_cfg(/* editable */ true);
-            TRACE(CSE, 5, "[CSE] final:\n%s", SHOW(code->cfg()));
-            code->clear_cfg();
+            TRACE(CSE, 5, "[CSE] end of iteration:\n%s", SHOW(code->cfg()));
           }
         }
-        return cse.get_stats();
       },
-      [](Stats a, Stats b) {
-        a.results_captured += b.results_captured;
-        a.stores_captured += b.stores_captured;
-        a.array_lengths_captured += b.array_lengths_captured;
-        a.instructions_eliminated += b.instructions_eliminated;
-        a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
-        a.methods_using_other_tracked_location_bit +=
-            b.methods_using_other_tracked_location_bit;
-        for (auto& p : b.eliminated_opcodes) {
-          a.eliminated_opcodes[p.first] += p.second;
-        }
-        a.skipped_due_to_too_many_registers +=
-            b.skipped_due_to_too_many_registers;
-        return a;
-      },
+      aggregate_stats,
       Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
@@ -1594,6 +1601,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   }
   mgr.incr_metric(METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS,
                   stats.skipped_due_to_too_many_registers);
+  mgr.incr_metric(METRIC_MAX_ITERATIONS, stats.max_iterations);
 
   shared_state.cleanup();
 }

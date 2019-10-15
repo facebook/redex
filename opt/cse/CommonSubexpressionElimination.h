@@ -25,6 +25,7 @@ struct Stats {
   // keys are IROpcode encoded as uint16_t, to make OSS build happy
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
   size_t skipped_due_to_too_many_registers{0};
+  size_t max_iterations{0};
 };
 
 struct SharedStateStats {
