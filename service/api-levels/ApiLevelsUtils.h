@@ -44,6 +44,7 @@ class ApiLevelsUtils {
 
   const Scope& m_scope;
   TypeToFrameworkAPI m_types_to_framework_api;
+  std::unordered_set<DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
   uint32_t m_api_level;
 };

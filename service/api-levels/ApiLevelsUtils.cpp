@@ -264,7 +264,8 @@ bool check_hierarchy(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
-    const TypeSystem& type_system) {
+    const TypeSystem& type_system,
+    const std::unordered_set<DexType*>& framework_classes) {
   DexType* type = cls->get_type();
   if (!is_interface(cls)) {
     // We don't need to worry about subclasses, as those we just need to update
@@ -279,13 +280,14 @@ bool check_hierarchy(
 
     auto* super_cls = cls->get_super_class();
     // We accept either Object or that the parent has an equivalent
-    // framework class.
+    // framework class or an actual framework class.
     // NOTE: That we would end up checking the parents up to chain when
     //       checking super_cls.
     // TODO(emmasevastian): If the parent is a framework class available on this
     //                      platform, we shouldn't fail.
     if (super_cls != known_types::java_lang_Object() &&
-        release_to_framework.count(super_cls) == 0) {
+        release_to_framework.count(super_cls) == 0 &&
+        framework_classes.count(super_cls) == 0) {
       return false;
     }
   } else {
@@ -333,8 +335,8 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
         continue;
       }
 
-      if (!check_hierarchy(cls, pair.second, release_to_framework,
-                           type_system)) {
+      if (!check_hierarchy(cls, pair.second, release_to_framework, type_system,
+                           m_framework_classes)) {
         to_remove.emplace(pair.first);
       }
     }
@@ -356,6 +358,10 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
 void ApiLevelsUtils::load_types_to_framework_api() {
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api =
       get_framework_classes();
+  for (const auto& pair : framework_cls_to_api) {
+    m_framework_classes.emplace(pair.first);
+  }
+
   std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
 
