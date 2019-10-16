@@ -46,6 +46,7 @@
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
+#include "PostLowering.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
@@ -931,6 +932,8 @@ void redex_backend(const PassManager& manager,
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata;
+  PostLowering post_lowering;
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -953,6 +956,7 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
+
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
                                ss.str(),
@@ -967,6 +971,9 @@ void redex_backend(const PassManager& manager,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic());
+
+      post_lowering.run(store.get_dexen()[i]);
+
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
