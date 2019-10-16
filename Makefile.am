@@ -66,6 +66,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/stringbuilder-outliner \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
+	-I$(top_srcdir)/opt/make-public \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
@@ -309,6 +310,7 @@ redex_all_SOURCES = \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
+	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
