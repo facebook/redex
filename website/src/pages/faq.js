@@ -8,9 +8,12 @@
 import React from "react";
 import Layout from "@theme/Layout";
 import withBaseUrl from "@docusaurus/withBaseUrl";
+import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
+import Link from "@docusaurus/Link";
 
 function Help(props) {
-
+	const context = useDocusaurusContext();
+	const { siteConfig = {} } = context;
 	const supportLinks = [
 		{
 			content: `Learn more using the [documentation on this site.](${withBaseUrl(
@@ -27,9 +30,8 @@ function Help(props) {
 			title: "Stay up to date"
 		}
 	];
-
 	return (
-		<Layout>
+		<Layout title={siteConfig.title} description={siteConfig.description}>
 			<div className="docMainWrapper wrapper">
 				<div className="container padding-vert--lg padding-top--xl">
 					<div className="post">
@@ -41,14 +43,23 @@ function Help(props) {
 					<main>
 						{supportLinks && supportLinks.length && (
 							<section>
-                  <div className="row padding-top--lg">
-                    {supportLinks.map((link, index) => (
-                      <div key={index} className="col col--4 text--break">
-                        <h3>{link.title}</h3>
-                        <p>{link.content}</p>
-                      </div>
-                    ))}
-                  </div>
+								<div className="row padding-top--lg">
+									<div className="col col--4 text--break">
+										<h3>{supportLinks[0].title}</h3>
+										<p>
+											Learn more using the{' '}
+											<Link to={withBaseUrl("docs/installation")}>
+												documentation on this site.
+											</Link>
+										</p>
+									</div>
+									{supportLinks.slice(1).map((link, index) => (
+										<div key={index} className="col col--4 text--break">
+											<h3>{link.title}</h3>
+											<p>{link.content}</p>
+										</div>
+									))}
+								</div>
 							</section>
 						)}
 					</main>

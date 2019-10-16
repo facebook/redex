@@ -46,7 +46,7 @@ Button.defaultProps = {
 };
 
 const Logo = props => (
-	<div className="projectLogo" style={{ padding: "0px 150px 70px 0px" }}>
+	<div className="projectLogo" style={{ padding: "0px 250px 130px 0px" }}>
 		<img src={props.img_src} />
 	</div>
 );
