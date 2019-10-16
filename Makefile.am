@@ -114,7 +114,6 @@ libredex_la_SOURCES = \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
-	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
@@ -144,7 +143,6 @@ libredex_la_SOURCES = \
 	libredex/HierarchyUtil.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
-	libredex/Inliner.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
@@ -359,7 +357,9 @@ redex_all_SOURCES = \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CFGInliner.cpp \
 	service/method-inliner/Deleter.cpp \
+	service/method-inliner/Inliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \

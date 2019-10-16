@@ -396,5 +396,15 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("unresolved_methods", inliner.get_info().unresolved_methods);
   mgr.incr_metric("known_public_methods",
                   inliner.get_info().known_public_methods);
+  mgr.incr_metric("constant_invoke_callers_analyzed",
+                  inliner.get_info().constant_invoke_callers_analyzed);
+  mgr.incr_metric(
+      "constant_invoke_callers_unreachable_blocks",
+      inliner.get_info().constant_invoke_callers_unreachable_blocks);
+  mgr.incr_metric("constant_invoke_callees_analyzed",
+                  inliner.get_info().constant_invoke_callees_analyzed);
+  mgr.incr_metric(
+      "constant_invoke_callees_unreachable_blocks",
+      inliner.get_info().constant_invoke_callees_unreachable_blocks);
 }
 } // namespace inliner

@@ -12,8 +12,10 @@
 #include <set>
 #include <vector>
 
+#include "ConstantEnvironment.h"
 #include "DexClass.h"
 #include "DexStore.h"
+#include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
 #include "PatriciaTreeSet.h"
 #include "Resolver.h"
@@ -67,6 +69,18 @@ enum MultiMethodInlinerMode {
 using CalleeCallerInsns = std::unordered_map<
     DexMethod*,
     std::unordered_map<DexMethod*, std::unordered_set<IRInstruction*>>>;
+
+using ConstantArguments = constant_propagation::interprocedural::ArgumentDomain;
+
+using InvokeConstantArguments =
+    std::vector<std::pair<IRList::iterator, ConstantArguments>>;
+
+struct InvokeConstantArgumentsAndDeadBlocks {
+  InvokeConstantArguments invoke_constant_arguments;
+  size_t dead_blocks{0};
+};
+
+using ConstantArgumentsOccurrences = std::pair<ConstantArguments, size_t>;
 
 /**
  * Helper class to inline a set of candidates.
@@ -243,13 +257,18 @@ class MultiMethodInliner {
    * a call to `inline_methods()`, but not if `inline_callees()` is invoked
    * directly.
    */
-  bool should_inline(const DexMethod* caller, const DexMethod* callee) const;
+  bool should_inline(const DexMethod* caller, const DexMethod* callee);
 
   /**
    * We want to avoid inlining a large method with many callers as that would
    * bloat the bytecode.
    */
-  bool too_many_callers(const DexMethod* callee) const;
+  bool too_many_callers(const DexMethod* callee);
+
+  /**
+   * Estimate inlined cost for a single invocation of a method.
+   */
+  size_t get_inlined_cost(const DexMethod* callee);
 
   /**
    * Staticize required methods (stored in `m_make_static`) and update
@@ -259,6 +278,20 @@ class MultiMethodInliner {
    *       from the destructor, there is no need to manually call it.
    */
   void invoke_direct_to_static();
+
+  /**
+   * For all (reachable) invoke instructions in a given method, collect
+   * information about their arguments, i.e. whether particular arguments
+   * are constants.
+   */
+  boost::optional<InvokeConstantArgumentsAndDeadBlocks>
+  get_invoke_constant_arguments(DexMethod* caller,
+                                const std::vector<DexMethod*>&);
+
+  /**
+   * Build up constant-arguments information for all invoked methods.
+   */
+  void compute_callee_constant_arguments();
 
  private:
   /**
@@ -293,6 +326,13 @@ class MultiMethodInliner {
   // have been inlined.
   mutable std::unordered_map<const DexMethod*, size_t> m_inlined_costs;
 
+  /**
+   * For all (reachable) invoked methods, list of constant arguments
+   */
+  mutable std::unordered_map<const DexMethod*,
+                             std::vector<ConstantArgumentsOccurrences>>
+      m_callee_constant_arguments;
+
   // Cache of whether all callers of a callee are in the same class.
   mutable std::unordered_map<const DexMethod*, bool> m_callers_in_same_class;
 
@@ -319,6 +359,10 @@ class MultiMethodInliner {
     size_t non_pub_ctor{0};
     size_t cross_store{0};
     size_t caller_too_large{0};
+    size_t constant_invoke_callers_analyzed{0};
+    size_t constant_invoke_callers_unreachable_blocks{0};
+    size_t constant_invoke_callees_analyzed{0};
+    size_t constant_invoke_callees_unreachable_blocks{0};
   };
   InliningInfo info;
 
