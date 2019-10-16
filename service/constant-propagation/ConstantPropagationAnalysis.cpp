@@ -223,10 +223,23 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
   return true;
 }
 
+static bool is_uninstantiable_class(DexType* type) {
+  if (is_array(type) || is_primitive(type)) {
+    return false;
+  }
+  auto cls = type_class(type);
+  if (cls == nullptr || is_interface(cls) || is_native(cls) ||
+      cls->is_external()) {
+    return false;
+  }
+  return !cls->has_ctors();
+}
+
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
   auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (src && src->get_constant() && *(src->get_constant()) == 0) {
+  if ((src && src->get_constant() && *(src->get_constant()) == 0) ||
+      (is_uninstantiable_class(insn->get_type()))) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -839,8 +852,7 @@ static void analyze_if(const IRInstruction* insn,
 }
 
 ConstantEnvironment FixpointIterator::analyze_edge(
-    const EdgeId& edge,
-    const ConstantEnvironment& exit_state_at_source) const {
+    const EdgeId& edge, const ConstantEnvironment& exit_state_at_source) const {
   auto env = exit_state_at_source;
   auto last_insn_it = edge->src()->get_last_insn();
   if (last_insn_it == edge->src()->end()) {
