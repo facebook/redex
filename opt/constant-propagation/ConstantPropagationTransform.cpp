@@ -53,7 +53,7 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
   ++m_stats.added_param_const;
 }
 
-void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
+bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
                                         const WholeProgramState& wps,
                                         IRList::iterator it) {
   auto* insn = it->insn;
@@ -90,11 +90,15 @@ void Transform::eliminate_redundant_put(const ConstantEnvironment& env,
       // This field must already hold this value. We don't need to write to it
       // again.
       m_deletes.push_back(it);
+      return true;
     }
     break;
   }
-  default: {}
+  default: {
+    break;
   }
+  }
+  return false;
 }
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
@@ -321,6 +325,70 @@ void Transform::eliminate_dead_branch(
   }
 }
 
+bool Transform::replace_with_throw(const ConstantEnvironment& env,
+                                   IRList::iterator it) {
+  auto* insn = it->insn;
+  auto opcode = insn->opcode();
+  size_t src_index;
+  switch (opcode) {
+  case OPCODE_MONITOR_ENTER:
+  case OPCODE_MONITOR_EXIT:
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_AGET:
+  case OPCODE_AGET_BYTE:
+  case OPCODE_AGET_CHAR:
+  case OPCODE_AGET_WIDE:
+  case OPCODE_AGET_SHORT:
+  case OPCODE_AGET_OBJECT:
+  case OPCODE_AGET_BOOLEAN:
+  case OPCODE_IGET:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_WIDE:
+  case OPCODE_IGET_SHORT:
+  case OPCODE_IGET_OBJECT:
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_ARRAY_LENGTH:
+    src_index = 0;
+    break;
+  case OPCODE_APUT:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_APUT_OBJECT:
+  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_WIDE:
+  case OPCODE_IPUT_SHORT:
+  case OPCODE_IPUT_OBJECT:
+  case OPCODE_IPUT_BOOLEAN: {
+    src_index = 1;
+    break;
+  }
+  default: {
+    return false;
+  }
+  }
+
+  auto reg = insn->src(src_index);
+  auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+  if (!value || !value->get_constant() || *value->get_constant() != 0) {
+    return false;
+  }
+
+  IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
+  throw_insn->set_src(0, reg);
+  m_replacements.emplace_back(insn, std::vector<IRInstruction*>{throw_insn});
+  m_rebuild_cfg = true;
+  ++m_stats.throws;
+  return true;
+}
+
 void Transform::apply_changes(IRCode* code) {
   for (auto const& p : m_replacements) {
     IRInstruction* old_op = p.first;
@@ -340,6 +408,10 @@ void Transform::apply_changes(IRCode* code) {
   for (auto insn : m_added_param_values) {
     code->insert_before(params.end(), insn);
   }
+  if (m_rebuild_cfg) {
+    code->build_cfg(/* editable */);
+    code->clear_cfg();
+  }
 }
 
 Transform::Stats Transform::apply(
@@ -355,9 +427,13 @@ Transform::Stats Transform::apply(
       continue;
     }
     for (auto& mie : InstructionIterable(block)) {
-      eliminate_redundant_put(env, wps, code->iterator_to(mie));
+      auto it = code->iterator_to(mie);
+      bool any_changes =
+          eliminate_redundant_put(env, wps, it) || replace_with_throw(env, it);
       intra_cp.analyze_instruction(mie.insn, &env);
-      simplify_instruction(env, wps, code->iterator_to(mie));
+      if (!any_changes) {
+        simplify_instruction(env, wps, code->iterator_to(mie));
+      }
     }
     eliminate_dead_branch(intra_cp, env, cfg, block);
   }

@@ -33,12 +33,14 @@ class Transform final {
     size_t branches_removed{0};
     size_t materialized_consts{0};
     size_t added_param_const{0};
+    size_t throws{0};
     Stats operator+(const Stats& that) const {
       Stats result;
       result.branches_removed = branches_removed + that.branches_removed;
       result.materialized_consts =
           materialized_consts + that.materialized_consts;
       result.added_param_const = added_param_const + that.added_param_const;
+      result.throws = throws + that.throws;
       return result;
     }
   };
@@ -64,9 +66,10 @@ class Transform final {
   void replace_with_const(const ConstantEnvironment&, IRList::iterator);
   void generate_const_param(const ConstantEnvironment&, IRList::iterator);
 
-  void eliminate_redundant_put(const ConstantEnvironment&,
+  bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
                                IRList::iterator);
+  bool replace_with_throw(const ConstantEnvironment&, IRList::iterator);
 
   void remove_dead_switch(const ConstantEnvironment&,
                           cfg::ControlFlowGraph&,
@@ -82,6 +85,7 @@ class Transform final {
       m_replacements;
   std::vector<IRInstruction*> m_added_param_values;
   std::vector<IRList::iterator> m_deletes;
+  bool m_rebuild_cfg{0};
   Stats m_stats;
 };
 
