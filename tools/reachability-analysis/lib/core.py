@@ -74,7 +74,7 @@ class ReachableObject(object):
         self.succs = []
 
     def __str__(self):
-        return self.name
+        return "%s: %s\n" % (ReachableObjectType.to_string(self.type), self.name)
 
     def __repr__(self):
         ret = "%s: %s\n" % (ReachableObjectType.to_string(self.type), self.name)
@@ -165,6 +165,10 @@ class AbstractGraph(object):
                 for target in out_edges[i]:
                     target_node = nodes[target]
                     self.add_edge(node, target_node)
+
+    def __repr__(self):
+        sorted_keys = sorted(self.nodes.keys())
+        return "[" + ",\n".join([self.nodes[k].__repr__() for k in sorted_keys]) + "]"
 
 
 class ReachabilityGraph(AbstractGraph):
