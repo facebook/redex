@@ -677,6 +677,31 @@ void write_reachable_object(std::ostream& os, const ReachableObject& obj) {
 } // namespace
 
 void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
+  auto compare = [](const ReachableObject& lhs, const ReachableObject& rhs) {
+    if (lhs.type != rhs.type) {
+      return lhs.type < rhs.type;
+    }
+    switch (lhs.type) {
+    case ReachableObjectType::CLASS:
+      return compare_dexclasses(lhs.cls, rhs.cls);
+    case ReachableObjectType::FIELD:
+      return compare_dexfields(lhs.field, rhs.field);
+    case ReachableObjectType::METHOD:
+      return compare_dexmethods(lhs.method, rhs.method);
+
+    case ReachableObjectType::ANNO:
+    case ReachableObjectType::SEED: {
+      // Pretty terrible, optimize.
+      std::ostringstream oss1;
+      oss1 << lhs;
+      std::ostringstream oss2;
+      oss2 << rhs;
+      return oss1.str() < oss2.str();
+    }
+    }
+    __builtin_unreachable();
+  };
+
   bs::write_header(os, /* version */ 1);
   bs::GraphWriter<ReachableObject, ReachableObjectHash> gw(
       write_reachable_object,
@@ -686,9 +711,16 @@ void dump_graph(std::ostream& os, const ReachableObjectGraph& retainers_of) {
         }
         const auto& preds = retainers_of.at(obj);
         std::vector<ReachableObject> preds_vec(preds.begin(), preds.end());
+        // Gotta sort the reachables or the output is nondeterministic.
+        std::sort(preds_vec.begin(), preds_vec.end(), compare);
         return preds_vec;
       });
-  gw.write(os, boost::adaptors::keys(retainers_of));
+
+  // Gotta sort the keys or the output is nondeterministic.
+  auto key_adaptor = boost::adaptors::keys(retainers_of);
+  std::vector<ReachableObject> keys(key_adaptor.begin(), key_adaptor.end());
+  std::sort(keys.begin(), keys.end(), compare);
+  gw.write(os, keys);
 }
 
 template void TransitiveClosureMarker::push<DexClass>(const DexClass* parent,
