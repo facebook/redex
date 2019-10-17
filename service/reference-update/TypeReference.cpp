@@ -332,8 +332,10 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
     wq.run_all();
   }
 
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> inits(m_inits.begin(),
+                                                               m_inits.end());
   std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_inits;
-  for (auto& pair : m_inits) {
+  for (auto& pair : inits) {
     auto* method = pair.first;
     auto* new_proto = pair.second;
     if (!DexMethod::get_method(

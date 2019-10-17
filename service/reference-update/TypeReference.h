@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "ClassHierarchy.h"
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
@@ -62,7 +63,7 @@ class TypeRefUpdater final {
    */
   bool mangling(DexMethodRef* method);
 
-  std::map<DexMethod*, DexProto*, dexmethods_comparator> m_inits;
+  ConcurrentMap<DexMethod*, DexProto*> m_inits;
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
 };
 
