@@ -50,7 +50,7 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
                                 21);
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
-  EXPECT_EQ(framework_cls_to_api.size(), 3);
+  EXPECT_EQ(framework_cls_to_api.size(), 4);
 
   auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
   EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs.size(), 2);

@@ -18,7 +18,7 @@ namespace api {
 
 /**
  * File format:
- *  <framework_cls> <num_methods> <num_fields>
+ *  <framework_cls> <super_cls> <num_methods> <num_fields>
  *      M <method0>
  *      M <method1>
  *      ...
@@ -34,16 +34,19 @@ ApiLevelsUtils::get_framework_classes() {
 
   FrameworkAPI framework_api;
   std::string framework_cls_str;
+  std::string super_cls_str;
   std::string class_name;
   uint32_t num_methods;
   uint32_t num_fields;
 
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
 
-  while (infile >> framework_cls_str >> num_methods >> num_fields) {
+  while (infile >> framework_cls_str >> super_cls_str >> num_methods >>
+         num_fields) {
     framework_api.cls = DexType::make_type(framework_cls_str.c_str());
     always_assert_log(framework_cls_to_api.count(framework_api.cls) == 0,
                       "Duplicated class name!");
+    framework_api.super_cls = DexType::make_type(super_cls_str.c_str());
 
     while (num_methods-- > 0) {
       std::string method_str;
@@ -280,15 +283,17 @@ bool check_hierarchy(
     }
 
     auto* super_cls = cls->get_super_class();
-    // We accept either Object or that the parent has an equivalent
-    // framework class or an actual framework class.
-    // NOTE: That we would end up checking the parents up to chain when
-    //       checking super_cls.
-    // TODO(emmasevastian): If the parent is a framework class available on this
-    //                      platform, we shouldn't fail.
-    if (super_cls != known_types::java_lang_Object() &&
-        release_to_framework.count(super_cls) == 0 &&
-        framework_classes.count(super_cls) == 0) {
+    auto* framwork_super_cls = framework_api.super_cls;
+
+    // We accept ONLY classes that have the super class as the corresponding
+    // framework ones. It might extend existing framework class or
+    // release class.
+    if (framework_classes.count(super_cls) > 0) {
+      if (super_cls != framwork_super_cls) {
+        return false;
+      }
+    } else if (release_to_framework.count(super_cls) == 0 ||
+               framwork_super_cls != release_to_framework.at(super_cls)) {
       return false;
     }
   } else {

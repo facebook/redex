@@ -13,6 +13,7 @@ namespace api {
 
 struct FrameworkAPI {
   DexType* cls;
+  DexType* super_cls;
   std::unordered_set<DexMethodRef*> mrefs;
   std::unordered_set<DexFieldRef*> frefs;
 };
