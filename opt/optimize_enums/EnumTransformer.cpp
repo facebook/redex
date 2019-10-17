@@ -1013,7 +1013,6 @@ class EnumTransformer final {
             return false;
           }
           std::vector<DexType*> types;
-          method->gather_types_shallow(types);
           method->gather_types(types);
           return std::any_of(types.begin(), types.end(), [this](DexType* type) {
             return (bool)try_convert_to_int_type(type);

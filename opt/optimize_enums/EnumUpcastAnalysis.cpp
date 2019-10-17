@@ -24,7 +24,6 @@ bool need_analyze(const DexMethod* method,
     return false;
   }
   std::vector<DexType*> types;
-  method->gather_types_shallow(types);
   method->gather_types(types);
   for (DexType* t : types) {
     if (is_array(t)) {

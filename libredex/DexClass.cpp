@@ -1105,11 +1105,9 @@ void DexProto::gather_strings(std::vector<DexString*>& lstring) const {
 
 void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& m : m_vmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& f : m_sfields) {
@@ -1227,7 +1225,7 @@ void DexField::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
-  // We handle m_spec.cls and proto in the first-layer gather.
+  gather_types_shallow(ltype); // Handle DexMethodRef parts.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
   auto param_anno = get_param_anno();
