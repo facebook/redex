@@ -16,14 +16,8 @@ function Help(props) {
 	const { siteConfig = {} } = context;
 	const supportLinks = [
 		{
-			content: `Learn more using the [documentation on this site.](${withBaseUrl(
-				"docs/doc1"
-			)})`,
-			title: "Browse Docs"
-		},
-		{
 			content: "Ask questions about the documentation and project",
-			title: "Join the community"
+      title: "Join the community"
 		},
 		{
 			content: "Find out what's new with this project",
@@ -45,7 +39,7 @@ function Help(props) {
 							<section>
 								<div className="row padding-top--lg">
 									<div className="col col--4 text--break">
-										<h3>{supportLinks[0].title}</h3>
+										<h3>Browse Docs</h3>
 										<p>
 											Learn more using the{' '}
 											<Link to={withBaseUrl("docs/installation")}>
@@ -53,7 +47,7 @@ function Help(props) {
 											</Link>
 										</p>
 									</div>
-									{supportLinks.slice(1).map((link, index) => (
+									{supportLinks.map((link, index) => (
 										<div key={index} className="col col--4 text--break">
 											<h3>{link.title}</h3>
 											<p>{link.content}</p>

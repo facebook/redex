@@ -8,8 +8,9 @@
 import React from "react";
 import Layout from "@theme/Layout";
 import useDocusaurusContext from "@docusaurus/useDocusaurusContext";
-import classnames from "classnames";
 import withBaseUrl from "@docusaurus/withBaseUrl";
+import Link from '@docusaurus/Link'
+import styles from './styles.module.css'
 
 const features = [
 	{
@@ -29,48 +30,37 @@ const features = [
 	}
 ];
 
-class Button extends React.Component {
-	render() {
-		return (
-			<div className="pluginWrapper buttonWrapper" style={{ padding: "0 2px" }}>
-				<a className="button" href={this.props.href} target={this.props.target}>
-					{this.props.children}
-				</a>
-			</div>
-		);
-	}
-}
-
-Button.defaultProps = {
-	target: "_self"
-};
-
 const Logo = props => (
-	<div className="projectLogo" style={{ padding: "0px 250px 130px 0px" }}>
+	<div className={styles.projectLogo} style={{ padding: "0px 250px 130px 0px" }}>
 		<img src={props.img_src} />
 	</div>
 );
 
 function Index(props) {
-	let language = props.language || "";
 	const context = useDocusaurusContext();
 	const { siteConfig = {} } = context;
 	return (
 		<Layout title={siteConfig.title} description={siteConfig.description}>
 			<div>
-				<header className={classnames("hero hero--primary")}>
+				<header className="hero hero--primary">
 					<div className="container padding-vert--lg">
 						<div className="row">
 							<div className="col text--center">
 								<h1 className="hero__title">{siteConfig.title}</h1>
 								<p className="hero__subtitle">{siteConfig.tagline}</p>
-								<div className="buttons">
-									<Button href={withBaseUrl("docs/installation")}>
+								<div className={styles.buttons}>
+									<Link
+										className="button button--lg button--secondary margin-right--xs"
+										to={withBaseUrl("docs/installation")}
+									>
 										GETTING STARTED
-									</Button>
-									<Button href="https://github.com/facebook/redex">
+									</Link>
+									<Link
+										className="button button--lg button--secondary"
+										to={"https://github.com/facebook/redex"}
+									>
 										GITHUB
-									</Button>
+									</Link>
 								</div>
 							</div>
 							<Logo img_src={withBaseUrl("img/redex-hero.png")} />
@@ -79,7 +69,7 @@ function Index(props) {
 				</header>
 				<div className="mainContainer">
 					{features && features.length && (
-						<section className="features">
+						<section className={styles.features}>
 							<div className="container">
 								<div className="row padding-vert--xl">
 									{features.map(({ imageUrl, title, content }, idx) => (
@@ -87,7 +77,7 @@ function Index(props) {
 											{imageUrl && (
 												<div className="text--center margin-bottom--lg">
 													<img
-														className="featureImage"
+														className={styles.featureImage}
 														src={withBaseUrl(imageUrl)}
 														alt={title}
 													/>

@@ -1,0 +1,45 @@
+.features {
+	display: flex;
+	align-items: center;
+	padding: 2rem 0;
+	width: 100%;
+}
+
+.featureImage {
+	height: 180px;
+	width: 180px;
+}
+
+.buttons {
+	display: flex;
+	justify-content: center;
+}
+
+.projectLogo {
+	display: none;
+    pointer-events: none;
+}
+
+.projectLogo img {
+	height: 100px;
+	margin-bottom: 0px;
+}
+
+@media only screen and (min-width: 1200px) {
+	.projectLogo {
+		align-items: center;
+		bottom: 0;
+		display: flex;
+		justify-content: flex-end;
+		left: 0;
+		padding: 2em 100px 4em;
+		position: absolute;
+		right: 0;
+		top: 0;
+		border: "1px solid blue";
+	}
+	.projectLogo img {
+		height: 100%;
+		max-height: 250px;
+	}
+}
