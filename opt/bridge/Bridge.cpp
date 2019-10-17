@@ -17,18 +17,18 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/functional/hash.hpp>
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "DexLoader.h"
-#include "Inliner.h"
-#include "IRCode.h"
-#include "IRInstruction.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "IRCode.h"
+#include "IRInstruction.h"
+#include "Inliner.h"
 #include "PassManager.h"
 #include "ReachableClasses.h"
 #include "Trace.h"
-#include "ClassHierarchy.h"
 #include "Walkers.h"
 
 namespace {
@@ -111,10 +111,9 @@ bool signature_matches(DexMethod* a, DexMethod* b) {
 }
 
 bool has_bridgelike_access(DexMethod* m) {
-  return
-    m->is_virtual() &&
-    (is_bridge(m) ||
-     (is_synthetic(m) && !is_static(m) && !is_constructor(m)));
+  return m->is_virtual() &&
+         (is_bridge(m) ||
+          (is_synthetic(m) && !is_static(m) && !is_constructor(m)));
 }
 
 void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
@@ -126,7 +125,7 @@ void do_inlining(DexMethod* bridge, DexMethod* bridgee) {
       });
   inliner::inline_tail_call(bridge, bridgee, invoke);
 }
-}
+} // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -174,21 +173,20 @@ class BridgeRemover {
       m_potential_bridgee_refs;
 
   void find_bridges() {
-    walk::methods(*m_scope,
-                 [&](DexMethod* m) {
-                   if (has_bridgelike_access(m)) {
-                     auto bridgee = find_bridgee(m);
-                     if (!bridgee) return;
-                     m_bridges_to_bridgees.emplace(m, bridgee);
-                     TRACE(BRIDGE,
-                           5,
-                           "Bridge:%p:%s\nBridgee:%p:%s",
-                           m,
-                           SHOW(m),
-                           bridgee,
-                           SHOW(bridgee));
-                   }
-                 });
+    walk::methods(*m_scope, [&](DexMethod* m) {
+      if (has_bridgelike_access(m)) {
+        auto bridgee = find_bridgee(m);
+        if (!bridgee) return;
+        m_bridges_to_bridgees.emplace(m, bridgee);
+        TRACE(BRIDGE,
+              5,
+              "Bridge:%p:%s\nBridgee:%p:%s",
+              m,
+              SHOW(m),
+              bridgee,
+              SHOW(bridgee));
+      }
+    });
   }
 
   void search_hierarchy_for_matches(DexMethod* bridge, DexMethod* bridgee) {
@@ -217,8 +215,8 @@ class BridgeRemover {
     for (auto super = type_class(type_class(clstype)->get_super_class());
          super != nullptr;
          super = type_class(super->get_super_class())) {
-      maybe_refs.emplace_back(
-          MethodRef(super->get_type(), name, proto), bridge);
+      maybe_refs.emplace_back(MethodRef(super->get_type(), name, proto),
+                              bridge);
       for (auto vmethod : const_cast<const DexClass*>(super)->get_vmethods()) {
         if (signature_matches(bridgee, vmethod)) {
           for (auto DEBUG_ONLY refp : maybe_refs) {
@@ -245,12 +243,7 @@ class BridgeRemover {
     for (auto subclass : subclasses) {
       m_potential_bridgee_refs.emplace(MethodRef(subclass, name, proto),
                                        bridge);
-      TRACE(BRIDGE,
-            5,
-            "    %s %s %s",
-            SHOW(subclass),
-            SHOW(name),
-            SHOW(proto));
+      TRACE(BRIDGE, 5, "    %s %s %s", SHOW(subclass), SHOW(name), SHOW(proto));
     }
   }
 
@@ -270,9 +263,8 @@ class BridgeRemover {
       auto inst = mie.insn;
       if (!is_invoke(inst->opcode())) continue;
       auto method = inst->get_method();
-      auto range = m_potential_bridgee_refs.equal_range(
-          MethodRef(method->get_class(), method->get_name(),
-              method->get_proto()));
+      auto range = m_potential_bridgee_refs.equal_range(MethodRef(
+          method->get_class(), method->get_name(), method->get_proto()));
       for (auto it = range.first; it != range.second; ++it) {
         auto referenced_bridge = it->second;
         // Don't count the bridge itself
@@ -294,14 +286,14 @@ class BridgeRemover {
     std::vector<DexMethodRef*> refs;
 
     auto visit_methods = [&refs](DexMethod* m) {
-        auto const& anno = m->get_anno_set();
-        if (anno) anno->gather_methods(refs);
-        auto const& param_anno = m->get_param_anno();
-        if (param_anno) {
-          for (auto const& pair : *param_anno) {
-            pair.second->gather_methods(refs);
-          }
+      auto const& anno = m->get_anno_set();
+      if (anno) anno->gather_methods(refs);
+      auto const& param_anno = m->get_param_anno();
+      if (param_anno) {
+        for (auto const& pair : *param_anno) {
+          pair.second->gather_methods(refs);
         }
+      }
     };
 
     for (auto const& cls : *m_scope) {
@@ -340,10 +332,10 @@ class BridgeRemover {
     }
 
     walk::code(*m_scope,
-              [](DexMethod*) { return true; },
-              [&](DexMethod* m, IRCode& code) {
-                exclude_referenced_bridgee(m, code);
-              });
+               [](DexMethod*) { return true; },
+               [&](DexMethod* m, IRCode& code) {
+                 exclude_referenced_bridgee(m, code);
+               });
   }
 
   void inline_bridges() {
@@ -386,9 +378,8 @@ class BridgeRemover {
     m_mgr.incr_metric(METRIC_BRIDGES_TO_OPTIMIZE, m_bridges_to_bridgees.size());
     inline_bridges();
     delete_unused_bridgees();
-    TRACE(BRIDGE, 1,
-            "Inlined and removed %lu bridges",
-            m_bridges_to_bridgees.size());
+    TRACE(BRIDGE, 1, "Inlined and removed %lu bridges",
+          m_bridges_to_bridgees.size());
     m_mgr.incr_metric(METRIC_BRIDGES_REMOVED, m_bridges_to_bridgees.size());
   }
 };
@@ -399,7 +390,8 @@ void BridgePass::run_pass(DexStoresVector& stores,
                           ConfigFiles& /* conf */,
                           PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(BRIDGE, 1, "BridgePass not run because no ProGuard configuration was provided.");
+    TRACE(BRIDGE, 1,
+          "BridgePass not run because no ProGuard configuration was provided.");
     return;
   }
   Scope scope = build_class_scope(stores);
