@@ -1169,6 +1169,9 @@ std::string show_deobfuscated(const DexClass* cls) {
   if (!cls) {
     return "";
   }
+  if (cls->get_deobfuscated_name().empty()) {
+    return cls->get_name() ? cls->get_name()->str() : show(cls);
+  }
   return cls->get_deobfuscated_name();
 }
 
