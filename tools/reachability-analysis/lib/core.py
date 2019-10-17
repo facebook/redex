@@ -104,13 +104,11 @@ class ReachableMethod(ReachableObject):
         ret = super(ReachableMethod, self).__repr__()
         if len(self.overriding) != 0:
             ret += "Overriding %s methods:\n" % len(self.overriding)
-            ret += show_list_with_idx(
-                list(map(lambda n: n.name, self.overriding)))
+            ret += show_list_with_idx(list(map(lambda n: n.name, self.overriding)))
 
         if len(self.overriden_by) != 0:
             ret += "Overriden by %s methods:\n" % len(self.overriden_by)
-            ret += show_list_with_idx(
-                list(map(lambda n: n.name, self.overriden_by)))
+            ret += show_list_with_idx(list(map(lambda n: n.name, self.overriden_by)))
         return ret
 
 
@@ -188,7 +186,7 @@ class ReachabilityGraph(AbstractGraph):
             type = ReachableObjectType.to_string(key[0])
             name = key[1]
             if search_str is None or search_str in name:
-                print("(ReachableObjectType.%s, \"%s\")" % (type, name))
+                print('(ReachableObjectType.%s, "%s")' % (type, name))
 
     @staticmethod
     def add_edge(n1, n2):
@@ -240,7 +238,7 @@ class MethodOverrideGraph(AbstractGraph):
     def list_nodes(self, search_str=None):
         for key in self.nodes.keys():
             if search_str is None or search_str in key:
-                print("\"%s\"" % key)
+                print('"%s"' % key)
 
     @staticmethod
     def add_edge(method, child):
@@ -260,7 +258,8 @@ class CombinedGraph(object):
             if type == ReachableObjectType.METHOD:
                 self.reachability_graph.nodes[(type, name)] = ReachableMethod(
                     self.reachability_graph.nodes[(type, name)],
-                    self.method_override_graph)
+                    self.method_override_graph,
+                )
 
         for method in self.method_override_graph.nodes.keys():
             method_node = self.reachability_graph.get_node(method)
@@ -301,8 +300,7 @@ class CombinedGraph(object):
         elif search_str is not None:
             # there could be names containing name of another node
             # in this case we prefer the only exact match
-            exact_match = list(filter(
-                (lambda n: n[1] == search_str), known_names))
+            exact_match = list(filter((lambda n: n[1] == search_str), known_names))
             if len(exact_match) == 1:
                 node = self.nodes[exact_match[0]]
 
@@ -312,8 +310,10 @@ class CombinedGraph(object):
             print("Found %s matching names:" % len(known_names))
             idx = 0
             for (type, name) in known_names:
-                print("%d: (ReachableObjectType.%s, \"%s\")"
-                    % (idx, ReachableObjectType.to_string(type), name))
+                print(
+                    '%d: (ReachableObjectType.%s, "%s")'
+                    % (idx, ReachableObjectType.to_string(type), name)
+                )
                 idx += 1
 
             return lambda i: self.nodes[known_names[i]]
