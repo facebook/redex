@@ -49,7 +49,7 @@ class SingleCalleeStrategy final : public BuildStrategy {
     std::vector<DexMethod*> roots;
 
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
-      if (is_definitely_virtual(method) || root(method)) {
+      if (is_definitely_virtual(method) || root(method) || is_clinit(method)) {
         roots.emplace_back(method);
       }
     });
