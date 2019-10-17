@@ -17,6 +17,9 @@ void fix_colliding_dmethods(
     const Scope& scope,
     const std::map<DexMethod*, DexProto*, dexmethods_comparator>&
         colliding_methods) {
+  if (colliding_methods.empty()) {
+    return;
+  }
   // Fix colliding methods by appending an additional param.
   TRACE(REFU, 9, "sig: colliding_methods %d", colliding_methods.size());
   std::unordered_map<DexMethod*, size_t> num_additional_args;
@@ -328,6 +331,24 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
     }
     wq.run_all();
   }
+
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> colliding_inits;
+  for (auto& pair : m_inits) {
+    auto* method = pair.first;
+    auto* new_proto = pair.second;
+    if (!DexMethod::get_method(
+            method->get_class(), method->get_name(), new_proto)) {
+      DexMethodSpec spec;
+      spec.proto = new_proto;
+      method->change(spec,
+                     false /* rename on collision */,
+                     true /* update deobfuscated name */);
+      TRACE(REFU, 9, "Update ctor %s ", SHOW(method));
+    } else {
+      colliding_inits.emplace(method->as_def(), new_proto);
+    }
+  }
+  fix_colliding_dmethods(scope, colliding_inits);
 }
 
 DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
@@ -388,18 +409,21 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   }
   DexProto* new_proto = DexProto::make_proto(
       rtype, DexTypeList::make_type_list(std::move(new_args)));
-  DexMethodSpec spec;
-  if (!is_init(method)) {
+  if (is_init(method)) {
+    always_assert(method->is_def());
+    // Don't check for init collisions here, since mangling() can execute in a
+    // parallel context.
+    m_inits.emplace(method->as_def(), new_proto);
+  } else {
+    DexMethodSpec spec;
+    spec.proto = new_proto;
     boost::hash_combine(seed, method->str());
     spec.name = gen_new_name(method->str(), seed);
+    method->change(spec,
+                   false /* rename on collision */,
+                   true /* update deobfuscated name */);
+    TRACE(REFU, 9, "Update method %s ", SHOW(method));
   }
-  spec.proto = new_proto;
-  // TODO: (fengliu) Handle collided <init> signatures instead of assertion
-  // failure.
-  method->change(spec,
-                 false /* rename on collision */,
-                 true /* update deobfuscated name */);
-  TRACE(REFU, 9, "Update method %s ", SHOW(method));
   return true;
 }
 
@@ -581,9 +605,8 @@ void update_method_signature_type_references(
 
   // Solve updating collision for direct methods by appending primitive
   // arguments.
-  if (!colliding_directs.empty()) {
-    fix_colliding_dmethods(scope, colliding_directs);
-  }
+  fix_colliding_dmethods(scope, colliding_directs);
+
   // Update virtual methods group by group.
   for (auto& key_and_group : vmethods_groups) {
     auto& group = key_and_group.second;

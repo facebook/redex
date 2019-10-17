@@ -50,16 +50,19 @@ class TypeRefUpdater final {
    * ...
    */
   DexType* try_convert_to_new_type(DexType* type);
+
   /**
    * Change a field to new type if its original type is a candidate.
    * Return true if the field is updated.
    */
   bool mangling(DexFieldRef* field);
+
   /**
    * Change proto of a method if its proto contains any candidate.
    */
   bool mangling(DexMethodRef* method);
 
+  std::map<DexMethod*, DexProto*, dexmethods_comparator> m_inits;
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
 };
 
