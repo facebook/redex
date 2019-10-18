@@ -636,7 +636,7 @@ bool is_subclass(const DexType* parent, const DexType* child) {
 }
 
 bool is_uninstantiable_class(DexType* type) {
-  if (is_array(type) || is_primitive(type)) {
+  if (type == nullptr || is_array(type) || is_primitive(type)) {
     return false;
   }
   auto cls = type_class(type);

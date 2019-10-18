@@ -330,12 +330,10 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   auto* insn = it->insn;
   auto opcode = insn->opcode();
   size_t src_index;
+  DexType* required_instance_type = nullptr;
   switch (opcode) {
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_INTERFACE:
-  case OPCODE_INVOKE_SUPER:
   case OPCODE_AGET:
   case OPCODE_AGET_BYTE:
   case OPCODE_AGET_CHAR:
@@ -343,24 +341,25 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_AGET_SHORT:
   case OPCODE_AGET_OBJECT:
   case OPCODE_AGET_BOOLEAN:
-  case OPCODE_IGET:
-  case OPCODE_IGET_BYTE:
-  case OPCODE_IGET_CHAR:
-  case OPCODE_IGET_WIDE:
-  case OPCODE_IGET_SHORT:
-  case OPCODE_IGET_OBJECT:
-  case OPCODE_IGET_BOOLEAN:
   case OPCODE_ARRAY_LENGTH:
   case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_INTERFACE: {
     src_index = 0;
     break;
+  }
+  case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_DIRECT: {
     auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
     always_assert(method == nullptr || !is_static(method));
-    if (method == nullptr || is_init(method)) {
+    if (opcode == OPCODE_INVOKE_DIRECT &&
+        (method == nullptr || is_init(method))) {
       return false;
     }
     src_index = 0;
+    if (method != nullptr && !method->is_external()) {
+      required_instance_type = method->get_class();
+    }
     break;
   }
   case OPCODE_APUT:
@@ -369,7 +368,17 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_APUT_WIDE:
   case OPCODE_APUT_SHORT:
   case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN:
+  case OPCODE_APUT_BOOLEAN: {
+    src_index = 1;
+    break;
+  }
+  case OPCODE_IGET:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_WIDE:
+  case OPCODE_IGET_SHORT:
+  case OPCODE_IGET_OBJECT:
+  case OPCODE_IGET_BOOLEAN:
   case OPCODE_IPUT:
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
@@ -377,7 +386,11 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_IPUT_SHORT:
   case OPCODE_IPUT_OBJECT:
   case OPCODE_IPUT_BOOLEAN: {
-    src_index = 1;
+    src_index = is_iget(opcode) ? 0 : 1;
+    auto* field = resolve_field(insn->get_field());
+    if (field && !field->is_external()) {
+      required_instance_type = field->get_class();
+    }
     break;
   }
   default: {
@@ -387,15 +400,30 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
 
   auto reg = insn->src(src_index);
   auto value = env.get(reg).maybe_get<SignedConstantDomain>();
+  std::vector<IRInstruction*> new_insns;
   if (!value || !value->get_constant() || *value->get_constant() != 0) {
-    return false;
+    if (!is_uninstantiable_class(required_instance_type)) {
+      return false;
+    }
+
+    IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
+    const_insn->set_dest(reg)->set_literal(0);
+    new_insns.emplace_back(const_insn);
   }
 
   IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
   throw_insn->set_src(0, reg);
-  m_replacements.emplace_back(insn, std::vector<IRInstruction*>{throw_insn});
+  new_insns.emplace_back(throw_insn);
+  m_replacements.emplace_back(insn, new_insns);
   m_rebuild_cfg = true;
   ++m_stats.throws;
+
+  if (insn->has_move_result_any()) {
+    auto move_result_it = std::next(it);
+    if (opcode::is_move_result_any(move_result_it->insn->opcode())) {
+      m_redundant_move_results.insert(move_result_it->insn);
+    }
+  }
   return true;
 }
 
@@ -441,7 +469,7 @@ Transform::Stats Transform::apply(
       bool any_changes =
           eliminate_redundant_put(env, wps, it) || replace_with_throw(env, it);
       intra_cp.analyze_instruction(mie.insn, &env);
-      if (!any_changes) {
+      if (!any_changes && !m_redundant_move_results.count(mie.insn)) {
         simplify_instruction(env, wps, code->iterator_to(mie));
       }
     }

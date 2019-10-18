@@ -85,6 +85,7 @@ class Transform final {
       m_replacements;
   std::vector<IRInstruction*> m_added_param_values;
   std::vector<IRList::iterator> m_deletes;
+  std::unordered_set<IRInstruction*> m_redundant_move_results;
   bool m_rebuild_cfg{0};
   Stats m_stats;
 };
