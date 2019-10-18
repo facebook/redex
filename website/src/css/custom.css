@@ -3,68 +3,23 @@
  * You can override the default Infima variables here.
  * Note: this is not a complete list of --ifm- variables.
  */
- :root {
-    --ifm-color-primary: #75c7a4;
-    --ifm-color-primary-dark: rgb(105, 173, 147);
-    --ifm-color-primary-darker: rgb(99, 163, 139);
-    --ifm-color-primary-darkest: rgb(82, 134, 115);
-    --ifm-color-primary-light: rgb(138, 201, 178);
-    --ifm-color-primary-lighter: rgb(158, 211, 191);
-    --ifm-color-primary-lightest: rgb(186, 224, 210);
-    --ifm-color-secondary:#f9f9f9;
-    --ifm-color-primary-dark: rgb(216, 216, 216);
-    --ifm-color-primary-darker: rgb(204, 204, 204);
-    --ifm-color-primary-darkest: rgb(168, 168, 168);
-    --ifm-color-primary-light: rgb(242, 242, 242);
-    --ifm-color-primary-lighter: rgb(245, 245, 245);
-    --ifm-color-primary-lightest: rgb(248, 248, 248);
-  }
-
-/* your custom css */
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/LatoLatin-Italic.woff2') format('woff2'),
-    url('/fonts/LatoLatin-Italic.woff') format('woff');
-  font-weight: normal;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/LatoLatin-Black.woff2') format('woff2'),
-    url('/fonts/LatoLatin-Black.woff') format('woff');
-  font-weight: 900;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/LatoLatin-BlackItalic.woff2') format('woff2'),
-    url('/fonts/LatoLatin-BlackItalic.woff') format('woff');
-  font-weight: 900;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/LatoLatin-Light.woff2') format('woff2'),
-    url('/fonts/LatoLatin-Light.woff') format('woff');
-  font-weight: 300;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: 'Lato';
-  src: url('/fonts/LatoLatin-Regular.woff2') format('woff2'),
-    url('/fonts/LatoLatin-Regular.woff') format('woff');
-  font-weight: normal;
-  font-style: normal;
+:root {
+  --ifm-color-primary: #75c7a4;
+  --ifm-color-primary-dark: rgb(105, 173, 147);
+  --ifm-color-primary-darker: rgb(99, 163, 139);
+  --ifm-color-primary-darkest: rgb(82, 134, 115);
+  --ifm-color-primary-light: rgb(138, 201, 178);
+  --ifm-color-primary-lighter: rgb(158, 211, 191);
+  --ifm-color-primary-lightest: rgb(186, 224, 210);
+  --ifm-color-secondary: #f9f9f9;
+  --ifm-color-primary-dark: rgb(216, 216, 216);
+  --ifm-color-primary-darker: rgb(204, 204, 204);
+  --ifm-color-primary-darkest: rgb(168, 168, 168);
+  --ifm-color-primary-light: rgb(242, 242, 242);
+  --ifm-color-primary-lighter: rgb(245, 245, 245);
+  --ifm-color-primary-lightest: rgb(248, 248, 248);
 }
 
 body {
-  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+  font-family: "Lato", "Helvetica Neue", Arial, sans-serif;
 }
-
-
-
