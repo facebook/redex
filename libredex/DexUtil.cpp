@@ -635,6 +635,18 @@ bool is_subclass(const DexType* parent, const DexType* child) {
   return false;
 }
 
+bool is_uninstantiable_class(DexType* type) {
+  if (is_array(type) || is_primitive(type)) {
+    return false;
+  }
+  auto cls = type_class(type);
+  if (cls == nullptr || is_interface(cls) || is_native(cls) ||
+      cls->is_external()) {
+    return false;
+  }
+  return !cls->has_ctors();
+}
+
 void change_visibility(DexMethod* method, DexType* scope) {
   auto code = method->get_code();
   always_assert(code != nullptr);

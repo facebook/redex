@@ -243,6 +243,12 @@ inline bool is_any_init(const DexMethodRef* method) {
 bool is_subclass(const DexType* parent, const DexType* child);
 
 /**
+ * Whether the given type refers to a proper class that has no ctor,
+ * and is not external or native.
+ */
+bool is_uninstantiable_class(DexType* type);
+
+/**
  * Change the visibility of members accessed in a method.
  * We make everything public, except if a scope argument is given; then accessed
  * members in the same scope will not be made public (We could be more precise

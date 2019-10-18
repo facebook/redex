@@ -351,8 +351,18 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_IGET_OBJECT:
   case OPCODE_IGET_BOOLEAN:
   case OPCODE_ARRAY_LENGTH:
+  case OPCODE_FILL_ARRAY_DATA:
     src_index = 0;
     break;
+  case OPCODE_INVOKE_DIRECT: {
+    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
+    always_assert(method == nullptr || !is_static(method));
+    if (method == nullptr || is_init(method)) {
+      return false;
+    }
+    src_index = 0;
+    break;
+  }
   case OPCODE_APUT:
   case OPCODE_APUT_BYTE:
   case OPCODE_APUT_CHAR:
