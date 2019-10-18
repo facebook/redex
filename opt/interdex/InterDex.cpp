@@ -162,8 +162,6 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
         dexes_structure->get_num_extended_dexes());
   TRACE(IDEX, 2, "\t scroll dex count: %d",
         dexes_structure->get_num_scroll_dexes());
-  TRACE(IDEX, 2, "\t mixedmode dex count: %d",
-        dexes_structure->get_num_mixedmode_dexes());
 
   TRACE(IDEX, 2, "Global stats:");
   TRACE(IDEX, 2, "\t %lu classes", dexes_structure->get_num_classes());
@@ -742,6 +740,24 @@ void InterDex::run() {
     flush_out_dex(EMPTY_DEX_INFO);
   }
 
+  // Emit dex info manifest
+  if (m_apk_manager.has_asset_dir()) {
+    auto mixed_mode_file = m_apk_manager.new_asset_file("dex_manifest.txt");
+    auto mixed_mode_fh = FileHandle(*mixed_mode_file);
+    mixed_mode_fh.seek_end();
+    std::stringstream ss;
+    int ordinal = 0;
+    for (const auto& dex_info : m_dex_infos) {
+      const auto& flags = std::get<1>(dex_info);
+      ss << std::get<0>(dex_info) << ",ordinal=" << ordinal++
+         << ",coldstart=" << flags.coldstart << ",extended=" << flags.extended
+         << ",primary=" << flags.primary << ",scroll=" << flags.scroll
+         << std::endl;
+    }
+    write_str(mixed_mode_fh, ss.str());
+    *mixed_mode_file = nullptr;
+  }
+
   always_assert_log(!m_emit_canaries ||
                         m_dexes_structure.get_num_dexes() < MAX_DEX_NUM,
                     "Bailing, max dex number surpassed %d\n",
@@ -816,22 +832,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
       canary_cls->rstate.set_keepnames();
     }
     m_dexes_structure.add_class_no_checks(canary_cls);
-
-    // NOTE: We only emit this if we have canary classes.
-    if (is_mixed_mode_dex(dex_info)) {
-      dex_info.mixed_mode = true;
-
-      always_assert_log(m_dexes_structure.get_num_mixedmode_dexes() == 0,
-                        "For now, we only accept 1 mixed mode dex.\n");
-      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode",
-            m_dexes_structure.get_num_secondary_dexes() + 1);
-
-      auto mixed_mode_file = m_apk_manager.new_asset_file("mixed_mode.txt");
-      auto mixed_mode_fh = FileHandle(*mixed_mode_file);
-      mixed_mode_fh.seek_end();
-      write_str(mixed_mode_fh, canary_name + "\n");
-      *mixed_mode_file = nullptr;
-    }
+    m_dex_infos.emplace_back(std::make_tuple(canary_name, dex_info));
   }
 
   for (auto& plugin : m_plugins) {
@@ -849,29 +850,6 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
   }
 
   m_outdex.emplace_back(m_dexes_structure.end_dex(dex_info));
-}
-
-bool InterDex::is_mixed_mode_dex(const DexInfo& dex_info) {
-  if (dex_info.mixed_mode) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::FIRST_COLDSTART_DEX) &&
-      m_dexes_structure.get_num_coldstart_dexes() == 0 && dex_info.coldstart) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::FIRST_EXTENDED_DEX) &&
-      m_dexes_structure.get_num_extended_dexes() == 0 && dex_info.extended) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::SCROLL_DEX) &&
-      m_dexes_structure.get_num_scroll_dexes() == 0 && dex_info.scroll) {
-    return true;
-  }
-
-  return false;
 }
 
 } // namespace interdex

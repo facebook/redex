@@ -142,10 +142,6 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
     m_info.num_extended_set_dexes++;
   }
 
-  if (dex_info.mixed_mode) {
-    m_info.num_mixed_mode_dexes++;
-  }
-
   if (dex_info.scroll) {
     m_info.num_scroll_dexes++;
   }

@@ -56,12 +56,6 @@ class InterDex {
 
   ~InterDex() { delete m_cross_dex_relocator; }
 
-  void set_mixed_mode_dex_statuses(
-      std::unordered_set<DexStatus, std::hash<int>>&& mixed_mode_dex_statuses) {
-    m_mixed_mode_info.set_mixed_mode_dex_statuses(
-        std::move(mixed_mode_dex_statuses));
-  }
-
   size_t get_num_cold_start_set_dexes() const {
     return m_dexes_structure.get_num_coldstart_dexes();
   }
@@ -113,7 +107,6 @@ class InterDex {
   void init_cross_dex_ref_minimizer_and_relocate_methods(const Scope& scope);
   void emit_remaining_classes(const Scope& scope);
   void flush_out_dex(DexInfo dex_info);
-  bool is_mixed_mode_dex(const DexInfo& dex_info);
 
   /**
    * Returns a list of coldstart types. It will only contain:
@@ -141,7 +134,7 @@ class InterDex {
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
 
-  MixedModeInfo m_mixed_mode_info;
+  std::vector<std::tuple<std::string, DexInfo>> m_dex_infos;
   DexesStructure m_dexes_structure;
 
   std::vector<DexType*> m_end_markers;

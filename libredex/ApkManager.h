@@ -24,6 +24,7 @@ class ApkManager {
     }
   }
 
+  bool has_asset_dir();
   std::shared_ptr<FILE*> new_asset_file(const char* filename);
 
  private:

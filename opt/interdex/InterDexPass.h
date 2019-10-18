@@ -62,7 +62,6 @@ class InterDexPass : public Pass {
   int64_t m_type_refs_limit;
   bool m_can_touch_coldstart_cls;
   bool m_can_touch_coldstart_extended_cls;
-  std::unordered_set<DexStatus, std::hash<int>> m_mixed_mode_dex_statuses;
   bool m_emit_scroll_set_marker;
   bool m_minimize_cross_dex_refs;
   CrossDexRefMinimizerConfig m_minimize_cross_dex_refs_config;
