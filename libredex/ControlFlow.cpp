@@ -338,6 +338,18 @@ bool Block::starts_with_move_result() {
   return false;
 }
 
+bool Block::contains_opcode(IROpcode opcode) {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (it->insn->opcode() == opcode) {
+      return true;
+    }
+  }
+  return false;
+}
+
 Block* Block::goes_to() const {
   const Edge* e = m_parent->get_succ_edge_of_type(this, EDGE_GOTO);
   if (e != nullptr) {

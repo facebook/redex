@@ -252,6 +252,8 @@ class Block final {
   // including move-result-pseudo
   bool starts_with_move_result();
 
+  bool contains_opcode(IROpcode opcode);
+
   // If this block has a single outgoing edge and it is a goto, return its
   // target. Otherwise, return nullptr
   Block* goes_to_only_edge() const;
