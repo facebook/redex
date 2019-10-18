@@ -1259,6 +1259,12 @@ class DexClass {
   bool is_perf_sensitive() const { return m_perf_sensitive; }
   void set_perf_sensitive(bool value) { m_perf_sensitive = value; }
 
+  // Find methods and fields from a class using its obfuscated name.
+  DexField* find_field_from_simple_deobfuscated_name(
+      const std::string& field_name);
+  DexMethod* find_method_from_simple_deobfuscated_name(
+      const std::string& method_name);
+
  private:
   void sort_methods();
   void sort_fields();

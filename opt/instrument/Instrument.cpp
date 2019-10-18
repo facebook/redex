@@ -637,46 +637,50 @@ void write_basic_block_index_file(
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
 } // namespace
 
+void replace_substr(std::string& data,
+                    const std::string& to_find,
+                    const std::string& to_replace) {
+  size_t pos = data.find(to_find);
+  while (pos != std::string::npos) {
+    data.replace(pos, to_find.size(), to_replace);
+    pos = data.find(to_find, pos + to_replace.size());
+  }
+}
+
 auto generate_sharded_analysis_methods(DexClass* cls,
-                                       const std::string& method_name,
+                                       const std::string& deobfuscated_prefix,
                                        const std::vector<DexFieldRef*> fields,
                                        const size_t num_shards) -> auto {
-  if (method_name.back() != '1') {
-    std::cerr << "[InstrumentPass] error: \'analysis_method_name\' must end "
-                 "with 1, but the name was\'"
-              << method_name << "\'" << show(*cls) << std::endl;
-    exit(1);
-  }
-
-  DexMethod* template_method = nullptr;
-  for (const auto& m : cls->get_dmethods()) {
-    if (m->get_name()->str() == method_name) {
-      template_method = m;
-      break;
-    }
-  }
+  // deobfuscated_prefix is the deobfuscated name
+  // e.g. onMethodBeginBasicGated
+  DexMethod* template_method =
+      cls->find_method_from_simple_deobfuscated_name(deobfuscated_prefix);
 
   if (template_method == nullptr) {
     std::cerr << "[InstrumentPass] error: failed to find template method \'"
-              << method_name << "\' in " << show(*cls) << std::endl;
+              << deobfuscated_prefix << "\' in " << show(*cls) << std::endl;
     for (const auto& m : cls->get_dmethods()) {
       std::cerr << " " << show(m) << std::endl;
     }
     exit(1);
   }
 
-  std::unordered_map<int /*shard index*/, DexMethod*> methods = {
-      {1, template_method}};
-  std::unordered_map<std::string, int> names = {{method_name, 1}};
-  const auto method_name_prefix =
-      method_name.substr(0, method_name.length() - 1);
-  for (size_t i = 2; i <= num_shards; ++i) {
-    const auto new_name = method_name_prefix + std::to_string(i);
+  const auto& method_prefix = template_method->get_name()->str();
+
+  std::unordered_map<int /*shard index*/, DexMethod*> methods = {};
+  std::unordered_map<std::string, int> names = {};
+
+  for (size_t i = 1; i <= num_shards; ++i) {
+    const auto new_name = method_prefix + std::to_string(i);
+    auto deobfuscated_name = template_method->get_deobfuscated_name();
+    replace_substr(deobfuscated_name, deobfuscated_prefix,
+                   deobfuscated_prefix + std::to_string(i));
+
     DexMethod* new_method =
         DexMethod::make_method_from(template_method,
                                     template_method->get_class(),
                                     DexString::make_string(new_name));
-    new_method->set_deobfuscated_name(new_name);
+    new_method->set_deobfuscated_name(deobfuscated_name);
     cls->add_method(new_method);
 
     // Patch array name.
@@ -687,7 +691,8 @@ auto generate_sharded_analysis_methods(DexClass* cls,
         [&](DexMethod* method,
             cfg::Block*,
             const std::vector<IRInstruction*>& insts) {
-          if (insts[0]->get_field()->get_name()->str() == "sMethodStats1") {
+          DexField* field = static_cast<DexField*>(insts[0]->get_field());
+          if (field->get_simple_deobfuscated_name() == "sMethodStats") {
             insts[0]->set_field(fields[i - 1]);
             patched = true;
             return;
@@ -726,6 +731,7 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   IRCode* code = clinit->get_code();
   std::vector<DexFieldRef*> fields;
   bool patched = false;
+  const std::string deobfuscated_prefix = "sMethodStats";
   walk::matching_opcodes_in_block(
       *clinit,
       std::make_tuple(m::is_opcode(OPCODE_NEW_ARRAY),
@@ -734,28 +740,35 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
-        if (insts[2]->get_field()->get_name()->str() != "sMethodStats1") {
+        DexField* template_field =
+            static_cast<DexField*>(insts[2]->get_field());
+        if (template_field->get_simple_deobfuscated_name() !=
+            deobfuscated_prefix) {
           return;
         }
 
         // Create new sMethodStatsN fields.
-        DexField* field = static_cast<DexField*>(insts[2]->get_field());
-        fields.push_back(field);
-        for (size_t i = 2; i <= num_shards; i++) {
-          const auto new_name = "sMethodStats" + std::to_string(i);
-          DexField* new_field =
-              DexField::make_field(field->get_class(),
+        const auto& field_prefix = template_field->get_name()->str();
+
+        for (size_t i = 1; i <= num_shards; i++) {
+          const auto new_name = field_prefix + std::to_string(i);
+          auto deobfuscated_name = template_field->get_deobfuscated_name();
+          replace_substr(deobfuscated_name, deobfuscated_prefix,
+                         deobfuscated_prefix + std::to_string(i));
+
+          DexField* new_field = static_cast<DexField*>(
+              DexField::make_field(template_field->get_class(),
                                    DexString::make_string(new_name),
-                                   field->get_type())
-                  ->make_concrete(field->get_access(),
-                                  field->get_static_value());
-          new_field->set_deobfuscated_name(new_name);
+                                   template_field->get_type()));
+          new_field->set_deobfuscated_name(deobfuscated_name);
+          new_field->make_concrete(template_field->get_access(),
+                                   template_field->get_static_value());
           fields.push_back(new_field);
           cls->add_field(new_field);
         }
 
         // Clone the matched three instructions, but with new field names.
-        for (size_t i = num_shards; i >= 2; --i) {
+        for (size_t i = num_shards; i >= 1; --i) {
           code->insert_after(
               insts[2], {(new IRInstruction(OPCODE_NEW_ARRAY))
                              ->set_type(insts[0]->get_type())
@@ -787,7 +800,10 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
   // Add => OPCODE: APUT_OBJECT vY, vX, vN
   //        ...
   // Add => OPCODE: APUT_OBJECT vY, vX, vN
-  patch_array_size(cls, "sMethodStatsArray", num_shards);
+  auto field =
+      cls->find_field_from_simple_deobfuscated_name("sMethodStatsArray");
+  always_assert(field != nullptr);
+  patch_array_size(cls, field->get_name()->str(), num_shards);
   patched = false;
   walk::matching_opcodes_in_block(
       *clinit,
@@ -797,7 +813,8 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
       [&](DexMethod* method,
           cfg::Block*,
           const std::vector<IRInstruction*>& insts) {
-        if (insts[2]->get_field()->get_name()->str() != "sMethodStatsArray") {
+        DexField* field = static_cast<DexField*>(insts[2]->get_field());
+        if (field->get_simple_deobfuscated_name() != "sMethodStatsArray") {
           return;
         }
 
@@ -1013,14 +1030,18 @@ void do_simple_method_tracing(DexClass* analysis_cls,
   // Patch stat array sizes.
   for (size_t i = 0; i < NUM_SHARDS; ++i) {
     size_t n = kTotalSize / NUM_SHARDS + (i < kTotalSize % NUM_SHARDS ? 1 : 0);
-    patch_array_size(analysis_cls,
-                     "sMethodStats" + std::to_string(i + 1),
+    // Get obfuscated name corresponding to each sMethodStat[1-N] field.
+    const auto field_name = array_fields[i]->get_name()->str();
+    patch_array_size(analysis_cls, field_name,
                      options.num_stats_per_method * n);
   }
 
   // Patch method count constant.
   always_assert(method_id == kTotalSize);
-  patch_static_field(analysis_cls, "sNumStaticallyInstrumented", kTotalSize);
+  auto field = analysis_cls->find_field_from_simple_deobfuscated_name(
+      "sNumStaticallyInstrumented");
+  always_assert(field != nullptr);
+  patch_static_field(analysis_cls, field->get_name()->str(), kTotalSize);
 
   ofs.close();
   TRACE(INSTRUMENT, 2, "Index file was written to: %s", SHOW(file_name));
