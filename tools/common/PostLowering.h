@@ -8,8 +8,9 @@
 #pragma once
 
 #include "DexClass.h"
+#include <string>
 
 class PostLowering {
  public:
-  void run(const DexClasses& dex);
+  void run(const DexClasses& dex, const std::string& output_dir);
 };

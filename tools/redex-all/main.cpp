@@ -972,7 +972,7 @@ void redex_backend(const PassManager& manager,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic());
 
-      post_lowering.run(store.get_dexen()[i]);
+      post_lowering.run(store.get_dexen()[i], output_dir);
 
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
