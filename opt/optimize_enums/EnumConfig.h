@@ -7,7 +7,7 @@
 #pragma once
 
 #include "ConcurrentContainers.h"
-#include "DexClass.h"
+#include "MethodOverrideGraph.h"
 
 namespace optimize_enums {
 /**
@@ -52,5 +52,8 @@ bool params_contain_object_type(const DexMethod* method,
 ParamSummary calculate_param_summary(DexMethod* method,
                                      const DexType* object_type);
 
-void calculate_param_summaries(Scope& scope, SummaryMap* param_summary_map);
+void calculate_param_summaries(
+    const Scope& scope,
+    const method_override_graph::Graph& override_graph,
+    SummaryMap* param_summary_map);
 } // namespace optimize_enums

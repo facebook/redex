@@ -612,16 +612,30 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
       (
         (load-param-object v0)
         (load-param-object v1)
+        (load-param-object v2)
         (return-void)
       )
     )
   )");
   EXPECT_EQ(summary2.returned_param, boost::none);
-  EXPECT_THAT(summary2.safe_params, UnorderedElementsAre(1));
+  EXPECT_THAT(summary2.safe_params, UnorderedElementsAre(2));
+
+  auto summary2_static = get_summary(R"(
+    (method (static public) "LFoo;.param_0_is_not_safecast:(Ljava/lang/Enum;Ljava/lang/Object;)V"
+      (
+        (load-param-object v0)
+        (load-param-object v1)
+        (return-void)
+      )
+    )
+  )");
+  EXPECT_EQ(summary2_static.returned_param, boost::none);
+  EXPECT_THAT(summary2_static.safe_params, UnorderedElementsAre(1));
 
   auto summary3 = get_summary(R"(
     (method () "LFoo;.check_cast:(Ljava/lang/Object;)Ljava/lang/Object;"
       (
+        (load-param-object v1)
         (load-param-object v0)
         (check-cast v0 "Ljava/lang/Enum;")
         (move-result-pseudo-object v0)
@@ -635,6 +649,7 @@ TEST_F(OptimizeEnumsTest, test_param_summary_generating) {
   auto summary4 = get_summary(R"(
     (method () "LFoo;.has_invocation:(Ljava/lang/Object;)Ljava/lang/Object;"
       (
+        (load-param-object v1)
         (load-param-object v0)
         (invoke-virtual (v0) "Ljava/lang/Object;.toString:()Ljava/lang/String;")
         (return-object v0)
