@@ -1196,6 +1196,37 @@ DexField* DexFieldRef::as_def() {
   }
 }
 
+// Find methods and fields from a class using its obfuscated name.
+DexField* DexClass::find_field_from_simple_deobfuscated_name(
+    const std::string& field_name) {
+  for (DexField* f : get_sfields()) {
+    if (f->get_simple_deobfuscated_name() == field_name) {
+      return f;
+    }
+  }
+  for (DexField* f : get_ifields()) {
+    if (f->get_simple_deobfuscated_name() == field_name) {
+      return f;
+    }
+  }
+  return nullptr;
+}
+
+DexMethod* DexClass::find_method_from_simple_deobfuscated_name(
+    const std::string& method_name) {
+  for (DexMethod* m : get_dmethods()) {
+    if (m->get_simple_deobfuscated_name() == method_name) {
+      return m;
+    }
+  }
+  for (DexMethod* m : get_vmethods()) {
+    if (m->get_simple_deobfuscated_name() == method_name) {
+      return m;
+    }
+  }
+  return nullptr;
+}
+
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);

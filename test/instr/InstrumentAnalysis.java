@@ -14,11 +14,11 @@ public class InstrumentAnalysis {
   private static final String LOG_TAG = "DYNA";
 
   private static int sNumStaticallyInstrumented = 0; // Redex will patch
-  private static final int[] sMethodStats1 = new int[0]; // Redex will patch
+  private static final int[] sMethodStats = new int[0]; // Redex will patch
   private static short[][] sMethodStatsArray = new short[][] {};  // Redex will patch
 
-  public static void onMethodBegin1(int index) {
-    ++sMethodStats1[index];
-    Log.i(LOG_TAG, MessageFormat.format("increment: {0}, {1}", index, sMethodStats1[index]));
+  public static void onMethodBegin(int index) {
+    ++sMethodStats[index];
+    Log.i(LOG_TAG, MessageFormat.format("increment: {0}, {1}", index, sMethodStats[index]));
   }
 }
