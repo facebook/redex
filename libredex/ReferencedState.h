@@ -18,6 +18,12 @@ namespace ir_meta_io {
 class IRMetaIO;
 }
 
+namespace keep_rules {
+namespace impl {
+class KeepState;
+}
+} // namespace keep_rules
+
 class ReferencedState {
  private:
   struct InnerStruct {
@@ -72,9 +78,6 @@ class ReferencedState {
 
   std::mutex m_keep_reasons_mtx;
   keep_reason::ReasonPtrSet m_keep_reasons;
-
-  // IR serialization class
-  friend class ir_meta_io::IRMetaIO;
 
  public:
   ReferencedState() = default;
@@ -153,23 +156,6 @@ class ReferencedState {
     return !inner_struct.m_keep || allowobfuscation();
   }
 
-  // Does any keep rule (whether -keep or -keepnames) match this DexMember?
-  bool has_keep() const {
-    return inner_struct.m_keep || inner_struct.m_by_resources;
-  }
-
-  // There's generally no need to call this; use can_delete() instead.
-  bool allowshrinking() const {
-    return !inner_struct.m_unset_allowshrinking &&
-           inner_struct.m_set_allowshrinking;
-  }
-
-  // There's generally no need to call this; use can_rename() instead.
-  bool allowobfuscation() const {
-    return !inner_struct.m_unset_allowobfuscation &&
-           inner_struct.m_set_allowobfuscation;
-  }
-
   bool assumenosideeffects() const {
     return inner_struct.m_assumenosideeffects;
   }
@@ -218,8 +204,6 @@ class ReferencedState {
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 
-  void set_has_keep() { set_has_keep(keep_reason::UNKNOWN); }
-
   /*
    * Mark this DexMember as an entry point that should not be deleted or
    * renamed.
@@ -241,25 +225,9 @@ class ReferencedState {
     }
   }
 
-  /*
-   * This should only be called from ProguardMatcher, and is used whenever we
-   * encounter a keep rule (regardless of whether it's `-keep` or `-keepnames`).
-   */
-  template <class... Args>
-  void set_has_keep(Args&&... args) {
-    inner_struct.m_keep = true;
-    if (RedexContext::record_keep_reasons()) {
-      add_keep_reason(
-          RedexContext::make_keep_reason(std::forward<Args>(args)...));
-    }
-  }
-
   const keep_reason::ReasonPtrSet& keep_reasons() const {
     return m_keep_reasons;
   }
-
-  void set_allowshrinking() { inner_struct.m_set_allowshrinking = true; }
-  void unset_allowshrinking() { inner_struct.m_unset_allowshrinking = true; }
 
   template <class... Args>
   void set_keepnames(Args&&... args) {
@@ -277,11 +245,6 @@ class ReferencedState {
   void force_unset_allowshrinking() {
     inner_struct.m_set_allowshrinking = true;
     inner_struct.m_unset_allowshrinking = false;
-  }
-
-  void set_allowobfuscation() { inner_struct.m_set_allowobfuscation = true; }
-  void unset_allowobfuscation() {
-    inner_struct.m_unset_allowobfuscation = true;
   }
 
   void set_assumenosideeffects() { inner_struct.m_assumenosideeffects = true; }
@@ -331,9 +294,52 @@ class ReferencedState {
   }
 
  private:
+  // Does any keep rule (whether -keep or -keepnames) match this DexMember?
+  bool has_keep() const { return inner_struct.m_keep; }
+
+  /*
+   * This should only be called from ProguardMatcher, and is used whenever we
+   * encounter a keep rule (regardless of whether it's `-keep` or `-keepnames`).
+   */
+  template <class... Args>
+  void set_has_keep(Args&&... args) {
+    inner_struct.m_keep = true;
+    if (RedexContext::record_keep_reasons()) {
+      add_keep_reason(
+          RedexContext::make_keep_reason(std::forward<Args>(args)...));
+    }
+  }
+
+  // There's generally no need to call this; use can_delete() instead.
+  bool allowshrinking() const {
+    return !inner_struct.m_unset_allowshrinking &&
+           inner_struct.m_set_allowshrinking;
+  }
+
+  void set_allowshrinking() { inner_struct.m_set_allowshrinking = true; }
+
+  void unset_allowshrinking() { inner_struct.m_unset_allowshrinking = true; }
+
+  // There's generally no need to call this; use can_rename() instead.
+  bool allowobfuscation() const {
+    return !inner_struct.m_unset_allowobfuscation &&
+           inner_struct.m_set_allowobfuscation;
+  }
+
+  void set_allowobfuscation() { inner_struct.m_set_allowobfuscation = true; }
+
+  void unset_allowobfuscation() {
+    inner_struct.m_unset_allowobfuscation = true;
+  }
+
   void add_keep_reason(const keep_reason::Reason* reason) {
     always_assert(RedexContext::record_keep_reasons());
     std::lock_guard<std::mutex> lock(m_keep_reasons_mtx);
     m_keep_reasons.emplace(reason);
   }
+
+  friend class keep_rules::impl::KeepState;
+
+  // IR serialization class
+  friend class ir_meta_io::IRMetaIO;
 };

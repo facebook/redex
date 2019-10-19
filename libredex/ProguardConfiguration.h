@@ -150,4 +150,56 @@ struct ProguardConfiguration {
   ProguardConfiguration(const ProguardConfiguration&) = delete;
 };
 
+namespace impl {
+
+/*
+ * This class exposes private methods of ReferencedState and is only intended
+ * to be used by ProguardMatcher and related PG-config-handling logic.
+ * Optimizations should use functions defined in ReachableClasses.h instead.
+ */
+class KeepState {
+ public:
+  template <class DexMember>
+  static bool has_keep(DexMember* member) {
+    return member->rstate.has_keep();
+  }
+
+  template <class DexMember, class... Args>
+  static void set_has_keep(DexMember* member, Args&&... args) {
+    member->rstate.set_has_keep(std::forward<Args>(args)...);
+  }
+
+  template <class DexMember>
+  static bool allowshrinking(DexMember* member) {
+    return member->rstate.allowshrinking();
+  }
+
+  template <class DexMember>
+  static void set_allowshrinking(DexMember* member) {
+    member->rstate.set_allowshrinking();
+  }
+
+  template <class DexMember>
+  static void unset_allowshrinking(DexMember* member) {
+    member->rstate.unset_allowshrinking();
+  }
+
+  template <class DexMember>
+  static bool allowobfuscation(DexMember* member) {
+    return member->rstate.allowobfuscation();
+  }
+
+  template <class DexMember>
+  static void set_allowobfuscation(DexMember* member) {
+    member->rstate.set_allowobfuscation();
+  }
+
+  template <class DexMember>
+  static void unset_allowobfuscation(DexMember* member) {
+    member->rstate.unset_allowobfuscation();
+  }
+};
+
+} // namespace impl
+
 } // namespace keep_rules

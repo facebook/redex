@@ -10,6 +10,8 @@
 #include "ReachableClasses.h"
 #include "ReferencedState.h"
 
+using namespace keep_rules;
+
 template <class Container>
 void print_method_seeds(std::ostream& output,
                         const ProguardMap& pg_map,
@@ -19,9 +21,10 @@ void print_method_seeds(std::ostream& output,
                         const bool allowobfuscation_filter) {
 
   for (DexMethod* method : methods) {
-    if (has_keep(method) ||
-        (allowshrinking_filter && !allowshrinking(method)) ||
-        (allowobfuscation_filter && !allowobfuscation(method))) {
+    if (impl::KeepState::has_keep(method) ||
+        (allowshrinking_filter && !impl::KeepState::allowshrinking(method)) ||
+        (allowobfuscation_filter &&
+         !impl::KeepState::allowobfuscation(method))) {
       return;
     }
     redex::print_method(output, pg_map, class_name, method);
@@ -36,8 +39,10 @@ void print_field_seeds(std::ostream& output,
                        const bool allowshrinking_filter,
                        const bool allowobfuscation_filter) {
   for (DexField* field : fields) {
-    if (!has_keep(field) || (allowshrinking_filter && !allowshrinking(field)) ||
-        (allowobfuscation_filter && !allowobfuscation(field))) {
+    if (!impl::KeepState::has_keep(field) ||
+        (allowshrinking_filter && !impl::KeepState::allowshrinking(field)) ||
+        (allowobfuscation_filter &&
+         !impl::KeepState::allowobfuscation(field))) {
       return;
     }
     redex::print_field(output, pg_map, class_name, field);
@@ -50,13 +55,13 @@ void show_class(std::ostream& output,
                 const bool allowshrinking_filter,
                 const bool allowobfuscation_filter) {
   if (allowshrinking_filter) {
-    if (allowshrinking(cls)) {
+    if (impl::KeepState::allowshrinking(cls)) {
       output << name << std::endl;
     }
     return;
   }
   if (allowobfuscation_filter) {
-    if (allowobfuscation(cls)) {
+    if (impl::KeepState::allowobfuscation(cls)) {
       output << name << std::endl;
     }
     return;
@@ -79,7 +84,7 @@ void keep_rules::print_seeds(std::ostream& output,
       deob = cls->get_name()->c_str();
     }
     std::string name = java_names::internal_to_external(deob);
-    if (has_keep(cls)) {
+    if (impl::KeepState::has_keep(cls)) {
       show_class(
           output, cls, name, allowshrinking_filter, allowobfuscation_filter);
     }

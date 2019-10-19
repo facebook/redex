@@ -24,6 +24,8 @@
 #include "ReachableClasses.h"
 #include "RedexTest.h"
 
+using namespace keep_rules;
+
 /**
 The objective of these tests are to make sure the ProGuard rules are
 properly applied to a set of test classes. The incomming APK is currently
@@ -171,7 +173,7 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Alpha;");
     ASSERT_NE(alpha, nullptr);
     EXPECT_FALSE(root(alpha));
-    EXPECT_FALSE(allowobfuscation(alpha));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(alpha));
   }
 
   // Beta is not used so should not have a keep marker.
@@ -197,7 +199,7 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta;");
     ASSERT_NE(nullptr, delta);
     EXPECT_TRUE(root(delta));
-    EXPECT_FALSE(allowobfuscation(delta));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(delta));
     // The field "public static int alpha" should not match because of the
     // public.
     auto alpha = find_static_field_named(
@@ -210,7 +212,7 @@ TEST_F(ProguardTest, assortment) {
         delta, "Lcom/facebook/redex/test/proguard/Delta;.beta:I");
     ASSERT_NE(nullptr, beta);
     EXPECT_TRUE(root(beta));
-    EXPECT_FALSE(allowobfuscation(beta));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(beta));
     // The field "private int gamma" should not match because
     // it is an instance field.
     auto gamma = find_instance_field_named(
@@ -222,7 +224,7 @@ TEST_F(ProguardTest, assortment) {
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>:()V");
     ASSERT_NE(nullptr, init_V);
     EXPECT_TRUE(root(init_V));
-    EXPECT_FALSE(allowobfuscation(init_V));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(init_V));
     auto init_I = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<init>:(I)V");
     ASSERT_NE(nullptr, init_I);
@@ -232,12 +234,12 @@ TEST_F(ProguardTest, assortment) {
                                      "Delta;.<init>:(Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     EXPECT_TRUE(root(init_S));
-    EXPECT_FALSE(allowobfuscation(init_S));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(init_S));
     // Check clinit
     auto clinit = find_dmethod_named(
         delta, "Lcom/facebook/redex/test/proguard/Delta;.<clinit>:()V");
     ASSERT_NE(nullptr, clinit);
-    EXPECT_FALSE(allowobfuscation(clinit));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(clinit));
   }
 
   { // Inner class Delta.A should be marked for keep.
@@ -252,7 +254,7 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$B;");
     ASSERT_NE(delta_b, nullptr);
     EXPECT_TRUE(root(delta_b));
-    EXPECT_FALSE(allowobfuscation(delta_b));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(delta_b));
   }
 
   { // Inner class Delta.C is kept.
@@ -327,7 +329,7 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$G;");
     ASSERT_NE(nullptr, delta_g);
     EXPECT_TRUE(root(delta_g));
-    EXPECT_TRUE(allowobfuscation(delta_g));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(delta_g));
     // Make sure its fields and methods have been kept by the "*;" directive.
     auto fuzzyWombat = find_instance_field_named(
         delta_g, "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombat:I");
@@ -337,7 +339,7 @@ TEST_F(ProguardTest, assortment) {
         "Lcom/facebook/redex/test/proguard/Delta$G;.fuzzyWombatValue:()I");
     ASSERT_NE(nullptr, fuzzyWombatValue);
     EXPECT_TRUE(root(fuzzyWombatValue));
-    EXPECT_TRUE(allowobfuscation(fuzzyWombatValue));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(fuzzyWombatValue));
     // Check that the constructor is not renamed.
     auto init_V =
         find_dmethod_named(delta_g,
@@ -345,7 +347,7 @@ TEST_F(ProguardTest, assortment) {
                            "Delta$G;.<init>:(Lcom/facebook/redex/test/"
                            "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
-    EXPECT_FALSE(allowobfuscation(init_V));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(init_V));
   }
 
   { // Inner class Delta.H is kept.
@@ -355,7 +357,7 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$H;");
     ASSERT_NE(delta_h, nullptr);
     EXPECT_TRUE(root(delta_h));
-    EXPECT_TRUE(allowobfuscation(delta_h));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(delta_h));
     auto wombatField = find_instance_field_named(
         delta_h, "Lcom/facebook/redex/test/proguard/Delta$H;.wombat:I");
     ASSERT_NE(wombatField, nullptr);
@@ -379,20 +381,20 @@ TEST_F(ProguardTest, assortment) {
         find_class_named(classes, "Lcom/facebook/redex/test/proguard/Delta$I;");
     ASSERT_NE(delta_i, nullptr);
     EXPECT_TRUE(root(delta_i));
-    EXPECT_TRUE(allowobfuscation(delta_i));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(delta_i));
     // Make sure all the wombat* fields were found.
     // wombat matches wombat.* from "wombat*"
     auto wombat = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat:I");
     ASSERT_NE(wombat, nullptr);
     EXPECT_TRUE(root(wombat));
-    EXPECT_TRUE(allowobfuscation(wombat));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(wombat));
     // wombat_alpha matches wombat.* from "wombat*"
     auto wombat_alpha = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.wombat_alpha:I");
     ASSERT_NE(wombat_alpha, nullptr);
     EXPECT_TRUE(root(wombat_alpha));
-    EXPECT_TRUE(allowobfuscation(wombat_alpha));
+    EXPECT_TRUE(impl::KeepState::allowobfuscation(wombat_alpha));
     // numbat does not match wombat.* from "wombat*"
     auto numbat = find_instance_field_named(
         delta_i, "Lcom/facebook/redex/test/proguard/Delta$I;.numbat:I");
@@ -526,7 +528,7 @@ TEST_F(ProguardTest, assortment) {
                            "proguard/Delta;)V");
     ASSERT_NE(nullptr, init_V);
     EXPECT_TRUE(root(init_V));
-    EXPECT_FALSE(allowobfuscation(init_V));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(init_V));
     auto init_I = find_dmethod_named(delta_j,
                                      "Lcom/facebook/redex/test/proguard/"
                                      "Delta$J;.<init>(Lcom/facebook/redex/test/"
@@ -539,7 +541,7 @@ TEST_F(ProguardTest, assortment) {
                            "proguard/Delta;Ljava/lang/String;)V");
     ASSERT_NE(nullptr, init_S);
     EXPECT_TRUE(root(init_S));
-    EXPECT_FALSE(allowobfuscation(init_S));
+    EXPECT_FALSE(impl::KeepState::allowobfuscation(init_S));
 
     // Make sure there are no iotas.
     auto iota_1 = find_vmethod_named(delta_j,

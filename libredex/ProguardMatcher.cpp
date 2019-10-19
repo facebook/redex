@@ -338,24 +338,24 @@ void apply_keep_modifiers(const KeepSpec& k, DexMember* member) {
   // programmers must fix the rules. Instead, we pick a conservative choice:
   // don't shrink or don't obfuscate.
   if (k.allowshrinking) {
-    if (!has_keep(member)) {
-      member->rstate.set_allowshrinking();
+    if (!impl::KeepState::has_keep(member)) {
+      impl::KeepState::set_allowshrinking(member);
     } else {
       // We already observed a keep rule for this member. So, even if another
       // "-keep,allowshrinking" tries to set allowshrinking, we must ignore it.
     }
   } else {
     // Otherwise reset it: don't allow shrinking.
-    member->rstate.unset_allowshrinking();
+    impl::KeepState::unset_allowshrinking(member);
   }
   // The same case: unsetting allowobfuscation has a priority.
   if (k.allowobfuscation) {
-    if (!has_keep(member) &&
+    if (!impl::KeepState::has_keep(member) &&
         strcmp(member->get_name()->c_str(), "<init>") != 0) {
-      member->rstate.set_allowobfuscation();
+      impl::KeepState::set_allowobfuscation(member);
     }
   } else {
-    member->rstate.unset_allowobfuscation();
+    impl::KeepState::unset_allowobfuscation(member);
   }
 }
 
@@ -603,7 +603,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   }
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
-    cls->rstate.set_has_keep(&m_keep_rule);
+    impl::KeepState::set_has_keep(cls, &m_keep_rule);
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",
             java_names::internal_to_external(cls->get_deobfuscated_name())
@@ -649,7 +649,7 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     member->rstate.set_whyareyoukeeping();
     break;
   case RuleType::KEEP: {
-    member->rstate.set_has_keep(&m_keep_rule);
+    impl::KeepState::set_has_keep(member, &m_keep_rule);
     if (member->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(member),
             show_keep(m_keep_rule).c_str());
@@ -775,7 +775,7 @@ void ProguardMatcher::process_proguard_rules(
 void ProguardMatcher::mark_all_annotation_classes_as_keep() {
   for (auto cls : m_classes) {
     if (is_annotation(cls)) {
-      cls->rstate.set_has_keep(keep_reason::ANNO);
+      impl::KeepState::set_has_keep(cls, keep_reason::ANNO);
       if (cls->rstate.report_whyareyoukeeping()) {
         TRACE(PGR,
               2,
