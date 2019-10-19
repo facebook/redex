@@ -24,7 +24,7 @@ in `config/default.config`.  This is what it looks like:
     "DelSuperPass",
     "SingleImplPass",
     "MethodInlinePass",
-    "StaticReloPass",
+    "StaticReloPassV2",
     "RemoveEmptyClassesPass",
     "ShortenSrcStringsPass"
   ]
