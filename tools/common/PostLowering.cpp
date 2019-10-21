@@ -7,4 +7,4 @@
 
 #include "PostLowering.h"
 
-void run(const DexClasses& dex, const std::string& output_dir) {}
+void PostLowering::run(const DexClasses& dex, const std::string& output_dir) {}
