@@ -10,6 +10,7 @@ import distutils.version
 import errno
 import fnmatch
 import glob
+import itertools
 import json
 import os
 import re
@@ -141,6 +142,77 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
     )
 
 
+def maybe_addr2line(lines):
+    backtrace_pattern = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
+
+    # Generate backtrace lines.
+    def find_matches():
+        for line in lines:
+            stripped_line = line.strip()
+            m = backtrace_pattern.fullmatch(stripped_line)
+            if m is not None:
+                yield m
+
+    # Check whether there is anything to do.
+    matches_gen = find_matches()
+    first_elem = next(matches_gen, None)
+    if first_elem is None:
+        return
+    matches_gen = itertools.chain([first_elem], matches_gen)
+
+    # Check whether addr2line is available
+    def has_addr2line():
+        try:
+            subprocess.check_call(
+                ["addr2line", "-v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    if not has_addr2line():
+        sys.stderr.write("Addr2line not found!\n")
+        return
+    sys.stderr.write("\n")
+
+    addr2line_base = ["addr2line", "-f", "-i", "-C", "-e"]
+
+    def symbolize(filename, offset):
+        # It's good enough not to use server mode.
+        try:
+            output = subprocess.check_output(addr2line_base + [filename, offset])
+            return output.decode(sys.stderr.encoding).splitlines()
+        except subprocess.CalledProcessError:
+            return ["<addr2line error>"]
+
+    for m in matches_gen:
+        sys.stderr.write("%s(%s)[%s]\n" % (m.group(1), m.group(2), m.group(3)))
+        decoded = symbolize(m.group(1), m.group(3))
+        odd_line = True
+        for line in decoded:
+            sys.stderr.write("%s%s\n" % ("  " * (1 if odd_line else 2), line.strip()))
+            odd_line = not odd_line
+
+    sys.stderr.write("\n")
+
+
+def run_and_stream_stderr(args, env, pass_fds):
+    proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
+    err_out = []
+    # Copy and stash the output.
+    for line in proc.stderr:
+        str_line = line.decode(sys.stdout.encoding)
+        sys.stderr.write(str_line)
+        err_out.append(str_line)
+        if len(err_out) > 1000:
+            err_out = err_out[100:]
+    returncode = proc.wait()
+
+    return (returncode, err_out)
+
+
 def run_redex_binary(state):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
@@ -230,25 +302,30 @@ def run_redex_binary(state):
     # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
     for i in range(5):
         try:
-            subprocess.check_call(args, env=env, pass_fds=(logger.trace_fp.fileno(),))
+            returncode, err_out = run_and_stream_stderr(
+                args, env, (logger.trace_fp.fileno(),)
+            )
+            if returncode != 0:
+                # Check for crash traces.
+                maybe_addr2line(err_out)
+
+                script_filenames = write_debugger_commands(args)
+                raise RuntimeError(
+                    ("redex-all crashed with exit code %s! " % returncode)
+                    + (
+                        "You can re-run it "
+                        "under gdb by running %(gdb_script_name)s or under lldb "
+                        "by running %(lldb_script_name)s"
+                    )
+                    % script_filenames
+                )
+            break
         except OSError as err:
             if err.errno == errno.ETXTBSY:
                 if i < 4:
                     time.sleep(5)
                     continue
             raise err
-        except subprocess.CalledProcessError as err:
-            script_filenames = write_debugger_commands(args)
-            raise RuntimeError(
-                ("redex-all crashed with exit code %s! " % err.returncode)
-                + (
-                    "You can re-run it "
-                    "under gdb by running %(gdb_script_name)s or under lldb "
-                    "by running %(lldb_script_name)s"
-                )
-                % script_filenames
-            )
-        break
     log("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 
