@@ -296,6 +296,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
       continue;
     }
     for (auto dmethod : cls->get_dmethods()) {
+      if (dmethod->rstate.dont_inline()) continue;
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
           is_constructor(dmethod)) {
