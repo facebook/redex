@@ -326,11 +326,6 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   auto configured_pure_methods = conf.get_pure_methods();
   pure_methods.insert(configured_pure_methods.begin(),
                       configured_pure_methods.end());
-  /*
-  TODO: Something goes wrong at runtime when the computed no-side-effects
-  methods are considered here. Once the root cause of the issue has been
-  identified and fixed, re-enable the following, and the metrics-code below,
-
   auto override_graph = method_override_graph::build_graph(scope);
   std::unordered_set<const DexMethod*> computed_no_side_effects_methods;
   auto computed_no_side_effects_methods_iterations =
@@ -339,7 +334,6 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   for (auto m : computed_no_side_effects_methods) {
     pure_methods.insert(const_cast<DexMethod*>(m));
   }
-  */
 
   auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
       scope,
@@ -361,12 +355,11 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);
-  /*
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS,
                   computed_no_side_effects_methods.size());
   mgr.incr_metric(METRIC_COMPUTED_NO_SIDE_EFFECTS_METHODS_ITERATIONS,
                   computed_no_side_effects_methods_iterations);
-  */
+
   TRACE(DCE, 1, "instructions removed -- dead: %d, unreachable: %d",
         stats.dead_instruction_count, stats.unreachable_instruction_count);
 }
