@@ -13,4 +13,6 @@
 class PostLowering {
  public:
   void run(const DexClasses& dex, const std::string& output_dir);
+
+  void cleanup();
 };

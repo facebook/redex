@@ -979,6 +979,8 @@ void redex_backend(const PassManager& manager,
     }
   }
 
+  post_lowering.cleanup();
+
   {
     Timer t("Writing opt decisions data");
     const Json::Value& opt_decisions_args = json_config["opt_decisions"];
