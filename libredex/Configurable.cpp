@@ -383,6 +383,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
       const std::string& param_doc, const bool param_is_required,              \
       const Configurable::bindflags_t param_bindflags, type& param,            \
       type default_value) {                                                    \
+    param = default_value;                                                     \
     reflector(param_name, param_doc, param_is_required, param_bindflags,       \
               Configurable::ReflectionParam::PRIMITIVE,                        \
               std::make_tuple(std::string{#type}, Configurable::Reflection()), \
@@ -396,6 +397,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
       const std::string& param_doc, const bool param_is_required,            \
       const Configurable::bindflags_t param_bindflags, type& param,          \
       type default_value) {                                                  \
+    param = default_value;                                                   \
     reflector(                                                               \
         param_name, param_doc, param_is_required, param_bindflags,           \
         Configurable::ReflectionParam::PRIMITIVE,                            \
@@ -410,6 +412,7 @@ Json::Value Configurable::as<Json::Value>(const Json::Value& value,
       const std::string& param_doc, const bool param_is_required,              \
       const Configurable::bindflags_t param_bindflags, type& param,            \
       type default_value) {                                                    \
+    param = default_value;                                                     \
     reflector(param_name, param_doc, param_is_required, param_bindflags,       \
               Configurable::ReflectionParam::PRIMITIVE,                        \
               std::make_tuple(std::string{#type}, Configurable::Reflection()), \
