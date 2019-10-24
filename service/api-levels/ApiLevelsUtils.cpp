@@ -132,11 +132,14 @@ std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
 
 namespace {
 
-bool find_method(DexString* meth_name,
-                 DexProto* meth_proto,
-                 const std::unordered_set<DexMethodRef*>& mrefs) {
+bool find_method(const std::string& simple_deobfuscated_name,
+                 const std::unordered_set<DexMethodRef*>& mrefs,
+                 DexProto* meth_proto) {
   for (DexMethodRef* mref : mrefs) {
-    if (mref->get_name() == meth_name && mref->get_proto() == meth_proto) {
+    if (mref->get_name()->str() == simple_deobfuscated_name &&
+        mref->get_proto() == meth_proto) {
+      // TODO(emmasevastian): Still have to make this work with
+      //                      deobfuscated ones.
       return true;
     }
   }
@@ -169,7 +172,8 @@ bool check_methods(
         type_reference::get_new_proto(meth->get_proto(), release_to_framework);
     // NOTE: For now, this assumes no obfuscation happened. We need to update
     //       it, if it runs later.
-    if (!find_method(meth->get_name(), new_proto, framework_api.mrefs)) {
+    if (!find_method(meth->get_simple_deobfuscated_name(), framework_api.mrefs,
+                     new_proto)) {
       TRACE(API_UTILS, 4,
             "Excluding %s since we couldn't find corresponding method: %s!",
             SHOW(framework_api.cls), show_deobfuscated(meth).c_str());
@@ -180,11 +184,12 @@ bool check_methods(
   return true;
 }
 
-bool find_field(DexString* field_name,
-                DexType* field_type,
-                const std::unordered_set<DexFieldRef*>& frefs) {
+bool find_field(const std::string& simple_deobfuscated_name,
+                const std::unordered_set<DexFieldRef*>& frefs,
+                DexType* field_type) {
   for (auto* fref : frefs) {
-    if (fref->get_name() == field_name && fref->get_type() == field_type) {
+    if (fref->get_name()->str() == simple_deobfuscated_name &&
+        fref->get_type() == field_type) {
       return true;
     }
   }
@@ -215,7 +220,8 @@ bool check_fields(
       new_field_type = it->second;
     }
 
-    if (!find_field(field->get_name(), new_field_type, framework_api.frefs)) {
+    if (!find_field(field->get_simple_deobfuscated_name(), framework_api.frefs,
+                    new_field_type)) {
       TRACE(API_UTILS, 4,
             "Excluding %s since we couldn't find corresponding field: %s!",
             SHOW(framework_api.cls), show_deobfuscated(field).c_str());
