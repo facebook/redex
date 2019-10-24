@@ -434,14 +434,14 @@ void VirtualMerging::merge_methods() {
         }
         // we'll define helper functions in a way that lets them mutate the new
         // IRCode
-        push_insn = [&](IRInstruction* insn) {
+        push_insn = [=](IRInstruction* insn) {
           overridden_code->push_back(insn);
         };
-        allocate_temp = [&]() { return overridden_code->allocate_temp(); };
-        allocate_wide_temp = [&]() {
+        allocate_temp = [=]() { return overridden_code->allocate_temp(); };
+        allocate_wide_temp = [=]() {
           return overridden_code->allocate_wide_temp();
         };
-        cleanup = [&]() { overridden_code->build_cfg(/* editable */ true); };
+        cleanup = [=]() { overridden_code->build_cfg(/* editable */ true); };
       } else {
         // We are dealing with a non-abstract method. In this case, we'll first
         // insert an if-instruction to decide whether to run the overriding
@@ -503,12 +503,11 @@ void VirtualMerging::merge_methods() {
               /* true */);
         }
         // we'll define helper functions in a way that lets them mutate the cfg
-        push_insn = [&](IRInstruction* insn) { new_block->push_back(insn); };
-        allocate_temp = [&]() { return overridden_cfg.allocate_temp(); };
-        allocate_wide_temp = [&]() {
-          return overridden_cfg.allocate_wide_temp();
-        };
-        cleanup = [&]() {};
+        push_insn = [=](IRInstruction* insn) { new_block->push_back(insn); };
+        auto* cfg_ptr = &overridden_cfg;
+        allocate_temp = [=]() { return cfg_ptr->allocate_temp(); };
+        allocate_wide_temp = [=]() { return cfg_ptr->allocate_wide_temp(); };
+        cleanup = []() {};
       }
       always_assert(1 + proto->get_args()->get_type_list().size() ==
                     param_regs.size());
