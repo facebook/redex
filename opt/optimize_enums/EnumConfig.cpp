@@ -16,7 +16,7 @@ namespace {
 struct ExternalMethodData {
   std::string method_name;
   boost::optional<uint16_t> returned_param;
-  std::initializer_list<uint16_t> safe_params;
+  std::vector<uint16_t> safe_params;
   ExternalMethodData(std::string name,
                      boost::optional<uint16_t> returned,
                      std::initializer_list<uint16_t> params)
