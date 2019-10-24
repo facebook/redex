@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "DexClass.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
 
@@ -169,6 +170,9 @@ bool check_methods(
     // NOTE: For now, this assumes no obfuscation happened. We need to update
     //       it, if it runs later.
     if (!find_method(meth->get_name(), new_proto, framework_api.mrefs)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find corresponding method: %s!",
+            SHOW(framework_api.cls), show_deobfuscated(meth).c_str());
       return false;
     }
   }
@@ -212,6 +216,9 @@ bool check_fields(
     }
 
     if (!find_field(field->get_name(), new_field_type, framework_api.frefs)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find corresponding field: %s!",
+            SHOW(framework_api.cls), show_deobfuscated(field).c_str());
       return false;
     }
   }
@@ -279,6 +286,10 @@ bool check_hierarchy(
     const auto& implemented_intfs =
         type_system.get_implemented_interfaces(type);
     if (!check_if_present(implemented_intfs, release_to_framework)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find one of the corresponding "
+            "interfaces!",
+            SHOW(framework_api.cls));
       return false;
     }
 
@@ -290,10 +301,17 @@ bool check_hierarchy(
     // release class.
     if (framework_classes.count(super_cls) > 0) {
       if (super_cls != framwork_super_cls) {
+        TRACE(API_UTILS, 4,
+              "Excluding %s since the class had different superclass than %s!",
+              SHOW(framework_api.cls), show_deobfuscated(super_cls).c_str());
         return false;
       }
     } else if (release_to_framework.count(super_cls) == 0 ||
                framwork_super_cls != release_to_framework.at(super_cls)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find the corresponding superclass "
+            "%s!",
+            SHOW(framework_api.cls), show_deobfuscated(super_cls).c_str());
       return false;
     }
   } else {
@@ -301,6 +319,10 @@ bool check_hierarchy(
     type_system.get_all_super_interfaces(type, super_intfs);
 
     if (!check_if_present(super_intfs, release_to_framework)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find one of the corresponding "
+            "extended interfaces!",
+            SHOW(framework_api.cls));
       return false;
     }
   }
@@ -373,6 +395,8 @@ void ApiLevelsUtils::load_framework_api() {
     //       android package. We might reconsider.
     const auto& framework_cls_str = framework_cls->str();
     if (!boost::starts_with(framework_cls_str, "Landroid")) {
+      TRACE(API_UTILS, 5, "Excluding %s from possible replacement.",
+            framework_cls_str.c_str());
       it = framework_cls_to_api.erase(it);
     } else {
       ++it;
@@ -395,6 +419,9 @@ void ApiLevelsUtils::load_framework_api() {
       std::string simple_name = get_simple_deobfuscated_name(cls->get_type());
       auto simple_cls_it = simple_cls_name_to_type.find(simple_name);
       if (simple_cls_it == simple_cls_name_to_type.end()) {
+        TRACE(API_UTILS, 7,
+              "Release library class %s has no corresponding framework class.",
+              show_deobfuscated(cls).c_str());
         continue;
       }
 
