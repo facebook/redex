@@ -124,6 +124,9 @@ ssize_t VectorImpl::insertArrayAt(const void* array, size_t index, size_t length
 {
     if (index > size())
         return BAD_INDEX;
+    if (!length) {
+      return index;
+    }
     void* where = _grow(index, length);
     if (where) {
         _do_copy(where, array, length);
@@ -640,4 +643,3 @@ ssize_t SortedVectorImpl::remove(const void* item)
 /*****************************************************************************/
 
 }; // namespace android
-
