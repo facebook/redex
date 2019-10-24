@@ -346,6 +346,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
           }
         }
       }
+      stats->code_bytes += encdata - initial_encdata;
       break;
     case TYPE_STRING_DATA_ITEM:
       stats->string_data_count += item.size;
@@ -382,7 +383,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
                    annotations_directory_item->parameters_size;
       }
 
-      stats->annotations_directory_count += encdata - initial_encdata;
+      stats->annotations_directory_bytes += encdata - initial_encdata;
       break;
     case TYPE_DEBUG_INFO_ITEM:
       stats->num_dbg_items += item.size;
