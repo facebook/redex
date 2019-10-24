@@ -78,7 +78,7 @@ class FixpointIterator
     m_wps.reset(wps);
   }
 
-  void analyze_node(DexMethod* const& method,
+  void analyze_node(const DexMethod* const& method,
                     Domain* current_state) const override;
 
   Domain analyze_edge(const std::shared_ptr<call_graph::Edge>& edge,

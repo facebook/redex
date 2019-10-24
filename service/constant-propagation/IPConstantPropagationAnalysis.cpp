@@ -24,7 +24,7 @@ ConstantEnvironment env_with_params(const IRCode* code,
   return env;
 }
 
-void FixpointIterator::analyze_node(DexMethod* const& method,
+void FixpointIterator::analyze_node(const DexMethod* const& method,
                                     Domain* current_state) const {
   // The entry node has no associated method.
   if (method == nullptr) {

@@ -270,9 +270,9 @@ class DexOpcodeData : public DexInstruction {
 
   ~DexOpcodeData() override { delete[] m_data; }
 
-  const uint16_t* data() { return m_data; }
+  const uint16_t* data() const { return m_data; }
   // This size refers to just the length of the data array
-  const uint16_t data_size() { return m_data_count; }
+  uint16_t data_size() const { return m_data_count; }
 };
 
 // helper function to create fill-array-data-payload according to
