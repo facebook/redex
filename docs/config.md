@@ -11,7 +11,7 @@ be able to tweak settings to get the best results.
 
 A starting point for configuration is to use a configuration similar to the
 default config that's baked in to the `redex` binary.  You can find this config
-in `config/default.config`.  This is what it looks like:
+in [config/default.config](https://github.com/facebook/redex/blob/master/config/default.config).  This is what it looks like:
 
 ```
 {
@@ -19,14 +19,14 @@ in `config/default.config`.  This is what it looks like:
   "passes" : [
     "ReBindRefsPass",
     "BridgePass",
-    "SynthPass",
-    "FinalInlinePass",
+    "FinalInlinePassV2",
     "DelSuperPass",
     "SingleImplPass",
     "MethodInlinePass",
     "StaticReloPassV2",
     "RemoveEmptyClassesPass",
-    "ShortenSrcStringsPass"
+    "ShortenSrcStringsPass",
+    "RegAllocPass"
   ]
 }
 }
@@ -59,7 +59,8 @@ this config:
     "DelSuperPass",
     "SingleImplPass",
     "MethodInlinePass",
-    "RemoveEmptyClassesPass"
+    "RemoveEmptyClassesPass",
+    "RegAllocPass"
   ]
 }
 }
@@ -81,7 +82,8 @@ ShortenSrcStrings to produce this map by adding a config entry:
 ```
 "redex" : {
   "passes" : [
-    ShortenSrcStrings
+    ShortenSrcStringsPass,
+    "RegAllocPass"
   ]
 },
 "ShortenSrcStringsPass" : {
