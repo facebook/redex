@@ -386,13 +386,13 @@ void update_const_string_type_refs(const Scope& scope,
 
       DexString* dex_str = insn->get_string();
       const std::string& internal_str =
-          JavaNameUtil::external_to_internal(dex_str->str());
+          java_names::external_to_internal(dex_str->str());
 
       const auto& find_name_to = merged_type_names.find(internal_str);
       if (find_name_to != merged_type_names.end()) {
         const std::string& name_to = find_name_to->second;
         DexString* dex_name_to =
-            DexString::make_string(JavaNameUtil::internal_to_external(name_to));
+            DexString::make_string(java_names::internal_to_external(name_to));
         insn->set_string(dex_name_to);
         TRACE(TERA,
               8,

@@ -16,7 +16,7 @@ namespace keep_reason {
 std::ostream& operator<<(std::ostream& os, const Reason& reason) {
   switch (reason.type) {
   case KEEP_RULE:
-    return os << "KEEP: " << redex::show_keep(*reason.keep_rule, false);
+    return os << "KEEP: " << keep_rules::show_keep(*reason.keep_rule, false);
   case REFLECTION:
     return os << "REFL: " << show_deobfuscated(reason.method);
   case REDEX_CONFIG:
@@ -25,12 +25,12 @@ std::ostream& operator<<(std::ostream& os, const Reason& reason) {
     return os << "MANIFEST";
   case XML:
     return os << "XML";
-  case CLINIT:
-    return os << "CLINIT";
   case ANNO:
     return os << "ANNO";
   case SERIALIZABLE:
     return os << "SERIALIZABLE";
+  case NATIVE:
+    return os << "NATIVE";
   case UNKNOWN:
     return os << "UNKNOWN";
   }

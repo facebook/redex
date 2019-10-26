@@ -127,8 +127,8 @@ TEST_F(ProguardTest, assortment) {
 
   const char* configuraiton_file = std::getenv("pg_config_e2e_pgconfig");
   ASSERT_NE(nullptr, configuraiton_file);
-  redex::ProguardConfiguration pg_config;
-  redex::proguard_parser::parse_file(configuraiton_file, &pg_config);
+  keep_rules::ProguardConfiguration pg_config;
+  keep_rules::proguard_parser::parse_file(configuraiton_file, &pg_config);
   EXPECT_TRUE(pg_config.ok);
 
   auto android_env_sdk = std::getenv("ANDROID_SDK");

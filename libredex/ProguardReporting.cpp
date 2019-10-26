@@ -18,22 +18,6 @@ std::string extract_suffix(std::string class_name) {
   return class_name.substr(i + 1);
 }
 
-std::string redex::dexdump_name_to_dot_name(const std::string& dexdump_name) {
-  redex_assert(!dexdump_name.empty());
-  std::string s;
-  for (const char& ch : dexdump_name.substr(1)) {
-    if (ch == '/') {
-      s += '.';
-      continue;
-    }
-    if (ch == ';') {
-      continue;
-    }
-    s += ch;
-  }
-  return s;
-}
-
 std::string type_descriptor_to_java(const std::string& descriptor) {
   redex_assert(!descriptor.empty());
   if (descriptor[0] == '[') {
@@ -67,7 +51,7 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
     return "void";
   }
   if (descriptor[0] == 'L') {
-    return redex::dexdump_name_to_dot_name(descriptor);
+    return java_names::internal_to_external(descriptor);
   }
   std::cerr << "type_descriptor_to_java: unexpected type descriptor "
             << descriptor << std::endl;
@@ -209,7 +193,7 @@ void redex::print_class(std::ostream& output,
               << cls->get_name()->c_str() << std::endl;
     deob = cls->get_name()->c_str();
   }
-  std::string name = redex::dexdump_name_to_dot_name(deob);
+  std::string name = java_names::internal_to_external(deob);
   output << name << std::endl;
   print_fields(output, pg_map, name, cls->get_ifields());
   print_fields(output, pg_map, name, cls->get_sfields());

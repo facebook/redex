@@ -64,7 +64,7 @@ void check_dont_merge_list(
     // class is not having STRICT don't merge status, and child class is
     // removable).
     if (find_parent->second != STRICT && can_delete(child_cls) &&
-        can_rename_if_ignoring_blanket_keepnames(child_cls)) {
+        can_rename(child_cls)) {
       if (is_abstract(child_cls)) {
         for (auto method : child_cls->get_vmethods()) {
           if (method->get_code()) {
@@ -227,7 +227,7 @@ void collect_can_merge(
   ClassHierarchy ch = build_type_hierarchy(scope);
   for (DexClass* cls : scope) {
     if (cls && !cls->is_external() && !is_interface(cls) && can_delete(cls) &&
-        can_rename_if_ignoring_blanket_keepnames(cls)) {
+        can_rename(cls)) {
       DexType* cls_type = cls->get_type();
       const auto& children_types = get_children(ch, cls->get_type());
       if (children_types.size() != 1) {
@@ -292,7 +292,7 @@ void record_code_reference(
           DexField* field = resolve_field(insn->get_field());
           if (field != nullptr) {
             if (field->get_class() != insn->get_field()->get_class() ||
-                !can_rename(field)) {
+                !can_rename_DEPRECATED(field)) {
               // If a field reference need to be resolved, don't merge as
               // renaming it might cause problems.
               // If a field that can't be renamed is being referenced. Don't
@@ -384,7 +384,7 @@ void record_method_signature(
       record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
     } else {
       DexClass* cls = type_class(type);
-      if (cls && (!is_abstract(cls) || !can_rename(method))) {
+      if (cls && (!is_abstract(cls) || !can_rename_DEPRECATED(method))) {
         // If a type is referenced and not a abstract type then add it to
         // don't use this type as mergeable.
         record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
@@ -419,7 +419,7 @@ void record_black_list(
               "%s | %s | %u",
               SHOW(cls),
               cls->rstate.str().c_str(),
-              can_delete(cls));
+              can_delete_DEPRECATED(cls));
         record_dont_merge_state(cls->get_type(), STRICT, dont_merge_status);
         return;
       }
@@ -452,7 +452,7 @@ void record_field_reference(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
-    if (!can_rename(field)) {
+    if (!can_rename_DEPRECATED(field)) {
       record_dont_merge_state(field->get_type(), CONDITIONAL,
                               dont_merge_status);
     }
@@ -657,11 +657,7 @@ void VerticalMergingPass::move_methods(
     std::unordered_map<DexMethodRef*, DexMethodRef*>* methodref_update_map) {
   DexType* target_cls_type = to_cls->get_type();
   auto move_method = [&](DexMethod* method) {
-    TRACE(VMERGE,
-          5,
-          "%s | %s | %s",
-          SHOW(from_cls),
-          SHOW(to_cls),
+    TRACE(VMERGE, 5, "%s | %s | %s", SHOW(from_cls), SHOW(to_cls),
           SHOW(method));
     if (is_merging_super_to_sub) {
       // Super class is being merged into subclass
@@ -689,7 +685,7 @@ void VerticalMergingPass::move_methods(
         } else {
           if (referenced_methods.count(method)) {
             // Static or direct method. Safe to move
-            always_assert(can_rename(method));
+            always_assert(can_rename_DEPRECATED(method));
             from_cls->remove_method(method);
             DexMethodSpec spec;
             spec.cls = target_cls_type;

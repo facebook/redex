@@ -85,7 +85,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     for (const auto& cls : scope) {
       // Make sure we don't drop classes which might be
       // called from native code.
-      if (!can_rename(cls)) {
+      if (!can_rename_DEPRECATED(cls)) {
         cold_cold_references.insert(cls->get_type());
       }
     }
@@ -104,7 +104,8 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 
     Scope output_scope;
     for (auto& cls : coldstart_classes) {
-      if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
+      if (can_rename_DEPRECATED(type_class(cls)) &&
+          cold_cold_references.count(cls) == 0) {
         new_no_ref++;
         unreferenced_classes.insert(type_class(cls));
       } else {
@@ -794,8 +795,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
       cc.set_super(get_object_type());
       canary_cls = cc.create();
       // Don't rename the Canary we've created
-      canary_cls->rstate.set_has_keep();
-      canary_cls->rstate.set_allowshrinking();
+      canary_cls->rstate.set_keepnames();
     }
     m_dexes_structure.add_class_no_checks(canary_cls);
 

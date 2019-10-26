@@ -266,7 +266,7 @@ RemoveArgs::MethodStats RemoveArgs::update_meths_with_unused_args_or_results() {
       return;
     }
 
-    if (!can_rename(method)) {
+    if (!can_rename_DEPRECATED(method)) {
       // Nothing to do if ProGuard says we can't change the method args.
       TRACE(ARGS,
             5,

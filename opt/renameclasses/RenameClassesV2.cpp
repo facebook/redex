@@ -82,6 +82,8 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
   case DontRenameReasonCode::Hierarchy:
     // Set to true to add more detailed metrics for renamer if needed
     return false;
+  case DontRenameReasonCode::ProguardCantRename:
+    return RedexContext::record_keep_reasons();
   default:
     return false;
   }
@@ -117,23 +119,6 @@ bool is_allowed_layout_class(
 }
 
 std::unordered_set<std::string>
-RenameClassesPassV2::build_dont_rename_resources(
-    PassManager& mgr,
-    std::unordered_map<const DexType*, std::string>& force_rename_classes) {
-  std::unordered_set<std::string> dont_rename_resources;
-  if (m_apk_dir.size()) {
-    // Classnames present in native libraries (lib/*/*.so)
-    for (std::string classname : get_native_classes(m_apk_dir)) {
-      auto type = DexType::get_type(classname);
-      if (type == nullptr) continue;
-      TRACE(RENAME, 4, "native_lib: %s", classname.c_str());
-      dont_rename_resources.insert(classname);
-    }
-  }
-  return dont_rename_resources;
-}
-
-std::unordered_set<std::string>
 RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   using namespace boost::algorithm;
   std::vector<DexString*> all_strings;
@@ -149,7 +134,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   for (auto dex_str : all_strings) {
     const std::string& s = dex_str->str();
     if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
-      const std::string& internal_name = JavaNameUtil::external_to_internal(s);
+      const std::string& internal_name = java_names::external_to_internal(s);
       auto cls = type_class(DexType::get_type(internal_name));
       if (cls != nullptr && !cls->is_external()) {
         result.insert(internal_name);
@@ -416,8 +401,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
   for (const auto& it : aliases.get_class_map()) {
-    external_names.emplace(
-        JavaNameUtil::internal_to_external(it.first->c_str()));
+    external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
   std::vector<DexString*> all_strings;
   for (auto clazz : scope) {
@@ -497,6 +481,19 @@ DexString* lookup_signature_annotation(const AliasMap& aliases,
   return nullptr;
 }
 
+std::string get_keep_rule(const DexClass* clazz) {
+  if (RedexContext::record_keep_reasons()) {
+    const auto& keep_reasons = clazz->rstate.keep_reasons();
+    for (const auto* reason : keep_reasons) {
+      if (reason->type == keep_reason::KEEP_RULE &&
+          !reason->keep_rule->allowobfuscation) {
+        return show(*reason);
+      }
+    }
+  }
+  return "";
+}
+
 void RenameClassesPassV2::eval_classes(Scope& scope,
                                        const ClassHierarchy& class_hierarchy,
                                        ConfigFiles& conf,
@@ -507,8 +504,6 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
   auto dont_rename_serde_relationships =
       build_dont_rename_serde_relationships(scope);
-  auto dont_rename_resources =
-      build_dont_rename_resources(mgr, force_rename_hierarchies);
   auto dont_rename_class_name_literals =
       build_dont_rename_class_name_literals(scope);
   auto dont_rename_class_for_types_with_reflection =
@@ -554,9 +549,8 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
     // Don't rename anything mentioned in resources. Two variants of checks here
     // to cover both configuration options (either we're relying on aapt to
     // compute resource reachability, or we're doing it ourselves).
-    if (dont_rename_resources.count(clsname) ||
-        (referenced_by_layouts(clazz) &&
-         !is_allowed_layout_class(clazz, m_allow_layout_rename_packages))) {
+    if (referenced_by_layouts(clazz) &&
+        !is_allowed_layout_class(clazz, m_allow_layout_rename_packages)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::Resources, norule};
       continue;
     }
@@ -614,9 +608,11 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
       continue;
     }
 
-    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
+    if (!can_rename_if_also_renaming_xml(clazz)) {
+      const auto& keep_reasons = clazz->rstate.keep_reasons();
+      auto rule = keep_reasons.size() > 0 ? show(*keep_reasons.begin()) : "";
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
-                                      norule};
+                                      get_keep_rule(clazz)};
       continue;
     }
   }
@@ -631,8 +627,6 @@ void RenameClassesPassV2::eval_classes_post(
     Scope& scope, const ClassHierarchy& class_hierarchy, PassManager& mgr) {
   auto dont_rename_hierarchies =
       build_dont_rename_hierarchies(mgr, scope, class_hierarchy);
-  std::string norule = "";
-
   for (auto clazz : scope) {
     if (m_dont_rename_reasons.find(clazz) != m_dont_rename_reasons.end()) {
       continue;
@@ -667,9 +661,9 @@ void RenameClassesPassV2::eval_classes_post(
 
     // Don't rename anything if something changed and the class cannot be
     // renamed anymore.
-    if (!can_rename_if_ignoring_blanket_keepnames(clazz)) {
+    if (!can_rename_if_also_renaming_xml(clazz)) {
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
-                                      norule};
+                                      get_keep_rule(clazz)};
     }
   }
 }
@@ -783,7 +777,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
         // already exist, then there's no way it can match a class
         // that was renamed
         DexString* internal_str = DexString::get_string(
-            JavaNameUtil::external_to_internal(str->c_str()).c_str());
+            java_names::external_to_internal(str->c_str()));
         // Look up both str and intternal_str in the map; maybe str was
         // internal to begin with?
         DexString* alias_from = nullptr;
@@ -796,7 +790,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
           // make_string here because the external form of the name may not be
           // present in the string table
           alias_to = DexString::make_string(
-              JavaNameUtil::internal_to_external(alias_to->str()));
+              java_names::internal_to_external(alias_to->str()));
         } else if (aliases.has(str)) {
           alias_from = str;
           alias_to = aliases.at(str);
@@ -853,8 +847,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(const AliasMap& aliases,
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : aliases.get_class_map()) {
     aliases_for_layouts.emplace(
-        JavaNameUtil::internal_to_external(apair.first->str()),
-        JavaNameUtil::internal_to_external(apair.second->str()));
+        java_names::internal_to_external(apair.first->str()),
+        java_names::internal_to_external(apair.second->str()));
   }
   ssize_t layout_bytes_delta = 0;
   size_t num_layout_renamed = 0;

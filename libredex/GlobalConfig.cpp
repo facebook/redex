@@ -66,5 +66,4 @@ void GlobalConfig::bind_config() {
   bind("coldstart_classes", "", string_param);
   bind("string_sort_mode", "", string_param);
   bind("compute_xml_reachability", false, bool_param);
-  bind("legacy_reflection_reachability", false, bool_param);
 }

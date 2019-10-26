@@ -9,7 +9,7 @@
 
 #include <string>
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 std::string form_member_regex(std::string proguard_regex);
@@ -17,4 +17,4 @@ std::string form_type_regex(std::string proguard_regex);
 std::string convert_wildcard_type(std::string typ);
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

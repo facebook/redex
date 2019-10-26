@@ -257,13 +257,11 @@ void IRMetaIO::serialize_rstate(const ReferencedState& rstate,
                                 std::ofstream& ostrm) {
   bit_rstate_t bit_rstate;
   bit_rstate.inner_struct = rstate.inner_struct;
-  bit_rstate.m_keep_count = rstate.m_keep_count.load();
   ostrm.write((char*)&bit_rstate, sizeof(bit_rstate));
 }
 
 void IRMetaIO::deserialize_rstate(const char** _ptr, ReferencedState& rstate) {
   bit_rstate_t* bit_rstate = (bit_rstate_t*)(*_ptr);
-  rstate.m_keep_count = bit_rstate->m_keep_count;
   rstate.inner_struct = bit_rstate->inner_struct;
   (*_ptr) += sizeof(bit_rstate_t);
 }

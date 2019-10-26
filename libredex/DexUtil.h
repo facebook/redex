@@ -577,7 +577,7 @@ struct dex_stats_t {
 
 dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
-namespace JavaNameUtil {
+namespace java_names {
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"
 inline std::string internal_to_external(const std::string& internal_name) {
@@ -603,4 +603,4 @@ inline std::string package_name(const std::string& type_name) {
     return nice_name;
   }
 }
-} // namespace JavaNameUtil
+} // namespace java_names

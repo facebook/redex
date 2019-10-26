@@ -296,6 +296,26 @@ void mark_reachable_by_classname(DexClass* dclass) {
   }
 }
 
+void mark_reachable_by_native(const DexType* dtype) {
+  auto dclass = type_class_internal(dtype);
+  if (dclass == nullptr) {
+    return;
+  }
+  dclass->rstate.set_keepnames(keep_reason::NATIVE);
+  for (DexMethod* dmethod : dclass->get_dmethods()) {
+    dmethod->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexMethod* vmethod : dclass->get_vmethods()) {
+    vmethod->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexField* sfield : dclass->get_sfields()) {
+    sfield->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+  for (DexField* ifield : dclass->get_ifields()) {
+    ifield->rstate.set_keepnames(keep_reason::NATIVE);
+  }
+}
+
 void mark_reachable_by_string(DexMethod* method) {
   if (method == nullptr) {
     return;
@@ -308,15 +328,6 @@ void mark_reachable_by_string(DexMethod* method) {
 
 void mark_reachable_by_classname(DexType* dtype) {
   mark_reachable_by_classname(type_class_internal(dtype));
-}
-
-void mark_reachable_by_classname(std::string& classname) {
-  DexString* dstring =
-      DexString::get_string(classname.c_str(), (uint32_t)classname.size());
-  DexType* dtype = DexType::get_type(dstring);
-  if (dtype == nullptr) return;
-  DexClass* dclass = type_class_internal(dtype);
-  mark_reachable_by_classname(dclass);
 }
 
 // Possible methods for an android:onClick accept 1 argument that is a View.
@@ -394,8 +405,6 @@ void mark_manifest_root(const std::string& classname) {
   }
   TRACE(PGR, 3, "manifest: %s", classname.c_str());
   dclass->rstate.set_root(keep_reason::MANIFEST);
-  // Prevent renaming.
-  dclass->rstate.increment_keep_count();
   for (DexMethod* dmethod : dclass->get_ctors()) {
     dmethod->rstate.set_root(keep_reason::MANIFEST);
   }
@@ -460,8 +469,7 @@ void analyze_reachable_from_manifest(
         TRACE(PGR, 3, "%s not exported", tag_info.classname.c_str());
         auto dclass = maybe_class_from_string(tag_info.classname);
         if (dclass) {
-          dclass->rstate.increment_keep_count();
-          dclass->rstate.unset_allowobfuscation();
+          dclass->rstate.set_keepnames();
         }
       }
       break;
@@ -675,6 +683,8 @@ void analyze_serializable(const Scope& scope) {
   }
 }
 
+} // namespace
+
 /*
  * Initializes list of classes that are reachable via reflection, and calls
  * or from code.
@@ -687,7 +697,7 @@ void analyze_serializable(const Scope& scope) {
  *  - Classes marked with special annotations (keep_annotations in config)
  *  - Classes reachable from native libraries
  */
-void init_permanently_reachable_classes(
+void init_reachable_classes(
     const Scope& scope,
     const JsonWrapper& config,
     const std::unordered_set<DexType*>& no_optimizations_anno) {
@@ -699,7 +709,6 @@ void init_permanently_reachable_classes(
   std::vector<std::string> methods;
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
-  bool legacy_reflection_reachability;
   bool analyze_native_lib_reachability;
 
   config.get("apk_dir", "", apk_dir);
@@ -708,42 +717,9 @@ void init_permanently_reachable_classes(
   config.get("keep_class_members", {}, class_members);
   config.get("keep_methods", {}, methods);
   config.get("compute_xml_reachability", true, compute_xml_reachability);
-  config.get("legacy_reflection_reachability", false,
-             legacy_reflection_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
   config.get("analyze_native_lib_reachability", true,
              analyze_native_lib_reachability);
-
-  if (legacy_reflection_reachability) {
-    auto match = std::make_tuple(
-        m::const_string(/* const-string {vX}, <any string> */),
-        m::move_result_pseudo(/* const-string {vX}, <any string> */),
-        m::invoke_static(/* invoke-static {vX}, java.lang.Class;.forName */
-                         m::opcode_method(
-                             m::named<DexMethodRef>("forName") &&
-                             m::on_class<DexMethodRef>("Ljava/lang/Class;")) &&
-                         m::has_n_args(1)));
-
-    walk::parallel::matching_opcodes(
-        scope,
-        match,
-        [&](const DexMethod* meth, const std::vector<IRInstruction*>& insns) {
-          auto const_string = insns[0];
-          auto move_result_pseudo = insns[1];
-          auto invoke_static = insns[2];
-          // Make sure that the registers agree
-          if (move_result_pseudo->dest() == invoke_static->src(0)) {
-            auto classname = JavaNameUtil::external_to_internal(
-                const_string->get_string()->c_str());
-            TRACE(PGR,
-                  4,
-                  "Found Class.forName of: %s, marking %s reachable",
-                  const_string->get_string()->c_str(),
-                  classname.c_str());
-            mark_reachable_by_classname(classname);
-          }
-        });
-  }
 
   std::unordered_set<DexType*> annotation_types(no_optimizations_anno.begin(),
                                                 no_optimizations_anno.end());
@@ -777,8 +753,18 @@ void init_permanently_reachable_classes(
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
         mark_reachable_by_classname(type);
+        mark_reachable_by_native(type);
       }
     }
+    walk::methods(scope, [&](DexMethod* meth) {
+      // These were probably already marked by the native lib reachability
+      // analysis above, but just to be doubly sure...
+      if (is_native(meth)) {
+        TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
+        mark_reachable_by_string(meth);
+        meth->rstate.set_keepnames(keep_reason::NATIVE);
+      }
+    });
   }
 
   analyze_reflection(scope);
@@ -807,27 +793,11 @@ void init_permanently_reachable_classes(
     }
   }
   analyze_serializable(scope);
-}
 
-/**
- * Walks all the code of the app, finding classes that are reachable from
- * code.
- *
- * Note that as code is changed or removed by Redex, this information will
- * become stale, so this method should be called periodically, for example
- * after each pass.
- */
-void recompute_classes_reachable_from_code(const Scope& scope) {
-  // Matches methods marked as native
-  walk::methods(scope, [&](DexMethod* meth) {
-    if (meth->get_access() & DexAccessFlags::ACC_NATIVE) {
-      TRACE(PGR, 3, "native_method: %s", SHOW(meth->get_class()));
-      mark_reachable_by_string(meth);
-    }
-  });
+  std::vector<std::string> json_serde_supercls;
+  config.get("json_serde_supercls", {}, json_serde_supercls);
+  initialize_reachable_for_json_serde(scope, json_serde_supercls);
 }
-
-} // namespace
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir) {
@@ -849,26 +819,6 @@ void recompute_reachable_from_xml_layouts(const Scope& scope,
   analyze_reachable_from_xml_layouts(scope, apk_dir);
 }
 
-void init_reachable_classes(
-    const Scope& scope,
-    const JsonWrapper& config,
-    const std::unordered_set<DexType*>& no_optimizations_anno) {
-
-  // Find classes that are reachable in such a way that none of the redex
-  // passes will cause them to be no longer reachable.  For example, if a
-  // class is referenced from the manifest.
-  init_permanently_reachable_classes(scope, config, no_optimizations_anno);
-
-  // Classes that are reachable in ways that could change as Redex runs. For
-  // example, a class might be instantiated from a method, but if that method
-  // is later deleted then it might no longer be reachable.
-  recompute_classes_reachable_from_code(scope);
-
-  std::vector<std::string> json_serde_supercls;
-  config.get("json_serde_supercls", {}, json_serde_supercls);
-  initialize_reachable_for_json_serde(scope, json_serde_supercls);
-}
-
 std::string ReferencedState::str() const {
   std::ostringstream s;
   s << inner_struct.m_by_type;
@@ -879,9 +829,6 @@ std::string ReferencedState::str() const {
   s << allowshrinking();
   s << allowobfuscation();
   s << inner_struct.m_assumenosideeffects;
-  s << inner_struct.m_blanket_keepnames;
   s << inner_struct.m_whyareyoukeeping;
-  s << ' ';
-  s << m_keep_count;
   return s.str();
 }

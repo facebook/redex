@@ -13,7 +13,7 @@
 #include "ProguardParser.h"
 #include "ProguardRegex.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 bool parse_boolean_command(std::vector<unique_ptr<Token>>::iterator* it,
@@ -1037,20 +1037,37 @@ std::string show_bool(bool b) {
   }
 }
 
-void remove_blanket_resource_keep(ProguardConfiguration* pg_config) {
-  auto blanket_resource_keep = R"(
+void remove_blacklisted_rules(ProguardConfiguration* pg_config) {
+  // TODO: Make the set of blacklisted rules configurable.
+  auto blacklisted_rules = R"(
+  # The proguard-android-optimize.txt file that is bundled with the Android SDK
+  # has a keep rule to prevent removal of all resource ID fields. This is likely
+  # because ProGuard runs before aapt which can change the values of those
+  # fields. Since this is no longer true in our case, this rule is redundant and
+  # hampers our optimizations.
+  #
+  # I chose to blacklist this rule instead of unmarking all resource IDs so that
+  # if a resource ID really needs to be kept, the user can still keep it by
+  # writing a keep rule that does a non-wildcard match.
   -keepclassmembers class **.R$* {
     public static <fields>;
   }
+
+  # See keepclassnames.pro, or T1890454.
+  -keepnames class *
 )";
-  std::stringstream ss(blanket_resource_keep);
-  ProguardConfiguration tmp_pg_config;
-  proguard_parser::parse(ss, &tmp_pg_config);
-  always_assert(tmp_pg_config.keep_rules.size() == 1);
-  const auto& blanket_resource_ks = **tmp_pg_config.keep_rules.begin();
-  pg_config->keep_rules.erase_if(
-      [&](const KeepSpec& ks) { return ks == blanket_resource_ks; });
+  std::stringstream ss(blacklisted_rules);
+  ProguardConfiguration pg_config_blacklist;
+  proguard_parser::parse(ss, &pg_config_blacklist);
+  pg_config->keep_rules.erase_if([&](const KeepSpec& ks) {
+    for (const auto& blacklisted_ks : pg_config_blacklist.keep_rules) {
+      if (ks == *blacklisted_ks) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

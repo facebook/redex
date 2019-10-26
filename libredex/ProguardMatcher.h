@@ -11,7 +11,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardMap.h"
 
-namespace redex {
+namespace keep_rules {
 
 using Scope = std::vector<DexClass*>;
 
@@ -20,4 +20,4 @@ void process_proguard_rules(const ProguardMap& pg_map,
                             const Scope& external_classes,
                             const ProguardConfiguration& pg_config,
                             bool keep_all_annotation_classes);
-} // namespace redex
+} // namespace keep_rules

@@ -27,7 +27,7 @@ size_t mark_classes_final(const Scope& scope) {
   ClassHierarchy ch = build_type_hierarchy(scope);
   size_t n_classes_finalized = 0;
   for (auto const& cls : scope) {
-    if (has_keep(cls) || is_abstract(cls) || is_final(cls)) {
+    if (!can_rename(cls) || is_abstract(cls) || is_final(cls)) {
       continue;
     }
     auto const& children = get_children(ch, cls->get_type());
@@ -45,7 +45,7 @@ size_t mark_methods_final(const Scope& scope,
   size_t n_methods_finalized = 0;
   for (auto const& cls : scope) {
     for (auto const& method : cls->get_vmethods()) {
-      if (has_keep(method) || is_abstract(method) || is_final(method)) {
+      if (!can_rename(method) || is_abstract(method) || is_final(method)) {
         continue;
       }
       if (override_graph.get_node(method).children.size() == 0) {
@@ -95,7 +95,7 @@ std::unordered_set<DexMethod*> find_private_methods(
   for (auto it = candidates.begin(); it != candidates.end();) {
     auto* m = *it;
     TRACE(ACCESS, 3, "Considering for privatization: %s", SHOW(m));
-    if (is_clinit(m) || has_keep(m) || is_abstract(m) || is_private(m)) {
+    if (is_clinit(m) || !can_rename(m) || is_abstract(m) || is_private(m)) {
       it = candidates.erase(it);
     } else {
       ++it;

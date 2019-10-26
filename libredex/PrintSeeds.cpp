@@ -66,11 +66,11 @@ void show_class(std::ostream& output,
 
 // Print out the seeds computed in classes by Redex to the specified ostream.
 // The ProGuard map is used to help deobfuscate type descriptors.
-void redex::print_seeds(std::ostream& output,
-                        const ProguardMap& pg_map,
-                        const Scope& classes,
-                        const bool allowshrinking_filter,
-                        const bool allowobfuscation_filter) {
+void keep_rules::print_seeds(std::ostream& output,
+                             const ProguardMap& pg_map,
+                             const Scope& classes,
+                             const bool allowshrinking_filter,
+                             const bool allowobfuscation_filter) {
   for (const auto& cls : classes) {
     auto deob = cls->get_deobfuscated_name();
     if (deob.empty()) {
@@ -78,7 +78,7 @@ void redex::print_seeds(std::ostream& output,
                 << cls->get_name()->c_str() << std::endl;
       deob = cls->get_name()->c_str();
     }
-    std::string name = redex::dexdump_name_to_dot_name(deob);
+    std::string name = java_names::internal_to_external(deob);
     if (has_keep(cls)) {
       show_class(
           output, cls, name, allowshrinking_filter, allowobfuscation_filter);

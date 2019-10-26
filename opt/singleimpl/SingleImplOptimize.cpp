@@ -518,7 +518,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
 
   TRACE(INTF, 9, "Changing name related to %s", SHOW(intf));
   for (const auto& meth : data.methoddefs) {
-    if (!can_rename(meth)) {
+    if (!can_rename_DEPRECATED(meth)) {
       TRACE(INTF, 9, "Changing name but cannot rename %s, give up", SHOW(meth));
       return;
     }

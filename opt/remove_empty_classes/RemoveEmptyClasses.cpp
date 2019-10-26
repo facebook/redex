@@ -34,16 +34,13 @@ bool is_empty_class(DexClass* cls,
   auto name = cls->get_type()->get_name()->c_str();
   TRACE(EMPTY, 4, ">> Empty Analysis for %s", name);
   TRACE(EMPTY, 4, "   no methods or fields: %d", empty_class);
-  TRACE(EMPTY, 4, "   can delete: %d", can_delete(cls));
+  TRACE(EMPTY, 4, "   can delete: %d", can_delete_DEPRECATED(cls));
   TRACE(EMPTY, 4, "   not interface: %d",
-      !(access & DexAccessFlags::ACC_INTERFACE));
-  TRACE(EMPTY, 4, "   references: %d",
-      class_references.count(cls->get_type()));
-  bool remove =
-         empty_class &&
-         can_delete(cls) &&
-         !(access & DexAccessFlags::ACC_INTERFACE) &&
-         class_references.count(cls->get_type()) == 0;
+        !(access & DexAccessFlags::ACC_INTERFACE));
+  TRACE(EMPTY, 4, "   references: %d", class_references.count(cls->get_type()));
+  bool remove = empty_class && can_delete_DEPRECATED(cls) &&
+                !(access & DexAccessFlags::ACC_INTERFACE) &&
+                class_references.count(cls->get_type()) == 0;
   TRACE(EMPTY, 4, "   remove: %d", remove);
   return remove;
 }

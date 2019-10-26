@@ -15,7 +15,7 @@
 #include "Debug.h"
 #include "ProguardLexer.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 bool is_deliminator(char ch) {
@@ -612,4 +612,4 @@ vector<unique_ptr<Token>> lex(istream& config) {
 }
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

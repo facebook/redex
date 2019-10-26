@@ -14,7 +14,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardLexer.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 void parse_file(const std::string& filename, ProguardConfiguration* pg_config);
@@ -23,18 +23,10 @@ void parse(istream& config,
            const std::string& filename = "");
 
 /*
- * The proguard-android-optimize.txt file that is bundled with the Android SDK
- * has a keep rule to prevent removal of all resource ID fields. This is likely
- * because ProGuard runs before aapt which can change the values of those
- * fields. Since this is no longer true in our case, this rule is redundant and
- * hampers our optimizations.
- *
- * This function looks for that exact rule and removes it. I chose to do this
- * instead of unmarking all resource IDs so that if a resource ID really needs
- * to be kept, the user can still keep it by writing a keep rule that does a
- * non-wildcard match.
+ * Typically used to remove keep rules that we wish to apply only to optimizers
+ * that run prior to invoking Redex (e.g. ProGuard or R8).
  */
-void remove_blanket_resource_keep(ProguardConfiguration* pg_config);
+void remove_blacklisted_rules(ProguardConfiguration* pg_config);
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

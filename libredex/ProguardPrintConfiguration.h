@@ -10,13 +10,13 @@
 #include "DexUtil.h"
 #include "ProguardConfiguration.h"
 
-namespace redex {
+namespace keep_rules {
 
 void show_configuration(std::ostream& output,
                         const Scope& classes,
                         const ProguardConfiguration& config);
 
 std::string show_keep(const KeepSpec& keep_rule, bool show_source = true);
-} // namespace redex
+} // namespace keep_rules
 
-// namespace redex
+// namespace keep_rules

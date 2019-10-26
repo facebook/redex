@@ -19,8 +19,8 @@ namespace {
 
 bool can_remove(DexField* field) {
   // XXX(jezng): why is can_rename not a subset of can_delete?
-  return field != nullptr && !field->is_external() && can_delete(field) &&
-         can_rename(field);
+  return field != nullptr && !field->is_external() &&
+         can_delete_DEPRECATED(field) && can_rename_DEPRECATED(field);
 }
 
 bool has_non_zero_static_value(DexField* field) {

@@ -183,7 +183,7 @@ void MethodDevirtualizer::verify_and_split(
     std::unordered_set<DexMethod*>& using_this,
     std::unordered_set<DexMethod*>& not_using_this) {
   for (const auto m : candidates) {
-    if (!m_config.ignore_keep && has_keep(m)) {
+    if (!m_config.ignore_keep && !can_rename(m)) {
       TRACE(VIRT, 2, "failed to devirt method %s: keep", SHOW(m));
       continue;
     }

@@ -18,7 +18,6 @@ class IRMetaIO {
  public:
   struct bit_rstate_t {
     ReferencedState::InnerStruct inner_struct;
-    uint16_t m_keep_count;
   };
   static void serialize_rstate(const ReferencedState& rstate,
                                std::ofstream& ostrm);
@@ -36,14 +35,11 @@ class IRMetaIO {
            !obj->rstate.inner_struct.m_is_serde &&
            !obj->rstate.inner_struct.m_keep &&
            !obj->rstate.inner_struct.m_assumenosideeffects &&
-           !obj->rstate.inner_struct.m_blanket_keepnames &&
            !obj->rstate.inner_struct.m_whyareyoukeeping &&
            !obj->rstate.inner_struct.m_set_allowshrinking &&
            !obj->rstate.inner_struct.m_unset_allowshrinking &&
            !obj->rstate.inner_struct.m_set_allowobfuscation &&
-           !obj->rstate.inner_struct.m_unset_allowobfuscation &&
-           !obj->rstate.inner_struct.m_keep_name &&
-           !obj->rstate.m_keep_count.load();
+           !obj->rstate.inner_struct.m_unset_allowobfuscation;
   }
 };
 } // namespace ir_meta_io

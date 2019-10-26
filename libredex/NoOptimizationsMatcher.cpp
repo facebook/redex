@@ -8,7 +8,7 @@
 #include "NoOptimizationsMatcher.h"
 #include "Walkers.h"
 
-namespace redex {
+namespace keep_rules {
 
 void process_no_optimizations_rules(
     const std::unordered_set<DexType*>& no_optimizations_annos,
@@ -23,4 +23,4 @@ void process_no_optimizations_rules(
   });
 }
 
-} // namespace redex
+} // namespace keep_rules
