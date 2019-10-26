@@ -29,9 +29,16 @@ namespace api {
  */
 std::unordered_map<DexType*, FrameworkAPI>
 ApiLevelsUtils::get_framework_classes() {
+  std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
+
   std::ifstream infile(m_framework_api_info_filename.c_str());
-  assert_log(infile, "Failed to open framework api file: %s\n",
-             m_framework_api_info_filename.c_str());
+  if (!infile) {
+    fprintf(stderr, "WARNING: Failed to open framework api file: %s\n",
+            m_framework_api_info_filename.c_str());
+    TRACE(API_UTILS, 1, "Failed to open framework api file: %s\n",
+          m_framework_api_info_filename.c_str());
+    return framework_cls_to_api;
+  }
 
   FrameworkAPI framework_api;
   std::string framework_cls_str;
@@ -39,8 +46,6 @@ ApiLevelsUtils::get_framework_classes() {
   std::string class_name;
   uint32_t num_methods;
   uint32_t num_fields;
-
-  std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
 
   while (infile >> framework_cls_str >> super_cls_str >> num_methods >>
          num_fields) {
@@ -411,6 +416,13 @@ void ApiLevelsUtils::load_framework_api() {
 
   std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
+  if (simple_cls_name_to_type.size() == 0) {
+    // Nothing to do here :|
+    TRACE(
+        API_UTILS, 1,
+        "Nothing to do since we have no framework classes to replace with ...");
+    return;
+  }
 
   std::unordered_set<std::string> simple_names_releases;
   for (DexClass* cls : m_scope) {
