@@ -27,6 +27,13 @@
 #include "Transform.h"
 #include "Util.h"
 
+#if defined(__clang__)
+#define NO_SIGNED_INT_OVERFLOW \
+  __attribute__((no_sanitize("signed-integer-overflow")))
+#else
+#define NO_SIGNED_INT_OVERFLOW
+#endif
+
 namespace {
 
 int bytecount(int32_t v) {
@@ -923,6 +930,7 @@ bool IRCode::try_sync(DexCode* code) {
       packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       int32_t next_key = *psdata++ = targets.front()->case_key;
+      redex_assert(targets.front()->case_key <= targets.back()->case_key);
       for (BranchTarget* target : targets) {
         // Fill in holes with relative offsets that are falling through to the
         // instruction after the switch instruction
@@ -930,7 +938,8 @@ bool IRCode::try_sync(DexCode* code) {
           *psdata++ = 3; // packed-switch statement is three code units
         }
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
-        ++next_key;
+        auto update_next = [&]() NO_SIGNED_INT_OVERFLOW { ++next_key; };
+        update_next();
       }
       // Emit align nop
       if (addr & 1) {
