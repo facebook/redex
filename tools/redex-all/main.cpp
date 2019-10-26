@@ -1084,6 +1084,7 @@ void dump_class_method_info_map(const std::string file_path,
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
+  signal(SIGINT, crash_backtrace_handler);
 #ifndef _MSC_VER
   signal(SIGBUS, crash_backtrace_handler);
 #endif
