@@ -43,13 +43,13 @@ using std::unordered_set;
  */
 template <class T, class R, class S, class K>
 int obfuscate_elems(const RenamingContext<T>& context,
-    DexElemManager<T, R, S, K>& name_mapping) {
+                    DexElemManager<T, R, S, K>& name_mapping) {
   int num_renames = 0;
   for (T elem : context.elems) {
     if (!context.can_rename_elem(elem) ||
         !name_mapping[elem]->should_rename()) {
       TRACE(OBFUSCATE, 4, "Ignoring member %s because we shouldn't rename it",
-          SHOW(elem->get_name()));
+            SHOW(elem->get_name()));
       continue;
     }
     context.name_gen.find_new_name(name_mapping[elem]);
@@ -72,8 +72,12 @@ void debug_logging(std::vector<DexClass*>& classes) {
   TRACE(OBFUSCATE, 3, "Finished applying new names to defs");
 }
 
-template<typename DexMember, typename DexMemberRef, typename DexMemberSpec, typename K>
-DexMember* find_renamable_ref(DexMemberRef* ref,
+template <typename DexMember,
+          typename DexMemberRef,
+          typename DexMemberSpec,
+          typename K>
+DexMember* find_renamable_ref(
+    DexMemberRef* ref,
     std::unordered_map<DexMemberRef*, DexMember*>& ref_def_cache,
     DexElemManager<DexMember*, DexMemberRef*, DexMemberSpec, K>& name_mapping) {
   TRACE(OBFUSCATE, 4, "Found a ref opcode");
@@ -88,41 +92,40 @@ DexMember* find_renamable_ref(DexMemberRef* ref,
   return def;
 }
 
-void update_refs(Scope& scope, DexFieldManager& field_name_mapping,
-    DexMethodManager& method_name_mapping) {
+void update_refs(Scope& scope,
+                 DexFieldManager& field_name_mapping,
+                 DexMethodManager& method_name_mapping) {
   std::unordered_map<DexFieldRef*, DexField*> f_ref_def_cache;
   std::unordered_map<DexMethodRef*, DexMethod*> m_ref_def_cache;
-  walk::opcodes(scope,
-    [&](DexMethod*, IRInstruction* instr) {
-      auto op = instr->opcode();
-      if (instr->has_field()) {
-        DexFieldRef* field_ref = instr->get_field();
-        if (field_ref->is_def()) return;
-        DexField* field_def =
-            find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
-        if (field_def != nullptr) {
-          TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
-          instr->set_field(field_def);
-        }
-      } else if (instr->has_method() &&
-                 (is_invoke_direct(op) || is_invoke_static(op))) {
-        // We only check invoke-direct and invoke-static because the method def
-        // we've renamed is a `dmethod`, not a `vmethod`.
-        //
-        // If we attempted to resolve invoke-virtual refs here, we would
-        // conflate this virtual ref with a direct def that happens to have the
-        // same name but isn't actually inherited.
-        DexMethodRef* method_ref = instr->get_method();
-        if (method_ref->is_def()) return;
-        DexMethod* method_def =
-            find_renamable_ref(method_ref, m_ref_def_cache,
-                method_name_mapping);
-        if (method_def != nullptr) {
-          TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
-          instr->set_method(method_def);
-        }
+  walk::opcodes(scope, [&](DexMethod*, IRInstruction* instr) {
+    auto op = instr->opcode();
+    if (instr->has_field()) {
+      DexFieldRef* field_ref = instr->get_field();
+      if (field_ref->is_def()) return;
+      DexField* field_def =
+          find_renamable_ref(field_ref, f_ref_def_cache, field_name_mapping);
+      if (field_def != nullptr) {
+        TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(field_ref));
+        instr->set_field(field_def);
       }
-    });
+    } else if (instr->has_method() &&
+               (is_invoke_direct(op) || is_invoke_static(op))) {
+      // We only check invoke-direct and invoke-static because the method def
+      // we've renamed is a `dmethod`, not a `vmethod`.
+      //
+      // If we attempted to resolve invoke-virtual refs here, we would
+      // conflate this virtual ref with a direct def that happens to have the
+      // same name but isn't actually inherited.
+      DexMethodRef* method_ref = instr->get_method();
+      if (method_ref->is_def()) return;
+      DexMethod* method_def =
+          find_renamable_ref(method_ref, m_ref_def_cache, method_name_mapping);
+      if (method_def != nullptr) {
+        TRACE(OBFUSCATE, 4, "Found a ref to fixup %s", SHOW(method_ref));
+        instr->set_method(method_def);
+      }
+    }
+  });
 }
 
 void get_totals(Scope& scope, RenameStats& stats) {
