@@ -21,7 +21,8 @@ void compute_identifier(int value, std::string* res);
 // Type for the map of descriptor -> [newname -> oldname]
 // This map is used for reverse lookup to find naming collisions
 typedef std::unordered_map<std::string,
-    std::unordered_map<std::string, std::string>> NameMapping;
+                           std::unordered_map<std::string, std::string>>
+    NameMapping;
 
 // Renames a field in the Dex
 void rename_field(DexField* field, const std::string& new_name);
@@ -47,27 +48,30 @@ bool should_rename_elem(const T* member) {
  */
 template <class T>
 class DexNameWrapper {
-protected:
+ protected:
   T dex_elem;
   // the new name that we're trying to give this element
   bool has_new_name{false};
   std::string name{"INVALID_DEFAULT_NAME"};
 
-public:
+ public:
   // Default constructor is only ever used for map template to work correctly
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
-  virtual ~DexNameWrapper() { }
+  virtual ~DexNameWrapper() {}
   DexNameWrapper(DexNameWrapper&& other) = default;
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
   // the pointer it is passed
-  explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) { }
+  explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) {}
 
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
   DexNameWrapper& operator=(DexNameWrapper&& other) = default;
 
-  inline T get() { always_assert(dex_elem != nullptr); return dex_elem; }
+  inline T get() {
+    always_assert(dex_elem != nullptr);
+    return dex_elem;
+  }
   inline const T get() const {
     always_assert(dex_elem != nullptr);
     return dex_elem;
@@ -83,7 +87,7 @@ public:
     has_new_name = true;
     name = new_name;
     // Uncomment this line for debug renaming
-    //name = std::string(SHOW(dex_elem->get_name())) + "_" + new_name;
+    // name = std::string(SHOW(dex_elem->get_name())) + "_" + new_name;
   }
 
   // Meant to be overridden, but we don't want this class to be abstract
@@ -111,18 +115,15 @@ using DexFieldWrapper = DexNameWrapper<DexField*>;
 using DexMethodWrapper = DexNameWrapper<DexMethod*>;
 
 class FieldNameWrapper : public DexFieldWrapper {
-public:
+ public:
   FieldNameWrapper() = default;
-  explicit FieldNameWrapper(DexField* elem) :
-      DexFieldWrapper(elem) { }
+  explicit FieldNameWrapper(DexField* elem) : DexFieldWrapper(elem) {}
 
-  bool should_rename() override {
-    return true;
-  }
+  bool should_rename() override { return true; }
 };
 
 class MethodNameWrapper : public DexMethodWrapper {
-private:
+ private:
   int n_links = 1;
   // Allows us to link wrappers together to show groups of wrappers that
   // have to be renamed together. If there is a non-null next pointer, any calls
@@ -143,10 +144,11 @@ private:
     if (next == nullptr) return this;
     return next->find_end_link();
   }
-public:
+
+ public:
   MethodNameWrapper() = default;
-  explicit MethodNameWrapper(DexMethod* dex_elem) :
-      DexNameWrapper<DexMethod*>(dex_elem), next(nullptr) {
+  explicit MethodNameWrapper(DexMethod* dex_elem)
+      : DexNameWrapper<DexMethod*>(dex_elem), next(nullptr) {
     // Make sure on construction any external elements are unrenamable
     renamable = should_rename_elem(dex_elem);
   }
@@ -188,8 +190,8 @@ public:
       // renamable
       if (!renamable || !other->should_rename()) {
         TRACE(OBFUSCATE, 4, "Elem %s marking\n\t%s unrenamable",
-            SHOW(renamable ? other->get() : this->get()),
-            SHOW(renamable ? this->get() : other->get()));
+              SHOW(renamable ? other->get() : this->get()),
+              SHOW(renamable ? this->get() : other->get()));
         other->mark_unrenamable();
       }
     } else {
@@ -485,14 +487,16 @@ class FieldNameGenerator : public NameGenerator<DexField*> {
 // K - DexType/DexProto - the type of the key we're using in the map
 template <class T, class R, class S, class K>
 class DexElemManager {
-protected:
+ protected:
   // Map from class_name -> type -> old_name ->
   //   DexNameWrapper (contains new name)
   // Note: unique_ptr necessary here to avoid object slicing
-  std::unordered_map<DexType*,
-      std::unordered_map<K,
-          std::unordered_map<DexString*,
-              std::unique_ptr<DexNameWrapper<T>>>>> elements;
+  std::unordered_map<
+      DexType*,
+      std::unordered_map<
+          K,
+          std::unordered_map<DexString*, std::unique_ptr<DexNameWrapper<T>>>>>
+      elements;
   using RefCtrFn = std::function<S(const std::string&)>;
   using SigGetFn = std::function<K(R)>;
   using ElemCtrFn = std::function<DexNameWrapper<T>*(T&)>;
@@ -502,28 +506,26 @@ protected:
 
   bool mark_all_unrenamable;
 
-public:
-  DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr) :
-      sig_getter_fn(get_sig),
-      ref_getter_fn(ref_ctr),
-      elemCtr(elem_ctr),
-      mark_all_unrenamable(false) { }
+ public:
+  DexElemManager(ElemCtrFn elem_ctr, SigGetFn get_sig, RefCtrFn ref_ctr)
+      : sig_getter_fn(get_sig),
+        ref_getter_fn(ref_ctr),
+        elemCtr(elem_ctr),
+        mark_all_unrenamable(false) {}
   DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
-  //void lock_elements() { mark_all_unrenamable = true; }
-  //void unlock_elements() { mark_all_unrenamable = false; }
+  // void lock_elements() { mark_all_unrenamable = true; }
+  // void unlock_elements() { mark_all_unrenamable = false; }
 
-  inline bool contains_elem(
-      DexType* cls, K sig, DexString* name) {
-    return elements.count(cls) > 0 &&
-      elements[cls].count(sig) > 0 &&
-      elements[cls][sig].count(name) > 0;
+  inline bool contains_elem(DexType* cls, K sig, DexString* name) {
+    return elements.count(cls) > 0 && elements[cls].count(sig) > 0 &&
+           elements[cls][sig].count(name) > 0;
   }
 
   inline bool contains_elem(R elem) {
-    return contains_elem(
-        elem->get_class(), sig_getter_fn(elem), elem->get_name());
+    return contains_elem(elem->get_class(), sig_getter_fn(elem),
+                         elem->get_name());
   }
 
   inline DexNameWrapper<T>* emplace(T elem) {
@@ -532,16 +534,17 @@ public:
     if (mark_all_unrenamable)
       elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
           ->mark_unrenamable();
-    return elements[
-        elem->get_class()][sig_getter_fn(elem)][elem->get_name()].get();
+    return elements[elem->get_class()][sig_getter_fn(elem)][elem->get_name()]
+        .get();
   }
 
   // Mirrors the map get operator, but ensures we create correct wrappers
   // if they don't exist
   inline DexNameWrapper<T>* operator[](T elem) {
-    return contains_elem(elem) ?
-      elements[elem->get_class()]
-        [sig_getter_fn(elem)][elem->get_name()].get() : emplace(elem);
+    return contains_elem(elem) ? elements[elem->get_class()]
+                                         [sig_getter_fn(elem)][elem->get_name()]
+                                             .get()
+                               : emplace(elem);
   }
 
   // Commits all the renamings in elements to the dex by modifying the
@@ -559,7 +562,7 @@ public:
               !wrap->should_commit() ||
               strcmp(wrap->get()->get_name()->c_str(), wrap->get_name()) == 0) {
             TRACE(OBFUSCATE, 2, "Not committing %s to %s", SHOW(wrap->get()),
-                wrap->get_name());
+                  wrap->get_name());
             continue;
           }
           auto elem = wrap->get();
@@ -585,15 +588,14 @@ public:
     return renamings;
   }
 
-private:
+ private:
   // Returns the def for that class and ref if it exists, nullptr otherwise
   T find_def(R ref, DexType* cls) {
     if (cls == nullptr) return nullptr;
     if (contains_elem(cls, sig_getter_fn(ref), ref->get_name())) {
       DexNameWrapper<T>* wrap =
-        elements[cls][sig_getter_fn(ref)][ref->get_name()].get();
-      if (wrap->is_modified())
-        return wrap->get();
+          elements[cls][sig_getter_fn(ref)][ref->get_name()].get();
+      if (wrap->is_modified()) return wrap->get();
     }
     return nullptr;
   }
@@ -634,12 +636,11 @@ private:
     for (auto& class_itr : elements) {
       for (auto& type_itr : class_itr.second) {
         for (auto& name_wrap : type_itr.second) {
-          TRACE(OBFUSCATE, 2, " (%s) %s",
-              SHOW(type_itr.first),
-              name_wrap.second->get_printable().c_str());
-              /*SHOW(class_itr.first),
-              SHOW(name_wrap.first),
-              name_wrap.second->get_name());*/
+          TRACE(OBFUSCATE, 2, " (%s) %s", SHOW(type_itr.first),
+                name_wrap.second->get_printable().c_str());
+          /*SHOW(class_itr.first),
+          SHOW(name_wrap.first),
+          name_wrap.second->get_name());*/
         }
       }
     }
@@ -656,7 +657,7 @@ DexMethodManager new_dex_method_manager();
 // Look at a list of members and check if there is a renamable member
 template <class T, class R, class S, class K>
 bool contains_renamable_elem(const std::vector<T>& elems,
-    DexElemManager<T, R, S, K>& name_mapping) {
+                             DexElemManager<T, R, S, K>& name_mapping) {
   for (T e : elems)
     if (should_rename_elem(e) && !name_mapping[e]->name_has_changed() &&
         name_mapping[e]->should_rename())
@@ -707,7 +708,7 @@ class MethodRenamingContext : public RenamingContext<DexMethod*> {
 // State of the renaming that we need to modify as we rename more fields
 template <class T, class R, class S, class K>
 class ObfuscationState {
-public:
+ public:
   // Ids that we've used in renaming
   std::unordered_set<std::string> used_ids;
   // Ids to avoid in renaming
@@ -734,10 +735,11 @@ class FieldObfuscationState
 };
 
 enum HierarchyDirection {
-  VisitNeither      = 0,
-  VisitSuperClasses = (1<<0),
-  VisitSubClasses   = (1<<1),
-  VisitBoth         = VisitSuperClasses | VisitSubClasses };
+  VisitNeither = 0,
+  VisitSuperClasses = (1 << 0),
+  VisitSubClasses = (1 << 1),
+  VisitBoth = VisitSuperClasses | VisitSubClasses
+};
 
 // Walks the class hierarchy starting at this class and including
 // superclasses (including external ones) and/or subclasses based on
@@ -746,12 +748,11 @@ enum HierarchyDirection {
 // Visitor - the lambda to call on each element
 // get_list - the function to get a list of elements to operate on from a class
 template <typename Visitor>
-void walk_hierarchy(
-    DexClass* cls,
-    Visitor on_member,
-    bool visit_private,
-    HierarchyDirection h_dir,
-    const ClassHierarchy& ch) {
+void walk_hierarchy(DexClass* cls,
+                    Visitor on_member,
+                    bool visit_private,
+                    HierarchyDirection h_dir,
+                    const ClassHierarchy& ch) {
   if (!cls) return;
   auto visit = [&](DexClass* cls) {
     for (const auto meth : const_cast<const DexClass*>(cls)->get_dmethods()) {
@@ -762,7 +763,8 @@ void walk_hierarchy(
     for (const auto meth : const_cast<const DexClass*>(cls)->get_vmethods()) {
       if (!is_private(meth) || visit_private)
         on_member(const_cast<DexMethod*>(meth));
-    }};
+    }
+  };
 
   visit(cls);
 
@@ -781,7 +783,7 @@ void walk_hierarchy(
   if (h_dir & HierarchyDirection::VisitSubClasses) {
     for (auto subcls_type : get_children(ch, cls->get_type())) {
       walk_hierarchy(type_class(subcls_type), on_member, visit_private,
-          HierarchyDirection::VisitSubClasses, ch);
+                     HierarchyDirection::VisitSubClasses, ch);
     }
   }
 }
