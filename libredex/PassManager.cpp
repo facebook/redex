@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -44,8 +44,8 @@ std::string get_apk_dir(const Json::Value& config) {
 
 } // namespace
 
-std::unique_ptr<redex::ProguardConfiguration> empty_pg_config() {
-  return std::make_unique<redex::ProguardConfiguration>();
+std::unique_ptr<keep_rules::ProguardConfiguration> empty_pg_config() {
+  return std::make_unique<keep_rules::ProguardConfiguration>();
 }
 
 PassManager::PassManager(const std::vector<Pass*>& passes,
@@ -55,7 +55,7 @@ PassManager::PassManager(const std::vector<Pass*>& passes,
 
 PassManager::PassManager(
     const std::vector<Pass*>& passes,
-    std::unique_ptr<redex::ProguardConfiguration> pg_config,
+    std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
     const Json::Value& config,
     const RedexOptions& options)
     : m_apk_mgr(get_apk_dir(config)),
@@ -176,23 +176,23 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     std::string seed_filename = seeds_output_file;
     Timer t("Writing seeds file " + seed_filename);
     std::ofstream seeds_file(seed_filename);
-    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
-                       false);
+    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope, false,
+                            false);
   }
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing seeds to file " + conf.get_printseeds());
     std::ofstream seeds_file(conf.get_printseeds());
-    redex::print_seeds(seeds_file, conf.get_proguard_map(), scope);
+    keep_rules::print_seeds(seeds_file, conf.get_proguard_map(), scope);
     std::ofstream config_file(conf.get_printseeds() + ".pro");
-    redex::show_configuration(config_file, scope, *m_pg_config);
+    keep_rules::show_configuration(config_file, scope, *m_pg_config);
     std::ofstream incoming(conf.get_printseeds() + ".incoming");
     redex::print_classes(incoming, conf.get_proguard_map(), scope);
     std::ofstream shrinking_file(conf.get_printseeds() + ".allowshrinking");
-    redex::print_seeds(shrinking_file, conf.get_proguard_map(), scope, true,
-                       false);
+    keep_rules::print_seeds(shrinking_file, conf.get_proguard_map(), scope,
+                            true, false);
     std::ofstream obfuscation_file(conf.get_printseeds() + ".allowobfuscation");
-    redex::print_seeds(obfuscation_file, conf.get_proguard_map(), scope, false,
-                       true);
+    keep_rules::print_seeds(obfuscation_file, conf.get_proguard_map(), scope,
+                            false, true);
   }
 
   // Enable opt decision logging if specified in config.

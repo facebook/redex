@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -311,7 +311,9 @@ class OptimizeEnums {
       return;
     }
     optimize_enums::Config config(max_enum_size);
-    calculate_param_summaries(m_scope, &config.param_summary_map);
+    const auto override_graph = method_override_graph::build_graph(m_scope);
+    calculate_param_summaries(m_scope, *override_graph,
+                              &config.param_summary_map);
 
     /**
      * An enum is safe if it not external, has no interfaces, and has only one

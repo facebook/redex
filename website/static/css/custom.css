@@ -1,0 +1,92 @@
+/**
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/* your custom css */
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Italic.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Italic.woff') format('woff');
+  font-weight: normal;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Black.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Black.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-BlackItalic.woff2') format('woff2'),
+    url('/fonts/LatoLatin-BlackItalic.woff') format('woff');
+  font-weight: 900;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Light.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Lato';
+  src: url('/fonts/LatoLatin-Regular.woff2') format('woff2'),
+    url('/fonts/LatoLatin-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+}
+
+.homeContainer {
+  background: $primaryColor;
+}
+
+.navPusher {
+  background: $secondaryColor;
+}
+
+.projectTitle {
+  color: #fff;
+}
+
+.homeContainer .homeWrapper {
+  padding: 6em 10px;
+}
+
+.button {
+  border: 1px solid #fff;
+  color: #fff;
+}
+
+.button:hover {
+  background: #fff;
+  color: $primaryColor;
+}
+
+body {
+  font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
+}
+
+.navigationSlider .slidingNav ul {
+  color: $primaryColor;
+}
+
+.navigationSlider .slidingNav ul li:hover {
+  color: #fff;
+}
+
+.navigationSlider .slidingNav ul li a {
+  font-size: 1em;
+  font-weight: bold;
+  padding: 15px;
+}

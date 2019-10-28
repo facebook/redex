@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,7 +10,7 @@
 #include "ProguardMap.h"
 #include "ProguardRegex.h"
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 // Convert a ProGuard member regex to a boost::regex
@@ -173,4 +173,4 @@ std::string convert_wildcard_type(std::string typ) {
 }
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

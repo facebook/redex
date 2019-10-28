@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -633,8 +633,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(
-              false, "Unexpected string directive: 0x%x", replace_info.string);
+          always_assert_log(false, "Unexpected string directive: 0x%x",
+                            replace_info.string);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::literal) {
@@ -668,8 +668,8 @@ struct Matcher {
           break;
         }
         default:
-          always_assert_log(
-              false, "Unexpected literal directive 0x%x", replace_info.literal);
+          always_assert_log(false, "Unexpected literal directive 0x%x",
+                            replace_info.literal);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::type) {
@@ -681,8 +681,8 @@ struct Matcher {
           replace->set_type(matched_types.at(Type::B));
           break;
         default:
-          always_assert_log(
-              false, "Unexpected type directive 0x%x", replace_info.type);
+          always_assert_log(false, "Unexpected type directive 0x%x",
+                            replace_info.type);
           break;
         }
       } else if (replace_info.kind == DexPattern::Kind::field) {
@@ -693,8 +693,8 @@ struct Matcher {
         case Field::B:
           replace->set_field(matched_fields.at(Field::B));
         default:
-          always_assert_log(
-              false, "Unexpected field directive 0x%x", replace_info.field);
+          always_assert_log(false, "Unexpected field directive 0x%x",
+                            replace_info.field);
         }
       }
     }
@@ -746,6 +746,8 @@ DexPattern invoke_StringBuilder_init_String(Register instance,
       {},
       DexMethod::make_method(LjavaStringBuilder, "<init>", "V", {LjavaString})};
 };
+
+// clang-format off
 
 // invoke-virtual {reg_instance, reg_argument},
 // Ljava/lang/StringBuilder;.append:(param_type)Ljava/lang/StringBuilder;
@@ -1220,6 +1222,8 @@ static const std::vector<Pattern>& get_string_patterns() {
   return kStringPatterns;
 }
 
+// clang-format on
+
 DexPattern move_ops(Register dest, Register src) {
   return {{OPCODE_MOVE, OPCODE_MOVE_OBJECT}, {src}, {dest}};
 };
@@ -1593,6 +1597,8 @@ const std::vector<Pattern>& get_arith_patterns() {
   return kArithPatterns;
 }
 
+// clang-format off
+
 const DexPattern invoke_class_get_simple_name() {
   return {{OPCODE_INVOKE_VIRTUAL,
            OPCODE_INVOKE_SUPER,
@@ -1624,6 +1630,8 @@ const std::vector<Pattern>& get_func_patterns() {
   return kFuncPatterns;
 }
 
+// clang-format on
+
 const std::vector<std::vector<Pattern>>& get_all_patterns() {
   static const std::vector<std::vector<Pattern>>& kAllPatterns = {
       get_string_patterns(),
@@ -1653,8 +1661,8 @@ class PeepholeOptimizer {
   int m_stats_inserted = 0;
 
  public:
-  explicit PeepholeOptimizer(
-      PassManager& mgr, const std::vector<std::string>& disabled_peepholes)
+  explicit PeepholeOptimizer(PassManager& mgr,
+                             const std::vector<std::string>& disabled_peepholes)
       : m_mgr(mgr) {
     for (const auto& pattern_list : patterns::get_all_patterns()) {
       for (const Pattern& pattern : pattern_list) {
@@ -1740,9 +1748,7 @@ class PeepholeOptimizer {
       num_patterns_matched +=
           m_mgr.get_metric(m_matchers[i].pattern.name.c_str());
     }
-    TRACE(PEEPHOLE,
-          1,
-          "%lu patterns matched and replaced",
+    TRACE(PEEPHOLE, 1, "%lu patterns matched and replaced",
           num_patterns_matched);
     TRACE(PEEPHOLE, 5, "Detailed pattern match stats:");
     for (size_t i = 0; i < m_matchers.size(); ++i) {
@@ -1767,7 +1773,7 @@ class PeepholeOptimizer {
     }
   }
 };
-}
+} // namespace
 
 void PeepholePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& /*cfg*/,

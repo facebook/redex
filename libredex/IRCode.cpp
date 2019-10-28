@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -26,6 +26,13 @@
 #include "InstructionLowering.h"
 #include "Transform.h"
 #include "Util.h"
+
+#if defined(__clang__)
+#define NO_SIGNED_INT_OVERFLOW \
+  __attribute__((no_sanitize("signed-integer-overflow")))
+#else
+#define NO_SIGNED_INT_OVERFLOW
+#endif
 
 namespace {
 
@@ -192,8 +199,7 @@ static void shard_multi_target(IRList* ir,
     for (int i = 0; i < entries; i++) {
       uint32_t targetaddr = base + read_int32(data);
       auto target = bm.by<Addr>().at(targetaddr);
-      insert_multi_branch_target(ir, case_key, target, src);
-      case_key++;
+      insert_multi_branch_target(ir, case_key + i, target, src);
     }
   } else if (ftype == FOPCODE_SPARSE_SWITCH) {
     const uint16_t* tdata = data + 2 * entries; // entries are 32b
@@ -924,6 +930,7 @@ bool IRCode::try_sync(DexCode* code) {
       packed_payload[1] = size;
       uint32_t* psdata = (uint32_t*)&packed_payload[2];
       int32_t next_key = *psdata++ = targets.front()->case_key;
+      redex_assert(targets.front()->case_key <= targets.back()->case_key);
       for (BranchTarget* target : targets) {
         // Fill in holes with relative offsets that are falling through to the
         // instruction after the switch instruction
@@ -931,7 +938,8 @@ bool IRCode::try_sync(DexCode* code) {
           *psdata++ = 3; // packed-switch statement is three code units
         }
         *psdata++ = multi_targets[target] - entry_to_addr.at(multiopcode);
-        ++next_key;
+        auto update_next = [&]() NO_SIGNED_INT_OVERFLOW { ++next_key; };
+        update_next();
       }
       // Emit align nop
       if (addr & 1) {

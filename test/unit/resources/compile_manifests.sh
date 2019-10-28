@@ -1,4 +1,8 @@
 #! /bin/bash
+# Copyright (c) Facebook, Inc. and its affiliates.
+#
+# This source code is licensed under the MIT license found in the
+# LICENSE file in the root directory of this source tree.
 
 # XXX(jezng): I tried running these commands as part of the Buck build, but I'm
 # having trouble getting the Buck-given versions of AAPT and the SDK libraries

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -241,6 +241,12 @@ inline bool is_any_init(const DexMethodRef* method) {
  * We can make this much faster in time.
  */
 bool is_subclass(const DexType* parent, const DexType* child);
+
+/**
+ * Whether the given type refers to a proper class that has no ctor,
+ * and is not external or native.
+ */
+bool is_uninstantiable_class(DexType* type);
 
 /**
  * Change the visibility of members accessed in a method.
@@ -506,7 +512,7 @@ struct dex_stats_t {
 
 dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs);
 
-namespace JavaNameUtil {
+namespace java_names {
 
 // Example: "Ljava/lang/String;" --> "java.lang.String"
 inline std::string internal_to_external(const std::string& internal_name) {
@@ -532,4 +538,4 @@ inline std::string package_name(const std::string& type_name) {
     return nice_name;
   }
 }
-} // namespace JavaNameUtil
+} // namespace java_names

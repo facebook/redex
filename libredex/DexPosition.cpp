@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -100,7 +100,7 @@ void RealPositionMapper::write_map_v2() {
     // strip out the args and return type
     auto qualified_method_name =
         full_method_name.substr(0, full_method_name.find(":"));
-    auto class_name = JavaNameUtil::internal_to_external(
+    auto class_name = java_names::internal_to_external(
         qualified_method_name.substr(0, qualified_method_name.rfind(".")));
     auto method_name =
         qualified_method_name.substr(qualified_method_name.rfind(".") + 1);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "ClassHierarchy.h"
+#include "ConcurrentContainers.h"
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
@@ -50,16 +51,19 @@ class TypeRefUpdater final {
    * ...
    */
   DexType* try_convert_to_new_type(DexType* type);
+
   /**
    * Change a field to new type if its original type is a candidate.
    * Return true if the field is updated.
    */
   bool mangling(DexFieldRef* field);
+
   /**
    * Change proto of a method if its proto contains any candidate.
    */
   bool mangling(DexMethodRef* method);
 
+  ConcurrentMap<DexMethod*, DexProto*> m_inits;
   const std::unordered_map<DexType*, DexType*>& m_old_to_new;
 };
 

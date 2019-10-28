@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -671,7 +671,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
         if (class_name && class_name->obj_kind == STRING) {
           if (class_name->dex_string != nullptr) {
             auto internal_name =
-                DexString::make_string(JavaNameUtil::external_to_internal(
+                DexString::make_string(java_names::external_to_internal(
                     class_name->dex_string->str()));
             current_state->set_abstract_obj(
                 RESULT_REGISTER,

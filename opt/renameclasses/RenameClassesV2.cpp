@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -21,6 +21,7 @@
 #include "IRInstruction.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
+#include "UnpackagePrivate.h"
 #include "Walkers.h"
 #include "Warning.h"
 
@@ -88,38 +89,6 @@ bool dont_rename_reason_to_metric_per_rule(DontRenameReasonCode reason) {
   }
 }
 
-void unpackage_private(Scope& scope) {
-  walk::methods(scope, [&](DexMethod* method) {
-    if (is_package_protected(method)) set_public(method);
-  });
-  walk::fields(scope, [&](DexField* field) {
-    if (is_package_protected(field)) set_public(field);
-  });
-  for (auto clazz : scope) {
-    if (!clazz->is_external()) {
-      set_public(clazz);
-    }
-  }
-
-  static DexType* dalvikinner =
-      DexType::get_type("Ldalvik/annotation/InnerClass;");
-
-  walk::annotations(scope, [&](DexAnnotation* anno) {
-    if (anno->type() != dalvikinner) return;
-    auto elems = anno->anno_elems();
-    for (auto elem : elems) {
-      // Fix access flags on all @InnerClass annotations
-      if (!strcmp("accessFlags", elem.string->c_str())) {
-        always_assert(elem.encoded_value->evtype() == DEVT_INT);
-        elem.encoded_value->value(
-            (elem.encoded_value->value() & ~VISIBILITY_MASK) | ACC_PUBLIC);
-        TRACE(RENAME, 3, "Fix InnerClass accessFlags %s => %08x",
-              elem.string->c_str(), elem.encoded_value->value());
-      }
-    }
-  });
-}
-
 } // namespace
 
 // Returns idx of the vector of packages if the given class name matches, or -1
@@ -165,7 +134,7 @@ RenameClassesPassV2::build_dont_rename_class_name_literals(Scope& scope) {
   for (auto dex_str : all_strings) {
     const std::string& s = dex_str->str();
     if (!ends_with(s, ".java") && boost::regex_match(s, external_name_regex)) {
-      const std::string& internal_name = JavaNameUtil::external_to_internal(s);
+      const std::string& internal_name = java_names::external_to_internal(s);
       auto cls = type_class(DexType::get_type(internal_name));
       if (cls != nullptr && !cls->is_external()) {
         result.insert(internal_name);
@@ -432,8 +401,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
   for (const auto& it : aliases.get_class_map()) {
-    external_names.emplace(
-        JavaNameUtil::internal_to_external(it.first->c_str()));
+    external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
   std::vector<DexString*> all_strings;
   for (auto clazz : scope) {
@@ -809,7 +777,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
         // already exist, then there's no way it can match a class
         // that was renamed
         DexString* internal_str = DexString::get_string(
-            JavaNameUtil::external_to_internal(str->c_str()).c_str());
+            java_names::external_to_internal(str->c_str()));
         // Look up both str and intternal_str in the map; maybe str was
         // internal to begin with?
         DexString* alias_from = nullptr;
@@ -822,7 +790,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
           // make_string here because the external form of the name may not be
           // present in the string table
           alias_to = DexString::make_string(
-              JavaNameUtil::internal_to_external(alias_to->str()));
+              java_names::internal_to_external(alias_to->str()));
         } else if (aliases.has(str)) {
           alias_from = str;
           alias_to = aliases.at(str);
@@ -879,8 +847,8 @@ void RenameClassesPassV2::rename_classes_in_layouts(const AliasMap& aliases,
   std::map<std::string, std::string> aliases_for_layouts;
   for (const auto& apair : aliases.get_class_map()) {
     aliases_for_layouts.emplace(
-        JavaNameUtil::internal_to_external(apair.first->str()),
-        JavaNameUtil::internal_to_external(apair.second->str()));
+        java_names::internal_to_external(apair.first->str()),
+        java_names::internal_to_external(apair.second->str()));
   }
   ssize_t layout_bytes_delta = 0;
   size_t num_layout_renamed = 0;

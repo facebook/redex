@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -123,8 +123,8 @@ DexMethod* generate_dispatch(const DexType* base_type,
     MethodBlock* curr_block;
 
     if (idx < targets.size() - 1) {
-      mb->instance_of(
-          self_loc, type_test_loc, const_cast<DexType*>(target_type));
+      mb->instance_of(self_loc, type_test_loc,
+                      const_cast<DexType*>(target_type));
       curr_block = mb->if_testz(OPCODE_IF_EQZ, type_test_loc);
     } else {
       // Last case
@@ -251,8 +251,7 @@ void remove_interface_references(
             SHOW(type));
     } else {
       insn->set_type(const_cast<DexType*>(new_type));
-      TRACE(RM_INTF, 9, " removing %s referencing %s", SHOW(insn),
-            SHOW(type));
+      TRACE(RM_INTF, 9, " removing %s referencing %s", SHOW(insn), SHOW(type));
     }
   };
 
@@ -270,12 +269,11 @@ void remove_interface_references(
   update_field_type_references(scope, old_to_new);
 }
 
-size_t exclude_unremovables(
-    const Scope& scope,
-    const DexStoresVector& stores,
-    const TypeSystem& type_system,
-    bool include_primary_dex,
-    TypeSet& candidates) {
+size_t exclude_unremovables(const Scope& scope,
+                            const DexStoresVector& stores,
+                            const TypeSystem& type_system,
+                            bool include_primary_dex,
+                            TypeSet& candidates) {
   size_t count = 0;
   always_assert(stores.size());
   XStoreRefs xstores(stores);
@@ -364,8 +362,7 @@ DexMethod* find_matching_virtual_method(const TypeSystem& type_system,
       continue;
     }
     if (type_system.is_subtype(method->get_class(), owner)) {
-      TRACE(RM_INTF, 9, "Matched target %s for %s", SHOW(method),
-            SHOW(owner));
+      TRACE(RM_INTF, 9, "Matched target %s for %s", SHOW(method), SHOW(owner));
       return method;
     }
   }

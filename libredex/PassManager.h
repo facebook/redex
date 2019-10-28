@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -27,7 +27,7 @@ class PassManager {
               const RedexOptions& options = RedexOptions{});
 
   PassManager(const std::vector<Pass*>& passes,
-              std::unique_ptr<redex::ProguardConfiguration> pg_config,
+              std::unique_ptr<keep_rules::ProguardConfiguration> pg_config,
               const Json::Value& config = Json::Value(Json::objectValue),
               const RedexOptions& options = RedexOptions{});
 
@@ -55,7 +55,10 @@ class PassManager {
   // A temporary hack to return the interdex metrics. Will be removed later.
   const std::unordered_map<std::string, int>& get_interdex_metrics();
 
-  redex::ProguardConfiguration& get_proguard_config() { return *m_pg_config; }
+  keep_rules::ProguardConfiguration& get_proguard_config() {
+    return *m_pg_config;
+  }
+
   bool no_proguard_rules() {
     return m_pg_config->keep_rules.empty() && !m_testing_mode;
   }
@@ -93,7 +96,7 @@ class PassManager {
   std::vector<PassManager::PassInfo> m_pass_info;
   PassInfo* m_current_pass_info;
 
-  std::unique_ptr<redex::ProguardConfiguration> m_pg_config;
+  std::unique_ptr<keep_rules::ProguardConfiguration> m_pg_config;
   const RedexOptions m_redex_options;
   bool m_testing_mode{false};
   bool m_regalloc_has_run{false};

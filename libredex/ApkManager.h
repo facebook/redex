@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,6 +24,7 @@ class ApkManager {
     }
   }
 
+  bool has_asset_dir();
   std::shared_ptr<FILE*> new_asset_file(const char* filename);
 
  private:

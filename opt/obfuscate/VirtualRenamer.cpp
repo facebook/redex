@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -527,7 +527,7 @@ size_t rename_virtuals(
   std::unordered_map<const DexType*, std::string> external_cache;
   if (avoid_stack_trace_collision) {
     for (const auto& cls : classes) {
-      std::string pref = JavaNameUtil::internal_to_external(cls->str()) + ".";
+      std::string pref = java_names::internal_to_external(cls->str()) + ".";
       auto emp_res = external_cache.emplace(cls->get_type(), pref);
       always_assert(emp_res.second);
       auto meths_visitor = [&](const std::vector<DexMethod*>& methods) {

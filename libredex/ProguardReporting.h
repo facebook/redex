@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,8 +13,6 @@
 #include <iostream>
 
 namespace redex {
-
-std::string dexdump_name_to_dot_name(const std::string& dexdump_name);
 
 template <class Container>
 void print_methods(std::ostream& output,

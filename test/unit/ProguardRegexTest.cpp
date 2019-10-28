@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,7 +11,7 @@
 
 #include "ProguardRegex.h"
 
-using namespace redex;
+using namespace keep_rules;
 
 TEST(ProguardRegexTest, members) {
   {

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <boost/functional/hash.hpp>
 
-namespace redex {
+namespace keep_rules {
 
 bool operator==(const MemberSpecification& lhs,
                 const MemberSpecification& rhs) {
@@ -89,4 +89,4 @@ void KeepSpecSet::erase_if(const std::function<bool(const KeepSpec&)>& pred) {
       m_ordered.end());
 }
 
-} // namespace redex
+} // namespace keep_rules

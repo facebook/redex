@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -312,6 +312,15 @@ MethodOverrideAction get_base_or_overriding_method_action(
     const DexMethod* method, bool ignore_methods_with_assumenosideeffects) {
   if (method == nullptr || is_clinit(method) ||
       method->rstate.no_optimizations()) {
+    return MethodOverrideAction::UNKNOWN;
+  }
+
+  // Why can_rename_DEPRECATED? To mirror what VirtualRenamer looks at.
+  if ((method->is_virtual() && is_interface(type_class(method->get_class()))) &&
+      (root(method) || !can_rename_DEPRECATED(method))) {
+    // We cannot rule out that there are dynamically added classes, created via
+    // Proxy.newProxyInstance, that override this method.
+    // So we assume the worst.
     return MethodOverrideAction::UNKNOWN;
   }
 

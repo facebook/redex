@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -68,7 +68,17 @@ class InterDexPassPlugin {
   // this after running its implementation
   virtual void cleanup(const std::vector<DexClass*>& scope) {}
 
+  const std::string& name() const { return m_name; }
+
   virtual ~InterDexPassPlugin(){};
+
+ private:
+  void set_name(const std::string& new_name) { m_name = new_name; }
+
+  std::string m_name;
+
+  template <typename T>
+  friend class ::PluginEntry;
 };
 
 using InterDexRegistry = PluginEntry<InterDexPassPlugin>;

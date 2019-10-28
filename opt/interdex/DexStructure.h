@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,7 +22,6 @@ using TypeRefs = std::unordered_set<DexType*>;
 
 struct DexInfo {
   bool primary{false};
-  bool mixed_mode{false};
   bool coldstart{false};
   bool extended{false};
   bool scroll{false};

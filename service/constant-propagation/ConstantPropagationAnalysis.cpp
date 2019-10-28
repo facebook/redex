@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,6 +22,15 @@ std::enable_if_t<std::is_integral<T>::value, int> fpclassify(T x) {
 #include "Resolver.h"
 #include "Transform.h"
 #include "Walkers.h"
+
+// While undefined behavior C++-wise, the two's complement implementation of
+// modern processors matches the required Java semantics. So silence ubsan.
+#if defined(__clang__)
+#define NO_UBSAN_ARITH \
+  __attribute__((no_sanitize("signed-integer-overflow", "shift")))
+#else
+#define NO_UBSAN_ARITH
+#endif
 
 namespace {
 
@@ -226,7 +235,8 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
   auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if (src && src->get_constant() && *(src->get_constant()) == 0) {
+  if ((src && src->get_constant() && *(src->get_constant()) == 0) ||
+      (is_uninstantiable_class(insn->get_type()))) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }
@@ -273,8 +283,8 @@ bool PrimitiveAnalyzer::analyze_cmp(const IRInstruction* insn,
   return true;
 }
 
-bool PrimitiveAnalyzer::analyze_binop_lit(const IRInstruction* insn,
-                                          ConstantEnvironment* env) {
+bool PrimitiveAnalyzer::analyze_binop_lit(
+    const IRInstruction* insn, ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
   int32_t lit = insn->get_literal();
   TRACE(CONSTP, 5, "Attempting to fold %s with literal %lu", SHOW(insn), lit);
@@ -412,7 +422,7 @@ bool is_binop64(IROpcode op) {
 }
 
 bool PrimitiveAnalyzer::analyze_binop(const IRInstruction* insn,
-                                      ConstantEnvironment* env) {
+                                      ConstantEnvironment* env) NO_UBSAN_ARITH {
   auto op = insn->opcode();
   TRACE(CONSTP, 5, "Attempting to fold %s", SHOW(insn));
   auto cst_left = env->get<SignedConstantDomain>(insn->src(0)).get_constant();
@@ -839,8 +849,7 @@ static void analyze_if(const IRInstruction* insn,
 }
 
 ConstantEnvironment FixpointIterator::analyze_edge(
-    const EdgeId& edge,
-    const ConstantEnvironment& exit_state_at_source) const {
+    const EdgeId& edge, const ConstantEnvironment& exit_state_at_source) const {
   auto env = exit_state_at_source;
   auto last_insn_it = edge->src()->get_last_insn();
   if (last_insn_it == edge->src()->end()) {

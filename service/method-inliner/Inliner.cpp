@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,6 +9,8 @@
 
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
+#include "ConcurrentContainers.h"
+#include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
@@ -16,9 +18,11 @@
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
+#include "Timer.h"
 #include "Transform.h"
 #include "UnknownVirtuals.h"
 #include "Walkers.h"
+#include "WorkQueue.h"
 
 using namespace opt_metadata;
 
@@ -43,6 +47,14 @@ const size_t COST_METHOD = 32;
 
 // Overhead of single extra argument for methods with many arguments
 const size_t COST_METHOD_ARG = 6;
+
+// When to consider running constant-propagation to better estimate inlined
+// cost. It just takes too much time to run the analysis for large methods.
+const size_t MAX_COST_FOR_CONSTANT_PROPAGATION = 272;
+
+// Minimum number of instructions needed across all constant arguments
+// variations before parallelizing constant-propagation.
+const size_t MIN_COST_FOR_PARALLELIZATION = 1977;
 
 /*
  * This is the maximum size of method that Dex bytecode can encode.
@@ -130,19 +142,18 @@ MultiMethodInliner::MultiMethodInliner(
       }
     }
   } else if (mode == InterDex) {
-    walk::opcodes(scope, [](DexMethod* caller) { return true; },
-                  [&](DexMethod* caller, IRInstruction* insn) {
-                    if (is_invoke(insn->opcode())) {
-                      auto callee =
-                          resolver(insn->get_method(), opcode_to_search(insn));
-                      if (true_virtual_callers.count(callee) == 0 &&
-                          callee != nullptr && callee->is_concrete() &&
-                          candidates.count(callee)) {
-                        callee_caller[callee].push_back(caller);
-                        caller_callee[caller].push_back(callee);
-                      }
-                    }
-                  });
+    walk::opcodes(
+        scope, [](DexMethod* caller) { return true; },
+        [&](DexMethod* caller, IRInstruction* insn) {
+          if (is_invoke(insn->opcode())) {
+            auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+            if (true_virtual_callers.count(callee) == 0 && callee != nullptr &&
+                callee->is_concrete() && candidates.count(callee)) {
+              callee_caller[callee].push_back(caller);
+              caller_callee[caller].push_back(callee);
+            }
+          }
+        });
     for (const auto& callee_callers : true_virtual_callers) {
       auto callee = callee_callers.first;
       for (const auto& caller_insns : callee_callers.second) {
@@ -154,7 +165,86 @@ MultiMethodInliner::MultiMethodInliner(
   }
 }
 
+/*
+ * The key of a constant-arguments data structure is a string representation
+ * that approximates the constant arguments.
+ */
+static std::string get_key(ConstantArguments constant_arguments) {
+  always_assert(!constant_arguments.is_bottom());
+  if (constant_arguments.is_top()) {
+    return "";
+  }
+  std::ostringstream oss;
+  bool first = true;
+  for (auto& p : constant_arguments.bindings()) {
+    if (first) {
+      first = false;
+    } else {
+      oss << ",";
+    }
+    oss << p.first << ":";
+    // TODO: Is it worthwhile to distinguish other domain cases?
+    auto c = p.second.maybe_get<SignedConstantDomain>();
+    if (c && c->get_constant()) {
+      oss << *c->get_constant();
+    }
+  }
+  return oss.str();
+}
+
+void MultiMethodInliner::compute_callee_constant_arguments() {
+  if (!m_config.constant_prop) {
+    return;
+  }
+
+  Timer t("compute_callee_constant_arguments");
+  struct CalleeInfo {
+    std::unordered_map<std::string, ConstantArguments> constant_arguments;
+    std::unordered_map<std::string, size_t> occurrences;
+  };
+  ConcurrentMap<DexMethod*, CalleeInfo> concurrent_callee_constant_arguments;
+  std::mutex info_lock;
+  auto wq = workqueue_foreach<DexMethod*>(
+      [&](DexMethod* caller) {
+        auto& callees = caller_callee.at(caller);
+        auto res = get_invoke_constant_arguments(caller, callees);
+        if (!res) {
+          return;
+        }
+        for (auto& p : res->invoke_constant_arguments) {
+          auto insn = p.first->insn;
+          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+          const auto& constant_arguments = p.second;
+          auto key = get_key(constant_arguments);
+          concurrent_callee_constant_arguments.update(
+              callee, [&](const DexMethod*, CalleeInfo& ci, bool /* exists */) {
+                ci.constant_arguments.emplace(key, constant_arguments);
+                ++ci.occurrences[key];
+              });
+        }
+        std::lock_guard<std::mutex> guard(info_lock);
+        info.constant_invoke_callers_analyzed++;
+        info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
+      },
+      redex_parallel::default_num_threads());
+  for (auto& p : caller_callee) {
+    wq.add_item(p.first);
+  };
+  wq.run_all();
+  for (auto& p : concurrent_callee_constant_arguments) {
+    auto& v = m_callee_constant_arguments[p.first];
+    const auto& ci = p.second;
+    for (const auto& q : ci.occurrences) {
+      const auto& key = q.first;
+      const auto& constant_arguments = q.second;
+      v.emplace_back(ci.constant_arguments.at(key), constant_arguments);
+    }
+  }
+}
+
 void MultiMethodInliner::inline_methods() {
+  compute_callee_constant_arguments();
+
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
   // hit a leaf and we start inlining from there
@@ -175,6 +265,7 @@ void MultiMethodInliner::caller_inline(
     const std::vector<DexMethod*>& callees,
     sparta::PatriciaTreeSet<DexMethod*> call_stack,
     std::unordered_set<DexMethod*>* visited) {
+  always_assert(callees.size() > 0);
   if (visited->count(caller)) {
     return;
   }
@@ -203,6 +294,50 @@ void MultiMethodInliner::caller_inline(
     }
   }
   inline_callees(caller, nonrecursive_callees);
+}
+
+boost::optional<InvokeConstantArgumentsAndDeadBlocks>
+MultiMethodInliner::get_invoke_constant_arguments(
+    DexMethod* caller, const std::vector<DexMethod*>& callees) {
+  IRCode* code = caller->get_code();
+  if (!code->editable_cfg_built()) {
+    return boost::none;
+  }
+
+  InvokeConstantArgumentsAndDeadBlocks res;
+  std::unordered_set<DexMethod*> callees_set(callees.begin(), callees.end());
+  auto& cfg = code->cfg();
+  constant_propagation::intraprocedural::FixpointIterator intra_cp(
+      cfg, constant_propagation::ConstantPrimitiveAnalyzer());
+  intra_cp.run(ConstantEnvironment());
+  for (const auto& block : cfg.blocks()) {
+    auto env = intra_cp.get_entry_state_at(block);
+    if (env.is_bottom()) {
+      res.dead_blocks++;
+      // we found an unreachable block; ignore invoke instructions in it
+      continue;
+    }
+    for (auto& mie : InstructionIterable(block)) {
+      auto insn = mie.insn;
+      if (is_invoke(insn->opcode())) {
+        auto callee = resolver(insn->get_method(), opcode_to_search(insn));
+        if (callees_set.count(callee)) {
+          ConstantArguments constant_arguments;
+          auto& srcs = insn->srcs();
+          for (size_t i = 0; i < srcs.size(); ++i) {
+            auto val = env.get(srcs[i]);
+            always_assert(!val.is_bottom());
+            constant_arguments.set(i, val);
+          }
+          res.invoke_constant_arguments.emplace_back(code->iterator_to(mie),
+                                                     constant_arguments);
+        }
+      }
+      intra_cp.analyze_instruction(insn, &env);
+    }
+  }
+
+  return res;
 }
 
 void MultiMethodInliner::inline_callees(
@@ -474,7 +609,7 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
 }
 
 bool MultiMethodInliner::should_inline(const DexMethod* caller,
-                                       const DexMethod* callee) const {
+                                       const DexMethod* callee) {
   if (callee->rstate.force_inline()) {
     return true;
   }
@@ -542,70 +677,182 @@ static size_t get_inlined_cost(IRInstruction* insn) {
 }
 
 /*
- * Try to estimate number of code units (2 bytes each) of code. Also take
- * into account costs arising from control-flow overhead
+ * Try to estimate number of code units (2 bytes each) overhead (instructions,
+ * metadata) that exists for this block; this doesn't include the cost of
+ * the instructions in the block, which are accounted for elsewhere.
  */
-static size_t get_inlined_cost(const IRCode* code) {
-  size_t cumulative_cost{0};
+static size_t get_inlined_cost(const std::vector<cfg::Block*> blocks,
+                               size_t index) {
+  auto block = blocks.at(index);
+  switch (block->branchingness()) {
+  case opcode::Branchingness::BRANCH_GOTO: {
+    auto target = block->goes_to_only_edge();
+    always_assert(target != nullptr);
+    if (index == blocks.size() - 1 || blocks.at(index + 1) != target) {
+      // we have a non-fallthrough goto edge
+      size_t cost = 1;
+      TRACE(INLINE, 5, "  %u: BRANCH_GOTO", cost);
+      return cost;
+    }
+    break;
+  }
+  case opcode::Branchingness::BRANCH_SWITCH: {
+    size_t cost = 4 + 3 * block->succs().size();
+    TRACE(INLINE, 5, "  %u: BRANCH_SWITCH", cost);
+    return cost;
+  }
+  default:
+    break;
+  }
+  return 0;
+}
+
+struct InlinedCostAndDeadBlocks {
+  size_t cost;
+  size_t dead_blocks;
+};
+
+/*
+ * Try to estimate number of code units (2 bytes each) of code. Also take
+ * into account costs arising from control-flow overhead and constant arguments,
+ * if any
+ */
+static InlinedCostAndDeadBlocks get_inlined_cost(
+    const IRCode* code, const ConstantArguments* constant_arguments = nullptr) {
+  auto& cfg = code->cfg();
+  std::unique_ptr<constant_propagation::intraprocedural::FixpointIterator>
+      intra_cp;
+  if (constant_arguments) {
+    intra_cp.reset(new constant_propagation::intraprocedural::FixpointIterator(
+        cfg, constant_propagation::ConstantPrimitiveAnalyzer()));
+    ConstantEnvironment initial_env =
+        constant_propagation::interprocedural::env_with_params(
+            code, *constant_arguments);
+    intra_cp->run(initial_env);
+  }
+
+  size_t cost{0};
+  // For each unreachable block, we'll give a small discount to
+  // reflect the fact that some incoming branch instruction also will get
+  // simplified or eliminated.
+  size_t conditional_branch_cost_discount{0};
+  size_t dead_blocks{0};
   size_t returns{0};
-  editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
-    auto insn = mie.insn;
-    cumulative_cost += get_inlined_cost(insn);
-    if (is_return(insn->opcode())) {
-      returns++;
-    }
-    return editable_cfg_adapter::LOOP_CONTINUE;
-  });
   if (code->editable_cfg_built()) {
-    auto blocks = code->cfg().blocks();
+    const auto blocks = code->cfg().blocks();
     for (size_t i = 0; i < blocks.size(); ++i) {
-      const auto& block = blocks.at(i);
-      size_t cost{0};
-      switch (block->branchingness()) {
-      case opcode::Branchingness::BRANCH_GOTO: {
-        auto target = block->goes_to_only_edge();
-        always_assert(target != nullptr);
-        if (i == blocks.size() - 1 || blocks.at(i + 1) != target) {
-          // we have a non-fallthrough goto edge
-          cost = 1;
-          TRACE(INLINE, 5, "  %u: BRANCH_GOTO", cost);
+      auto block = blocks.at(i);
+      if (intra_cp && intra_cp->get_entry_state_at(block).is_bottom()) {
+        // we found an unreachable block
+        for (const auto edge : block->preds()) {
+          const auto& pred_env = intra_cp->get_entry_state_at(edge->src());
+          if (!pred_env.is_bottom() && edge->type() == cfg::EDGE_BRANCH) {
+            // A conditional branch instruction is going to disppear
+            conditional_branch_cost_discount += 1;
+          }
         }
-        break;
+        dead_blocks++;
+        continue;
       }
-      case opcode::Branchingness::BRANCH_SWITCH:
-        cost = 4 + 3 * block->succs().size();
-        TRACE(INLINE, 5, "  %u: BRANCH_SWITCH", cost);
-        break;
-      default:
-        break;
+      cost += get_inlined_cost(blocks, i);
+      for (auto& mie : InstructionIterable(block)) {
+        auto insn = mie.insn;
+        cost += get_inlined_cost(insn);
+        if (is_return(insn->opcode())) {
+          returns++;
+        }
       }
-      cumulative_cost += cost;
     }
+  } else {
+    editable_cfg_adapter::iterate(code, [&](const MethodItemEntry& mie) {
+      auto insn = mie.insn;
+      cost += get_inlined_cost(insn);
+      if (is_return(insn->opcode())) {
+        returns++;
+      }
+      return editable_cfg_adapter::LOOP_CONTINUE;
+    });
   }
   if (returns > 1) {
     // if there's more than one return, gotos will get introduced to merge
     // control flow
-    cumulative_cost += returns - 1;
+    cost += returns - 1;
   }
-  return cumulative_cost;
+
+  return {cost - std::min(cost, conditional_branch_cost_discount), dead_blocks};
 }
 
-bool MultiMethodInliner::too_many_callers(const DexMethod* callee) const {
+size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
+  auto inlined_cost_it = m_inlined_costs.find(callee);
+  if (inlined_cost_it != m_inlined_costs.end()) {
+    return inlined_cost_it->second;
+  }
+
+  auto inlined_cost = ::get_inlined_cost(callee->get_code()).cost;
+  auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
+  if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
+      inlined_cost <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
+    const auto& callee_constant_arguments =
+        callee_constant_arguments_it->second;
+    std::mutex lock;
+    size_t total_count{0};
+    auto process_key = [&](ConstantArgumentsOccurrences cao) {
+      const auto& constant_arguments = cao.first;
+      const auto count = cao.second;
+      TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
+      auto res = ::get_inlined_cost(callee->get_code(), &constant_arguments);
+      TRACE(INLINE, 4,
+            "[too_many_callers] get_inlined_cost with %zu constant invoke "
+            "params %s @ %s: cost %zu (dead blocks: %zu)",
+            constant_arguments.is_top() ? 0 : constant_arguments.size(),
+            get_key(constant_arguments).c_str(), SHOW(callee), res.cost,
+            res.dead_blocks);
+      std::lock_guard<std::mutex> guard(lock);
+      info.constant_invoke_callees_analyzed += count;
+      info.constant_invoke_callees_unreachable_blocks +=
+          res.dead_blocks * count;
+      inlined_cost += res.cost * count;
+      total_count += count;
+    };
+
+    if (callee_constant_arguments.size() > 1 &&
+        callee_constant_arguments.size() * inlined_cost >=
+            MIN_COST_FOR_PARALLELIZATION) {
+      inlined_cost = 0;
+      auto num_threads =
+          std::min(redex_parallel::default_num_threads(),
+                   (unsigned int)callee_constant_arguments.size());
+      auto wq = workqueue_foreach<ConstantArgumentsOccurrences>(process_key,
+                                                                num_threads);
+      for (auto& p : callee_constant_arguments) {
+        wq.add_item(p);
+      }
+      wq.run_all();
+    } else {
+      inlined_cost = 0;
+      for (auto& p : callee_constant_arguments) {
+        process_key(p);
+      }
+    }
+
+    always_assert(total_count > 0);
+    inlined_cost /= total_count;
+  }
+  TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: %u", SHOW(callee),
+        inlined_cost);
+  m_inlined_costs[callee] = inlined_cost;
+  return inlined_cost;
+}
+
+bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   const auto& callers = callee_caller.at(callee);
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
   // 1. Determine costs of inlining
 
-  auto inlined_cost_it = m_inlined_costs.find(callee);
-  size_t inlined_cost;
-  if (inlined_cost_it != m_inlined_costs.end()) {
-    inlined_cost = inlined_cost_it->second;
-  } else {
-    TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
-    m_inlined_costs[callee] = inlined_cost =
-        get_inlined_cost(callee->get_code());
-  }
+  size_t inlined_cost = get_inlined_cost(callee);
+
   if (m_mode != IntraDex) {
     auto callers_in_same_class_it = m_callers_in_same_class.find(callee);
     bool have_all_callers_same_class;

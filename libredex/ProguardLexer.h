@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -23,7 +23,7 @@
 #include <string>
 #include <vector>
 
-namespace redex {
+namespace keep_rules {
 namespace proguard_parser {
 
 using namespace std;
@@ -686,4 +686,4 @@ class EndOfFile : public Token {
 vector<unique_ptr<Token>> lex(istream& config);
 
 } // namespace proguard_parser
-} // namespace redex
+} // namespace keep_rules

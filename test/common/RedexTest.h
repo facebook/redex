@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -44,7 +44,7 @@ struct RedexIntegrationTest : public RedexTest {
 
   void run_passes(
       const std::vector<Pass*>& passes,
-      std::unique_ptr<redex::ProguardConfiguration> pg_config = nullptr,
+      std::unique_ptr<keep_rules::ProguardConfiguration> pg_config = nullptr,
       const Json::Value& json_conf = Json::nullValue) {
 
     std::unique_ptr<PassManager> manager = nullptr;

@@ -66,6 +66,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/result-propagation \
 	-I$(top_srcdir)/opt/stringbuilder-outliner \
 	-I$(top_srcdir)/opt/shorten-srcstrings \
+	-I$(top_srcdir)/opt/make-public \
 	-I$(top_srcdir)/opt/methodinline \
 	-I$(top_srcdir)/opt/singleimpl \
 	-I$(top_srcdir)/opt/static-sink \
@@ -113,7 +114,6 @@ libredex_la_SOURCES = \
 	libredex/ApiLevelChecker.cpp \
 	libredex/ApkManager.cpp \
 	libredex/CallGraph.cpp \
-	libredex/CFGInliner.cpp \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
@@ -143,7 +143,6 @@ libredex_la_SOURCES = \
 	libredex/HierarchyUtil.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
-	libredex/Inliner.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
@@ -309,6 +308,7 @@ redex_all_SOURCES = \
 	opt/resolve-refs/ResolveRefsPass.cpp \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
+	opt/make-public/MakePublicPass.cpp \
 	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
@@ -317,7 +317,6 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplStats.cpp \
 	opt/singleimpl/SingleImplUtil.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
-	opt/staticrelo/StaticRelo.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \
 	opt/string_simplification/StringIterator.cpp \
@@ -357,7 +356,9 @@ redex_all_SOURCES = \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
+	service/method-inliner/CFGInliner.cpp \
 	service/method-inliner/Deleter.cpp \
+	service/method-inliner/Inliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \
@@ -366,6 +367,7 @@ redex_all_SOURCES = \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
 	tools/common/ToolsCommon.cpp \
+	tools/common/PostLowering.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

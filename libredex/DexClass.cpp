@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -1105,11 +1105,9 @@ void DexProto::gather_strings(std::vector<DexString*>& lstring) const {
 
 void DexClass::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& m : m_dmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& m : m_vmethods) {
-    m->gather_types_shallow(ltype);
     m->gather_types(ltype);
   }
   for (auto const& f : m_sfields) {
@@ -1196,6 +1194,37 @@ DexField* DexFieldRef::as_def() {
   }
 }
 
+// Find methods and fields from a class using its obfuscated name.
+DexField* DexClass::find_field_from_simple_deobfuscated_name(
+    const std::string& field_name) {
+  for (DexField* f : get_sfields()) {
+    if (f->get_simple_deobfuscated_name() == field_name) {
+      return f;
+    }
+  }
+  for (DexField* f : get_ifields()) {
+    if (f->get_simple_deobfuscated_name() == field_name) {
+      return f;
+    }
+  }
+  return nullptr;
+}
+
+DexMethod* DexClass::find_method_from_simple_deobfuscated_name(
+    const std::string& method_name) {
+  for (DexMethod* m : get_dmethods()) {
+    if (m->get_simple_deobfuscated_name() == method_name) {
+      return m;
+    }
+  }
+  for (DexMethod* m : get_vmethods()) {
+    if (m->get_simple_deobfuscated_name() == method_name) {
+      return m;
+    }
+  }
+  return nullptr;
+}
+
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);
@@ -1227,7 +1256,7 @@ void DexField::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
 }
 
 void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
-  // We handle m_spec.cls and proto in the first-layer gather.
+  gather_types_shallow(ltype); // Handle DexMethodRef parts.
   if (m_code) m_code->gather_types(ltype);
   if (m_anno) m_anno->gather_types(ltype);
   auto param_anno = get_param_anno();

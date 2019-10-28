@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -46,6 +46,7 @@
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
+#include "PostLowering.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
@@ -156,9 +157,10 @@ bool add_value_to_config(Json::Value& config,
 
 Json::Value default_config() {
   const auto passes = {
-      "ReBindRefsPass",        "BridgePass",     "SynthPass",
-      "FinalInlinePass",       "DelSuperPass",   "SingleImplPass",
-      "MethodInlinePass",      "StaticReloPass", "RemoveEmptyClassesPass",
+      "ReBindRefsPass",        "BridgePass",
+      "FinalInlinePassV2",     "DelSuperPass",
+      "SingleImplPass",        "MethodInlinePass",
+      "StaticReloPassV2",      "RemoveEmptyClassesPass",
       "ShortenSrcStringsPass", "RegAllocPass",
   };
   std::istringstream temp_json("{\"redex\":{\"passes\":[]}}");
@@ -752,15 +754,15 @@ static void assert_dex_magic_consistency(const std::string& source,
  */
 void redex_frontend(ConfigFiles& conf, /* input */
                     Arguments& args, /* inout */
-                    redex::ProguardConfiguration& pg_config,
+                    keep_rules::ProguardConfiguration& pg_config,
                     DexStoresVector& stores,
                     Json::Value& stats) {
   Timer redex_frontend_timer("Redex_frontend");
   for (const auto& pg_config_path : args.proguard_config_paths) {
     Timer time_pg_parsing("Parsed ProGuard config file");
-    redex::proguard_parser::parse_file(pg_config_path, &pg_config);
+    keep_rules::proguard_parser::parse_file(pg_config_path, &pg_config);
   }
-  redex::proguard_parser::remove_blacklisted_rules(&pg_config);
+  keep_rules::proguard_parser::remove_blacklisted_rules(&pg_config);
 
   const auto& pg_libs = pg_config.libraryjars;
   args.jar_paths.insert(pg_libs.begin(), pg_libs.end());
@@ -868,8 +870,8 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("No Optimizations Rules");
     // this will change rstate of methods
-    redex::process_no_optimizations_rules(conf.get_no_optimizations_annos(),
-                                          scope);
+    keep_rules::process_no_optimizations_rules(
+        conf.get_no_optimizations_annos(), scope);
     monitor_count::mark_sketchy_methods_with_no_optimize(scope);
   }
   {
@@ -931,6 +933,8 @@ void redex_backend(const PassManager& manager,
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata;
+  PostLowering post_lowering;
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -953,6 +957,7 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
+
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
                                ss.str(),
@@ -967,10 +972,15 @@ void redex_backend(const PassManager& manager,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic());
+
+      post_lowering.run(store.get_dexen()[i], output_dir);
+
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
+
+  post_lowering.cleanup();
 
   {
     Timer t("Writing opt decisions data");
@@ -1074,6 +1084,7 @@ void dump_class_method_info_map(const std::string file_path,
 int main(int argc, char* argv[]) {
   signal(SIGSEGV, crash_backtrace_handler);
   signal(SIGABRT, crash_backtrace_handler);
+  signal(SIGINT, crash_backtrace_handler);
 #ifndef _MSC_VER
   signal(SIGBUS, crash_backtrace_handler);
 #endif
@@ -1100,7 +1111,7 @@ int main(int argc, char* argv[]) {
     RedexContext::set_record_keep_reasons(
         args.config.get("record_keep_reasons", false).asBool());
 
-    auto pg_config = std::make_unique<redex::ProguardConfiguration>();
+    auto pg_config = std::make_unique<keep_rules::ProguardConfiguration>();
     DexStoresVector stores;
     ConfigFiles conf(args.config, args.out_dir);
 

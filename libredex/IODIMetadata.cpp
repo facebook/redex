@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -14,7 +14,7 @@ namespace {
 // Returns com.foo.Bar. for the DexClass Lcom/foo/Bar;. Note the trailing
 // '.'.
 std::string pretty_prefix_for_cls(const DexClass* cls) {
-  std::string pretty_name = JavaNameUtil::internal_to_external(cls->str());
+  std::string pretty_name = java_names::internal_to_external(cls->str());
   // Include the . separator
   pretty_name.push_back('.');
   return pretty_name;

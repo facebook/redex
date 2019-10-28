@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -71,9 +71,9 @@ class RemoveUnreachableTest : public RedexIntegrationTest {};
 TEST_F(RemoveUnreachableTest, synthetic) {
   dummy_cfg.using_seeds = false;
 
-  redex::ProguardConfiguration pg_config;
+  keep_rules::ProguardConfiguration pg_config;
   std::string ss =
-  R"(-keep class A {
+      R"(-keep class A {
        int foo;
        <init>();
        int bar();
@@ -93,7 +93,7 @@ TEST_F(RemoveUnreachableTest, synthetic) {
     }
   )";
   std::istringstream pg_config_text(ss);
-  redex::proguard_parser::parse(pg_config_text, &pg_config);
+  keep_rules::proguard_parser::parse(pg_config_text, &pg_config);
   ASSERT_TRUE(pg_config.ok);
   ASSERT_FALSE(pg_config.keep_rules.empty());
 

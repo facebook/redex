@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -56,23 +56,8 @@ inline bool is_serde(DexMember* member) {
 }
 
 template <class DexMember>
-inline bool has_keep(DexMember* member) {
-  return member->rstate.has_keep();
-}
-
-template <class DexMember>
 inline bool marked_by_string(DexMember* member) {
   return member->rstate.is_referenced_by_string();
-}
-
-template <class DexMember>
-inline bool allowshrinking(DexMember* member) {
-  return member->rstate.allowshrinking();
-}
-
-template <class DexMember>
-inline bool allowobfuscation(DexMember* member) {
-  return member->rstate.allowobfuscation();
 }
 
 template <class DexMember>

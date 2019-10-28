@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -8,6 +8,7 @@
 #include <cstdarg>
 #include <gtest/gtest.h>
 
+#include "ApiLevelChecker.h"
 #include "Creators.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
@@ -95,6 +96,7 @@ TEST_F(StaticReloV2Test, staticMethodsOnlyRefedOnce) {
   call(method_c, method_b);
 
   Scope scope({classA, classB, classOther});
+  api::LevelChecker::init(0, scope);
   std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 2);
@@ -117,6 +119,7 @@ TEST_F(StaticReloV2Test, staticMethodsOnlyRefedOnce) {
  * class, relocate all of them into the caller class
  *
  * Input:
+ * // A.a has higher api level.
  * A.a -> B.b -> Other.c
  * B.b -> A.a
  * A.a -> Other.c
@@ -139,18 +142,20 @@ TEST_F(StaticReloV2Test, staticMethodsOnlyRefedOnce) {
  * }
  *
  * Output:
- * Other.a -> Other.b -> Other.c
- * Other.a -> Other.c
- * class A {}
+ * // Not relocate A.a because it has higher api level.
+ * A.a -> Other.b -> Other.c
+ * A.a -> Other.c
+ * class A {
+ *   public static void a() {}
+ * }
  * class B {}
  * class Other {}
- *   public static void a() {}
  *   public static void b() {
- *     a();
+ *     A.a();
  *   }
  *   public void c() {
  *     b();
- *     a();
+ *     A.a();
  *   }
  * }
  */
@@ -168,6 +173,8 @@ TEST_F(StaticReloV2Test, clusterRefedByOneClass) {
   call(method_c, method_a);
 
   Scope scope({classA, classB, classOther});
+  api::LevelChecker::init(0, scope);
+  method_a->rstate.set_api_level(1);
   std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 2);
@@ -179,8 +186,8 @@ TEST_F(StaticReloV2Test, clusterRefedByOneClass) {
       candidate_classes.end());
   int relocated_methods =
       StaticReloPassV2::run_relocation(scope, candidate_classes);
-  EXPECT_EQ(relocated_methods, 2);
-  EXPECT_EQ(method_a->get_class(), classOther->get_type());
+  EXPECT_EQ(relocated_methods, 1);
+  EXPECT_EQ(method_a->get_class(), classA->get_type());
   EXPECT_EQ(method_b->get_class(), classOther->get_type());
   EXPECT_EQ(method_c->get_class(), classOther->get_type());
 }
@@ -217,6 +224,7 @@ TEST_F(StaticReloV2Test, staticMethodRefedByMany) {
   call(method_c, method_a);
 
   Scope scope({classA, classOther1, classOther2});
+  api::LevelChecker::init(0, scope);
   std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 1);
@@ -263,6 +271,7 @@ TEST_F(StaticReloV2Test, relocatePrivateStaticMethod) {
   call(method_d, method_private_a);
 
   Scope scope({classInner, classOuter});
+  api::LevelChecker::init(0, scope);
   std::vector<DexClass*> candidate_classes =
       StaticReloPassV2::gen_candidates(scope);
   EXPECT_EQ(candidate_classes.size(), 1);

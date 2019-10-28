@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -134,22 +134,20 @@ class Graph final {
 class GraphInterface {
  public:
   using Graph = call_graph::Graph;
-  using NodeId = DexMethod*;
+  using NodeId = const DexMethod*;
   using EdgeId = std::shared_ptr<Edge>;
 
-  static const NodeId entry(const Graph& graph) {
-    return graph.entry().method();
-  }
+  static NodeId entry(const Graph& graph) { return graph.entry().method(); }
   static Edges predecessors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callers();
   }
   static Edges successors(const Graph& graph, const NodeId& m) {
     return graph.node(m).callees();
   }
-  static const NodeId source(const Graph& graph, const EdgeId& e) {
+  static NodeId source(const Graph& graph, const EdgeId& e) {
     return graph.node(e->caller()).method();
   }
-  static const NodeId target(const Graph& graph, const EdgeId& e) {
+  static NodeId target(const Graph& graph, const EdgeId& e) {
     return graph.node(e->callee()).method();
   }
 };

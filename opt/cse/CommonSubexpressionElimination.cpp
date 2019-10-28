@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -93,6 +93,9 @@ constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS =
     "num_conditionally_pure_methods";
 constexpr const char* METRIC_CONDITIONALLY_PURE_METHODS_ITERATIONS =
     "num_conditionally_pure_methods_iterations";
+constexpr const char* METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS =
+    "num_skipped_due_to_too_many_registers";
+constexpr const char* METRIC_MAX_ITERATIONS = "num_max_iterations";
 
 using value_id_t = uint64_t;
 constexpr size_t TRACKED_LOCATION_BITS = 42; // leaves 20 bits for running index
@@ -165,43 +168,30 @@ using RefEnvironment =
 class CseEnvironment final
     : public sparta::ReducedProductAbstractDomain<CseEnvironment,
                                                   DefEnvironment,
-                                                  DefEnvironment,
                                                   RefEnvironment> {
  public:
   using ReducedProductAbstractDomain::ReducedProductAbstractDomain;
-  CseEnvironment() = default;
+  CseEnvironment()
+      : ReducedProductAbstractDomain(
+            std::make_tuple(DefEnvironment(), RefEnvironment())) {}
 
-  CseEnvironment(std::initializer_list<std::pair<register_t, ValueIdDomain>>)
-      : ReducedProductAbstractDomain(std::make_tuple(
-            DefEnvironment(), DefEnvironment(), RefEnvironment())) {}
+  static void reduce_product(std::tuple<DefEnvironment, RefEnvironment>&) {}
 
-  static void reduce_product(
-      std::tuple<DefEnvironment, DefEnvironment, RefEnvironment>&) {}
-
-  const DefEnvironment& get_def_env(bool is_barrier_sensitive) const {
-    if (is_barrier_sensitive) {
-      return ReducedProductAbstractDomain::get<0>();
-    } else {
-      return ReducedProductAbstractDomain::get<1>();
-    }
+  const DefEnvironment& get_def_env() const {
+    return ReducedProductAbstractDomain::get<0>();
   }
 
   const RefEnvironment& get_ref_env() const {
-    return ReducedProductAbstractDomain::get<2>();
+    return ReducedProductAbstractDomain::get<1>();
   }
 
-  CseEnvironment& mutate_def_env(bool is_barrier_sensitive,
-                                 std::function<void(DefEnvironment*)> f) {
-    if (is_barrier_sensitive) {
-      apply<0>(f);
-    } else {
-      apply<1>(f);
-    }
+  CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
+    apply<0>(f);
     return *this;
   }
 
   CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
-    apply<2>(f);
+    apply<1>(f);
     return *this;
   }
 };
@@ -414,9 +404,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         auto c = domain.get_constant();
         if (c) {
           auto value_id = *c;
-          auto ibs = is_barrier_sensitive(value_id);
-          if (!current_state->get_def_env(ibs).get(value_id).get_constant()) {
-            current_state->mutate_def_env(ibs, [&](DefEnvironment* env) {
+          if (!current_state->get_def_env().get(value_id).get_constant()) {
+            current_state->mutate_def_env([&](DefEnvironment* env) {
               env->set(value_id, IRInstructionDomain(insn));
             });
           }
@@ -449,12 +438,11 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       // the time this algorithm takes seems reasonable.)
 
       bool any_changes = false;
-      current_state->mutate_def_env(true /* is_barrier_sensitive */,
-                                    [mask, &any_changes](DefEnvironment* env) {
-                                      if (env->erase_all_matching(mask)) {
-                                        any_changes = true;
-                                      }
-                                    });
+      current_state->mutate_def_env([mask, &any_changes](DefEnvironment* env) {
+        if (env->erase_all_matching(mask)) {
+          any_changes = true;
+        }
+      });
       current_state->mutate_ref_env([mask, &any_changes](RefEnvironment* env) {
         bool any_map_changes = env->map([mask](ValueIdDomain domain) {
           auto c = domain.get_constant();
@@ -489,20 +477,14 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                           const IRValue& value,
                           CseEnvironment* current_state) const {
     auto value_id = *get_value_id(value);
-    auto ibs = is_barrier_sensitive(value_id);
     auto insn_domain = IRInstructionDomain(insn);
-    current_state->mutate_def_env(ibs,
-                                  [value_id, insn_domain](DefEnvironment* env) {
-                                    env->set(value_id, insn_domain);
-                                  });
+    current_state->mutate_def_env([value_id, insn_domain](DefEnvironment* env) {
+      env->set(value_id, insn_domain);
+    });
   }
 
   bool is_pre_state_src(value_id_t value_id) const {
     return !!m_pre_state_value_ids.count(value_id);
-  }
-
-  bool is_barrier_sensitive(value_id_t value_id) const {
-    return !!(value_id & ValueIdFlags::IS_TRACKED_LOCATION_MASK);
   }
 
   size_t get_value_ids_size() { return m_value_ids.size(); }
@@ -1207,8 +1189,7 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
       auto value_id = *ref_c;
       always_assert(!analyzer.is_pre_state_src(value_id));
-      auto ibs = analyzer.is_barrier_sensitive(value_id);
-      auto def_c = env.get_def_env(ibs).get(value_id).get_constant();
+      auto def_c = env.get_def_env().get(value_id).get_constant();
       if (!def_c) {
         continue;
       }
@@ -1229,15 +1210,54 @@ CommonSubexpressionElimination::CommonSubexpressionElimination(
       }
 
       m_forward.emplace_back((Forward){earlier_insn, insn});
+      m_earlier_insns.insert(earlier_insn);
     }
+  }
+}
+
+static IROpcode get_move_opcode(IRInstruction* earlier_insn) {
+  if (earlier_insn->has_dest()) {
+    return earlier_insn->dest_is_wide()
+               ? OPCODE_MOVE_WIDE
+               : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
+                                                : OPCODE_MOVE;
+  } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
+    return OPCODE_MOVE;
+  } else {
+    always_assert(is_aput(earlier_insn->opcode()) ||
+                  is_iput(earlier_insn->opcode()) ||
+                  is_sput(earlier_insn->opcode()));
+    return earlier_insn->src_is_wide(0)
+               ? OPCODE_MOVE_WIDE
+               : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
+                  earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
+                  earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
+                     ? OPCODE_MOVE_OBJECT
+                     : OPCODE_MOVE;
   }
 }
 
 bool CommonSubexpressionElimination::patch(bool is_static,
                                            DexType* declaring_type,
                                            DexTypeList* args,
+                                           unsigned int max_estimated_registers,
                                            bool runtime_assertions) {
   if (m_forward.size() == 0) {
+    return false;
+  }
+
+  unsigned int max_dest = 0;
+  for (auto& mie : cfg::InstructionIterable(m_cfg)) {
+    if (mie.insn->has_dest() && mie.insn->dest() > max_dest) {
+      max_dest = mie.insn->dest();
+    }
+  };
+  for (auto earlier_insn : m_earlier_insns) {
+    IROpcode move_opcode = get_move_opcode(earlier_insn);
+    max_dest += (move_opcode == OPCODE_MOVE_WIDE) ? 2 : 1;
+  }
+  if (max_dest > max_estimated_registers) {
+    m_stats.skipped_due_to_too_many_registers += m_forward.size();
     return false;
   }
 
@@ -1250,31 +1270,15 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
     if (!temps.count(earlier_insn)) {
-      uint32_t src_reg;
-      IROpcode move_opcode;
+      IROpcode move_opcode = get_move_opcode(earlier_insn);
       if (earlier_insn->has_dest()) {
-        src_reg = earlier_insn->dest();
-        move_opcode = earlier_insn->dest_is_wide()
-                          ? OPCODE_MOVE_WIDE
-                          : earlier_insn->dest_is_object() ? OPCODE_MOVE_OBJECT
-                                                           : OPCODE_MOVE;
         m_stats.results_captured++;
       } else if (earlier_insn->opcode() == OPCODE_NEW_ARRAY) {
-        src_reg = earlier_insn->src(0);
-        move_opcode = OPCODE_MOVE;
         m_stats.array_lengths_captured++;
       } else {
         always_assert(is_aput(earlier_insn->opcode()) ||
                       is_iput(earlier_insn->opcode()) ||
                       is_sput(earlier_insn->opcode()));
-        src_reg = earlier_insn->src(0);
-        move_opcode = earlier_insn->src_is_wide(0)
-                          ? OPCODE_MOVE_WIDE
-                          : (earlier_insn->opcode() == OPCODE_APUT_OBJECT ||
-                             earlier_insn->opcode() == OPCODE_IPUT_OBJECT ||
-                             earlier_insn->opcode() == OPCODE_SPUT_OBJECT)
-                                ? OPCODE_MOVE_OBJECT
-                                : OPCODE_MOVE;
         m_stats.stores_captured++;
       }
       uint32_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
@@ -1503,6 +1507,25 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto shared_state = SharedState(pure_methods);
   shared_state.init_scope(scope);
+  CopyPropagationPass::Config copy_prop_config;
+  copy_prop_config.eliminate_const_classes = false;
+  copy_prop_config.eliminate_const_strings = false;
+  copy_prop_config.static_finals = false;
+  auto aggregate_stats = [](Stats a, Stats b) {
+    a.results_captured += b.results_captured;
+    a.stores_captured += b.stores_captured;
+    a.array_lengths_captured += b.array_lengths_captured;
+    a.instructions_eliminated += b.instructions_eliminated;
+    a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+    a.methods_using_other_tracked_location_bit +=
+        b.methods_using_other_tracked_location_bit;
+    for (auto& p : b.eliminated_opcodes) {
+      a.eliminated_opcodes[p.first] += p.second;
+    }
+    a.skipped_due_to_too_many_registers += b.skipped_due_to_too_many_registers;
+    a.max_iterations = std::max(a.max_iterations, b.max_iterations);
+    return a;
+  };
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
@@ -1516,46 +1539,43 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           return Stats();
         }
 
-        TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
-        always_assert(code->editable_cfg_built());
-        CommonSubexpressionElimination cse(&shared_state, code->cfg());
-        bool any_changes =
-            cse.patch(is_static(method), method->get_class(),
-                      method->get_proto()->get_args(), m_runtime_assertions);
-        code->clear_cfg();
-        if (any_changes) {
+        Stats stats;
+        while (true) {
+          stats.max_iterations++;
+          TRACE(CSE, 3, "[CSE] processing %s", SHOW(method));
+          always_assert(code->editable_cfg_built());
+          CommonSubexpressionElimination cse(&shared_state, code->cfg());
+          bool any_changes = cse.patch(is_static(method), method->get_class(),
+                                       method->get_proto()->get_args(),
+                                       copy_prop_config.max_estimated_registers,
+                                       m_runtime_assertions);
+          stats = aggregate_stats(stats, cse.get_stats());
+          code->clear_cfg();
+
+          if (!any_changes) {
+            return stats;
+          }
+
           // TODO: CopyPropagation and LocalDce will separately construct
           // an editable cfg. Don't do that, and fully convert those passes
           // to be cfg-based.
 
-          CopyPropagationPass::Config config;
-          copy_propagation_impl::CopyPropagation copy_propagation(config);
+          // The following default 'features' of copy propagation would only
+          // interfere with what CSE is trying to do.
+          copy_propagation_impl::CopyPropagation copy_propagation(
+              copy_prop_config);
           copy_propagation.run(code, method);
 
           auto local_dce = LocalDce(pure_methods);
           local_dce.dce(code);
 
+          code->build_cfg(/* editable */ true);
           if (traceEnabled(CSE, 5)) {
-            code->build_cfg(/* editable */ true);
-            TRACE(CSE, 5, "[CSE] final:\n%s", SHOW(code->cfg()));
-            code->clear_cfg();
+            TRACE(CSE, 5, "[CSE] end of iteration:\n%s", SHOW(code->cfg()));
           }
         }
-        return cse.get_stats();
       },
-      [](Stats a, Stats b) {
-        a.results_captured += b.results_captured;
-        a.stores_captured += b.stores_captured;
-        a.array_lengths_captured += b.array_lengths_captured;
-        a.instructions_eliminated += b.instructions_eliminated;
-        a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
-        a.methods_using_other_tracked_location_bit +=
-            b.methods_using_other_tracked_location_bit;
-        for (auto& p : b.eliminated_opcodes) {
-          a.eliminated_opcodes[p.first] += p.second;
-        }
-        return a;
-      },
+      aggregate_stats,
       Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
@@ -1579,6 +1599,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
     name += SHOW(static_cast<IROpcode>(p.first));
     mgr.incr_metric(name, p.second);
   }
+  mgr.incr_metric(METRIC_SKIPPED_DUE_TO_TOO_MANY_REGISTERS,
+                  stats.skipped_due_to_too_many_registers);
+  mgr.incr_metric(METRIC_MAX_ITERATIONS, stats.max_iterations);
 
   shared_state.cleanup();
 }

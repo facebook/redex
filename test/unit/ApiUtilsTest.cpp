@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,6 +10,7 @@
 #include "ApiLevelsUtils.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "IRAssembler.h"
 #include "ScopeHelper.h"
 
 namespace {
@@ -49,7 +50,7 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
                                 21);
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
-  EXPECT_EQ(framework_cls_to_api.size(), 3);
+  EXPECT_EQ(framework_cls_to_api.size(), 4);
 
   auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
   EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs.size(), 2);
@@ -121,6 +122,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   method->set_access(ACC_PUBLIC);
   method->set_virtual(true);
   method->set_external();
+  method->set_code(assembler::ircode_from_string("((return-void))"));
 
   auto a_cls = type_class(a_release);
   a_cls->add_method(method);

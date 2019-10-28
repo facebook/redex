@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -50,7 +50,7 @@ struct ConfigFiles {
     return m_class_lists;
   }
 
-  const bool has_class_list(const std::string& name) {
+  bool has_class_list(const std::string& name) {
     ensure_class_lists_loaded();
     return m_class_lists.count(name) != 0;
   }

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -7,6 +7,7 @@
 
 #include "StaticReloV2.h"
 
+#include "ApiLevelChecker.h"
 #include "ClassHierarchy.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -202,8 +203,14 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
       }
     } else if (vertex.color >= 0) {
       // only one color
-      relocate_method(vertex.method, scope[vertex.color]->get_type());
-      relocated_methods++;
+      auto to_class = type_class(scope[vertex.color]->get_type());
+      // We can relocate method to a class only if the api level of the class is
+      // higher or equal to the api level of the method.
+      if (to_class->rstate.get_api_level() >=
+          api::LevelChecker::get_method_level(vertex.method)) {
+        relocate_method(vertex.method, to_class->get_type());
+        relocated_methods++;
+      }
     }
     // keep multiple colored vertices untouched
   }

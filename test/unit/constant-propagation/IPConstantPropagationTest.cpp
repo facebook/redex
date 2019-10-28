@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -1073,6 +1073,7 @@ TEST_F(InterproceduralConstantPropagationTest, VirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(known_types::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1125,6 +1126,7 @@ TEST_F(InterproceduralConstantPropagationTest, RootVirtualMethodReturnValue) {
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(known_types::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"
@@ -1179,10 +1181,12 @@ TEST_F(InterproceduralConstantPropagationTest,
   auto cls_ty = DexType::make_type("LFoo;");
   ClassCreator creator(cls_ty);
   creator.set_super(known_types::java_lang_Object());
+  creator.set_access(creator.get_access() | ACC_NATIVE);
 
   auto cls_child_ty = DexType::make_type("LBoo;");
   ClassCreator child_creator(cls_child_ty);
   child_creator.set_super(cls_ty);
+  child_creator.set_access(child_creator.get_access() | ACC_NATIVE);
 
   auto m1 = assembler::method_from_string(R"(
     (method (public static) "LFoo;.bar:(LFoo;)V"

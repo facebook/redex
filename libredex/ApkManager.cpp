@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -22,6 +22,14 @@ void check_directory(std::string& dir) {
 }
 
 } // namespace
+
+bool ApkManager::has_asset_dir() {
+  check_directory(m_apk_dir);
+  std::ostringstream path;
+  path << m_apk_dir << "/assets/secondary-program-dex-jars/";
+  std::string assets_dir = path.str();
+  return boost::filesystem::is_directory(assets_dir.c_str());
+}
 
 std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename) {
   check_directory(m_apk_dir);

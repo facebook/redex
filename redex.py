@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Copyright (c) Facebook, Inc. and its affiliates.
 #
 # This source code is licensed under the MIT license found in the
@@ -7,18 +6,21 @@
 
 import argparse
 import distutils.version
+import enum
 import errno
 import fnmatch
 import glob
+import itertools
 import json
 import os
+import platform
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import sys
 import tempfile
-import time
 import timeit
 import zipfile
 from os.path import abspath, basename, dirname, isdir, isfile, join
@@ -141,6 +143,145 @@ def get_stop_pass_idx(passes_list, pass_name_and_num):
     )
 
 
+def maybe_addr2line(lines):
+    backtrace_pattern = re.compile(r"^([^(]+)(?:\((.*)\))?\[(0x[0-9a-f]+)\]$")
+
+    # Generate backtrace lines.
+    def find_matches():
+        for line in lines:
+            stripped_line = line.strip()
+            m = backtrace_pattern.fullmatch(stripped_line)
+            if m is not None:
+                yield m
+
+    # Check whether there is anything to do.
+    matches_gen = find_matches()
+    first_elem = next(matches_gen, None)
+    if first_elem is None:
+        return
+    matches_gen = itertools.chain([first_elem], matches_gen)
+
+    # Check whether addr2line is available
+    def has_addr2line():
+        try:
+            subprocess.check_call(
+                ["addr2line", "-v"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
+    if not has_addr2line():
+        sys.stderr.write("Addr2line not found!\n")
+        return
+    sys.stderr.write("\n")
+
+    addr2line_base = ["addr2line", "-f", "-i", "-C", "-e"]
+
+    def symbolize(filename, offset):
+        # It's good enough not to use server mode.
+        try:
+            output = subprocess.check_output(addr2line_base + [filename, offset])
+            return output.decode(sys.stderr.encoding).splitlines()
+        except subprocess.CalledProcessError:
+            return ["<addr2line error>"]
+
+    for m in matches_gen:
+        sys.stderr.write("%s(%s)[%s]\n" % (m.group(1), m.group(2), m.group(3)))
+        decoded = symbolize(m.group(1), m.group(3))
+        odd_line = True
+        for line in decoded:
+            sys.stderr.write("%s%s\n" % ("  " * (1 if odd_line else 2), line.strip()))
+            odd_line = not odd_line
+
+    sys.stderr.write("\n")
+
+
+def run_and_stream_stderr(args, env, pass_fds):
+    proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
+
+    def stream_and_return():
+        err_out = []
+        # Copy and stash the output.
+        for line in proc.stderr:
+            str_line = line.decode(sys.stdout.encoding)
+            sys.stderr.write(str_line)
+            err_out.append(str_line)
+            if len(err_out) > 1000:
+                err_out = err_out[100:]
+        returncode = proc.wait()
+
+        return (returncode, err_out)
+
+    return (proc, stream_and_return)
+
+
+# Signal handlers.
+# A SIGINT handler gives the process some time to wait for redex to terminate
+# and symbolize a backtrace. The SIGINT handler uninstalls itself so that a
+# second SIGINT really kills redex.py and install a SIGALRM handler. The SIGALRM
+# handler either sends a SIGINT to redex, waits some more, or terminates
+# redex.py.
+class RedexState(enum.Enum):
+    UNSTARTED = 1
+    STARTED = 2
+    POSTPROCESSING = 3
+    FINISHED = 4
+
+
+class SigIntHandler:
+    def __init__(self):
+        self._old_handler = None
+        self._state = RedexState.UNSTARTED
+        self._proc = None
+
+    def install(self):
+        # On Linux, support ctrl-c.
+        # Note: must be on the main thread. Add checks. Portability is an issue.
+        if platform.system() != "Linux":
+            return
+
+        self._old_handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, self._sigint_handler)
+
+    def uninstall(self):
+        if self._old_handler is not None:
+            signal.signal(signal.SIGINT, self._old_handler)
+
+    def set_state(self, new_state):
+        self._state = new_state
+
+    def set_proc(self, new_proc):
+        self._proc = new_proc
+
+    def _sigalrm_handler(self, _signum, _frame):
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        if self._state == RedexState.STARTED:
+            # Send SIGINT in case redex-all was not in the same process
+            # group and wait some more.
+            self._proc.send_signal(signal.SIGINT)
+            signal.alarm(3)
+            return
+        if self._state == RedexState.POSTPROCESSING:
+            # Maybe symbolization took a while. Give it some more time.
+            signal.alarm(3)
+            return
+        # Kill ourselves.
+        os.kill(os.getpid(), signal.SIGINT)
+
+    def _sigint_handler(self, _signum, _frame):
+        signal.signal(signal.SIGINT, self._old_handler)
+        if self._state == RedexState.UNSTARTED or self._state == RedexState.FINISHED:
+            os.kill(os.getpid(), signal.SIGINT)
+
+        # This is the first SIGINT, schedule some waiting period. redex-all is
+        # likely in the same process group and already got a SIGINT delivered.
+        signal.signal(signal.SIGALRM, self._sigalrm_handler)
+        signal.alarm(3)
+
+
 def run_redex_binary(state):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
@@ -225,30 +366,51 @@ def run_redex_binary(state):
 
     add_extra_environment_args(env)
 
+    def run():
+        sigint_handler = SigIntHandler()
+        sigint_handler.install()
+
+        try:
+            proc, handler = run_and_stream_stderr(
+                args, env, (logger.trace_fp.fileno(),)
+            )
+            sigint_handler.set_proc(proc)
+            sigint_handler.set_state(RedexState.STARTED)
+
+            returncode, err_out = handler()
+
+            sigint_handler.set_state(RedexState.POSTPROCESSING)
+
+            if returncode != 0:
+                # Check for crash traces.
+                maybe_addr2line(err_out)
+
+                script_filenames = write_debugger_commands(args)
+                raise RuntimeError(
+                    ("redex-all crashed with exit code %s! " % returncode)
+                    + (
+                        "You can re-run it "
+                        "under gdb by running %(gdb_script_name)s or under lldb "
+                        "by running %(lldb_script_name)s"
+                    )
+                    % script_filenames
+                )
+            return True
+        except OSError as err:
+            if err.errno == errno.ETXTBSY:
+                return False
+            raise err
+        finally:
+            sigint_handler.set_state(RedexState.FINISHED)
+            sigint_handler.uninstall()
+
     # Our CI system occasionally fails because it is trying to write the
     # redex-all binary when this tries to run.  This shouldn't happen, and
     # might be caused by a JVM bug.  Anyways, let's retry and hope it stops.
-    for i in range(5):
-        try:
-            subprocess.check_call(args, env=env, pass_fds=(logger.trace_fp.fileno(),))
-        except OSError as err:
-            if err.errno == errno.ETXTBSY:
-                if i < 4:
-                    time.sleep(5)
-                    continue
-            raise err
-        except subprocess.CalledProcessError as err:
-            script_filenames = write_debugger_commands(args)
-            raise RuntimeError(
-                ("redex-all crashed with exit code %s! " % err.returncode)
-                + (
-                    "You can re-run it "
-                    "under gdb by running %(gdb_script_name)s or under lldb "
-                    "by running %(lldb_script_name)s"
-                )
-                % script_filenames
-            )
-        break
+    for _ in range(5):
+        if run():
+            break
+
     log("Dex processing finished in {:.2f} seconds".format(timer() - start))
 
 

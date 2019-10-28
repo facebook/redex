@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -140,10 +140,6 @@ DexClasses DexesStructure::end_dex(DexInfo dex_info) {
 
   if (dex_info.extended) {
     m_info.num_extended_set_dexes++;
-  }
-
-  if (dex_info.mixed_mode) {
-    m_info.num_mixed_mode_dexes++;
   }
 
   if (dex_info.scroll) {

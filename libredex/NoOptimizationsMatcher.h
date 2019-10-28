@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -9,7 +9,7 @@
 
 #include "ConfigFiles.h"
 
-namespace redex {
+namespace keep_rules {
 
 /**
  * This method walks all methods in the given scope and looks for annotations
@@ -22,4 +22,4 @@ void process_no_optimizations_rules(
     const std::unordered_set<DexType*>& no_optimizations_annos,
     const Scope& scope);
 
-} // namespace redex
+} // namespace keep_rules

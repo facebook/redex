@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -39,6 +39,27 @@ class TestB {
   }
 }
 
+class GetItem {
+  // CHECK: method: direct redex.GetItem.get_item
+  public static int get_item(int input) {
+    // CHECK-NOT: const{{.*}} #int 9
+    // CHECK: const{{.*}} #int 3
+    // CHECK: if-ge {{.*}}
+    if (input < 3) {
+      // CHECK: const{{.*}} #int 5
+      return 5;
+    }
+    // CHECK: const{{.*}} #int 10
+    return 10;
+    // CHECK: return {{.*}}
+  }
+}
+
+class TestC {
+  public static int a = GetItem.get_item(2);
+  public int another_call() { return GetItem.get_item(9); }
+}
+
 public class IPConstantPropagationTest {
 
   // CHECK: method: virtual redex.IPConstantPropagationTest.two_ctors
@@ -69,6 +90,14 @@ public class IPConstantPropagationTest {
     assertThat(one.a).isEqualTo(0);
     // CHECK: iget {{.*}} redex.TestB.b:int
     assertThat(one.b).isEqualTo(0);
+    // CHECK: return-void
+  }
+
+  // CHECK: method: virtual redex.IPConstantPropagationTest.call_by_clinit
+  @Test
+  public void call_by_clinit() {
+    TestC c = new TestC();
+    assertThat(c.another_call()).isEqualTo(10);
     // CHECK: return-void
   }
 }

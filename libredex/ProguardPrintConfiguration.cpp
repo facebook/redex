@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,7 +11,7 @@
 #include <iostream>
 #include <sstream>
 
-std::string show_keep_style(const redex::KeepSpec& keep_rule) {
+std::string show_keep_style(const keep_rules::KeepSpec& keep_rule) {
   if (keep_rule.mark_classes && !keep_rule.mark_conditionally &&
       !keep_rule.allowshrinking) {
     return "-keep";
@@ -39,7 +39,7 @@ std::string show_keep_style(const redex::KeepSpec& keep_rule) {
   return "-invalidkeep";
 }
 
-std::string show_keep_modifiers(const redex::KeepSpec& keep_rule) {
+std::string show_keep_modifiers(const keep_rules::KeepSpec& keep_rule) {
   std::string modifiers;
   if (keep_rule.allowoptimization) {
     modifiers += ",allowoptimization";
@@ -118,7 +118,8 @@ std::string show_access_flags(const DexAccessFlags flags,
   return ss.str();
 }
 
-std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
+std::string show_fields(
+    const std::vector<keep_rules::MemberSpecification>& fields) {
   std::ostringstream ss;
   for (const auto& field : fields) {
     if (!(field.annotationType.empty())) {
@@ -133,7 +134,7 @@ std::string show_fields(const std::vector<redex::MemberSpecification>& fields) {
 }
 
 std::string show_methods(
-    const std::vector<redex::MemberSpecification>& methods) {
+    const std::vector<keep_rules::MemberSpecification>& methods) {
   std::ostringstream ss;
   for (const auto& method : methods) {
     if (!(method.annotationType.empty())) {
@@ -147,7 +148,7 @@ std::string show_methods(
   return ss.str();
 }
 
-std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
+std::string keep_rules::show_keep(const KeepSpec& keep_rule, bool show_source) {
   std::ostringstream text;
   text << show_keep_style(keep_rule) << show_keep_modifiers(keep_rule) << " ";
   const auto class_spec = keep_rule.class_spec;
@@ -189,15 +190,16 @@ std::string redex::show_keep(const KeepSpec& keep_rule, bool show_source) {
   return text.str();
 }
 
-void redex::show_configuration(std::ostream& output,
-                               const Scope& classes,
-                               const redex::ProguardConfiguration& config) {
+void keep_rules::show_configuration(
+    std::ostream& output,
+    const Scope& classes,
+    const keep_rules::ProguardConfiguration& config) {
   size_t total = classes.size();
   for (const auto& cls : classes) {
     total += cls->get_vmethods().size() + cls->get_dmethods().size() +
              cls->get_ifields().size() + cls->get_sfields().size();
   }
   for (const auto& keep : config.keep_rules) {
-    output << redex::show_keep(*keep) << std::endl;
+    output << keep_rules::show_keep(*keep) << std::endl;
   }
 }

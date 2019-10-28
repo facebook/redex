@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -332,6 +332,18 @@ bool Block::starts_with_move_result() {
   if (first_it != end()) {
     auto first_op = first_it->insn->opcode();
     if (opcode::is_move_result_any(first_op)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool Block::contains_opcode(IROpcode opcode) {
+  for (auto it = begin(); it != end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    if (it->insn->opcode() == opcode) {
       return true;
     }
   }

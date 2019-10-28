@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -282,6 +282,16 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
   if (opcode == OPCODE_INVOKE_VIRTUAL || opcode == OPCODE_INVOKE_INTERFACE) {
     always_assert(callee->is_virtual());
     // Make sure all implementations of this method have the same param index
+
+    // Why can_rename_DEPRECATED? To mirror what VirtualRenamer looks at.
+    if (opcode == OPCODE_INVOKE_INTERFACE &&
+        (root(callee) || !can_rename_DEPRECATED(callee))) {
+      // We cannot rule out that there are dynamically added classes, created
+      // via Proxy.newProxyInstance, that override this method.
+      // So we assume the worst.
+      return boost::none;
+    }
+
     const auto overriding_methods =
         method_override_graph::get_overriding_methods(m_graph, callee);
     for (auto* overriding : overriding_methods) {

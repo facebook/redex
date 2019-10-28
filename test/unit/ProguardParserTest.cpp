@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -13,7 +13,7 @@
 #include "ProguardConfiguration.h"
 #include "ProguardParser.h"
 
-using namespace redex;
+using namespace keep_rules;
 
 // Make sure we can parse an empty string
 TEST(ProguardParserTest, empty1) {

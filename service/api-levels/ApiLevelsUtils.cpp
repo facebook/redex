@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "DexClass.h"
+#include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
 
@@ -18,7 +19,7 @@ namespace api {
 
 /**
  * File format:
- *  <framework_cls> <num_methods> <num_fields>
+ *  <framework_cls> <super_cls> <num_methods> <num_fields>
  *      M <method0>
  *      M <method1>
  *      ...
@@ -28,22 +29,30 @@ namespace api {
  */
 std::unordered_map<DexType*, FrameworkAPI>
 ApiLevelsUtils::get_framework_classes() {
+  std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
+
   std::ifstream infile(m_framework_api_info_filename.c_str());
-  assert_log(infile, "Failed to open framework api file: %s\n",
-             m_framework_api_info_filename.c_str());
+  if (!infile) {
+    fprintf(stderr, "WARNING: Failed to open framework api file: %s\n",
+            m_framework_api_info_filename.c_str());
+    TRACE(API_UTILS, 1, "Failed to open framework api file: %s\n",
+          m_framework_api_info_filename.c_str());
+    return framework_cls_to_api;
+  }
 
   FrameworkAPI framework_api;
   std::string framework_cls_str;
+  std::string super_cls_str;
   std::string class_name;
   uint32_t num_methods;
   uint32_t num_fields;
 
-  std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
-
-  while (infile >> framework_cls_str >> num_methods >> num_fields) {
+  while (infile >> framework_cls_str >> super_cls_str >> num_methods >>
+         num_fields) {
     framework_api.cls = DexType::make_type(framework_cls_str.c_str());
     always_assert_log(framework_cls_to_api.count(framework_api.cls) == 0,
                       "Duplicated class name!");
+    framework_api.super_cls = DexType::make_type(super_cls_str.c_str());
 
     while (num_methods-- > 0) {
       std::string method_str;
@@ -128,11 +137,14 @@ std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
 
 namespace {
 
-bool find_method(DexString* meth_name,
-                 DexProto* meth_proto,
-                 const std::unordered_set<DexMethodRef*>& mrefs) {
+bool find_method(const std::string& simple_deobfuscated_name,
+                 const std::unordered_set<DexMethodRef*>& mrefs,
+                 DexProto* meth_proto) {
   for (DexMethodRef* mref : mrefs) {
-    if (mref->get_name() == meth_name && mref->get_proto() == meth_proto) {
+    if (mref->get_name()->str() == simple_deobfuscated_name &&
+        mref->get_proto() == meth_proto) {
+      // TODO(emmasevastian): Still have to make this work with
+      //                      deobfuscated ones.
       return true;
     }
   }
@@ -155,14 +167,21 @@ bool check_methods(
 
   DexType* current_type = methods.at(0)->get_class();
   for (DexMethod* meth : methods) {
-    if (!is_public(meth)) {
+    if (!is_public(meth) || !meth->get_code()) {
       // TODO(emmasevastian): When should we check non-public methods?
+      // TODO(emmasevastian): When should we still check if it is abstract?
       continue;
     }
 
     auto* new_proto =
         type_reference::get_new_proto(meth->get_proto(), release_to_framework);
-    if (!find_method(meth->get_name(), new_proto, framework_api.mrefs)) {
+    // NOTE: For now, this assumes no obfuscation happened. We need to update
+    //       it, if it runs later.
+    if (!find_method(meth->get_simple_deobfuscated_name(), framework_api.mrefs,
+                     new_proto)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find corresponding method: %s!",
+            SHOW(framework_api.cls), show_deobfuscated(meth).c_str());
       return false;
     }
   }
@@ -170,11 +189,12 @@ bool check_methods(
   return true;
 }
 
-bool find_field(DexString* field_name,
-                DexType* field_type,
-                const std::unordered_set<DexFieldRef*>& frefs) {
+bool find_field(const std::string& simple_deobfuscated_name,
+                const std::unordered_set<DexFieldRef*>& frefs,
+                DexType* field_type) {
   for (auto* fref : frefs) {
-    if (fref->get_name() == field_name && fref->get_type() == field_type) {
+    if (fref->get_name()->str() == simple_deobfuscated_name &&
+        fref->get_type() == field_type) {
       return true;
     }
   }
@@ -205,7 +225,11 @@ bool check_fields(
       new_field_type = it->second;
     }
 
-    if (!find_field(field->get_name(), new_field_type, framework_api.frefs)) {
+    if (!find_field(field->get_simple_deobfuscated_name(), framework_api.frefs,
+                    new_field_type)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find corresponding field: %s!",
+            SHOW(framework_api.cls), show_deobfuscated(field).c_str());
       return false;
     }
   }
@@ -262,7 +286,8 @@ bool check_hierarchy(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
-    const TypeSystem& type_system) {
+    const TypeSystem& type_system,
+    const std::unordered_set<DexType*>& framework_classes) {
   DexType* type = cls->get_type();
   if (!is_interface(cls)) {
     // We don't need to worry about subclasses, as those we just need to update
@@ -272,18 +297,32 @@ bool check_hierarchy(
     const auto& implemented_intfs =
         type_system.get_implemented_interfaces(type);
     if (!check_if_present(implemented_intfs, release_to_framework)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find one of the corresponding "
+            "interfaces!",
+            SHOW(framework_api.cls));
       return false;
     }
 
     auto* super_cls = cls->get_super_class();
-    // We accept either Object or that the parent has an equivalent
-    // framework class.
-    // NOTE: That we would end up checking the parents up to chain when
-    //       checking super_cls.
-    // TODO(emmasevastian): If the parent is a framework class available on this
-    //                      platform, we shouldn't fail.
-    if (super_cls != known_types::java_lang_Object() &&
-        release_to_framework.count(super_cls) == 0) {
+    auto* framwork_super_cls = framework_api.super_cls;
+
+    // We accept ONLY classes that have the super class as the corresponding
+    // framework ones. It might extend existing framework class or
+    // release class.
+    if (framework_classes.count(super_cls) > 0) {
+      if (super_cls != framwork_super_cls) {
+        TRACE(API_UTILS, 4,
+              "Excluding %s since the class had different superclass than %s!",
+              SHOW(framework_api.cls), show_deobfuscated(super_cls).c_str());
+        return false;
+      }
+    } else if (release_to_framework.count(super_cls) == 0 ||
+               framwork_super_cls != release_to_framework.at(super_cls)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find the corresponding superclass "
+            "%s!",
+            SHOW(framework_api.cls), show_deobfuscated(super_cls).c_str());
       return false;
     }
   } else {
@@ -291,6 +330,10 @@ bool check_hierarchy(
     type_system.get_all_super_interfaces(type, super_intfs);
 
     if (!check_if_present(super_intfs, release_to_framework)) {
+      TRACE(API_UTILS, 4,
+            "Excluding %s since we couldn't find one of the corresponding "
+            "extended interfaces!",
+            SHOW(framework_api.cls));
       return false;
     }
   }
@@ -331,8 +374,8 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
         continue;
       }
 
-      if (!check_hierarchy(cls, pair.second, release_to_framework,
-                           type_system)) {
+      if (!check_hierarchy(cls, pair.second, release_to_framework, type_system,
+                           m_framework_classes)) {
         to_remove.emplace(pair.first);
       }
     }
@@ -351,11 +394,35 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
  * Loads information regarding support libraries / androidX etc to framework
  * APIs.
  */
-void ApiLevelsUtils::load_types_to_framework_api() {
+void ApiLevelsUtils::load_framework_api() {
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api =
       get_framework_classes();
+  for (auto it = framework_cls_to_api.begin();
+       it != framework_cls_to_api.end();) {
+    auto* framework_cls = it->first;
+    m_framework_classes.emplace(framework_cls);
+
+    // NOTE: We are currently excluding classes outside of
+    //       android package. We might reconsider.
+    const auto& framework_cls_str = framework_cls->str();
+    if (!boost::starts_with(framework_cls_str, "Landroid")) {
+      TRACE(API_UTILS, 5, "Excluding %s from possible replacement.",
+            framework_cls_str.c_str());
+      it = framework_cls_to_api.erase(it);
+    } else {
+      ++it;
+    }
+  }
+
   std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
+  if (simple_cls_name_to_type.size() == 0) {
+    // Nothing to do here :|
+    TRACE(
+        API_UTILS, 1,
+        "Nothing to do since we have no framework classes to replace with ...");
+    return;
+  }
 
   std::unordered_set<std::string> simple_names_releases;
   for (DexClass* cls : m_scope) {
@@ -370,6 +437,9 @@ void ApiLevelsUtils::load_types_to_framework_api() {
       std::string simple_name = get_simple_deobfuscated_name(cls->get_type());
       auto simple_cls_it = simple_cls_name_to_type.find(simple_name);
       if (simple_cls_it == simple_cls_name_to_type.end()) {
+        TRACE(API_UTILS, 7,
+              "Release library class %s has no corresponding framework class.",
+              show_deobfuscated(cls).c_str());
         continue;
       }
 
@@ -377,13 +447,27 @@ void ApiLevelsUtils::load_types_to_framework_api() {
       // TODO(emmasevastian): Reconsider this! For now, leaving it as using
       //                      simple name, since paths have changed between
       //                      release and compatibility libraries.
-      always_assert(simple_names_releases.count(simple_name) == 0);
-      m_types_to_framework_api[cls->get_type()] =
-          std::move(framework_cls_to_api[simple_cls_it->second]);
+      auto inserted = simple_names_releases.emplace(simple_name);
+      if (!inserted.second) {
+        m_types_to_framework_api.erase(cls->get_type());
+      } else {
+        m_types_to_framework_api[cls->get_type()] =
+            std::move(framework_cls_to_api[simple_cls_it->second]);
+      }
     }
   }
 
   // Checks and updates the mapping from release libraries to framework classes.
+  check_and_update_release_to_framework();
+}
+
+void ApiLevelsUtils::filter_types(
+    const std::unordered_set<const DexType*>& types) {
+  for (const auto* type : types) {
+    m_types_to_framework_api.erase(type);
+  }
+
+  // Make sure we clean up the dependencies.
   check_and_update_release_to_framework();
 }
 

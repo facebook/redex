@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -162,8 +162,6 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
         dexes_structure->get_num_extended_dexes());
   TRACE(IDEX, 2, "\t scroll dex count: %d",
         dexes_structure->get_num_scroll_dexes());
-  TRACE(IDEX, 2, "\t mixedmode dex count: %d",
-        dexes_structure->get_num_mixedmode_dexes());
 
   TRACE(IDEX, 2, "Global stats:");
   TRACE(IDEX, 2, "\t %lu classes", dexes_structure->get_num_classes());
@@ -181,7 +179,8 @@ namespace interdex {
 bool InterDex::should_skip_class_due_to_plugin(DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_skip_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Skipping class :: %s", SHOW(clazz));
+      TRACE(IDEX, 4, "IDEX: Skipping class from %s :: %s",
+            plugin->name().c_str(), SHOW(clazz));
       return true;
     }
   }
@@ -198,8 +197,8 @@ void InterDex::add_to_scope(DexClass* cls) {
 bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   for (const auto& plugin : m_plugins) {
     if (plugin->should_not_relocate_methods_of_class(clazz)) {
-      TRACE(IDEX, 4, "IDEX: Not relocating methods of class :: %s",
-            SHOW(clazz));
+      TRACE(IDEX, 4, "IDEX: Not relocating methods of class from %s :: %s",
+            plugin->name().c_str(), SHOW(clazz));
       return true;
     }
   }
@@ -727,9 +726,10 @@ void InterDex::run() {
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {
     auto add_classes = plugin->leftover_classes();
+    std::string name = plugin->name();
     for (DexClass* add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin generated leftover class :: %s",
-            SHOW(add_class));
+      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin generated leftover class :: %s",
+            name.c_str(), SHOW(add_class));
       emit_class(EMPTY_DEX_INFO, add_class, /* check_if_skip */ false,
                  /* perf_sensitive */ false);
     }
@@ -738,6 +738,24 @@ void InterDex::run() {
   // Emit what is left, if any.
   if (m_dexes_structure.get_current_dex_classes().size()) {
     flush_out_dex(EMPTY_DEX_INFO);
+  }
+
+  // Emit dex info manifest
+  if (m_apk_manager.has_asset_dir()) {
+    auto mixed_mode_file = m_apk_manager.new_asset_file("dex_manifest.txt");
+    auto mixed_mode_fh = FileHandle(*mixed_mode_file);
+    mixed_mode_fh.seek_end();
+    std::stringstream ss;
+    int ordinal = 0;
+    for (const auto& dex_info : m_dex_infos) {
+      const auto& flags = std::get<1>(dex_info);
+      ss << std::get<0>(dex_info) << ",ordinal=" << ordinal++
+         << ",coldstart=" << flags.coldstart << ",extended=" << flags.extended
+         << ",primary=" << flags.primary << ",scroll=" << flags.scroll
+         << std::endl;
+    }
+    write_str(mixed_mode_fh, ss.str());
+    *mixed_mode_file = nullptr;
   }
 
   always_assert_log(!m_emit_canaries ||
@@ -814,22 +832,7 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
       canary_cls->rstate.set_keepnames();
     }
     m_dexes_structure.add_class_no_checks(canary_cls);
-
-    // NOTE: We only emit this if we have canary classes.
-    if (is_mixed_mode_dex(dex_info)) {
-      dex_info.mixed_mode = true;
-
-      always_assert_log(m_dexes_structure.get_num_mixedmode_dexes() == 0,
-                        "For now, we only accept 1 mixed mode dex.\n");
-      TRACE(IDEX, 2, "Secondary dex %d is considered for mixed mode",
-            m_dexes_structure.get_num_secondary_dexes() + 1);
-
-      auto mixed_mode_file = m_apk_manager.new_asset_file("mixed_mode.txt");
-      auto mixed_mode_fh = FileHandle(*mixed_mode_file);
-      mixed_mode_fh.seek_end();
-      write_str(mixed_mode_fh, canary_name + "\n");
-      *mixed_mode_file = nullptr;
-    }
+    m_dex_infos.emplace_back(std::make_tuple(canary_name, dex_info));
   }
 
   for (auto& plugin : m_plugins) {
@@ -840,36 +843,13 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
                    squashed_classes.end());
     auto add_classes = plugin->additional_classes(m_outdex, classes);
     for (auto add_class : add_classes) {
-      TRACE(IDEX, 4, "IDEX: Emitting plugin-generated class :: %s",
-            SHOW(add_class));
+      TRACE(IDEX, 4, "IDEX: Emitting %s-plugin-generated class :: %s",
+            plugin->name().c_str(), SHOW(add_class));
       m_dexes_structure.add_class_no_checks(add_class);
     }
   }
 
   m_outdex.emplace_back(m_dexes_structure.end_dex(dex_info));
-}
-
-bool InterDex::is_mixed_mode_dex(const DexInfo& dex_info) {
-  if (dex_info.mixed_mode) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::FIRST_COLDSTART_DEX) &&
-      m_dexes_structure.get_num_coldstart_dexes() == 0 && dex_info.coldstart) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::FIRST_EXTENDED_DEX) &&
-      m_dexes_structure.get_num_extended_dexes() == 0 && dex_info.extended) {
-    return true;
-  }
-
-  if (m_mixed_mode_info.has_status(DexStatus::SCROLL_DEX) &&
-      m_dexes_structure.get_num_scroll_dexes() == 0 && dex_info.scroll) {
-    return true;
-  }
-
-  return false;
 }
 
 } // namespace interdex

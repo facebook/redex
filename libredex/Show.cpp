@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -47,7 +47,7 @@ std::string humanize(std::string const& type) {
     ss << humanize(type.substr(1)) << "[]";
     return ss.str();
   } else if (type[0] == 'L') {
-    return JavaNameUtil::internal_to_external(type);
+    return java_names::internal_to_external(type);
   }
   return "unknown";
 }
@@ -1168,6 +1168,9 @@ std::string show_context(IRCode const* code, IRInstruction const* insn) {
 std::string show_deobfuscated(const DexClass* cls) {
   if (!cls) {
     return "";
+  }
+  if (cls->get_deobfuscated_name().empty()) {
+    return cls->get_name() ? cls->get_name()->str() : show(cls);
   }
   return cls->get_deobfuscated_name();
 }

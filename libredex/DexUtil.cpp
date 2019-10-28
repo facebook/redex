@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -633,6 +633,18 @@ bool is_subclass(const DexType* parent, const DexType* child) {
     super = cls->get_super_class();
   }
   return false;
+}
+
+bool is_uninstantiable_class(DexType* type) {
+  if (type == nullptr || is_array(type) || is_primitive(type)) {
+    return false;
+  }
+  auto cls = type_class(type);
+  if (cls == nullptr || is_interface(cls) || is_native(cls) ||
+      cls->is_external() || !cls->rstate.can_delete()) {
+    return false;
+  }
+  return !cls->has_ctors();
 }
 
 void change_visibility(DexMethod* method, DexType* scope) {

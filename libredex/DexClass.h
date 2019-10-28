@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -1156,6 +1156,12 @@ class DexClass {
     return ctors;
   }
 
+  bool has_ctors() const {
+    auto& dmethods = get_dmethods();
+    // TODO: There must be a logarithmic approach to this. dmethods are sorted!
+    return !!get_ctors().size();
+  }
+
   void add_method(DexMethod* m);
   // Removes the method from this class
   void remove_method(const DexMethod* m);
@@ -1252,6 +1258,12 @@ class DexClass {
   // This bit is only set by the InterDex pass and not available earlier.
   bool is_perf_sensitive() const { return m_perf_sensitive; }
   void set_perf_sensitive(bool value) { m_perf_sensitive = value; }
+
+  // Find methods and fields from a class using its obfuscated name.
+  DexField* find_field_from_simple_deobfuscated_name(
+      const std::string& field_name);
+  DexMethod* find_method_from_simple_deobfuscated_name(
+      const std::string& method_name);
 
  private:
   void sort_methods();
