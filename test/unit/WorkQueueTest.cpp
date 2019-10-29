@@ -66,29 +66,10 @@ TEST(WorkQueueTest, singleThreadTest) {
   }
 }
 
-// use the reference data pointers to compute values, instead of pure inputs.
-TEST(WorkQueueTest, checkDataInitialization) {
-  int data_refs[3] = {50, 50, 50};
-  int array[NUM_INTS] = {0};
-
-  WorkQueue<int, int*, int> wq(
-      [](WorkerState<int, int*, int>* a, int b) { return *a->get_data(); },
-      [](int a, int b) { return a + b; },
-      [&](int a) { return &data_refs[a]; },
-      3);
-
-  for (int idx = 0; idx < NUM_INTS; ++idx) {
-    wq.add_item(array[idx]);
-  }
-
-  int result = wq.run_all();
-  EXPECT_EQ(50 * NUM_INTS, result);
-}
-
 // Check that we can dynamically adding work items during execution.
 TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
-  using WorkerState = WorkerState<int, std::nullptr_t, int>;
-  WorkQueue<int, std::nullptr_t, int> wq(
+  using WorkerState = WorkerState<int, int>;
+  WorkQueue<int, int> wq(
       [&wq](WorkerState* worker_state, int a) {
         if (a > 0) {
           worker_state->push_task(a - 1);
@@ -96,7 +77,7 @@ TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
         }
         return 0;
       },
-      [](int a, int b) { return a + b; }, [](uint) { return nullptr; }, 3);
+      [](int a, int b) { return a + b; }, 3);
   wq.add_item(10);
   auto result = wq.run_all();
 

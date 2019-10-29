@@ -415,9 +415,8 @@ class walk {
         OutputReducerFn reducer,
         const Output& init = Output(),
         size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = WorkQueue<DexClass*, std::nullptr_t, Output>(
-          [&](WorkerState<DexClass*, std::nullptr_t, Output>* state,
-              DexClass* cls) {
+      auto wq = WorkQueue<DexClass*, Output>(
+          [&](WorkerState<DexClass*, Output>* state, DexClass* cls) {
             Output out = init;
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
@@ -430,7 +429,6 @@ class walk {
             return out;
           },
           reducer,
-          [](unsigned int) { return nullptr; },
           num_threads);
 
       for (const auto& cls : classes) {
