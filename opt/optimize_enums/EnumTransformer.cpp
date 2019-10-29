@@ -152,6 +152,11 @@ struct EnumUtil {
     dexen.push_back(cls);
   }
 
+  bool is_super_type_of_candidate_enum(DexType* type) {
+    return type == ENUM_TYPE || type == OBJECT_TYPE ||
+           type == SERIALIZABLE_TYPE || type == COMPARABLE_TYPE;
+  }
+
   /**
    * IF LCandidateEnum; is a candidate enum:
    *  LCandidateEnum; => Ljava/lang/Integer;
@@ -621,7 +626,7 @@ class CodeTransformer final {
                           cfg::Block* block,
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
-    auto field = static_cast<DexField*>(insn->get_field());
+    auto field = insn->get_field();
     if (!m_enum_attributes_map.count(field->get_type())) {
       return;
     }
@@ -651,26 +656,26 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto ifield = insn->get_field();
     auto enum_type = ifield->get_class();
-    if (m_enum_attributes_map.count(enum_type)) {
-      auto vObj = insn->src(0);
-      auto get_ifield_method =
-          m_enum_util->add_get_ifield_method(enum_type, ifield);
-      IROpcode opcode;
-      switch (insn->opcode()) {
-      case OPCODE_IGET_WIDE:
-        opcode = OPCODE_MOVE_RESULT_WIDE;
-        break;
-      case OPCODE_IGET_OBJECT:
-        opcode = OPCODE_MOVE_RESULT_OBJECT;
-        break;
-      default:
-        opcode = OPCODE_MOVE_RESULT;
-      }
-      m_replacements.push_back(InsnReplacement(
-          cfg, block, mie,
-          dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}),
-          opcode));
+    if (!m_enum_attributes_map.count(enum_type)) {
+      return;
     }
+    auto vObj = insn->src(0);
+    auto get_ifield_method =
+        m_enum_util->add_get_ifield_method(enum_type, ifield);
+    IROpcode opcode;
+    switch (insn->opcode()) {
+    case OPCODE_IGET_WIDE:
+      opcode = OPCODE_MOVE_RESULT_WIDE;
+      break;
+    case OPCODE_IGET_OBJECT:
+      opcode = OPCODE_MOVE_RESULT_OBJECT;
+      break;
+    default:
+      opcode = OPCODE_MOVE_RESULT;
+    }
+    m_replacements.push_back(InsnReplacement(
+        cfg, block, mie,
+        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}), opcode));
   }
 
   /**
@@ -689,7 +694,6 @@ class CodeTransformer final {
     auto attributes_it = m_enum_attributes_map.find(container);
     if (attributes_it != m_enum_attributes_map.end()) {
       auto reg = allocate_temp();
-      auto cls = type_class(container);
       uint64_t enum_size = attributes_it->second.m_constants_map.size();
       always_assert(enum_size);
       std::vector<IRInstruction*> new_insns;
@@ -736,21 +740,12 @@ class CodeTransformer final {
                           MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    DexType* candidate_type =
-        extract_candidate_enum_type(env.get(insn->src(0)));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
+    auto reg = insn->src(0);
+    auto candidate_type = infer_candidate_type(env.get(reg), container);
+    if (!candidate_type) {
       return;
     }
     auto helper_method = m_enum_util->add_substitute_of_name(candidate_type);
-    auto reg = insn->src(0);
     m_replacements.push_back(InsnReplacement(
         cfg, block, mie,
         dasm(OPCODE_INVOKE_STATIC, helper_method, {{VREG, reg}})));
@@ -767,17 +762,9 @@ class CodeTransformer final {
                               MethodItemEntry* mie) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        m_enum_attributes_map.count(container) == 0) {
-      return;
-    }
     auto src_reg = insn->src(0);
-    DexType* candidate_type = extract_candidate_enum_type(env.get(src_reg));
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-      candidate_type = container;
-    } else if (!candidate_type) {
+    auto candidate_type = infer_candidate_type(env.get(src_reg), container);
+    if (!candidate_type) {
       return;
     }
     auto helper_method =
@@ -863,16 +850,9 @@ class CodeTransformer final {
                              DexMethodRef* integer_meth) {
     auto insn = mie->insn;
     auto container = insn->get_method()->get_class();
-    if (container != m_enum_util->OBJECT_TYPE &&
-        container != m_enum_util->ENUM_TYPE &&
-        !m_enum_attributes_map.count(container)) {
-      return;
-    }
-    auto this_types = env.get(insn->src(0));
-    DexType* candidate_type = extract_candidate_enum_type(this_types);
-    if (m_enum_attributes_map.count(container)) {
-      always_assert(candidate_type == nullptr || candidate_type == container);
-    } else if (!candidate_type) {
+    auto src_reg = insn->src(0);
+    auto candidate_type = infer_candidate_type(env.get(src_reg), container);
+    if (!candidate_type) {
       return;
     }
     auto new_insn = new IRInstruction(OPCODE_INVOKE_VIRTUAL);
@@ -896,24 +876,17 @@ class CodeTransformer final {
     auto insn = mie->insn;
     auto method_ref = insn->get_method();
     auto container_type = method_ref->get_class();
-    if (!m_enum_attributes_map.count(container_type)) {
-      if (container_type != m_enum_util->OBJECT_TYPE &&
-          container_type != m_enum_util->ENUM_TYPE &&
-          container_type != m_enum_util->SERIALIZABLE_TYPE &&
-          container_type != m_enum_util->COMPARABLE_TYPE) {
-        return;
-      }
-      container_type = extract_candidate_enum_type(env.get(insn->src(0)));
-      if (!m_enum_attributes_map.count(container_type)) {
-        return;
-      }
+    auto candidate_type =
+        infer_candidate_type(env.get(insn->src(0)), container_type);
+    if (!candidate_type) {
+      return;
     }
 
     // If this is toString() and there is no CandidateEnum.toString(), then we
     // call Enum.name() instead.
     if (signatures_match(method_ref, m_enum_util->ENUM_TOSTRING_METHOD) &&
         m_enum_util->get_user_defined_tostring_method(
-            type_class(container_type)) == nullptr) {
+            type_class(candidate_type)) == nullptr) {
       update_invoke_name(env, cfg, block, mie);
     } else {
       auto method = resolve_method(method_ref, MethodSearch::Virtual);
@@ -927,29 +900,50 @@ class CodeTransformer final {
   }
 
   /**
+   * Infer a candidate type from an instruction like
+   * `invoke-virtual vReg, Target.method()`
+   *
+   * Return a candidate type if we can get only one, return null if all these
+   * types are not related to our candidate types. Bail out if the type are
+   * mixed (our analysis part should have excluded this case).
+   */
+  DexType* infer_candidate_type(const EnumTypes& reg_types,
+                                DexType* target_type) {
+    DexType* candidate_type = nullptr;
+    if (m_enum_attributes_map.count(target_type)) {
+      candidate_type = target_type;
+    } else if (!m_enum_util->is_super_type_of_candidate_enum(target_type)) {
+      return nullptr;
+    }
+    auto type_set = reg_types.elements();
+    if (type_set.empty()) {
+      // Register holds null value, we infer the type in instruction.
+      return candidate_type;
+    } else if (candidate_type) {
+      always_assert_log(type_set.size() == 1 &&
+                            *type_set.begin() == candidate_type,
+                        "%s != %s", SHOW(type_set), SHOW(candidate_type));
+      return candidate_type;
+    } else if (type_set.size() == 1) {
+      candidate_type = *type_set.begin();
+      return m_enum_attributes_map.count(candidate_type) ? candidate_type
+                                                         : nullptr;
+    } else {
+      for (auto t : type_set) {
+        always_assert_log(!m_enum_attributes_map.count(t), "%s\n", SHOW(t));
+      }
+      return nullptr;
+    }
+  }
+
+  /**
    * Return nullptr if the types contain none of the candidate enums,
    * return the candidate type if types only contain one candidate enum and do
    * not contain other types,
    * or assertion failure when the types are mixed.
    */
   DexType* extract_candidate_enum_type(const EnumTypes& types) {
-    auto type_set = types.elements();
-    if (std::all_of(type_set.begin(), type_set.end(), [this](DexType* t) {
-          return !m_enum_attributes_map.count(t);
-        })) {
-      return nullptr;
-    }
-    DexType* ret = nullptr;
-
-    for (auto t : type_set) {
-      if (m_enum_attributes_map.count(t)) {
-        always_assert_log(ret == nullptr,
-                          "Multiple candidate enums %s and %s\n", SHOW(t),
-                          SHOW(ret));
-        ret = t;
-      }
-    }
-    return ret;
+    return infer_candidate_type(types, m_enum_util->OBJECT_TYPE);
   }
 
   DexType* try_convert_to_int_type(DexType* type) {
