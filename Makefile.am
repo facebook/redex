@@ -117,8 +117,8 @@ libredex_la_SOURCES = \
 	libredex/ClassHierarchy.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
-	libredex/Creators.cpp \
 	libredex/ControlFlow.cpp \
+	libredex/Creators.cpp \
 	libredex/Debug.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexClass.cpp \
@@ -126,13 +126,14 @@ libredex_la_SOURCES = \
 	libredex/DexEncoding.cpp \
 	libredex/DexHasher.cpp \
 	libredex/DexIdx.cpp \
-	libredex/DexLoader.cpp \
 	libredex/DexInstruction.cpp \
+	libredex/DexLoader.cpp \
 	libredex/DexMemberRefs.cpp \
 	libredex/DexOpcode.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \
 	libredex/DexStore.cpp \
+	libredex/DexStoreUtil.cpp \
 	libredex/DexTypeDomain.cpp \
 	libredex/DexUtil.cpp \
 	libredex/DexStoreUtil.cpp \
@@ -153,12 +154,14 @@ libredex_la_SOURCES = \
 	libredex/IRMetaIO.cpp \
 	libredex/IROpcode.cpp \
 	libredex/IRTypeChecker.cpp \
+	libredex/IRTypeChecker.cpp \
 	libredex/JarLoader.cpp \
 	libredex/JsonWrapper.cpp \
 	libredex/KeepReason.cpp \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
+	libredex/MethodProfiles.cpp
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
@@ -185,13 +188,12 @@ libredex_la_SOURCES = \
 	libredex/RedexException.cpp \
 	libredex/RedexOptions.cpp \
 	libredex/RedexResources.cpp \
+	libredex/ReflectionAnalysis.cpp \
 	libredex/Resolver.cpp \
 	libredex/Show.cpp \
-	libredex/ReflectionAnalysis.cpp \
 	libredex/Timer.cpp \
 	libredex/Trace.cpp \
 	libredex/Transform.cpp \
-	libredex/IRTypeChecker.cpp \
 	libredex/TypeInference.cpp \
 	libredex/TypeSystem.cpp \
 	libredex/TypeUtil.cpp \

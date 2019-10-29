@@ -178,6 +178,19 @@ void ConfigFiles::load_method_sorting_whitelisted_substrings() {
   }
 }
 
+void ConfigFiles::ensure_agg_method_stats_loaded() {
+  const std::string& empty_str = "";
+  const std::string& csv_filename =
+      get_json_config().get("agg_method_stats_file", empty_str);
+  if (csv_filename == empty_str || m_method_profiles.is_initialized()) {
+    return;
+  }
+  bool success = m_method_profiles.initialize(csv_filename);
+  if (!success) {
+    std::cerr << "WARNING: Unable to initialize method stats!\n";
+  }
+}
+
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   Json::Value config;
   m_json.get("inliner", Json::nullValue, config);

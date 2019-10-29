@@ -65,6 +65,7 @@
   TM(MARIANA_TRENCH) \
   TM(METH_DEDUP)     \
   TM(METH_MERGER)    \
+  TM(METH_PROF)      \
   TM(MMINL)          \
   TM(MMODE)          \
   TM(MONITOR)        \
