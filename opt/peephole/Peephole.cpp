@@ -1652,7 +1652,9 @@ bool contains(const std::vector<T>& vec, const T& value) {
   return std::find(vec.begin(), vec.end(), value) != vec.end();
 }
 
-class PeepholeOptimizer {
+// Each thread will have its own instance of PeepholeOptimizer, so align it in
+// order to avoid false sharing.
+class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
  private:
   std::vector<Matcher> m_matchers;
   std::vector<size_t> m_stats;
@@ -1779,35 +1781,23 @@ void PeepholePass::run_pass(DexStoresVector& stores,
                             ConfigFiles& /*cfg*/,
                             PassManager& mgr) {
   auto scope = build_class_scope(stores);
-  std::vector<std::unique_ptr<PeepholeOptimizer>> helpers;
-  auto wq = WorkQueue<DexClass*, PeepholeOptimizer*, std::nullptr_t>(
-      [&](WorkerState<DexClass*, PeepholeOptimizer*, std::nullptr_t>* state,
-          DexClass* cls) {
-        PeepholeOptimizer* ph = state->get_data();
-        for (auto dmethod : cls->get_dmethods()) {
-          TraceContext context(dmethod->get_deobfuscated_name());
-          ph->run_method(dmethod);
-        }
-        for (auto vmethod : cls->get_vmethods()) {
-          TraceContext context(vmethod->get_deobfuscated_name());
-          ph->run_method(vmethod);
-        }
-        return nullptr;
-      },
-      [](std::nullptr_t, std::nullptr_t) { return nullptr; }, // reducer
-      [&](unsigned int /*thread_index*/) { // data initializer
-        helpers.emplace_back(std::make_unique<PeepholeOptimizer>(
-            mgr, config.disabled_peepholes));
-        return helpers.back().get();
-      },
-      redex_parallel::default_num_threads());
-  for (auto* cls : scope) {
-    wq.add_item(cls);
+  auto num_threads = redex_parallel::default_num_threads();
+  std::vector<std::unique_ptr<PeepholeOptimizer>> peephole_optimizers;
+  for (size_t i = 0; i < num_threads; ++i) {
+    peephole_optimizers.emplace_back(
+        std::make_unique<PeepholeOptimizer>(mgr, config.disabled_peepholes));
   }
-  wq.run_all();
 
-  for (const auto& helper : helpers) {
-    helper->incr_all_metrics();
+  walk::parallel::methods(
+      scope,
+      [&](DexMethod* method) {
+        auto& ph = peephole_optimizers[redex_parallel::get_worker_id()];
+        ph->run_method(method);
+      },
+      num_threads);
+
+  for (size_t i = 0; i < num_threads; ++i) {
+    peephole_optimizers[i]->incr_all_metrics();
   }
 
   if (!contains<std::string>(config.disabled_peepholes,

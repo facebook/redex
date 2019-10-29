@@ -200,6 +200,7 @@ libredex_la_SOURCES = \
 	libredex/Vinfo.cpp \
 	libredex/VirtualScope.cpp \
 	libredex/Warning.cpp \
+	libredex/WorkQueue.cpp \
 	libresource/FileMap.cpp \
 	libresource/ResourceTypes.cpp \
 	libresource/Serialize.cpp \

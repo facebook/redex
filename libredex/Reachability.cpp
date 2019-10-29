@@ -343,13 +343,13 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
     check_strings = true;
   }
   if (m_ignore_sets.string_literals.count(type)) {
-    ++m_worker_state->get_data()->num_ignore_check_strings;
+    ++m_stats->num_ignore_check_strings;
     check_strings = false;
   }
   if (cls && check_strings) {
     for (const auto& ignore_anno_type : m_ignore_sets.string_literal_annos) {
       if (has_anno(cls, ignore_anno_type)) {
-        ++m_worker_state->get_data()->num_ignore_check_strings;
+        ++m_stats->num_ignore_check_strings;
         check_strings = false;
         break;
       }
@@ -518,12 +518,12 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
       [&](MarkWorkerState* worker_state, const ReachableObject& obj) {
         TransitiveClosureMarker transitive_closure_marker(
             ignore_sets, *method_override_graph, record_reachability,
-            &cond_marked, reachable_objects.get(), worker_state);
+            &cond_marked, reachable_objects.get(), worker_state,
+            &stats_arr[worker_state->worker_id()]);
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
       [](std::nullptr_t, std::nullptr_t) { return nullptr; },
-      [&stats_arr](unsigned int thread_idx) { return &stats_arr[thread_idx]; },
       num_threads);
   for (const auto& obj : root_set) {
     work_queue.add_item(obj);

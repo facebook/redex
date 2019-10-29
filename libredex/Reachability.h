@@ -155,12 +155,14 @@ struct References {
   std::vector<DexMethodRef*> methods;
 };
 
-struct Stats {
+// Each thread will have its own instance of Stats, so align it in order to
+// avoid false sharing.
+struct alignas(CACHE_LINE_SIZE) Stats {
   int num_ignore_check_strings;
 };
 
-using MarkWorkQueue = WorkQueue<ReachableObject, Stats*>;
-using MarkWorkerState = WorkerState<ReachableObject, Stats*>;
+using MarkWorkQueue = WorkQueue<ReachableObject>;
+using MarkWorkerState = WorkerState<ReachableObject>;
 
 /*
  * These helper classes compute reachable objects by a DFS+marking algorithm.
@@ -236,13 +238,15 @@ class TransitiveClosureMarker {
       bool record_reachability,
       ConditionallyMarked* cond_marked,
       ReachableObjects* reachable_objects,
-      MarkWorkerState* worker_state)
+      MarkWorkerState* worker_state,
+      Stats* stats)
       : m_ignore_sets(ignore_sets),
         m_method_override_graph(method_override_graph),
         m_record_reachability(record_reachability),
         m_cond_marked(cond_marked),
         m_reachable_objects(reachable_objects),
-        m_worker_state(worker_state) {
+        m_worker_state(worker_state),
+        m_stats(stats) {
     m_class_forname = DexMethod::get_method(
         "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
   }
@@ -306,6 +310,7 @@ class TransitiveClosureMarker {
   ConditionallyMarked* m_cond_marked;
   ReachableObjects* m_reachable_objects;
   MarkWorkerState* m_worker_state;
+  Stats* m_stats;
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(
