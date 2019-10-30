@@ -367,7 +367,7 @@ int VirtualRenamer::rename_interface_scopes(int& seed) {
           redex_assert(type_class(intf) != nullptr);
           const auto meth = find_method(type_class(intf), name, proto);
           redex_assert(meth != nullptr);
-          if (!can_rename_DEPRECATED(meth)) {
+          if (!can_rename(meth)) {
             TRACE(OBFUSCATE, 5, "Cannot rename %s", SHOW(meth));
             return;
           }
