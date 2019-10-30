@@ -122,3 +122,118 @@ TEST_F(PeepholeTestB, StringBuilderInit) {
   EXPECT_EQ(assembler::to_s_expr(method_3->get_code()),
             assembler::to_s_expr(expected_code_3.get()));
 }
+
+class PeepholeTestNPE : public RedexTest {
+ public:
+  ::sparta::s_expr run_peephole_pass(const std::string& code) {
+    ClassCreator creator(DexType::make_type("LFoo;"));
+    creator.set_super(known_types::java_lang_Object());
+    auto method = DexMethod::make_method("LFoo;.b:()V")
+                      ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
+    method->set_code(assembler::ircode_from_string(code));
+    creator.add_method(method);
+
+    PeepholePass peephole_pass;
+    PassManager manager({&peephole_pass});
+    ConfigFiles config(Json::nullValue);
+    DexStore store("classes");
+    store.add_classes({creator.create()});
+    std::vector<DexStore> stores;
+    stores.emplace_back(std::move(store));
+    manager.run_passes(stores, config);
+
+    return assembler::to_s_expr(method->get_code());
+  }
+
+  ::sparta::s_expr get_s_expr(const std::string& code) {
+    return assembler::to_s_expr(assembler::ircode_from_string(code).get());
+  }
+};
+
+TEST_F(PeepholeTestNPE, ThrowNPEEmpty) {
+  auto original_code = R"(
+     (
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/NullPointerException;.<init>:()V")
+      (throw v0)
+     )
+    )";
+  auto peepholed_s_expr = run_peephole_pass(original_code);
+  auto expected_code = R"(
+     (
+      (const v0 0)
+      (throw v0)
+     )
+    )";
+  auto expected_s_expr = get_s_expr(expected_code);
+  ASSERT_EQ(peepholed_s_expr, expected_s_expr);
+}
+
+TEST_F(PeepholeTestNPE, ThrowNPENotEmpty) {
+  auto original_code = R"(
+     (
+      (const-string "Test")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (throw v0)
+     )
+    )";
+  auto peepholed_s_expr = run_peephole_pass(original_code);
+  auto expected_s_expr = get_s_expr(original_code);
+  ASSERT_EQ(peepholed_s_expr, expected_s_expr);
+}
+
+TEST_F(PeepholeTestNPE, ThrowNonNPEVerifiable) {
+  auto original_code = R"(
+     (
+      (new-instance "Ljava/lang/IllegalArgumentException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/IllegalArgumentException;.<init>:()V")
+      (throw v0)
+     )
+    )";
+  auto peepholed_s_expr = run_peephole_pass(original_code);
+  auto expected_s_expr = get_s_expr(original_code);
+  ASSERT_EQ(peepholed_s_expr, expected_s_expr) << peepholed_s_expr.str();
+}
+
+TEST_F(PeepholeTestNPE, ThrowNonNPENotVerifiable) {
+  auto original_code = R"(
+     (
+      (new-instance "Ljava/lang/IllegalArgumentException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/NullPointerException;.<init>:()V")
+      (throw v0)
+     )
+    )";
+  auto peepholed_s_expr = run_peephole_pass(original_code);
+  auto expected_s_expr = get_s_expr(original_code);
+  ASSERT_EQ(peepholed_s_expr, expected_s_expr);
+}
+
+TEST_F(PeepholeTestNPE, ThrowNPEBasicBlock) {
+  auto original_code = R"(
+     (
+      (const v1 0)
+      (if-eqz v1 :other_exception)
+      (const-string "Test")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (goto :the_throw)
+      (:other_exception)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/NullPointerException;.<init>:()V")
+      (:the_throw)
+      (throw v0)
+     )
+    )";
+  auto peepholed_s_expr = run_peephole_pass(original_code);
+  auto expected_s_expr = get_s_expr(original_code);
+  ASSERT_EQ(peepholed_s_expr, expected_s_expr);
+}

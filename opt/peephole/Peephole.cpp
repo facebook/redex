@@ -109,6 +109,8 @@ enum class Literal {
   HashCode_String_A,
   // Directive: Convert mul/div to shl/shr with log2 of the literal argument.
   Mul_Div_To_Shift_Log2,
+  // Explicit 0.
+  Zero,
 };
 
 enum class String {
@@ -495,6 +497,7 @@ struct Matcher {
     case OPCODE_AGET_SHORT:
     case OPCODE_AGET_WIDE:
     case OPCODE_AGET_OBJECT:
+    case OPCODE_THROW:
       redex_assert(replace.kind == DexPattern::Kind::none);
       return new IRInstruction(static_cast<IROpcode>(opcode));
     }
@@ -667,10 +670,10 @@ struct Matcher {
           replace->set_literal(static_cast<uint64_t>(log2(a)));
           break;
         }
-        default:
-          always_assert_log(false, "Unexpected literal directive 0x%x",
-                            replace_info.literal);
+        case Literal::Zero: {
+          replace->set_literal(0);
           break;
+        }
         }
       } else if (replace_info.kind == DexPattern::Kind::type) {
         switch (replace_info.type) {
@@ -1615,6 +1618,44 @@ std::vector<Pattern> get_func_patterns() {
   };
 }
 
+const DexPattern new_instance(Type type) {
+  return {{OPCODE_NEW_INSTANCE}, {}, {}, type};
+};
+
+const DexPattern invoke_npe_init(Register r) {
+  return {{OPCODE_INVOKE_DIRECT},
+          {r},
+          {},
+          DexMethod::make_method(
+              "Ljava/lang/NullPointerException;", "<init>", "V", {})};
+}
+
+const DexPattern throw_exception(Register r) {
+  return {{OPCODE_THROW},
+          {r},
+          {}};
+}
+
+std::vector<Pattern> get_throw_empty_npe_patterns() {
+  return {
+      {"Simplify_throw_new_NullPointerException",
+       {new_instance(Type::A),
+        move_result_pseudo_object(Register::A),
+        invoke_npe_init(Register::A),
+        throw_exception(Register::A)},
+       {const_integer(Register::A, Literal::Zero), // Null.
+        throw_exception(Register::A)},
+       [](const Matcher& m) {
+         // Check new-instance type..
+         if (!m.matched_instructions.empty()) {
+           DexType* type = m.matched_instructions.front()->get_type();
+           return type == DexType::make_type("Ljava/lang/NullPointerException;");
+         }
+         return true;  // Let it pass.
+       }},
+  };
+}
+
 // clang-format on
 
 const std::vector<std::vector<Pattern>> get_all_patterns() {
@@ -1624,7 +1665,8 @@ const std::vector<std::vector<Pattern>> get_all_patterns() {
           get_nop_patterns(),
           get_putget_same_reg_patterns(),
           get_putget_diff_reg_patterns(),
-          get_aputaget_patterns()};
+          get_aputaget_patterns(),
+          get_throw_empty_npe_patterns()};
 }
 
 } // namespace patterns
