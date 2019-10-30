@@ -15,6 +15,33 @@
     fprintf(stderr, msg, ##__VA_ARGS__);           \
   }
 
+namespace {
+DexMethod* parse_method(const Json::Value& str,
+                        Configurable::bindflags_t bindflags) {
+  if (!str.isString()) {
+    throw std::runtime_error("Expected string, got:" + str.asString());
+  }
+  auto meth = DexMethod::get_method(str.asString());
+  if (meth == nullptr) {
+    error_or_warn(
+        bindflags & Configurable::bindflags::methods::error_if_unresolvable,
+        bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
+        "\"%s\" failed to resolve to a known method\n",
+        str.asString().c_str());
+  } else {
+    if (!meth->is_def()) {
+      error_or_warn(
+          bindflags & Configurable::bindflags::methods::error_if_not_def,
+          bindflags & Configurable::bindflags::methods::warn_if_not_def,
+          "\"%s\" resolved to a method reference\n", str.asString().c_str());
+    } else {
+      return meth->as_def();
+    }
+  }
+  return nullptr;
+}
+} // namespace
+
 void Configurable::parse_config(const JsonWrapper& json) {
   m_after_configuration = {};
   m_reflecting = false;
@@ -320,22 +347,28 @@ std::unordered_set<DexMethod*> Configurable::as<std::unordered_set<DexMethod*>>(
                     "std::unordered_set<DexMethod*>");
   std::unordered_set<DexMethod*> result;
   for (auto& str : value) {
-    auto meth = DexMethod::get_method(str.asString());
-    if (meth == nullptr) {
-      error_or_warn(
-          bindflags & Configurable::bindflags::methods::error_if_unresolvable,
-          bindflags & Configurable::bindflags::methods::warn_if_unresolvable,
-          "\"%s\" failed to resolve to a known method\n",
-          str.asString().c_str());
-    } else {
-      if (!meth->is_def()) {
-        error_or_warn(
-            bindflags & Configurable::bindflags::methods::error_if_not_def,
-            bindflags & Configurable::bindflags::methods::warn_if_not_def,
-            "\"%s\" resolved to a method reference\n", str.asString().c_str());
-      } else {
-        result.emplace(static_cast<DexMethod*>(meth));
-      }
+    if (auto meth = parse_method(str, bindflags)) {
+      result.emplace(meth);
+    }
+  }
+  return result;
+}
+
+template <>
+Configurable::MapOfMethods Configurable::as<Configurable::MapOfMethods>(
+    const Json::Value& value, bindflags_t bindflags) {
+  always_assert_log(!(bindflags & ~Configurable::bindflags::methods::mask),
+                    "Only method bindflags may be specified for a "
+                    "std::unordered_map<DexMethod*, DexMethod*>");
+  if (!value.isObject()) {
+    throw std::runtime_error("Expected object, got:" + value.asString());
+  }
+  MapOfMethods result;
+  for (auto it = value.begin(); it != value.end(); ++it) {
+    auto k = parse_method(it.key(), bindflags);
+    auto v = parse_method(*it, bindflags);
+    if (k && v) {
+      result[k] = v;
     }
   }
   return result;
@@ -441,5 +474,6 @@ IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexType*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexClass*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexMethod*>, "set")
 IMPLEMENT_REFLECTOR_EX(Configurable::MapOfVectorOfStrings, "dict")
+IMPLEMENT_REFLECTOR_EX(Configurable::MapOfMethods, "dict")
 
 #undef error_or_warn

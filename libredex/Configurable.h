@@ -204,9 +204,10 @@ class Configurable {
    * time. */
   void parse_config(const JsonWrapper& json);
 
-  // Type aliases for convience
+  // Type aliases for convenience
   using MapOfVectorOfStrings =
       std::unordered_map<std::string, std::vector<std::string>>;
+  using MapOfMethods = std::unordered_map<DexMethod*, DexMethod*>;
 
   static constexpr const char* default_doc() { return "TODO: Document this"; }
 
@@ -386,6 +387,7 @@ DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<const DexType*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexClass*>)
 DEFINE_CONFIGURABLE_PRIMITIVE(std::unordered_set<DexMethod*>)
+DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfMethods)
 DEFINE_CONFIGURABLE_PRIMITIVE(Configurable::MapOfVectorOfStrings)
 
 #undef DEFINE_CONFIGURABLE_PRIMITIVE
