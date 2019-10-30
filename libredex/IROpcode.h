@@ -290,6 +290,10 @@ IROpcode move_result_to_move(IROpcode);
 
 IROpcode return_to_move(IROpcode);
 
+IROpcode move_result_to_pseudo(IROpcode op);
+
+IROpcode pseudo_to_move_result(IROpcode op);
+
 IROpcode sget_opcode_for_field(const DexField* field);
 
 enum Branchingness {

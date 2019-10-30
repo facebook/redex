@@ -397,19 +397,6 @@ IRInstruction* make_sget(DexField* field) {
   return (new IRInstruction(opcode))->set_field(field);
 }
 
-IROpcode move_result_to_pseudo(IROpcode op) {
-  switch (op) {
-  case OPCODE_MOVE_RESULT:
-    return IOPCODE_MOVE_RESULT_PSEUDO;
-  case OPCODE_MOVE_RESULT_OBJECT:
-    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
-  case OPCODE_MOVE_RESULT_WIDE:
-    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
-  default:
-    always_assert(false);
-  }
-}
-
 void replace_getter_wrapper(IRCode* transform,
                             IRInstruction* insn,
                             IRInstruction* move_result,
@@ -422,7 +409,7 @@ void replace_getter_wrapper(IRCode* transform,
       is_static(field) ? make_sget(field) : make_iget(field, insn->src(0));
   TRACE(SYNT, 2, "Created instruction: %s", SHOW(new_get));
   auto move_result_pseudo =
-      (new IRInstruction(move_result_to_pseudo(move_result->opcode())))
+      (new IRInstruction(opcode::move_result_to_pseudo(move_result->opcode())))
           ->set_dest(move_result->dest());
 
   transform->replace_opcode(insn, {new_get, move_result_pseudo});

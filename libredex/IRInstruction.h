@@ -164,9 +164,12 @@ class IRInstruction final {
     return opcode_impl::has_move_result_pseudo(m_opcode);
   }
 
+  bool has_move_result() const {
+    return has_method() || m_opcode == OPCODE_FILLED_NEW_ARRAY;
+  }
+
   bool has_move_result_any() const {
-    return has_method() || has_move_result_pseudo() ||
-           m_opcode == OPCODE_FILLED_NEW_ARRAY;
+    return has_move_result() || has_move_result_pseudo();
   }
 
   /*

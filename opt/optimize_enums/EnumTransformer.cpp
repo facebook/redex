@@ -35,6 +35,8 @@
  *                    Ljava/lang/Integer;.equals:(Object)Z
  *  -- sget-object LCandidateEnum;.f:LCandidateEnum; =>
  *                 LEnumUtils;.f?:Ljava/lang/Integer;
+ *       or construct a new integer if the enum is allowed to be optimized
+ *       unsafely.
  *  -- invoke-virtual LCandidateEnum;.name:()String =>
  *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *  -- invoke-virtual LCandidateEnum;.hashCode:()I =>
@@ -51,8 +53,8 @@
  *
  *  We also make all virtual methods static and keep them in their original
  * class while also changing their invocations to static.
- * 3. Clean the static fileds of candidate enums and update these enum classes
- * to inherit Object instead of Enum.
+ * 3. Clean up the static fields of candidate enums and update these enum
+ * classes to inherit java.lang.Object instead of java.lang.Enum.
  * 4. Update specs of methods and fields based on name mangling.
  */
 
@@ -147,7 +149,8 @@ struct EnumUtil {
   explicit EnumUtil(const Config& config) : m_config(config) {}
 
   void create_util_class(DexStoresVector* stores, uint32_t fields_count) {
-    DexClass* cls = make_enumutils_class(fields_count);
+    uint32_t fields_in_primary = std::min(fields_count, m_config.max_enum_size);
+    DexClass* cls = make_enumutils_class(fields_in_primary);
     auto& dexen = (*stores)[0].get_dexen()[0];
     dexen.push_back(cls);
   }
@@ -352,7 +355,7 @@ struct EnumUtil {
     clinit_code->push_back(dasm(OPCODE_SPUT_OBJECT, values_field, {2_v}));
     clinit_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-    m_values_method_ref = make_values_method(cls, values_field);
+    m_values_method_ref = make_values_method(cls, values_field, fields_count);
 
     return cls;
   }
@@ -411,36 +414,90 @@ struct EnumUtil {
 
   /**
    * LEnumUtils;.values:(I)[Ljava/lang/Integer;
+   *
+   * We construct an array field at class loading time, which stores some of the
+   * integers. Copy part of the array if the required integers are in the array,
+   * otherwise copy all of them and construct more. The following comments are
+   * the basic blocks of this method.
+   *
+   * res = new Integer[count]
+   * if count <= VALUES.length
+   *   : small_argument_block
+   *   copy_size = count
+   *   goto :copy_array_block
+   * else
+   *   : large_argument_block
+   *   copy_size = VALUES.length
+   *   id = copy_size
+   *   goto :integers_block
+   *   : integers_block
+   *   if id < count
+   *     : one_integer_block
+   *     res[id] = Integer.valueOf(id)
+   *     id = id + 1
+   *     goto :integers_block
+   *   else
+   *     goto :copy_array_block
+   * : copy_array_block
+   * System.arraycopy(VALUES, 0, res, 0, copy_size);
+   * return res
    */
-  DexMethodRef* make_values_method(DexClass* cls, DexFieldRef* values_field) {
+  DexMethodRef* make_values_method(DexClass* cls,
+                                   DexFieldRef* values_field,
+                                   uint32_t total_integer_fields) {
     DexString* name = DexString::make_string("values");
+    auto integer_array_type = make_array_type(INTEGER_TYPE);
     DexProto* proto = DexProto::make_proto(
-        make_array_type(INTEGER_TYPE),
-        DexTypeList::make_type_list({known_types::_int()}));
+        integer_array_type, DexTypeList::make_type_list({known_types::_int()}));
     DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
                             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
-    method->set_code(std::make_unique<IRCode>());
+    method->set_code(std::make_unique<IRCode>(method, 0));
     cls->add_method(method);
     method->set_deobfuscated_name(show(method));
     auto code = method->get_code();
+    code->build_cfg();
+    auto& cfg = code->cfg();
+    auto entry = cfg.entry_block();
+    auto small_argument_block = cfg.create_block();
+    auto large_argument_block = cfg.create_block();
+    auto one_integer_block = cfg.create_block();
+    auto integers_block = cfg.create_block();
+    auto copy_array_block = cfg.create_block();
+    cfg.add_edge(small_argument_block, copy_array_block, cfg::EDGE_GOTO);
+    cfg.add_edge(large_argument_block, integers_block, cfg::EDGE_GOTO);
+    cfg.add_edge(one_integer_block, integers_block, cfg::EDGE_GOTO);
 
-    auto sub_array_method = DexMethod::make_method(
-        "Ljava/util/Arrays;.copyOfRange:([Ljava/lang/Object;II)[Ljava/lang/"
-        "Object;");
+    entry->push_back(
+        {dasm(OPCODE_NEW_ARRAY, integer_array_type, {0_v}),
+         dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {1_v}),
+         dasm(OPCODE_CONST, {2_v, {LITERAL, total_integer_fields}})});
+    cfg.create_branch(entry, dasm(OPCODE_IF_LE, {0_v, 2_v}),
+                      large_argument_block, small_argument_block);
 
-    code->push_back(dasm(IOPCODE_LOAD_PARAM, {1_v}));
-    code->push_back(dasm(OPCODE_SGET_OBJECT, values_field));
-    code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-    code->push_back(dasm(OPCODE_CONST, {2_v, 0_L}));
-    code->push_back(
-        dasm(OPCODE_INVOKE_STATIC, sub_array_method, {0_v, 2_v, 1_v}));
-    code->push_back(dasm(OPCODE_MOVE_RESULT_OBJECT, {0_v}));
-    code->push_back(
-        dasm(OPCODE_CHECK_CAST, make_array_type(INTEGER_TYPE), {0_v}));
-    code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {0_v}));
-    code->push_back(dasm(OPCODE_RETURN_OBJECT, {0_v}));
-    code->set_registers_size(3);
+    small_argument_block->push_back(dasm(OPCODE_MOVE, {4_v, 0_v}));
 
+    large_argument_block->push_back(
+        {dasm(OPCODE_MOVE, {4_v, 2_v}), dasm(OPCODE_MOVE, {5_v, 2_v})});
+    cfg.create_branch(integers_block, dasm(OPCODE_IF_LT, {5_v, 0_v}),
+                      copy_array_block, one_integer_block);
+
+    one_integer_block->push_back(
+        {dasm(OPCODE_INVOKE_STATIC, INTEGER_VALUEOF_METHOD, {5_v}),
+         dasm(OPCODE_MOVE_RESULT_OBJECT, {6_v}),
+         dasm(OPCODE_APUT_OBJECT, {6_v, 1_v, 5_v}),
+         dasm(OPCODE_ADD_INT_LIT8, {5_v, 5_v, 1_L})});
+
+    auto copy_array_method = DexMethod::make_method(
+        "Ljava/lang/System;.arraycopy:(Ljava/lang/Object;ILjava/lang/"
+        "Object;II)V");
+    copy_array_block->push_back({dasm(OPCODE_SGET_OBJECT, values_field),
+                                 dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {7_v}),
+                                 dasm(OPCODE_CONST, {8_v, 0_L}),
+                                 dasm(OPCODE_INVOKE_STATIC, copy_array_method,
+                                      {7_v, 8_v, 1_v, 8_v, 4_v}),
+                                 dasm(OPCODE_RETURN_OBJECT, {1_v})});
+    cfg.recompute_registers_size();
+    code->clear_cfg();
     return (DexMethodRef*)method;
   }
 };
@@ -452,20 +509,21 @@ struct InsnReplacement {
   InsnReplacement(cfg::ControlFlowGraph& cfg,
                   cfg::Block* block,
                   MethodItemEntry* mie,
-                  IRInstruction* new_insn,
-                  boost::optional<IROpcode> opcode = boost::none)
+                  IRInstruction* new_insn)
       : original_insn(block->to_cfg_instruction_iterator(*mie)),
         replacements{new_insn} {
-    push_back_move_result(cfg, mie, opcode);
+    push_back_move_result(cfg, new_insn);
   }
   InsnReplacement(cfg::ControlFlowGraph& cfg,
                   cfg::Block* block,
                   MethodItemEntry* mie,
-                  std::vector<IRInstruction*>& new_insns,
-                  boost::optional<IROpcode> opcode = boost::none)
+                  std::vector<IRInstruction*>& new_insns)
       : original_insn(block->to_cfg_instruction_iterator(*mie)),
         replacements(std::move(new_insns)) {
-    push_back_move_result(cfg, mie, opcode);
+    if (!replacements.empty()) {
+      auto new_insn = *replacements.rbegin();
+      push_back_move_result(cfg, new_insn);
+    }
   }
 
  private:
@@ -475,14 +533,22 @@ struct InsnReplacement {
    * because the original one will be removed.
    */
   void push_back_move_result(cfg::ControlFlowGraph& cfg,
-                             MethodItemEntry* mie,
-                             boost::optional<IROpcode> opcode) {
-    always_assert(mie->insn->has_move_result_any());
-    auto move_insn_it = cfg.move_result_of(original_insn);
-    if (!move_insn_it.is_end()) {
-      auto& move_insn = move_insn_it.unwrap()->insn;
-      replacements.push_back(dasm(opcode ? *opcode : move_insn->opcode(),
-                                  {{VREG, move_insn->dest()}}));
+                             IRInstruction* new_insn) {
+    auto org_move_insn_it = cfg.move_result_of(original_insn);
+    if (!org_move_insn_it.is_end()) {
+      auto& org_move_insn = org_move_insn_it.unwrap()->insn;
+      auto& org_insn = original_insn.unwrap()->insn;
+      auto org_op = org_move_insn->opcode();
+
+      auto dest = org_move_insn->dest();
+      IROpcode new_op = org_op;
+      if (org_insn->has_move_result() && new_insn->has_move_result_pseudo()) {
+        new_op = opcode::move_result_to_pseudo(org_op);
+      } else if (org_insn->has_move_result_pseudo() &&
+                 new_insn->has_move_result()) {
+        new_op = opcode::pseudo_to_move_result(org_op);
+      }
+      replacements.push_back(dasm(new_op, {{VREG, dest}}));
     }
   }
 };
@@ -620,6 +686,9 @@ class CodeTransformer final {
    * If the field is a candidate enum field,
    * sget-object LCandidateEnum;.f:LCandidateEnum; =>
    *   sget-object LEnumUtils;.f?:Integer
+   * or
+   *   const v_ordinal #??
+   *   invoke-static v_ordinal Integer.valueOf:(I)Integer
    */
   void update_sget_object(const optimize_enums::EnumTypeEnvironment& env,
                           cfg::ControlFlowGraph& cfg,
@@ -635,9 +704,24 @@ class CodeTransformer final {
     if (!constants.count(field)) {
       return;
     }
-    auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
-    auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
-    m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    uint32_t ordinal = constants.at(field).ordinal;
+    if (ordinal < m_enum_util->m_config.max_enum_size) {
+      auto new_field = m_enum_util->m_fields.at(constants.at(field).ordinal);
+      auto new_insn = dasm(OPCODE_SGET_OBJECT, new_field);
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insn));
+    } else {
+      always_assert(
+          m_enum_util->m_config.breaking_reference_equality_whitelist.count(
+              field->get_type()));
+      auto ordinal_reg = allocate_temp();
+      std::vector<IRInstruction*> new_insns;
+      new_insns.push_back(
+          dasm(OPCODE_CONST, {{VREG, ordinal_reg}, {LITERAL, ordinal}}));
+      new_insns.push_back(dasm(OPCODE_INVOKE_STATIC,
+                               m_enum_util->INTEGER_VALUEOF_METHOD,
+                               {{VREG, ordinal_reg}}));
+      m_replacements.push_back(InsnReplacement(cfg, block, mie, new_insns));
+    }
   }
 
   /**
@@ -662,20 +746,9 @@ class CodeTransformer final {
     auto vObj = insn->src(0);
     auto get_ifield_method =
         m_enum_util->add_get_ifield_method(enum_type, ifield);
-    IROpcode opcode;
-    switch (insn->opcode()) {
-    case OPCODE_IGET_WIDE:
-      opcode = OPCODE_MOVE_RESULT_WIDE;
-      break;
-    case OPCODE_IGET_OBJECT:
-      opcode = OPCODE_MOVE_RESULT_OBJECT;
-      break;
-    default:
-      opcode = OPCODE_MOVE_RESULT;
-    }
     m_replacements.push_back(InsnReplacement(
         cfg, block, mie,
-        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}}), opcode));
+        dasm(OPCODE_INVOKE_STATIC, get_ifield_method, {{VREG, vObj}})));
   }
 
   /**
@@ -981,16 +1054,24 @@ class EnumTransformer final {
         TRACE(ENUM, 2, "\tCannot analyze enum %s : ord %lu sfields %lu",
               SHOW(enum_cls), num_enum_constants,
               enum_cls->get_sfields().size());
+        continue;
       } else if (num_enum_constants > config.max_enum_size) {
-        TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
-              num_enum_constants);
-      } else {
-        m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
-        m_enum_objs += num_enum_constants;
-        m_enum_attributes_map.emplace(*it, attributes);
-        clean_generated_methods_fields(enum_cls);
-        opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
+        if (!config.breaking_reference_equality_whitelist.count(*it)) {
+          TRACE(ENUM, 2, "\tSkip %s %lu values", SHOW(enum_cls),
+                num_enum_constants);
+          continue;
+        } else {
+          TRACE(ENUM, 2,
+                "\tOptimimze %s (%lu values) but object equality is not "
+                "guaranteed",
+                SHOW(enum_cls), num_enum_constants);
+        }
       }
+      m_int_objs = std::max<uint32_t>(m_int_objs, num_enum_constants);
+      m_enum_objs += num_enum_constants;
+      m_enum_attributes_map.emplace(*it, attributes);
+      clean_generated_methods_fields(enum_cls);
+      opt_metadata::log_opt(ENUM_OPTIMIZED, enum_cls);
     }
     m_enum_util->create_util_class(stores, m_int_objs);
   }

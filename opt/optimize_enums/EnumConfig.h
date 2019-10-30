@@ -37,10 +37,20 @@ struct Config {
    * than max_enum_size values before the transformation.
    */
   uint32_t max_enum_size;
+  /**
+   * Will try to optimize the enums in the whitelist without considering
+   * reference equality of the enum objects.
+   */
+  std::unordered_set<DexType*> breaking_reference_equality_whitelist;
   SummaryMap param_summary_map;
   ConcurrentSet<DexType*> candidate_enums;
 
   explicit Config(uint32_t max_size) : max_enum_size(max_size) {}
+
+  explicit Config(uint32_t max_size, const std::vector<DexType*>& whitelist)
+      : max_enum_size(max_size),
+        breaking_reference_equality_whitelist(whitelist.begin(),
+                                              whitelist.end()) {}
 };
 
 bool params_contain_object_type(const DexMethod* method,

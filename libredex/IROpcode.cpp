@@ -1136,6 +1136,32 @@ IROpcode return_to_move(IROpcode op) {
   }
 }
 
+IROpcode move_result_to_pseudo(IROpcode op) {
+  switch (op) {
+  case OPCODE_MOVE_RESULT:
+    return IOPCODE_MOVE_RESULT_PSEUDO;
+  case OPCODE_MOVE_RESULT_OBJECT:
+    return IOPCODE_MOVE_RESULT_PSEUDO_OBJECT;
+  case OPCODE_MOVE_RESULT_WIDE:
+    return IOPCODE_MOVE_RESULT_PSEUDO_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
+IROpcode pseudo_to_move_result(IROpcode op) {
+  switch (op) {
+  case IOPCODE_MOVE_RESULT_PSEUDO:
+    return OPCODE_MOVE_RESULT;
+  case IOPCODE_MOVE_RESULT_PSEUDO_OBJECT:
+    return OPCODE_MOVE_RESULT_OBJECT;
+  case IOPCODE_MOVE_RESULT_PSEUDO_WIDE:
+    return OPCODE_MOVE_RESULT_WIDE;
+  default:
+    always_assert(false);
+  }
+}
+
 IROpcode sget_opcode_for_field(const DexField* field) {
   switch (type_to_datatype(field->get_type())) {
   case DataType::Array:
