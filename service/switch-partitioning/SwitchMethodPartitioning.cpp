@@ -136,7 +136,7 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
   //
   // Traverse the tree in starting at the end of the linear chain of prologue
   // blocks and stopping before we reach a leaf.
-  boost::optional<uint16_t> determining_reg;
+  boost::optional<uint16_t> determining_reg = boost::none;
   std::queue<cfg::Block*> to_visit;
   to_visit.push(m_prologue_blocks.back());
   while (!to_visit.empty()) {
