@@ -742,8 +742,7 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
         !classname_contains_wildcard(extendsClassName)) {
       DexClass* super = find_single_class(extendsClassName);
       if (super != nullptr) {
-        TypeSet children;
-        get_all_children(m_hierarchy, super->get_type(), children);
+        auto children = get_all_children(m_hierarchy, super->get_type());
         process_single_keep(class_match, keep_rule, super, regex_map);
         for (auto const* type : children) {
           process_single_keep(class_match, keep_rule, type_class(type),

@@ -43,6 +43,8 @@ void get_all_children(const ClassHierarchy& hierarchy,
                       const DexType* type,
                       TypeSet& children);
 
+TypeSet get_all_children(const ClassHierarchy& hierarchy, const DexType* type);
+
 /**
  * Map from each interface to the classes implementing that interface.
  * Interfaces are "flattened" so that a super interface maps to every
