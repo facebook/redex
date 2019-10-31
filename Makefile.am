@@ -161,7 +161,7 @@ libredex_la_SOURCES = \
 	libredex/Match.cpp \
 	libredex/MethodDevirtualizer.cpp \
 	libredex/MethodOverrideGraph.cpp \
-	libredex/MethodProfiles.cpp
+	libredex/MethodProfiles.cpp \
 	libredex/MonitorCount.cpp \
 	libredex/Mutators.cpp \
 	libredex/NoOptimizationsMatcher.cpp \
