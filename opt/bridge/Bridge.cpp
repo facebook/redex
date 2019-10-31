@@ -236,8 +236,7 @@ class BridgeRemover {
      *
      *   Easy.  Any subclass can refer to the bridgee.
      */
-    TypeSet subclasses;
-    get_all_children(m_ch, clstype, subclasses);
+    auto subclasses = get_all_children(m_ch, clstype);
     for (auto subclass : subclasses) {
       m_potential_bridgee_refs.emplace(MethodRef(subclass, name, proto),
                                        bridge);

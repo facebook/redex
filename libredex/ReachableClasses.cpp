@@ -366,8 +366,7 @@ void mark_onclick_attributes_reachable(
   always_assert(type_context != nullptr);
 
   auto class_hierarchy = build_type_hierarchy(scope);
-  TypeSet children;
-  get_all_children(class_hierarchy, type_context, children);
+  auto children = get_all_children(class_hierarchy, type_context);
 
   for (const auto& t : children) {
     auto dclass = type_class(t);
@@ -543,10 +542,8 @@ void initialize_reachable_for_json_serde(
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(scope);
-  TypeSet children;
   for (auto* serde_supercls : serde_superclses) {
-    get_all_children(ch, serde_supercls, children);
-    for (auto* child : children) {
+    for (auto* child : get_all_children(ch, serde_supercls)) {
       type_class(child)->rstate.set_is_serde();
     }
   }

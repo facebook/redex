@@ -140,6 +140,12 @@ void get_all_children(const ClassHierarchy& hierarchy,
   }
 }
 
+TypeSet get_all_children(const ClassHierarchy& hierarchy, const DexType* type) {
+  TypeSet children;
+  get_all_children(hierarchy, type, children);
+  return children;
+}
+
 void get_all_implementors(const Scope& scope,
                           const DexType* intf,
                           TypeSet& impls) {

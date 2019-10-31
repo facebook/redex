@@ -271,9 +271,8 @@ bool VirtualRenamer::usable_name(DexString* name,
                                  const VirtualScope* scope) const {
   const auto root = scope->type;
   const auto proto = scope->methods[0].first->get_proto();
-  TypeSet hier;
+  auto hier = get_all_children(class_scopes.get_class_hierarchy(), root);
   hier.insert(root);
-  get_all_children(class_scopes.get_class_hierarchy(), root, hier);
   bool has_ste = stack_trace_elements != nullptr;
   for (const auto& type : hier) {
     if (DexMethod::get_method(const_cast<DexType*>(type), name, proto) !=
