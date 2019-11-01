@@ -31,7 +31,9 @@ struct DontRenameReason {
   std::string rule;
 };
 
-class AliasMap;
+namespace rewriter {
+class TypeStringMap;
+}
 
 class RenameClassesPassV2 : public Pass {
  public:
@@ -87,7 +89,8 @@ class RenameClassesPassV2 : public Pass {
                       ConfigFiles& conf,
                       bool rename_annotations,
                       PassManager& mgr);
-  void rename_classes_in_layouts(const AliasMap& aliases, PassManager& mgr);
+  void rename_classes_in_layouts(const rewriter::TypeStringMap& name_mapping,
+                                 PassManager& mgr);
 
   std::string prepend_package_prefix(const char* descriptor);
 

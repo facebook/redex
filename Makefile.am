@@ -97,6 +97,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/reference-update \
 	-I$(top_srcdir)/service/switch-dispatch \
 	-I$(top_srcdir)/service/switch-partitioning \
+	-I$(top_srcdir)/service/type-string-rewriter \
 	-I$(top_srcdir)/shared \
 	-I$(top_srcdir)/sparta/include \
 	-I$(top_srcdir)/tools/common \
@@ -371,6 +372,7 @@ redex_all_SOURCES = \
 	service/switch-dispatch/SwitchDispatch.cpp \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
+	service/type-string-rewriter/TypeStringRewriter.cpp \
 	tools/common/ToolsCommon.cpp \
 	tools/common/PostLowering.cpp \
 	tools/redex-all/main.cpp

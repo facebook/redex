@@ -21,6 +21,7 @@
 #include "IRInstruction.h"
 #include "ReachableClasses.h"
 #include "RedexResources.h"
+#include "TypeStringRewriter.h"
 #include "UnpackagePrivate.h"
 #include "Walkers.h"
 #include "Warning.h"
@@ -368,39 +369,13 @@ RenameClassesPassV2::build_dont_rename_annotated() {
   return dont_rename_annotated;
 }
 
-class AliasMap {
-  std::map<DexString*, DexString*, dexstrings_comparator> m_class_name_map;
-  std::map<DexString*, DexString*, dexstrings_comparator> m_extras_map;
-
- public:
-  void add_class_alias(DexClass* cls, DexString* alias) {
-    m_class_name_map.emplace(cls->get_name(), alias);
-  }
-  void add_alias(DexString* original, DexString* alias) {
-    m_extras_map.emplace(original, alias);
-  }
-  bool has(DexString* key) const {
-    return m_class_name_map.count(key) || m_extras_map.count(key);
-  }
-  DexString* at(DexString* key) const {
-    auto it = m_class_name_map.find(key);
-    if (it != m_class_name_map.end()) {
-      return it->second;
-    }
-    return m_extras_map.at(key);
-  }
-  const std::map<DexString*, DexString*, dexstrings_comparator>& get_class_map()
-      const {
-    return m_class_name_map;
-  }
-};
-
-static void sanity_check(const Scope& scope, const AliasMap& aliases) {
+static void sanity_check(const Scope& scope,
+                         const rewriter::TypeStringMap& name_mapping) {
   std::unordered_set<std::string> external_names;
   // Class.forName() expects strings of the form "foo.bar.Baz". We should be
   // very suspicious if we see these strings in the string pool that
   // correspond to the old name of a class that we have renamed...
-  for (const auto& it : aliases.get_class_map()) {
+  for (const auto& it : name_mapping.get_class_map()) {
     external_names.emplace(java_names::internal_to_external(it.first->c_str()));
   }
   std::vector<DexString*> all_strings;
@@ -411,7 +386,7 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
   int sketchy_strings = 0;
   for (auto s : all_strings) {
     if (external_names.find(s->str()) != external_names.end() ||
-        aliases.has(s)) {
+        name_mapping.get_new_type_name(s)) {
       TRACE(RENAME, 2, "Found %s in string pool after renaming", s->c_str());
       sketchy_strings++;
     }
@@ -421,64 +396,6 @@ static void sanity_check(const Scope& scope, const AliasMap& aliases) {
             "WARNING: Found a number of sketchy class-like strings after class "
             "renaming. Re-run with TRACE=RENAME:2 for more details.\n");
   }
-}
-
-/* In Signature annotations, parameterized types of the form Foo<Bar> get
- * represented as the strings
- *   "Lcom/baz/Foo" "<" "Lcom/baz/Bar;" ">"
- *   or
- *   "Lcom/baz/Foo<" "Lcom/baz/Bar;" ">"
- *
- * Note that "Lcom/baz/Foo" lacks a trailing semicolon.
- * Signature annotations suck.
- *
- * This method transforms the input to the form expected by the alias map:
- *   "Lcom/baz/Foo;"
- * looks that up in the map, then transforms back to the form of the input.
- */
-DexString* lookup_signature_annotation(const AliasMap& aliases,
-                                       DexString* anno) {
-  bool has_bracket = false;
-  bool added_semicolon = false;
-  std::string anno_str = anno->str();
-  // anno_str looks like one of these
-  // Lcom/baz/Foo<
-  // Lcom/baz/Foo;
-  // Lcom/baz/Foo
-  if (anno_str.back() == '<') {
-    anno_str.pop_back();
-    has_bracket = true;
-  }
-  // anno_str looks like one of these
-  // Lcom/baz/Foo;
-  // Lcom/baz/Foo
-  if (anno_str.back() != ';') {
-    anno_str.push_back(';');
-    added_semicolon = true;
-  }
-  // anno_str looks like this
-  // Lcom/baz/Foo;
-
-  // Use get_string because if it's in the map, then it must also already exist
-  DexString* transformed_anno = DexString::get_string(anno_str);
-  if (transformed_anno != nullptr && aliases.has(transformed_anno)) {
-    DexString* obfu = aliases.at(transformed_anno);
-    if (!added_semicolon && !has_bracket) {
-      return obfu;
-    }
-    std::string obfu_str = obfu->str();
-    // We need to transform back to the original format of the input
-    if (added_semicolon) {
-      always_assert(obfu_str.back() == ';');
-      obfu_str.pop_back();
-    }
-    if (has_bracket) {
-      always_assert(obfu_str.back() != '<');
-      obfu_str.push_back('<');
-    }
-    return DexString::make_string(obfu_str);
-  }
-  return nullptr;
 }
 
 std::string get_keep_rule(const DexClass* clazz) {
@@ -686,7 +603,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
   // Make everything public
   unpackage_private(scope);
 
-  AliasMap aliases;
+  rewriter::TypeStringMap name_mapping;
   uint32_t sequence = 0;
   for (auto clazz : scope) {
     auto dtype = clazz->get_type();
@@ -737,7 +654,7 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
                       prefixed_descriptor.c_str());
 
     auto dstring = DexString::make_string(prefixed_descriptor);
-    aliases.add_class_alias(clazz, dstring);
+    name_mapping.add_type_name(clazz->get_name(), dstring);
     dtype->set_name(dstring);
     std::string old_str(oldname->c_str());
     // std::string new_str(descriptor);
@@ -759,8 +676,6 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
       std::string newarraytype("[");
       newarraytype += dstring->c_str();
       dstring = DexString::make_string(newarraytype);
-
-      aliases.add_alias(oldname, dstring);
       arraytype->set_name(dstring);
     }
   }
@@ -781,19 +696,20 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
         // Look up both str and intternal_str in the map; maybe str was
         // internal to begin with?
         DexString* alias_from = nullptr;
-        DexString* alias_to = nullptr;
-        if (aliases.has(internal_str)) {
+        DexString* alias_to = name_mapping.get_new_type_name(internal_str);
+        if (alias_to) {
           alias_from = internal_str;
-          alias_to = aliases.at(internal_str);
           // Since we matched on external form, we need to map internal alias
           // back.
           // make_string here because the external form of the name may not be
           // present in the string table
           alias_to = DexString::make_string(
               java_names::internal_to_external(alias_to->str()));
-        } else if (aliases.has(str)) {
-          alias_from = str;
-          alias_to = aliases.at(str);
+        } else {
+          alias_to = name_mapping.get_new_type_name(str);
+          if (alias_to) {
+            alias_from = str;
+          }
         }
         if (alias_to) {
           DexType* alias_from_type = DexType::get_type(alias_from);
@@ -811,41 +727,19 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
    * Strings rather than Type's, so they have to be explicitly
    * handled.
    */
-  static DexType* dalviksig =
-      DexType::get_type("Ldalvik/annotation/Signature;");
-  walk::annotations(scope, [&](DexAnnotation* anno) {
-    if (anno->type() != dalviksig) return;
-    auto elems = anno->anno_elems();
-    for (auto elem : elems) {
-      auto ev = elem.encoded_value;
-      if (ev->evtype() != DEVT_ARRAY) continue;
-      auto arrayev = static_cast<DexEncodedValueArray*>(ev);
-      auto const& evs = arrayev->evalues();
-      for (auto strev : *evs) {
-        if (strev->evtype() != DEVT_STRING) continue;
-        auto stringev = static_cast<DexEncodedValueString*>(strev);
-        DexString* old_str = stringev->string();
-        DexString* new_str = lookup_signature_annotation(aliases, old_str);
-        if (new_str != nullptr) {
-          TRACE(RENAME, 5, "Rewriting Signature from '%s' to '%s'",
-                old_str->c_str(), new_str->c_str());
-          stringev->string(new_str);
-        }
-      }
-    }
-  });
+  rewrite_dalvik_annotation_signature(scope, name_mapping);
 
-  rename_classes_in_layouts(aliases, mgr);
+  rename_classes_in_layouts(name_mapping, mgr);
 
-  sanity_check(scope, aliases);
+  sanity_check(scope, name_mapping);
 }
 
-void RenameClassesPassV2::rename_classes_in_layouts(const AliasMap& aliases,
-                                                    PassManager& mgr) {
+void RenameClassesPassV2::rename_classes_in_layouts(
+    const rewriter::TypeStringMap& name_mapping, PassManager& mgr) {
   // Sync up ResStringPool entries in XML layouts. Class names should appear in
   // their "external" name, i.e. java.lang.String instead of Ljava/lang/String;
   std::map<std::string, std::string> aliases_for_layouts;
-  for (const auto& apair : aliases.get_class_map()) {
+  for (const auto& apair : name_mapping.get_class_map()) {
     aliases_for_layouts.emplace(
         java_names::internal_to_external(apair.first->str()),
         java_names::internal_to_external(apair.second->str()));
