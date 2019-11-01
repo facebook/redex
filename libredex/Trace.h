@@ -26,6 +26,7 @@
   TM(BUILDERS)       \
   TM(CFG)            \
   TM(CFP)            \
+  TM(CIC)            \
   TM(CLP_GQL)        \
   TM(CLP_LITHO)      \
   TM(CONSTP)         \

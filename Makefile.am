@@ -87,6 +87,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/virtual_merging \
 	-I$(top_srcdir)/opt/virtual_scope \
 	-I$(top_srcdir)/service/api-levels \
+	-I$(top_srcdir)/service/class-init \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
@@ -346,6 +347,7 @@ redex_all_SOURCES = \
 	opt/virtual_merging/VirtualMerging.cpp \
 	opt/virtual_scope/MethodDevirtualizationPass.cpp \
 	service/api-levels/ApiLevelsUtils.cpp \
+	service/class-init/ClassInitCounter.cpp \
 	service/constant-propagation/ConstantEnvironment.cpp \
 	service/constant-propagation/ConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ConstantPropagationWholeProgramState.cpp \
