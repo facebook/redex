@@ -7,13 +7,13 @@
 
 #include "ModelMerger.h"
 
-#include "AnnoUtils.h"
 #include "ClassAssemblingUtils.h"
 #include "DexUtil.h"
 #include "MethodReference.h"
 #include "PassManager.h"
 #include "Resolver.h"
 #include "TypeReference.h"
+#include "TypeStringRewriter.h"
 #include "TypeTagUtils.h"
 #include "Walkers.h"
 
@@ -645,6 +645,11 @@ std::vector<DexClass*> ModelMerger::merge_model(
                        max_num_dispatch_target);
   auto mergeable_to_merger_ctor = mm.merge_methods();
   update_stats(model.get_name(), to_materialize, mm);
+
+  // Rewrite strings in annotation dalvik.annotation.Signature
+  rewriter::TypeStringMap type_str_mapping(mergeable_to_merger);
+  rewriter::rewrite_dalvik_annotation_signature(scope, type_str_mapping);
+
   if (model_spec.replace_type_like_const_strings) {
     update_const_string_type_refs(scope, merged_type_names);
   }

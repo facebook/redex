@@ -91,6 +91,13 @@ DexString* make_array(const DexString* name, uint32_t level) {
 
 namespace rewriter {
 
+TypeStringMap::TypeStringMap(
+    const std::unordered_map<const DexType*, DexType*>& type_mapping) {
+  for (const auto& pair : type_mapping) {
+    add_type_name(pair.first->get_name(), pair.second->get_name());
+  }
+}
+
 void TypeStringMap::add_type_name(DexString* old_name, DexString* new_name) {
   always_assert(old_name && new_name);
   m_type_name_map[old_name] = new_name;

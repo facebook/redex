@@ -21,6 +21,9 @@ class TypeStringMap {
   std::map<DexString*, DexString*, dexstrings_comparator> m_type_name_map;
 
  public:
+  TypeStringMap() {}
+  TypeStringMap(
+      const std::unordered_map<const DexType*, DexType*>& type_mapping);
   /**
    * Add type mapping from old_name to new_name.
    */
@@ -42,4 +45,5 @@ class TypeStringMap {
  */
 void rewrite_dalvik_annotation_signature(const Scope& scope,
                                          const TypeStringMap& mapping);
+
 } // namespace rewriter
