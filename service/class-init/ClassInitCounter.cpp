@@ -350,7 +350,7 @@ void FieldWriteRegs::add_field(DexFieldRef* field,
     // New register
     if (reg_map == previous_usage.regs.end()) {
       previous_usage.regs.insert({reg, {instr}});
-      if (previous_usage.set == OneReg) {
+      if (previous_usage.source == OneReg) {
         m_fields[field] = FieldSet{previous_usage.regs, AllPaths, MultipleReg};
       }
     } else {
