@@ -116,7 +116,7 @@ std::deque<uint16_t> RemoveArgs::compute_live_args(
   auto& cfg = code->cfg();
   cfg.calculate_exit_block();
   LivenessFixpointIterator fixpoint_iter(cfg);
-  fixpoint_iter.run(LivenessDomain(code->get_registers_size()));
+  fixpoint_iter.run(LivenessDomain());
   auto entry_block = cfg.entry_block();
 
   std::deque<uint16_t> live_arg_idxs;
