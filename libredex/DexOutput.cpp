@@ -81,13 +81,15 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
+GatheredTypes::GatheredTypes(DexClasses* classes,
+                             const std::vector<DexString*>& extra_strings)
+    : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
 
   // build maps for the different custom sorting options
-  build_cls_load_map();
+  build_cls_load_map(extra_strings);
   build_cls_map();
   build_method_map();
 
@@ -240,7 +242,8 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   return sidx;
 }
 
-void GatheredTypes::build_cls_load_map() {
+void GatheredTypes::build_cls_load_map(
+    const std::vector<DexString*>& extra_strings) {
   unsigned int index = 0;
   int type_strings = 0;
   int init_strings = 0;
@@ -292,6 +295,17 @@ void GatheredTypes::build_cls_load_map() {
       }
     });
   }
+
+  // Adding extra "custom" strings,
+  // NOTE: The locality of those can be improved ...
+  for (const auto& s : extra_strings) {
+    if (!m_cls_load_strings.count(s)) {
+      m_cls_load_strings[s] = index;
+      index++;
+      total_strings++;
+    }
+  }
+
   TRACE(CUSTOMSORT, 1,
         "found %d strings from types, %d from strings in init methods, %d "
         "total strings",
@@ -354,14 +368,15 @@ DexOutput::DexOutput(
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    const std::vector<DexString*>& extra_strings)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
-  m_gtypes = new GatheredTypes(classes);
+  m_gtypes = new GatheredTypes(classes, extra_strings);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
   m_pos_mapper = pos_mapper;
@@ -2326,7 +2341,8 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
-    const std::string& dex_magic) {
+    const std::string& dex_magic,
+    const std::vector<DexString*>& extra_strings) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2371,7 +2387,8 @@ dex_stats_t write_classes_to_dex(
                              conf,
                              pos_mapper,
                              method_to_id,
-                             code_debug_lines);
+                             code_debug_lines,
+                             extra_strings);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

@@ -958,6 +958,9 @@ void redex_backend(const PassManager& manager,
       }
       ss << ".dex";
 
+      auto extra_strings =
+          post_lowering.get_extra_strings(store.get_dexen()[i]);
+
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
                                ss.str(),
@@ -971,7 +974,8 @@ void redex_backend(const PassManager& manager,
                                needs_addresses ? &method_to_id : nullptr,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
-                               stores[0].get_dex_magic());
+                               stores[0].get_dex_magic(),
+                               extra_strings);
 
       post_lowering.run(store.get_dexen()[i], output_dir);
 

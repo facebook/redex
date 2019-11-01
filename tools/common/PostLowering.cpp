@@ -9,4 +9,9 @@
 
 void PostLowering::run(const DexClasses& dex, const std::string& output_dir) {}
 
+std::vector<DexString*> PostLowering::get_extra_strings(const DexClasses& dex) {
+  std::vector<DexString*> empty;
+  return empty;
+}
+
 void PostLowering::cleanup() {}

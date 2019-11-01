@@ -12,7 +12,7 @@
 
 class PostLowering {
  public:
+  std::vector<DexString*> get_extra_strings(const DexClasses& dex);
   void run(const DexClasses& dex, const std::string& output_dir);
-
   void cleanup();
 };
