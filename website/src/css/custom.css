@@ -19,7 +19,3 @@
   --ifm-color-primary-lighter: rgb(245, 245, 245);
   --ifm-color-primary-lightest: rgb(248, 248, 248);
 }
-
-body {
-  font-family: "Lato", "Helvetica Neue", Arial, sans-serif;
-}
