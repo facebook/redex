@@ -70,6 +70,9 @@ class SharedState {
   get_read_locations_of_conditionally_pure_method(
       const DexMethodRef* method_ref, IROpcode opcode) const;
   const SharedStateStats& get_stats() const { return m_stats; }
+  const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
+    return m_pure_methods;
+  }
 
  private:
   void init_method_barriers(const Scope& scope);
@@ -77,6 +80,7 @@ class SharedState {
   bool is_invoke_safe(const IRInstruction* insn, DexType* exact_virtual_scope);
   CseUnorderedLocationSet get_relevant_written_locations(
       const IRInstruction* insn, const CseUnorderedLocationSet& read_locations);
+  // after init_scope, m_pure_methods will include m_conditionally_pure_methods
   std::unordered_set<DexMethodRef*> m_pure_methods;
   std::unordered_set<DexMethodRef*> m_safe_methods;
   std::unique_ptr<ConcurrentMap<Barrier, size_t, BarrierHasher>> m_barriers;

@@ -955,6 +955,9 @@ void SharedState::init_scope(const Scope& scope) {
       &m_conditionally_pure_methods);
   m_stats.conditionally_pure_methods = m_conditionally_pure_methods.size();
   m_stats.conditionally_pure_methods_iterations = iterations;
+  for (auto& p : m_conditionally_pure_methods) {
+    m_pure_methods.insert(const_cast<DexMethod*>(p.first));
+  }
 
   init_method_barriers(scope);
 }
@@ -1120,7 +1123,12 @@ SharedState::get_read_locations_of_conditionally_pure_method(
 bool SharedState::has_pure_method(const IRInstruction* insn) const {
   auto method_ref = insn->get_method();
   if (m_pure_methods.find(method_ref) != m_pure_methods.end()) {
-    TRACE(CSE, 4, "[CSE] unresolved pure for %s", SHOW(method_ref));
+    TRACE(CSE, 4, "[CSE] unresolved %spure for %s",
+          (method_ref->is_def() &&
+           m_conditionally_pure_methods.count(method_ref->as_def()))
+              ? "conditionally "
+              : "",
+          SHOW(method_ref));
     return true;
   }
 
@@ -1566,7 +1574,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
               copy_prop_config);
           copy_propagation.run(code, method);
 
-          auto local_dce = LocalDce(pure_methods);
+          auto local_dce = LocalDce(shared_state.get_pure_methods());
           local_dce.dce(code);
 
           code->build_cfg(/* editable */ true);

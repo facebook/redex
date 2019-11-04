@@ -1318,6 +1318,148 @@ TEST_F(CommonSubexpressionEliminationTest, pure_methods) {
        expected_str, 1);
 }
 
+TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
+  // Calling a conditionally pure method twice with no relevant writes in
+  // between means that the second call can be cse'ed.
+  ClassCreator o_creator(DexType::make_type("LO;"));
+  o_creator.set_super(known_types::java_lang_Object());
+
+  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+
+  auto get_method = DexMethod::make_method("LO;.getX:()I")
+                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  get_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (iget v2 "LO;.x:I")
+      (return v2)
+    )
+  )"));
+  o_creator.add_method(get_method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+    )
+  )";
+  auto expected_str = R"(
+    (
+      (const v0 0)
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+      (move v2 v1)
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+      (move v1 v2)
+    )
+  )";
+
+  test(Scope{type_class(known_types::java_lang_Object()), o_creator.create()},
+       code_str,
+       expected_str,
+       1);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       conditionally_pure_methods_with_mutation) {
+   // Calling a conditionally pure method twice with a relevant write in
+   // between means that the second call can NOT be cse'ed.
+  ClassCreator o_creator(DexType::make_type("LO;"));
+  o_creator.set_super(known_types::java_lang_Object());
+
+  auto field_x = DexField::make_field("LO;.x:I")->make_concrete(ACC_PRIVATE);
+
+  auto get_method = DexMethod::make_method("LO;.getX:()I")
+                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  get_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (iget v2 "LO;.x:I")
+      (return v2)
+    )
+  )"));
+  o_creator.add_method(get_method);
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+      (iput v0 v0 "LO;.x:I")
+      (invoke-virtual (v0) "LO;.getX:()I")
+      (move-result v1)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(known_types::java_lang_Object()), o_creator.create()},
+       code_str,
+       expected_str,
+       0);
+}
+
+TEST_F(CommonSubexpressionEliminationTest,
+       overriden_conditionally_pure_methods) {
+   // A virtual base method is not actually conditionally pure if there is an
+   // overriding method in a derived class that performs writes.
+
+  // define base type
+
+  ClassCreator base_creator(DexType::make_type("LBase;"));
+  base_creator.set_super(known_types::java_lang_Object());
+
+  auto field_x = DexField::make_field("LBase;.x:I")->make_concrete(ACC_PRIVATE);
+
+  auto get_method = DexMethod::make_method("LBase;.getX:()I")
+                        ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  get_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (iget v2 "LBase;.x:I")
+      (return v2)
+    )
+  )"));
+  base_creator.add_method(get_method);
+  DexClass* base_class = base_creator.create();
+
+  // define derived type
+
+  ClassCreator derived_creator(DexType::make_type("LDerived;"));
+  derived_creator.set_super(base_class->get_type());
+
+  get_method = DexMethod::make_method("LDerived;.getX:()I")
+                   ->make_concrete(ACC_PUBLIC, true /* is_virtual */);
+  get_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (iget v0 "LBase;.x:I")
+      (move-result-pseudo v1)
+      (const v2 1)
+      (add-int v1 v1 v2)
+      (iput v1 v0 "LBase;.x:I")
+      (return v1)
+    )
+  )"));
+  derived_creator.add_method(get_method);
+  DexClass* derived_class = derived_creator.create();
+
+  auto code_str = R"(
+    (
+      (const v0 0)
+      (invoke-virtual (v0) "LBase;.getX:()I")
+      (move-result v1)
+      (invoke-virtual (v0) "LBase;.getX:()I")
+      (move-result v1)
+    )
+  )";
+  auto expected_str = code_str;
+  test(Scope{type_class(known_types::java_lang_Object()), base_class,
+             derived_class},
+       code_str,
+       expected_str,
+       0);
+}
+
 TEST_F(CommonSubexpressionEliminationTest, recursion_is_benign) {
   ClassCreator a_creator(DexType::make_type("LA;"));
   a_creator.set_super(known_types::java_lang_Object());
