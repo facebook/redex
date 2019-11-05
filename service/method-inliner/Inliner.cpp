@@ -193,7 +193,7 @@ static std::string get_key(ConstantArguments constant_arguments) {
 }
 
 void MultiMethodInliner::compute_callee_constant_arguments() {
-  if (!m_config.constant_prop) {
+  if (!m_config.use_constant_propagation_for_callee_size) {
     return;
   }
 
