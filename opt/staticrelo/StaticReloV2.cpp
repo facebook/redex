@@ -200,6 +200,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
         DexMethod* caller = graph.vertices[caller_id].method;
         relocate_method(vertex.method, caller->get_class());
         relocated_methods++;
+        set_public(vertex.method);
       }
     } else if (vertex.color >= 0) {
       // only one color
@@ -211,6 +212,7 @@ int relocate_clusters(const StaticCallGraph& graph, const Scope& scope) {
         relocate_method(vertex.method, to_class->get_type());
         relocated_methods++;
       }
+      set_public(vertex.method);
     }
     // keep multiple colored vertices untouched
   }
@@ -231,10 +233,12 @@ std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
   walk::classes(scope, [&](DexClass* cls) {
     if (!cls->is_external() && get_children(ch, cls->get_type()).empty() &&
         !is_interface(cls) && cls->get_ifields().empty() &&
-        cls->get_sfields().empty() && cls->get_vmethods().empty()) {
+        cls->get_sfields().empty() && cls->get_vmethods().empty() &&
+        !cls->rstate.no_optimizations()) {
       for (const auto& method : cls->get_dmethods()) {
         if (!is_static(method) || !can_rename_DEPRECATED(method) ||
-            !can_delete_DEPRECATED(method)) {
+            !can_delete_DEPRECATED(method) ||
+            method->rstate.no_optimizations()) {
           return;
         }
         if (method->get_code() == nullptr) {
