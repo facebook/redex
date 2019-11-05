@@ -1093,21 +1093,23 @@ IROpcode move_result_pseudo_for_sget(IROpcode op) {
 
 IROpcode move_result_for_invoke(const DexMethodRef* method) {
   auto rtype = method->get_proto()->get_rtype();
-  return is_wide_type(rtype) ? OPCODE_MOVE_RESULT_WIDE
-                             : is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
-                                                : OPCODE_MOVE_RESULT;
+  return type::is_wide_type(rtype)
+             ? OPCODE_MOVE_RESULT_WIDE
+             : type::is_object(rtype) ? OPCODE_MOVE_RESULT_OBJECT
+                                      : OPCODE_MOVE_RESULT;
 }
 
 IROpcode return_opcode(const DexType* type) {
-  return is_wide_type(type)
+  return type::is_wide_type(type)
              ? OPCODE_RETURN_WIDE
-             : is_object(type) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
+             : type::is_object(type) ? OPCODE_RETURN_OBJECT : OPCODE_RETURN;
 }
 
 IROpcode load_opcode(const DexType* type) {
-  return is_wide_type(type)
+  return type::is_wide_type(type)
              ? IOPCODE_LOAD_PARAM_WIDE
-             : is_object(type) ? IOPCODE_LOAD_PARAM_OBJECT : IOPCODE_LOAD_PARAM;
+             : type::is_object(type) ? IOPCODE_LOAD_PARAM_OBJECT
+                                     : IOPCODE_LOAD_PARAM;
 }
 
 IROpcode move_result_to_move(IROpcode op) {

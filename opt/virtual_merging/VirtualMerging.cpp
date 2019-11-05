@@ -421,12 +421,13 @@ void VirtualMerging::merge_methods() {
         overridden_code->push_back(load_param_insn);
         param_regs.push_back(load_param_insn->dest());
         for (auto t : proto->get_args()->get_type_list()) {
-          if (is_wide_type(t)) {
+          if (type::is_wide_type(t)) {
             load_param_insn = new IRInstruction(IOPCODE_LOAD_PARAM_WIDE);
             load_param_insn->set_dest(overridden_code->allocate_wide_temp());
           } else {
-            load_param_insn = new IRInstruction(
-                is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT : IOPCODE_LOAD_PARAM);
+            load_param_insn =
+                new IRInstruction(type::is_object(t) ? IOPCODE_LOAD_PARAM_OBJECT
+                                                     : IOPCODE_LOAD_PARAM);
             load_param_insn->set_dest(overridden_code->allocate_temp());
           }
           overridden_code->push_back(load_param_insn);

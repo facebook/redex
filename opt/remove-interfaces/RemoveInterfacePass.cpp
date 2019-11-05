@@ -92,7 +92,7 @@ DexMethod* generate_dispatch(const DexType* base_type,
                         ACC_STATIC | ACC_PUBLIC, anno_set, keep_debug_info);
   // Variable setup
   auto self_loc = mc->get_local(0);
-  auto type_test_loc = mc->make_local(known_types::_boolean());
+  auto type_test_loc = mc->make_local(type::_boolean());
   auto ret_loc = new_proto->is_void() ? mc->get_local(0) // not used
                                       : mc->make_local(new_proto->get_rtype());
   std::vector<Location> args = get_args_for(new_proto, mc);
@@ -193,7 +193,7 @@ const DexType* get_replacement_type(const TypeSystem& type_system,
     return root;
   }
   TRACE(RM_INTF, 9, "Replacing %s with java.lang.Object;", SHOW(to_remove));
-  return known_types::java_lang_Object();
+  return type::java_lang_Object();
 }
 
 /**
@@ -230,7 +230,7 @@ void remove_interface_references(
       return;
     }
     const auto ref_type = insn->get_type();
-    auto type = get_element_type_if_array(ref_type);
+    auto type = type::get_element_type_if_array(ref_type);
     if (interfaces.count(type) == 0) {
       return;
     }
@@ -241,8 +241,8 @@ void remove_interface_references(
     }
     always_assert(type_class(type));
     auto new_type = get_replacement_type(type_system, type, root);
-    if (is_array(ref_type)) {
-      const auto array_merger_type = make_array_type(new_type);
+    if (type::is_array(ref_type)) {
+      const auto array_merger_type = type::make_array_type(new_type);
       insn->set_type(array_merger_type);
       TRACE(RM_INTF,
             9,
@@ -315,7 +315,7 @@ size_t exclude_unremovables(const Scope& scope,
       if (!insn->has_type() || insn->get_type() == nullptr) {
         continue;
       }
-      auto type = get_element_type_if_array(insn->get_type());
+      auto type = type::get_element_type_if_array(insn->get_type());
       if (candidates.count(type) == 0) {
         continue;
       }

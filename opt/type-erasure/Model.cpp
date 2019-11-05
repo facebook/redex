@@ -300,7 +300,7 @@ void Model::build_hierarchy(const TypeSet& roots) {
     }
     const auto cls = type_class(type);
     const auto super = cls->get_super_class();
-    redex_assert(super != nullptr && super != known_types::java_lang_Object());
+    redex_assert(super != nullptr && super != type::java_lang_Object());
     m_hierarchy[super].insert(type);
     m_parents[type] = super;
   }
@@ -600,7 +600,7 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
         continue;
       }
 
-      const auto& type = get_element_type_if_array(insn->get_type());
+      const auto& type = type::get_element_type_if_array(insn->get_type());
       if (const_types.count(type) > 0) {
         current_non_mergeables.insert(type);
       }
@@ -620,14 +620,14 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
 
   TRACE(TERA, 4, "Non mergeables (opcodes) %ld", m_non_mergeables.size());
 
-  static DexType* string_type = known_types::java_lang_String();
+  static DexType* string_type = type::java_lang_String();
 
   if (!m_spec.merge_types_with_static_fields) {
     walk::fields(scope, [&](DexField* field) {
       if (generated.count(field->get_class()) > 0) {
         if (is_static(field)) {
-          auto rtype = get_element_type_if_array(field->get_type());
-          if (!is_primitive(rtype) && rtype != string_type) {
+          auto rtype = type::get_element_type_if_array(field->get_type());
+          if (!type::is_primitive(rtype) && rtype != string_type) {
             // If the type is either non-primitive or a list of
             // non-primitive types (excluding Strings), then exclude it as
             // we might change the initialization order.
@@ -731,11 +731,11 @@ void Model::shape_merger(const MergerType& merger,
     MergerType::Shape shape{0, 0, 0, 0, 0, 0, 0};
     for (const auto& field : cls->get_ifields()) {
       const auto field_type = field->get_type();
-      if (field_type == known_types::java_lang_String()) {
+      if (field_type == type::java_lang_String()) {
         shape.string_fields++;
         continue;
       }
-      switch (type_shorty(field_type)) {
+      switch (type::type_shorty(field_type)) {
       case 'L':
       case '[':
         shape.reference_fields++;

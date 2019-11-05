@@ -347,7 +347,7 @@ class ClassScopes {
   template <class VirtualScopeWalkerFn =
       void(const DexType*, const VirtualScope*)>
   void walk_virtual_scopes(VirtualScopeWalkerFn walker) const {
-    walk_virtual_scopes(known_types::java_lang_Object(), walker);
+    walk_virtual_scopes(type::java_lang_Object(), walker);
   }
 
   /**
@@ -380,7 +380,7 @@ class ClassScopes {
   template <class VirtualScopesWalkerFn =
       void(const DexType*, const std::vector<const VirtualScope*>&)>
   void walk_class_scopes(VirtualScopesWalkerFn walker) const {
-    walk_class_scopes(known_types::java_lang_Object(), walker);
+    walk_class_scopes(type::java_lang_Object(), walker);
   }
 
   /**

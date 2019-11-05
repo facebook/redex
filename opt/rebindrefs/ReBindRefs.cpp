@@ -51,21 +51,21 @@ bool is_object_equals(DexMethodRef* mref) {
   static DexString* equals = DexString::make_string("equals");
   static DexProto* bool_obj = DexProto::make_proto(
       DexType::make_type("Z"),
-      DexTypeList::make_type_list({known_types::java_lang_Object()}));
+      DexTypeList::make_type_list({type::java_lang_Object()}));
   return mref->get_name() == equals && mref->get_proto() == bool_obj;
 }
 
 bool is_object_hashCode(DexMethodRef* mref) {
   static DexString* hashCode = DexString::make_string("hashCode");
-  static DexProto* int_void = DexProto::make_proto(
-      known_types::_int(), DexTypeList::make_type_list({}));
+  static DexProto* int_void =
+      DexProto::make_proto(type::_int(), DexTypeList::make_type_list({}));
   return mref->get_name() == hashCode && mref->get_proto() == int_void;
 }
 
 bool is_object_getClass(DexMethodRef* mref) {
   static DexString* getClass = DexString::make_string("getClass");
   static DexProto* cls_void = DexProto::make_proto(
-      known_types::java_lang_Class(), DexTypeList::make_type_list({}));
+      type::java_lang_Class(), DexTypeList::make_type_list({}));
   return mref->get_name() == getClass && mref->get_proto() == cls_void;
 }
 
@@ -235,8 +235,8 @@ struct Rebinder {
 
   bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
     static auto clone = DexString::make_string("clone");
-    return is_array(mtype) && mref->get_name() == clone &&
-           !is_primitive(get_array_element_type(mtype));
+    return type::is_array(mtype) && mref->get_name() == clone &&
+           !type::is_primitive(type::get_array_element_type(mtype));
   }
 
   DexMethodRef* rebind_array_clone(DexMethodRef* mref) {

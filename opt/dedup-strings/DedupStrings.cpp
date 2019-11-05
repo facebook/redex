@@ -102,7 +102,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
         // We do not want to trigger a clinit.
         continue;
       }
-      if (cls->get_super_class() != known_types::java_lang_Object() ||
+      if (cls->get_super_class() != type::java_lang_Object() ||
           cls->get_interfaces()->get_type_list().size() > 0) {
         // Classes that derived from another class, or implement interfaces,
         // may trigger additional class loads, which is undesirable, or even
@@ -117,7 +117,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
       }
       auto has_non_trivial_type = [](DexField* f) -> bool {
         auto t = f->get_type();
-        return !is_primitive(t) && t != known_types::java_lang_Object();
+        return !type::is_primitive(t) && t != type::java_lang_Object();
       };
       auto& ifields = cls->get_ifields();
       auto& sfields = cls->get_ifields();
@@ -213,16 +213,16 @@ DexMethod* DedupStrings::make_const_string_loader_method(
     DexClass* host_cls, const std::vector<DexString*>& strings) {
   // Here we build the string factory method with a big switch statement.
   always_assert(strings.size() > 0);
-  const auto string_type = known_types::java_lang_String();
+  const auto string_type = type::java_lang_String();
   const auto proto = DexProto::make_proto(
-      string_type, DexTypeList::make_type_list({known_types::_int()}));
+      string_type, DexTypeList::make_type_list({type::_int()}));
   MethodCreator method_creator(host_cls->get_type(),
                                DexString::make_string("$const$string"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
   redex_assert(strings.size() > 0);
   auto id_arg = method_creator.get_local(0);
-  auto res_var = method_creator.make_local(known_types::java_lang_String());
+  auto res_var = method_creator.make_local(type::java_lang_String());
   auto main_block = method_creator.get_main_block();
 
   if (strings.size() == 1) {

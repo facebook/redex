@@ -888,7 +888,7 @@ DexMethod* class_with_method(const std::string& class_name,
                              const std::string& method_instructions) {
   auto class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(known_types::java_lang_Object());
+  class_creator.set_super(type::java_lang_Object());
   auto method = assembler::method_from_string(method_instructions);
   class_creator.add_method(method);
   class_creator.create();
@@ -899,7 +899,7 @@ DexClass* class_with_methods(const std::string& class_name,
                              const std::vector<DexMethod*>& methods) {
   auto class_type = DexType::make_type(DexString::make_string(class_name));
   ClassCreator class_creator(class_type);
-  class_creator.set_super(known_types::java_lang_Object());
+  class_creator.set_super(type::java_lang_Object());
   for (const auto& method : methods) {
     class_creator.add_method(method);
   }

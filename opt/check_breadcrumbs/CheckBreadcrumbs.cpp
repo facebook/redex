@@ -313,7 +313,7 @@ bool Breadcrumbs::is_illegal_cross_store(const DexType* caller,
  * null if the type reference is defined or external.
  */
 const DexType* Breadcrumbs::check_type(const DexType* type) {
-  auto type_ref = get_element_type_if_array(type);
+  auto type_ref = type::get_element_type_if_array(type);
   const auto& cls = type_class(type_ref);
   if (cls == nullptr) return nullptr;
   if (cls->is_external()) return nullptr;

@@ -92,7 +92,7 @@ bool IRInstruction::invoke_src_is_wide(size_t i) const {
 
   const std::deque<DexType*>& args =
       m_method->get_proto()->get_args()->get_type_list();
-  return is_wide_type(args[i]);
+  return type::is_wide_type(args[i]);
 }
 
 bool IRInstruction::src_is_wide(size_t i) const {
@@ -170,7 +170,7 @@ void IRInstruction::normalize_registers() {
           args_idx,
           old_srcs_idx);
       set_src(srcs_idx++, src(old_srcs_idx));
-      old_srcs_idx += is_wide_type(args.at(args_idx)) ? 2 : 1;
+      old_srcs_idx += type::is_wide_type(args.at(args_idx)) ? 2 : 1;
     }
     always_assert(old_srcs_idx == srcs_size());
     set_srcs_size(srcs_idx);
@@ -189,7 +189,7 @@ void IRInstruction::denormalize_registers() {
     bool has_wide{false};
     for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
-      if (is_wide_type(args.at(args_idx))) {
+      if (type::is_wide_type(args.at(args_idx))) {
         srcs.push_back(src(srcs_idx) + 1);
         has_wide = true;
       }

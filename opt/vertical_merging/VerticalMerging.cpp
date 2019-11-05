@@ -283,9 +283,10 @@ void record_code_reference(
             // We don't want to merge class if either merger or
             // mergeable was ever accessed in instance_of to prevent
             // semantic error.
-            record_dont_merge_state(get_element_type_if_array(insn->get_type()),
-                                    STRICT,
-                                    dont_merge_status);
+            record_dont_merge_state(
+                type::get_element_type_if_array(insn->get_type()),
+                STRICT,
+                dont_merge_status);
             return;
           }
         } else if (insn->has_field()) {
@@ -300,13 +301,13 @@ void record_code_reference(
               // if having collision.
               // TODO(suree404): can improve.
               record_dont_merge_state(
-                  get_element_type_if_array(field->get_class()),
+                  type::get_element_type_if_array(field->get_class()),
                   CONDITIONAL,
                   dont_merge_status);
             }
           } else {
             record_dont_merge_state(
-                get_element_type_if_array(insn->get_field()->get_class()),
+                type::get_element_type_if_array(insn->get_field()->get_class()),
                 CONDITIONAL,
                 dont_merge_status);
           }
@@ -334,7 +335,7 @@ void record_code_reference(
               DexClass* callee_class = type_class(callee->get_class());
               if (callee_class && is_abstract(callee_class)) {
                 record_dont_merge_state(
-                    get_element_type_if_array(callee->get_class()),
+                    type::get_element_type_if_array(callee->get_class()),
                     CONDITIONAL,
                     dont_merge_status);
               }
@@ -356,7 +357,8 @@ void record_code_reference(
         }
 
         for (auto type_to_check : types_to_check) {
-          const DexType* self_type = get_element_type_if_array(type_to_check);
+          const DexType* self_type =
+              type::get_element_type_if_array(type_to_check);
           DexClass* cls = type_class(self_type);
           if (cls && !is_abstract(cls)) {
             // If a type is referenced and not a abstract type then
@@ -393,11 +395,11 @@ void record_method_signature(
   };
   walk::methods(scope, [&](DexMethod* method) {
     DexProto* proto = method->get_proto();
-    const DexType* rtype = get_element_type_if_array(proto->get_rtype());
+    const DexType* rtype = type::get_element_type_if_array(proto->get_rtype());
     check_method_sig(rtype, method);
     DexTypeList* args = proto->get_args();
     for (const DexType* it : args->get_type_list()) {
-      const DexType* extracted_type = get_element_type_if_array(it);
+      const DexType* extracted_type = type::get_element_type_if_array(it);
       check_method_sig(extracted_type, method);
     }
   });
@@ -510,13 +512,13 @@ void update_references(const Scope& scope,
         if (insn->has_type()) {
           auto ref_type = insn->get_type();
           DexType* type =
-              const_cast<DexType*>(get_element_type_if_array(ref_type));
+              const_cast<DexType*>(type::get_element_type_if_array(ref_type));
           if (update_map.count(type) == 0) {
             return;
           }
           auto merger_type = update_map.at(type);
-          if (is_array(ref_type)) {
-            auto array_merger_type = make_array_type(merger_type);
+          if (type::is_array(ref_type)) {
+            auto array_merger_type = type::make_array_type(merger_type);
             insn->set_type(array_merger_type);
           } else {
             insn->set_type(const_cast<DexType*>(merger_type));

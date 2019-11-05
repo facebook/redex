@@ -69,7 +69,7 @@ void check_if_tracked_sget(DexMethod* src_method,
     && classes_to_track.count(target_cls)
     && !recorded_fields.count(target_field)) {
     always_assert_log(target_field->is_concrete(), "Must be a concrete field");
-    if (is_primitive(target_field->get_type())) {
+    if (type::is_primitive(target_field->get_type())) {
       auto value = target_field->get_static_value();
       TRACE(TRACKRESOURCES, 3, "value %d, sget to %s from %s", value, SHOW(target_field), SHOW(src_method));
     } else {

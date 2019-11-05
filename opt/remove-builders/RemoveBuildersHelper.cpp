@@ -688,7 +688,7 @@ DexProto* make_proto_for(DexClass* cls) {
   }
 
   auto fields_list = DexTypeList::make_type_list(std::move(dfields));
-  return DexProto::make_proto(known_types::_void(), fields_list);
+  return DexProto::make_proto(type::_void(), fields_list);
 }
 
 /**
@@ -711,17 +711,17 @@ std::vector<IRInstruction*> generate_load_params(
 
   for (DexField* field : fields) {
     IROpcode op;
-    if (is_wide_type(field->get_type())) {
+    if (type::is_wide_type(field->get_type())) {
       op = IOPCODE_LOAD_PARAM_WIDE;
     } else {
-      op = is_primitive(field->get_type()) ? IOPCODE_LOAD_PARAM
-                                           : IOPCODE_LOAD_PARAM_OBJECT;
+      op = type::is_primitive(field->get_type()) ? IOPCODE_LOAD_PARAM
+                                                 : IOPCODE_LOAD_PARAM_OBJECT;
     }
 
     insn = new IRInstruction(op);
     insn->set_dest(params_reg_start);
     field_to_reg[field] = params_reg_start;
-    params_reg_start += is_wide_type(field->get_type()) ? 2 : 1;
+    params_reg_start += type::is_wide_type(field->get_type()) ? 2 : 1;
     load_params.push_back(insn);
   }
 
@@ -842,7 +842,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   DexMethodRef* buildee_constr_ref = DexMethod::get_method(
       buildee,
       DexString::make_string("<init>"),
-      DexProto::make_proto(known_types::_void(),
+      DexProto::make_proto(type::_void(),
                            DexTypeList::make_type_list({builder->get_type()})));
   if (!buildee_constr_ref) {
     // Nothing to search for.
@@ -897,7 +897,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
         code->insert_before(it, move_result_pseudo);
 
         insn->set_src(index++, new_regs_size);
-        new_regs_size += is_wide_type(field->get_type()) ? 2 : 1;
+        new_regs_size += type::is_wide_type(field->get_type()) ? 2 : 1;
       }
 
       insn->set_srcs_size(new_regs_size - regs_size + 1);
@@ -1202,7 +1202,7 @@ bool remove_builder_from(DexMethod* method,
                              : builder->get_super_class();
 
   // TODO(emmasevastian): extend it.
-  static DexType* object_type = known_types::java_lang_Object();
+  static DexType* object_type = type::java_lang_Object();
   if (super_class != object_type) {
     return false;
   }

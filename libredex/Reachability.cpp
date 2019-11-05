@@ -233,7 +233,7 @@ void TransitiveClosureMarker::push(const Parent* parent,
 
 template <class Parent>
 void TransitiveClosureMarker::push(const Parent* parent, const DexType* type) {
-  type = get_element_type_if_array(type);
+  type = type::get_element_type_if_array(type);
   push(parent, type_class(type));
 }
 

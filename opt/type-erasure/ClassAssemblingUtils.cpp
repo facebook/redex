@@ -72,7 +72,7 @@ void change_super_class(DexClass* cls, DexType* super_type) {
 }
 
 std::string get_merger_package_name(const DexType* type) {
-  auto pkg_name = get_package_name(type);
+  auto pkg_name = type::get_package_name(type);
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
@@ -109,7 +109,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
   auto base_type = DexType::make_type(
       DexString::make_string("L" + spec.class_name_prefix + "EmptyBase;"));
   auto base_class = create_class(base_type,
-                                 known_types::java_lang_Object(),
+                                 type::java_lang_Object(),
                                  get_merger_package_name(interface_root),
                                  std::vector<DexField*>(),
                                  TypeSet(),
@@ -131,7 +131,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
     // Add an empty base class to qualified implementors
     auto impl_cls = type_class(impl_type);
     if (ifcs.size() == 1 && impl_cls &&
-        impl_cls->get_super_class() == known_types::java_lang_Object() &&
+        impl_cls->get_super_class() == type::java_lang_Object() &&
         !is_in_non_root_store(impl_type, stores, xstores,
                               spec.include_primary_dex)) {
       change_super_class(impl_cls, base_type);
@@ -204,21 +204,21 @@ std::vector<DexField*> create_merger_fields(
   for (const auto f : mergeable_fields) {
     auto type = f->get_type();
     std::string name;
-    if (type == known_types::_byte() || type == known_types::_char() ||
-        type == known_types::_short() || type == known_types::_int()) {
-      type = known_types::_int();
+    if (type == type::_byte() || type == type::_char() ||
+        type == type::_short() || type == type::_int()) {
+      type = type::_int();
       name = "i";
-    } else if (type == known_types::_boolean()) {
-      type = known_types::_boolean();
+    } else if (type == type::_boolean()) {
+      type = type::_boolean();
       name = "z";
-    } else if (type == known_types::_long()) {
-      type = known_types::_long();
+    } else if (type == type::_long()) {
+      type = type::_long();
       name = "j";
-    } else if (type == known_types::_float()) {
-      type = known_types::_float();
+    } else if (type == type::_float()) {
+      type = type::_float();
       name = "f";
-    } else if (type == known_types::_double()) {
-      type = known_types::_double();
+    } else if (type == type::_double()) {
+      type = type::_double();
       name = "d";
     } else {
       static DexType* string_type = DexType::make_type("Ljava/lang/String;");
@@ -226,9 +226,9 @@ std::vector<DexField*> create_merger_fields(
         type = string_type;
         name = "s";
       } else {
-        char t = type_shorty(type);
+        char t = type::type_shorty(type);
         always_assert(t == 'L' || t == '[');
-        type = known_types::java_lang_Object();
+        type = type::java_lang_Object();
         name = "l";
       }
     }
@@ -272,7 +272,7 @@ DexClass* create_merger_class(const DexType* type,
     auto type_tag_field =
         DexField::make_field(
             type, DexString::make_string(INTERNAL_TYPE_TAG_FIELD_NAME),
-            known_types::_int())
+            type::_int())
             ->make_concrete(ACC_PUBLIC | ACC_FINAL);
     fields.push_back(type_tag_field);
   }
@@ -317,19 +317,19 @@ void patch_iget(DexMethod* meth,
     break;
   }
   case OPCODE_IGET_BYTE: {
-    always_assert(original_field_type == known_types::_byte());
+    always_assert(original_field_type == type::_byte());
     auto int_to_byte = new IRInstruction(OPCODE_INT_TO_BYTE);
     patch_iget_for_int_like_types(meth, it, int_to_byte);
     break;
   }
   case OPCODE_IGET_CHAR: {
-    always_assert(original_field_type == known_types::_char());
+    always_assert(original_field_type == type::_char());
     auto int_to_char = new IRInstruction(OPCODE_INT_TO_CHAR);
     patch_iget_for_int_like_types(meth, it, int_to_char);
     break;
   }
   case OPCODE_IGET_SHORT: {
-    always_assert(original_field_type == known_types::_short());
+    always_assert(original_field_type == type::_short());
     auto int_to_short = new IRInstruction(OPCODE_INT_TO_SHORT);
     patch_iget_for_int_like_types(meth, it, int_to_short);
     break;

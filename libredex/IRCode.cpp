@@ -330,12 +330,13 @@ void generate_load_params(const DexMethod* method,
   for (DexType* arg : args) {
     IROpcode op;
     auto prev_reg = param_reg;
-    if (is_wide_type(arg)) {
+    if (type::is_wide_type(arg)) {
       param_reg += 2;
       op = IOPCODE_LOAD_PARAM_WIDE;
     } else {
       param_reg += 1;
-      op = is_primitive(arg) ? IOPCODE_LOAD_PARAM : IOPCODE_LOAD_PARAM_OBJECT;
+      op = type::is_primitive(arg) ? IOPCODE_LOAD_PARAM
+                                   : IOPCODE_LOAD_PARAM_OBJECT;
     }
     auto insn = new IRInstruction(op);
     insn->set_dest(prev_reg);
@@ -650,7 +651,7 @@ void calculate_ins_size(const DexMethod* method, DexCode* dex_code) {
     ++ins_size;
   }
   for (auto arg : args_list) {
-    if (is_wide_type(arg)) {
+    if (type::is_wide_type(arg)) {
       ins_size += 2;
     } else {
       ++ins_size;

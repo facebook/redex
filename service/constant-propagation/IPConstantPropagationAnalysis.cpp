@@ -94,9 +94,9 @@ void set_encoded_values(const DexClass* cls, ConstantEnvironment* env) {
     auto value = sfield->get_static_value();
     if (value == nullptr || value->evtype() == DEVT_NULL) {
       env->set(sfield, SignedConstantDomain(0));
-    } else if (is_primitive(sfield->get_type())) {
+    } else if (type::is_primitive(sfield->get_type())) {
       env->set(sfield, SignedConstantDomain(value->value()));
-    } else if (sfield->get_type() == known_types::java_lang_String() &&
+    } else if (sfield->get_type() == type::java_lang_String() &&
                value->evtype() == DEVT_STRING) {
       env->set(
           sfield,

@@ -270,9 +270,9 @@ struct MergerType {
   }
 
   int start_index_for(const DexType* t) const {
-    static const auto string_type = known_types::java_lang_String();
+    static const auto string_type = type::java_lang_String();
     if (t == string_type) return 0;
-    switch (type_shorty(t)) {
+    switch (type::type_shorty(t)) {
     case 'L':
     case '[':
       return start_index_for_ref();
@@ -300,21 +300,21 @@ struct MergerType {
    */
   DexType* field_type_at(int pos) {
     if (pos >= start_index_for_string() && pos < start_index_for_ref()) {
-      return known_types::java_lang_String();
+      return type::java_lang_String();
     } else if (pos >= start_index_for_ref() && pos < start_index_for_bool()) {
-      return known_types::java_lang_Object();
+      return type::java_lang_Object();
     } else if (pos >= start_index_for_bool() && pos < start_index_for_int()) {
-      return known_types::_boolean();
+      return type::_boolean();
     } else if (pos >= start_index_for_int() && pos < start_index_for_long()) {
-      return known_types::_int();
+      return type::_int();
     } else if (pos >= start_index_for_long() &&
                pos < start_index_for_double()) {
-      return known_types::_long();
+      return type::_long();
     } else if (pos >= start_index_for_double() &&
                pos < start_index_for_float()) {
-      return known_types::_double();
+      return type::_double();
     } else if (pos >= start_index_for_float() && pos < field_count()) {
-      return known_types::_float();
+      return type::_float();
     } else {
       always_assert(false);
     }

@@ -80,7 +80,7 @@ static size_t sum_src_sizes(const IRInstruction* insn) {
   }
   auto& types = insn->get_method()->get_proto()->get_args()->get_type_list();
   for (auto* type : types) {
-    size += is_wide_type(type) ? 2 : 1;
+    size += type::is_wide_type(type) ? 2 : 1;
   }
   return size;
 }

@@ -15,17 +15,6 @@
 
 namespace {
 
-// cache the java.lang.Object type
-DexType* object_type = nullptr;
-bool is_object(DexType* type) {
-  if (object_type) return type == object_type;
-  if (strcmp(type->get_name()->c_str(), "Ljava/lang/Object;") == 0) {
-    object_type = type;
-    return true;
-  }
-  return false;
-}
-
 bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
 bool is_alpha(char c) {
@@ -156,7 +145,7 @@ void class_type_stats(SingleImpls& single_impls) {
     auto nested_cls = false;
     if (!anon) nested_cls = is_nested(name);
     const auto& cls = type_class(intf_it.second.cls);
-    if (is_object(cls->get_super_class()) &&
+    if (type::is_object(cls->get_super_class()) &&
         cls->get_interfaces()->get_type_list().size() == 0) {
       if (anon) {
         anonymous_no_parent << "+ " << show(cls) << "\n";

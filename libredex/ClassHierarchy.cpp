@@ -50,7 +50,7 @@ void build_class_hierarchy(ClassHierarchy& hierarchy, const DexClass* cls) {
   if (super != nullptr) {
     hierarchy[super].insert(type);
   } else {
-    always_assert_log(cls->get_type() == known_types::java_lang_Object(),
+    always_assert_log(cls->get_type() == type::java_lang_Object(),
                       SHOW(cls->get_type()));
   }
 }

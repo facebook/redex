@@ -519,8 +519,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
           current_state->get_abstract_obj(insn->src(0)).get_object();
       if (array_object) {
         auto type = array_object->dex_type;
-        if (type && is_array(type)) {
-          const auto etype = get_array_component_type(type);
+        if (type && type::is_array(type)) {
+          const auto etype = type::get_array_component_type(type);
           update_non_string_input(current_state, insn, etype);
           break;
         }
@@ -598,8 +598,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_NEW_ARRAY: {
       auto array_type = insn->get_type();
-      always_assert(is_array(array_type));
-      auto component_type = get_array_component_type(array_type);
+      always_assert(type::is_array(array_type));
+      auto component_type = type::get_array_component_type(array_type);
       if (component_type ==
           DexType::make_type(DexString::make_string("Ljava/lang/Class;"))) {
         const auto aobj =
@@ -626,8 +626,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
     case OPCODE_FILLED_NEW_ARRAY: {
       auto array_type = insn->get_type();
-      always_assert(is_array(array_type));
-      auto component_type = get_array_component_type(array_type);
+      always_assert(type::is_array(array_type));
+      auto component_type = type::get_array_component_type(array_type);
       AbstractObject aobj(AbstractObjectKind::OBJECT, insn->get_type());
       if (component_type == DexType::make_type("Ljava/lang/Class;")) {
         auto arg_count = insn->srcs_size();
@@ -733,7 +733,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
                                DexType* type) const {
     auto dest_reg =
         insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
-    if (type == known_types::java_lang_Class()) {
+    if (type == type::java_lang_Class()) {
       // We don't have precise type information to which the Class obj refers
       // to.
       current_state->set_abstract_obj(dest_reg,
@@ -781,7 +781,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     invalidate_argument_heap_objects(current_state, insn);
     DexMethodRef* callee = insn->get_method();
     DexType* return_type = callee->get_proto()->get_rtype();
-    if (is_void(return_type) || !is_object(return_type)) {
+    if (type::is_void(return_type) || !type::is_object(return_type)) {
       return;
     }
     update_non_string_input(current_state, insn, return_type);
@@ -879,8 +879,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
       if (callee == m_get_class) {
         current_state->set_abstract_obj(
             RESULT_REGISTER,
-            AbstractObjectDomain(AbstractObject(
-                AbstractObjectKind::CLASS, known_types::java_lang_String())));
+            AbstractObjectDomain(AbstractObject(AbstractObjectKind::CLASS,
+                                                type::java_lang_String())));
         current_state->set_class_source(
             RESULT_REGISTER,
             ClassObjectSourceDomain(ClassObjectSource::REFLECTION));

@@ -111,7 +111,7 @@ boost::optional<size_t> get_ctor_type_tag_param_idx(
   auto type_list = ctor_proto->get_args()->get_type_list();
   size_t idx = 0;
   for (auto type : type_list) {
-    if (type == known_types::_int()) {
+    if (type == type::_int()) {
       always_assert_log(!type_tag_param_idx,
                         "More than one potential type tag param found!");
       type_tag_param_idx = boost::optional<size_t>(idx);
@@ -682,8 +682,8 @@ void ModelMethodMerger::merge_ctors() {
       }
 
       // Create dispatch.
-      auto dispatch_arg_list = type_reference::append_and_make(
-          ctor_proto->get_args(), known_types::_int());
+      auto dispatch_arg_list =
+          type_reference::append_and_make(ctor_proto->get_args(), type::_int());
       auto dispatch_proto =
           pass_type_tag_param
               ? DexProto::make_proto(ctor_proto->get_rtype(), dispatch_arg_list)

@@ -54,7 +54,7 @@ class TypeSystemTest : public RedexTest {};
 TEST_F(TypeSystemTest, empty) {
   auto const intf_flag = ACC_PUBLIC | ACC_INTERFACE;
   Scope scope = create_empty_scope();
-  auto obj_t = known_types::java_lang_Object();
+  auto obj_t = type::java_lang_Object();
 
   // interfaces
   auto i1_t = DexType::make_type("LI1;");

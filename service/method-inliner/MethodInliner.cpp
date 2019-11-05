@@ -297,8 +297,8 @@ void gather_true_virtual_methods(const Scope& scope,
     always_assert(callee->get_code());
     // Not considering candidates that accessed type in their method body
     // or returning a non primitive type.
-    if (!is_primitive(
-            get_element_type_if_array(callee->get_proto()->get_rtype()))) {
+    if (!type::is_primitive(type::get_element_type_if_array(
+            callee->get_proto()->get_rtype()))) {
       return;
     }
     for (auto& mie : InstructionIterable(callee->get_code())) {

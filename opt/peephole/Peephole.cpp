@@ -631,7 +631,7 @@ struct Matcher {
         }
         case String::Type_A_get_simple_name: {
           DexType* a = matched_types.at(Type::A);
-          std::string simple = get_simple_name(a);
+          std::string simple = type::get_simple_name(a);
           replace->set_string(DexString::make_string(simple));
           break;
         }

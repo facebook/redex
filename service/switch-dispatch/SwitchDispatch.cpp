@@ -123,8 +123,8 @@ void handle_default_block(
   } else if (!spec.proto->is_void()) {
     // dex2oat doesn't verify the simple init if the return type is an array
     // type.
-    if (is_array(spec.proto->get_rtype())) {
-      Location size_loc = mc->make_local(known_types::_int());
+    if (type::is_array(spec.proto->get_rtype())) {
+      Location size_loc = mc->make_local(type::_int());
       def_block->init_loc(size_loc);
       def_block->new_array(spec.proto->get_rtype(), size_loc, ret_loc);
     } else {
@@ -226,7 +226,7 @@ DexMethod* create_simple_switch_dispatch(
   auto mc = init_method_creator(spec, orig_method);
   auto self_loc = mc->get_local(0);
   // iget type tag field.
-  auto type_tag_loc = mc->make_local(known_types::_int());
+  auto type_tag_loc = mc->make_local(type::_int());
   auto ret_loc = get_return_location(spec, mc);
   auto mb = mc->get_main_block();
 
@@ -268,7 +268,7 @@ dispatch::DispatchMethod create_two_level_switch_dispatch(
   auto mc = init_method_creator(spec, orig_method);
   auto self_loc = mc->get_local(0);
   // iget type tag field.
-  auto type_tag_loc = mc->make_local(known_types::_int());
+  auto type_tag_loc = mc->make_local(type::_int());
   auto mb = mc->get_main_block();
   auto ret_loc = get_return_location(spec, mc);
 
@@ -421,7 +421,7 @@ dispatch::Type possible_type(DexMethod* method) {
 
 DexProto* append_int_arg(DexProto* proto) {
   auto args_list = proto->get_args()->get_type_list();
-  args_list.push_back(known_types::_int());
+  args_list.push_back(type::_int());
   return DexProto::make_proto(
       proto->get_rtype(), DexTypeList::make_type_list(std::move(args_list)));
 }
@@ -612,7 +612,7 @@ DexMethod* create_simple_dispatch(
     cases[p.first] = nullptr;
   }
   auto default_block = main_block->switch_op(method_tag_loc, cases);
-  bool has_return_value = (return_type != known_types::_void());
+  bool has_return_value = (return_type != type::_void());
   auto res_loc =
       has_return_value ? mc.make_local(return_type) : Location::empty();
   for (auto& p : cases) {

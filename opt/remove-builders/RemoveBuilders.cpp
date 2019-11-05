@@ -235,7 +235,7 @@ void RemoveBuildersPass::run_pass(DexStoresVector& stores,
   // Initialize couters.
   b_counter = {0, 0, 0, 0};
 
-  auto obj_type = known_types::java_lang_Object();
+  auto obj_type = type::java_lang_Object();
   auto scope = build_class_scope(stores);
   for (DexClass* cls : scope) {
     if (is_annotation(cls) || is_interface(cls) ||

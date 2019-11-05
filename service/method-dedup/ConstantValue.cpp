@@ -262,7 +262,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   mb->invoke(callee, args);
 
   DexType* ret_type = callee->get_proto()->get_rtype();
-  if (ret_type == known_types::_void()) {
+  if (ret_type == type::_void()) {
     mb->ret_void();
   } else {
     auto ret_loc = mc->make_local(ret_type);

@@ -217,7 +217,7 @@ bool dest_may_be_pointer(const IRInstruction* insn) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
-    return !is_primitive(insn->get_method()->get_proto()->get_rtype());
+    return !type::is_primitive(insn->get_method()->get_proto()->get_rtype());
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:
   case OPCODE_CHECK_CAST:
@@ -302,7 +302,7 @@ void analyze_generic_invoke(const IRInstruction* insn,
   const auto& arg_types =
       insn->get_method()->get_proto()->get_args()->get_type_list();
   for (const auto* arg : arg_types) {
-    if (!is_primitive(arg)) {
+    if (!type::is_primitive(arg)) {
       env->set_may_escape(insn->src(idx));
     }
     ++idx;
@@ -323,7 +323,8 @@ void escape_heap_referenced_objects(const IRInstruction* insn,
       op == OPCODE_IPUT_OBJECT) {
     env->set_may_escape(insn->src(0));
   } else if (op == OPCODE_FILLED_NEW_ARRAY &&
-             !is_primitive(get_array_component_type(insn->get_type()))) {
+             !type::is_primitive(
+                 type::get_array_component_type(insn->get_type()))) {
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       env->set_may_escape(insn->src(i));
     }

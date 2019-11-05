@@ -18,7 +18,7 @@ TEST_F(TypeRefUpdaterTest, init_collision) {
   auto foo = DexType::make_type("LFoo;");
   auto bar = DexType::make_type("LBar;");
   ClassCreator cc(foo);
-  cc.set_super(known_types::java_lang_Object());
+  cc.set_super(type::java_lang_Object());
 
   auto ctor_takes_foo = DexMethod::make_method("LFoo;.<init>:(LFoo;)V")
                             ->make_concrete(ACC_PUBLIC, false);

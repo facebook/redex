@@ -97,11 +97,11 @@ struct EnumUtil {
 
   const DexString* VALUES_FIELD_STR = DexString::make_string("$VALUES");
 
-  const DexType* ENUM_TYPE = known_types::java_lang_Enum();
-  DexType* INT_TYPE = known_types::_int();
-  DexType* INTEGER_TYPE = known_types::java_lang_Integer();
-  DexType* OBJECT_TYPE = known_types::java_lang_Object();
-  DexType* STRING_TYPE = known_types::java_lang_String();
+  const DexType* ENUM_TYPE = type::java_lang_Enum();
+  DexType* INT_TYPE = type::_int();
+  DexType* INTEGER_TYPE = type::java_lang_Integer();
+  DexType* OBJECT_TYPE = type::java_lang_Object();
+  DexType* STRING_TYPE = type::java_lang_String();
   DexType* SERIALIZABLE_TYPE = DexType::make_type("Ljava/io/Serializable;");
   DexType* COMPARABLE_TYPE = DexType::make_type("Ljava/lang/Comparable;");
   DexType* RTEXCEPTION_TYPE =
@@ -170,13 +170,13 @@ struct EnumUtil {
    */
   DexType* try_convert_to_int_type(const EnumAttributeMap& enum_attributes_map,
                                    DexType* type) const {
-    uint32_t level = get_array_level(type);
+    uint32_t level = type::get_array_level(type);
     DexType* elem_type = type;
     if (level) {
-      elem_type = get_array_element_type(type);
+      elem_type = type::get_array_element_type(type);
     }
     if (enum_attributes_map.count(elem_type)) {
-      return level ? make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
+      return level ? type::make_array_type(INTEGER_TYPE, level) : INTEGER_TYPE;
     }
     return nullptr;
   }
@@ -340,7 +340,7 @@ struct EnumUtil {
     type = DexType::make_type(name.c_str());
     ClassCreator cc(type);
     cc.set_access(ACC_PUBLIC | ACC_FINAL);
-    cc.set_super(known_types::java_lang_Object());
+    cc.set_super(type::java_lang_Object());
     DexClass* cls = cc.create();
     cls->rstate.set_generated();
 
@@ -366,7 +366,7 @@ struct EnumUtil {
   DexFieldRef* make_values_field(DexClass* cls) {
     auto name = DexString::make_string("$VALUES");
     auto field = DexField::make_field(cls->get_type(), name,
-                                      make_array_type(INTEGER_TYPE))
+                                      type::make_array_type(INTEGER_TYPE))
                      ->make_concrete(ACC_PRIVATE | ACC_FINAL | ACC_STATIC);
     cls->add_field(field);
     return (DexFieldRef*)field;
@@ -392,8 +392,8 @@ struct EnumUtil {
    * Make <clinit> method.
    */
   DexMethod* make_clinit_method(DexClass* cls, uint32_t fields_count) {
-    auto proto = DexProto::make_proto(known_types::_void(),
-                                      DexTypeList::make_type_list({}));
+    auto proto =
+        DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
     DexMethod* method =
         DexMethod::make_method(cls->get_type(), CLINIT_METHOD_STR, proto)
             ->make_concrete(ACC_STATIC | ACC_CONSTRUCTOR, false);
@@ -406,7 +406,7 @@ struct EnumUtil {
     // new-array v2, v2, [Integer
     code->push_back(dasm(OPCODE_CONST, {2_v, {LITERAL, fields_count}}));
     code->push_back(
-        dasm(OPCODE_NEW_ARRAY, make_array_type(INTEGER_TYPE), {2_v}));
+        dasm(OPCODE_NEW_ARRAY, type::make_array_type(INTEGER_TYPE), {2_v}));
     code->push_back(dasm(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT, {2_v}));
     code->set_registers_size(3);
     return method;
@@ -446,9 +446,9 @@ struct EnumUtil {
                                    DexFieldRef* values_field,
                                    uint32_t total_integer_fields) {
     DexString* name = DexString::make_string("values");
-    auto integer_array_type = make_array_type(INTEGER_TYPE);
+    auto integer_array_type = type::make_array_type(INTEGER_TYPE);
     DexProto* proto = DexProto::make_proto(
-        integer_array_type, DexTypeList::make_type_list({known_types::_int()}));
+        integer_array_type, DexTypeList::make_type_list({type::_int()}));
     DexMethod* method = DexMethod::make_method(cls->get_type(), name, proto)
                             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     method->set_code(std::make_unique<IRCode>(method, 0));
@@ -1387,7 +1387,7 @@ class EnumTransformer final {
       auto ordinal = pair.first;
       auto block = cfg.create_block();
       cases.emplace_back(ordinal, block);
-      if (ifield_type == known_types::java_lang_String()) {
+      if (ifield_type == type::java_lang_String()) {
         const DexString* value = pair.second.string_value;
         if (value) {
           block->push_back(
@@ -1401,7 +1401,7 @@ class EnumTransformer final {
         }
       } else {
         int64_t value = pair.second.primitive_value;
-        if (is_wide_type(ifield_type)) {
+        if (type::is_wide_type(ifield_type)) {
           block->push_back({dasm(OPCODE_CONST_WIDE, {1_v, {LITERAL, value}}),
                             dasm(OPCODE_RETURN_WIDE, {1_v})});
         } else {

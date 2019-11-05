@@ -39,7 +39,7 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
     auto type = env.get_type(reg);
     auto dex_type = env.get_dex_type(reg);
     if (type.equals(type_inference::TypeDomain(ZERO)) ||
-        (dex_type && check_cast(*dex_type, insn->get_type()))) {
+        (dex_type && type::check_cast(*dex_type, insn->get_type()))) {
       auto src = insn->src(0);
       auto it = code->iterator_to(mie);
       auto dst = ir_list::move_result_pseudo_of(it)->dest();

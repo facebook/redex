@@ -446,7 +446,7 @@ void ResultPropagation::patch(PassManager& mgr, IRCode* code) {
       const auto param_type =
           get_param_type(is_static, insn->get_method(), *param_index);
       const auto rtype = insn->get_method()->get_proto()->get_rtype();
-      if (!check_cast(param_type, rtype)) {
+      if (!type::check_cast(param_type, rtype)) {
         ++m_stats.unverifiable_move_results;
         continue;
       }

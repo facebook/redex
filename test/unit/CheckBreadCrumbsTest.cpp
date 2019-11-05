@@ -161,7 +161,7 @@ DexClass* create_class(DexType* type,
 }
 
 DexClass* create_class_A() {
-  auto int_t = known_types::_int();
+  auto int_t = type::_int();
   auto a_t = DexType::make_type("LA;");
 
   std::vector<DexField*> a_fields{
@@ -179,7 +179,7 @@ DexClass* create_class_A() {
                        ->make_concrete(ACC_PRIVATE | ACC_STATIC, false);
   std::vector<DexMethod*> a_methods{a_pub_fun, a_pro_fun, a_pri_fun};
   return create_class(
-      a_t, known_types::java_lang_Object(), a_methods, a_fields, ACC_PUBLIC);
+      a_t, type::java_lang_Object(), a_methods, a_fields, ACC_PUBLIC);
 }
 
 DexClass* create_class_B(DexType* super) {

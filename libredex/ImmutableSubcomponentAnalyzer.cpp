@@ -247,8 +247,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       // This analysis is only concerned with instance methods (i.e. not static)
       DexMethodRef* dex_method = insn->get_method();
       auto proto = dex_method->get_proto();
-      auto supported_return_type =
-          is_object(proto->get_rtype()) || is_primitive(proto->get_rtype());
+      auto supported_return_type = type::is_object(proto->get_rtype()) ||
+                                   type::is_primitive(proto->get_rtype());
       if (supported_return_type && proto->get_args()->size() == 0 &&
           m_is_immutable_getter(dex_method)) {
         // Note that a getter takes no arguments.

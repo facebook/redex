@@ -23,7 +23,7 @@ class SwitchDispatchTest : public RedexTest {};
 
 TEST_F(SwitchDispatchTest, create_simple_dispatch) {
   ClassCreator cc(DexType::make_type("Lfoo;"));
-  cc.set_super(known_types::java_lang_Object());
+  cc.set_super(type::java_lang_Object());
   cc.create();
   { // static methods
     DexAccessFlags access = ACC_STATIC;

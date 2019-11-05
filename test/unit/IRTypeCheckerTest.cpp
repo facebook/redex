@@ -38,9 +38,9 @@ class IRTypeCheckerTest : public RedexTest {
         DexType::make_type("D"), // v10/v11
         DexType::make_type("S"), // v12
         DexType::make_type("F"), // v13
-        known_types::java_lang_Object() // v14
+        type::java_lang_Object() // v14
     });
-    auto proto = DexProto::make_proto(known_types::_boolean(), args);
+    auto proto = DexProto::make_proto(type::_boolean(), args);
     m_method =
         DexMethod::make_method(DexType::make_type("Lbar;"),
                                DexString::make_string("testMethod"),
@@ -109,7 +109,7 @@ TEST_F(IRTypeCheckerTest, move_result_at_start) {
   // Construct a new method because we don't want any load-param opcodes in
   // this one
   auto args = DexTypeList::make_type_list({});
-  auto proto = DexProto::make_proto(known_types::_boolean(), args);
+  auto proto = DexProto::make_proto(type::_boolean(), args);
   auto method =
       DexMethod::make_method(DexType::make_type("Lbar;"),
                              DexString::make_string("testMethod2"),
@@ -150,7 +150,7 @@ TEST_F(IRTypeCheckerTest, move_result_pseudo_no_prefix) {
 TEST_F(IRTypeCheckerTest, move_result_pseudo_no_suffix) {
   using namespace dex_asm;
   std::vector<IRInstruction*> insns = {
-      dasm(OPCODE_CHECK_CAST, known_types::java_lang_Object(), {14_v}),
+      dasm(OPCODE_CHECK_CAST, type::java_lang_Object(), {14_v}),
   };
   add_code(insns);
   IRTypeChecker checker(m_method);
@@ -567,7 +567,7 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   const auto type_b = DexType::make_type("LB;");
 
   ClassCreator cls_base_creator(type_base);
-  cls_base_creator.set_super(known_types::java_lang_Object());
+  cls_base_creator.set_super(type::java_lang_Object());
   auto base_foo =
       DexMethod::make_method("LBase;.foo:()I")->make_concrete(ACC_PUBLIC, true);
   cls_base_creator.add_method(base_foo);

@@ -371,21 +371,21 @@ bool DexEncodedValue::is_wide() const {
 }
 
 DexEncodedValue* DexEncodedValue::zero_for_type(DexType* type) {
-  if (type == known_types::_byte()) {
+  if (type == type::_byte()) {
     return new DexEncodedValue(DEVT_BYTE, 0);
-  } else if (type == known_types::_char()) {
+  } else if (type == type::_char()) {
     return new DexEncodedValue(DEVT_CHAR, 0);
-  } else if (type == known_types::_short()) {
+  } else if (type == type::_short()) {
     return new DexEncodedValue(DEVT_SHORT, 0);
-  } else if (type == known_types::_int()) {
+  } else if (type == type::_int()) {
     return new DexEncodedValue(DEVT_INT, 0);
-  } else if (type == known_types::_long()) {
+  } else if (type == type::_long()) {
     return new DexEncodedValue(DEVT_LONG, 0);
-  } else if (type == known_types::_float()) {
+  } else if (type == type::_float()) {
     return new DexEncodedValue(DEVT_FLOAT, 0);
-  } else if (type == known_types::_double()) {
+  } else if (type == type::_double()) {
     return new DexEncodedValue(DEVT_DOUBLE, 0);
-  } else if (type == known_types::_boolean()) {
+  } else if (type == type::_boolean()) {
     return new DexEncodedValueBit(DEVT_BOOLEAN, false);
   } else {
     // not a primitive

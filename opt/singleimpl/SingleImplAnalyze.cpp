@@ -65,8 +65,8 @@ DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
   if (exists(single_impls, type)) {
     return type;
   }
-  if (is_array(type)) {
-    auto element_type = get_array_element_type(type);
+  if (type::is_array(type)) {
+    auto element_type = type::get_array_element_type(type);
     redex_assert(element_type);
     const auto sit = single_impls.find(element_type);
     if (sit != single_impls.end()) {

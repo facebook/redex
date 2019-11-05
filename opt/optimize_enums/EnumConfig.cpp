@@ -150,7 +150,7 @@ void calculate_param_summaries(
     const Scope& scope,
     const method_override_graph::Graph& override_graph,
     SummaryMap* param_summary_map) {
-  auto object_type = known_types::java_lang_Object();
+  auto object_type = type::java_lang_Object();
   walk::parallel::code(
       scope,
       [object_type, &override_graph](DexMethod* method) {

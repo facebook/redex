@@ -61,9 +61,9 @@ void process_proto(std::unordered_set<const DexType*>* class_references,
                    DexMethodRef* meth) {
   // Types referenced in protos.
   auto const& proto = meth->get_proto();
-  class_references->insert(get_element_type_if_array(proto->get_rtype()));
+  class_references->insert(type::get_element_type_if_array(proto->get_rtype()));
   for (auto const& ptype : proto->get_args()->get_type_list()) {
-    class_references->insert(get_element_type_if_array(ptype));
+    class_references->insert(type::get_element_type_if_array(ptype));
   }
 }
 
@@ -74,14 +74,16 @@ void process_code(std::unordered_set<const DexType*>* class_references,
   for (auto const& mie : InstructionIterable(meth->get_code())) {
     auto opcode = mie.insn;
     if (opcode->has_type()) {
-      auto typ = get_element_type_if_array(opcode->get_type());
+      auto typ = type::get_element_type_if_array(opcode->get_type());
       TRACE(EMPTY, 4, "Adding type from code to keep list: %s",
             typ->get_name()->c_str());
       class_references->insert(typ);
     } else if (opcode->has_field()) {
       auto const& field = opcode->get_field();
-      class_references->insert(get_element_type_if_array(field->get_class()));
-      class_references->insert(get_element_type_if_array(field->get_type()));
+      class_references->insert(
+          type::get_element_type_if_array(field->get_class()));
+      class_references->insert(
+          type::get_element_type_if_array(field->get_type()));
     } else if (opcode->has_method()) {
       auto const& m = opcode->get_method();
       process_proto(class_references, m);
@@ -125,7 +127,7 @@ size_t remove_empty_classes(Scope& classes) {
 
   // Ennumerate fields.
   walk::fields(classes, [&class_references](DexField* field) {
-    class_references.insert(get_element_type_if_array(field->get_type()));
+    class_references.insert(type::get_element_type_if_array(field->get_type()));
   });
 
   TRACE(EMPTY, 3, "About to erase classes.");

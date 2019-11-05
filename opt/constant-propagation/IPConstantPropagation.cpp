@@ -119,7 +119,7 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
       }
       // Since a boolean value can only have 1 and 0 as values, "GEZ" tells us
       // nothing useful about this field.
-      if (is_boolean(field->get_type()) &&
+      if (type::is_boolean(field->get_type()) &&
           value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
         continue;
       }
@@ -133,7 +133,7 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
       if (value.is_top()) {
         continue;
       }
-      if (is_boolean(method->get_proto()->get_rtype()) &&
+      if (type::is_boolean(method->get_proto()->get_rtype()) &&
           value.equals(SignedConstantDomain(sign_domain::Interval::GEZ))) {
         continue;
       }

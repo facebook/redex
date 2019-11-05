@@ -17,7 +17,7 @@ namespace {
 
 std::vector<DexClass*> create_scope(bool add_parent) {
   std::vector<DexClass*> scope = create_empty_scope();
-  auto obj_t = known_types::java_lang_Object();
+  auto obj_t = type::java_lang_Object();
 
   auto a_t = DexType::make_type("Landroidx/ArrayMap;");
   auto a_cls = create_internal_class(a_t, obj_t, {});
@@ -113,8 +113,7 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   Scope scope = create_scope(false);
 
   auto void_args = DexTypeList::make_type_list({});
-  auto void_object =
-      DexProto::make_proto(known_types::java_lang_Object(), void_args);
+  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
 
   auto a_release = DexType::make_type("Landroidx/ArrayMap;");
   auto method = static_cast<DexMethod*>(DexMethod::make_method(

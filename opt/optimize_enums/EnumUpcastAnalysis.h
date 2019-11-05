@@ -52,8 +52,8 @@ class EnumFixpointIterator final
  private:
   const Config& m_config;
 
-  const DexType* ENUM_TYPE = known_types::java_lang_Enum();
-  const DexType* OBJECT_TYPE = known_types::java_lang_Object();
+  const DexType* ENUM_TYPE = type::java_lang_Enum();
+  const DexType* OBJECT_TYPE = type::java_lang_Object();
 };
 
 void reject_unsafe_enums(const std::vector<DexClass*>& classes, Config* config);

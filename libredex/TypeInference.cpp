@@ -309,7 +309,7 @@ void TypeInference::run(bool is_static,
     }
     case IOPCODE_LOAD_PARAM: {
       always_assert(sig_it != signature.end());
-      if (is_float(*sig_it++)) {
+      if (type::is_float(*sig_it++)) {
         set_float(&init_state, insn->dest());
       } else {
         set_integer(&init_state, insn->dest());
@@ -318,7 +318,7 @@ void TypeInference::run(bool is_static,
     }
     case IOPCODE_LOAD_PARAM_WIDE: {
       always_assert(sig_it != signature.end());
-      if (is_double(*sig_it++)) {
+      if (type::is_double(*sig_it++)) {
         set_double(&init_state, insn->dest());
       } else {
         set_long(&init_state, insn->dest());
@@ -409,8 +409,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_MOVE_EXCEPTION: {
     // We don't know where to grab the type of the just-caught exception.
     // Simply set to j.l.Throwable here.
-    set_reference(current_state, insn->dest(),
-                  known_types::java_lang_Throwable());
+    set_reference(current_state, insn->dest(), type::java_lang_Throwable());
     break;
   }
   case OPCODE_RETURN_VOID: {
@@ -443,13 +442,11 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_CONST_STRING: {
-    set_reference(current_state, RESULT_REGISTER,
-                  known_types::java_lang_String());
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_String());
     break;
   }
   case OPCODE_CONST_CLASS: {
-    set_reference(current_state, RESULT_REGISTER,
-                  known_types::java_lang_Class());
+    set_reference(current_state, RESULT_REGISTER, type::java_lang_Class());
     break;
   }
   case OPCODE_MONITOR_ENTER:
@@ -478,11 +475,12 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
-    const DexType* element_type = get_array_component_type(insn->get_type());
+    const DexType* element_type =
+        type::get_array_component_type(insn->get_type());
     // We assume that structural constraints on the bytecode are satisfied,
     // i.e., the type is indeed an array type.
     always_assert(element_type != nullptr);
-    bool is_array_of_references = is_object(element_type);
+    bool is_array_of_references = type::is_object(element_type);
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (is_array_of_references) {
         refine_reference(current_state, insn->src(i));
@@ -577,8 +575,8 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     refine_integer(current_state, insn->src(1));
     const auto dex_type_opt = current_state->get_dex_type(insn->src(0));
-    if (dex_type_opt && *dex_type_opt && is_array(*dex_type_opt)) {
-      const auto etype = get_array_component_type(*dex_type_opt);
+    if (dex_type_opt && *dex_type_opt && type::is_array(*dex_type_opt)) {
+      const auto etype = type::get_array_component_type(*dex_type_opt);
       set_reference(current_state, RESULT_REGISTER, etype);
     } else {
       set_reference(current_state, RESULT_REGISTER);
@@ -615,7 +613,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_IGET: {
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
       set_integer(current_state, RESULT_REGISTER);
@@ -633,7 +631,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_IGET_WIDE: {
     refine_reference(current_state, insn->src(0));
     const DexType* type = insn->get_field()->get_type();
-    if (is_double(type)) {
+    if (type::is_double(type)) {
       set_double(current_state, RESULT_REGISTER);
     } else {
       set_long(current_state, RESULT_REGISTER);
@@ -649,7 +647,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
       refine_integer(current_state, insn->src(0));
@@ -677,7 +675,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SGET: {
     DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       set_float(current_state, RESULT_REGISTER);
     } else {
       set_integer(current_state, RESULT_REGISTER);
@@ -693,7 +691,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SGET_WIDE: {
     DexType* type = insn->get_field()->get_type();
-    if (is_double(type)) {
+    if (type::is_double(type)) {
       set_double(current_state, RESULT_REGISTER);
     } else {
       set_long(current_state, RESULT_REGISTER);
@@ -708,7 +706,7 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   }
   case OPCODE_SPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       refine_float(current_state, insn->src(0));
     } else {
       refine_integer(current_state, insn->src(0));
@@ -749,46 +747,46 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
       refine_reference(current_state, insn->src(src_idx++));
     }
     for (DexType* arg_type : arg_types) {
-      if (is_object(arg_type)) {
+      if (type::is_object(arg_type)) {
         refine_reference(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_integer(arg_type)) {
+      if (type::is_integer(arg_type)) {
         refine_integer(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_long(arg_type)) {
+      if (type::is_long(arg_type)) {
         refine_long(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_float(arg_type)) {
+      if (type::is_float(arg_type)) {
         refine_float(current_state, insn->src(src_idx++));
         continue;
       }
-      always_assert(is_double(arg_type));
+      always_assert(type::is_double(arg_type));
       refine_double(current_state, insn->src(src_idx++));
     }
     DexType* return_type = dex_method->get_proto()->get_rtype();
-    if (is_void(return_type)) {
+    if (type::is_void(return_type)) {
       break;
     }
-    if (is_object(return_type)) {
+    if (type::is_object(return_type)) {
       set_reference(current_state, RESULT_REGISTER, return_type);
       break;
     }
-    if (is_integer(return_type)) {
+    if (type::is_integer(return_type)) {
       set_integer(current_state, RESULT_REGISTER);
       break;
     }
-    if (is_long(return_type)) {
+    if (type::is_long(return_type)) {
       set_long(current_state, RESULT_REGISTER);
       break;
     }
-    if (is_float(return_type)) {
+    if (type::is_float(return_type)) {
       set_float(current_state, RESULT_REGISTER);
       break;
     }
-    always_assert(is_double(return_type));
+    always_assert(type::is_double(return_type));
     set_double(current_state, RESULT_REGISTER);
     break;
   }

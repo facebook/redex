@@ -545,7 +545,7 @@ size_t rename_virtuals(
                     next_dmethod_seeds);
 
   // rename virtual only first
-  const auto obj_t = known_types::java_lang_Object();
+  const auto obj_t = type::java_lang_Object();
   int seed = 0;
   size_t renamed = vr.rename_virtual_scopes(obj_t, seed);
   TRACE(OBFUSCATE, 2, "Virtual renamed: %ld", renamed);

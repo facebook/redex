@@ -26,14 +26,14 @@ void fix_colliding_dmethods(
   for (auto it : colliding_methods) {
     auto meth = it.first;
     auto new_proto = it.second;
-    auto new_arg_list = type_reference::append_and_make(new_proto->get_args(),
-                                                        known_types::_int());
+    auto new_arg_list =
+        type_reference::append_and_make(new_proto->get_args(), type::_int());
     new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
     size_t arg_count = 1;
     while (DexMethod::get_method(
                meth->get_class(), meth->get_name(), new_proto) != nullptr) {
-      new_arg_list = type_reference::append_and_make(new_proto->get_args(),
-                                                     known_types::_int());
+      new_arg_list =
+          type_reference::append_and_make(new_proto->get_args(), type::_int());
       new_proto = DexProto::make_proto(new_proto->get_rtype(), new_arg_list);
       ++arg_count;
     }
@@ -205,7 +205,7 @@ void add_vmethod_to_groups(
 
   auto proto = method->get_proto();
   auto rtype =
-      const_cast<DexType*>(get_element_type_if_array(proto->get_rtype()));
+      const_cast<DexType*>(type::get_element_type_if_array(proto->get_rtype()));
   if (old_to_new.count(rtype)) {
     VMethodGroupKey key = cal_group_key(rtype, org_signature_hash);
     auto& group = (*groups)[key];
@@ -214,7 +214,7 @@ void add_vmethod_to_groups(
   }
   for (const auto arg_type : proto->get_args()->get_type_list()) {
     auto extracted_arg_type =
-        const_cast<DexType*>(get_element_type_if_array(arg_type));
+        const_cast<DexType*>(type::get_element_type_if_array(arg_type));
     if (old_to_new.count(extracted_arg_type)) {
       VMethodGroupKey key =
           cal_group_key(extracted_arg_type, org_signature_hash);
@@ -354,14 +354,14 @@ void TypeRefUpdater::update_methods_fields(const Scope& scope) {
 }
 
 DexType* TypeRefUpdater::try_convert_to_new_type(DexType* type) {
-  uint32_t level = get_array_level(type);
+  uint32_t level = type::get_array_level(type);
   DexType* elem_type = type;
   if (level) {
-    elem_type = get_array_element_type(type);
+    elem_type = type::get_array_element_type(type);
   }
   if (m_old_to_new.count(elem_type)) {
     auto new_type = m_old_to_new.at(elem_type);
-    return level ? make_array_type(new_type, level) : new_type;
+    return level ? type::make_array_type(new_type, level) : new_type;
   }
   return nullptr;
 }
@@ -466,12 +466,12 @@ std::string get_method_signature(const DexMethod* method) {
 }
 
 bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
-  auto rtype = get_element_type_if_array(proto->get_rtype());
+  auto rtype = type::get_element_type_if_array(proto->get_rtype());
   if (targets.count(rtype)) {
     return true;
   }
   for (const auto arg_type : proto->get_args()->get_type_list()) {
-    auto extracted_arg_type = get_element_type_if_array(arg_type);
+    auto extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (targets.count(extracted_arg_type)) {
       return true;
     }
@@ -482,21 +482,21 @@ bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
 DexProto* get_new_proto(
     const DexProto* proto,
     const std::unordered_map<const DexType*, DexType*>& old_to_new) {
-  auto rtype = get_element_type_if_array(proto->get_rtype());
+  auto rtype = type::get_element_type_if_array(proto->get_rtype());
   if (old_to_new.count(rtype) > 0) {
     auto merger_type = old_to_new.at(rtype);
-    auto level = get_array_level(proto->get_rtype());
-    rtype = make_array_type(merger_type, level);
+    auto level = type::get_array_level(proto->get_rtype());
+    rtype = type::make_array_type(merger_type, level);
   } else {
     rtype = proto->get_rtype();
   }
   std::deque<DexType*> lst;
   for (const auto arg_type : proto->get_args()->get_type_list()) {
-    auto extracted_arg_type = get_element_type_if_array(arg_type);
+    auto extracted_arg_type = type::get_element_type_if_array(arg_type);
     if (old_to_new.count(extracted_arg_type) > 0) {
       auto merger_type = old_to_new.at(extracted_arg_type);
-      auto level = get_array_level(arg_type);
-      auto new_arg_type = make_array_type(merger_type, level);
+      auto level = type::get_array_level(arg_type);
+      auto new_arg_type = type::make_array_type(merger_type, level);
       lst.push_back(new_arg_type);
     } else {
       lst.push_back(arg_type);
@@ -638,14 +638,14 @@ void update_field_type_references(
   TRACE(REFU, 4, " updating field refs");
   const auto update_field = [&](DexFieldRef* field) {
     const auto ref_type = field->get_type();
-    const auto type = get_element_type_if_array(ref_type);
+    const auto type = type::get_element_type_if_array(ref_type);
     if (old_to_new.count(type) == 0) {
       return;
     }
     DexFieldSpec spec;
     auto new_type = old_to_new.at(type);
-    auto level = get_array_level(ref_type);
-    auto new_type_incl_array = make_array_type(new_type, level);
+    auto level = type::get_array_level(ref_type);
+    auto new_type_incl_array = type::make_array_type(new_type, level);
     spec.type = new_type_incl_array;
     field->change(spec);
     TRACE(REFU, 9, " updating field ref to %s", SHOW(type));
@@ -657,7 +657,7 @@ void update_field_type_references(
       auto insn = mie.insn;
       if (insn->has_field()) {
         const auto ref_type = insn->get_field()->get_type();
-        const auto type = get_element_type_if_array(ref_type);
+        const auto type = type::get_element_type_if_array(ref_type);
         always_assert_log(
             old_to_new.count(type) == 0,
             "Find old type in field reference %s, please make sure that "

@@ -2041,7 +2041,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 
   auto deobf_type = [&](DexType* type) {
     if (type) {
-      if (is_array(type)) {
+      if (type::is_array(type)) {
         auto* type_str = type->c_str();
         int dim = 0;
         while (type_str[dim] == '[') {
@@ -2052,7 +2052,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         std::string result;
         if (inner_cls) {
           result = java_names::internal_to_external(deobf_class(inner_cls));
-        } else if (inner_type && is_primitive(inner_type)) {
+        } else if (inner_type && type::is_primitive(inner_type)) {
           result = deobf_primitive(type_str[dim]);
         } else {
           result = java_names::internal_to_external(&type_str[dim]);
@@ -2065,7 +2065,7 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
         DexClass* cls = type_class(type);
         if (cls) {
           return java_names::internal_to_external(deobf_class(cls));
-        } else if (is_primitive(type)) {
+        } else if (type::is_primitive(type)) {
           return std::string(deobf_primitive(type->c_str()[0]));
         } else {
           return java_names::internal_to_external(type->c_str());

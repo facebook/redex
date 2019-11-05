@@ -21,9 +21,9 @@ struct LocalDceTryTest : public RedexTest {
 
   LocalDceTryTest() {
     auto args = DexTypeList::make_type_list({});
-    auto proto = DexProto::make_proto(known_types::_void(), args);
+    auto proto = DexProto::make_proto(type::_void(), args);
     m_method =
-        DexMethod::make_method(known_types::java_lang_Object(),
+        DexMethod::make_method(type::java_lang_Object(),
                                DexString::make_string("testMethod"), proto)
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, false);
     m_method->set_code(std::make_unique<IRCode>(m_method, 1));
@@ -225,13 +225,13 @@ struct LocalDceEnhanceTest : public RedexTest {};
 
 TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
   Scope scope = create_empty_scope();
-  auto void_t = known_types::_void();
+  auto void_t = type::_void();
   auto void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
-  DexClass* a_cls = create_internal_class(
-      a_type, known_types::java_lang_Object(), {}, ACC_PUBLIC | ACC_INTERFACE);
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(a_cls, "m", void_void);
 
   scope.push_back(a_cls);
@@ -259,13 +259,13 @@ TEST_F(LocalDceEnhanceTest, NoImplementorIntfTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
   Scope scope = create_empty_scope();
-  auto void_t = known_types::_void();
+  auto void_t = type::_void();
   auto void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
 
   DexType* a_type = DexType::make_type("LA;");
-  DexClass* a_cls = create_internal_class(
-      a_type, known_types::java_lang_Object(), {}, ACC_PUBLIC | ACC_ABSTRACT);
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
   create_abstract_method(a_cls, "m", void_void);
 
   DexType* b_type = DexType::make_type("LB;");
@@ -303,12 +303,12 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorTest) {
 
 TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
   Scope scope = create_empty_scope();
-  auto void_t = known_types::_void();
+  auto void_t = type::_void();
   auto void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
-  DexClass* a_cls = create_internal_class(
-      a_type, known_types::java_lang_Object(), {}, ACC_PUBLIC | ACC_ABSTRACT);
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
   create_abstract_method(a_cls, "m", void_void);
 
   DexType* b_type = DexType::make_type("LB;");
@@ -340,17 +340,17 @@ TEST_F(LocalDceEnhanceTest, NoImplementorTest) {
 
 TEST_F(LocalDceEnhanceTest, HaveImplementorIntfTest) {
   Scope scope = create_empty_scope();
-  auto void_t = known_types::_void();
+  auto void_t = type::_void();
   auto void_void =
       DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
   DexType* a_type = DexType::make_type("LA;");
-  DexClass* a_cls = create_internal_class(
-      a_type, known_types::java_lang_Object(), {}, ACC_PUBLIC | ACC_INTERFACE);
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_INTERFACE);
   create_abstract_method(a_cls, "m", void_void);
 
   DexType* b_type = DexType::make_type("LB;");
   DexClass* b_cls =
-      create_internal_class(b_type, known_types::java_lang_Object(), {a_type});
+      create_internal_class(b_type, type::java_lang_Object(), {a_type});
 
   scope.push_back(a_cls);
   scope.push_back(b_cls);

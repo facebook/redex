@@ -556,10 +556,10 @@ TEST_F(RenamerTest, Interface3IntfOverEscape) {
   std::vector<DexClass*> scope = create_scope_11();
   // add static void A() {} in class A
   auto cls = type_class(DexType::get_type("LA;"));
-  create_empty_method(cls, "A",
-                      DexProto::make_proto(known_types::_void(),
-                                           DexTypeList::make_type_list({})),
-                      ACC_PUBLIC | ACC_STATIC);
+  create_empty_method(
+      cls, "A",
+      DexProto::make_proto(type::_void(), DexTypeList::make_type_list({})),
+      ACC_PUBLIC | ACC_STATIC);
 
   print_scope(scope);
   EXPECT_EQ(18, rename_virtuals(scope));

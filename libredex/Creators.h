@@ -39,7 +39,7 @@ struct Location {
   bool is_wide() const { return loc_size(type) == 2; }
 
   bool is_ref() const {
-    char t = type_shorty(type);
+    char t = type::type_shorty(type);
     return t == 'L' || t == '[';
   }
 
@@ -54,7 +54,7 @@ struct Location {
   int get_reg() const { return reg; }
 
   static Location& empty() {
-    static Location empty_loc(known_types::_void(), 0);
+    static Location empty_loc(type::_void(), 0);
     return empty_loc;
   }
 
@@ -63,8 +63,8 @@ struct Location {
    * Size of this location.
    */
   static uint16_t loc_size(DexType* type) {
-    char t = type_shorty(type);
-    always_assert(type != known_types::_void());
+    char t = type::type_shorty(type);
+    always_assert(type != type::_void());
     return t == 'J' || t == 'D' ? 2 : 1;
   }
 
@@ -568,7 +568,7 @@ struct ClassCreator {
   DexClass* create() {
     always_assert_log(m_cls->m_self, "Self cannot be null in a DexClass");
     if (m_cls->m_super_class == NULL) {
-      if (m_cls->m_self != known_types::java_lang_Object()) {
+      if (m_cls->m_self != type::java_lang_Object()) {
         always_assert_log(m_cls->m_super_class, "No supertype found for %s",
                           SHOW(m_cls->m_self));
       }

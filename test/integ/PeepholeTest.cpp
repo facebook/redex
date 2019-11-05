@@ -109,7 +109,7 @@ class PeepholeTest : public ::testing::Test {
   // add a void->void static method to our dex_class
   DexMethod* make_void_method(const char* method_name,
                               const IRInstructionList& insns) const {
-    auto ret = known_types::_void();
+    auto ret = type::_void();
     auto args = DexTypeList::make_type_list({});
     auto proto = DexProto::make_proto(ret, args); // I()
     DexMethod* method =
@@ -181,7 +181,7 @@ class PeepholeTest : public ::testing::Test {
     DexFieldRef* field =
         DexField::make_field(dex_class->get_type(),
                              DexString::make_string("field_name"),
-                             known_types::_int());
+                             type::_int());
 
     return IRInstructionList{
         dasm(OPCODE_NEW_INSTANCE, dex_class->get_type(), {}),
@@ -199,7 +199,7 @@ class PeepholeTest : public ::testing::Test {
     DexFieldRef* field =
         DexField::make_field(dex_class->get_type(),
                              DexString::make_string("field_name"),
-                             known_types::_int());
+                             type::_int());
 
     return IRInstructionList{
         dasm(OPCODE_NEW_INSTANCE, dex_class->get_type(), {}),
@@ -220,7 +220,7 @@ class PeepholeTest : public ::testing::Test {
     DexField* field =
         DexField::make_field(dex_class->get_type(),
                              DexString::make_string("field_name"),
-                             known_types::_int())
+                             type::_int())
             ->make_concrete(make_field_volatile ? DexAccessFlags::ACC_VOLATILE
                                                 : DexAccessFlags::ACC_PUBLIC);
     dex_class->add_field(field);
@@ -414,7 +414,7 @@ static void sputget_peep_hole_test(const std::string& field_desc,
                                    bool volatile_field = false) {
   g_redex = new RedexContext();
   ClassCreator creator(DexType::make_type("LFoo;"));
-  creator.set_super(known_types::java_lang_Object());
+  creator.set_super(type::java_lang_Object());
 
   auto field = static_cast<DexField*>(DexField::make_field(field_desc));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC);
@@ -802,7 +802,7 @@ static void aputget_peep_hole_test(const std::string& code_str,
                                    const std::string& expected_str) {
   g_redex = new RedexContext();
   ClassCreator creator(DexType::make_type("LFoo;"));
-  creator.set_super(known_types::java_lang_Object());
+  creator.set_super(type::java_lang_Object());
 
   auto method = static_cast<DexMethod*>(DexMethod::make_method("LFoo;.b:()V"));
   method->make_concrete(ACC_PUBLIC | ACC_STATIC, false);

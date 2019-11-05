@@ -56,25 +56,25 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     std::vector<DexType*> no_interfaces;
 
     DexType* i_c_type = DexType::make_type("I_C;");
-    DexClass* i_c_cls = create_class(i_c_type, known_types::java_lang_Object(),
+    DexClass* i_c_cls = create_class(i_c_type, type::java_lang_Object(),
                                      no_interfaces, ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_c_cls);
 
     std::vector<DexType*> c_interfaces{i_c_type};
     DexType* c_type = DexType::make_type("C;");
-    DexClass* c_cls = create_class(c_type, known_types::java_lang_Object(),
+    DexClass* c_cls = create_class(c_type, type::java_lang_Object(),
                                    c_interfaces, ACC_PUBLIC);
     m_classes.push_back(c_cls);
 
     DexType* i_b0_type = DexType::make_type("I_B0;");
     DexClass* i_b0_cls =
-        create_class(i_b0_type, known_types::java_lang_Object(), no_interfaces,
+        create_class(i_b0_type, type::java_lang_Object(), no_interfaces,
                      ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_b0_cls);
 
     DexType* i_b1_type = DexType::make_type("I_B1;");
     DexClass* i_b1_cls =
-        create_class(i_b1_type, known_types::java_lang_Object(), no_interfaces,
+        create_class(i_b1_type, type::java_lang_Object(), no_interfaces,
                      ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_b1_cls);
 
@@ -84,7 +84,7 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     m_classes.push_back(b_cls);
 
     DexType* i_a_type = DexType::make_type("I_A;");
-    DexClass* i_a_cls = create_class(i_a_type, known_types::java_lang_Object(),
+    DexClass* i_a_cls = create_class(i_a_type, type::java_lang_Object(),
                                      no_interfaces, ACC_PUBLIC | ACC_INTERFACE);
     m_classes.push_back(i_a_cls);
 
@@ -97,8 +97,8 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
   void add_testing_class() {
     std::vector<DexType*> no_interfaces;
     DexType* type = DexType::make_type("testClass");
-    m_cls = create_class(type, known_types::java_lang_Object(), no_interfaces,
-                         ACC_PUBLIC);
+    m_cls =
+        create_class(type, type::java_lang_Object(), no_interfaces, ACC_PUBLIC);
     m_classes.push_back(m_cls);
   }
 
@@ -107,7 +107,7 @@ struct RemoveRedundantCheckCastsTest : public RedexTest {
     add_testing_class();
 
     m_args = DexTypeList::make_type_list({});
-    m_proto = DexProto::make_proto(known_types::_void(), m_args);
+    m_proto = DexProto::make_proto(type::_void(), m_args);
   }
 
   DexMethod* create_empty_method(const std::string& name) {

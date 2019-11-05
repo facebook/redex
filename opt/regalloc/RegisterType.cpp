@@ -338,9 +338,9 @@ static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
   const auto& types = method->get_proto()->get_args()->get_type_list();
   always_assert_log(types.size() > i, "Invalid invoke insn %s\n", SHOW(insn));
   auto* type = types.at(i);
-  if (is_wide_type(type)) {
+  if (type::is_wide_type(type)) {
     return RegisterType::WIDE;
-  } else if (is_primitive(types.at(i))) {
+  } else if (type::is_primitive(types.at(i))) {
     return RegisterType::NORMAL;
   } else {
     return RegisterType::OBJECT;
@@ -578,7 +578,7 @@ RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
   case OPCODE_NEW_ARRAY:
     return RegisterType::NORMAL;
   case OPCODE_FILLED_NEW_ARRAY:
-    return is_primitive(get_array_component_type(insn->get_type()))
+    return type::is_primitive(type::get_array_component_type(insn->get_type()))
                ? RegisterType::NORMAL
                : RegisterType::OBJECT;
   case IOPCODE_LOAD_PARAM:

@@ -277,7 +277,7 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     return TypeDemand::Int;
 
   case OPCODE_FILLED_NEW_ARRAY: {
-    DexType* component_type = get_array_component_type(insn->get_type());
+    DexType* component_type = type::get_array_component_type(insn->get_type());
     return get_type_demand(component_type);
   }
   case OPCODE_CMPL_FLOAT:
@@ -402,9 +402,9 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
         auto dex_type = type_environment.get_dex_type(insn->src(1));
         TRACE(CU, 3, "[CU] aput(-wide) instruction array type: %s",
               dex_type ? SHOW(dex_type) : "(unknown dex type)");
-        if (dex_type && is_array(*dex_type)) {
+        if (dex_type && type::is_array(*dex_type)) {
           auto type_demand =
-              get_type_demand(get_array_component_type(*dex_type));
+              get_type_demand(type::get_array_component_type(*dex_type));
           always_assert(insn->opcode() != OPCODE_APUT ||
                         (type_demand == TypeDemand::Error ||
                          type_demand == TypeDemand::Int ||

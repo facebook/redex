@@ -389,7 +389,7 @@ void ReduceArrayLiterals::patch() {
     }
 
     auto type = new_array_insn->get_type();
-    auto element_type = get_array_component_type(type);
+    auto element_type = type::get_array_component_type(type);
 
     if (m_min_sdk < 24) {
       // See T45708995.
@@ -416,14 +416,14 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (is_wide_type(element_type)) {
+    if (type::is_wide_type(element_type)) {
       // TODO: Consider using an annotation-based scheme.
       m_stats.remaining_wide_arrays++;
       m_stats.remaining_wide_array_elements += aput_insns.size();
       continue;
     }
 
-    if (m_min_sdk < 21 && is_array(element_type)) {
+    if (m_min_sdk < 21 && type::is_array(element_type)) {
       // The Dalvik verifier had a bug for this case:
       // It retrieves the "element class" to check if the elements are of the
       // right type:
@@ -438,7 +438,7 @@ void ReduceArrayLiterals::patch() {
 
     if (m_min_sdk < 19 &&
         (m_arch == Architecture::UNKNOWN || m_arch == Architecture::X86) &&
-        !is_primitive(element_type)) {
+        !type::is_primitive(element_type)) {
       // Before Kitkat, the Dalvik x86-atom backend had a bug for this case.
       // https://android.googlesource.com/platform/dalvik/+/ics-mr0/vm/mterp/out/InterpAsm-x86-atom.S#25106
       m_stats.remaining_buggy_arrays++;
@@ -446,7 +446,7 @@ void ReduceArrayLiterals::patch() {
       continue;
     }
 
-    if (is_primitive(element_type) && element_type != known_types::_int()) {
+    if (type::is_primitive(element_type) && element_type != type::_int()) {
       // Somewhat surprising random implementation limitation in all known
       // ART versions:
       // https://android.googlesource.com/platform/art/+/400455c23d6a9a849d090b9e60ff53c4422e461b/runtime/interpreter/interpreter_common.cc#189
@@ -596,7 +596,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   // replace aput instructions with moves to temporary regs used by
   // filled-new-array instruction (see above)
 
-  auto move_op = is_primitive(get_array_component_type(type))
+  auto move_op = type::is_primitive(type::get_array_component_type(type))
                      ? OPCODE_MOVE
                      : OPCODE_MOVE_OBJECT;
 

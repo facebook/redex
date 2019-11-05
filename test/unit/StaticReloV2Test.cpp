@@ -21,13 +21,13 @@ struct StaticReloV2Test : public RedexTest {
   DexProto* m_proto;
 
   StaticReloV2Test() : RedexTest() {
-    m_proto = DexProto::make_proto(known_types::_void(),
-                                   DexTypeList::make_type_list({}));
+    m_proto =
+        DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   }
 
   DexClass* create_class(const char* class_name) {
     ClassCreator cc(DexType::make_type(class_name));
-    cc.set_super(known_types::java_lang_Object());
+    cc.set_super(type::java_lang_Object());
     return cc.create();
   }
 

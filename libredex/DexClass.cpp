@@ -1074,10 +1074,10 @@ void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
 
 static DexString* make_shorty(const DexType* rtype, const DexTypeList* args) {
   std::string s;
-  s.push_back(type_shorty(rtype));
+  s.push_back(type::type_shorty(rtype));
   if (args != nullptr) {
     for (auto arg : args->get_type_list()) {
-      s.push_back(type_shorty(arg));
+      s.push_back(type::type_shorty(arg));
     }
   }
   return DexString::make_string(s);
@@ -1356,12 +1356,12 @@ DexProto* DexType::get_non_overlapping_proto(DexString* method_name,
   for (auto t : type_list) {
     new_arg_list.push_back(t);
   }
-  new_arg_list.push_back(known_types::_int());
+  new_arg_list.push_back(type::_int());
   DexTypeList* new_args = DexTypeList::make_type_list(std::move(new_arg_list));
   DexProto* new_proto = DexProto::make_proto(rtype, new_args);
   methodref_in_context = DexMethod::get_method(this, method_name, new_proto);
   while (methodref_in_context) {
-    new_arg_list.push_back(known_types::_int());
+    new_arg_list.push_back(type::_int());
     new_args = DexTypeList::make_type_list(std::move(new_arg_list));
     new_proto = DexProto::make_proto(rtype, new_args);
     methodref_in_context = DexMethod::get_method(this, method_name, new_proto);

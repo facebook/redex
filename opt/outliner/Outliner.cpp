@@ -40,15 +40,15 @@ DexMethodRef* get_ctor(DexType* type) {
       type,
       DexString::make_string("<init>"),
       DexProto::make_proto(
-          known_types::_void(),
-          DexTypeList::make_type_list({known_types::java_lang_String()})));
+          type::_void(),
+          DexTypeList::make_type_list({type::java_lang_String()})));
   return ctor;
 }
 
 DexMethodRef* get_dispatch_method() {
   auto ex_type = DexType::get_type("Ljava/lang/Exception;");
   auto proto = DexProto::make_proto(
-      ex_type, DexTypeList::make_type_list({known_types::_int()}));
+      ex_type, DexTypeList::make_type_list({type::_int()}));
   auto target = DexType::make_type(DISPATCH_CLASS_NAME);
   return DexMethod::make_method(
       target, DexString::make_string(DISPATCH_METHOD_NAME), proto);
@@ -70,7 +70,7 @@ void build_dispatcher(DexStoresVector& stores,
 
   // define args and locals
   auto outline_arg = mc->get_local(0);
-  auto str_local = mc->make_local(known_types::java_lang_String());
+  auto str_local = mc->make_local(type::java_lang_String());
   auto ex_local = mc->make_local(DexType::get_type("Ljava/lang/Exception;"));
 
   // build up our outlined method
@@ -105,7 +105,7 @@ void build_dispatcher(DexStoresVector& stores,
 
   // create outline class and dispatch method
   auto dispatch_cls = new ClassCreator(dispatch_method->get_class());
-  dispatch_cls->set_super(known_types::java_lang_Object());
+  dispatch_cls->set_super(type::java_lang_Object());
   dispatch_cls->set_access(ACC_PUBLIC);
   dispatch_cls->add_method(mc->create());
   // add class to last dex of root store

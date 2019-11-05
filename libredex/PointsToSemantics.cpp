@@ -782,7 +782,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE: {
       DexMethodRef* dex_method = insn->get_method();
-      if (is_object(dex_method->get_proto()->get_rtype())) {
+      if (type::is_object(dex_method->get_proto()->get_rtype())) {
         // We attach an anchor to a method invocation only if the method returns
         // an object.
         current_state->set(RESULT_REGISTER, AnchorDomain(insn));
@@ -970,7 +970,7 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_INTERFACE: {
-      return is_object(insn->get_method()->get_proto()->get_rtype());
+      return type::is_object(insn->get_method()->get_proto()->get_rtype());
     }
     default: { return false; }
     }
@@ -1010,8 +1010,7 @@ class PointsToActionGenerator final {
     }
     case OPCODE_NEW_INSTANCE: {
       DexType* dex_type = insn->get_type();
-      if (m_type_system.is_subtype(known_types::java_lang_Throwable(),
-                                   dex_type)) {
+      if (m_type_system.is_subtype(type::java_lang_Throwable(), dex_type)) {
         // If the object created is an exception (i.e., its type inherits from
         // java.lang.Throwable), we use PTS_GET_EXCEPTION. In our semantic
         // model, the exact identity of an exception is abstracted away for
@@ -1031,8 +1030,9 @@ class PointsToActionGenerator final {
           PointsToOperation(PTS_NEW_OBJECT, insn->get_type()),
           get_variable_from_anchor(insn)));
       if (insn->opcode() == OPCODE_FILLED_NEW_ARRAY) {
-        const DexType* element_type = get_array_element_type(insn->get_type());
-        if (!is_object(element_type)) {
+        const DexType* element_type =
+            type::get_array_element_type(insn->get_type());
+        if (!type::is_object(element_type)) {
           break;
         }
         auto lhs =
@@ -1149,7 +1149,7 @@ class PointsToActionGenerator final {
 
     // Allocate a variable for the returned object if any.
     boost::optional<PointsToVariable> dest;
-    if (is_object(insn->get_method()->get_proto()->get_rtype())) {
+    if (type::is_object(insn->get_method()->get_proto()->get_rtype())) {
       dest = {get_variable_from_anchor(insn)};
     }
 
@@ -1165,7 +1165,7 @@ class PointsToActionGenerator final {
     // Process the arguments of the method invocation.
     int32_t arg_pos = 0;
     for (DexType* dex_type : signature) {
-      if (is_object(dex_type)) {
+      if (type::is_object(dex_type)) {
         args.push_back(
             {arg_pos,
              get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});

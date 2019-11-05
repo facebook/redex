@@ -475,11 +475,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   case OPCODE_FILLED_NEW_ARRAY: {
-    const DexType* element_type = get_array_component_type(insn->get_type());
+    const DexType* element_type =
+        type::get_array_component_type(insn->get_type());
     // We assume that structural constraints on the bytecode are satisfied,
     // i.e., the type is indeed an array type.
     always_assert(element_type != nullptr);
-    bool is_array_of_references = is_object(element_type);
+    bool is_array_of_references = type::is_object(element_type);
     for (size_t i = 0; i < insn->srcs_size(); ++i) {
       if (is_array_of_references) {
         assume_reference(current_state, insn->src(i));
@@ -617,7 +618,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_IPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       assume_float(current_state, insn->src(0));
     } else {
       assume_integer(current_state, insn->src(0));
@@ -660,7 +661,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_SPUT: {
     const DexType* type = insn->get_field()->get_type();
-    if (is_float(type)) {
+    if (type::is_float(type)) {
       assume_float(current_state, insn->src(0));
     } else {
       assume_integer(current_state, insn->src(0));
@@ -706,23 +707,23 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_reference(current_state, insn->src(src_idx++));
     }
     for (DexType* arg_type : arg_types) {
-      if (is_object(arg_type)) {
+      if (type::is_object(arg_type)) {
         assume_reference(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_integer(arg_type)) {
+      if (type::is_integer(arg_type)) {
         assume_integer(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_long(arg_type)) {
+      if (type::is_long(arg_type)) {
         assume_long(current_state, insn->src(src_idx++));
         continue;
       }
-      if (is_float(arg_type)) {
+      if (type::is_float(arg_type)) {
         assume_float(current_state, insn->src(src_idx++));
         continue;
       }
-      always_assert(is_double(arg_type));
+      always_assert(type::is_double(arg_type));
       assume_double(current_state, insn->src(src_idx++));
     }
     break;

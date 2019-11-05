@@ -338,7 +338,8 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
         for (auto ptype : proto->get_args()->get_type_list()) {
-          dont_rename_native_bindings.insert(get_element_type_if_array(ptype));
+          dont_rename_native_bindings.insert(
+              type::get_element_type_if_array(ptype));
         }
       }
     }
@@ -349,7 +350,8 @@ RenameClassesPassV2::build_dont_rename_native_bindings(Scope& scope) {
         auto rtype = proto->get_rtype();
         dont_rename_native_bindings.insert(rtype);
         for (auto ptype : proto->get_args()->get_type_list()) {
-          dont_rename_native_bindings.insert(get_element_type_if_array(ptype));
+          dont_rename_native_bindings.insert(
+              type::get_element_type_if_array(ptype));
         }
       }
     }

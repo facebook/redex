@@ -46,7 +46,7 @@ struct DedupBlocksTest : public RedexTest {
 
   DedupBlocksTest() {
     m_args = DexTypeList::make_type_list({});
-    m_proto = DexProto::make_proto(known_types::_void(), m_args);
+    m_proto = DexProto::make_proto(type::_void(), m_args);
     m_type = DexType::make_type("testClass");
 
     m_creator = new ClassCreator(m_type);

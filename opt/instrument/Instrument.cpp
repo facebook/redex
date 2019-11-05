@@ -234,7 +234,7 @@ void insert_invoke_static_array_arg(IRCode* code,
   array_size_inst->set_dest(array_dest);
 
   IRInstruction* new_array_insn = new IRInstruction(OPCODE_NEW_ARRAY);
-  new_array_insn->set_type(make_array_type(known_types::_short()));
+  new_array_insn->set_type(type::make_array_type(type::_short()));
   new_array_insn->set_srcs_size(1);
   new_array_insn->set_src(0, array_dest);
 

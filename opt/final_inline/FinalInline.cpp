@@ -116,7 +116,8 @@ class FinalInlineImpl {
         if (keep_member(m_config.keep_class_members, sfield)) continue;
         if ((sfield->get_access() & aflags) != aflags) continue;
         auto value = sfield->get_static_value();
-        if (value == nullptr && !is_primitive(sfield->get_type())) continue;
+        if (value == nullptr && !type::is_primitive(sfield->get_type()))
+          continue;
         if (!found && !can_delete_DEPRECATED(sfield)) continue;
 
         moveable_fields.push_back(sfield);
@@ -231,7 +232,7 @@ class FinalInlineImpl {
           continue;
         }
         auto value = sfield->get_static_value();
-        if (value == nullptr && !is_primitive(sfield->get_type())) {
+        if (value == nullptr && !type::is_primitive(sfield->get_type())) {
           continue;
         }
         if (value != nullptr && !value->is_evtype_primitive()) {

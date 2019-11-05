@@ -25,7 +25,7 @@ namespace {
 void create_object_class() {
   std::vector<DexMethod*> object_methods;
 
-  auto type = known_types::java_lang_Object();
+  auto type = type::java_lang_Object();
   // create the following methods:
   // protected java.lang.Object.clone()Ljava/lang/Object;
   // public java.lang.Object.equals(Ljava/lang/Object;)Z
@@ -41,22 +41,19 @@ void create_object_class() {
 
   // required sigs
   auto void_args = DexTypeList::make_type_list({});
-  auto void_object =
-      DexProto::make_proto(known_types::java_lang_Object(), void_args);
+  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
   auto object_bool = DexProto::make_proto(
-      known_types::_boolean(),
-      DexTypeList::make_type_list({known_types::java_lang_Object()}));
-  auto void_void = DexProto::make_proto(known_types::_void(), void_args);
-  auto void_class =
-      DexProto::make_proto(known_types::java_lang_Class(), void_args);
-  auto void_int = DexProto::make_proto(known_types::_int(), void_args);
-  auto void_string =
-      DexProto::make_proto(known_types::java_lang_String(), void_args);
+      type::_boolean(),
+      DexTypeList::make_type_list({type::java_lang_Object()}));
+  auto void_void = DexProto::make_proto(type::_void(), void_args);
+  auto void_class = DexProto::make_proto(type::java_lang_Class(), void_args);
+  auto void_int = DexProto::make_proto(type::_int(), void_args);
+  auto void_string = DexProto::make_proto(type::java_lang_String(), void_args);
   auto long_void = DexProto::make_proto(
-      known_types::_void(), DexTypeList::make_type_list({known_types::_int()}));
+      type::_void(), DexTypeList::make_type_list({type::_int()}));
   auto long_int_void = DexProto::make_proto(
-      known_types::_void(),
-      DexTypeList::make_type_list({known_types::_long(), known_types::_int()}));
+      type::_void(),
+      DexTypeList::make_type_list({type::_long(), type::_int()}));
 
   // required names
   auto clone = DexString::make_string("clone");
@@ -72,7 +69,7 @@ void create_object_class() {
   // create methods and add to the list of object methods
   // All the checks to see if the methods exist are because we cannot set
   // access/virtual for external methods, so if the method exists (i.e. if this
-  // function is called multiple times with known_types::java_lang_Object()), we
+  // function is called multiple times with type::java_lang_Object()), we
   // will fail an assertion. This only happens in tests when no external jars
   // are available protected java.lang.Object.clone()Ljava/lang/Object;
   auto method =
@@ -401,8 +398,7 @@ void merge(const BaseSigs& base_sigs,
             base_sig_map[name][proto][0].methods.size(),
             base_sig_map[name][proto][0].interfaces.size());
       always_assert(
-          base_sig_map[name][proto][0].type ==
-              known_types::java_lang_Object() ||
+          base_sig_map[name][proto][0].type == type::java_lang_Object() ||
           !is_interface(type_class(base_sig_map[name][proto][0].type)));
       // walk every scope in derived that we have to merge
       TRACE(VIRT, 4, "-- walking scopes");
@@ -418,9 +414,9 @@ void merge(const BaseSigs& base_sigs,
               4,
               "-- is interface 0x%X %d",
               scope.type,
-              scope.type != known_types::java_lang_Object() &&
+              scope.type != type::java_lang_Object() &&
                   is_interface(type_class(scope.type)));
-        if (scope.type == known_types::java_lang_Object() ||
+        if (scope.type == type::java_lang_Object() ||
             !is_interface(type_class(scope.type))) {
           TRACE(VIRT,
                 4,
@@ -526,7 +522,7 @@ bool load_interfaces_methods(const std::deque<DexType*>& interfaces,
 bool get_interface_methods(const DexType* type, BaseIntfSigs& intf_methods) {
   always_assert_log(intf_methods.size() == 0, "intf_methods is an out param");
   // REVIEW: should we always have a DexClass for java.lang.Object?
-  if (type == known_types::java_lang_Object()) return false;
+  if (type == type::java_lang_Object()) return false;
   auto cls = type_class(type);
   always_assert_log(
       cls != nullptr, "DexClass must exist for type %s\n", SHOW(type));
@@ -775,17 +771,15 @@ void get_root_scopes(const SignatureMap& sig_map,
 
 SignatureMap build_signature_map(const ClassHierarchy& class_hierarchy) {
   SignatureMap signature_map;
-  build_signature_map(
-      class_hierarchy, known_types::java_lang_Object(), signature_map);
+  build_signature_map(class_hierarchy, type::java_lang_Object(), signature_map);
   return signature_map;
 }
 
 const std::vector<DexMethod*>& get_vmethods(const DexType* type) {
   const DexClass* cls = type_class(type);
   if (cls == nullptr) {
-    always_assert_log(type == known_types::java_lang_Object(),
-                      "Unknown type %s\n",
-                      SHOW(type));
+    always_assert_log(
+        type == type::java_lang_Object(), "Unknown type %s\n", SHOW(type));
     create_object_class();
     cls = type_class(type);
   }
@@ -800,7 +794,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
   always_assert(scopes != protos->second.end());
   const auto meth_type = meth->get_class();
   for (const auto& scope : scopes->second) {
-    if (scope.type == known_types::java_lang_Object()) return scope;
+    if (scope.type == type::java_lang_Object()) return scope;
     if (is_subclass(scope.type, meth_type)) return scope;
   }
   always_assert_log(false, "unreachable. Scope not found for %s\n", SHOW(meth));
@@ -821,7 +815,7 @@ std::vector<const DexMethod*> select_from(const VirtualScope* scope,
   std::unordered_map<const DexType*, DexMethod*> non_child_methods;
   bool found_root_method = false;
   for (const auto& method : scope->methods) {
-    if (check_cast(method.first->get_class(), type)) {
+    if (type::check_cast(method.first->get_class(), type)) {
       found_root_method =
           found_root_method || type == method.first->get_class();
       refined_scope.emplace_back(method.first);
@@ -854,7 +848,7 @@ ClassScopes::ClassScopes(const Scope& scope) {
   m_hierarchy = build_type_hierarchy(scope);
   m_interface_map = build_interface_map(m_hierarchy);
   m_sig_map = build_signature_map(m_hierarchy);
-  build_class_scopes(known_types::java_lang_Object());
+  build_class_scopes(type::java_lang_Object());
   build_interface_scopes();
 }
 
@@ -864,12 +858,12 @@ const ClassHierarchy& ClassScopes::get_parent_to_children() const {
 
 /**
  * Builds the ClassScope for type and children.
- * Calling with known_types::java_lang_Object() builds the ClassScope
+ * Calling with type::java_lang_Object() builds the ClassScope
  * for the entire system as redex knows it.
  */
 void ClassScopes::build_class_scopes(const DexType* type) {
   auto cls = type_class(type);
-  always_assert(cls != nullptr || type == known_types::java_lang_Object());
+  always_assert(cls != nullptr || type == type::java_lang_Object());
   get_root_scopes(m_sig_map, type, m_scopes);
 
   const auto& children_it = m_hierarchy.find(type);

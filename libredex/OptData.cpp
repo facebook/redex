@@ -150,7 +150,7 @@ std::shared_ptr<InsnOptData> MethodOptData::get_insn_opt_data(
 }
 
 ClassOptData::ClassOptData(const DexClass* cls) : m_cls(cls) {
-  m_package = get_package_name(cls->get_type());
+  m_package = type::get_package_name(cls->get_type());
   auto source_file = cls->get_source_file();
   if (source_file != nullptr) {
     m_has_srcfile = true;

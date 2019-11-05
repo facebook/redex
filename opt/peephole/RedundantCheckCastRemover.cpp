@@ -60,5 +60,5 @@ bool RedundantCheckCastRemover::can_remove_check_cast(
   auto check_type = check_cast_op->get_type();
   return move_result_op->dest() == check_cast_op->src(0) &&
          move_result_pseudo->dest() == check_cast_op->src(0) &&
-         check_cast(invoke_return, check_type);
+         type::check_cast(invoke_return, check_type);
 }
