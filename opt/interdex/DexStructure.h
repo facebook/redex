@@ -23,6 +23,7 @@ using TypeRefs = std::unordered_set<DexType*>;
 struct DexInfo {
   bool primary{false};
   bool coldstart{false};
+  bool background{false};
   bool extended{false};
   bool scroll{false};
 };

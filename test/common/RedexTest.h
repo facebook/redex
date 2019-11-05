@@ -26,6 +26,7 @@ struct RedexTest : public testing::Test {
 struct RedexIntegrationTest : public RedexTest {
  protected:
   const char* dex_file;
+  const char* secondary_dex_file;
   std::vector<DexStore> stores;
   boost::optional<DexClasses&> classes;
   DexMetadata dex_metadata;
@@ -33,11 +34,18 @@ struct RedexIntegrationTest : public RedexTest {
  public:
   RedexIntegrationTest() {
     dex_file = std::getenv("dexfile");
+
     always_assert_log(dex_file,
                       "Dex file must be set up before integration tests.\n");
+
+    secondary_dex_file = std::getenv("secondary_dexfile");
+
     dex_metadata.set_id("classes");
     DexStore root_store(dex_metadata);
     root_store.add_classes(load_classes_from_dex(dex_file));
+    if (secondary_dex_file) {
+      root_store.add_classes(load_classes_from_dex(secondary_dex_file));
+    }
     classes = root_store.get_dexen().back();
     stores.emplace_back(std::move(root_store));
   }
@@ -49,9 +57,10 @@ struct RedexIntegrationTest : public RedexTest {
 
     std::unique_ptr<PassManager> manager = nullptr;
     if (pg_config) {
-      manager = std::make_unique<PassManager>(passes, std::move(pg_config));
+      manager = std::make_unique<PassManager>(
+          passes, std::move(pg_config), json_conf);
     } else {
-      manager = std::make_unique<PassManager>(passes);
+      manager = std::make_unique<PassManager>(passes, json_conf);
     }
     manager->set_testing_mode();
     ConfigFiles conf(json_conf);

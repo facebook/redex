@@ -46,6 +46,10 @@ class InterDex {
         m_force_single_dex(force_single_dex),
         m_emit_canaries(emit_canaries),
         m_minimize_cross_dex_refs(minimize_cross_dex_refs),
+        m_emitting_scroll_set(false),
+        m_emitting_bg_set(false),
+        m_emitted_bg_set(false),
+        m_emitting_extended(false),
         m_cross_dex_ref_minimizer(cross_dex_refs_config),
         m_cross_dex_relocator_config(cross_dex_relocator_config),
         m_original_scope(original_scope) {
@@ -92,7 +96,7 @@ class InterDex {
   bool should_not_relocate_methods_of_class(const DexClass* clazz);
   void add_to_scope(DexClass* cls);
   bool should_skip_class_due_to_plugin(DexClass* clazz);
-  bool emit_class(const DexInfo& dex_info,
+  bool emit_class(DexInfo& dex_info,
                   DexClass* clazz,
                   bool check_if_skip,
                   bool perf_sensitive,
@@ -102,11 +106,12 @@ class InterDex {
       const std::vector<DexType*>& interdex_order,
       const std::unordered_set<DexClass*>& unreferenced_classes);
   void emit_interdex_classes(
+      DexInfo& dex_info,
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes);
   void init_cross_dex_ref_minimizer_and_relocate_methods(const Scope& scope);
-  void emit_remaining_classes(const Scope& scope);
-  void flush_out_dex(DexInfo dex_info);
+  void emit_remaining_classes(DexInfo& dex_info, const Scope& scope);
+  void flush_out_dex(DexInfo& dex_info);
 
   /**
    * Returns a list of coldstart types. It will only contain:
@@ -133,6 +138,11 @@ class InterDex {
   bool m_force_single_dex;
   bool m_emit_canaries;
   bool m_minimize_cross_dex_refs;
+
+  bool m_emitting_scroll_set;
+  bool m_emitting_bg_set;
+  bool m_emitted_bg_set;
+  bool m_emitting_extended;
 
   std::vector<std::tuple<std::string, DexInfo>> m_dex_infos;
   DexesStructure m_dexes_structure;

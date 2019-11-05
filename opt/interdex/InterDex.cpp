@@ -7,6 +7,8 @@
 
 #include "InterDex.h"
 
+#include <boost/algorithm/string/predicate.hpp>
+
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -32,11 +34,16 @@ constexpr const char CANARY_CLASS_FORMAT[] = "Lsecondary/dex%02d/Canary;";
 constexpr size_t CANARY_CLASS_BUFSIZE = sizeof(CANARY_CLASS_FORMAT);
 
 constexpr const char* END_MARKER_FORMAT = "LDexEndMarker";
-constexpr const char* SCROLL_MARKER_FORMAT = "LScrollList";
+
+constexpr const char* SCROLL_SET_START_FORMAT = "LScrollSetStart";
+constexpr const char* SCROLL_SET_END_FORMAT = "LScrollSetEnd";
+
+constexpr const char* BG_SET_START_FORMAT = "LBackgroundSetStart";
+constexpr const char* BG_SET_END_FORMAT = "LBackgroundSetEnd";
 
 constexpr size_t MAX_DEX_NUM = 99;
 
-constexpr const interdex::DexInfo EMPTY_DEX_INFO = interdex::DexInfo();
+static interdex::DexInfo EMPTY_DEX_INFO;
 
 std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     const Scope& scope,
@@ -206,7 +213,7 @@ bool InterDex::should_not_relocate_methods_of_class(const DexClass* clazz) {
   return false;
 }
 
-bool InterDex::emit_class(const DexInfo& dex_info,
+bool InterDex::emit_class(DexInfo& dex_info,
                           DexClass* clazz,
                           bool check_if_skip,
                           bool perf_sensitive,
@@ -322,6 +329,7 @@ void InterDex::emit_primary_dex(
 }
 
 void InterDex::emit_interdex_classes(
+    DexInfo& dex_info,
     const std::vector<DexType*>& interdex_types,
     const std::unordered_set<DexClass*>& unreferenced_classes) {
   if (interdex_types.size() == 0) {
@@ -329,69 +337,89 @@ void InterDex::emit_interdex_classes(
     return;
   }
 
-  DexInfo dex_info;
   // NOTE: coldstart has no interaction with extended and scroll set, but that
   //       is not true for the later 2.
   dex_info.coldstart = true;
-
-  // Last end market delimits where the whole coldstart set ends
-  // and the extended coldstart set begins.
-  auto last_end_marker_it =
-      m_end_markers.size() > 0
-          ? std::find(interdex_types.begin(), interdex_types.end(),
-                      m_end_markers.back())
-          : interdex_types.end();
-
-  auto scroll_list_end_it = interdex_types.end();
-  auto scroll_list_start_it = interdex_types.end();
-
-  if (m_scroll_markers.size() > 0) {
-    scroll_list_end_it = std::find(interdex_types.begin(), interdex_types.end(),
-                                   m_scroll_markers.back());
-    scroll_list_start_it = std::find(
-        interdex_types.begin(), interdex_types.end(), m_scroll_markers.front());
-  }
 
   size_t cls_skipped_in_secondary = 0;
 
   for (auto it = interdex_types.begin(); it != interdex_types.end(); ++it) {
     DexType* type = *it;
     DexClass* cls = type_class(type);
-
     if (!cls) {
       TRACE(IDEX, 5, "[interdex classes]: No such entry %s.", SHOW(type));
-
-      auto end_marker =
-          std::find(m_end_markers.begin(), m_end_markers.end(), type);
-      if (end_marker != m_end_markers.end()) {
-        TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
-
-        flush_out_dex(dex_info);
-
-        // Check if we need to add the mixed mode classes here.
-        if (end_marker == std::prev(m_end_markers.end())) {
-          dex_info.coldstart = false;
-          dex_info.extended = true;
+      if (boost::algorithm::starts_with(type->get_name()->str(),
+                                        SCROLL_SET_START_FORMAT)) {
+        always_assert_log(
+            !m_emitting_scroll_set,
+            "Scroll start marker discovered after another scroll start marker");
+        always_assert_log(
+            !m_emitting_bg_set,
+            "Scroll start marker discovered between background set markers");
+        m_emitting_scroll_set = true;
+        TRACE(IDEX, 2, "Marking dex as scroll at betamap entry %d",
+              std::distance(interdex_types.begin(), it));
+        dex_info.scroll = true;
+      } else if (boost::algorithm::starts_with(type->get_name()->str(),
+                                               SCROLL_SET_END_FORMAT)) {
+        always_assert_log(
+            m_emitting_scroll_set,
+            "Scroll end marker discovered without scroll start marker");
+        m_emitting_scroll_set = false;
+      } else if (boost::algorithm::starts_with(type->get_name()->str(),
+                                               BG_SET_START_FORMAT)) {
+        always_assert_log(!m_emitting_bg_set,
+                          "Background start marker discovered after another "
+                          "background start marker");
+        always_assert_log(
+            !m_emitting_scroll_set,
+            "Background start marker discovered between scroll set markers");
+        TRACE(IDEX, 2, "Marking dex as background at betamap entry %d",
+              std::distance(interdex_types.begin(), it));
+        m_emitting_bg_set = true;
+        dex_info.background = true;
+      } else if (boost::algorithm::starts_with(type->get_name()->str(),
+                                               BG_SET_END_FORMAT)) {
+        always_assert_log(
+            m_emitting_bg_set,
+            "Background end marker discovered without background start marker");
+        m_emitting_bg_set = false;
+        m_emitted_bg_set = true;
+      } else {
+        auto end_marker =
+            std::find(m_end_markers.begin(), m_end_markers.end(), type);
+        // Cold start end marker is the last dex end marker
+        auto cold_start_end_marker = m_end_markers.size()
+                                         ? m_end_markers.end() - 1
+                                         : m_end_markers.end();
+        if (end_marker != m_end_markers.end()) {
+          always_assert_log(
+              !m_emitting_scroll_set,
+              "End marker discovered between scroll start/end markers");
+          always_assert_log(
+              !m_emitting_bg_set,
+              "End marker discovered between background start/end markers");
+          TRACE(IDEX, 2, "Terminating dex due to %s", SHOW(type));
+          flush_out_dex(dex_info);
+          if (end_marker == cold_start_end_marker) {
+            dex_info.coldstart = false;
+          }
         }
       }
-
-      if (it == scroll_list_start_it) {
-        dex_info.scroll = true;
-      } else if (it == scroll_list_end_it) {
-        dex_info.scroll = false;
+    } else {
+      if (unreferenced_classes.count(cls)) {
+        TRACE(IDEX, 3, "%s no longer linked to coldstart set.", SHOW(cls));
+        cls_skipped_in_secondary++;
+        continue;
       }
-
-      continue;
+      if (m_emitted_bg_set) {
+        m_emitted_bg_set = false;
+        dex_info.extended = true;
+        m_emitting_extended = true;
+      }
+      emit_class(dex_info, cls, /* check_if_skip */ true,
+                 /* perf_sensitive */ true);
     }
-
-    if (unreferenced_classes.count(cls)) {
-      TRACE(IDEX, 3, "%s no longer linked to coldstart set.", SHOW(cls));
-      cls_skipped_in_secondary++;
-      continue;
-    }
-
-    emit_class(dex_info, cls, /* check_if_skip */ true,
-               /* perf_sensitive */ true);
   }
 
   // Now emit the classes we omitted from the original coldstart set.
@@ -408,6 +436,12 @@ void InterDex::emit_interdex_classes(
         "[interdex order]: %d classes are unreferenced from the interdex order "
         "in secondary dexes.",
         cls_skipped_in_secondary);
+
+  // TODO: check for unterminated markers
+  always_assert_log(!m_emitting_scroll_set, "Unterminated scroll set marker");
+  always_assert_log(!m_emitting_bg_set, "Unterminated background set marker");
+
+  m_emitting_extended = false;
 }
 
 namespace {
@@ -451,7 +485,7 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry.c_str());
     if (!type) {
-      if (entry.find(END_MARKER_FORMAT) != std::string::npos) {
+      if (boost::algorithm::starts_with(entry, END_MARKER_FORMAT)) {
         type = DexType::make_type(entry.c_str());
         m_end_markers.emplace_back(type);
 
@@ -465,10 +499,24 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
 
         TRACE(IDEX, 4, "[interdex order]: Found class end marker %s.",
               entry.c_str());
-      } else if (entry.find(SCROLL_MARKER_FORMAT) != std::string::npos) {
+      } else if (boost::algorithm::starts_with(entry,
+                                               SCROLL_SET_START_FORMAT)) {
         type = DexType::make_type(entry.c_str());
-        m_scroll_markers.emplace_back(type);
-        TRACE(IDEX, 4, "[interdex order]: Found scroll class marker %s.",
+        TRACE(IDEX, 4,
+              "[interdex order]: Found scroll set start class marker %s.",
+              entry.c_str());
+      } else if (boost::algorithm::starts_with(entry, SCROLL_SET_END_FORMAT)) {
+        type = DexType::make_type(entry.c_str());
+        TRACE(IDEX, 4,
+              "[interdex order]: Found scroll set end class marker %s.",
+              entry.c_str());
+      } else if (boost::algorithm::starts_with(entry, BG_SET_START_FORMAT)) {
+        type = DexType::make_type(entry.c_str());
+        TRACE(IDEX, 4, "[interdex order]: Found bg set start class marker %s.",
+              entry.c_str());
+      } else if (boost::algorithm::starts_with(entry, BG_SET_END_FORMAT)) {
+        type = DexType::make_type(entry.c_str());
+        TRACE(IDEX, 4, "[interdex order]: Found bg set end class marker %s.",
               entry.c_str());
       } else {
         continue;
@@ -601,10 +649,10 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
   }
 }
 
-void InterDex::emit_remaining_classes(const Scope& scope) {
+void InterDex::emit_remaining_classes(DexInfo& dex_info, const Scope& scope) {
   if (!m_minimize_cross_dex_refs) {
     for (DexClass* cls : scope) {
-      emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ true,
+      emit_class(dex_info, cls, /* check_if_skip */ true,
                  /* perf_sensitive */ false);
     }
     return;
@@ -624,7 +672,7 @@ void InterDex::emit_remaining_classes(const Scope& scope) {
     DexClass* cls = pick_worst ? m_cross_dex_ref_minimizer.worst()
                                : m_cross_dex_ref_minimizer.front();
     std::vector<DexClass*> erased_classes;
-    bool emitted = emit_class(EMPTY_DEX_INFO, cls, /* check_if_skip */ false,
+    bool emitted = emit_class(dex_info, cls, /* check_if_skip */ false,
                               /* perf_sensitive */ false, &erased_classes);
     int new_dexnum = m_dexes_structure.get_num_dexes();
     bool overflowed = dexnum != new_dexnum;
@@ -718,10 +766,11 @@ void InterDex::run() {
   }
 
   // Emit interdex classes, if any.
-  emit_interdex_classes(interdex_types, unreferenced_classes);
+  DexInfo dex_info;
+  emit_interdex_classes(dex_info, interdex_types, unreferenced_classes);
 
   // Now emit the classes that weren't specified in the head or primary list.
-  emit_remaining_classes(scope);
+  emit_remaining_classes(dex_info, scope);
 
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {
@@ -730,14 +779,14 @@ void InterDex::run() {
     for (DexClass* add_class : add_classes) {
       TRACE(IDEX, 4, "IDEX: Emitting %s-plugin generated leftover class :: %s",
             name.c_str(), SHOW(add_class));
-      emit_class(EMPTY_DEX_INFO, add_class, /* check_if_skip */ false,
+      emit_class(dex_info, add_class, /* check_if_skip */ false,
                  /* perf_sensitive */ false);
     }
   }
 
   // Emit what is left, if any.
   if (m_dexes_structure.get_current_dex_classes().size()) {
-    flush_out_dex(EMPTY_DEX_INFO);
+    flush_out_dex(dex_info);
   }
 
   // Emit dex info manifest
@@ -747,12 +796,12 @@ void InterDex::run() {
     mixed_mode_fh.seek_end();
     std::stringstream ss;
     int ordinal = 0;
-    for (const auto& dex_info : m_dex_infos) {
-      const auto& flags = std::get<1>(dex_info);
-      ss << std::get<0>(dex_info) << ",ordinal=" << ordinal++
+    for (const auto& info : m_dex_infos) {
+      const auto& flags = std::get<1>(info);
+      ss << std::get<0>(info) << ",ordinal=" << ordinal++
          << ",coldstart=" << flags.coldstart << ",extended=" << flags.extended
          << ",primary=" << flags.primary << ",scroll=" << flags.scroll
-         << std::endl;
+         << ",background=" << flags.background << std::endl;
     }
     write_str(mixed_mode_fh, ss.str());
     *mixed_mode_file = nullptr;
@@ -795,7 +844,7 @@ void InterDex::add_dexes_from_store(const DexStore& store) {
 /**
  * This needs to be called before getting to the next dex.
  */
-void InterDex::flush_out_dex(DexInfo dex_info) {
+void InterDex::flush_out_dex(DexInfo& dex_info) {
 
   int dexnum = m_dexes_structure.get_num_dexes();
   if (dex_info.primary) {
@@ -804,10 +853,12 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
   } else {
     TRACE(IDEX, 2,
           "Writing out secondary dex number %d, which is %s of coldstart, "
-          "%s of extended set, %s scroll classes and has %d classes.",
+          "%s of extended set, %s of background set, %s scroll "
+          "classes and has %d classes.",
           m_dexes_structure.get_num_secondary_dexes() + 1,
           (dex_info.coldstart ? "part of" : "not part of"),
           (dex_info.extended ? "part of" : "not part of"),
+          (dex_info.background ? "part of" : "not part of"),
           (dex_info.scroll ? "has" : "doesn't have"),
           m_dexes_structure.get_current_dex_classes().size());
   }
@@ -850,6 +901,16 @@ void InterDex::flush_out_dex(DexInfo dex_info) {
   }
 
   m_outdex.emplace_back(m_dexes_structure.end_dex(dex_info));
+
+  if (!m_emitting_scroll_set) {
+    dex_info.scroll = false;
+  }
+  if (!m_emitting_bg_set) {
+    dex_info.background = false;
+  }
+  if (!m_emitting_extended) {
+    dex_info.extended = false;
+  }
 }
 
 } // namespace interdex
