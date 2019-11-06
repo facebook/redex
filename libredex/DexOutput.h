@@ -242,7 +242,6 @@ class DexOutput {
   std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
-  std::unordered_map<DexClass*, uint32_t> m_cdi_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
@@ -251,6 +250,7 @@ class DexOutput {
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
+  bool m_force_class_data_end_of_file;
 
   void insert_map_item(uint16_t typeidx,
                        uint32_t size,
@@ -313,7 +313,8 @@ class DexOutput {
       std::unordered_map<DexMethod*, uint64_t>* method_to_id,
       std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
           code_debug_lines,
-      const std::vector<DexString*>& extra_strings = std::vector<DexString*>());
+      const std::vector<DexString*>& extra_strings = std::vector<DexString*>(),
+      bool force_class_data_end_of_file = false);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,

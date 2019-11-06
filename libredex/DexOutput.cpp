@@ -369,7 +369,8 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::vector<DexString*>& extra_strings)
+    const std::vector<DexString*>& extra_strings,
+    bool force_class_data_end_of_file)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
@@ -392,6 +393,7 @@ DexOutput::DexOutput(
   m_emit_name_based_locators = emit_name_based_locators;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
+  m_force_class_data_end_of_file = force_class_data_end_of_file;
 }
 
 DexOutput::~DexOutput() {
@@ -806,16 +808,6 @@ void DexOutput::generate_class_data() {
     } else {
       cdefs[i].source_file_idx = DEX_NO_INDEX;
     }
-    if (m_cdi_offsets.count(clz)) {
-      cdefs[i].class_data_offset = m_cdi_offsets[clz];
-    } else {
-      cdefs[i].class_data_offset = 0;
-      always_assert_log(
-          clz->get_dmethods().size() == 0 && clz->get_vmethods().size() == 0 &&
-              clz->get_ifields().size() == 0 && clz->get_sfields().size() == 0,
-          "DexClass %s has member but no class data!\n",
-          SHOW(clz->get_type()));
-    }
     if (m_static_values.count(clz)) {
       cdefs[i].static_values_off = m_static_values[clz];
     } else {
@@ -838,16 +830,18 @@ void DexOutput::generate_class_data_items() {
     uint32_t offset = (uint32_t)(((uint8_t*)it.code_item) - m_output);
     dco[it.code] = offset;
   }
+  dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
+  uint32_t count = 0;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
     if (!clz->has_class_data()) continue;
     /* No alignment constraints for this data */
     int size = clz->encode(dodx, dco, m_output + m_offset);
-    m_cdi_offsets[clz] = m_offset;
+    cdefs[i].class_data_offset = m_offset;
     m_offset += size;
+    count += 1;
   }
-  insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t)m_cdi_offsets.size(),
-                  cdi_start, m_offset - cdi_start);
+  insert_map_item(TYPE_CLASS_DATA_ITEM, count, cdi_start, m_offset - cdi_start);
 }
 
 static void sync_all(const Scope& scope) {
@@ -2219,7 +2213,9 @@ void DexOutput::prepare(SortMode string_mode,
   generate_typelist_data();
   generate_string_data(string_mode);
   generate_code_items(code_mode);
-  generate_class_data_items();
+  if (!m_force_class_data_end_of_file) {
+    generate_class_data_items();
+  }
   generate_type_data();
   generate_proto_data();
   generate_field_data();
@@ -2227,6 +2223,9 @@ void DexOutput::prepare(SortMode string_mode,
   generate_class_data();
   generate_annotations();
   generate_debug_items();
+  if (m_force_class_data_end_of_file) {
+    generate_class_data_items();
+  }
   generate_map();
   align_output();
   finalize_header();
@@ -2388,7 +2387,8 @@ dex_stats_t write_classes_to_dex(
                              pos_mapper,
                              method_to_id,
                              code_debug_lines,
-                             extra_strings);
+                             extra_strings,
+                             redex_options.force_class_data_end_of_file);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

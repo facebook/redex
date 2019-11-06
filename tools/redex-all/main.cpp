@@ -265,6 +265,12 @@ Arguments parse_args(int argc, char* argv[]) {
           ->default_value(false),
       "If specified, states that the current run disables dex hasher.\n");
   od.add_options()(
+      "force-class-data-end-of-file",
+      po::bool_switch(&args.redex_options.force_class_data_end_of_file)
+          ->default_value(false),
+      "If specified then resulting dex files will have class data placed at"
+      " the end of the file, i.e. last map item entry just before map list.\n");
+  od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
       "Architecture; one of arm/arm64/thumb2/x86_64/x86/mips/mips64");
