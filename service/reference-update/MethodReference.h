@@ -10,6 +10,7 @@
 #include <boost/optional.hpp>
 
 #include "DexClass.h"
+#include "DexStore.h"
 
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 
@@ -65,4 +66,12 @@ void update_call_refs_simple(
 
 CallSites collect_call_refs(const Scope& scope,
                             const MethodOrderedSet& callees);
+
+/**
+ * Replace instance method call with static method call.
+ * obj.instance_method(arg1, ...) => XX.static_method(obj, arg1, ...)
+ */
+int wrap_instance_call_with_static(
+    DexStoresVector& stores,
+    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement);
 } // namespace method_reference
