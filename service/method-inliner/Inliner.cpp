@@ -15,6 +15,8 @@
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
+#include "InlineForSpeed.h"
+#include "MethodProfiles.h"
 #include "Mutators.h"
 #include "OptData.h"
 #include "Resolver.h"
@@ -82,12 +84,16 @@ MultiMethodInliner::MultiMethodInliner(
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolve_fn,
     const inliner::InlinerConfig& config,
     MultiMethodInlinerMode mode /* default is InterDex */,
-    const CalleeCallerInsns& true_virtual_callers)
+    const CalleeCallerInsns& true_virtual_callers,
+    const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
+        method_profile_stats)
     : resolver(resolve_fn),
       xstores(stores),
       m_scope(scope),
       m_config(config),
-      m_mode(mode) {
+      m_mode(mode),
+      m_hot_methods(
+          inline_for_speed::compute_hot_methods(method_profile_stats)) {
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
@@ -613,6 +619,16 @@ bool MultiMethodInliner::should_inline(const DexMethod* caller,
   if (callee->rstate.force_inline()) {
     return true;
   }
+
+  if (!m_hot_methods.empty()) {
+    if (inline_for_speed::should_inline(caller, callee, m_hot_methods)) {
+      TRACE(METH_PROF, 3, "%s, %s", SHOW(caller), SHOW(callee));
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   if (too_many_callers(callee)) {
     log_nopt(INL_TOO_MANY_CALLERS, callee);
     return false;

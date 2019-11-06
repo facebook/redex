@@ -17,6 +17,7 @@
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
+#include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
 #include "Resolver.h"
 
@@ -105,7 +106,9 @@ class MultiMethodInliner {
       std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver,
       const inliner::InlinerConfig& config,
       MultiMethodInlinerMode mode = InterDex,
-      const CalleeCallerInsns& true_virtual_callers = {});
+      const CalleeCallerInsns& true_virtual_callers = {},
+      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
+          method_profile_stats = {});
 
   ~MultiMethodInliner() { invoke_direct_to_static(); }
 
@@ -373,6 +376,8 @@ class MultiMethodInliner {
   std::unordered_set<DexMethod*> m_make_static;
 
   const MultiMethodInlinerMode m_mode;
+
+  const std::unordered_set<const DexMethodRef*> m_hot_methods;
 
  public:
   const InliningInfo& get_info() { return info; }

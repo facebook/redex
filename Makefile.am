@@ -146,6 +146,7 @@ libredex_la_SOURCES = \
 	libredex/HierarchyUtil.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \
+	libredex/InlineForSpeed.cpp \
 	libredex/InlinerConfig.cpp \
 	libredex/InstructionLowering.cpp \
 	libredex/IODIMetadata.cpp \
@@ -314,8 +315,9 @@ redex_all_SOURCES = \
 	opt/result-propagation/ResultPropagation.cpp \
 	opt/shorten-srcstrings/Shorten.cpp \
 	opt/make-public/MakePublicPass.cpp \
-	opt/methodinline/MethodInlinePass.cpp \
 	opt/methodinline/IntraDexInlinePass.cpp \
+	opt/methodinline/MethodInlinePass.cpp \
+	opt/methodinline/PerfMethodInlinePass.cpp \
 	opt/singleimpl/SingleImpl.cpp \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \

@@ -16,6 +16,7 @@ namespace inliner {
  */
 void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
-                 const InlinerConfig& inliner_config,
-                 bool intra_dex = false);
+                 ConfigFiles& inliner_config,
+                 bool intra_dex = false,
+                 bool use_method_profiles = false);
 } // namespace inliner

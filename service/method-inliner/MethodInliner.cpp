@@ -21,6 +21,7 @@
 #include "IRInstruction.h"
 #include "Inliner.h"
 #include "MethodOverrideGraph.h"
+#include "MethodProfiles.h"
 #include "ReachableClasses.h"
 #include "Resolver.h"
 #include "Walkers.h"
@@ -317,8 +318,9 @@ void gather_true_virtual_methods(const Scope& scope,
 namespace inliner {
 void run_inliner(DexStoresVector& stores,
                  PassManager& mgr,
-                 const InlinerConfig& inliner_config,
-                 bool intra_dex /*false*/) {
+                 ConfigFiles& conf,
+                 bool intra_dex /* false */,
+                 bool use_method_profiles /* false */) {
   if (mgr.no_proguard_rules()) {
     TRACE(INLINE, 1,
           "MethodInlinePass not run because no ProGuard configuration was "
@@ -328,6 +330,7 @@ void run_inliner(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
+  const auto& inliner_config = conf.get_inliner_config();
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 
@@ -345,10 +348,16 @@ void run_inliner(DexStoresVector& stores,
     });
   }
 
+  using MethodStats =
+      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;
+  MethodStats method_profile_stats =
+      use_method_profiles ? conf.get_method_profiles().method_stats()
+                          : MethodStats{};
+
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers);
+                             true_virtual_callers, method_profile_stats);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {
