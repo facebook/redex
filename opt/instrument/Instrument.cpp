@@ -12,6 +12,7 @@
 #include "InterDexPass.h"
 #include "InterDexPassPlugin.h"
 #include "Match.h"
+#include "MethodReference.h"
 #include "Show.h"
 #include "TypeSystem.h"
 #include "Walkers.h"
@@ -1182,6 +1183,9 @@ void InstrumentPass::bind_config() {
   bind("num_stats_per_method", {1}, m_options.num_stats_per_method);
   bind("num_shards", {1}, m_options.num_shards);
   bind("only_cold_start_class", true, m_options.only_cold_start_class);
+  bind("methods_replacement", {}, m_options.methods_replacement,
+       "Replacing instance method call with static method call.",
+       Configurable::bindflags::methods::error_if_unresolvable);
 
   after_configuration([this] {
     // Make a small room for additional method refs during InterDex.
@@ -1192,12 +1196,28 @@ void InstrumentPass::bind_config() {
                               [num_shards = m_options.num_shards]() {
                                 return new InstrumentInterDexPlugin(num_shards);
                               });
+    // Currently we only support instance call to static call.
+    for (auto& pair : m_options.methods_replacement) {
+      always_assert(!is_static(pair.first));
+      always_assert(is_static(pair.second));
+    }
+    if (m_options.instrumentation_strategy == "methods_replacement") {
+      always_assert_log(
+          !m_options.methods_replacement.empty(),
+          "Invalid configuration, `methods_replacement` should not be empty\n");
+    }
   });
 }
 
 void InstrumentPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& cfg,
                               PassManager& pm) {
+  // TODO(fengliu): We may need change this but leave it here for local test.
+  if (m_options.instrumentation_strategy == "methods_replacement") {
+    method_reference::wrap_instance_call_with_static(
+        stores, m_options.methods_replacement);
+    return;
+  }
   if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
       !pm.get_redex_options().instrument_pass_enabled) {
     TRACE(INSTRUMENT, 1,
