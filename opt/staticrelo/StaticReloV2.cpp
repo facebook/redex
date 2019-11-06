@@ -233,8 +233,7 @@ std::vector<DexClass*> StaticReloPassV2::gen_candidates(const Scope& scope) {
   walk::classes(scope, [&](DexClass* cls) {
     if (!cls->is_external() && get_children(ch, cls->get_type()).empty() &&
         !is_interface(cls) && cls->get_ifields().empty() &&
-        cls->get_sfields().empty() && cls->get_vmethods().empty() &&
-        !cls->rstate.no_optimizations()) {
+        cls->get_sfields().empty() && cls->get_vmethods().empty()) {
       for (const auto& method : cls->get_dmethods()) {
         if (!is_static(method) || !can_rename_DEPRECATED(method) ||
             !can_delete_DEPRECATED(method) ||
