@@ -23,17 +23,19 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
   }
 
   auto* code = m_method->get_code();
-  code->build_cfg(/* editable */ false);
   auto& cfg = code->cfg();
   type_inference::TypeInference inference(cfg);
   inference.run(m_method);
   auto& envs = inference.get_type_environments();
 
-  for (auto& mie : InstructionIterable(code)) {
-    IRInstruction* insn = mie.insn;
+  auto iterable = cfg::InstructionIterable(cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    cfg::Block* block = it.block();
+    IRInstruction* insn = it->insn;
     if (insn->opcode() != OPCODE_CHECK_CAST) {
       continue;
     }
+
     auto reg = insn->src(0);
     auto& env = envs.at(insn);
     auto type = env.get_type(reg);
@@ -41,16 +43,20 @@ CheckCastAnalysis::collect_redundant_checks_replacement() {
     if (type.equals(type_inference::TypeDomain(ZERO)) ||
         (dex_type && type::check_cast(*dex_type, insn->get_type()))) {
       auto src = insn->src(0);
-      auto it = code->iterator_to(mie);
-      auto dst = ir_list::move_result_pseudo_of(it)->dest();
+      auto move = cfg.move_result_of(it);
+      if (move.is_end()) {
+        continue;
+      }
+
+      auto dst = move->insn->dest();
       if (src == dst) {
-        redundant_check_casts.emplace_back(&mie, boost::none);
+        redundant_check_casts.emplace_back(block, insn, boost::none);
       } else {
         auto new_move = new IRInstruction(OPCODE_MOVE_OBJECT);
         new_move->set_src(0, src);
         new_move->set_dest(dst);
         redundant_check_casts.emplace_back(
-            &mie, boost::optional<IRInstruction*>(new_move));
+            block, insn, boost::optional<IRInstruction*>(new_move));
       }
     }
   }

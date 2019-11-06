@@ -20,22 +20,22 @@ size_t remove_redundant_check_casts(DexMethod* method) {
   }
 
   auto* code = method->get_code();
-  code->build_cfg(/* editable */ false);
+  code->build_cfg(/* editable */ true);
+  auto& cfg = code->cfg();
   impl::CheckCastAnalysis analysis(method);
-  auto redundant_check_casts = analysis.collect_redundant_checks_replacement();
-
-  for (const auto& pair : redundant_check_casts) {
-    MethodItemEntry* to_replace = pair.first;
-    boost::optional<IRInstruction*> replacement_opt = pair.second;
-    if (replacement_opt) {
-      code->replace_opcode(to_replace->insn, *replacement_opt);
+  auto casts = analysis.collect_redundant_checks_replacement();
+  for (const auto& cast : casts) {
+    auto it = cfg.find_insn(cast.insn, cast.block);
+    boost::optional<IRInstruction*> replacement = cast.replacement;
+    if (replacement) {
+      cfg.replace_insn(it, *replacement);
     } else {
-      auto it = code->iterator_to(*to_replace);
-      code->remove_opcode(it);
+      cfg.remove_insn(it);
     }
   }
 
-  return redundant_check_casts.size();
+  code->clear_cfg();
+  return casts.size();
 }
 
 void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,

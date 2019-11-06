@@ -349,6 +349,7 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (:lb1)
       (check-cast v1 "I_C;")
       (move-result-pseudo-object v1)
+      (return-void)
     )
   )";
 
@@ -362,16 +363,17 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (const v1 0)
       (const v0 0)
 
-      (if-eqz v0 :lb0)
+      (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-      (goto :lb1)
 
       (:lb0)
-      (new-instance "B;")
-      (move-result-pseudo-object v1)
+      (return-void)
 
       (:lb1)
+      (new-instance "B;")
+      (move-result-pseudo-object v1)
+      (goto :lb0)
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -399,6 +401,7 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (:lb1)
       (check-cast v1 "I_C;")
       (move-result-pseudo-object v1)
+      (return-void)
     )
   )";
 
@@ -412,16 +415,17 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (const v1 0)
       (const v0 0)
 
-      (if-eqz v0 :lb0)
+      (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-      (goto :lb1)
 
       (:lb0)
-      (new-instance "A;")
-      (move-result-pseudo-object v1)
+      (return-void)
 
       (:lb1)
+      (new-instance "A;")
+      (move-result-pseudo-object v1)
+      (goto :lb0)
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
