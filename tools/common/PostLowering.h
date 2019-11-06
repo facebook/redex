@@ -7,12 +7,14 @@
 
 #pragma once
 
-#include "DexClass.h"
 #include <string>
+
+#include "DexClass.h"
+#include "PassManager.h"
 
 class PostLowering {
  public:
   std::vector<DexString*> get_extra_strings(const DexClasses& dex);
   void run(const DexClasses& dex, const std::string& output_dir);
-  void cleanup();
+  void cleanup(PassManager& mgr);
 };

@@ -14,6 +14,12 @@
 
 namespace {
 
+void create_directories_if_not_exists(std::string& dir) {
+  if (!boost::filesystem::exists(dir.c_str())) {
+    boost::filesystem::create_directories(dir.c_str());
+  }
+}
+
 void check_directory(std::string& dir) {
   if (!boost::filesystem::is_directory(dir.c_str())) {
     std::cerr << "error: not a writable directory: " << dir << std::endl;
@@ -31,12 +37,18 @@ bool ApkManager::has_asset_dir() {
   return boost::filesystem::is_directory(assets_dir.c_str());
 }
 
-std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename) {
+std::shared_ptr<FILE*> ApkManager::new_asset_file(const char* filename,
+                                                  const char* dir_path,
+                                                  bool new_dir) {
   check_directory(m_apk_dir);
   std::ostringstream path;
-  path << m_apk_dir << "/assets/secondary-program-dex-jars/";
+  path << m_apk_dir << dir_path;
   std::string assets_dir = path.str();
-  check_directory(assets_dir);
+  if (new_dir) {
+    create_directories_if_not_exists(assets_dir);
+  } else {
+    check_directory(assets_dir);
+  }
   path << filename;
 
   FILE* fd = fopen(path.str().c_str(), "w");

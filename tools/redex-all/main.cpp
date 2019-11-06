@@ -885,9 +885,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
 /**
  * Post processing steps: write dex and collect stats
  */
-void redex_backend(const PassManager& manager,
-                   const std::string& output_dir,
+void redex_backend(const std::string& output_dir,
                    const ConfigFiles& conf,
+                   PassManager& manager,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
@@ -984,7 +984,7 @@ void redex_backend(const PassManager& manager,
     }
   }
 
-  post_lowering.cleanup();
+  post_lowering.cleanup(manager);
 
   {
     Timer t("Writing opt decisions data");
@@ -1173,7 +1173,7 @@ int main(int argc, char* argv[]) {
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
-      redex_backend(manager, args.out_dir, conf, stores, stats);
+      redex_backend(args.out_dir, conf, manager, stores, stats);
       if (args.config.get("emit_class_method_info_map", false).asBool()) {
         dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
                                    stores);

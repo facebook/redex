@@ -14,4 +14,4 @@ std::vector<DexString*> PostLowering::get_extra_strings(const DexClasses& dex) {
   return empty;
 }
 
-void PostLowering::cleanup() {}
+void PostLowering::cleanup(PassManager& mgr) {}
