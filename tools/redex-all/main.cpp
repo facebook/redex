@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -46,6 +46,7 @@
 #include "NoOptimizationsMatcher.h"
 #include "OptData.h"
 #include "PassRegistry.h"
+#include "PostLowering.h"
 #include "ProguardConfiguration.h" // New ProGuard configuration
 #include "ProguardMatcher.h"
 #include "ProguardParser.h" // New ProGuard Parser
@@ -263,6 +264,12 @@ Arguments parse_args(int argc, char* argv[]) {
       po::bool_switch(&args.redex_options.disable_dex_hasher)
           ->default_value(false),
       "If specified, states that the current run disables dex hasher.\n");
+  od.add_options()(
+      "force-class-data-end-of-file",
+      po::bool_switch(&args.redex_options.force_class_data_end_of_file)
+          ->default_value(false),
+      "If specified then resulting dex files will have class data placed at"
+      " the end of the file, i.e. last map item entry just before map list.\n");
   od.add_options()(
       "arch,A",
       po::value<std::vector<std::string>>(),
@@ -884,9 +891,9 @@ void redex_frontend(ConfigFiles& conf, /* input */
 /**
  * Post processing steps: write dex and collect stats
  */
-void redex_backend(const PassManager& manager,
-                   const std::string& output_dir,
+void redex_backend(const std::string& output_dir,
                    const ConfigFiles& conf,
+                   PassManager& manager,
                    DexStoresVector& stores,
                    Json::Value& stats) {
   Timer redex_backend_timer("Redex_backend");
@@ -932,6 +939,8 @@ void redex_backend(const PassManager& manager,
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata;
+  PostLowering post_lowering;
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -954,6 +963,10 @@ void redex_backend(const PassManager& manager,
         ss << (i + 2);
       }
       ss << ".dex";
+
+      auto extra_strings =
+          post_lowering.get_extra_strings(store.get_dexen()[i]);
+
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
                                ss.str(),
@@ -967,11 +980,17 @@ void redex_backend(const PassManager& manager,
                                needs_addresses ? &method_to_id : nullptr,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
-                               stores[0].get_dex_magic());
+                               stores[0].get_dex_magic(),
+                               extra_strings);
+
+      post_lowering.run(store.get_dexen()[i], output_dir);
+
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
+
+  post_lowering.cleanup(manager);
 
   {
     Timer t("Writing opt decisions data");
@@ -1125,7 +1144,7 @@ int main(int argc, char* argv[]) {
 
     if (args.stop_pass_idx == boost::none) {
       // Call redex_backend by default
-      redex_backend(manager, args.out_dir, conf, stores, stats);
+      redex_backend(args.out_dir, conf, manager, stores, stats);
       if (args.config.get("emit_class_method_info_map", false).asBool()) {
         dump_class_method_info_map(conf.metafile(CLASS_METHOD_INFO_MAP),
                                    stores);

@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -24,7 +24,11 @@ class ApkManager {
     }
   }
 
-  std::shared_ptr<FILE*> new_asset_file(const char* filename);
+  bool has_asset_dir();
+  std::shared_ptr<FILE*> new_asset_file(
+      const char* filename,
+      const char* dir_path = "/assets/secondary-program-dex-jars/",
+      bool new_dir = false);
 
  private:
   std::vector<std::shared_ptr<FILE*>> m_files;

@@ -368,6 +368,7 @@ redex_all_SOURCES = \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
 	tools/common/ToolsCommon.cpp \
+	tools/common/PostLowering.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

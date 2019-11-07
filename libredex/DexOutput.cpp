@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -81,13 +81,15 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(DexClasses* classes) : m_classes(classes) {
+GatheredTypes::GatheredTypes(DexClasses* classes,
+                             const std::vector<DexString*>& extra_strings)
+    : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
 
   // build maps for the different custom sorting options
-  build_cls_load_map();
+  build_cls_load_map(extra_strings);
   build_cls_map();
   build_method_map();
 
@@ -240,7 +242,8 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   return sidx;
 }
 
-void GatheredTypes::build_cls_load_map() {
+void GatheredTypes::build_cls_load_map(
+    const std::vector<DexString*>& extra_strings) {
   unsigned int index = 0;
   int type_strings = 0;
   int init_strings = 0;
@@ -292,6 +295,17 @@ void GatheredTypes::build_cls_load_map() {
       }
     });
   }
+
+  // Adding extra "custom" strings,
+  // NOTE: The locality of those can be improved ...
+  for (const auto& s : extra_strings) {
+    if (!m_cls_load_strings.count(s)) {
+      m_cls_load_strings[s] = index;
+      index++;
+      total_strings++;
+    }
+  }
+
   TRACE(CUSTOMSORT, 1,
         "found %d strings from types, %d from strings in init methods, %d "
         "total strings",
@@ -354,14 +368,16 @@ DexOutput::DexOutput(
     const ConfigFiles& config_files,
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines)
+    std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
+    const std::vector<DexString*>& extra_strings,
+    bool force_class_data_end_of_file)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
-  m_gtypes = new GatheredTypes(classes);
+  m_gtypes = new GatheredTypes(classes, extra_strings);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
   m_pos_mapper = pos_mapper;
@@ -377,6 +393,7 @@ DexOutput::DexOutput(
   m_emit_name_based_locators = emit_name_based_locators;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
+  m_force_class_data_end_of_file = force_class_data_end_of_file;
 }
 
 DexOutput::~DexOutput() {
@@ -791,16 +808,6 @@ void DexOutput::generate_class_data() {
     } else {
       cdefs[i].source_file_idx = DEX_NO_INDEX;
     }
-    if (m_cdi_offsets.count(clz)) {
-      cdefs[i].class_data_offset = m_cdi_offsets[clz];
-    } else {
-      cdefs[i].class_data_offset = 0;
-      always_assert_log(
-          clz->get_dmethods().size() == 0 && clz->get_vmethods().size() == 0 &&
-              clz->get_ifields().size() == 0 && clz->get_sfields().size() == 0,
-          "DexClass %s has member but no class data!\n",
-          SHOW(clz->get_type()));
-    }
     if (m_static_values.count(clz)) {
       cdefs[i].static_values_off = m_static_values[clz];
     } else {
@@ -823,16 +830,18 @@ void DexOutput::generate_class_data_items() {
     uint32_t offset = (uint32_t)(((uint8_t*)it.code_item) - m_output);
     dco[it.code] = offset;
   }
+  dex_class_def* cdefs = (dex_class_def*)(m_output + hdr.class_defs_off);
+  uint32_t count = 0;
   for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
     DexClass* clz = m_classes->at(i);
     if (!clz->has_class_data()) continue;
     /* No alignment constraints for this data */
     int size = clz->encode(dodx, dco, m_output + m_offset);
-    m_cdi_offsets[clz] = m_offset;
+    cdefs[i].class_data_offset = m_offset;
     m_offset += size;
+    count += 1;
   }
-  insert_map_item(TYPE_CLASS_DATA_ITEM, (uint32_t)m_cdi_offsets.size(),
-                  cdi_start, m_offset - cdi_start);
+  insert_map_item(TYPE_CLASS_DATA_ITEM, count, cdi_start, m_offset - cdi_start);
 }
 
 static void sync_all(const Scope& scope) {
@@ -2204,7 +2213,9 @@ void DexOutput::prepare(SortMode string_mode,
   generate_typelist_data();
   generate_string_data(string_mode);
   generate_code_items(code_mode);
-  generate_class_data_items();
+  if (!m_force_class_data_end_of_file) {
+    generate_class_data_items();
+  }
   generate_type_data();
   generate_proto_data();
   generate_field_data();
@@ -2212,6 +2223,9 @@ void DexOutput::prepare(SortMode string_mode,
   generate_class_data();
   generate_annotations();
   generate_debug_items();
+  if (m_force_class_data_end_of_file) {
+    generate_class_data_items();
+  }
   generate_map();
   align_output();
   finalize_header();
@@ -2326,7 +2340,8 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
-    const std::string& dex_magic) {
+    const std::string& dex_magic,
+    const std::vector<DexString*>& extra_strings) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2371,7 +2386,9 @@ dex_stats_t write_classes_to_dex(
                              conf,
                              pos_mapper,
                              method_to_id,
-                             code_debug_lines);
+                             code_debug_lines,
+                             extra_strings,
+                             redex_options.force_class_data_end_of_file);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

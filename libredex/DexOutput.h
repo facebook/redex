@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -107,7 +107,8 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
-    const std::string& dex_magic);
+    const std::string& dex_magic,
+    const std::vector<DexString*>& extra_strings = std::vector<DexString*>());
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -164,12 +165,15 @@ class GatheredTypes {
   dexfield_to_idx* get_field_index(cmp_dfield cmp = compare_dexfields);
   dexmethod_to_idx* get_method_index(cmp_dmethod cmp = compare_dexmethods);
 
-  void build_cls_load_map();
+  void build_cls_load_map(const std::vector<DexString*>& extra_strings);
   void build_cls_map();
   void build_method_map();
 
  public:
-  GatheredTypes(DexClasses* classes);
+  GatheredTypes(
+      DexClasses* classes,
+      const std::vector<DexString*>& extra_strings = std::vector<DexString*>());
+
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
   std::vector<DexString*> get_dexstring_emitlist(T cmp = compare_dexstrings);
@@ -238,7 +242,6 @@ class DexOutput {
   std::unordered_map<DexMethod*, uint64_t>* m_method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
-  std::unordered_map<DexClass*, uint32_t> m_cdi_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
@@ -247,6 +250,7 @@ class DexOutput {
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
+  bool m_force_class_data_end_of_file;
 
   void insert_map_item(uint16_t typeidx,
                        uint32_t size,
@@ -294,20 +298,23 @@ class DexOutput {
   friend struct DexOutputTestHelper;
 
  public:
-  DexOutput(const char* path,
-            DexClasses* classes,
-            LocatorIndex* locator_index,
-            bool emit_name_based_locators,
-            bool normal_primary_dex,
-            size_t store_number,
-            size_t dex_number,
-            DebugInfoKind debug_info_kind,
-            IODIMetadata* iodi_metadata,
-            const ConfigFiles& config_files,
-            PositionMapper* pos_mapper,
-            std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-            std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-                code_debug_lines);
+  DexOutput(
+      const char* path,
+      DexClasses* classes,
+      LocatorIndex* locator_index,
+      bool emit_name_based_locators,
+      bool normal_primary_dex,
+      size_t store_number,
+      size_t dex_number,
+      DebugInfoKind debug_info_kind,
+      IODIMetadata* iodi_metadata,
+      const ConfigFiles& config_files,
+      PositionMapper* pos_mapper,
+      std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+      std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
+          code_debug_lines,
+      const std::vector<DexString*>& extra_strings = std::vector<DexString*>(),
+      bool force_class_data_end_of_file = false);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
