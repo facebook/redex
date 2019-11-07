@@ -24,6 +24,22 @@ struct Stats {
   std::unordered_map<uint16_t, size_t> eliminated_opcodes;
   size_t skipped_due_to_too_many_registers{0};
   size_t max_iterations{0};
+  Stats operator+(const Stats& b) const {
+    Stats a = *this;
+    a.results_captured += b.results_captured;
+    a.stores_captured += b.stores_captured;
+    a.array_lengths_captured += b.array_lengths_captured;
+    a.instructions_eliminated += b.instructions_eliminated;
+    a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
+    a.methods_using_other_tracked_location_bit +=
+        b.methods_using_other_tracked_location_bit;
+    for (auto& p : b.eliminated_opcodes) {
+      a.eliminated_opcodes[p.first] += p.second;
+    }
+    a.skipped_due_to_too_many_registers += b.skipped_due_to_too_many_registers;
+    a.max_iterations = std::max(a.max_iterations, b.max_iterations);
+    return a;
+  };
 };
 
 struct SharedStateStats {

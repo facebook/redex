@@ -105,11 +105,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         ldce.dce(code);
         return ldce.get_stats();
       },
-      [](LocalDce::Stats a, LocalDce::Stats b) {
-        a.dead_instruction_count += b.dead_instruction_count;
-        a.unreachable_instruction_count += b.unreachable_instruction_count;
-        return a;
-      });
+      [](LocalDce::Stats a, LocalDce::Stats b) { return a + b; });
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);

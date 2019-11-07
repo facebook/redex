@@ -69,22 +69,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   copy_prop_config.eliminate_const_classes = false;
   copy_prop_config.eliminate_const_strings = false;
   copy_prop_config.static_finals = false;
-
-  auto aggregate_stats = [](Stats a, Stats b) {
-    a.results_captured += b.results_captured;
-    a.stores_captured += b.stores_captured;
-    a.array_lengths_captured += b.array_lengths_captured;
-    a.instructions_eliminated += b.instructions_eliminated;
-    a.max_value_ids = std::max(a.max_value_ids, b.max_value_ids);
-    a.methods_using_other_tracked_location_bit +=
-        b.methods_using_other_tracked_location_bit;
-    for (auto& p : b.eliminated_opcodes) {
-      a.eliminated_opcodes[p.first] += p.second;
-    }
-    a.skipped_due_to_too_many_registers += b.skipped_due_to_too_many_registers;
-    a.max_iterations = std::max(a.max_iterations, b.max_iterations);
-    return a;
-  };
   const auto stats = walk::parallel::reduce_methods<Stats>(
       scope,
       [&](DexMethod* method) {
@@ -108,7 +92,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                        method->get_proto()->get_args(),
                                        copy_prop_config.max_estimated_registers,
                                        m_runtime_assertions);
-          stats = aggregate_stats(stats, cse.get_stats());
+          stats = stats + cse.get_stats();
           code->clear_cfg();
 
           if (!any_changes) {
@@ -133,7 +117,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           }
         }
       },
-      aggregate_stats,
+      [](const Stats& a, const Stats& b) { return a + b; },
       Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
