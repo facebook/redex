@@ -586,8 +586,20 @@ void MultiMethodInliner::inline_inlinables(
                                    ? caller->cfg().sum_opcode_sizes()
                                    : caller->sum_opcode_sizes();
 
+  // Prefer inlining smaller methods first, so that we are less likely to hit
+  // overall size limit.
+  std::vector<std::pair<DexMethod*, IRList::iterator>> ordered_inlinables(
+      inlinables.begin(), inlinables.end());
+
+  std::stable_sort(ordered_inlinables.begin(), ordered_inlinables.end(),
+                   [this](const std::pair<DexMethod*, IRList::iterator>& a,
+                          const std::pair<DexMethod*, IRList::iterator>& b) {
+                     return get_callee_insn_size(a.first) <
+                            get_callee_insn_size(b.first);
+                   });
+
   std::vector<DexMethod*> inlined_callees;
-  for (auto inlinable : inlinables) {
+  for (auto inlinable : ordered_inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
     auto callsite = inlinable.second;
