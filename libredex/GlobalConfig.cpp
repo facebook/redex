@@ -16,6 +16,7 @@ void InlinerConfig::bind_config() {
   bind("multiple_callers", multiple_callers, multiple_callers);
   bind("inline_small_non_deletables", inline_small_non_deletables,
        inline_small_non_deletables);
+  bind("run_const_prop", run_const_prop, run_const_prop);
   bind("run_cse", run_cse, run_cse);
   bind("run_copy_prop", run_copy_prop, run_copy_prop);
   bind("run_local_dce", run_local_dce, run_local_dce);

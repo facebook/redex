@@ -215,6 +215,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("inline_small_non_deletables",
          true,
          inliner_config->inline_small_non_deletables);
+  jw.get("run_const_prop", false, inliner_config->run_const_prop);
   jw.get("run_cse", false, inliner_config->run_cse);
   jw.get("run_copy_prop", false, inliner_config->run_copy_prop);
   jw.get("run_local_dce", false, inliner_config->run_local_dce);

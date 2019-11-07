@@ -12,6 +12,8 @@
 #include "CommonSubexpressionElimination.h"
 #include "ConcurrentContainers.h"
 #include "ConstantPropagationAnalysis.h"
+#include "ConstantPropagationTransform.h"
+#include "ConstantPropagationWholeProgramState.h"
 #include "ControlFlow.h"
 #include "CopyPropagation.h"
 #include "DexUtil.h"
@@ -492,15 +494,31 @@ void MultiMethodInliner::inline_inlinables(
     code->clear_cfg();
   }
 
-  if (m_config.run_cse || m_config.run_copy_prop || m_config.run_local_dce) {
+  if (m_config.run_const_prop || m_config.run_cse || m_config.run_copy_prop ||
+      m_config.run_local_dce) {
+    bool editable_cfg_built = caller->editable_cfg_built();
+
+    if (m_config.run_const_prop) {
+      if (editable_cfg_built) {
+        caller->clear_cfg();
+      }
+      if (!caller->cfg_built()) {
+        caller->build_cfg(/* editable */ false);
+      }
+      constant_propagation::intraprocedural::FixpointIterator fp_iter(
+          caller->cfg(), constant_propagation::ConstantPrimitiveAnalyzer());
+      fp_iter.run(ConstantEnvironment());
+      constant_propagation::Transform::Config config;
+      constant_propagation::Transform tf(config);
+      tf.apply(fp_iter, constant_propagation::WholeProgramState(), caller);
+    }
+
     // The following default 'features' of copy propagation would only
     // interfere with what CSE is trying to do.
     copy_propagation_impl::Config copy_prop_config;
     copy_prop_config.eliminate_const_classes = false;
     copy_prop_config.eliminate_const_strings = false;
     copy_prop_config.static_finals = false;
-
-    bool editable_cfg_built = caller->editable_cfg_built();
 
     if (m_config.run_cse) {
       if (!caller->editable_cfg_built()) {
