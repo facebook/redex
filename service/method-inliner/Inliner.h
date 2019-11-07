@@ -280,6 +280,13 @@ class MultiMethodInliner {
   bool should_inline(const DexMethod* callee);
 
   /**
+   * should_inline_fast will return true for a subset of methods compared to
+   * should_inline. should_inline_fast can be evaluated much more quickly, as it
+   * doesn't need to peek into the callee code.
+   */
+  bool should_inline_fast(const DexMethod* callee);
+
+  /**
    * We want to avoid inlining a large method with many callers as that would
    * bloat the bytecode.
    */
@@ -328,6 +335,19 @@ class MultiMethodInliner {
    * synchronously.
    */
   void shrink_method(DexMethod* method);
+
+  /**
+   * For callers waiting for callees to become ready, decrement their wait
+   * counter, and if zero, initiate inlining and postprocessing.
+   */
+  void decrement_caller_wait_counts(const std::vector<DexMethod*>& callers);
+
+  /**
+   * If a callee has been registered for delayed shrinking, decrement the wait
+   * counter, and if zero, initiate shrinking asynchronously.
+   */
+  void decrement_delayed_shrinking_callee_wait_counts(
+      const std::vector<DexMethod*>& callees);
 
   /**
    * Whether inline_inlinables needs to deconstruct the caller's and callees'
@@ -408,6 +428,11 @@ class MultiMethodInliner {
   // For parallel execution, number of remaining callees any given caller is
   // still waiting for.
   ConcurrentMap<const DexMethod*, size_t> m_async_caller_wait_counts;
+
+  // For parallel execution, number of remaining callers any given delayed
+  // shrinking callee is still waiting for.
+  ConcurrentMap<const DexMethod*, size_t>
+      m_async_delayed_shrinking_callee_wait_counts;
 
   // Whether any of const-prop/cs/copy-prop/local-dce are enabled.
   bool m_shrinking_enabled{0};
@@ -490,4 +515,7 @@ class MultiMethodInliner {
   const LocalDce::Stats& get_local_dce_stats() { return m_local_dce_stats; }
   size_t get_methods_shrunk() { return m_methods_shrunk; }
   size_t get_callers() { return m_async_caller_wait_counts.size(); }
+  size_t get_delayed_shrinking_callees() {
+    return m_async_delayed_shrinking_callee_wait_counts.size();
+  }
 };

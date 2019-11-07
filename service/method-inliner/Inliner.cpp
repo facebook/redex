@@ -724,20 +724,39 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
 }
 
 void MultiMethodInliner::postprocess_method(DexMethod* method) {
-
+  bool delayed_shrinking = false;
+  bool is_callee = !!m_async_callee_priorities.count(method);
   if (m_shrinking_enabled && !method->rstate.no_optimizations()) {
-    shrink_method(method);
+    if (is_callee && should_inline_fast(method)) {
+      // We know now that this method will get inlined regardless of the size
+      // of its code. Therefore, we can delay shrinking, to unblock further
+      // work more quickly.
+      delayed_shrinking = true;
+    } else {
+      shrink_method(method);
+    }
   }
 
-  if (m_async_callee_priorities.count(method) == 0) {
+  if (!is_callee) {
     // This method isn't the callee of another caller, so we can stop here.
+    always_assert(!delayed_shrinking);
     return;
   }
 
   // This pre-populates the m_should_inline cache.
   should_inline(method);
 
-  for (auto caller : m_async_callee_callers.at(method)) {
+  auto& callers = m_async_callee_callers.at(method);
+  if (delayed_shrinking) {
+    m_async_delayed_shrinking_callee_wait_counts.emplace(method,
+                                                         callers.size());
+  }
+  decrement_caller_wait_counts(callers);
+}
+
+void MultiMethodInliner::decrement_caller_wait_counts(
+    const std::vector<DexMethod*>& callers) {
+  for (auto caller : callers) {
     bool caller_ready = false;
     m_async_caller_wait_counts.update(
         caller, [&](const DexMethod*, size_t& value, bool /*exists*/) {
@@ -748,18 +767,40 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
         // TODO: Support parallel execution without pre-deconstructed cfgs.
         auto& callees = m_async_caller_callees.at(caller);
         caller_inline(caller, callees);
+        decrement_delayed_shrinking_callee_wait_counts(callees);
         async_postprocess_method(caller);
       } else {
         // We can process inlining concurrently!
         async_prioritized_method_execute(caller, [caller, this]() {
           auto& callees = m_async_caller_callees.at(caller);
           caller_inline(caller, callees);
+          decrement_delayed_shrinking_callee_wait_counts(callees);
           if (m_shrinking_enabled ||
               m_async_callee_priorities.count(caller) != 0) {
             postprocess_method(caller);
           }
         });
       }
+    }
+  }
+}
+
+void MultiMethodInliner::decrement_delayed_shrinking_callee_wait_counts(
+    const std::vector<DexMethod*>& callees) {
+  for (auto callee : callees) {
+    if (!m_async_delayed_shrinking_callee_wait_counts.count(callee)) {
+      continue;
+    }
+
+    bool callee_ready = false;
+    m_async_delayed_shrinking_callee_wait_counts.update(
+        callee, [&](const DexMethod*, size_t& value, bool /*exists*/) {
+          callee_ready = --value == 0;
+        });
+    if (callee_ready) {
+      int priority = std::numeric_limits<int>::min();
+      m_async_method_executor.post(priority,
+                                   [callee, this]() { shrink_method(callee); });
     }
   }
 }
@@ -906,19 +947,43 @@ bool MultiMethodInliner::caller_too_large(DexType* caller_type,
   return false;
 }
 
+bool MultiMethodInliner::should_inline_fast(const DexMethod* callee) {
+  if (for_speed()) {
+    // inline_for_speed::should_inline was used earlire to prune the static
+    // call-graph
+    return true;
+  }
+
+  if (callee->rstate.force_inline()) {
+    return true;
+  }
+
+  const auto& callers = callee_caller.at(callee);
+  auto caller_count = callers.size();
+  always_assert(caller_count > 0);
+
+  // non-root methods that are only ever called once should always be inlined,
+  // as the method can be removed afterwards
+  if (caller_count == 1 && !root(callee)) {
+    return true;
+  }
+
+  return false;
+}
+
 bool MultiMethodInliner::should_inline(const DexMethod* callee) {
+  if (should_inline_fast(callee)) {
+    return true;
+  }
+
   auto res = m_should_inline.get(callee, boost::none);
   if (res) {
     return *res;
   }
 
-  if (for_speed()) {
-    // inline_for_speed::should_inline was used earlire to prune the static
-    // call-graph
-    res = true;
-  } else if (callee->rstate.force_inline()) {
-    res = true;
-  } else if (too_many_callers(callee)) {
+  always_assert(!for_speed());
+  always_assert(!callee->rstate.force_inline());
+  if (too_many_callers(callee)) {
     log_nopt(INL_TOO_MANY_CALLERS, callee);
     res = false;
   } else {
@@ -1175,12 +1240,7 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   const auto& callers = callee_caller.at(callee);
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
-
-  // non-root methods that are only ever called once should always be inlined,
-  // as the method can be removed afterwards
-  if (caller_count == 1 && !root(callee)) {
-    return false;
-  }
+  always_assert(caller_count != 1 || root(callee));
 
   // 1. Determine costs of inlining
 

@@ -105,7 +105,7 @@ class PriorityThreadPool {
   }
 
   // Wait for all work items to be processed.
-  void join() {
+  void wait() {
     always_assert(m_pool);
     auto start = std::chrono::system_clock::now();
     {
@@ -121,6 +121,10 @@ class PriorityThreadPool {
     auto end = std::chrono::system_clock::now();
     m_waited_time += end - start;
     always_assert(m_pending_work_items.size() == 0);
+  }
+
+  void join() {
+    wait();
     m_pool->join();
   }
 };

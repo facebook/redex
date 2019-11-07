@@ -428,6 +428,8 @@ void run_inliner(DexStoresVector& stores,
                   inliner.get_info().critical_path_length);
   mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
+  mgr.incr_metric("delayed_shrinking_callees",
+                  inliner.get_delayed_shrinking_callees());
   mgr.incr_metric("instructions_eliminated_const_prop",
                   inliner.get_const_prop_stats().branches_removed +
                       inliner.get_const_prop_stats().materialized_consts +
