@@ -24,6 +24,7 @@ struct InlinerConfig {
   bool inline_small_non_deletables{true};
   bool use_constant_propagation_for_callee_size{true};
   bool use_cfg_inliner{false};
+  bool run_cse{false};
   bool run_copy_prop{false};
   bool run_local_dce{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;

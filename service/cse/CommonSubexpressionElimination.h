@@ -9,8 +9,6 @@
 
 #include "ConcurrentContainers.h"
 #include "MethodOverrideGraph.h"
-#include "Pass.h"
-#include "PassManager.h"
 #include "Purity.h"
 
 namespace cse_impl {
@@ -130,16 +128,3 @@ class CommonSubexpressionElimination {
 };
 
 } // namespace cse_impl
-
-class CommonSubexpressionEliminationPass : public Pass {
- public:
-  CommonSubexpressionEliminationPass()
-      : Pass("CommonSubexpressionEliminationPass") {}
-
-  virtual void bind_config() override;
-  virtual void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
- private:
-  bool m_debug;
-  bool m_runtime_assertions;
-};

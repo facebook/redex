@@ -9,6 +9,7 @@
 
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
+#include "CommonSubexpressionElimination.h"
 #include "ConcurrentContainers.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
@@ -172,6 +173,11 @@ MultiMethodInliner::MultiMethodInliner(
         caller_callee[caller].push_back(callee);
       }
     }
+  }
+
+  if (config.run_cse) {
+    m_cse_shared_state =
+        std::make_unique<cse_impl::SharedState>(m_pure_methods);
   }
 }
 
@@ -486,24 +492,49 @@ void MultiMethodInliner::inline_inlinables(
     code->clear_cfg();
   }
 
-  if (m_config.run_copy_prop) {
+  if (m_config.run_cse || m_config.run_copy_prop || m_config.run_local_dce) {
+    // The following default 'features' of copy propagation would only
+    // interfere with what CSE is trying to do.
+    copy_propagation_impl::Config copy_prop_config;
+    copy_prop_config.eliminate_const_classes = false;
+    copy_prop_config.eliminate_const_strings = false;
+    copy_prop_config.static_finals = false;
+
     bool editable_cfg_built = caller->editable_cfg_built();
-    if (editable_cfg_built) {
+
+    if (m_config.run_cse) {
+      if (!caller->editable_cfg_built()) {
+        caller->build_cfg(/* editable */ true);
+      }
+
+      cse_impl::CommonSubexpressionElimination cse(m_cse_shared_state.get(),
+                                                   caller->cfg());
+      cse.patch(is_static(caller_method), caller_method->get_class(),
+                caller_method->get_proto()->get_args(),
+                copy_prop_config.max_estimated_registers);
+    }
+
+    if (m_config.run_copy_prop) {
+      if (caller->editable_cfg_built()) {
+        caller->clear_cfg();
+      }
+
+      copy_propagation_impl::Config config;
+      copy_propagation_impl::CopyPropagation copy_propagation(config);
+      copy_propagation.run(caller, caller_method);
+    }
+
+    if (m_config.run_local_dce) {
+      // LocalDce doesn't care if editable_cfg_built
+      auto local_dce = LocalDce(m_pure_methods);
+      local_dce.dce(caller);
+    }
+
+    if (editable_cfg_built && !caller->editable_cfg_built()) {
+      caller->build_cfg(/* editable */ true);
+    } else if (!editable_cfg_built && caller->editable_cfg_built()) {
       caller->clear_cfg();
     }
-
-    copy_propagation_impl::Config config;
-    copy_propagation_impl::CopyPropagation copy_propagation(config);
-    copy_propagation.run(caller, caller_method);
-
-    if (editable_cfg_built) {
-      caller->build_cfg(/* editable */ true);
-    }
-  }
-
-  if (m_config.run_local_dce) {
-    auto local_dce = LocalDce(m_pure_methods);
-    local_dce.dce(caller);
   }
 }
 
@@ -552,8 +583,8 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
 
     // Don't inline code into a method that doesn't have the same (or higher)
-    // required API. We don't want to bring API specific code into a class where
-    // it's not supported.
+    // required API. We don't want to bring API specific code into a class
+    // where it's not supported.
     int32_t callee_api = api::LevelChecker::get_method_level(callee);
     if (callee_api != api::LevelChecker::get_min_level() &&
         callee_api > api::LevelChecker::get_method_level(caller)) {
@@ -575,8 +606,8 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
   }
 
-  // Only now, when we'll indicating that the method inlinable, we'll record the
-  // fact that we'll have to make some methods static.
+  // Only now, when we'll indicating that the method inlinable, we'll record
+  // the fact that we'll have to make some methods static.
   std::copy(make_static.begin(), make_static.end(),
             std::inserter(m_make_static, m_make_static.end()));
   return true;
@@ -683,11 +714,12 @@ static size_t get_inlined_regs_cost(size_t regs) {
 
 /*
  * Try to estimate number of code units (2 bytes each) of an instruction.
- * - Ignore internal opcodes because they do not take up any space in the final
- *   dex file.
+ * - Ignore internal opcodes because they do not take up any space in the
+ * final dex file.
  * - Ignore move opcodes with the hope that RegAlloc will eliminate most of
  *   them.
- * - Remove return opcodes, as they will disappear when gluing things together.
+ * - Remove return opcodes, as they will disappear when gluing things
+ * together.
  */
 static size_t get_inlined_cost(IRInstruction* insn) {
   auto op = insn->opcode();
@@ -759,8 +791,8 @@ struct InlinedCostAndDeadBlocks {
 
 /*
  * Try to estimate number of code units (2 bytes each) of code. Also take
- * into account costs arising from control-flow overhead and constant arguments,
- * if any
+ * into account costs arising from control-flow overhead and constant
+ * arguments, if any
  */
 static InlinedCostAndDeadBlocks get_inlined_cost(
     const IRCode* code, const ConstantArguments* constant_arguments = nullptr) {
@@ -1023,8 +1055,8 @@ bool MultiMethodInliner::cannot_inline_opcodes(
           return editable_cfg_adapter::LOOP_BREAK;
         }
         // if the caller and callee are in the same class, we don't have to
-        // worry about invoke supers, or unknown virtuals -- private / protected
-        // methods will remain accessible
+        // worry about invoke supers, or unknown virtuals -- private /
+        // protected methods will remain accessible
         if (caller->get_class() != callee->get_class()) {
           if (nonrelocatable_invoke_super(insn)) {
             if (invk_insn) {
@@ -1063,8 +1095,8 @@ bool MultiMethodInliner::cannot_inline_opcodes(
         return editable_cfg_adapter::LOOP_CONTINUE;
       });
   // The IRCode inliner can't handle callees with more than one return
-  // statement (normally one, the way dx generates code). That allows us to make
-  // a simple inline strategy where we don't have to worry about creating
+  // statement (normally one, the way dx generates code). That allows us to
+  // make a simple inline strategy where we don't have to worry about creating
   // branches from the multiple returns to the main code
   //
   // d8 however, generates code with multiple return statements in general.
@@ -1082,8 +1114,8 @@ bool MultiMethodInliner::cannot_inline_opcodes(
 /**
  * Check if a visibility/accessibility change would turn a method referenced
  * in a callee to virtual methods as they are inlined into the caller.
- * That is, once a callee is inlined we need to ensure that everything that was
- * referenced by a callee is visible and accessible in the caller context.
+ * That is, once a callee is inlined we need to ensure that everything that
+ * was referenced by a callee is visible and accessible in the caller context.
  * This step would not be needed if we changed all private instance to static.
  */
 bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
@@ -1195,14 +1227,14 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
   // Referencing a method or field that doesn't exist on the OS version of the
   // current device causes a "soft error" for the entire class that the
   // reference resides in. Soft errors aren't worrisome from a correctness
-  // perspective (though they may cause the class to run slower on some devices)
-  // but there's a bug in Android 5 that triggers an erroneous "hard error"
-  // after a "soft error".
+  // perspective (though they may cause the class to run slower on some
+  // devices) but there's a bug in Android 5 that triggers an erroneous "hard
+  // error" after a "soft error".
   //
-  // The exact conditions that trigger the Android 5 bug aren't currently known.
-  // As a quick fix, we're refusing to inline methods that check the OS's
-  // version. This generally works because the reference to the non-existent
-  // field/method is usually guarded by checking that
+  // The exact conditions that trigger the Android 5 bug aren't currently
+  // known. As a quick fix, we're refusing to inline methods that check the
+  // OS's version. This generally works because the reference to the
+  // non-existent field/method is usually guarded by checking that
   // `android.os.build.VERSION.SDK_INT` is larger than the required api level.
   auto op = insn->opcode();
   if (is_sget(op)) {
@@ -1267,18 +1299,18 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
 }
 
 void MultiMethodInliner::invoke_direct_to_static() {
-  // We sort the methods here because make_static renames methods on collision,
-  // and which collisions occur is order-dependent. E.g. if we have the
-  // following methods in m_make_static:
+  // We sort the methods here because make_static renames methods on
+  // collision, and which collisions occur is order-dependent. E.g. if we have
+  // the following methods in m_make_static:
   //
   //   Foo Foo::bar()
   //   Foo Foo::bar(Foo f)
   //
-  // making Foo::bar() static first would make it collide with Foo::bar(Foo f),
-  // causing it to get renamed to bar$redex0(). But if Foo::bar(Foo f) gets
-  // static-ified first, it becomes Foo::bar(Foo f, Foo f), so when bar() gets
-  // made static later there is no collision. So in the interest of having
-  // reproducible binaries, we sort the methods first.
+  // making Foo::bar() static first would make it collide with Foo::bar(Foo
+  // f), causing it to get renamed to bar$redex0(). But if Foo::bar(Foo f)
+  // gets static-ified first, it becomes Foo::bar(Foo f, Foo f), so when bar()
+  // gets made static later there is no collision. So in the interest of
+  // having reproducible binaries, we sort the methods first.
   //
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
@@ -1494,9 +1526,9 @@ class MethodSplicer {
         if (mie->type == MFLOW_POSITION && mie->pos->parent == nullptr) {
           mie->pos->parent = m_invoke_position;
         }
-        // if a handler list does not terminate in a catch-all, have it point to
-        // the parent's active catch handler. TODO: Make this more precise by
-        // checking if the parent catch type is a subtype of the callee's.
+        // if a handler list does not terminate in a catch-all, have it point
+        // to the parent's active catch handler. TODO: Make this more precise
+        // by checking if the parent catch type is a subtype of the callee's.
         if (mie->type == MFLOW_CATCH && mie->centry->next == nullptr &&
             mie->centry->catch_type != nullptr) {
           mie->centry->next = m_active_catch;

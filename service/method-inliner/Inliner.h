@@ -12,6 +12,7 @@
 #include <set>
 #include <vector>
 
+#include "CommonSubexpressionElimination.h"
 #include "ConstantEnvironment.h"
 #include "DexClass.h"
 #include "DexStore.h"
@@ -380,6 +381,8 @@ class MultiMethodInliner {
   const std::unordered_set<const DexMethodRef*> m_hot_methods;
 
   const std::unordered_set<DexMethodRef*> m_pure_methods;
+
+  std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 
  public:
   const InliningInfo& get_info() { return info; }
