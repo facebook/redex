@@ -786,6 +786,10 @@ class OptimizeEnums {
     // NOTE: We leave CopyPropagation to clean up the extra moves and
     //       LDCE the array access.
     auto move_ordinal_it = cfg.move_result_of(*info.invoke);
+    if (move_ordinal_it.is_end()) {
+      return;
+    }
+
     auto move_ordinal = move_ordinal_it->insn;
     auto reg_ordinal = move_ordinal->dest();
     auto new_ordinal_reg = cfg.allocate_temp();

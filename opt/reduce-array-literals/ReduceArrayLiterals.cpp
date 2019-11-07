@@ -486,6 +486,9 @@ void ReduceArrayLiterals::patch_new_array(
   auto it = m_cfg.find_insn(new_array_insn);
   always_assert(new_array_insn->opcode() == OPCODE_NEW_ARRAY);
   auto move_result_it = m_cfg.move_result_of(it);
+  if (move_result_it.is_end()) {
+    return;
+  }
   always_assert(move_result_it->insn->opcode() ==
                 IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
   auto overall_dest = move_result_it->insn->dest();

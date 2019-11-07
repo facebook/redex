@@ -136,10 +136,14 @@ class RemoveUnusedFields final {
         }
       }
       for (auto insn_it : to_replace) {
-        auto move_result = cfg.move_result_of(insn_it)->insn;
+        auto move_result = cfg.move_result_of(insn_it);
+        if (move_result.is_end()) {
+          continue;
+        }
+        auto insn = move_result->insn;
         IRInstruction* const0 = new IRInstruction(
-            move_result->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
-        const0->set_dest(move_result->dest())->set_literal(0);
+            insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
+        const0->set_dest(insn->dest())->set_literal(0);
         auto invalidated = cfg.replace_insn(insn_it, const0);
         always_assert(!invalidated);
       }
