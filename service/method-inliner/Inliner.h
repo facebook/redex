@@ -14,12 +14,16 @@
 
 #include "CommonSubexpressionElimination.h"
 #include "ConstantEnvironment.h"
+#include "ConstantPropagationTransform.h"
+#include "CopyPropagation.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
 #include "IRCode.h"
+#include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "PatriciaTreeSet.h"
+#include "PriorityThreadPool.h"
 #include "Resolver.h"
 
 namespace inliner {
@@ -123,6 +127,8 @@ class MultiMethodInliner {
    */
   std::unordered_set<DexMethod*> get_inlined() const { return inlined; }
 
+  bool for_speed() const { return !m_hot_methods.empty(); }
+
   /**
    * Inline callees in the caller if is_inlinable below returns true.
    */
@@ -147,15 +153,25 @@ class MultiMethodInliner {
                     size_t estimated_insn_size);
 
  private:
+  void caller_inline(DexMethod* caller,
+                     const std::vector<DexMethod*>& nonrecursive_callees);
+
+  using CallerNonrecursiveCalleesByStackDepth = std::unordered_map<
+      size_t,
+      std::vector<std::pair<DexMethod*, std::vector<DexMethod*>>>>;
+
   /**
-   * Inline all callees into caller.
+   * Determine order in which to inline.
    * Recurse in a callee if that has inlinable candidates of its own.
    * Inlining is bottom up.
    */
-  void caller_inline(DexMethod* caller,
-                     const std::vector<DexMethod*>& callees,
-                     sparta::PatriciaTreeSet<DexMethod*> call_stack,
-                     std::unordered_set<DexMethod*>* visited);
+  size_t compute_caller_nonrecursive_callees_by_stack_depth(
+      DexMethod* caller,
+      const std::vector<DexMethod*>& callees,
+      sparta::PatriciaTreeSet<DexMethod*> call_stack,
+      std::unordered_map<DexMethod*, size_t>* visited,
+      CallerNonrecursiveCalleesByStackDepth*
+          caller_nonrecursive_callees_by_stack_depth);
 
   void inline_inlinables(
       DexMethod* caller,
@@ -261,7 +277,7 @@ class MultiMethodInliner {
    * a call to `inline_methods()`, but not if `inline_callees()` is invoked
    * directly.
    */
-  bool should_inline(const DexMethod* caller, const DexMethod* callee);
+  bool should_inline(const DexMethod* callee);
 
   /**
    * We want to avoid inlining a large method with many callers as that would
@@ -297,6 +313,34 @@ class MultiMethodInliner {
    */
   void compute_callee_constant_arguments();
 
+  /**
+   * Initiate post-processing a method asynchronously.
+   */
+  void async_postprocess_method(DexMethod* method);
+
+  /**
+   * Post-processing a method synchronously.
+   */
+  void postprocess_method(DexMethod* method);
+
+  /**
+   * Shrink a method (run constant-prop, cse, copy-prop, local-dce)
+   * synchronously.
+   */
+  void shrink_method(DexMethod* method);
+
+  /**
+   * Whether inline_inlinables needs to deconstruct the caller's and callees'
+   * code.
+   */
+  bool inline_inlinables_need_deconstruct(DexMethod* method);
+
+  /**
+   * Execute asynchronously using a method's priority.
+   */
+  void async_prioritized_method_execute(DexMethod* method,
+                                        std::function<void()> f);
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -326,9 +370,11 @@ class MultiMethodInliner {
 
   std::unordered_map<DexMethod*, std::unordered_map<IRInstruction*, DexMethod*>>
       caller_virtual_callee;
+
   // Cache of the inlined costs of each method after all its eligible callsites
   // have been inlined.
-  mutable std::unordered_map<const DexMethod*, size_t> m_inlined_costs;
+  mutable ConcurrentMap<const DexMethod*, boost::optional<size_t>>
+      m_inlined_costs;
 
   /**
    * For all (reachable) invoked methods, list of constant arguments
@@ -338,7 +384,51 @@ class MultiMethodInliner {
       m_callee_constant_arguments;
 
   // Cache of whether all callers of a callee are in the same class.
-  mutable std::unordered_map<const DexMethod*, bool> m_callers_in_same_class;
+  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
+      m_callers_in_same_class;
+
+  // Priority thread pool to handle parallel processing of methods, either
+  // shrinking initially / after inlining into them, or even to inline in
+  // parallel. By default, parallelism is disabled num_threads = 0).
+  PriorityThreadPool m_async_method_executor{0};
+
+  // For parallel execution, priorities for methods, to minimize waiting.
+  std::unordered_map<const DexMethod*, int> m_async_callee_priorities;
+
+  // For parallel execution, callee-callers relationships. The induced tree
+  // has been pruned of recursive relationships.
+  std::unordered_map<const DexMethod*, std::vector<DexMethod*>>
+      m_async_callee_callers;
+
+  // For parallel execution, caller-callees relationships. The induced tree
+  // has been pruned of recursive relationships.
+  std::unordered_map<const DexMethod*, std::vector<DexMethod*>>
+      m_async_caller_callees;
+
+  // For parallel execution, number of remaining callees any given caller is
+  // still waiting for.
+  ConcurrentMap<const DexMethod*, size_t> m_async_caller_wait_counts;
+
+  // Whether any of const-prop/cs/copy-prop/local-dce are enabled.
+  bool m_shrinking_enabled{0};
+
+  // When mutating shared state, except info, while inlining in parallel
+  std::mutex m_mutex;
+
+  // When mutating info while inlining in parallel
+  std::mutex m_info_mutex;
+
+  // Cache for should_inline function
+  ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
+
+  constant_propagation::Transform::Stats m_const_prop_stats;
+  cse_impl::Stats m_cse_stats;
+  copy_propagation_impl::Stats m_copy_prop_stats;
+  LocalDce::Stats m_local_dce_stats;
+  size_t m_methods_shrunk{0};
+
+  // When mutating service stats while inlining in parallel
+  std::mutex m_stats_mutex;
 
  private:
   /**
@@ -347,6 +437,7 @@ class MultiMethodInliner {
   struct InliningInfo {
     size_t calls_inlined{0};
     size_t recursive{0};
+    size_t max_call_stack_depth{0};
     size_t not_found{0};
     size_t blacklisted{0};
     size_t throws{0};
@@ -367,6 +458,8 @@ class MultiMethodInliner {
     size_t constant_invoke_callers_unreachable_blocks{0};
     size_t constant_invoke_callees_analyzed{0};
     size_t constant_invoke_callees_unreachable_blocks{0};
+    size_t waited_seconds{0};
+    size_t max_priority{0};
   };
   InliningInfo info;
 
@@ -386,4 +479,15 @@ class MultiMethodInliner {
 
  public:
   const InliningInfo& get_info() { return info; }
+
+  const constant_propagation::Transform::Stats& get_const_prop_stats() {
+    return m_const_prop_stats;
+  }
+  const cse_impl::Stats& get_cse_stats() { return m_cse_stats; }
+  const copy_propagation_impl::Stats& get_copy_prop_stats() {
+    return m_copy_prop_stats;
+  }
+  const LocalDce::Stats& get_local_dce_stats() { return m_local_dce_stats; }
+  size_t get_methods_shrunk() { return m_methods_shrunk; }
+  size_t get_callers() { return m_async_caller_wait_counts.size(); }
 };

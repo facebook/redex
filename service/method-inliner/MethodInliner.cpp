@@ -330,7 +330,7 @@ void run_inliner(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
-  const auto& inliner_config = conf.get_inliner_config();
+  auto inliner_config = conf.get_inliner_config();
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 
@@ -353,6 +353,9 @@ void run_inliner(DexStoresVector& stores,
   MethodStats method_profile_stats =
       use_method_profiles ? conf.get_method_profiles().method_stats()
                           : MethodStats{};
+  if (use_method_profiles) {
+    inliner_config.shrink_other_methods = false;
+  }
 
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
@@ -380,6 +383,9 @@ void run_inliner(DexStoresVector& stores,
   size_t deleted = delete_methods(scope, inlined, resolver);
 
   TRACE(INLINE, 3, "recursive %ld", inliner.get_info().recursive);
+  TRACE(INLINE, 3, "max_call_stack_depth %ld",
+        inliner.get_info().max_call_stack_depth);
+  TRACE(INLINE, 3, "waited seconds %ld", inliner.get_info().waited_seconds);
   TRACE(INLINE, 3, "blacklisted meths %ld", inliner.get_info().blacklisted);
   TRACE(INLINE, 3, "virtualizing methods %ld", inliner.get_info().need_vmethod);
   TRACE(INLINE, 3, "invoke super %ld", inliner.get_info().invoke_super);
@@ -399,6 +405,9 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
         inliner.get_info().calls_inlined, inlined_count, deleted);
 
+  mgr.incr_metric("recursive", inliner.get_info().recursive);
+  mgr.incr_metric("max_call_stack_depth",
+                  inliner.get_info().max_call_stack_depth);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
@@ -415,5 +424,21 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric(
       "constant_invoke_callees_unreachable_blocks",
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
+  mgr.incr_metric("max_priority", inliner.get_info().max_priority);
+  mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
+  mgr.incr_metric("callers", inliner.get_callers());
+  mgr.incr_metric("instructions_eliminated_const_prop",
+                  inliner.get_const_prop_stats().branches_removed +
+                      inliner.get_const_prop_stats().materialized_consts +
+                      inliner.get_const_prop_stats().added_param_const +
+                      inliner.get_const_prop_stats().throws);
+  mgr.incr_metric("instructions_eliminated_cse",
+                  inliner.get_cse_stats().instructions_eliminated);
+  mgr.incr_metric("instructions_eliminated_copy_prop",
+                  inliner.get_copy_prop_stats().moves_eliminated);
+  mgr.incr_metric(
+      "instructions_eliminated_localdce",
+      inliner.get_local_dce_stats().dead_instruction_count +
+          inliner.get_local_dce_stats().unreachable_instruction_count);
 }
 } // namespace inliner

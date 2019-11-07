@@ -17,7 +17,7 @@ namespace redex_parallel {
 /**
  * Redex uses the number of physical cores.
  */
-static inline unsigned int default_num_threads() {
+inline unsigned int default_num_threads() {
   unsigned int threads = boost::thread::physical_concurrency();
   return std::max(1u, threads);
 }
