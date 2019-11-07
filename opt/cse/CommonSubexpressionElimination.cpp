@@ -60,7 +60,7 @@
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
-#include "CopyPropagationPass.h"
+#include "CopyPropagation.h"
 #include "HashedSetAbstractDomain.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
@@ -1518,7 +1518,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   // The following default 'features' of copy propagation would only
   // interfere with what CSE is trying to do.
-  CopyPropagationPass::Config copy_prop_config;
+  copy_propagation_impl::Config copy_prop_config;
   copy_prop_config.eliminate_const_classes = false;
   copy_prop_config.eliminate_const_strings = false;
   copy_prop_config.static_finals = false;

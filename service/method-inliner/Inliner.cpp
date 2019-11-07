@@ -12,6 +12,7 @@
 #include "ConcurrentContainers.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ControlFlow.h"
+#include "CopyPropagation.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
@@ -483,6 +484,21 @@ void MultiMethodInliner::inline_inlinables(
 
   for (IRCode* code : need_deconstruct) {
     code->clear_cfg();
+  }
+
+  if (m_config.run_copy_prop) {
+    bool editable_cfg_built = caller->editable_cfg_built();
+    if (editable_cfg_built) {
+      caller->clear_cfg();
+    }
+
+    copy_propagation_impl::Config config;
+    copy_propagation_impl::CopyPropagation copy_propagation(config);
+    copy_propagation.run(caller, caller_method);
+
+    if (editable_cfg_built) {
+      caller->build_cfg(/* editable */ true);
+    }
   }
 
   if (m_config.run_local_dce) {

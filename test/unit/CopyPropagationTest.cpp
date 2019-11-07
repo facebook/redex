@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "CopyPropagationPass.h"
+#include "CopyPropagation.h"
 #include "IRAssembler.h"
 #include "RedexTest.h"
 
@@ -26,7 +26,7 @@ TEST_F(CopyPropagationTest, simple) {
 )");
   code->set_registers_size(3);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -61,7 +61,7 @@ TEST_F(CopyPropagationTest, deleteRepeatedMove) {
 )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -93,7 +93,7 @@ TEST_F(CopyPropagationTest, noRemapRange) {
 )");
   code->set_registers_size(7);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -117,7 +117,7 @@ TEST_F(CopyPropagationTest, deleteSelfMove) {
 )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -140,7 +140,7 @@ TEST_F(CopyPropagationTest, representative) {
 )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -167,7 +167,7 @@ TEST_F(CopyPropagationTest, verifyEnabled) {
 )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -194,7 +194,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses) {
 )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -229,7 +229,7 @@ TEST_F(CopyPropagationTest, consts_safe_by_constant_uses_aput) {
   auto code = method->get_code();
   code->set_registers_size(3);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -266,7 +266,7 @@ TEST_F(CopyPropagationTest, consts_unsafe_by_constant_uses_aput) {
   auto code = method->get_code();
   code->set_registers_size(3);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -297,7 +297,7 @@ TEST_F(CopyPropagationTest, wide_consts_safe_by_constant_uses) {
 )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -338,7 +338,7 @@ TEST_F(CopyPropagationTest, if_constraints_with_constant_uses) {
   auto code = method->get_code();
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -372,7 +372,7 @@ TEST_F(CopyPropagationTest, cliqueAliasing) {
   )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = false;
   CopyPropagation(config).run(code.get());
 
@@ -404,7 +404,7 @@ TEST_F(CopyPropagationTest, loopNoChange) {
   )");
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -443,7 +443,7 @@ TEST_F(CopyPropagationTest, branchNoChange) {
   )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -483,7 +483,7 @@ TEST_F(CopyPropagationTest, intersect1) {
   )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code.get());
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -524,7 +524,7 @@ TEST_F(CopyPropagationTest, intersect2) {
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(5);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = false;
   CopyPropagation(config).run(code.get());
 
@@ -542,7 +542,7 @@ TEST_F(CopyPropagationTest, wide) {
   )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
 
@@ -565,7 +565,7 @@ TEST_F(CopyPropagationTest, wideClobber) {
   )");
   code->set_registers_size(5);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.wide_registers = false;
   CopyPropagation(config).run(code.get());
 
@@ -590,7 +590,7 @@ TEST_F(CopyPropagationTest, wideClobberWideTrue) {
   )");
   code->set_registers_size(5);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.wide_registers = true;
   CopyPropagation(config).run(code.get());
 
@@ -616,7 +616,7 @@ TEST_F(CopyPropagationTest, repWide) {
   )");
   code->set_registers_size(5);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.wide_registers = true;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
@@ -654,7 +654,7 @@ TEST_F(CopyPropagationTest, whichRep) {
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
 
@@ -681,7 +681,7 @@ TEST_F(CopyPropagationTest, whichRep2) {
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
 
@@ -706,7 +706,7 @@ TEST_F(CopyPropagationTest, whichRepPreserve) {
   )");
   code->set_registers_size(4);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   CopyPropagation(config).run(code.get());
 
@@ -739,7 +739,7 @@ TEST_F(CopyPropagationTest, wideInvokeSources) {
   auto code = assembler::ircode_from_string(no_change);
   code->set_registers_size(16);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   config.replace_with_representative = true;
   config.wide_registers = true;
   config.regalloc_has_run = true;
@@ -765,7 +765,7 @@ TEST_F(CopyPropagationTest, use_does_not_kill_type_demands) {
   auto code = method->get_code();
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(
@@ -795,7 +795,7 @@ TEST_F(CopyPropagationTest, instance_of_kills_type_demands) {
   auto code = method->get_code();
   code->set_registers_size(2);
 
-  CopyPropagationPass::Config config;
+  copy_propagation_impl::Config config;
   CopyPropagation(config).run(code, method);
 
   auto expected_code = assembler::ircode_from_string(R"(

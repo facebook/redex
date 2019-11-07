@@ -89,6 +89,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/api-levels \
 	-I$(top_srcdir)/service/class-init \
 	-I$(top_srcdir)/service/constant-propagation \
+	-I$(top_srcdir)/service/copy-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/local-dce \
@@ -251,7 +252,6 @@ redex_all_SOURCES = \
 	opt/constant-propagation/ConstantPropagationRuntimeAssert.cpp \
 	opt/constant-propagation/ConstantPropagationTransform.cpp \
 	opt/constant-propagation/IPConstantPropagation.cpp \
-	opt/copy-propagation/AliasedRegisters.cpp \
 	opt/copy-propagation/CopyPropagationPass.cpp \
 	opt/cse/CommonSubexpressionElimination.cpp \
 	opt/dedup_blocks/DedupBlocksPass.cpp \
@@ -358,6 +358,8 @@ redex_all_SOURCES = \
 	service/constant-propagation/IPConstantPropagationAnalysis.cpp \
 	service/constant-propagation/ObjectDomain.cpp \
 	service/constant-propagation/SignDomain.cpp \
+	service/copy-propagation/AliasedRegisters.cpp \
+	service/copy-propagation/CopyPropagation.cpp \
 	service/dataflow/LiveRange.cpp \
 	service/dataflow/ConstantUses.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
