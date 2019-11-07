@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "Pass.h"
+#include "IRCode.h"
 
 #include <boost/dynamic_bitset.hpp>
 
@@ -60,21 +60,4 @@ class LocalDce {
                    IRInstruction* inst,
                    const boost::dynamic_bitset<>& bliveness);
   bool assumenosideeffects(DexMethodRef* ref, DexMethod* meth);
-};
-
-class LocalDcePass : public Pass {
- public:
-  LocalDcePass() : Pass("LocalDcePass") {}
-
-  bool no_implementor_abstract_is_pure{false};
-
-  void bind_config() override {
-    bind("no_implementor_abstract_is_pure",
-         false,
-         no_implementor_abstract_is_pure);
-  }
-
-  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
-  std::unordered_set<DexMethodRef*> find_pure_methods(const Scope&);
 };

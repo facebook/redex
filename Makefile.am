@@ -91,6 +91,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/constant-propagation \
 	-I$(top_srcdir)/service/dataflow \
 	-I$(top_srcdir)/service/escape-analysis \
+	-I$(top_srcdir)/service/local-dce \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-merger \
@@ -267,7 +268,7 @@ redex_all_SOURCES = \
 	opt/interdex/InterDexPass.cpp \
 	opt/introduce_switch/IntroduceSwitch.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
-	opt/local-dce/LocalDce.cpp \
+	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
 	opt/obfuscate/Obfuscate.cpp \
 	opt/obfuscate/ObfuscateUtils.cpp \
@@ -360,6 +361,7 @@ redex_all_SOURCES = \
 	service/dataflow/LiveRange.cpp \
 	service/dataflow/ConstantUses.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
+	service/local-dce/LocalDce.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \

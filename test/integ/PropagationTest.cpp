@@ -15,8 +15,8 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
+#include "LocalDcePass.h"
 #include "Peephole.h"
-#include "LocalDce.h"
 
 /*
 

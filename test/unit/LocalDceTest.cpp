@@ -12,7 +12,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "InstructionLowering.h"
-#include "LocalDce.h"
+#include "LocalDcePass.h"
 #include "RedexTest.h"
 #include "ScopeHelper.h"
 

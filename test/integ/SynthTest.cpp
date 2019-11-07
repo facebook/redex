@@ -21,9 +21,9 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
+#include "LocalDcePass.h"
 #include "ReBindRefs.h"
 #include "Synth.h"
-#include "LocalDce.h"
 
 #include "Match.h"
 

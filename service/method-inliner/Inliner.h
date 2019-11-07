@@ -379,6 +379,8 @@ class MultiMethodInliner {
 
   const std::unordered_set<const DexMethodRef*> m_hot_methods;
 
+  const std::unordered_set<DexMethodRef*> m_pure_methods;
+
  public:
   const InliningInfo& get_info() { return info; }
 };

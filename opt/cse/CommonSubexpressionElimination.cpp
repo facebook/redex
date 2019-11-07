@@ -1515,10 +1515,14 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
   auto shared_state = SharedState(pure_methods);
   shared_state.init_scope(scope);
+
+  // The following default 'features' of copy propagation would only
+  // interfere with what CSE is trying to do.
   CopyPropagationPass::Config copy_prop_config;
   copy_prop_config.eliminate_const_classes = false;
   copy_prop_config.eliminate_const_strings = false;
   copy_prop_config.static_finals = false;
+
   auto aggregate_stats = [](Stats a, Stats b) {
     a.results_captured += b.results_captured;
     a.stores_captured += b.stores_captured;
@@ -1564,20 +1568,19 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
             return stats;
           }
 
-          // TODO: CopyPropagation and LocalDce will separately construct
-          // an editable cfg. Don't do that, and fully convert those passes
+          // TODO: CopyPropagation will separately construct
+          // an editable cfg. Don't do that, and fully convert that passes
           // to be cfg-based.
 
-          // The following default 'features' of copy propagation would only
-          // interfere with what CSE is trying to do.
           copy_propagation_impl::CopyPropagation copy_propagation(
               copy_prop_config);
           copy_propagation.run(code, method);
 
+          code->build_cfg(/* editable */ true);
+
           auto local_dce = LocalDce(shared_state.get_pure_methods());
           local_dce.dce(code);
 
-          code->build_cfg(/* editable */ true);
           if (traceEnabled(CSE, 5)) {
             TRACE(CSE, 5, "[CSE] end of iteration:\n%s", SHOW(code->cfg()));
           }

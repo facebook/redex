@@ -215,6 +215,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("inline_small_non_deletables",
          true,
          inliner_config->inline_small_non_deletables);
+  jw.get("run_local_dce", false, inliner_config->run_local_dce);
 
   jw.get("black_list", {}, inliner_config->m_black_list);
   jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);

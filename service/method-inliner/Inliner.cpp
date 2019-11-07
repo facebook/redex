@@ -16,9 +16,11 @@
 #include "EditableCfgAdapter.h"
 #include "IRInstruction.h"
 #include "InlineForSpeed.h"
+#include "LocalDce.h"
 #include "MethodProfiles.h"
 #include "Mutators.h"
 #include "OptData.h"
+#include "Purity.h"
 #include "Resolver.h"
 #include "Timer.h"
 #include "Transform.h"
@@ -93,7 +95,8 @@ MultiMethodInliner::MultiMethodInliner(
       m_config(config),
       m_mode(mode),
       m_hot_methods(
-          inline_for_speed::compute_hot_methods(method_profile_stats)) {
+          inline_for_speed::compute_hot_methods(method_profile_stats)),
+      m_pure_methods(get_pure_methods()) {
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
@@ -480,6 +483,11 @@ void MultiMethodInliner::inline_inlinables(
 
   for (IRCode* code : need_deconstruct) {
     code->clear_cfg();
+  }
+
+  if (m_config.run_local_dce) {
+    auto local_dce = LocalDce(m_pure_methods);
+    local_dce.dce(caller);
   }
 }
 
