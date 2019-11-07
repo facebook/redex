@@ -608,8 +608,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
                       CseEnvironment* current_state) const {
     auto ref_env = current_state->get_ref_env();
     std::unordered_map<uint32_t, value_id_t> new_pre_state_src_values;
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      auto reg = insn->src(i);
+    for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
       if (!c) {
         auto it = new_pre_state_src_values.find(reg);
@@ -636,8 +635,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     always_assert(opcode != IOPCODE_PRE_STATE_SRC);
     value.opcode = opcode;
     auto ref_env = current_state->get_ref_env();
-    for (size_t i = 0; i < insn->srcs_size(); i++) {
-      auto reg = insn->src(i);
+    for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
       always_assert(c);
       value_id_t value_id = *c;
