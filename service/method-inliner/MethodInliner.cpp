@@ -424,7 +424,8 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric(
       "constant_invoke_callees_unreachable_blocks",
       inliner.get_info().constant_invoke_callees_unreachable_blocks);
-  mgr.incr_metric("max_priority", inliner.get_info().max_priority);
+  mgr.incr_metric("critical_path_length",
+                  inliner.get_info().critical_path_length);
   mgr.incr_metric("methods_shrunk", inliner.get_methods_shrunk());
   mgr.incr_metric("callers", inliner.get_callers());
   mgr.incr_metric("instructions_eliminated_const_prop",

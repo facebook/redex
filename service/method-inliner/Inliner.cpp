@@ -318,13 +318,19 @@ void MultiMethodInliner::inline_methods() {
       for (auto callee : callees) {
         auto& callee_priority = m_async_callee_priorities[callee];
         callee_priority = std::max(callee_priority, caller_priority + 1);
-        info.max_priority =
-            std::max(info.max_priority, (size_t)callee_priority);
         m_async_callee_callers[callee].push_back(caller);
       }
       m_async_caller_wait_counts.emplace(caller, callees.size());
       m_async_caller_callees.emplace(caller, callees);
     }
+  }
+  for (auto& p : m_async_callee_callers) {
+    auto callee = p.first;
+    auto& callers = p.second;
+    auto& callee_priority = m_async_callee_priorities[callee];
+    info.critical_path_length =
+        std::max(info.critical_path_length, callee_priority);
+    callee_priority = (callee_priority << 16) + callers.size();
   }
 
   // Kick off (shrinking and) pre-computing the should-inline cache.

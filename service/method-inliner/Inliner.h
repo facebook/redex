@@ -459,7 +459,7 @@ class MultiMethodInliner {
     size_t constant_invoke_callees_analyzed{0};
     size_t constant_invoke_callees_unreachable_blocks{0};
     size_t waited_seconds{0};
-    size_t max_priority{0};
+    int critical_path_length{0};
   };
   InliningInfo info;
 
