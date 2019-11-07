@@ -42,7 +42,8 @@ TEST_F(NullPropagationTest, NullMonitorEnter) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (throw v0)
+      (const v1 0)
+      (throw v1)
     )
 )");
 
@@ -64,7 +65,8 @@ TEST_F(NullPropagationTest, NullInvokeVirtual) {
   auto expected_code = assembler::ircode_from_string(R"(
     (
       (const v0 0)
-      (throw v0)
+      (const v1 0)
+      (throw v1)
     )
 )");
 
@@ -89,7 +91,8 @@ TEST_F(NullPropagationTest, AputInvokeVirtual) {
       (const v0 0)
       (const v1 0)
       (const v2 0)
-      (throw v1)
+      (const v3 0)
+      (throw v3)
     )
 )");
 

@@ -69,7 +69,10 @@ class Transform final {
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
                                IRList::iterator);
-  bool replace_with_throw(const ConstantEnvironment&, IRList::iterator);
+  bool replace_with_throw(const ConstantEnvironment&,
+                          IRList::iterator,
+                          IRCode* code,
+                          boost::optional<int32_t>* temp_reg);
 
   void remove_dead_switch(const ConstantEnvironment&,
                           cfg::ControlFlowGraph&,

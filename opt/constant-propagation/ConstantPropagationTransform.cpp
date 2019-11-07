@@ -326,7 +326,9 @@ void Transform::eliminate_dead_branch(
 }
 
 bool Transform::replace_with_throw(const ConstantEnvironment& env,
-                                   IRList::iterator it) {
+                                   IRList::iterator it,
+                                   IRCode* code,
+                                   boost::optional<int32_t>* temp_reg) {
   auto* insn = it->insn;
   auto opcode = insn->opcode();
   size_t src_index;
@@ -405,14 +407,23 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
     if (!is_uninstantiable_class(required_instance_type)) {
       return false;
     }
-
-    IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
-    const_insn->set_dest(reg)->set_literal(0);
-    new_insns.emplace_back(const_insn);
   }
 
+  // We'll replace this instruction with
+  //   const tmp, 0
+  //   throw tmp
+  // We do not reuse reg, even if it might be null, as we need a value that is
+  // throwable.
+  if (!*temp_reg) {
+    *temp_reg = code->allocate_temp();
+  }
+
+  IRInstruction* const_insn = new IRInstruction(OPCODE_CONST);
+  const_insn->set_dest(**temp_reg)->set_literal(0);
+  new_insns.emplace_back(const_insn);
+
   IRInstruction* throw_insn = new IRInstruction(OPCODE_THROW);
-  throw_insn->set_src(0, reg);
+  throw_insn->set_src(0, **temp_reg);
   new_insns.emplace_back(throw_insn);
   m_replacements.emplace_back(insn, new_insns);
   m_rebuild_cfg = true;
@@ -457,6 +468,7 @@ Transform::Stats Transform::apply(
     const WholeProgramState& wps,
     IRCode* code) {
   auto& cfg = code->cfg();
+  boost::optional<int32_t> temp_reg;
   for (const auto& block : cfg.blocks()) {
     auto env = intra_cp.get_entry_state_at(block);
     // This block is unreachable, no point mutating its instructions -- DCE
@@ -466,8 +478,8 @@ Transform::Stats Transform::apply(
     }
     for (auto& mie : InstructionIterable(block)) {
       auto it = code->iterator_to(mie);
-      bool any_changes =
-          eliminate_redundant_put(env, wps, it) || replace_with_throw(env, it);
+      bool any_changes = eliminate_redundant_put(env, wps, it) ||
+                         replace_with_throw(env, it, code, &temp_reg);
       intra_cp.analyze_instruction(mie.insn, &env);
       if (!any_changes && !m_redundant_move_results.count(mie.insn)) {
         simplify_instruction(env, wps, code->iterator_to(mie));
