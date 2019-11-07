@@ -1176,6 +1176,12 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   auto caller_count = callers.size();
   always_assert(caller_count > 0);
 
+  // non-root methods that are only ever called once should always be inlined,
+  // as the method can be removed afterwards
+  if (caller_count == 1 && !root(callee)) {
+    return false;
+  }
+
   // 1. Determine costs of inlining
 
   size_t inlined_cost = get_inlined_cost(callee);
@@ -1224,12 +1230,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
     } else {
       return true;
     }
-  }
-
-  // non-root methods that are only ever called once should always be inlined,
-  // as the method can be removed afterwards
-  if (caller_count == 1) {
-    return false;
   }
 
   // Let's just consider this particular inlining opportunity
