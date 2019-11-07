@@ -267,6 +267,16 @@ void MultiMethodInliner::inline_methods() {
   m_async_method_executor.set_num_threads(
       m_config.debug ? 1 : redex_parallel::default_num_threads());
 
+  // The order in which we inline is such that once a callee is considered to
+  // be inlined, it's code will no longer change. So we can cache its size.
+  m_callee_insn_sizes =
+      std::make_unique<ConcurrentMap<const DexMethod*, size_t>>();
+
+  // Instead of changing visibility as we inline, blocking other work on the
+  // critical path, we do it all in parallel at the end.
+  m_delayed_change_visibilities = std::make_unique<
+      std::unordered_map<DexMethod*, std::unordered_set<DexType*>>>();
+
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
   // hit a leaf and we start inlining from there.
@@ -357,6 +367,7 @@ void MultiMethodInliner::inline_methods() {
   }
 
   m_async_method_executor.join();
+  delayed_change_visibilities();
   info.waited_seconds = m_async_method_executor.get_waited_seconds();
 }
 
@@ -574,7 +585,8 @@ void MultiMethodInliner::inline_inlinables(
   size_t estimated_insn_size = caller->editable_cfg_built()
                                    ? caller->cfg().sum_opcode_sizes()
                                    : caller->sum_opcode_sizes();
-  size_t calls_inlined = 0;
+
+  std::vector<DexMethod*> inlined_callees;
   for (auto inlinable : inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
@@ -604,19 +616,22 @@ void MultiMethodInliner::inline_inlinables(
       inliner::inline_method(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
-    estimated_insn_size += callee->editable_cfg_built()
-                               ? callee->cfg().sum_opcode_sizes()
-                               : callee->sum_opcode_sizes();
+    estimated_insn_size += get_callee_insn_size(callee_method);
 
-    TRACE(MMINL, 6, "checking visibility usage of members in %s", SHOW(callee));
+    inlined_callees.push_back(callee_method);
+  }
 
-    {
-      std::lock_guard<std::mutex> guard(m_mutex);
-      change_visibility(callee_method, caller_method->get_class());
+  if (inlined_callees.size() > 0) {
+    std::lock_guard<std::mutex> guard(m_mutex);
+    for (auto callee_method : inlined_callees) {
+      if (m_delayed_change_visibilities) {
+        (*m_delayed_change_visibilities)[callee_method].insert(
+            caller_method->get_class());
+      } else {
+        change_visibility(callee_method, caller_method->get_class());
+      }
       inlined.insert(callee_method);
     }
-
-    calls_inlined++;
   }
 
   for (IRCode* code : need_deconstruct) {
@@ -624,7 +639,7 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   std::lock_guard<std::mutex> guard(m_info_mutex);
-  info.calls_inlined += calls_inlined;
+  info.calls_inlined += inlined_callees.size();
 }
 
 void MultiMethodInliner::async_prioritized_method_execute(
@@ -743,8 +758,10 @@ void MultiMethodInliner::postprocess_method(DexMethod* method) {
     return;
   }
 
-  // This pre-populates the m_should_inline cache.
-  should_inline(method);
+  // This pre-populates the m_should_inline and m_callee_insn_sizes caches.
+  if (should_inline(method)) {
+    get_callee_insn_size(method);
+  }
 
   auto& callers = m_async_callee_callers.at(method);
   if (delayed_shrinking) {
@@ -912,9 +929,7 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // INSTRUCTION_BUFFER is added because the final method size is often larger
   // than our estimate -- during the sync phase, we may have to pick larger
   // branch opcodes to encode large jumps.
-  const IRCode* code = callee->get_code();
-  auto callee_size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
-                                                : code->sum_opcode_sizes();
+  auto callee_size = get_callee_insn_size(callee);
   if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
     std::lock_guard<std::mutex> guard(m_info_mutex);
     info.caller_too_large++;
@@ -991,6 +1006,24 @@ bool MultiMethodInliner::should_inline(const DexMethod* callee) {
   }
   m_should_inline.emplace(callee, res);
   return *res;
+}
+
+size_t MultiMethodInliner::get_callee_insn_size(const DexMethod* callee) {
+  if (m_callee_insn_sizes) {
+    auto size = m_callee_insn_sizes->get(callee, 0);
+    if (size != 0) {
+      return size;
+    }
+  }
+
+  const IRCode* code = callee->get_code();
+  auto size = code->editable_cfg_built() ? code->cfg().sum_opcode_sizes()
+                                         : code->sum_opcode_sizes();
+  always_assert(size > 0);
+  if (m_callee_insn_sizes) {
+    m_callee_insn_sizes->emplace(callee, size);
+  }
+  return size;
 }
 
 /*
@@ -1625,6 +1658,21 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
   return has_cross_store_ref;
 }
 
+void MultiMethodInliner::delayed_change_visibilities() {
+  walk::parallel::code(m_scope, [&](DexMethod* method, IRCode& code) {
+    auto it = m_delayed_change_visibilities->find(method);
+    if (it == m_delayed_change_visibilities->end()) {
+      return;
+    }
+    auto& scopes = it->second;
+    for (auto scope : scopes) {
+      TRACE(MMINL, 6, "checking visibility usage of members in %s",
+            SHOW(method));
+      change_visibility(method, scope);
+    }
+  });
+}
+
 void MultiMethodInliner::invoke_direct_to_static() {
   // We sort the methods here because make_static renames methods on
   // collision, and which collisions occur is order-dependent. E.g. if we have
@@ -1648,16 +1696,16 @@ void MultiMethodInliner::invoke_direct_to_static() {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
     mutators::make_static(method);
   }
-  walk::opcodes(m_scope, [](DexMethod* meth) { return true; },
-                [&](DexMethod*, IRInstruction* insn) {
-                  auto op = insn->opcode();
-                  if (op == OPCODE_INVOKE_DIRECT) {
-                    auto m = insn->get_method()->as_def();
-                    if (m && m_make_static.count(m)) {
-                      insn->set_opcode(OPCODE_INVOKE_STATIC);
-                    }
-                  }
-                });
+  walk::parallel::opcodes(m_scope, [](DexMethod* meth) { return true; },
+                          [&](DexMethod*, IRInstruction* insn) {
+                            auto op = insn->opcode();
+                            if (op == OPCODE_INVOKE_DIRECT) {
+                              auto m = insn->get_method()->as_def();
+                              if (m && m_make_static.count(m)) {
+                                insn->set_opcode(OPCODE_INVOKE_STATIC);
+                              }
+                            }
+                          });
 }
 
 void adjust_opcode_counts(

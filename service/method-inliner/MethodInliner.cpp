@@ -408,6 +408,7 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
+  mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);

@@ -287,6 +287,11 @@ class MultiMethodInliner {
   bool should_inline_fast(const DexMethod* callee);
 
   /**
+   * Gets the number of instructions in a callee.
+   */
+  size_t get_callee_insn_size(const DexMethod* callee);
+
+  /**
    * We want to avoid inlining a large method with many callers as that would
    * bloat the bytecode.
    */
@@ -296,6 +301,12 @@ class MultiMethodInliner {
    * Estimate inlined cost for a single invocation of a method.
    */
   size_t get_inlined_cost(const DexMethod* callee);
+
+  /**
+   * Change visibilities of methods, assuming that`m_change_visibility` is
+   * non-null.
+   */
+  void delayed_change_visibilities();
 
   /**
    * Staticize required methods (stored in `m_make_static`) and update
@@ -437,7 +448,12 @@ class MultiMethodInliner {
   // Whether any of const-prop/cs/copy-prop/local-dce are enabled.
   bool m_shrinking_enabled{0};
 
-  // When mutating shared state, except info, while inlining in parallel
+  std::unordered_set<DexMethod*> m_make_static;
+  std::unique_ptr<std::unordered_map<DexMethod*, std::unordered_set<DexType*>>>
+      m_delayed_change_visibilities;
+
+  // When mutating shared state m_make_static, m_delayed_change_visibilities,
+  // inlined, except info, while inlining in parallel
   std::mutex m_mutex;
 
   // When mutating info while inlining in parallel
@@ -445,6 +461,9 @@ class MultiMethodInliner {
 
   // Cache for should_inline function
   ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
+
+  // Optional cache for get_callee_insn_size function
+  std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
 
   constant_propagation::Transform::Stats m_const_prop_stats;
   cse_impl::Stats m_cse_stats;
@@ -491,8 +510,6 @@ class MultiMethodInliner {
   const std::vector<DexClass*>& m_scope;
 
   const inliner::InlinerConfig& m_config;
-
-  std::unordered_set<DexMethod*> m_make_static;
 
   const MultiMethodInlinerMode m_mode;
 
