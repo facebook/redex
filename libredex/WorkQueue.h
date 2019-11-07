@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Debug.h"
+#include "Thread.h"
 
 #include <algorithm>
 #include <boost/optional/optional.hpp>
@@ -18,18 +19,7 @@
 #include <queue>
 #include <random>
 
-// As far as Intel processors are concerned...
-#define CACHE_LINE_SIZE 64
-
 namespace redex_parallel {
-
-/**
- * Redex uses the number of physical cores.
- */
-static inline unsigned int default_num_threads() {
-  unsigned int threads = boost::thread::physical_concurrency();
-  return std::max(1u, threads);
-}
 
 constexpr int INVALID_ID{-1};
 
