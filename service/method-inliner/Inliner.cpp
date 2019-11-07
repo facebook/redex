@@ -299,7 +299,10 @@ void MultiMethodInliner::caller_inline(
       nonrecursive_callees.push_back(callee);
     }
   }
-  inline_callees(caller, nonrecursive_callees);
+
+  if (nonrecursive_callees.size() > 0) {
+    inline_callees(caller, nonrecursive_callees);
+  }
 }
 
 boost::optional<InvokeConstantArgumentsAndDeadBlocks>
@@ -385,7 +388,9 @@ void MultiMethodInliner::inline_callees(
     info.not_found += callees.size() - found;
   }
 
-  inline_inlinables(caller, inlinables);
+  if (inlinables.size() > 0) {
+    inline_inlinables(caller, inlinables);
+  }
 }
 
 void MultiMethodInliner::inline_callees(
