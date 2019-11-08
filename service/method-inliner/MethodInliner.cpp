@@ -160,6 +160,14 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
         (!method->get_code() && !is_abstract(method))) {
       return;
     }
+    // Why can_rename? To mirror what VirtualRenamer looks at.
+    if (is_interface(type_class(method->get_class())) &&
+        (root(method) || !can_rename(method))) {
+      // We cannot rule out that there are dynamically added classes, possibly
+      // even created at runtime via Proxy.newProxyInstance, that override this
+      // method. So we assume the worst.
+      return;
+    }
     const auto& overriding_methods =
         mog::get_overriding_methods(*method_override_graph, method);
     if (overriding_methods.size() == 0) {
@@ -171,9 +179,9 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       if (is_abstract(overriding_method)) {
         continue;
       }
-      if (!overriding_method->get_code()) {
+      if (!overriding_method->get_code() || root(overriding_method)) {
         // If the method is not abstract method and it doesn't have
-        // implementation, we bail out.
+        // implementation or is root, we bail out.
         return;
       }
       filtered_methods.emplace(overriding_method);
