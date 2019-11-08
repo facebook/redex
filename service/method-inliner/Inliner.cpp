@@ -48,10 +48,7 @@ const size_t COST_INVOKE_WITH_RESULT = 5;
 const size_t COST_INVOKE_WITHOUT_RESULT = 3;
 
 // Overhead of having a method and its metadata.
-const size_t COST_METHOD = 32;
-
-// Overhead of single extra argument for methods with many arguments
-const size_t COST_METHOD_ARG = 6;
+const size_t COST_METHOD = 16;
 
 // When to consider running constant-propagation to better estimate inlined
 // cost. It just takes too much time to run the analysis for large methods.
@@ -1343,12 +1340,9 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   }
 
   if (m_config.multiple_callers) {
-    // Methods with many arguments are more costly to keep around (more likely
-    // to need custom proto)
-    size_t method_cost = COST_METHOD;
-    method_cost +=
-        COST_METHOD_ARG *
-        get_inlined_regs_cost(callee->get_proto()->get_args()->size());
+    // The cost of keeping a method amounts of somewhat fixed metadata overhead,
+    // plus the method body, which we approximate with the inlined cost.
+    size_t method_cost = COST_METHOD + get_inlined_cost(callee);
 
     // If we inline invocations to this method everywhere, we could delete the
     // method. Is this worth it, given the number of callsites and costs
