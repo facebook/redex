@@ -19,23 +19,8 @@ constexpr unsigned int NUM_INTS = 1000;
 //==========
 
 TEST(WorkQueueTest, EmptyQueue) {
-  auto wq = workqueue_mapreduce<std::string, int>(
-      [](std::string a) { return a.size(); },
-      [](int a, int b) { return a + b; });
+  auto wq = workqueue_foreach<std::string>([](std::string a) { return 0; });
   wq.run_all();
-}
-
-TEST(WorkQueueTest, mapreduceTest) {
-  auto wq = workqueue_mapreduce<std::string, int>(
-      [](std::string a) { return a.size(); },
-      [](int a, int b) { return a + b; });
-
-  for (int idx = 0; idx < NUM_STRINGS; ++idx) {
-    wq.add_item("wow");
-    wq.add_item("abc4");
-  }
-  int result = wq.run_all();
-  ASSERT_EQ(7 * NUM_STRINGS, result);
 }
 
 TEST(WorkQueueTest, foreachTest) {
@@ -68,18 +53,23 @@ TEST(WorkQueueTest, singleThreadTest) {
 
 // Check that we can dynamically adding work items during execution.
 TEST(WorkQueueTest, checkDynamicallyAddingTasks) {
-  using WorkerState = WorkerState<int, int>;
-  WorkQueue<int, int> wq(
-      [&wq](WorkerState* worker_state, int a) {
+  constexpr size_t num_threads{3};
+  auto results = std::make_unique<int[]>(num_threads);
+  WorkQueue<int> wq(
+      [&](WorkerState<int>* worker_state, int a) {
         if (a > 0) {
           worker_state->push_task(a - 1);
-          return a;
+          results[redex_parallel::get_worker_id()] += a;
         }
-        return 0;
       },
-      [](int a, int b) { return a + b; }, 3);
+      num_threads);
   wq.add_item(10);
-  auto result = wq.run_all();
+  wq.run_all();
+
+  size_t result{0};
+  for (size_t i = 0; i < num_threads; ++i) {
+    result += results[i];
+  }
 
   // 10 + 9 + ... + 1 + 0 = 55
   EXPECT_EQ(55, result);

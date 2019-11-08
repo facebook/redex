@@ -73,31 +73,6 @@ struct class_load_work {
   int num;
 };
 
-static std::vector<std::exception_ptr> class_work(class_load_work* clw) {
-  try {
-    clw->dl->load_dex_class(clw->num);
-    return {}; // no exception
-  } catch (const std::exception& exc) {
-    TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
-
-    return {std::current_exception()};
-  }
-}
-
-static std::vector<std::exception_ptr> exc_reducer(
-    const std::vector<std::exception_ptr>& v1,
-    const std::vector<std::exception_ptr>& v2) {
-  if (v1.empty()) {
-    return v2;
-  } else if (v2.empty()) {
-    return v1;
-  } else {
-    std::vector<std::exception_ptr> result(v1);
-    result.insert(result.end(), v2.begin(), v2.end());
-    return result;
-  }
-}
-
 const uint8_t* align_ptr(const uint8_t* ptr, size_t alignment) {
   if ((size_t)ptr % alignment != 0) {
     return ptr + (alignment - ((size_t)ptr % alignment));
@@ -494,20 +469,35 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   m_classes = &classes;
 
   auto lwork = new class_load_work[dh->class_defs_size];
-  auto wq =
-      workqueue_mapreduce<class_load_work*, std::vector<std::exception_ptr>>(
-          class_work, exc_reducer);
+  auto num_threads = redex_parallel::default_num_threads();
+  std::vector<std::vector<std::exception_ptr>> exceptions_vec(num_threads);
+  auto wq = workqueue_foreach<class_load_work*>(
+      [&exceptions_vec](class_load_work* clw) {
+        try {
+          clw->dl->load_dex_class(clw->num);
+        } catch (const std::exception& exc) {
+          TRACE(MAIN, 1, "Worker throw the exception:%s", exc.what());
+          exceptions_vec[redex_parallel::get_worker_id()].emplace_back(
+              std::current_exception());
+        }
+      },
+      num_threads);
   for (uint32_t i = 0; i < dh->class_defs_size; i++) {
     lwork[i].dl = this;
     lwork[i].num = i;
     wq.add_item(&lwork[i]);
   }
-  const auto exceptions = wq.run_all();
+  wq.run_all();
   delete[] lwork;
 
-  if (!exceptions.empty()) {
+  std::vector<std::exception_ptr> all_exceptions;
+  for (auto& exceptions : exceptions_vec) {
+    all_exceptions.insert(
+        all_exceptions.end(), exceptions.begin(), exceptions.end());
+  }
+  if (!all_exceptions.empty()) {
     // At least one of the workers raised an exception
-    aggregate_exception ae(exceptions);
+    aggregate_exception ae(all_exceptions);
     throw ae;
   }
 

@@ -40,6 +40,13 @@ struct Stats {
   uint32_t num_invoke_virtual_replaced{0};
   uint32_t num_invoke_interface_replaced{0};
   uint32_t num_desupered{0};
+
+  Stats& operator+=(const Stats& that) {
+    num_invoke_virtual_replaced += that.num_invoke_virtual_replaced;
+    num_invoke_interface_replaced += that.num_invoke_interface_replaced;
+    num_desupered += that.num_desupered;
+    return *this;
+  }
 };
 
 void try_desuperify(const DexMethod* caller,
@@ -130,18 +137,9 @@ void ReBindVRefsPass::run_pass(DexStoresVector& stores,
                     g_redex->external_classes().begin(),
                     g_redex->external_classes().end());
   auto override_graph = mog::build_graph(full_scope);
-
-  Stats stats = walk::parallel::reduce_methods<Stats>(
-      scope,
-      [&](DexMethod* method) -> Stats {
-        return replaced_virtual_refs(*override_graph, method, m_desuperify);
-      },
-      [](Stats a, Stats b) {
-        a.num_invoke_virtual_replaced += b.num_invoke_virtual_replaced;
-        a.num_invoke_interface_replaced += b.num_invoke_interface_replaced;
-        a.num_desupered += b.num_desupered;
-        return a;
-      });
+  Stats stats = walk::parallel::methods<Stats>(scope, [&](DexMethod* method) {
+    return replaced_virtual_refs(*override_graph, method, m_desuperify);
+  });
   mgr.set_metric("num_desupered", stats.num_desupered);
   mgr.set_metric("num_invoke_virtual_replaced",
                  stats.num_invoke_virtual_replaced);

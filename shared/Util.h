@@ -44,6 +44,13 @@ void insert_sorted(Container& c, const T& e, Compare comp) {
   c.insert(std::lower_bound(c.begin(), c.end(), e, comp), e);
 }
 
+template <class T>
+struct MergeContainers {
+  void operator()(const T& addend, T* accumulator) {
+    accumulator->insert(addend.begin(), addend.end());
+  }
+};
+
 /**
  * Copy the const-ness of `In` onto `Out`.
  * For example:

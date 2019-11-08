@@ -486,20 +486,13 @@ Stats lower(DexMethod* method, bool lower_with_cfg) {
 
 Stats run(DexStoresVector& stores, bool lower_with_cfg) {
   auto scope = build_class_scope(stores);
-  return walk::parallel::reduce_methods<Stats>(
-      scope,
-      [lower_with_cfg](DexMethod* m) {
-        Stats stats;
-        if (m->get_code() == nullptr) {
-          return stats;
-        }
-        stats.accumulate(lower(m, lower_with_cfg));
-        return stats;
-      },
-      [](Stats a, Stats b) {
-        a.accumulate(b);
-        return a;
-      });
+  return walk::parallel::methods<Stats>(scope, [lower_with_cfg](DexMethod* m) {
+    Stats stats;
+    if (m->get_code() == nullptr) {
+      return stats;
+    }
+    return lower(m, lower_with_cfg);
+  });
 }
 
 // Computes number of entries needed for a packed switch, accounting for any

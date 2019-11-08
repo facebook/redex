@@ -305,7 +305,7 @@ std::string show(const RegisterTransform& reg_transform) {
 
 } // namespace
 
-void Allocator::Stats::accumulate(const Allocator::Stats& that) {
+Allocator::Stats& Allocator::Stats::operator+=(const Allocator::Stats& that) {
   reiteration_count += that.reiteration_count;
   param_spill_moves += that.param_spill_moves;
   range_spill_moves += that.range_spill_moves;
@@ -313,6 +313,7 @@ void Allocator::Stats::accumulate(const Allocator::Stats& that) {
   split_moves += that.split_moves;
   moves_coalesced += that.moves_coalesced;
   params_spill_early += that.params_spill_early;
+  return *this;
 }
 
 static bool has_2addr_form(IROpcode op) {

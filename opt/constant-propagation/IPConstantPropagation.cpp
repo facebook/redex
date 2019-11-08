@@ -147,9 +147,8 @@ void PassImpl::compute_analysis_stats(const WholeProgramState& wps) {
  * that analyze() obtained.
  */
 void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
-  m_transform_stats = walk::parallel::reduce_methods<Transform::Stats>(
-      scope,
-      [&](DexMethod* method) {
+  m_transform_stats =
+      walk::parallel::methods<Transform::Stats>(scope, [&](DexMethod* method) {
         if (method->get_code() == nullptr) {
           return Transform::Stats();
         }
@@ -167,9 +166,6 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
           Transform tf(config);
           return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
         }
-      },
-      [](Transform::Stats a, Transform::Stats b) { // reducer
-        return a + b;
       });
 }
 

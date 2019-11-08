@@ -109,8 +109,8 @@ size_t trim_shapes(MergerType::ShapeCollector& shapes, size_t min_count) {
   std::vector<MergerType::Shape> shapes_to_remove;
   for (const auto& shape_it : shapes) {
     if (shape_it.second.types.size() >= min_count) {
-      TRACE(TERA, 7, "Keep shape %s (%ld)",
-            shape_it.first.to_string().c_str(), shape_it.second.types.size());
+      TRACE(TERA, 7, "Keep shape %s (%ld)", shape_it.first.to_string().c_str(),
+            shape_it.second.types.size());
       continue;
     }
     shapes_to_remove.push_back(shape_it.first);
@@ -230,15 +230,10 @@ void exclude_reference_to_android_sdk(const Json::Value& json_val,
 
     return current_excluded;
   };
-  auto excluded_by_android_sdk_ref =
-      walk::parallel::reduce_methods<std::unordered_set<const DexType*>>(
-          mergeable_classes,
-          scanner,
-          [](std::unordered_set<const DexType*> left,
-             const std::unordered_set<const DexType*> right) {
-            left.insert(right.begin(), right.end());
-            return left;
-          });
+  auto excluded_by_android_sdk_ref = walk::parallel::methods<
+      std::unordered_set<const DexType*>,
+      MergeContainers<std::unordered_set<const DexType*>>>(mergeable_classes,
+                                                           scanner);
   for (const auto excluded : excluded_by_android_sdk_ref) {
     non_mergeables.insert(excluded);
   }
@@ -609,11 +604,9 @@ void Model::find_non_mergeables(const Scope& scope, const TypeSet& generated) {
     return current_non_mergeables;
   };
 
-  TypeSet non_mergeables_opcode = walk::parallel::reduce_methods<TypeSet>(
-      scope, patcher, [](TypeSet left, const TypeSet right) {
-        left.insert(right.begin(), right.end());
-        return left;
-      });
+  TypeSet non_mergeables_opcode =
+      walk::parallel::methods<TypeSet, MergeContainers<TypeSet>>(scope,
+                                                                 patcher);
 
   m_non_mergeables.insert(non_mergeables_opcode.begin(),
                           non_mergeables_opcode.end());
@@ -1093,10 +1086,7 @@ void Model::collect_methods() {
       }
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
-      TRACE(TERA,
-            8,
-            "%ld virtual scopes in %s",
-            virt_scopes.size(),
+      TRACE(TERA, 8, "%ld virtual scopes in %s", virt_scopes.size(),
             SHOW(type));
       for (const auto& virt_scope : virt_scopes) {
 

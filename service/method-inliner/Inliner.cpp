@@ -743,10 +743,10 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
   }
 
   std::lock_guard<std::mutex> guard(m_stats_mutex);
-  m_const_prop_stats = m_const_prop_stats + const_prop_stats;
-  m_cse_stats = m_cse_stats + cse_stats;
-  m_copy_prop_stats = m_copy_prop_stats + copy_prop_stats;
-  m_local_dce_stats = m_local_dce_stats + local_dce_stats;
+  m_const_prop_stats += const_prop_stats;
+  m_cse_stats += cse_stats;
+  m_copy_prop_stats += copy_prop_stats;
+  m_local_dce_stats += local_dce_stats;
   m_methods_shrunk++;
 }
 

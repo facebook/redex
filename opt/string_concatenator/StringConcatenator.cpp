@@ -84,20 +84,20 @@ struct Stats {
   uint32_t clinits_emptied{0};
   uint32_t string_fields_resolved{0};
 
-  void operator+=(const Stats& stats) {
-    insns_removed += stats.insns_removed;
-    clinits_emptied += stats.clinits_emptied;
-    string_fields_resolved += stats.string_fields_resolved;
+  Stats& operator+=(const Stats& that) {
+    insns_removed += that.insns_removed;
+    clinits_emptied += that.clinits_emptied;
+    string_fields_resolved += that.string_fields_resolved;
+    return *this;
   }
 
   void report(PassManager& mgr) {
     mgr.set_metric("insns_removed", insns_removed);
     mgr.set_metric("clinits_emptied", clinits_emptied);
     mgr.set_metric("string_fields_resolved", string_fields_resolved);
-    TRACE(
-        STR_CAT, 1,
-        "insns removed: %d, methods rewritten %d, string fields resolved %d",
-        insns_removed, clinits_emptied, string_fields_resolved);
+    TRACE(STR_CAT, 1,
+          "insns removed: %d, methods rewritten %d, string fields resolved %d",
+          insns_removed, clinits_emptied, string_fields_resolved);
   }
 };
 
@@ -374,9 +374,9 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
   const auto& scope = build_class_scope(stores);
   const ConcatenatorConfig config{};
   LockedMethodSet methods_to_remove;
-  Stats stats = walk::parallel::reduce_methods<Stats, Scope>(
+  Stats stats = walk::parallel::methods<Stats>(
       scope,
-      [&config, &methods_to_remove](DexMethod* m) -> Stats {
+      [&config, &methods_to_remove](DexMethod* m) {
         auto code = m->get_code();
         if (code == nullptr) {
           return Stats{};
@@ -394,11 +394,6 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
 
         return stats;
       },
-      [](Stats a, Stats b) {
-        a += b;
-        return a;
-      },
-      Stats{},
       DEBUG ? 1 : redex_parallel::default_num_threads());
 
   for (DexMethod* method : methods_to_remove.get()) {

@@ -24,11 +24,11 @@ struct CallCounter {
   uint32_t supers{0};
   uint32_t directs{0};
 
-  static CallCounter plus(CallCounter a, CallCounter b) {
-    a.virtuals += b.virtuals;
-    a.supers += b.supers;
-    a.directs += b.directs;
-    return a;
+  CallCounter& operator+=(const CallCounter& that) {
+    virtuals += that.virtuals;
+    supers += that.supers;
+    directs += that.directs;
+    return *this;
   }
 };
 
@@ -90,13 +90,7 @@ void fix_call_sites(const std::vector<DexClass*>& scope,
     return call_counter;
   };
 
-  CallCounter call_counter = walk::parallel::reduce_methods<CallCounter, Scope>(
-      scope, fixer, [](CallCounter a, CallCounter b) -> CallCounter {
-        a.virtuals += b.virtuals;
-        a.supers += b.supers;
-        a.directs += b.directs;
-        return a;
-      });
+  CallCounter call_counter = walk::parallel::methods<CallCounter>(scope, fixer);
 
   metrics.num_virtual_calls += call_counter.virtuals;
   metrics.num_super_calls += call_counter.supers;

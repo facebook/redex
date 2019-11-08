@@ -22,10 +22,12 @@
 
 namespace regalloc {
 
-graph_coloring::Allocator::Stats RegAllocPass::allocate(
+using Stats = graph_coloring::Allocator::Stats;
+
+Stats RegAllocPass::allocate(
     const graph_coloring::Allocator::Config& allocator_config, DexMethod* m) {
   if (m->get_code() == nullptr) {
-    return graph_coloring::Allocator::Stats();
+    return Stats();
   }
   auto& code = *m->get_code();
   TRACE(REG, 5, "regs:%d code:\n%s", code.get_registers_size(), SHOW(&code));
@@ -55,17 +57,9 @@ void RegAllocPass::run_pass(DexStoresVector& stores,
   allocator_config.no_overwrite_this =
       mgr.get_redex_options().no_overwrite_this();
 
-  using Output = graph_coloring::Allocator::Stats;
   auto scope = build_class_scope(stores);
-  auto stats = walk::parallel::reduce_methods<Output>(
-      scope,
-      [&](DexMethod* m) { // mapper
-        return allocate(allocator_config, m);
-      },
-      [](Output a, Output b) { // reducer
-        a.accumulate(b);
-        return a;
-      });
+  auto stats = walk::parallel::methods<Stats>(
+      scope, [&](DexMethod* m) { return allocate(allocator_config, m); });
 
   TRACE(REG, 1, "Total reiteration count: %lu", stats.reiteration_count);
   TRACE(REG, 1, "Total Params spilled early: %lu", stats.params_spill_early);

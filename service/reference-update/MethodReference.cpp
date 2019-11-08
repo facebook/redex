@@ -131,11 +131,14 @@ CallSites collect_call_refs(const Scope& scope,
     return call_sites;
   };
 
-  CallSites call_sites = walk::parallel::reduce_methods<CallSites>(
-      scope, patcher, [](CallSites left, CallSites right) {
-        left.insert(left.end(), right.begin(), right.end());
-        return left;
-      });
+  struct Append {
+    void operator()(const CallSites& addend, CallSites* accumulator) {
+      accumulator->insert(accumulator->end(), addend.begin(), addend.end());
+    }
+  };
+
+  CallSites call_sites =
+      walk::parallel::methods<CallSites, Append>(scope, patcher);
   return call_sites;
 }
 

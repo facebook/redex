@@ -28,7 +28,6 @@ constexpr const char* METRIC_GOTO_REMOVED = "num_goto_removed";
 
 class RemoveGotos {
  private:
-
   /*
    * A blocks B and C can be merged together if and only if
    * - B jumps to C unconditionally
@@ -155,20 +154,15 @@ void RemoveGotosPass::run_pass(DexStoresVector& stores,
   auto scope = build_class_scope(stores);
 
   size_t total_gotos_removed =
-      walk::parallel::reduce_methods<size_t>(
-          scope,
-          [](DexMethod* m) -> size_t {
-            if (!m->get_code()) {
-              return 0;
-            }
-            return RemoveGotos::process_method(m);
-          },
-          [](size_t a, size_t b) { return a + b; });
+      walk::parallel::methods<size_t>(scope, [](DexMethod* m) -> size_t {
+        if (!m->get_code()) {
+          return 0;
+        }
+        return RemoveGotos::process_method(m);
+      });
 
   mgr.incr_metric(METRIC_GOTO_REMOVED, total_gotos_removed);
-  TRACE(RMGOTO,
-        1,
-        "Number of unnecessary gotos removed: %d",
+  TRACE(RMGOTO, 1, "Number of unnecessary gotos removed: %d",
         total_gotos_removed);
 }
 

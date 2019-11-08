@@ -226,15 +226,13 @@ void IntroduceSwitchPass::run_pass(DexStoresVector& stores,
                                    PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Metrics total_switch_cases = walk::parallel::reduce_methods<Metrics>(
-      scope,
-      [](DexMethod* m) -> Metrics {
+  Metrics total_switch_cases =
+      walk::parallel::methods<Metrics>(scope, [](DexMethod* m) -> Metrics {
         if (!m->get_code()) {
           return Metrics();
         }
         return IntroduceSwitch::process_method(m);
-      },
-      [](Metrics a, Metrics b) { return a + b; });
+      });
 
   if (total_switch_cases.switch_intro > 0) {
     mgr.incr_metric(METRIC_SWITCH_INTRODUCED, total_switch_cases.switch_intro);

@@ -34,14 +34,13 @@ class Transform final {
     size_t materialized_consts{0};
     size_t added_param_const{0};
     size_t throws{0};
-    Stats operator+(const Stats& that) const {
-      Stats result;
-      result.branches_removed = branches_removed + that.branches_removed;
-      result.materialized_consts =
-          materialized_consts + that.materialized_consts;
-      result.added_param_const = added_param_const + that.added_param_const;
-      result.throws = throws + that.throws;
-      return result;
+
+    Stats& operator+=(const Stats& that) {
+      branches_removed += that.branches_removed;
+      materialized_consts += that.materialized_consts;
+      added_param_const += that.added_param_const;
+      throws += that.throws;
+      return *this;
     }
   };
 

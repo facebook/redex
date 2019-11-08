@@ -401,9 +401,8 @@ size_t RemoveArgs::update_callsite(IRInstruction* instr) {
  */
 size_t RemoveArgs::update_callsites() {
   // Walk through all methods to look for and edit callsites.
-  return walk::parallel::reduce_methods<size_t>(
-      m_scope,
-      [&](DexMethod* method) -> size_t {
+  return walk::parallel::methods<size_t>(
+      m_scope, [&](DexMethod* method) -> size_t {
         auto code = method->get_code();
         if (code == nullptr) {
           return 0;
@@ -420,8 +419,7 @@ size_t RemoveArgs::update_callsites() {
           }
         }
         return callsite_args_removed;
-      },
-      [](size_t a, size_t b) { return a + b; });
+      });
 }
 
 void RemoveUnusedArgsPass::run_pass(DexStoresVector& stores,

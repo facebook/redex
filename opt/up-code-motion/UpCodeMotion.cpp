@@ -338,37 +338,26 @@ void UpCodeMotionPass::run_pass(DexStoresVector& stores,
                                 PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Stats stats = walk::parallel::reduce_methods<Stats>(
-      scope,
-      [](DexMethod* method) -> Stats {
-        const auto code = method->get_code();
-        if (!code) {
-          return Stats{};
-        }
+  Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
+    const auto code = method->get_code();
+    if (!code) {
+      return Stats{};
+    }
 
-        Stats stats = UpCodeMotionPass::process_code(
-            is_static(method), method->get_class(),
-            method->get_proto()->get_args(), code);
-        if (stats.instructions_moved || stats.branches_moved_over) {
-          TRACE(UCM, 3,
-                "[up code motion] Moved %u instructions over %u conditional "
-                "branches while inverting %u conditional branches and dealing "
-                "with %u clobbered registers in {%s}",
-                stats.instructions_moved, stats.branches_moved_over,
-                stats.inverted_conditional_branches, stats.clobbered_registers,
-                SHOW(method));
-        }
-        return stats;
-      },
-      [](Stats a, Stats b) {
-        Stats c;
-        c.instructions_moved = a.instructions_moved + b.instructions_moved;
-        c.branches_moved_over = a.branches_moved_over + b.branches_moved_over;
-        c.inverted_conditional_branches =
-            a.inverted_conditional_branches + b.inverted_conditional_branches;
-        c.clobbered_registers = a.clobbered_registers + b.clobbered_registers;
-        return c;
-      });
+    Stats stats =
+        UpCodeMotionPass::process_code(is_static(method), method->get_class(),
+                                       method->get_proto()->get_args(), code);
+    if (stats.instructions_moved || stats.branches_moved_over) {
+      TRACE(UCM, 3,
+            "[up code motion] Moved %u instructions over %u conditional "
+            "branches while inverting %u conditional branches and dealing "
+            "with %u clobbered registers in {%s}",
+            stats.instructions_moved, stats.branches_moved_over,
+            stats.inverted_conditional_branches, stats.clobbered_registers,
+            SHOW(method));
+    }
+    return stats;
+  });
 
   mgr.incr_metric(METRIC_INSTRUCTIONS_MOVED, stats.instructions_moved);
   mgr.incr_metric(METRIC_BRANCHES_MOVED_OVER, stats.branches_moved_over);

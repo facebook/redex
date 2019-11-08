@@ -318,9 +318,8 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
                                         PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  int total_insns_hoisted = walk::parallel::reduce_methods<int>(
-      scope,
-      [](DexMethod* method) -> int {
+  int total_insns_hoisted =
+      walk::parallel::methods<int>(scope, [](DexMethod* method) -> int {
         const auto code = method->get_code();
         if (!code) {
           return 0;
@@ -333,8 +332,7 @@ void BranchPrefixHoistingPass::run_pass(DexStoresVector& stores,
                 insns_hoisted, SHOW(method));
         }
         return insns_hoisted;
-      },
-      [](int a, int b) { return a + b; });
+      });
 
   mgr.incr_metric(METRIC_INSTRUCTIONS_HOISTED, total_insns_hoisted);
 }

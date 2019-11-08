@@ -59,7 +59,7 @@ inline std::vector<int> create_permutation(int num, unsigned int thread_idx) {
 
 } // namespace workqueue_impl
 
-template <class Input, class Output = std::nullptr_t>
+template <class Input>
 class WorkerState {
  public:
   WorkerState(size_t id) : m_id(id) {}
@@ -90,90 +90,60 @@ class WorkerState {
   size_t m_id;
   std::queue<Input> m_queue;
   boost::mutex m_queue_mtx;
-  Output m_result;
 
-  template <class, class>
+  template <class>
   friend class WorkQueue;
 };
 
-template <class Input, class Output = std::nullptr_t>
+template <class Input>
 class WorkQueue {
  private:
-  using Mapper = std::function<Output(WorkerState<Input, Output>*, Input)>;
-  Mapper m_mapper;
-  std::function<Output(Output, Output)> m_reducer;
+  using Executor = std::function<void(WorkerState<Input>*, Input)>;
+  Executor m_executor;
 
-  std::vector<std::unique_ptr<WorkerState<Input, Output>>> m_states;
+  std::vector<std::unique_ptr<WorkerState<Input>>> m_states;
 
   const size_t m_num_threads{1};
   size_t m_insert_idx{0};
 
-  void consume(WorkerState<Input, Output>* state, Input task) {
-    state->m_result = m_reducer(state->m_result, m_mapper(state, task));
+  void consume(WorkerState<Input>* state, Input task) {
+    m_executor(state, task);
   }
 
  public:
-  WorkQueue(Mapper mapper,
-            std::function<Output(Output, Output)> reducer,
-            unsigned int num_threads);
+  WorkQueue(Executor, unsigned int num_threads);
 
   void add_item(Input task);
 
   /**
    * Spawn threads and evaluate function.  This method blocks.
    */
-  Output run_all(const Output& init_output = Output());
+  void run_all();
 };
 
-template <class Input, class Output>
-WorkQueue<Input, Output>::WorkQueue(
-    WorkQueue::Mapper mapper,
-    std::function<Output(Output, Output)> reducer,
-    unsigned int num_threads)
-    : m_mapper(mapper), m_reducer(reducer), m_num_threads(num_threads) {
+template <class Input>
+WorkQueue<Input>::WorkQueue(WorkQueue::Executor executor,
+                            unsigned int num_threads)
+    : m_executor(executor), m_num_threads(num_threads) {
   always_assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<WorkerState<Input, Output>>(i));
+    m_states.emplace_back(std::make_unique<WorkerState<Input>>(i));
   }
 }
 
 /**
- * Creates a new work queue that doesn't return a value.  This is for
- * jobs that only have side-effects.
+ * Convenience wrapper for jobs that don't require access to the WorkerState.
  */
 template <class Input>
-WorkQueue<Input, std::nullptr_t /*Output*/> workqueue_foreach(
+WorkQueue<Input> workqueue_foreach(
     const std::function<void(Input)>& func,
     unsigned int num_threads = redex_parallel::default_num_threads()) {
-  using Output = std::nullptr_t;
-  return WorkQueue<Input, Output>(
-      [func](WorkerState<Input, Output>*, Input a) -> Output {
-        func(a);
-        return nullptr;
-      },
-      [](Output, Output) -> Output { return nullptr; },
-      num_threads);
+  return WorkQueue<Input>([func](WorkerState<Input>*, Input a) { func(a); },
+                          num_threads);
 }
 
-/**
- * Creates a new work queue that reduces the items to a single value (e.g
- * for a statistics map).  This implies no thread state is required.
- */
-template <class Input, class Output>
-WorkQueue<Input, Output> workqueue_mapreduce(
-    const std::function<Output(Input)>& mapper,
-    const std::function<Output(Output, Output)>& reducer,
-    unsigned int num_threads = redex_parallel::default_num_threads()) {
-  return WorkQueue<Input, Output>(
-      [mapper](WorkerState<Input, Output>*, Input a) -> Output {
-        return mapper(a);
-      },
-      reducer,
-      num_threads);
-}
-
-template <class Input, class Output>
-void WorkQueue<Input, Output>::add_item(Input task) {
+template <class Input>
+void WorkQueue<Input>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   m_states[m_insert_idx]->m_queue.push(task);
 }
@@ -182,12 +152,11 @@ void WorkQueue<Input, Output>::add_item(Input task) {
  * Each worker thread pulls from its own queue first, and then once finished
  * looks randomly at other queues to try and steal work.
  */
-template <class Input, class Output>
-Output WorkQueue<Input, Output>::run_all(const Output& init_output) {
+template <class Input>
+void WorkQueue<Input>::run_all() {
   std::vector<boost::thread> all_threads;
-  auto worker = [&](WorkerState<Input, Output>* state, size_t state_idx) {
+  auto worker = [&](WorkerState<Input>* state, size_t state_idx) {
     workqueue_impl::set_worker_id(state_idx);
-    state->m_result = init_output;
     auto attempts =
         workqueue_impl::create_permutation(m_num_threads, state_idx);
     while (true) {
@@ -218,10 +187,4 @@ Output WorkQueue<Input, Output>::run_all(const Output& init_output) {
   for (auto& thread : all_threads) {
     thread.join();
   }
-
-  Output result = init_output;
-  for (auto& thread_state : m_states) {
-    result = m_reducer(result, thread_state->m_result);
-  }
-  return result;
 }

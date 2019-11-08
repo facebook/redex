@@ -69,7 +69,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
   copy_prop_config.eliminate_const_classes = false;
   copy_prop_config.eliminate_const_strings = false;
   copy_prop_config.static_finals = false;
-  const auto stats = walk::parallel::reduce_methods<Stats>(
+  const auto stats = walk::parallel::methods<Stats>(
       scope,
       [&](DexMethod* method) {
         const auto code = method->get_code();
@@ -92,7 +92,7 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
                                        method->get_proto()->get_args(),
                                        copy_prop_config.max_estimated_registers,
                                        m_runtime_assertions);
-          stats = stats + cse.get_stats();
+          stats += cse.get_stats();
           code->clear_cfg();
 
           if (!any_changes) {
@@ -117,8 +117,6 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
           }
         }
       },
-      [](const Stats& a, const Stats& b) { return a + b; },
-      Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_RESULTS_CAPTURED, stats.results_captured);
   mgr.incr_metric(METRIC_STORES_CAPTURED, stats.stores_captured);

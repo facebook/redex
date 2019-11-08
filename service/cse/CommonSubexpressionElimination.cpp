@@ -1490,4 +1490,20 @@ void CommonSubexpressionElimination::insert_runtime_assertions(
   }
 }
 
+Stats& Stats::operator+=(const Stats& that) {
+  results_captured += that.results_captured;
+  stores_captured += that.stores_captured;
+  array_lengths_captured += that.array_lengths_captured;
+  instructions_eliminated += that.instructions_eliminated;
+  max_value_ids = std::max(max_value_ids, that.max_value_ids);
+  methods_using_other_tracked_location_bit +=
+      that.methods_using_other_tracked_location_bit;
+  for (auto& p : that.eliminated_opcodes) {
+    eliminated_opcodes[p.first] += p.second;
+  }
+  skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
+  max_iterations = std::max(max_iterations, that.max_iterations);
+  return *this;
+}
+
 } // namespace cse_impl

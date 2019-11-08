@@ -290,8 +290,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       if (array && is_new_array(*array) && !is_array_literal(*array) && index &&
           is_literal(*index)) {
         int64_t index_literal = get_literal(*index);
-        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal,
-              array->length);
+        TRACE(RAL, 4, "[RAL]    index %ld of %u", index_literal, array->length);
         if (is_next_index(*array, index_literal)) {
           TRACE(RAL, 4, "[RAL]    is next");
           TrackedValue new_array = *array;
@@ -660,7 +659,7 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
 
   const auto scope = build_class_scope(stores);
 
-  const auto stats = walk::parallel::reduce_methods<ReduceArrayLiterals::Stats>(
+  const auto stats = walk::parallel::methods<ReduceArrayLiterals::Stats>(
       scope,
       [&](DexMethod* m) {
         const auto code = m->get_code();
@@ -675,20 +674,6 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
         code->clear_cfg();
         return ral.get_stats();
       },
-      [](ReduceArrayLiterals::Stats a, ReduceArrayLiterals::Stats b) {
-        a.filled_arrays += b.filled_arrays;
-        a.filled_array_elements += b.filled_array_elements;
-        a.filled_array_chunks += b.filled_array_chunks;
-        a.remaining_wide_arrays += b.remaining_wide_arrays;
-        a.remaining_wide_array_elements += b.remaining_wide_array_elements;
-        a.remaining_unimplemented_arrays += b.remaining_unimplemented_arrays;
-        a.remaining_unimplemented_array_elements +=
-            b.remaining_unimplemented_array_elements;
-        a.remaining_buggy_arrays += b.remaining_buggy_arrays;
-        a.remaining_buggy_array_elements += b.remaining_buggy_array_elements;
-        return a;
-      },
-      ReduceArrayLiterals::Stats{},
       m_debug ? 1 : redex_parallel::default_num_threads());
   mgr.incr_metric(METRIC_FILLED_ARRAYS, stats.filled_arrays);
   mgr.incr_metric(METRIC_FILLED_ARRAY_ELEMENTS, stats.filled_array_elements);
@@ -703,6 +688,21 @@ void ReduceArrayLiteralsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAYS, stats.remaining_buggy_arrays);
   mgr.incr_metric(METRIC_REMAINING_BUGGY_ARRAY_ELEMENTS,
                   stats.remaining_buggy_array_elements);
+}
+
+ReduceArrayLiterals::Stats& ReduceArrayLiterals::Stats::operator+=(
+    const ReduceArrayLiterals::Stats& that) {
+  filled_arrays += that.filled_arrays;
+  filled_array_elements += that.filled_array_elements;
+  filled_array_chunks += that.filled_array_chunks;
+  remaining_wide_arrays += that.remaining_wide_arrays;
+  remaining_wide_array_elements += that.remaining_wide_array_elements;
+  remaining_unimplemented_arrays += that.remaining_unimplemented_arrays;
+  remaining_unimplemented_array_elements +=
+      that.remaining_unimplemented_array_elements;
+  remaining_buggy_arrays += that.remaining_buggy_arrays;
+  remaining_buggy_array_elements += that.remaining_buggy_array_elements;
+  return *this;
 }
 
 static ReduceArrayLiteralsPass s_pass;

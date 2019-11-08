@@ -233,8 +233,9 @@ struct RedexContext {
 // One or more exceptions
 class aggregate_exception : public std::exception {
  public:
-  explicit aggregate_exception(const std::vector<std::exception_ptr>& exns)
-      : m_exceptions(exns) {}
+  template <class T>
+  explicit aggregate_exception(T container)
+      : m_exceptions(container.begin(), container.end()) {}
 
   // We do not really want to have this called directly
   const char* what() const throw() override { return "one or more exception"; }

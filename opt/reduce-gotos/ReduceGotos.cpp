@@ -445,50 +445,24 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
                                PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  Stats stats = walk::parallel::reduce_methods<Stats>(
-      scope,
-      [](DexMethod* method) -> Stats {
-        const auto code = method->get_code();
-        if (!code) {
-          return Stats{};
-        }
+  Stats stats = walk::parallel::methods<Stats>(scope, [](DexMethod* method) {
+    const auto code = method->get_code();
+    if (!code) {
+      return Stats{};
+    }
 
-        Stats stats = ReduceGotosPass::process_code(code);
-        if (stats.replaced_gotos_with_returns ||
-            stats.inverted_conditional_branches) {
-          TRACE(RG, 3,
-                "[reduce gotos] Replaced %u gotos with returns, "
-                "removed %u trailing moves, "
-                "inverted %u conditional branches in {%s}",
-                stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
-                stats.inverted_conditional_branches, SHOW(method));
-        }
-        return stats;
-      },
-      [](Stats a, Stats b) {
-        Stats c;
-        c.removed_switches = a.removed_switches + b.removed_switches;
-        c.reduced_switches = a.reduced_switches + b.reduced_switches;
-        c.replaced_trivial_switches =
-            a.replaced_trivial_switches + b.replaced_trivial_switches;
-        c.remaining_trivial_switches =
-            a.remaining_trivial_switches + b.remaining_trivial_switches;
-        c.removed_switch_cases =
-            a.removed_switch_cases + b.removed_switch_cases;
-        c.replaced_gotos_with_returns =
-            a.replaced_gotos_with_returns + b.replaced_gotos_with_returns;
-        c.removed_trailing_moves =
-            a.removed_trailing_moves + b.removed_trailing_moves;
-        c.inverted_conditional_branches =
-            a.inverted_conditional_branches + b.inverted_conditional_branches;
-        c.remaining_two_case_switches =
-            a.remaining_two_case_switches + b.remaining_two_case_switches;
-        c.remaining_range_switches =
-            a.remaining_range_switches + b.remaining_range_switches;
-        c.remaining_range_switch_cases =
-            a.remaining_range_switch_cases + b.remaining_range_switch_cases;
-        return c;
-      });
+    Stats stats = ReduceGotosPass::process_code(code);
+    if (stats.replaced_gotos_with_returns ||
+        stats.inverted_conditional_branches) {
+      TRACE(RG, 3,
+            "[reduce gotos] Replaced %u gotos with returns, "
+            "removed %u trailing moves, "
+            "inverted %u conditional branches in {%s}",
+            stats.replaced_gotos_with_returns, stats.removed_trailing_moves,
+            stats.inverted_conditional_branches, SHOW(method));
+    }
+    return stats;
+  });
 
   mgr.incr_metric(METRIC_REMOVED_SWITCHES, stats.removed_switches);
   mgr.incr_metric(METRIC_REDUCED_SWITCHES, stats.reduced_switches);
@@ -512,6 +486,22 @@ void ReduceGotosPass::run_pass(DexStoresVector& stores,
         "[reduce gotos] Replaced %u gotos with returns, inverted %u "
         "conditional brnaches in total",
         stats.replaced_gotos_with_returns, stats.inverted_conditional_branches);
+}
+
+ReduceGotosPass::Stats& ReduceGotosPass::Stats::operator+=(
+    const ReduceGotosPass::Stats& that) {
+  removed_switches += that.removed_switches;
+  reduced_switches += that.reduced_switches;
+  replaced_trivial_switches += that.replaced_trivial_switches;
+  remaining_trivial_switches += that.remaining_trivial_switches;
+  removed_switch_cases += that.removed_switch_cases;
+  replaced_gotos_with_returns += that.replaced_gotos_with_returns;
+  removed_trailing_moves += that.removed_trailing_moves;
+  inverted_conditional_branches += that.inverted_conditional_branches;
+  remaining_two_case_switches += that.remaining_two_case_switches;
+  remaining_range_switches += that.remaining_range_switches;
+  remaining_range_switch_cases += that.remaining_range_switch_cases;
+  return *this;
 }
 
 static ReduceGotosPass s_pass;

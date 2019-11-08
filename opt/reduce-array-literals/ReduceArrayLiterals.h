@@ -22,6 +22,8 @@ class ReduceArrayLiterals {
     size_t remaining_unimplemented_array_elements{0};
     size_t remaining_buggy_arrays{0};
     size_t remaining_buggy_array_elements{0};
+
+    Stats& operator+=(const Stats&);
   };
 
   ReduceArrayLiterals(cfg::ControlFlowGraph&,

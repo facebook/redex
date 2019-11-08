@@ -93,9 +93,8 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
     pure_methods.insert(const_cast<DexMethod*>(m));
   }
 
-  auto stats = walk::parallel::reduce_methods<LocalDce::Stats>(
-      scope,
-      [&](DexMethod* m) {
+  auto stats =
+      walk::parallel::methods<LocalDce::Stats>(scope, [&](DexMethod* m) {
         auto* code = m->get_code();
         if (code == nullptr || m->rstate.no_optimizations()) {
           return LocalDce::Stats();
@@ -104,8 +103,7 @@ void LocalDcePass::run_pass(DexStoresVector& stores,
         LocalDce ldce(pure_methods);
         ldce.dce(code);
         return ldce.get_stats();
-      },
-      [](LocalDce::Stats a, LocalDce::Stats b) { return a + b; });
+      });
   mgr.incr_metric(METRIC_DEAD_INSTRUCTIONS, stats.dead_instruction_count);
   mgr.incr_metric(METRIC_UNREACHABLE_INSTRUCTIONS,
                   stats.unreachable_instruction_count);

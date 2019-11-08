@@ -329,15 +329,9 @@ size_t exclude_unremovables(const Scope& scope,
     return current_excluded;
   };
 
-  auto excluded_by_opcode =
-      walk::parallel::reduce_methods<std::unordered_set<const DexType*>>(
-          scope,
-          patcher,
-          [](std::unordered_set<const DexType*> left,
-             const std::unordered_set<const DexType*> right) {
-            left.insert(right.begin(), right.end());
-            return left;
-          });
+  auto excluded_by_opcode = walk::parallel::methods<
+      std::unordered_set<const DexType*>,
+      MergeContainers<std::unordered_set<const DexType*>>>(scope, patcher);
 
   for (const auto type : excluded_by_opcode) {
     candidates.erase(type);

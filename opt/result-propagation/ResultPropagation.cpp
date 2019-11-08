@@ -476,9 +476,8 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
   const auto methods_which_return_parameter =
       find_methods_which_return_parameter(mgr, scope, resolver);
 
-  const auto stats = walk::parallel::reduce_methods<ResultPropagation::Stats>(
-      scope,
-      [&](DexMethod* m) {
+  const auto stats = walk::parallel::methods<ResultPropagation::Stats>(
+      scope, [&](DexMethod* m) {
         const auto code = m->get_code();
         if (code == nullptr) {
           return ResultPropagation::Stats();
@@ -487,12 +486,6 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         ResultPropagation rp(methods_which_return_parameter, resolver);
         rp.patch(mgr, code);
         return rp.get_stats();
-      },
-      [](ResultPropagation::Stats a, ResultPropagation::Stats b) {
-        a.erased_move_results += b.erased_move_results;
-        a.patched_move_results += b.patched_move_results;
-        a.unverifiable_move_results += b.unverifiable_move_results;
-        return a;
       });
   mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER,
                   methods_which_return_parameter.size());
@@ -507,6 +500,8 @@ void ResultPropagationPass::run_pass(DexStoresVector& stores,
         methods_which_return_parameter.size(), stats.erased_move_results,
         stats.patched_move_results, stats.unverifiable_move_results);
 }
+
+using ParamIndexMap = std::unordered_map<const DexMethod*, ParamIndex>;
 
 const std::unordered_map<const DexMethod*, ParamIndex>
 ResultPropagationPass::find_methods_which_return_parameter(
@@ -530,10 +525,8 @@ ResultPropagationPass::find_methods_which_return_parameter(
   while (true) {
     mgr.incr_metric(METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS, 1);
     const auto next_methods_which_return_parameter =
-        walk::parallel::reduce_methods<
-            std::unordered_map<const DexMethod*, ParamIndex>>(
-            scope,
-            [&](DexMethod* method) {
+        walk::parallel::methods<ParamIndexMap, MergeContainers<ParamIndexMap>>(
+            scope, [&](DexMethod* method) {
               std::unordered_map<const DexMethod*, ParamIndex> res;
 
               const auto code = method->get_code();
@@ -563,11 +556,6 @@ ResultPropagationPass::find_methods_which_return_parameter(
               }
 
               return res;
-            },
-            [](std::unordered_map<const DexMethod*, ParamIndex> a,
-               std::unordered_map<const DexMethod*, ParamIndex> b) {
-              a.insert(b.begin(), b.end());
-              return a;
             });
 
     if (next_methods_which_return_parameter.size() ==

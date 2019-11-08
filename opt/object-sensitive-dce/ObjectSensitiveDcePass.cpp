@@ -140,9 +140,8 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
   side_effects::analyze_scope(scope, call_graph, *ptrs_fp_iter_map,
                               &effect_summaries);
 
-  auto removed = walk::parallel::reduce_methods<size_t>(
-      scope,
-      [&](DexMethod* method) -> size_t {
+  auto removed =
+      walk::parallel::methods<size_t>(scope, [&](DexMethod* method) -> size_t {
         if (method->rstate.no_optimizations()) {
           return 0;
         }
@@ -171,8 +170,7 @@ void ObjectSensitiveDcePass::run_pass(DexStoresVector& stores,
         transform::remove_unreachable_blocks(code);
         TRACE(OSDCE, 5, "After:\n%s", SHOW(&code));
         return dead_instructions.size();
-      },
-      std::plus<size_t>());
+      });
   mgr.set_metric("removed_instructions", removed);
 }
 

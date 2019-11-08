@@ -98,7 +98,7 @@ class Allocator {
              split_moves;
     }
     size_t net_moves() const { return moves_inserted() - moves_coalesced; }
-    void accumulate(const Stats&);
+    Stats& operator+=(const Stats&);
   };
 
   Allocator() = default; // use default config

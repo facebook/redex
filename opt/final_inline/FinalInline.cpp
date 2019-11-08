@@ -51,8 +51,8 @@ class FinalInlineImpl {
 
   std::unordered_set<DexField*> get_called_field_defs(const Scope& scope) {
     std::vector<DexFieldRef*> field_refs;
-    walk::methods(scope,
-                 [&](DexMethod* method) { method->gather_fields(field_refs); });
+    walk::methods(
+        scope, [&](DexMethod* method) { method->gather_fields(field_refs); });
     sort_unique(field_refs);
     /* Okay, now we have a complete list of field refs
      * for this particular dex.  Map to the def actually invoked.
@@ -242,9 +242,8 @@ class FinalInlineImpl {
       }
     }
 
-    return walk::parallel::reduce_methods<size_t, Scope>(
-        m_full_scope,
-        [&inline_field, this](DexMethod* m) -> size_t {
+    return walk::parallel::methods<size_t>(
+        m_full_scope, [&inline_field, this](DexMethod* m) -> size_t {
           auto* code = m->get_code();
           if (!code) {
             return 0;
@@ -277,8 +276,7 @@ class FinalInlineImpl {
             code->remove_opcode(it);
           }
           return rewrites.size();
-        },
-        [](size_t a, size_t b) { return a + b; });
+        });
   }
 
   /*
@@ -527,10 +525,8 @@ class FinalInlineImpl {
         TRACE(FINALINLINE, 2, "Resolved field %s", SHOW(dep.field));
       }
     }
-    TRACE(FINALINLINE,
-          1,
-          "Resolved %lu static finals via const prop",
-          nresolved);
+    TRACE(
+        FINALINLINE, 1, "Resolved %lu static finals via const prop", nresolved);
     return nresolved;
   }
 

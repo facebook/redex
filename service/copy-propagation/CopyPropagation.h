@@ -37,7 +37,7 @@ struct Stats {
         replaced_sources(replaced),
         skipped_due_to_too_many_registers(skipped) {}
 
-  Stats operator+(const Stats& other);
+  Stats& operator+=(const Stats&);
 };
 
 class CopyPropagation final {

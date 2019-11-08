@@ -523,7 +523,6 @@ std::unique_ptr<ReachableObjects> compute_reachable_objects(
         transitive_closure_marker.visit(obj);
         return nullptr;
       },
-      [](std::nullptr_t, std::nullptr_t) { return nullptr; },
       num_threads);
   for (const auto& obj : root_set) {
     work_queue.add_item(obj);

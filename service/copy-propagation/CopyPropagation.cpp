@@ -398,16 +398,15 @@ class AliasFixpointIterator final
 
 namespace copy_propagation_impl {
 
-Stats Stats::operator+(const Stats& other) {
-  return Stats{moves_eliminated + other.moves_eliminated,
-               replaced_sources + other.replaced_sources,
-               skipped_due_to_too_many_registers +
-                   other.skipped_due_to_too_many_registers};
+Stats& Stats::operator+=(const Stats& that) {
+  moves_eliminated += that.moves_eliminated;
+  replaced_sources += that.replaced_sources;
+  skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
+  return *this;
 }
 
 Stats CopyPropagation::run(Scope scope) {
-  using Output = Stats;
-  return walk::parallel::reduce_methods<Output>(
+  return walk::parallel::methods<Stats>(
       scope,
       [this](DexMethod* m) {
         IRCode* code = m->get_code();
@@ -438,8 +437,6 @@ Stats CopyPropagation::run(Scope scope) {
 
         return result;
       },
-      [](Output a, Output b) { return a + b; },
-      Output(),
       m_config.debug ? 1 : redex_parallel::default_num_threads());
 }
 

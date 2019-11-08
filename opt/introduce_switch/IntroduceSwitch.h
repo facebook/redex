@@ -19,13 +19,12 @@ class IntroduceSwitchPass : public Pass {
 
     Metrics() {}
 
-    Metrics operator+(const Metrics& b) {
-      Metrics m;
-      m.switch_intro = this->switch_intro + b.switch_intro;
-      m.switch_cases = this->switch_cases + b.switch_cases;
-      m.removed_instrs = this->removed_instrs + b.removed_instrs;
-      m.added_instrs = this->added_instrs + b.added_instrs;
-      return m;
+    Metrics& operator+=(const Metrics& that) {
+      switch_intro += that.switch_intro;
+      switch_cases += that.switch_cases;
+      removed_instrs += that.removed_instrs;
+      added_instrs += that.added_instrs;
+      return *this;
     }
   };
 

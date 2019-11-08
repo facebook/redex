@@ -16,11 +16,11 @@ class LocalDce {
   struct Stats {
     size_t dead_instruction_count{0};
     size_t unreachable_instruction_count{0};
-    LocalDce::Stats operator+(LocalDce::Stats b) {
-      LocalDce::Stats a = *this;
-      a.dead_instruction_count += b.dead_instruction_count;
-      a.unreachable_instruction_count += b.unreachable_instruction_count;
-      return a;
+
+    Stats& operator+=(const Stats& that) {
+      dead_instruction_count += that.dead_instruction_count;
+      unreachable_instruction_count += that.unreachable_instruction_count;
+      return *this;
     }
   };
 

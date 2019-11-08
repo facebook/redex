@@ -361,6 +361,22 @@ class walk {
 
   static constexpr bool all_methods(DexMethod*) { return true; }
 
+  template <class T>
+  struct plus_assign {
+    void operator()(const T& addend, T* accumulator) { *accumulator += addend; }
+  };
+
+  template <class T>
+  struct PlacementNewDeleter {
+    void operator()(T* t) {
+      t->~T();
+      free((void*)t);
+    }
+  };
+
+  template <class T>
+  using PlacementNewUniquePtr = std::unique_ptr<T, PlacementNewDeleter<T>>;
+
  public:
   /**
    * The parallel:: methods have very similar signatures (and names) to their
@@ -403,38 +419,69 @@ class walk {
 
     /**
      * Call `walker` on all methods in `classes` in parallel. Then combine the
-     * Output with `reducer` function.
+     * Accumulator objects with Sum.
+     *
+     * Each thread has its own Accumulator object that the walker can modify
+     * without taking a lock.
      */
-    template <class Output,
-              class Classes,
-              class MethodWalkerFn = Output(DexMethod*),
-              class OutputReducerFn = Output(Output, Output)>
-    Output static reduce_methods(
+    template <class Accumulator,
+              class Reduce = plus_assign<Accumulator>,
+              class Classes>
+    static Accumulator methods(
         const Classes& classes,
-        MethodWalkerFn walker,
-        OutputReducerFn reducer,
-        const Output& init = Output(),
-        size_t num_threads = redex_parallel::default_num_threads()) {
-      auto wq = WorkQueue<DexClass*, Output>(
-          [&](WorkerState<DexClass*, Output>* state, DexClass* cls) {
-            Output out = init;
+        const std::function<void(DexMethod*, Accumulator*)>& walker,
+        size_t num_threads = redex_parallel::default_num_threads(),
+        Accumulator init = Accumulator()) {
+      std::vector<PlacementNewUniquePtr<Accumulator>> acc_vec(num_threads);
+      // Use aligned_alloc to avoid false sharing.
+      for (size_t i = 0; i < num_threads; ++i) {
+        acc_vec[i] = PlacementNewUniquePtr<Accumulator>(new (aligned_alloc(
+            CACHE_LINE_SIZE, sizeof(Accumulator))) Accumulator(init));
+      }
+
+      auto wq = workqueue_foreach<DexClass*>(
+          [&](DexClass* cls) {
+            const auto& acc = acc_vec[redex_parallel::get_worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
-              out = reducer(out, walker(dmethod));
+              walker(dmethod, acc.get());
             }
             for (auto vmethod : cls->get_vmethods()) {
               TraceContext context(vmethod->get_deobfuscated_name());
-              out = reducer(out, walker(vmethod));
+              walker(vmethod, acc.get());
             }
-            return out;
           },
-          reducer,
           num_threads);
+      run_all(wq, classes);
 
-      for (const auto& cls : classes) {
-        wq.add_item(cls);
+      auto reduce = Reduce();
+      for (const auto& acc : acc_vec) {
+        reduce(*acc, &init);
+      }
+      return init;
+    }
+
+    /**
+     * Call `walker` on all methods in `classes` in parallel. Then combine the
+     * Accumulator objects with Sum.
+     *
+     * This version doesn't pass an Accumulator object to the walker -- instead
+     * the walker returns a fresh Accumulator object which gets summed up.
+     */
+    template <class Accumulator,
+              class Reduce = plus_assign<Accumulator>,
+              class Classes>
+    static Accumulator methods(
+        const Classes& classes,
+        const std::function<Accumulator(DexMethod*)>& walker,
+        size_t num_threads = redex_parallel::default_num_threads(),
+        Accumulator init = Accumulator()) {
+      auto reduce = Reduce();
+      auto f = [&](DexMethod* method, Accumulator* acc) {
+        reduce(walker(method), acc);
       };
-      return wq.run_all();
+      return methods<Accumulator, Reduce, Classes>(
+          classes, f, num_threads, init);
     }
 
     /**

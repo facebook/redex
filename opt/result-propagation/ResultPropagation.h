@@ -95,6 +95,13 @@ class ResultPropagation {
     size_t erased_move_results{0};
     size_t patched_move_results{0};
     size_t unverifiable_move_results{0};
+
+    Stats& operator+=(const Stats& that) {
+      erased_move_results += that.erased_move_results;
+      patched_move_results += that.patched_move_results;
+      unverifiable_move_results += that.unverifiable_move_results;
+      return *this;
+    }
   };
 
   ResultPropagation(const std::unordered_map<const DexMethod*, ParamIndex>&

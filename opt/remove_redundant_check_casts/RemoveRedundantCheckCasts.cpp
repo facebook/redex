@@ -43,12 +43,10 @@ void RemoveRedundantCheckCastsPass::run_pass(DexStoresVector& stores,
                                              PassManager& mgr) {
   auto scope = build_class_scope(stores);
 
-  size_t num_redundant_check_casts = walk::parallel::reduce_methods<size_t>(
-      scope,
-      [&](DexMethod* method) -> size_t {
+  size_t num_redundant_check_casts =
+      walk::parallel::methods<size_t>(scope, [&](DexMethod* method) {
         return remove_redundant_check_casts(method);
-      },
-      std::plus<size_t>());
+      });
 
   mgr.set_metric("num_redundant_check_casts", num_redundant_check_casts);
 }
