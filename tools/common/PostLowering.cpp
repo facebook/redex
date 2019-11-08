@@ -7,7 +7,9 @@
 
 #include "PostLowering.h"
 
-void PostLowering::run(const DexClasses& dex, const std::string& output_dir) {}
+void PostLowering::setup() {}
+
+void PostLowering::run(const DexClasses& dex) {}
 
 std::vector<DexString*> PostLowering::get_extra_strings(const DexClasses& dex) {
   std::vector<DexString*> empty;

@@ -944,6 +944,8 @@ void redex_backend(const std::string& output_dir,
   // TODO(emmasevastian): Update flag.
   bool run_post_lowering = redex_options.force_class_data_end_of_file;
 
+  post_lowering.setup();
+
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
@@ -989,7 +991,7 @@ void redex_backend(const std::string& output_dir,
                                extra_strings);
 
       if (run_post_lowering) {
-        post_lowering.run(store.get_dexen()[i], output_dir);
+        post_lowering.run(store.get_dexen()[i]);
       }
 
       output_totals += this_dex_stats;
