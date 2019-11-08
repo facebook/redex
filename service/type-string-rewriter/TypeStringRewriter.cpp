@@ -160,4 +160,38 @@ void rewrite_dalvik_annotation_signature(const Scope& scope,
     }
   });
 }
+
+uint32_t rewrite_string_literal_instructions(const Scope& scope,
+                                             const TypeStringMap& mapping) {
+  std::atomic<uint32_t> total_updates(0);
+  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
+    for (const auto& mie : InstructionIterable(code)) {
+      auto insn = mie.insn;
+      if (insn->opcode() != OPCODE_CONST_STRING) {
+        continue;
+      }
+      DexString* old_str = insn->get_string();
+      DexString* internal_str = DexString::get_string(
+          java_names::external_to_internal(old_str->str()));
+      if (!internal_str || !DexType::get_type(internal_str)) {
+        continue;
+      }
+      auto new_type_name = mapping.get_new_type_name(internal_str);
+      if (!new_type_name) {
+        continue;
+      }
+      auto new_str = DexString::make_string(
+          java_names::internal_to_external(new_type_name->str()));
+      insn->set_string(new_str);
+      total_updates++;
+      TRACE(RENAME,
+            5,
+            "Replace const-string from %s to %s",
+            old_str->c_str(),
+            new_str->c_str());
+    }
+  });
+  return total_updates.load();
+}
+
 } // namespace rewriter

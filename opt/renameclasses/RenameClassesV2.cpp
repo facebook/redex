@@ -683,47 +683,20 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
   }
 
   /* Now rewrite all const-string strings for force renamed classes. */
-  auto match = std::make_tuple(m::const_string());
-
-  walk::matching_opcodes(
-      scope, match,
-      [&](const DexMethod*, const std::vector<IRInstruction*>& insns) {
-        IRInstruction* insn = insns[0];
-        DexString* str = insn->get_string();
-        // get_string instead of make_string here because if the string doesn't
-        // already exist, then there's no way it can match a class
-        // that was renamed
-        DexString* internal_str = DexString::get_string(
-            java_names::external_to_internal(str->c_str()));
-        // Look up both str and intternal_str in the map; maybe str was
-        // internal to begin with?
-        DexString* alias_from = nullptr;
-        DexString* alias_to = name_mapping.get_new_type_name(internal_str);
-        if (alias_to) {
-          alias_from = internal_str;
-          // Since we matched on external form, we need to map internal alias
-          // back.
-          // make_string here because the external form of the name may not be
-          // present in the string table
-          alias_to = DexString::make_string(
-              java_names::internal_to_external(alias_to->str()));
-        } else {
-          alias_to = name_mapping.get_new_type_name(str);
-          if (alias_to) {
-            alias_from = str;
-          }
-        }
-        if (alias_to) {
-          DexType* alias_from_type = DexType::get_type(alias_from);
-          DexClass* alias_from_cls = type_class(alias_from_type);
-          if (m_force_rename_classes.count(alias_from_cls)) {
-            mgr.incr_metric(METRIC_REWRITTEN_CONST_STRINGS, 1);
-            insn->set_string(alias_to);
-            TRACE(RENAME, 3, "Rewrote const-string \"%s\" to \"%s\"",
-                  str->c_str(), alias_to->c_str());
-          }
-        }
-      });
+  rewriter::TypeStringMap force_rename_map;
+  for (const auto& pair : name_mapping.get_class_map()) {
+    auto type = DexType::get_type(pair.first);
+    if (!type) {
+      continue;
+    }
+    auto clazz = type_class(type);
+    if (clazz && m_force_rename_classes.count(clazz)) {
+      force_rename_map.add_type_name(pair.first, pair.second);
+    }
+  }
+  auto updated_instructions =
+      rewriter::rewrite_string_literal_instructions(scope, force_rename_map);
+  mgr.incr_metric(METRIC_REWRITTEN_CONST_STRINGS, updated_instructions);
 
   /* Now we need to re-write the Signature annotations.  They use
    * Strings rather than Type's, so they have to be explicitly

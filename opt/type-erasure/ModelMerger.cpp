@@ -373,37 +373,6 @@ void update_refs_to_mergeable_types(
       scope, mergeable_to_merger, merger_to_instance_of_meth, type_tags);
 }
 
-void update_const_string_type_refs(const Scope& scope,
-                                   const MergedTypeNames& merged_type_names) {
-  // Rewrite all const-string strings for merged classes.
-  walk::parallel::code(scope, [&](DexMethod* meth, IRCode& code) {
-    for (const auto& mie : InstructionIterable(code)) {
-      auto insn = mie.insn;
-
-      if (insn->opcode() != OPCODE_CONST_STRING) {
-        continue;
-      }
-
-      DexString* dex_str = insn->get_string();
-      const std::string& internal_str =
-          java_names::external_to_internal(dex_str->str());
-
-      const auto& find_name_to = merged_type_names.find(internal_str);
-      if (find_name_to != merged_type_names.end()) {
-        const std::string& name_to = find_name_to->second;
-        DexString* dex_name_to =
-            DexString::make_string(java_names::internal_to_external(name_to));
-        insn->set_string(dex_name_to);
-        TRACE(TERA,
-              8,
-              "Replace const-string from %s to %s",
-              dex_str->c_str(),
-              dex_name_to->c_str());
-      }
-    }
-  });
-}
-
 std::string merger_info(const MergerType& merger) {
   std::ostringstream ss;
   ss << " assembling merger " << SHOW(merger.type) << " - mergeables "
@@ -651,7 +620,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
   rewriter::rewrite_dalvik_annotation_signature(scope, type_str_mapping);
 
   if (model_spec.replace_type_like_const_strings) {
-    update_const_string_type_refs(scope, merged_type_names);
+    rewriter::rewrite_string_literal_instructions(scope, type_str_mapping);
   }
 
   // Write out mapping files

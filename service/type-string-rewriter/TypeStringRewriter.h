@@ -46,4 +46,13 @@ class TypeStringMap {
 void rewrite_dalvik_annotation_signature(const Scope& scope,
                                          const TypeStringMap& mapping);
 
+/**
+ * Rewrite string literals in instructions from old type names to new type
+ * names. Return the number of total updates.
+ *
+ * const-string "com.facebook.TypeXYZ" => const-string "X.A"
+ */
+uint32_t rewrite_string_literal_instructions(const Scope& scope,
+                                             const TypeStringMap& mapping);
+
 } // namespace rewriter
