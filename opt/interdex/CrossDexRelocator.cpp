@@ -32,8 +32,8 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
   bool relocate_virtual_methods = m_config.relocate_virtual_methods;
 
   auto can_relocate_common = [](DexMethod* m) {
-    return m->is_concrete() && m->get_code() && can_rename_DEPRECATED(m) &&
-           !root(m) && !m->rstate.no_optimizations() && no_invoke_super(m);
+    return m->is_concrete() && m->get_code() && can_rename(m) && !root(m) &&
+           !m->rstate.no_optimizations() && no_invoke_super(m);
   };
 
   if (relocate_static_methods || relocate_non_static_direct_methods) {

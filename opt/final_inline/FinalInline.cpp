@@ -97,7 +97,7 @@ class FinalInlineImpl {
       if (is_cls_blacklisted(clazz)) {
         continue;
       }
-      bool found = can_delete_DEPRECATED(clazz);
+      bool found = can_delete(clazz);
       if (!found) {
         auto name = clazz->get_name()->c_str();
         for (const auto& name_prefix : m_config.remove_class_members) {
@@ -118,7 +118,7 @@ class FinalInlineImpl {
         auto value = sfield->get_static_value();
         if (value == nullptr && !type::is_primitive(sfield->get_type()))
           continue;
-        if (!found && !can_delete_DEPRECATED(sfield)) continue;
+        if (!found && !can_delete(sfield)) continue;
 
         moveable_fields.push_back(sfield);
         smallscope.push_back(clazz);

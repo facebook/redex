@@ -706,14 +706,14 @@ match_t<T, std::tuple<match_t<DexClass, P> > >
 
 /** Match which checks can_delete helper for DexMembers */
 template <typename T>
-match_t<T, std::tuple<>> can_delete_DEPRECATED() {
-  return {[](const T* t) { return can_delete_DEPRECATED(t); }};
+match_t<T, std::tuple<>> can_delete() {
+  return {[](const T* t) { return can_delete(t); }};
 }
 
 /** Match which checks can_rename helper for DexMembers */
 template <typename T>
-match_t<T, std::tuple<>> can_rename_DEPRECATED() {
-  return {[](const T* t) { return can_rename_DEPRECATED(t); }};
+match_t<T, std::tuple<>> can_rename() {
+  return {[](const T* t) { return can_rename(t); }};
 }
 
 /** Match which checks keep helper for DexMembers */

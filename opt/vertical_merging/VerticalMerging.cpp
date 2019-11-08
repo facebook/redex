@@ -293,7 +293,7 @@ void record_code_reference(
           DexField* field = resolve_field(insn->get_field());
           if (field != nullptr) {
             if (field->get_class() != insn->get_field()->get_class() ||
-                !can_rename_DEPRECATED(field)) {
+                !can_rename(field)) {
               // If a field reference need to be resolved, don't merge as
               // renaming it might cause problems.
               // If a field that can't be renamed is being referenced. Don't
@@ -386,7 +386,7 @@ void record_method_signature(
       record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
     } else {
       DexClass* cls = type_class(type);
-      if (cls && (!is_abstract(cls) || !can_rename_DEPRECATED(method))) {
+      if (cls && (!is_abstract(cls) || !can_rename(method))) {
         // If a type is referenced and not a abstract type then add it to
         // don't use this type as mergeable.
         record_dont_merge_state(type, CONDITIONAL, dont_merge_status);
@@ -421,7 +421,7 @@ void record_black_list(
               "%s | %s | %u",
               SHOW(cls),
               cls->rstate.str().c_str(),
-              can_delete_DEPRECATED(cls));
+              can_delete(cls));
         record_dont_merge_state(cls->get_type(), STRICT, dont_merge_status);
         return;
       }
@@ -454,7 +454,7 @@ void record_field_reference(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status) {
   walk::fields(scope, [&](DexField* field) {
-    if (!can_rename_DEPRECATED(field)) {
+    if (!can_rename(field)) {
       record_dont_merge_state(field->get_type(), CONDITIONAL,
                               dont_merge_status);
     }
@@ -687,7 +687,7 @@ void VerticalMergingPass::move_methods(
         } else {
           if (referenced_methods.count(method)) {
             // Static or direct method. Safe to move
-            always_assert(can_rename_DEPRECATED(method));
+            always_assert(can_rename(method));
             from_cls->remove_method(method);
             DexMethodSpec spec;
             spec.cls = target_cls_type;

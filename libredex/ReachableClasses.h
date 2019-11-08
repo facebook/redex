@@ -41,16 +41,6 @@ inline bool can_rename_if_also_renaming_xml(DexMember* member) {
 }
 
 template <class DexMember>
-inline bool can_delete_DEPRECATED(DexMember* member) {
-  return member->rstate.can_delete_DEPRECATED();
-}
-
-template <class DexMember>
-inline bool can_rename_DEPRECATED(DexMember* member) {
-  return member->rstate.can_rename_DEPRECATED();
-}
-
-template <class DexMember>
 inline bool is_serde(DexMember* member) {
   return member->rstate.is_serde();
 }

@@ -283,9 +283,8 @@ const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
     always_assert(callee->is_virtual());
     // Make sure all implementations of this method have the same param index
 
-    // Why can_rename_DEPRECATED? To mirror what VirtualRenamer looks at.
     if (opcode == OPCODE_INVOKE_INTERFACE &&
-        (root(callee) || !can_rename_DEPRECATED(callee))) {
+        (root(callee) || !can_rename(callee))) {
       // We cannot rule out that there are dynamically added classes, created
       // via Proxy.newProxyInstance, that override this method.
       // So we assume the worst.

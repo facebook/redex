@@ -77,7 +77,7 @@ DexMethodRef* match_pattern(DexMethod* bridge) {
 }
 
 bool is_optimization_candidate(DexMethod* bridge, DexMethod* bridgee) {
-  if (!can_delete_DEPRECATED(bridgee)) {
+  if (!can_delete(bridgee)) {
     TRACE(BRIDGE, 5, "Cannot delete bridgee! bridge: %s\n bridgee: %s",
           SHOW(bridge), SHOW(bridgee));
     return false;

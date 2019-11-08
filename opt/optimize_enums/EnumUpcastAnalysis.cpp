@@ -669,7 +669,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
 
   walk::parallel::fields(classes, [candidate_enums,
                                    &rejected_enums](DexField* field) {
-    if (can_rename_DEPRECATED(field)) {
+    if (can_rename(field)) {
       return;
     }
     if (candidate_enums->count_unsafe(field->get_class())) {
@@ -696,7 +696,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
       return;
     }
 
-    if (!can_rename_DEPRECATED(method)) {
+    if (!can_rename(method)) {
       std::vector<DexType*> types;
       method->get_proto()->gather_types(types);
       for (auto type : types) {

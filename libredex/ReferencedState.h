@@ -276,23 +276,6 @@ class ReferencedState {
   bool dont_inline() const { return inner_struct.m_dont_inline; }
   void set_dont_inline() { inner_struct.m_dont_inline = true; }
 
-  /*** YOU PROBABLY SHOULDN'T USE THIS ***/
-  // This is a conservative estimate about what cannot be deleted. Not all
-  // passes respect this -- most critically, RMU doesn't. Use can_delete()
-  // instead, which ignores our over-conservative native libraries analysis.
-  bool can_delete_DEPRECATED() const {
-    return !inner_struct.m_by_type && !inner_struct.m_by_resources &&
-           (!inner_struct.m_keep || allowshrinking());
-  }
-
-  // Like can_delete_DEPRECATED(), this is also over-conservative. Weirdly, it
-  // also excludes things that are marked with allowshrinking. Use can_rename()
-  // instead.
-  bool can_rename_DEPRECATED() const {
-    return !inner_struct.m_by_string &&
-           (!inner_struct.m_keep || allowobfuscation()) && !allowshrinking();
-  }
-
  private:
   // Does any keep rule (whether -keep or -keepnames) match this DexMember?
   bool has_keep() const { return inner_struct.m_keep; }

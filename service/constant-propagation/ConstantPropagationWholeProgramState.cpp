@@ -32,8 +32,8 @@ void set_fields_in_partition(const DexClass* cls,
   for (auto& field : fields) {
     auto value = field_env.get(field);
     if (!value.is_top()) {
-      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>",
-            SHOW(field), SHOW(value));
+      TRACE(ICONSTP, 2, "%s has value %s after <clinit> or <init>", SHOW(field),
+            SHOW(value));
       always_assert(field->get_class() == cls->get_type());
     } else {
       TRACE(ICONSTP, 2, "%s has unknown value after <clinit> or <init>",
@@ -92,8 +92,8 @@ bool analyze_gets_helper(const WholeProgramState* whole_program_state,
 }
 
 bool not_eligible_ifield(DexField* field) {
-  return is_static(field) || field->is_external() ||
-         !can_delete_DEPRECATED(field) || is_volatile(field);
+  return is_static(field) || field->is_external() || !can_delete(field) ||
+         is_volatile(field);
 }
 
 /**

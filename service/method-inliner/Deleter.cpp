@@ -29,7 +29,7 @@ size_t delete_methods(
   size_t deleted = 0;
   for (auto callee : removable) {
     if (!callee->is_concrete()) continue;
-    if (!can_delete_DEPRECATED(callee)) continue;
+    if (!can_delete(callee)) continue;
     auto cls = type_class(callee->get_class());
     always_assert_log(cls != nullptr,
                       "%s is concrete but does not have a DexClass\n",

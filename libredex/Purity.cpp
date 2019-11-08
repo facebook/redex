@@ -315,9 +315,8 @@ MethodOverrideAction get_base_or_overriding_method_action(
     return MethodOverrideAction::UNKNOWN;
   }
 
-  // Why can_rename_DEPRECATED? To mirror what VirtualRenamer looks at.
   if ((method->is_virtual() && is_interface(type_class(method->get_class()))) &&
-      (root(method) || !can_rename_DEPRECATED(method))) {
+      (root(method) || !can_rename(method))) {
     // We cannot rule out that there are dynamically added classes, created via
     // Proxy.newProxyInstance, that override this method.
     // So we assume the worst.

@@ -164,7 +164,7 @@ void VirtualMerging::compute_mergeable_scope_methods() {
       return;
     }
 
-    if (!can_rename_DEPRECATED(overriding_method) || root(overriding_method) ||
+    if (!can_rename(overriding_method) || root(overriding_method) ||
         overriding_method->rstate.no_optimizations()) {
       return;
     }

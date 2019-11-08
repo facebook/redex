@@ -92,7 +92,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
     for (const auto& cls : scope) {
       // Make sure we don't drop classes which might be
       // called from native code.
-      if (!can_rename_DEPRECATED(cls)) {
+      if (!can_rename(cls)) {
         cold_cold_references.insert(cls->get_type());
       }
     }
@@ -111,8 +111,7 @@ std::unordered_set<DexClass*> find_unrefenced_coldstart_classes(
 
     Scope output_scope;
     for (auto& cls : coldstart_classes) {
-      if (can_rename_DEPRECATED(type_class(cls)) &&
-          cold_cold_references.count(cls) == 0) {
+      if (can_rename(type_class(cls)) && cold_cold_references.count(cls) == 0) {
         new_no_ref++;
         unreferenced_classes.insert(type_class(cls));
       } else {

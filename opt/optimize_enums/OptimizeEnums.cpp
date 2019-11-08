@@ -323,7 +323,7 @@ class OptimizeEnums {
      */
     auto is_safe_enum = [this](const DexClass* cls) {
       if (is_enum(cls) && !cls->is_external() && is_final(cls) &&
-          can_delete_DEPRECATED(cls) && cls->get_interfaces()->size() == 0 &&
+          can_delete(cls) && cls->get_interfaces()->size() == 0 &&
           only_one_static_synth_field(cls)) {
 
         const auto& ctors = cls->get_ctors();
@@ -333,7 +333,7 @@ class OptimizeEnums {
         }
 
         for (auto& vmethod : cls->get_vmethods()) {
-          if (!can_rename_DEPRECATED(vmethod)) {
+          if (!can_rename(vmethod)) {
             return false;
           }
         }
@@ -388,7 +388,7 @@ class OptimizeEnums {
       // Only consider enums that are final, not external, do not have
       // interfaces, and are not instance fields of serializable classes.
       return is_enum(cls) && !cls->is_external() && is_final(cls) &&
-             can_delete_DEPRECATED(cls) && cls->get_interfaces()->size() == 0 &&
+             can_delete(cls) && cls->get_interfaces()->size() == 0 &&
              !types_used_in_serializable.count(cls->get_type());
     };
 

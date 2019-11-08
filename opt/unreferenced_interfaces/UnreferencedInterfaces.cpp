@@ -63,7 +63,7 @@ TypeSet collect_interfaces(
   TypeSet candidates;
   for (const auto& cls : scope) {
     if (!is_interface(cls)) continue;
-    if (!can_delete_DEPRECATED(cls)) continue;
+    if (!can_delete(cls)) continue;
     if (!cls->get_sfields().empty()) continue;
     candidates.insert(cls->get_type());
     metric.candidates++;

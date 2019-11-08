@@ -117,7 +117,7 @@ void generate_dispatches(
   for (auto method : methods) {
     // Use dispatch::may_be_dispatch(method) to heuristically exclude large
     // dispatches.
-    if (!root(method) && can_rename_DEPRECATED(method) &&
+    if (!root(method) && can_rename(method) &&
         !ref_counter.too_less_callers(method) &&
         !dispatch::may_be_dispatch(method)) {
       proto_to_methods[method->get_proto()].insert(method);
@@ -204,8 +204,8 @@ Stats merge_methods_within_class(const DexClasses& classes,
     std::for_each(non_virtuals.begin(), non_virtuals.end(),
                   [&methods](DexMethod* method) {
                     auto type = method->get_class();
-                    if (!methods.count(type) ||
-                        !can_rename_DEPRECATED(method) || root(method)) {
+                    if (!methods.count(type) || !can_rename(method) ||
+                        root(method)) {
                       return;
                     }
                     methods[type].push_back(method);

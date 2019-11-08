@@ -802,7 +802,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
 
 bool can_rename_scope(const VirtualScope* scope) {
   for (const auto& vmeth : scope->methods) {
-    if (!can_rename_DEPRECATED(vmeth.first) || (vmeth.second & ESCAPED) != 0) {
+    if (!can_rename(vmeth.first) || (vmeth.second & ESCAPED) != 0) {
       return false;
     }
   }
