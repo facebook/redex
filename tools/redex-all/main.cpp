@@ -939,7 +939,10 @@ void redex_backend(const std::string& output_dir,
   std::unordered_map<DexMethod*, uint64_t> method_to_id;
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata;
+
   PostLowering post_lowering;
+  // TODO(emmasevastian): Update flag.
+  bool run_post_lowering = redex_options.force_class_data_end_of_file;
 
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
@@ -965,7 +968,9 @@ void redex_backend(const std::string& output_dir,
       ss << ".dex";
 
       auto extra_strings =
-          post_lowering.get_extra_strings(store.get_dexen()[i]);
+          run_post_lowering
+              ? post_lowering.get_extra_strings(store.get_dexen()[i])
+              : std::vector<DexString*>();
 
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
@@ -983,14 +988,18 @@ void redex_backend(const std::string& output_dir,
                                stores[0].get_dex_magic(),
                                extra_strings);
 
-      post_lowering.run(store.get_dexen()[i], output_dir);
+      if (run_post_lowering) {
+        post_lowering.run(store.get_dexen()[i], output_dir);
+      }
 
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
 
-  post_lowering.cleanup(manager);
+  if (run_post_lowering) {
+    post_lowering.cleanup(manager);
+  }
 
   {
     Timer t("Writing opt decisions data");
