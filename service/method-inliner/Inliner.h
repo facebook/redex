@@ -115,7 +115,7 @@ class MultiMethodInliner {
       const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
           method_profile_stats = {});
 
-  ~MultiMethodInliner() { invoke_direct_to_static(); }
+  ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
   /**
    * attempt inlining for all candidates.
@@ -123,9 +123,12 @@ class MultiMethodInliner {
   void inline_methods();
 
   /**
-   * Return the count of unique inlined methods.
+   * Return the set of unique inlined methods.
    */
-  std::unordered_set<DexMethod*> get_inlined() const { return inlined; }
+  std::unordered_set<DexMethod*> get_inlined() const {
+    std::unordered_set<DexMethod*> res(m_inlined.begin(), m_inlined.end());
+    return res;
+  }
 
   bool for_speed() const { return !m_hot_methods.empty(); }
 
@@ -309,13 +312,13 @@ class MultiMethodInliner {
   void delayed_change_visibilities();
 
   /**
-   * Staticize required methods (stored in `m_make_static`) and update
+   * Staticize required methods (stored in `m_delayed_make_static`) and update
    * opcodes accordingly.
    *
    * NOTE: It only needs to be called once after inlining. Since it is called
    *       from the destructor, there is no need to manually call it.
    */
-  void invoke_direct_to_static();
+  void delayed_invoke_direct_to_static();
 
   /**
    * For all (reachable) invoke instructions in a given method, collect
@@ -386,7 +389,7 @@ class MultiMethodInliner {
   /**
    * Inlined methods.
    */
-  std::unordered_set<DexMethod*> inlined;
+  ConcurrentSet<DexMethod*> m_inlined;
 
   //
   // Maps from callee to callers and reverse map from caller to callees.
@@ -448,13 +451,17 @@ class MultiMethodInliner {
   // Whether any of const-prop/cs/copy-prop/local-dce are enabled.
   bool m_shrinking_enabled{0};
 
-  std::unordered_set<DexMethod*> m_make_static;
-  std::unique_ptr<std::unordered_map<DexMethod*, std::unordered_set<DexType*>>>
+  // Set of methods that need to be made static eventually. The destructor
+  // of this class will do the necessary delayed work.
+  ConcurrentSet<DexMethod*> m_delayed_make_static;
+
+  // Set of methods (and associated scope types) for which change_visibility
+  // needs to get called eventually. This happens locally within inline_methods.
+  std::unique_ptr<ConcurrentMap<DexMethod*, std::unordered_set<DexType*>>>
       m_delayed_change_visibilities;
 
-  // When mutating shared state m_make_static, m_delayed_change_visibilities,
-  // inlined, except info, while inlining in parallel
-  std::mutex m_mutex;
+  // When calling change_visibility eagerly
+  std::mutex m_change_visibility_mutex;
 
   // When mutating info while inlining in parallel
   std::mutex m_info_mutex;

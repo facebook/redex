@@ -272,7 +272,7 @@ void MultiMethodInliner::inline_methods() {
   // Instead of changing visibility as we inline, blocking other work on the
   // critical path, we do it all in parallel at the end.
   m_delayed_change_visibilities = std::make_unique<
-      std::unordered_map<DexMethod*, std::unordered_set<DexType*>>>();
+      ConcurrentMap<DexMethod*, std::unordered_set<DexType*>>>();
 
   // we want to inline bottom up, so as a first step we identify all the
   // top level callers, then we recurse into all inlinable callees until we
@@ -631,15 +631,19 @@ void MultiMethodInliner::inline_inlinables(
   }
 
   if (inlined_callees.size() > 0) {
-    std::lock_guard<std::mutex> guard(m_mutex);
     for (auto callee_method : inlined_callees) {
       if (m_delayed_change_visibilities) {
-        (*m_delayed_change_visibilities)[callee_method].insert(
-            caller_method->get_class());
+        m_delayed_change_visibilities->update(
+            callee_method, [caller_method](const DexMethod*,
+                                           std::unordered_set<DexType*>& value,
+                                           bool /*exists*/) {
+              value.insert(caller_method->get_class());
+            });
       } else {
+        std::lock_guard<std::mutex> guard(m_change_visibility_mutex);
         change_visibility(callee_method, caller_method->get_class());
       }
-      inlined.insert(callee_method);
+      m_inlined.insert(callee_method);
     }
   }
 
@@ -900,11 +904,11 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
   }
 
   if (make_static.size()) {
-    std::lock_guard<std::mutex> guard(m_mutex);
     // Only now, when we'll indicate that the method inlinable, we'll record
     // the fact that we'll have to make some methods static.
-    std::copy(make_static.begin(), make_static.end(),
-              std::inserter(m_make_static, m_make_static.end()));
+    for (auto method : make_static) {
+      m_delayed_make_static.insert(method);
+    }
   }
 
   return true;
@@ -1679,10 +1683,10 @@ void MultiMethodInliner::delayed_change_visibilities() {
   });
 }
 
-void MultiMethodInliner::invoke_direct_to_static() {
+void MultiMethodInliner::delayed_invoke_direct_to_static() {
   // We sort the methods here because make_static renames methods on
   // collision, and which collisions occur is order-dependent. E.g. if we have
-  // the following methods in m_make_static:
+  // the following methods in m_delayed_make_static:
   //
   //   Foo Foo::bar()
   //   Foo Foo::bar(Foo f)
@@ -1696,7 +1700,8 @@ void MultiMethodInliner::invoke_direct_to_static() {
   // Also, we didn't use an std::set keyed by method signature here because
   // make_static is mutating the signatures. The tree that implements the set
   // would have to be rebalanced after the mutations.
-  std::vector<DexMethod*> methods(m_make_static.begin(), m_make_static.end());
+  std::vector<DexMethod*> methods(m_delayed_make_static.begin(),
+                                  m_delayed_make_static.end());
   std::sort(methods.begin(), methods.end(), compare_dexmethods);
   for (auto method : methods) {
     TRACE(MMINL, 6, "making %s static", method->get_name()->c_str());
@@ -1707,7 +1712,7 @@ void MultiMethodInliner::invoke_direct_to_static() {
                             auto op = insn->opcode();
                             if (op == OPCODE_INVOKE_DIRECT) {
                               auto m = insn->get_method()->as_def();
-                              if (m && m_make_static.count(m)) {
+                              if (m && m_delayed_make_static.count_unsafe(m)) {
                                 insn->set_opcode(OPCODE_INVOKE_STATIC);
                               }
                             }
