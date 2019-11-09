@@ -1714,22 +1714,6 @@ void MultiMethodInliner::invoke_direct_to_static() {
                           });
 }
 
-void adjust_opcode_counts(
-    const std::unordered_multimap<DexMethod*, DexMethod*>& callee_to_callers,
-    DexMethod* callee,
-    std::unordered_map<DexMethod*, size_t>* adjusted_opcode_count) {
-  auto code = callee->get_code();
-  if (code == nullptr) {
-    return;
-  }
-  auto code_size = code->count_opcodes();
-  auto range = callee_to_callers.equal_range(callee);
-  for (auto it = range.first; it != range.second; ++it) {
-    auto caller = it->second;
-    (*adjusted_opcode_count)[caller] += code_size;
-  }
-}
-
 namespace {
 
 using RegMap = transform::RegMap;
