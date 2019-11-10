@@ -11,6 +11,7 @@
 #include <fstream>
 
 #include "DexClass.h"
+#include "MethodOverrideGraph.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "TypeSystem.h"
@@ -160,14 +161,16 @@ bool find_method(const std::string& simple_deobfuscated_name,
 bool check_methods(
     const std::vector<DexMethod*>& methods,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework) {
+    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const std::unordered_set<DexMethodRef*>& methods_non_private) {
   if (methods.size() == 0) {
     return true;
   }
 
   DexType* current_type = methods.at(0)->get_class();
   for (DexMethod* meth : methods) {
-    if (!is_public(meth) || !meth->get_code()) {
+    if (!is_public(meth) || !meth->get_code() ||
+        methods_non_private.count(meth) == 0) {
       // TODO(emmasevastian): When should we check non-public methods?
       // TODO(emmasevastian): When should we still check if it is abstract?
       continue;
@@ -205,14 +208,15 @@ bool find_field(const std::string& simple_deobfuscated_name,
 bool check_fields(
     const std::vector<DexField*>& fields,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework) {
+    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const std::unordered_set<DexFieldRef*>& fields_non_private) {
   if (fields.size() == 0) {
     return true;
   }
 
   DexType* current_type = fields.at(0)->get_class();
   for (DexField* field : fields) {
-    if (!is_public(field)) {
+    if (!is_public(field) || fields_non_private.count(field) == 0) {
       // TODO(emmasevastian): When should we check non-public fields?
       continue;
     }
@@ -244,20 +248,24 @@ bool check_fields(
 bool check_members(
     DexClass* cls,
     const api::FrameworkAPI& framework_api,
-    const std::unordered_map<const DexType*, DexType*>& release_to_framework) {
-  if (!check_methods(cls->get_dmethods(), framework_api,
-                     release_to_framework)) {
+    const std::unordered_map<const DexType*, DexType*>& release_to_framework,
+    const std::unordered_set<DexMethodRef*>& methods_non_private,
+    const std::unordered_set<DexFieldRef*>& fields_non_private) {
+  if (!check_methods(cls->get_dmethods(), framework_api, release_to_framework,
+                     methods_non_private)) {
     return false;
   }
-  if (!check_methods(cls->get_vmethods(), framework_api,
-                     release_to_framework)) {
+  if (!check_methods(cls->get_vmethods(), framework_api, release_to_framework,
+                     methods_non_private)) {
     return false;
   }
 
-  if (!check_fields(cls->get_sfields(), framework_api, release_to_framework)) {
+  if (!check_fields(cls->get_sfields(), framework_api, release_to_framework,
+                    fields_non_private)) {
     return false;
   }
-  if (!check_fields(cls->get_ifields(), framework_api, release_to_framework)) {
+  if (!check_fields(cls->get_ifields(), framework_api, release_to_framework,
+                    fields_non_private)) {
     return false;
   }
 
@@ -369,7 +377,8 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
       DexClass* cls = type_class(pair.first);
       always_assert(cls);
 
-      if (!check_members(cls, pair.second, release_to_framework)) {
+      if (!check_members(cls, pair.second, release_to_framework,
+                         m_methods_non_private, m_fields_non_private)) {
         to_remove.emplace(pair.first);
         continue;
       }
@@ -388,6 +397,50 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
       m_types_to_framework_api.erase(type);
     }
   }
+}
+
+void ApiLevelsUtils::gather_non_private_members() {
+  m_methods_non_private.clear();
+  m_fields_non_private.clear();
+
+  const auto& override_graph = method_override_graph::build_graph(m_scope);
+
+  // TODO(emmasevastian): parallelize.
+  for (DexClass* cls : m_scope) {
+    std::vector<DexMethodRef*> current_methods;
+    std::vector<DexFieldRef*> current_fields;
+
+    cls->gather_methods(current_methods);
+    for (DexMethodRef* mref : current_methods) {
+      if (m_types_to_framework_api.count(mref->get_class())) {
+        if (mref->get_class() != cls->get_type()) {
+          m_methods_non_private.emplace(mref);
+        } else {
+          auto* mdef = mref->as_def();
+
+          // Being extra conservative here ...
+          // NOTE: Whatever we add to the list we will need to replace.
+          if (!mdef ||
+              method_override_graph::is_true_virtual(*override_graph, mdef)) {
+            m_methods_non_private.emplace(mref);
+          }
+        }
+      }
+    }
+
+    cls->gather_fields(current_fields);
+    for (DexFieldRef* fref : current_fields) {
+      if (m_types_to_framework_api.count(fref->get_class()) &&
+          fref->get_class() != cls->get_type()) {
+        m_fields_non_private.emplace(fref);
+      }
+    }
+  }
+
+  TRACE(API_UTILS, 4, "We have %d methods that are actually non private",
+        m_methods_non_private.size());
+  TRACE(API_UTILS, 4, "We have %d fields that are actually non private",
+        m_fields_non_private.size());
 }
 
 /**
@@ -456,6 +509,8 @@ void ApiLevelsUtils::load_framework_api() {
       }
     }
   }
+
+  gather_non_private_members();
 
   // Checks and updates the mapping from release libraries to framework classes.
   check_and_update_release_to_framework();

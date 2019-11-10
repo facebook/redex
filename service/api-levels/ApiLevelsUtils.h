@@ -38,6 +38,16 @@ class ApiLevelsUtils {
 
   std::unordered_map<DexType*, FrameworkAPI> get_framework_classes();
 
+  /**
+   * NOTE: Workaround for the fact that real private members can be made public
+   * by any pass ... We gather:
+   *  - members that are accessed outside of their own class
+   *  - true virtual methods
+   *
+   * NOTE: This needs to run every time something changes in the scope.
+   */
+  void gather_non_private_members();
+
   void filter_types(const std::unordered_set<const DexType*>& types);
 
  private:
@@ -49,6 +59,13 @@ class ApiLevelsUtils {
   std::unordered_set<DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
   uint32_t m_api_level;
+
+  /**
+   * NOTE: Those work as "non-private" in the sense that we check where
+   *       they are referenced:
+   */
+  std::unordered_set<DexMethodRef*> m_methods_non_private;
+  std::unordered_set<DexFieldRef*> m_fields_non_private;
 };
 
 } // namespace api

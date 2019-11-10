@@ -41,6 +41,30 @@ std::vector<DexClass*> create_scope(bool add_parent) {
   return scope;
 }
 
+void add_usage(Scope* scope, DexMethodRef* mref) {
+  auto obj_t = type::java_lang_Object();
+  auto new_t = DexType::make_type("LUsage;");
+  auto new_cls = create_internal_class(new_t, obj_t, {});
+  scope->push_back(new_cls);
+
+  std::string code_str = R"(
+    (method (private) "LUsage;.bar:()V"
+      (
+        (new-instance "Landroidx/ArrayMap;")
+        (move-result-pseudo-object v0)
+        (invoke-virtual (v0) ")";
+  code_str += SHOW(mref);
+  code_str += R"(")
+        (move-result-object v0)
+        (return-void)
+      )
+    )
+  )";
+  std::cout << code_str << std::endl;
+  auto method = assembler::method_from_string(code_str);
+  new_cls->add_method(method);
+}
+
 } // namespace
 
 TEST(ApiUtilsTest, testParseInputFormat) {
@@ -107,6 +131,36 @@ TEST(ApiUtilsTest, testEasyInput_SubClassMissingInReleaseLibraries) {
   EXPECT_EQ(types_to_framework_api.at(c_release).cls, c_framework);
 }
 
+TEST(ApiUtilsTest, testEasyInput_MethodMissingButNotTruePrivate) {
+  g_redex = new RedexContext();
+
+  Scope scope = create_scope(false);
+
+  auto void_args = DexTypeList::make_type_list({});
+  auto void_object = DexProto::make_proto(type::java_lang_Object(), void_args);
+
+  auto a_release = DexType::make_type("Landroidx/ArrayMap;");
+  auto method = static_cast<DexMethod*>(DexMethod::make_method(
+      a_release, DexString::make_string("foo"), void_object));
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+
+  auto a_cls = type_class(a_release);
+  a_cls->add_method(method);
+
+  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
+                                21);
+
+  const auto& types_to_framework_api = api_utils.get_types_to_framework_api();
+  EXPECT_EQ(types_to_framework_api.size(), 3);
+
+  auto b_framework = DexType::make_type("Landroid/util/ArraySet;");
+  auto b_release = DexType::make_type("Landroidx/ArraySet;");
+  EXPECT_EQ(types_to_framework_api.at(b_release).cls, b_framework);
+}
+
 TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   g_redex = new RedexContext();
 
@@ -125,6 +179,10 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
 
   auto a_cls = type_class(a_release);
   a_cls->add_method(method);
+
+  // We need to actually use the method outside of the class, for it to be
+  // considered missing.
+  add_usage(&scope, method);
 
   api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
                                 21);
