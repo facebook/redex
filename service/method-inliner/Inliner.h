@@ -53,6 +53,12 @@ void inline_tail_call(DexMethod* caller,
  */
 void inline_method(IRCode* caller, IRCode* callee, IRList::iterator pos);
 
+/**
+ * Inline `callee` into `caller` at `pos` and try to change the visibility of
+ * accessed members. See comment of `change_visibility` for details.
+ */
+void inline_method(DexMethod* caller, IRCode* callee, IRList::iterator pos);
+
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
  * success.

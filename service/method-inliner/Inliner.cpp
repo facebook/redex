@@ -1967,6 +1967,13 @@ DexPosition* last_position_before(const IRList::const_iterator& it,
   return position_it == rend ? nullptr : position_it->pos.get();
 }
 
+void inline_method(DexMethod* caller,
+                   IRCode* callee_code,
+                   IRList::iterator pos) {
+  change_visibility(callee_code, caller->get_class());
+  inline_method(caller->get_code(), callee_code, pos);
+}
+
 void inline_method(IRCode* caller_code,
                    IRCode* callee_code,
                    IRList::iterator pos) {

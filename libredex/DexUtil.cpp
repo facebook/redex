@@ -467,7 +467,10 @@ bool is_uninstantiable_class(DexType* type) {
 }
 
 void change_visibility(DexMethod* method, DexType* scope) {
-  auto code = method->get_code();
+  change_visibility(method->get_code(), scope);
+}
+
+void change_visibility(IRCode* code, DexType* scope) {
   always_assert(code != nullptr);
 
   editable_cfg_adapter::iterate(code, [scope](MethodItemEntry& mie) {
