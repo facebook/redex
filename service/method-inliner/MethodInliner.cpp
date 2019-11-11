@@ -339,6 +339,21 @@ void run_inliner(DexStoresVector& stores,
   CalleeCallerInsns true_virtual_callers;
   // Gather all inlinable candidates.
   auto inliner_config = conf.get_inliner_config();
+
+  using MethodStats =
+      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;
+  MethodStats method_profile_stats =
+      use_method_profiles ? conf.get_method_profiles().method_stats()
+                          : MethodStats{};
+  if (use_method_profiles && method_profile_stats.empty()) {
+    // PerfMethodInline is enabled, but there are no profiles available. Bail,
+    // don't run a regular inline pass.
+    return;
+  }
+  if (use_method_profiles) {
+    inliner_config.shrink_other_methods = false;
+  }
+
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
 
@@ -354,15 +369,6 @@ void run_inliner(DexStoresVector& stores,
     walk::parallel::code(scope, [](DexMethod*, IRCode& code) {
       code.build_cfg(/* editable */ true);
     });
-  }
-
-  using MethodStats =
-      const std::unordered_map<const DexMethodRef*, method_profiles::Stats>;
-  MethodStats method_profile_stats =
-      use_method_profiles ? conf.get_method_profiles().method_stats()
-                          : MethodStats{};
-  if (use_method_profiles) {
-    inliner_config.shrink_other_methods = false;
   }
 
   // inline candidates
