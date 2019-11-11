@@ -426,13 +426,13 @@ void ApiLevelsUtils::gather_non_private_members() {
           }
         }
       }
+    }
 
-      cls->gather_fields(current_fields);
-      for (DexFieldRef* fref : current_fields) {
-        if (m_types_to_framework_api.count(fref->get_class()) &&
-            fref->get_class() != cls->get_type()) {
-          m_fields_non_private.emplace(fref);
-        }
+    cls->gather_fields(current_fields);
+    for (DexFieldRef* fref : current_fields) {
+      if (m_types_to_framework_api.count(fref->get_class()) &&
+          fref->get_class() != cls->get_type()) {
+        m_fields_non_private.emplace(fref);
       }
     }
   }
@@ -471,9 +471,9 @@ void ApiLevelsUtils::load_framework_api() {
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
   if (simple_cls_name_to_type.size() == 0) {
     // Nothing to do here :|
-    TRACE(API_UTILS, 1,
-          "Nothing to do since we have no framework classes to replace with "
-          "...");
+    TRACE(
+        API_UTILS, 1,
+        "Nothing to do since we have no framework classes to replace with ...");
     return;
   }
 
@@ -512,8 +512,7 @@ void ApiLevelsUtils::load_framework_api() {
 
   gather_non_private_members();
 
-  // Checks and updates the mapping from release libraries to framework
-  // classes.
+  // Checks and updates the mapping from release libraries to framework classes.
   check_and_update_release_to_framework();
 }
 
