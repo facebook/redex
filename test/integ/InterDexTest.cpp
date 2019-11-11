@@ -71,7 +71,7 @@ class InterDexTest : public RedexIntegrationTest {
 
   std::string make_tmp_dir() {
     auto path = boost::filesystem::temp_directory_path();
-    path += boost::filesystem::unique_path("redex_interdex_test_%%%%%%%%");
+    path += boost::filesystem::unique_path("/redex_interdex_test_%%%%%%%%");
     boost::filesystem::create_directories(path);
     return path.string();
   }
