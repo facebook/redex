@@ -14,6 +14,9 @@
 /// they can't be instantiated to simplify those mentions:
 ///
 ///  - `instance-of` with an uninstantiable type parameter always returns false.
+///  - `invoke-virtual` and `invoke-direct` on methods whose class is
+///    uninstantiable can be replaced by a `throw null;`, because they can only
+///    be called on a `null` instance.
 class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}

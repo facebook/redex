@@ -13,6 +13,8 @@
 #include "IRCode.h"
 #include "Walkers.h"
 
+#include <boost/optional.hpp>
+
 namespace {
 
 /// \return a new \c IRInstruction representing a `const` operation writing
@@ -24,11 +26,27 @@ IRInstruction* ir_const(uint32_t dest, int64_t lit) {
   return insn;
 }
 
+/// \return a new \c IRInstruction representing a `throw` operation, throwing
+/// the contents of register \p src.
+IRInstruction* ir_throw(uint32_t src) {
+  auto insn = new IRInstruction(OPCODE_THROW);
+  insn->set_src(0, src);
+  return insn;
+}
+
 } // namespace
 
 void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
   using Insert = cfg::CFGMutation::Insert;
   cfg::CFGMutation m(cfg);
+
+  // Lazily generate a scratch register.
+  auto get_scratch = [reg = boost::optional<uint32_t>(), &cfg]() mutable {
+    if (!reg) {
+      reg = cfg.allocate_temp();
+    }
+    return *reg;
+  };
 
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
@@ -38,6 +56,13 @@ void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
       if (is_uninstantiable_class(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
+      }
+      break;
+    case OPCODE_INVOKE_DIRECT:
+    case OPCODE_INVOKE_VIRTUAL:
+      if (is_uninstantiable_class(insn->get_method()->get_class())) {
+        auto tmp = get_scratch();
+        m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
       }
       break;
     default:
