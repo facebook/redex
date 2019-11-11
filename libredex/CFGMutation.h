@@ -34,9 +34,11 @@ class CFGMutation {
   CFGMutation(const CFGMutation&) = delete;
   CFGMutation& operator=(const CFGMutation&) = delete;
 
-  /// CFGMutation is moveable
+  /// CFGMutation is move-constructable
   CFGMutation(CFGMutation&&) = default;
-  CFGMutation& operator=(CFGMutation&&) = default;
+
+  /// CFGMutation is not move-assignable.
+  CFGMutation& operator=(CFGMutation&&) = delete;
 
   /// Add a new change to this mutation.
   ///
