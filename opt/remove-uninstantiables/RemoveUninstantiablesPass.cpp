@@ -41,7 +41,7 @@ void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
   cfg::CFGMutation m(cfg);
 
   // Lazily generate a scratch register.
-  auto get_scratch = [reg = boost::optional<uint32_t>(), &cfg]() mutable {
+  auto get_scratch = [&cfg, reg = boost::optional<uint32_t>()]() mutable {
     if (!reg) {
       reg = cfg.allocate_temp();
     }
