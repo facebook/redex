@@ -4,11 +4,10 @@
     "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy"
-
   },
   "devDependencies": {
-    "@docusaurus/core": "^2.0.0-alpha.27",
-    "@docusaurus/preset-classic": "^2.0.0-alpha.27",
+    "@docusaurus/core": "^2.0.0-alpha.34",
+    "@docusaurus/preset-classic": "^2.0.0-alpha.34",
     "classnames": "^2.2.6",
     "react": "^16.8.4",
     "react-dom": "^16.8.4"
