@@ -184,6 +184,28 @@ void AnalysisImpl::filter_do_not_strip() {
       escape_interface(intf_it.first, DO_NOT_STRIP);
     }
   }
+  walk::methods(scope, [this](DexMethod* method) {
+    if (root(method)) {
+      for (auto arg_type : *method->get_proto()->get_args()) {
+        if (single_impls.count(arg_type)) {
+          escape_interface(arg_type, DO_NOT_STRIP);
+        }
+      }
+      if (single_impls.count(method->get_class())) {
+        escape_interface(method->get_class(), DO_NOT_STRIP);
+      }
+    }
+  });
+  walk::fields(scope, [this](DexField* field) {
+    if (root(field)) {
+      if (single_impls.count(field->get_type())) {
+        escape_interface(field->get_type(), DO_NOT_STRIP);
+      }
+      if (single_impls.count(field->get_class())) {
+        escape_interface(field->get_class(), DO_NOT_STRIP);
+      }
+    }
+  });
 }
 
 /**
