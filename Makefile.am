@@ -54,6 +54,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove_redundant_check_casts \
+	-I$(top_srcdir)/opt/remove-uninstantiables \
 	-I$(top_srcdir)/opt/remove-unreachable \
 	-I$(top_srcdir)/opt/remove_empty_classes \
 	-I$(top_srcdir)/opt/remove_gotos \
@@ -303,6 +304,7 @@ redex_all_SOURCES = \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
 	opt/remove_redundant_check_casts/CheckCastAnalysis.cpp \
 	opt/remove_redundant_check_casts/RemoveRedundantCheckCasts.cpp \
+	opt/remove-uninstantiables/RemoveUninstantiablesPass.cpp \
 	opt/remove-unreachable/RemoveUnreachable.cpp \
 	opt/remove-unused-fields/RemoveUnusedFields.cpp \
 	opt/remove_empty_classes/RemoveEmptyClasses.cpp \
