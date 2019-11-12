@@ -9,7 +9,7 @@
 
 namespace regalloc {
 
-using reg_t = uint16_t;
+using vreg_t = uint16_t;
 
 /*
  * This class tracks which registers are available over the course of register
@@ -29,33 +29,31 @@ class VirtualRegistersFile {
    * allocates it. Returns the first register of that slot. Grow the register
    * file if necessary.
    */
-  reg_t alloc(size_t width);
+  vreg_t alloc(size_t width);
 
   /*
    * Allocates a slot of size :width at position :pos. Will not complain if the
    * slot is already allocated.
    */
-  void alloc_at(reg_t pos, size_t width);
+  void alloc_at(vreg_t pos, size_t width);
 
   /*
    * Frees a slot of size :width at :pos. Will not complain if the slot is
    * already free.
    */
-  void free(reg_t pos, size_t width);
+  void free(vreg_t pos, size_t width);
 
   /*
    * Returns whether :width registers are available at :pos.
    */
-  bool is_free(reg_t pos, size_t width) const;
+  bool is_free(vreg_t pos, size_t width) const;
 
-  reg_t size() const {
-    return m_free.size();
-  }
+  vreg_t size() const { return m_free.size(); }
 
   friend std::ostream& operator<<(std::ostream&, const VirtualRegistersFile&);
 
  private:
-  reg_t find_free_range_at_end() const;
+  vreg_t find_free_range_at_end() const;
 
   boost::dynamic_bitset<> m_free;
 };

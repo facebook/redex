@@ -42,7 +42,7 @@ class IRCode {
   IRList* m_ir_list;
   std::unique_ptr<cfg::ControlFlowGraph> m_cfg;
 
-  uint16_t m_registers_size{0};
+  reg_t m_registers_size{0};
   // TODO(jezng): we shouldn't be storing / exposing the DexDebugItem... just
   // exposing the param names should be enough
   std::unique_ptr<DexDebugItem> m_dbg;
@@ -102,14 +102,14 @@ class IRCode {
     return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 
-  uint16_t get_registers_size() const { return m_registers_size; }
+  reg_t get_registers_size() const { return m_registers_size; }
 
-  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+  void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
-  uint16_t allocate_temp() { return m_registers_size++; }
+  reg_t allocate_temp() { return m_registers_size++; }
 
-  uint16_t allocate_wide_temp() {
-    uint16_t new_reg = m_registers_size;
+  reg_t allocate_wide_temp() {
+    reg_t new_reg = m_registers_size;
     m_registers_size += 2;
     return new_reg;
   }

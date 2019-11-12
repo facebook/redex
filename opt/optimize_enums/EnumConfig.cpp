@@ -15,11 +15,11 @@ namespace {
 // The structure is used for hardcoding external method param summaries.
 struct ExternalMethodData {
   std::string method_name;
-  boost::optional<uint16_t> returned_param;
-  std::vector<uint16_t> safe_params;
+  boost::optional<reg_t> returned_param;
+  std::vector<reg_t> safe_params;
   ExternalMethodData(std::string name,
-                     boost::optional<uint16_t> returned,
-                     std::initializer_list<uint16_t> params)
+                     boost::optional<reg_t> returned,
+                     std::initializer_list<reg_t> params)
       : method_name(name), returned_param(returned), safe_params(params) {}
 };
 /**

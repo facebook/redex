@@ -164,9 +164,9 @@ size_t src_bit_width(IROpcode op, int i) {
   return dex_opcode::src_bit_width(opcode::to_dex_opcode(op), i);
 }
 
-reg_t max_value_for_src(const IRInstruction* insn,
-                        size_t src_index,
-                        bool src_is_wide) {
+vreg_t max_value_for_src(const IRInstruction* insn,
+                         size_t src_index,
+                         bool src_is_wide) {
   auto max_value = max_unsigned_value(src_bit_width(insn->opcode(), src_index));
   auto op = insn->opcode();
   if (opcode::has_range_form(op) && insn->srcs_size() == 1) {
@@ -208,7 +208,7 @@ void GraphBuilder::update_node_constraints(IRList::iterator it,
     auto& node = graph->m_nodes[src];
     auto type = src_reg_type(insn, i);
     node.m_type_domain.meet_with(RegisterTypeDomain(type));
-    reg_t max_vreg;
+    vreg_t max_vreg;
     if (range_set.contains(insn)) {
       max_vreg = max_unsigned_value(16);
       node.m_props.set(Node::RANGE);
@@ -364,8 +364,8 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
 
   o << "containment graph {\n";
   for (const auto& pair : m_containment_graph) {
-    reg_t reg1 = static_cast<reg_t>((pair & 0xFFFF0000) >> 16);
-    reg_t reg2 = static_cast<reg_t>(pair & 0x0000FFFF);
+    reg_t reg1 = static_cast<reg_t>((pair & 0xFFFFFFFF00000000) >> 32);
+    reg_t reg2 = static_cast<reg_t>(pair & 0x00000000FFFFFFFF);
     o << reg1 << " -- " << reg2 << "\n";
   }
   o << "}\n";
@@ -375,7 +375,7 @@ std::ostream& Graph::write_dot_format(std::ostream& o) const {
 void GraphBuilder::make_node(Graph* graph,
                              reg_t r,
                              RegisterType type,
-                             reg_t max_vreg) {
+                             vreg_t max_vreg) {
   always_assert(graph->m_nodes.find(r) == graph->m_nodes.end());
   graph->m_nodes[r].m_type_domain.meet_with(RegisterTypeDomain(type));
   graph->m_nodes[r].m_width = type == RegisterType::WIDE ? 2 : 1;

@@ -80,12 +80,12 @@ DexField* trivial_get_field_wrapper(DexMethod* m) {
   if (!is_iget(it->insn->opcode())) return nullptr;
 
   auto iget = it->insn;
-  uint16_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
+  reg_t iget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = it->insn->src(0);
+  reg_t ret_reg = it->insn->src(0);
   if (ret_reg != iget_dest) return nullptr;
   ++it;
 
@@ -121,12 +121,12 @@ DexField* trivial_get_static_field_wrapper(DexMethod* m) {
   if (!is_sget(it->insn->opcode())) return nullptr;
 
   auto sget = it->insn;
-  uint16_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
+  reg_t sget_dest = ir_list::move_result_pseudo_of(it.unwrap())->dest();
   std::advance(it, 2);
 
   if (!is_return_value(it->insn->opcode())) return nullptr;
 
-  uint16_t ret_reg = it->insn->src(0);
+  reg_t ret_reg = it->insn->src(0);
   if (ret_reg != sget_dest) return nullptr;
   ++it;
 
@@ -363,7 +363,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
   return ssms;
 }
 
-IRInstruction* make_iget(DexField* field, uint16_t src) {
+IRInstruction* make_iget(DexField* field, reg_t src) {
   auto const opcode = [&]() {
     switch (type_to_datatype(field->get_type())) {
     case DataType::Array:

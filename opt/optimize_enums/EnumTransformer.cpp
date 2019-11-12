@@ -1023,7 +1023,7 @@ class CodeTransformer final {
     return m_enum_util->try_convert_to_int_type(m_enum_attributes_map, type);
   }
 
-  inline uint16_t allocate_temp() {
+  inline reg_t allocate_temp() {
     return m_method->get_code()->cfg().allocate_temp();
   }
 

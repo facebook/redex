@@ -180,7 +180,7 @@ void IRInstruction::normalize_registers() {
 void IRInstruction::denormalize_registers() {
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
-    std::vector<uint16_t> srcs;
+    std::vector<reg_t> srcs;
     size_t args_idx{0};
     size_t srcs_idx{0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {

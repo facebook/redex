@@ -35,9 +35,9 @@ struct TaintedRegs {
 
 /**
  * Using negative numbers here, since those will be used
- * alongside registers (uint16_t).
+ * alongside registers (uint32_t).
  */
-enum FieldOrRegStatus : int {
+enum FieldOrRegStatus : int64_t {
   // Default mapping.
   DEFAULT = -1,
 
@@ -78,12 +78,12 @@ bool tainted_reg_escapes(
     bool enable_buildee_constr_change = false);
 
 void transfer_object_reach(DexType* object,
-                           uint16_t regs_size,
+                           uint32_t regs_size,
                            const IRInstruction* insn,
                            RegSet& regs);
 
 std::unique_ptr<std::unordered_map<IRInstruction*, TaintedRegs>>
-get_tainted_regs(uint16_t regs_size,
+get_tainted_regs(uint32_t regs_size,
                  const std::vector<cfg::Block*>& blocks,
                  DexType* type);
 

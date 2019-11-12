@@ -267,7 +267,7 @@ struct Matcher {
   size_t match_index;
   std::vector<IRInstruction*> matched_instructions;
 
-  std::unordered_map<Register, uint16_t, EnumClassHash> matched_regs;
+  std::unordered_map<Register, reg_t, EnumClassHash> matched_regs;
   std::unordered_map<String, DexString*, EnumClassHash> matched_strings;
   std::unordered_map<Literal, int64_t, EnumClassHash> matched_literals;
   std::unordered_map<Type, DexType*, EnumClassHash> matched_types;
@@ -288,7 +288,7 @@ struct Matcher {
   // It updates the matching state for the given instruction. Returns true if
   // insn matches to the last 'match' pattern.
   bool try_match(IRInstruction* insn) {
-    auto match_reg = [&](Register pattern_reg, uint16_t insn_reg) {
+    auto match_reg = [&](Register pattern_reg, reg_t insn_reg) {
       // This register has been observed already. Check whether they are same.
       if (matched_regs.find(pattern_reg) != end(matched_regs)) {
         return matched_regs.at(pattern_reg) == insn_reg;

@@ -113,7 +113,7 @@ void build_dispatcher(DexStoresVector& stores,
   stores[0].get_dexen().rbegin()->emplace_back(dispatch_cls->create());
 }
 
-IRInstruction* make_invoke(const DexMethodRef* meth, uint16_t v0) {
+IRInstruction* make_invoke(const DexMethodRef* meth, reg_t v0) {
   auto invoke = new IRInstruction(OPCODE_INVOKE_STATIC);
   invoke->set_method(const_cast<DexMethodRef*>(meth))
       ->set_srcs_size(1)

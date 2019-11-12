@@ -58,11 +58,10 @@ constexpr const char* METRIC_INVERTED_CONDITIONAL_BRANCHES =
 
 } // namespace
 
-void ReduceGotosPass::shift_registers(cfg::ControlFlowGraph* cfg,
-                                      uint16_t* reg) {
+void ReduceGotosPass::shift_registers(cfg::ControlFlowGraph* cfg, reg_t* reg) {
   for (auto& mie : cfg::InstructionIterable(*cfg)) {
     auto insn = mie.insn;
-    for (uint16_t i = 0; i < insn->srcs_size(); ++i) {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + 1);
     }
     if (insn->has_dest()) {
@@ -87,7 +86,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
 
   std::unique_ptr<LivenessFixpointIterator> liveness_iter;
 
-  boost::optional<uint16_t> const_reg;
+  boost::optional<reg_t> const_reg;
 
   // Optimization #0: Remove switches...
   // - turning them into gotos when all cases branch to the same block

@@ -353,7 +353,7 @@ class ControlFlowGraph {
    * if editable is false, changes to the CFG aren't reflected in the output dex
    * instructions.
    */
-  ControlFlowGraph(IRList* ir, uint16_t registers_size, bool editable = true);
+  ControlFlowGraph(IRList* ir, reg_t registers_size, bool editable = true);
   ~ControlFlowGraph();
 
   /*
@@ -697,17 +697,17 @@ class ControlFlowGraph {
 
   uint32_t sum_opcode_sizes() const;
 
-  uint16_t allocate_temp() { return m_registers_size++; }
+  reg_t allocate_temp() { return m_registers_size++; }
 
-  uint16_t allocate_wide_temp() {
-    uint16_t new_reg = m_registers_size;
+  reg_t allocate_wide_temp() {
+    reg_t new_reg = m_registers_size;
     m_registers_size += 2;
     return new_reg;
   }
 
-  uint16_t get_registers_size() const { return m_registers_size; }
+  reg_t get_registers_size() const { return m_registers_size; }
 
-  void set_registers_size(uint16_t sz) { m_registers_size = sz; }
+  void set_registers_size(reg_t sz) { m_registers_size = sz; }
 
   // Find the highest register in use and set m_registers_size
   //
@@ -978,7 +978,7 @@ class ControlFlowGraph {
   // edge
   void move_edge(Edge* edge, Block* new_source, Block* new_target);
 
-  uint16_t compute_registers_size() const;
+  reg_t compute_registers_size() const;
 
   // Return the next unused block identifier
   BlockId next_block_id() const;
@@ -989,7 +989,7 @@ class ControlFlowGraph {
   Blocks m_blocks;
   EdgeSet m_edges;
 
-  uint16_t m_registers_size{0};
+  reg_t m_registers_size{0};
   Block* m_entry_block{nullptr};
   Block* m_exit_block{nullptr};
   bool m_editable{true};

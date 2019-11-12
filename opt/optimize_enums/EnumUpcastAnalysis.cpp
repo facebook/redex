@@ -490,7 +490,7 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
                                                EnumTypeEnvironment* env) const {
   const bool use_result = insn->has_move_result_any();
   if (use_result || insn->has_dest()) {
-    Register dest = use_result ? RESULT_REGISTER : insn->dest();
+    reg_t dest = use_result ? RESULT_REGISTER : insn->dest();
 
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:

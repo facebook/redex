@@ -51,7 +51,7 @@ constexpr const char* METRIC_INSTRUCTIONS_HOISTED = "num_instructions_hoisted";
 } // namespace
 
 bool BranchPrefixHoistingPass::has_side_effect_on_vregs(
-    const IRInstruction& insn, const std::unordered_set<uint16_t>& vregs) {
+    const IRInstruction& insn, const std::unordered_set<reg_t>& vregs) {
   if (!insn.has_dest()) {
     // insn has no destination, can not have a side effect
     return false; // we need to return here, otherwise dest() will throw
@@ -149,8 +149,8 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
     return 0;
   }
   IRInstruction* last_insn = last_insn_it->insn;
-  std::unordered_set<uint16_t> crit_regs(last_insn->srcs().begin(),
-                                         last_insn->srcs().end());
+  std::unordered_set<reg_t> crit_regs(last_insn->srcs().begin(),
+                                      last_insn->srcs().end());
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
 
@@ -183,7 +183,7 @@ void BranchPrefixHoistingPass::skip_pos_debug(IRList::iterator& it,
 
 std::vector<IRInstruction> BranchPrefixHoistingPass::get_insns_to_hoist(
     const std::vector<cfg::Block*>& succ_blocks,
-    const std::unordered_set<uint16_t>& crit_regs) {
+    const std::unordered_set<reg_t>& crit_regs) {
   // get iterators that points to the beginning of each block
   std::vector<IRList::iterator> block_iters;
   block_iters.reserve(succ_blocks.size());

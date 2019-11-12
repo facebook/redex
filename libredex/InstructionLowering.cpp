@@ -225,7 +225,7 @@ void check_load_params(DexMethod* method) {
   auto& args_list = method->get_proto()->get_args()->get_type_list();
   auto it = param_ops.begin();
   auto end = param_ops.end();
-  uint16_t next_ins = it->insn->dest();
+  reg_t next_ins = it->insn->dest();
   if (!is_static(method)) {
     auto op = it->insn->opcode();
     always_assert(op == IOPCODE_LOAD_PARAM_OBJECT);

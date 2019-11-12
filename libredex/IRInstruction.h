@@ -109,6 +109,8 @@
  *   B2: <catches exceptions from B1>
  *     invoke-static {v0} LQux;.a(LFoo;)V
  */
+using reg_t = uint32_t;
+
 class IRInstruction final {
  public:
   explicit IRInstruction(IROpcode op);
@@ -204,12 +206,12 @@ class IRInstruction final {
    * Accessors for logical parts of the instruction.
    */
   IROpcode opcode() const { return m_opcode; }
-  uint16_t dest() const {
+  reg_t dest() const {
     always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
-  uint16_t src(size_t i) const { return m_srcs.at(i); }
-  const std::vector<uint16_t>& srcs() const { return m_srcs; }
+  reg_t src(size_t i) const { return m_srcs.at(i); }
+  const std::vector<reg_t>& srcs() const { return m_srcs; }
 
   /*
    * Setters for logical parts of the instruction.
@@ -218,13 +220,13 @@ class IRInstruction final {
     m_opcode = op;
     return this;
   }
-  IRInstruction* set_dest(uint16_t vreg) {
+  IRInstruction* set_dest(reg_t reg) {
     always_assert(has_dest());
-    m_dest = vreg;
+    m_dest = reg;
     return this;
   }
-  IRInstruction* set_src(size_t i, uint16_t vreg) {
-    m_srcs.at(i) = vreg;
+  IRInstruction* set_src(size_t i, reg_t reg) {
+    m_srcs.at(i) = reg;
     return this;
   }
   IRInstruction* set_srcs_size(uint16_t count) {
@@ -323,7 +325,7 @@ class IRInstruction final {
 
  private:
   IROpcode m_opcode;
-  uint16_t m_dest{0};
+  reg_t m_dest{0};
   union {
     // Zero-initialize this union with the uint64_t member instead of a
     // pointer-type member so that it works properly even on 32-bit machines
@@ -335,7 +337,7 @@ class IRInstruction final {
     DexOpcodeData* m_data;
   };
   // Put m_srcs at the end for dense packing
-  std::vector<uint16_t> m_srcs;
+  std::vector<reg_t> m_srcs;
 };
 
 /*

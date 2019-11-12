@@ -223,7 +223,7 @@ void insert_invoke_instr(IRCode* code,
 void insert_invoke_static_array_arg(IRCode* code,
                                     size_t method_id,
                                     DexMethod* method_onMethodExit,
-                                    const std::vector<uint16_t>& reg_bb_vector,
+                                    const std::vector<reg_t>& reg_bb_vector,
                                     IRList::iterator insert_point) {
   // If num_vectors >5, create array of all bit vectors. Add as argument to
   // invoke call.
@@ -255,7 +255,7 @@ void insert_invoke_static_array_arg(IRCode* code,
   // Set of instructions to add bit vectors to newly created array.
   std::vector<IRInstruction*> index_inst(num_vectors);
   std::vector<IRInstruction*> aput_inst(num_vectors);
-  std::vector<uint16_t> index_reg(num_vectors);
+  std::vector<reg_t> index_reg(num_vectors);
 
   catch_block = find_try_block(code, insert_point);
 
@@ -298,7 +298,7 @@ void insert_invoke_static_array_arg(IRCode* code,
 void insert_invoke_static_call_bb(IRCode* code,
                                   size_t method_id,
                                   DexMethod* method_onMethodExit,
-                                  const std::vector<uint16_t>& reg_bb_vector) {
+                                  const std::vector<reg_t>& reg_bb_vector) {
   for (auto mie = code->begin(); mie != code->end(); ++mie) {
     if (mie->type == MFLOW_OPCODE &&
         (mie->insn->opcode() == OPCODE_RETURN ||
@@ -387,7 +387,7 @@ int instrument_onBasicBlockBegin(
 
   // Add <num_vectors> shorts to the beginning to method. These will be used as
   // basic block 16-bit vectors.
-  std::vector<uint16_t> reg_bb_vector(num_vectors);
+  std::vector<reg_t> reg_bb_vector(num_vectors);
   std::vector<IRInstruction*> const_inst_int(num_vectors);
   for (size_t reg_index = 0; reg_index < num_vectors; ++reg_index) {
     const_inst_int.at(reg_index) = new IRInstruction(OPCODE_CONST);
@@ -819,9 +819,9 @@ std::vector<DexFieldRef*> patch_sharded_arrays(DexClass* cls,
           return;
         }
 
-        const uint16_t vX = insts[1]->dest();
-        const uint16_t vY = code->allocate_temp();
-        const uint16_t vN = code->allocate_temp();
+        const reg_t vX = insts[1]->dest();
+        const reg_t vY = code->allocate_temp();
+        const reg_t vN = code->allocate_temp();
         for (size_t i = num_shards; i >= 1; --i) {
           code->insert_after(
               insts[2],

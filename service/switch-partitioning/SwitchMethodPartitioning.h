@@ -75,7 +75,7 @@ class SwitchMethodPartitioning final {
   const IRCode* get_code() const { return m_code; }
 
  private:
-  boost::optional<uint16_t> compute_prologue_blocks(
+  boost::optional<reg_t> compute_prologue_blocks(
       cfg::ControlFlowGraph* cfg,
       const constant_propagation::intraprocedural::FixpointIterator& fixpoint,
       bool verify_default_case);

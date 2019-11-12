@@ -165,7 +165,6 @@ std::vector<IRInstruction*> get_aput_insns(const TrackedValue& array) {
   return aput_insns;
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using TrackedDomain =
@@ -177,7 +176,7 @@ using EscapedArrayDomain =
  * For each register that holds a relevant value, keep track of it.
  **/
 using TrackedDomainEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, TrackedDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TrackedDomain>;
 
 class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
 
@@ -190,7 +189,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       IRInstruction* insn,
       TrackedDomainEnvironment* current_state) const override {
 
-    const auto set_current_state_at = [&](register_t reg, bool wide,
+    const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           TrackedDomain value) {
       current_state->set(reg, value);
       if (wide) {
@@ -468,7 +467,7 @@ void ReduceArrayLiterals::patch_new_array(
 
   // prepare for chunking, if needed
 
-  boost::optional<uint16_t> chunk_dest;
+  boost::optional<reg_t> chunk_dest;
   if (aput_insns.size() > m_max_filled_elements) {
     // we are going to chunk
     chunk_dest = m_cfg.allocate_temp();
@@ -499,7 +498,7 @@ void ReduceArrayLiterals::patch_new_array(
   // aput values. Note that we cannot share these registers across different
   // new-array optimizations, as they may have overlapping scopes. Most of these
   // temporary registers will get optimized away by later optimization passes.
-  std::vector<uint16_t> temp_regs;
+  std::vector<reg_t> temp_regs;
   for (size_t chunk_start = 0; chunk_start < aput_insns.size();) {
     auto chunk_size = patch_new_array_chunk(
         type, chunk_start, aput_insns, chunk_dest, overall_dest, &temp_regs);
@@ -511,9 +510,9 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
     DexType* type,
     size_t chunk_start,
     const std::vector<IRInstruction*>& aput_insns,
-    boost::optional<uint16_t> chunk_dest,
-    uint16_t overall_dest,
-    std::vector<uint16_t>* temp_regs) {
+    boost::optional<reg_t> chunk_dest,
+    reg_t overall_dest,
+    std::vector<reg_t>* temp_regs) {
 
   size_t chunk_size =
       std::min(aput_insns.size() - chunk_start, m_max_filled_elements);

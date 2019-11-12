@@ -180,7 +180,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     auto code = meth->get_code();
     if (const_vals.needs_stub()) {
       // Insert const load
-      std::vector<uint16_t> args;
+      std::vector<reg_t> args;
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }
@@ -192,13 +192,13 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       stub_methods.push_back(stub);
     } else {
       // Make const load
-      std::vector<uint16_t> const_regs;
+      std::vector<reg_t> const_regs;
       for (size_t i = 0; i < const_vals.size(); ++i) {
         const_regs.push_back(code->allocate_temp());
       }
       auto const_loads_and_invoke = const_vals.make_const_loads(const_regs);
       // Insert const load
-      std::vector<uint16_t> args;
+      std::vector<reg_t> args;
       for (size_t i = 0; i < insn->srcs_size(); i++) {
         args.push_back(insn->src(i));
       }

@@ -48,14 +48,14 @@ using LabelDefs = std::unordered_map<std::string, MethodItemEntry*>;
 using LabelRefs =
     std::unordered_map<const IRInstruction*, std::vector<std::string>>;
 
-uint16_t reg_from_str(const std::string& reg_str) {
+reg_t reg_from_str(const std::string& reg_str) {
   always_assert(reg_str.at(0) == 'v');
-  uint16_t reg;
-  sscanf(&reg_str.c_str()[1], "%hu", &reg);
+  reg_t reg;
+  sscanf(&reg_str.c_str()[1], "%u", &reg);
   return reg;
 }
 
-std::string reg_to_str(uint16_t reg) { return "v" + std::to_string(reg); }
+std::string reg_to_str(reg_t reg) { return "v" + std::to_string(reg); }
 
 s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   auto op = insn->opcode();
@@ -691,16 +691,15 @@ s_expr to_s_expr(const IRCode* code) {
   return s_expr(exprs);
 }
 
-static boost::optional<uint16_t> largest_reg_operand(
-    const IRInstruction* insn) {
-  boost::optional<uint16_t> max_reg;
+static boost::optional<reg_t> largest_reg_operand(const IRInstruction* insn) {
+  boost::optional<reg_t> max_reg;
   if (insn->has_dest()) {
     max_reg = insn->dest();
   }
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     // boost::none is the smallest element of the ordering.
     // It's smaller than any uint16_t.
-    max_reg = std::max(max_reg, boost::optional<uint16_t>(insn->src(i)));
+    max_reg = std::max(max_reg, boost::make_optional(insn->src(i)));
   }
   return max_reg;
 }
@@ -712,7 +711,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
   always_assert_log(insns_expr.size() > 0, "Empty instruction list?! %s");
   LabelDefs label_defs;
   LabelRefs label_refs;
-  boost::optional<uint16_t> max_reg;
+  boost::optional<reg_t> max_reg;
   std::unordered_map<std::string, DexPosition*> positions;
 
   // map from catch name to catch marker pointer

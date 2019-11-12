@@ -19,10 +19,10 @@
 
 namespace regalloc {
 
-using reg_t = uint16_t;
-using reg_pair_t = uint32_t;
+using vreg_t = uint16_t;
+using reg_pair_t = uint64_t;
 
-inline uint16_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
+inline vreg_t max_unsigned_value(bit_width_t bits) { return (1 << bits) - 1; }
 
 /*
  * Tracks which instructions that can be encoded in range form should take
@@ -68,7 +68,7 @@ class GraphBuilder;
 inline reg_pair_t build_containment_edge(reg_t u, reg_t v) {
   reg_pair_t hi = static_cast<reg_pair_t>(u);
   reg_pair_t lo = static_cast<reg_pair_t>(v);
-  return (hi << 16) | lo;
+  return (hi << (sizeof(reg_t) * 8)) | lo;
 }
 
 inline reg_pair_t build_edge(reg_t u, reg_t v) {
@@ -77,7 +77,7 @@ inline reg_pair_t build_edge(reg_t u, reg_t v) {
   if (u > v) {
     std::swap(hi, lo);
   }
-  return (hi << 16) | lo;
+  return (hi << (sizeof(reg_t) * 8)) | lo;
 }
 
 } // namespace impl
@@ -124,7 +124,7 @@ class Node {
    * different opcodes have different maximums, this ends up being a per-node
    * value instead of a global value.
    */
-  reg_t max_vreg() const { return m_max_vreg; }
+  vreg_t max_vreg() const { return m_max_vreg; }
 
   /*
    * The register allocator assumes that every live range has exactly one
@@ -150,7 +150,7 @@ class Node {
  private:
   uint32_t m_weight{0};
   uint32_t m_spill_cost{0};
-  reg_t m_max_vreg{max_unsigned_value(16)};
+  vreg_t m_max_vreg{max_unsigned_value(16)};
   // While the width is implicit in the register type, looking up the type to
   // determine the width is a little more expensive than storing the width
   // directly. Since the width() function is quite hot, it's worth optimizing.
@@ -250,9 +250,9 @@ size_t dest_bit_width(IRList::iterator it);
  * The largest valid register that we can map the symreg in insn->src(src_index)
  * to.
  */
-reg_t max_value_for_src(const IRInstruction* insn,
-                        size_t src_index,
-                        bool src_is_wide);
+vreg_t max_value_for_src(const IRInstruction* insn,
+                         size_t src_index,
+                         bool src_is_wide);
 
 namespace impl {
 
@@ -276,7 +276,7 @@ class GraphBuilder {
 
   // For unit tests
   static Graph create_empty() { return Graph(); }
-  static void make_node(Graph*, reg_t, RegisterType, reg_t max_vreg);
+  static void make_node(Graph*, reg_t, RegisterType, vreg_t max_vreg);
   static void add_edge(Graph*, reg_t, reg_t);
 };
 

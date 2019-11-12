@@ -495,7 +495,7 @@ std::ostream& operator<<(std::ostream& os, const Edge& e) {
 }
 
 ControlFlowGraph::ControlFlowGraph(IRList* ir,
-                                   uint16_t registers_size,
+                                   reg_t registers_size,
                                    bool editable)
     : m_registers_size(registers_size), m_editable(editable) {
   always_assert_log(ir->size() > 0, "IRList contains no instructions");
@@ -1026,13 +1026,13 @@ void ControlFlowGraph::sanity_check() const {
   }
 }
 
-uint16_t ControlFlowGraph::compute_registers_size() const {
-  uint16_t num_regs = 0;
+reg_t ControlFlowGraph::compute_registers_size() const {
+  reg_t num_regs = 0;
   for (const auto& mie : cfg::ConstInstructionIterable(*this)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
       // +1 because registers start at v0
-      uint16_t size_required = insn->dest() + insn->dest_is_wide() + 1;
+      reg_t size_required = insn->dest() + insn->dest_is_wide() + 1;
       num_regs = std::max(size_required, num_regs);
     }
   }

@@ -109,7 +109,6 @@ enum ValueIdFlags : value_id_t {
   BASE = ((value_id_t)1) << (TRACKED_LOCATION_BITS + 2),
 };
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // Marker opcode for values representing a source of an instruction; this is
@@ -161,7 +160,7 @@ using ValueIdDomain = sparta::ConstantAbstractDomain<value_id_t>;
 using DefEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<value_id_t, IRInstructionDomain>;
 using RefEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, ValueIdDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ValueIdDomain>;
 
 class CseEnvironment final
     : public sparta::ReducedProductAbstractDomain<CseEnvironment,
@@ -367,7 +366,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
   void analyze_instruction(IRInstruction* insn,
                            CseEnvironment* current_state) const override {
-    const auto set_current_state_at = [&](register_t reg, bool wide,
+    const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           ValueIdDomain value) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
         env->set(reg, value);
@@ -513,7 +512,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return value_id ? ValueIdDomain(*value_id) : ValueIdDomain::top();
   }
 
-  value_id_t get_pre_state_src_value_id(register_t reg,
+  value_id_t get_pre_state_src_value_id(reg_t reg,
                                         const IRInstruction* insn) const {
     auto value = get_pre_state_src_value(reg, insn);
     auto value_id = get_value_id(value);
@@ -595,8 +594,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     return boost::none;
   }
 
-  IRValue get_pre_state_src_value(register_t reg,
-                                  const IRInstruction* insn) const {
+  IRValue get_pre_state_src_value(reg_t reg, const IRInstruction* insn) const {
     IRValue value;
     value.opcode = IOPCODE_PRE_STATE_SRC;
     value.srcs.push_back(reg);
@@ -607,7 +605,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
   void init_pre_state(const IRInstruction* insn,
                       CseEnvironment* current_state) const {
     auto ref_env = current_state->get_ref_env();
-    std::unordered_map<uint32_t, value_id_t> new_pre_state_src_values;
+    std::unordered_map<reg_t, value_id_t> new_pre_state_src_values;
     for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
       if (!c) {
@@ -1271,7 +1269,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
 
   // gather relevant instructions, and allocate temp registers
 
-  std::unordered_map<IRInstruction*, std::pair<IROpcode, uint32_t>> temps;
+  std::unordered_map<IRInstruction*, std::pair<IROpcode, reg_t>> temps;
   std::unordered_set<IRInstruction*> insns;
   for (auto& f : m_forward) {
     IRInstruction* earlier_insn = f.earlier_insn;
@@ -1287,9 +1285,9 @@ bool CommonSubexpressionElimination::patch(bool is_static,
                       is_sput(earlier_insn->opcode()));
         m_stats.stores_captured++;
       }
-      uint32_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
-                              ? m_cfg.allocate_wide_temp()
-                              : m_cfg.allocate_temp();
+      reg_t temp_reg = move_opcode == OPCODE_MOVE_WIDE
+                           ? m_cfg.allocate_wide_temp()
+                           : m_cfg.allocate_temp();
       temps.emplace(earlier_insn, std::make_pair(move_opcode, temp_reg));
       insns.insert(earlier_insn);
     }
@@ -1315,7 +1313,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
     IRInstruction* earlier_insn = f.earlier_insn;
     auto& q = temps.at(earlier_insn);
     IROpcode move_opcode = q.first;
-    uint32_t temp_reg = q.second;
+    reg_t temp_reg = q.second;
     IRInstruction* insn = f.insn;
     auto& it = iterators.at(insn);
     IRInstruction* move_insn = new IRInstruction(move_opcode);
@@ -1344,7 +1342,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
   for (auto& r : temps) {
     IRInstruction* earlier_insn = r.first;
     IROpcode move_opcode = r.second.first;
-    uint32_t temp_reg = r.second.second;
+    reg_t temp_reg = r.second.second;
 
     auto& it = iterators.at(earlier_insn);
     IRInstruction* move_insn = new IRInstruction(move_opcode);

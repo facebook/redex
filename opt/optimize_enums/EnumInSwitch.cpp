@@ -31,8 +31,8 @@ boost::optional<Info> get_enum_reg(const Environment& env,
     // Only one of the registers should have the case key in it. Return that
     // one. If both registers do then return none.
     always_assert(insn->srcs_size() == 2);
-    uint16_t l_reg = insn->src(0);
-    uint16_t r_reg = insn->src(1);
+    reg_t l_reg = insn->src(0);
+    reg_t r_reg = insn->src(1);
     boost::optional<Info> left = env.get(l_reg).get_constant();
     boost::optional<Info> right = env.get(r_reg).get_constant();
     bool l_has = has_all_but_branch(left);

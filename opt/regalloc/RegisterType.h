@@ -14,7 +14,7 @@
 
 namespace regalloc {
 
-using reg_t = uint16_t;
+using vreg_t = uint16_t;
 
 /*
  * We need to figure out the type of a register in order to generate the
@@ -59,12 +59,12 @@ using RegisterTypeDomain = register_type_impl::Domain;
 
 RegisterType dest_reg_type(const IRInstruction*);
 
-RegisterType src_reg_type(const IRInstruction*, reg_t);
+RegisterType src_reg_type(const IRInstruction*, vreg_t);
 
 /*
  * Generate the right move instruction for a given type.
  */
-IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src);
+IRInstruction* gen_move(RegisterType type, vreg_t dest, vreg_t src);
 
 } // namespace regalloc
 

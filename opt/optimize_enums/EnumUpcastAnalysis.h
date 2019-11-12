@@ -28,13 +28,11 @@ bool is_enum_valueof(const DexMethodRef* method);
  */
 bool is_enum_values(const DexMethodRef* method);
 
-using Register = ir_analyzer::register_t;
-
 // Store possible types for a register although we only care about Object, Enum
 // and Enum's subtypes.
 using EnumTypes = sparta::PatriciaTreeSetAbstractDomain<DexType*>;
 using EnumTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<Register, EnumTypes>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, EnumTypes>;
 
 class EnumFixpointIterator final
     : public ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment> {

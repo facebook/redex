@@ -132,7 +132,7 @@ constexpr int INVALID_SCORE = std::numeric_limits<int>::max();
  * If :reg is mapped to something other than :vreg, then we'll need to insert a
  * move instruction to remap :reg.
  */
-bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
+bool needs_remap(const transform::RegMap& reg_map, reg_t reg, vreg_t vreg) {
   return reg_map.find(reg) != reg_map.end() && reg_map.at(reg) != vreg;
 }
 
@@ -143,7 +143,7 @@ bool needs_remap(const transform::RegMap& reg_map, reg_t reg, reg_t vreg) {
 int score_range_fit(
     const interference::Graph& ig,
     const std::vector<reg_t>& range_regs,
-    reg_t range_base,
+    vreg_t range_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int score{0};
@@ -169,16 +169,16 @@ int score_range_fit(
  * Searches between :range_base_start and :range_base_end, and returns the
  * range_base with the best score.
  */
-reg_t find_best_range_fit(
+vreg_t find_best_range_fit(
     const interference::Graph& ig,
     const std::vector<reg_t>& range_regs,
-    reg_t range_base_start,
-    reg_t range_base_end,
+    vreg_t range_base_start,
+    vreg_t range_base_end,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     const transform::RegMap& reg_map) {
   int min_score{INVALID_SCORE};
-  reg_t range_base = 0;
-  for (reg_t i = range_base_start; i <= range_base_end; ++i) {
+  vreg_t range_base = 0;
+  for (vreg_t i = range_base_start; i <= range_base_end; ++i) {
     auto score = score_range_fit(ig, range_regs, i, vreg_files, reg_map);
     if (score < min_score) {
       min_score = score;
@@ -199,7 +199,7 @@ reg_t find_best_range_fit(
 void fit_range_instruction(
     const interference::Graph& ig,
     const IRInstruction* insn,
-    reg_t range_base,
+    vreg_t range_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
@@ -229,7 +229,7 @@ void fit_range_instruction(
 void fit_params(
     const interference::Graph& ig,
     const boost::sub_range<IRList>& param_insns,
-    reg_t params_base,
+    vreg_t params_base,
     const std::unordered_map<reg_t, VirtualRegistersFile>& vreg_files,
     RegisterTransform* reg_transform,
     SpillPlan* spills) {
@@ -356,7 +356,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   Rank rank_map;
   Parent parent_map;
   RegisterAliasSets aliases((RankPMap(rank_map)), (ParentPMap(parent_map)));
-  for (size_t i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
     aliases.make_set(i);
   }
 
@@ -404,7 +404,7 @@ bool Allocator::coalesce(interference::Graph* ig, IRCode* code) {
   }
 
   transform::RegMap reg_map;
-  for (auto i = 0; i < code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < code->get_registers_size(); ++i) {
     reg_map.emplace(i, aliases.find_set(i));
   }
   transform::remap_registers(code, reg_map);
@@ -530,7 +530,7 @@ void Allocator::select(const IRCode* code,
                        std::stack<reg_t>* select_stack,
                        RegisterTransform* reg_transform,
                        SpillPlan* spill_plan) {
-  reg_t vregs_size = reg_transform->size;
+  vreg_t vregs_size = reg_transform->size;
   while (!select_stack->empty()) {
     auto reg = select_stack->top();
     select_stack->pop();
@@ -565,7 +565,7 @@ bool should_convert_to_range(const interference::Graph& ig,
   if (!opcode::has_range_form(insn->opcode())) {
     return false;
   }
-  constexpr reg_t NON_RANGE_MAX_VREG = 15;
+  constexpr vreg_t NON_RANGE_MAX_VREG = 15;
   bool has_wide{false};
   bool has_spill{false};
   std::unordered_set<reg_t> src_reg_set;
@@ -588,7 +588,7 @@ bool should_convert_to_range(const interference::Graph& ig,
   }
 
   auto& liveness = ig.get_liveness(insn);
-  reg_t low_regs_occupied{0};
+  vreg_t low_regs_occupied{0};
   for (auto reg : liveness.elements()) {
     auto& node = ig.get_node(reg);
     if (node.max_vreg() > NON_RANGE_MAX_VREG || src_reg_set.count(reg)) {
@@ -637,12 +637,9 @@ void Allocator::select_ranges(const IRCode* code,
       vreg_files.emplace(src, vreg_file);
     }
 
-    reg_t range_base = find_best_range_fit(ig,
-                                           insn->srcs(),
-                                           0,
-                                           reg_transform->size,
-                                           vreg_files,
-                                           reg_transform->map);
+    vreg_t range_base =
+        find_best_range_fit(ig, insn->srcs(), 0, reg_transform->size,
+                            vreg_files, reg_transform->map);
     fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
                           spill_plan);
   }
@@ -673,12 +670,9 @@ void Allocator::select_params(const DexMethod* method,
 
   auto min_param_reg =
       reg_transform->size < params_size ? 0 : reg_transform->size - params_size;
-  auto params_base = find_best_range_fit(ig,
-                                         param_regs,
-                                         min_param_reg,
-                                         reg_transform->size,
-                                         vreg_files,
-                                         reg_transform->map);
+  auto params_base =
+      find_best_range_fit(ig, param_regs, min_param_reg, reg_transform->size,
+                          vreg_files, reg_transform->map);
   fit_params(ig, param_insns, params_base, vreg_files, reg_transform,
              spill_plan);
 }
@@ -735,12 +729,12 @@ void Allocator::find_split(const interference::Graph& ig,
       ++spill_it;
       continue;
     }
-    reg_t best_vreg = 0;
+    vreg_t best_vreg = 0;
     bool split_found = false;
     bool split_around_name = false;
     // Find all the vregs assigned to reg's neighbors.
     // Key is vreg, value is a set of registers that are mapped to this vreg.
-    std::unordered_map<reg_t, std::unordered_set<reg_t>> mapped_neighbors;
+    std::unordered_map<vreg_t, std::unordered_set<vreg_t>> mapped_neighbors;
     auto& node = ig.get_node(reg);
     for (auto adj : node.adjacent()) {
       auto it = reg_map.find(adj);

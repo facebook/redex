@@ -437,7 +437,7 @@ class FinalInlineImpl {
   // breaking future instructions that rely on the value of the source
   // register.  Yes, this means we're N^2 in theory, but hopefully in
   // practice we don't approach that.
-  bool reg_reused(uint16_t reg,
+  bool reg_reused(reg_t reg,
                   const ir_list::InstructionIterator& it,
                   const ir_list::InstructionIterator& end) {
     for (auto jt = std::next(it, 2); jt != end; ++jt) {

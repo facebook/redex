@@ -296,7 +296,7 @@ void update_instance_of(
       // Replace INSTANCE_OF with INVOKE_STATIC to instance_of_meth.
       auto merger_type = mergeable_to_merger.at(type);
       auto instance_of_meth = merger_to_instance_of_meth.at(merger_type);
-      std::vector<uint16_t> args;
+      std::vector<reg_t> args;
       args.push_back(insn->src(0));
       args.push_back(type_tag_reg);
       auto invoke = method_reference::make_invoke(

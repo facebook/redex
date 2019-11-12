@@ -16,8 +16,6 @@
 
 namespace reaching_defs {
 
-using reg_t = ir_analyzer::register_t;
-
 class Domain final : public sparta::AbstractDomainReverseAdaptor<
                          sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>,
                          Domain> {

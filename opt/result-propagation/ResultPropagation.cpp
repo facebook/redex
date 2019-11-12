@@ -32,7 +32,7 @@ constexpr const char* METRIC_METHODS_WHICH_RETURN_PARAMETER_ITERATIONS =
     "num_methods_which_return_parameters_iterations";
 constexpr const ParamIndex WIDE_HIGH = 1 << 31;
 
-void patch_move_result_to_move(IRInstruction* move_result_inst, uint16_t reg) {
+void patch_move_result_to_move(IRInstruction* move_result_inst, reg_t reg) {
   const auto op = move_result_inst->opcode();
   move_result_inst->set_opcode(opcode::move_result_to_move(op));
   move_result_inst->set_srcs_size(1);
@@ -49,7 +49,6 @@ const DexType* get_param_type(bool is_static,
   return args[param_index];
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
@@ -59,10 +58,10 @@ using ParamDomain = sparta::ConstantAbstractDomain<ParamIndex>;
  * keeps track of the param index.
  **/
 using ParamDomainEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, ParamDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, ParamDomain>;
 
 // We use this special register to denote the value that is being returned.
-register_t RETURN_VALUE = RESULT_REGISTER - 1;
+reg_t RETURN_VALUE = RESULT_REGISTER - 1;
 
 bool isNotHigh(ParamDomain domain) {
   auto const constant = domain.get_constant();
@@ -98,7 +97,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
     // other registers should be accessed through the following two helper
     // functions to ensure that wide values are properly handled.
 
-    const auto get_current_state_at = [&](register_t reg, bool wide) {
+    const auto get_current_state_at = [&](reg_t reg, bool wide) {
       const auto low = current_state->get(reg);
       if (!wide) {
         return isNotHigh(low) ? low : ParamDomain::top();
@@ -108,7 +107,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
                                                        : ParamDomain::top();
     };
 
-    const auto set_current_state_at = [&](register_t reg, bool wide,
+    const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           ParamDomain value) {
       always_assert(isNotHigh(value));
       current_state->set(reg, value);

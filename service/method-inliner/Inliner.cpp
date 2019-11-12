@@ -1739,7 +1739,7 @@ std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
   auto reg_map = std::make_unique<RegMap>();
 
   // generate the callee register map
-  for (auto i = 0; i < callee_code->get_registers_size(); ++i) {
+  for (reg_t i = 0; i < callee_code->get_registers_size(); ++i) {
     reg_map->emplace(i, callee_reg_start + i);
   }
 
@@ -1803,7 +1803,7 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
 }
 
 void cleanup_callee_debug(IRCode* callee_code) {
-  std::unordered_set<uint16_t> valid_regs;
+  std::unordered_set<reg_t> valid_regs;
   auto it = callee_code->begin();
   while (it != callee_code->end()) {
     auto& mei = *it++;
@@ -1844,7 +1844,7 @@ class MethodSplicer {
   const RegMap& m_callee_reg_map;
   DexPosition* m_invoke_position;
   MethodItemEntry* m_active_catch;
-  std::unordered_set<uint16_t> m_valid_dbg_regs;
+  std::unordered_set<reg_t> m_valid_dbg_regs;
 
  public:
   MethodSplicer(IRCode* mtcaller,

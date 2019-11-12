@@ -11,6 +11,7 @@
 
 #include "DexClass.h"
 #include "DexStore.h"
+#include "IRInstruction.h"
 
 using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
 
@@ -47,11 +48,11 @@ struct NewCallee {
   }
 };
 
-IRInstruction* make_load_const(uint16_t dest, size_t val);
+IRInstruction* make_load_const(reg_t dest, size_t val);
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<uint16_t> args);
+                           std::vector<reg_t> args);
 
 /**
  * A callsite consists of a caller, a callee and the instruction.

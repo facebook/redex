@@ -274,7 +274,6 @@ sparta::AbstractValueKind AbstractObject::meet_with(
 
 namespace impl {
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 class AbstractObjectDomain final
@@ -300,10 +299,10 @@ using ClassObjectSourceDomain =
     sparta::ConstantAbstractDomain<ClassObjectSource>;
 
 using BasicAbstractObjectEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AbstractObjectDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AbstractObjectDomain>;
 
 using ClassObjectSourceEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, ClassObjectSourceDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, ClassObjectSourceDomain>;
 
 using HeapClassArrayEnvironment = PatriciaTreeMapAbstractEnvironment<
     AbstractHeapAddress,
@@ -322,26 +321,26 @@ class AbstractObjectEnvironment final
                  ClassObjectSourceEnvironment,
                  HeapClassArrayEnvironment>& /* product */) {}
 
-  const AbstractObjectDomain get_abstract_obj(register_t reg) const {
+  const AbstractObjectDomain get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
   }
 
-  void set_abstract_obj(register_t reg, const AbstractObjectDomain aobj) {
+  void set_abstract_obj(reg_t reg, const AbstractObjectDomain aobj) {
     apply<0>([=](auto env) { env->set(reg, aobj); }, true);
   }
 
   void update_abstract_obj(
-      register_t reg,
+      reg_t reg,
       const std::function<AbstractObjectDomain(const AbstractObjectDomain&)>&
           operation) {
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  const ClassObjectSourceDomain get_class_source(register_t reg) const {
+  const ClassObjectSourceDomain get_class_source(reg_t reg) const {
     return get<1>().get(reg);
   }
 
-  void set_class_source(register_t reg, const ClassObjectSourceDomain cls_src) {
+  void set_class_source(reg_t reg, const ClassObjectSourceDomain cls_src) {
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
@@ -813,7 +812,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
 
   DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
                                       IRInstruction* insn,
-                                      register_t reg) const {
+                                      reg_t reg) const {
     auto element_name =
         current_state->get_abstract_obj(insn->src(reg)).get_object();
     if (element_name && element_name->obj_kind == STRING) {
@@ -1067,9 +1066,9 @@ ReflectionAnalysis::ReflectionAnalysis(DexMethod* dex_method)
 }
 
 void ReflectionAnalysis::get_reflection_site(
-    const register_t reg,
+    const reg_t reg,
     IRInstruction* insn,
-    std::map<register_t, ReflectionAbstractObject>* abstract_objects) const {
+    std::map<reg_t, ReflectionAbstractObject>* abstract_objects) const {
   auto aobj = m_analyzer->get_abstract_object(reg, insn);
   if (!aobj) {
     return;
@@ -1106,7 +1105,7 @@ const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   auto reg_size = code->get_registers_size();
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
-    std::map<register_t, ReflectionAbstractObject> abstract_objects;
+    std::map<reg_t, ReflectionAbstractObject> abstract_objects;
     for (size_t i = 0; i < reg_size; i++) {
       get_reflection_site(i, insn, &abstract_objects);
     }

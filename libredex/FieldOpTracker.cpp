@@ -24,12 +24,11 @@ bool is_own_init(DexField* field, const DexMethod* method) {
          method->get_class() == field->get_class();
 }
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 using IsZeroDomain = sparta::ConstantAbstractDomain<bool>;
 using IsZeroEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<register_t, IsZeroDomain>;
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, IsZeroDomain>;
 
 class IsZeroAnalyzer final : public BaseIRAnalyzer<IsZeroEnvironment> {
 

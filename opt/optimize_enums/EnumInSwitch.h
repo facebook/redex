@@ -51,7 +51,7 @@ struct Info {
   boost::optional<cfg::InstructionIterator> invoke;
   boost::optional<cfg::InstructionIterator> aget;
   boost::optional<cfg::InstructionIterator> branch;
-  boost::optional<uint16_t> reg;
+  boost::optional<reg_t> reg;
 
   bool operator==(const Info& other) const {
     return array_field == other.array_field && invoke == other.invoke &&

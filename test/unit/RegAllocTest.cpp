@@ -723,7 +723,7 @@ TEST_F(RegAllocTest, Spill) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+  spill_plan.global_spills = std::unordered_map<reg_t, vreg_t>{
       {0, 16},
       {1, 16},
       {2, 256},
@@ -775,7 +775,7 @@ TEST_F(RegAllocTest, NoSpillSingleArgInvokes) {
 
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{
+  spill_plan.global_spills = std::unordered_map<reg_t, vreg_t>{
       {0, 16},
       {1, 0},
   };
@@ -875,14 +875,14 @@ TEST_F(RegAllocTest, FindSplit) {
   SplitCosts split_costs;
   SplitPlan split_plan;
   graph_coloring::SpillPlan spill_plan;
-  spill_plan.global_spills = std::unordered_map<reg_t, reg_t>{{1, 256}};
+  spill_plan.global_spills = std::unordered_map<reg_t, vreg_t>{{1, 256}};
   graph_coloring::RegisterTransform reg_transform;
   reg_transform.map = transform::RegMap{{0, 0}};
   graph_coloring::Allocator allocator;
   calc_split_costs(fixpoint_iter, code.get(), &split_costs);
   allocator.find_split(
       ig, split_costs, &reg_transform, &spill_plan, &split_plan);
-  EXPECT_EQ(split_plan.split_around.at(1), std::unordered_set<reg_t>{0});
+  EXPECT_EQ(split_plan.split_around.at(1), std::unordered_set<vreg_t>{0});
 }
 
 TEST_F(RegAllocTest, Split) {
@@ -912,8 +912,8 @@ TEST_F(RegAllocTest, Split) {
   graph_coloring::SpillPlan spill_plan;
   // split 0 around 1
   split_plan.split_around =
-      std::unordered_map<reg_t, std::unordered_set<reg_t>>{
-          {1, std::unordered_set<reg_t>{0}}};
+      std::unordered_map<vreg_t, std::unordered_set<vreg_t>>{
+          {1, std::unordered_set<vreg_t>{0}}};
   graph_coloring::Allocator allocator;
   allocator.spill(ig, spill_plan, range_set, code.get());
   split(fixpoint_iter, split_plan, split_costs, ig, code.get());

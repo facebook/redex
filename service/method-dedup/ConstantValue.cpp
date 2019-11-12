@@ -16,7 +16,7 @@ namespace {
 
 constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 
-std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
+std::vector<IRInstruction*> make_string_const(reg_t dest, std::string val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -33,7 +33,7 @@ std::vector<IRInstruction*> make_string_const(uint16_t dest, std::string val) {
 ConstantValue::ConstantValue(const TypeTags* type_tags,
                              const std::string kind_str,
                              const std::string val_str,
-                             const uint16_t param_reg)
+                             reg_t param_reg)
     : m_param_reg(param_reg) {
   if (kind_str == "I") {
     m_kind = ConstantKind::INT;
@@ -104,7 +104,7 @@ ConstantValue::collect_constant_loads_in(const IRCode* code) {
   return res;
 }
 
-std::vector<IRInstruction*> ConstantValue::make_load_const(uint16_t const_reg) {
+std::vector<IRInstruction*> ConstantValue::make_load_const(reg_t const_reg) {
   always_assert(is_valid());
 
   if (is_int_value()) {
@@ -194,7 +194,7 @@ ConstantValues::collect_constant_loads(const IRCode* code) {
 }
 
 std::vector<IRInstruction*> ConstantValues::make_const_loads(
-    std::vector<uint16_t>& const_regs) {
+    std::vector<reg_t>& const_regs) {
   always_assert(const_regs.size() == size());
   std::vector<IRInstruction*> res;
   size_t reg_idx = 0;

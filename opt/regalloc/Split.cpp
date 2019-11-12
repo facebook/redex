@@ -70,8 +70,8 @@ void calc_split_costs(const LivenessFixpointIterator& fixpoint_iter,
 
 IRInstruction* gen_load_for_split(
     const Graph& ig,
-    reg_t l,
-    std::unordered_map<reg_t, reg_t>* load_store_reg,
+    vreg_t l,
+    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
     IRCode* code) {
   auto load_reg_it = load_store_reg->find(l);
   if (load_reg_it == load_store_reg->end()) {
@@ -85,8 +85,8 @@ IRInstruction* gen_load_for_split(
 
 IRInstruction* gen_store_for_split(
     const Graph& ig,
-    reg_t l,
-    std::unordered_map<reg_t, reg_t>* load_store_reg,
+    vreg_t l,
+    std::unordered_map<vreg_t, vreg_t>* load_store_reg,
     IRCode* code) {
   auto store_reg_it = load_store_reg->find(l);
   if (store_reg_it == load_store_reg->end()) {
@@ -140,7 +140,7 @@ size_t split_for_block(const SplitPlan& split_plan,
                        const LivenessFixpointIterator& fixpoint_iter,
                        const Graph& ig,
                        cfg::Block* block,
-                       std::unordered_map<reg_t, reg_t>* load_store_reg,
+                       std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                        IRCode* code,
                        BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -240,7 +240,7 @@ size_t split_for_define(const SplitPlan& split_plan,
                         const IRInstruction* insn,
                         const LivenessDomain& live_out,
                         IRCode* code,
-                        std::unordered_map<reg_t, reg_t>* load_store_reg,
+                        std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                         IRList::iterator it) {
   size_t split_move = 0;
   if (insn->has_dest()) {
@@ -288,7 +288,7 @@ size_t split_for_last_use(const SplitPlan& split_plan,
                           const LivenessDomain& live_out,
                           cfg::Block* block,
                           IRCode* code,
-                          std::unordered_map<reg_t, reg_t>* load_store_reg,
+                          std::unordered_map<vreg_t, vreg_t>* load_store_reg,
                           IRList::reverse_iterator& it,
                           BlockLoadInfo* block_load_info) {
   size_t split_move = 0;
@@ -441,7 +441,7 @@ size_t split(const LivenessFixpointIterator& fixpoint_iter,
              IRCode* code) {
   // Keep track of which reg is stored or loaded to which temp
   // so that we can get the right reg loaded or stored.
-  std::unordered_map<reg_t, reg_t> load_store_reg;
+  std::unordered_map<vreg_t, vreg_t> load_store_reg;
   BlockLoadInfo block_load_info;
   size_t split_move = 0;
   auto& cfg = code->cfg();

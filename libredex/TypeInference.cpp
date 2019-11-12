@@ -95,28 +95,28 @@ TypeLattice type_lattice(
      {LONG2, SCALAR2},  {DOUBLE2, SCALAR2}, {REFERENCE, TOP},
      {SCALAR, TOP},     {SCALAR1, TOP},     {SCALAR2, TOP}});
 
-void set_type(TypeEnvironment* state, register_t reg, const TypeDomain& type) {
+void set_type(TypeEnvironment* state, reg_t reg, const TypeDomain& type) {
   state->set_type(reg, type);
 }
 
-void set_integer(TypeEnvironment* state, register_t reg) {
+void set_integer(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(INT));
 }
 
-void set_float(TypeEnvironment* state, register_t reg) {
+void set_float(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(FLOAT));
 }
 
-void set_scalar(TypeEnvironment* state, register_t reg) {
+void set_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR));
 }
 
-void set_reference(TypeEnvironment* state, register_t reg) {
+void set_reference(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(REFERENCE));
 }
 
 void set_reference(TypeEnvironment* state,
-                   register_t reg,
+                   reg_t reg,
                    const boost::optional<const DexType*>& dex_type_opt) {
   state->set_type(reg, TypeDomain(REFERENCE));
   const DexTypeDomain dex_type =
@@ -124,17 +124,17 @@ void set_reference(TypeEnvironment* state,
   state->set_concrete_type(reg, dex_type);
 }
 
-void set_long(TypeEnvironment* state, register_t reg) {
+void set_long(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(LONG1));
   state->set_type(reg + 1, TypeDomain(LONG2));
 }
 
-void set_double(TypeEnvironment* state, register_t reg) {
+void set_double(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(DOUBLE1));
   state->set_type(reg + 1, TypeDomain(DOUBLE2));
 }
 
-void set_wide_scalar(TypeEnvironment* state, register_t reg) {
+void set_wide_scalar(TypeEnvironment* state, reg_t reg) {
   state->set_type(reg, TypeDomain(SCALAR1));
   state->set_type(reg + 1, TypeDomain(SCALAR2));
 }
@@ -142,7 +142,7 @@ void set_wide_scalar(TypeEnvironment* state, register_t reg) {
 // This is used for the operand of a comparison operation with zero. The
 // complexity here is that this operation may be performed on either an
 // integer or a reference.
-void refine_comparable_with_zero(TypeEnvironment* state, register_t reg) {
+void refine_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -165,9 +165,7 @@ void refine_comparable_with_zero(TypeEnvironment* state, register_t reg) {
 // This is used for the operands of a comparison operation between two
 // registers. The complexity here is that this operation may be performed on
 // either two integers or two references.
-void refine_comparable(TypeEnvironment* state,
-                       register_t reg1,
-                       register_t reg2) {
+void refine_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -206,7 +204,7 @@ TypeDomain TypeInference::refine_type(const TypeDomain& type,
 }
 
 void TypeInference::refine_type(TypeEnvironment* state,
-                                register_t reg,
+                                reg_t reg,
                                 IRType expected) const {
   state->update_type(reg, [this, expected](const TypeDomain& type) {
     return refine_type(type, expected, /* const_type */ CONST,
@@ -215,7 +213,7 @@ void TypeInference::refine_type(TypeEnvironment* state,
 }
 
 void TypeInference::refine_wide_type(TypeEnvironment* state,
-                                     register_t reg,
+                                     reg_t reg,
                                      IRType expected1,
                                      IRType expected2) const {
   state->update_type(reg, [this, expected1](const TypeDomain& type) {
@@ -232,41 +230,37 @@ void TypeInference::refine_wide_type(TypeEnvironment* state,
   });
 }
 
-void TypeInference::refine_reference(TypeEnvironment* state,
-                                     register_t reg) const {
+void TypeInference::refine_reference(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ REFERENCE);
 }
 
-void TypeInference::refine_scalar(TypeEnvironment* state,
-                                  register_t reg) const {
+void TypeInference::refine_scalar(TypeEnvironment* state, reg_t reg) const {
   refine_type(state,
               reg,
               /* expected */ SCALAR);
 }
 
-void TypeInference::refine_integer(TypeEnvironment* state,
-                                   register_t reg) const {
+void TypeInference::refine_integer(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ INT);
 }
 
-void TypeInference::refine_float(TypeEnvironment* state, register_t reg) const {
+void TypeInference::refine_float(TypeEnvironment* state, reg_t reg) const {
   refine_type(state, reg, /* expected */ FLOAT);
 }
 
 void TypeInference::refine_wide_scalar(TypeEnvironment* state,
-                                       register_t reg) const {
+                                       reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ SCALAR1,
                    /* expected2 */ SCALAR2);
 }
 
-void TypeInference::refine_long(TypeEnvironment* state, register_t reg) const {
+void TypeInference::refine_long(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
 }
 
-void TypeInference::refine_double(TypeEnvironment* state,
-                                  register_t reg) const {
+void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
   refine_wide_type(state, reg, /* expected1 */ DOUBLE1,
                    /* expected2 */ DOUBLE2);
 }

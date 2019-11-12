@@ -34,8 +34,6 @@
 
 namespace local_pointers {
 
-using reg_t = ir_analyzer::register_t;
-
 using PointerSet = sparta::PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
 using PointerEnvironment =

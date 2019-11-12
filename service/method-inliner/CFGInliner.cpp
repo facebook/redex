@@ -69,7 +69,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   move_return_reg(&callee,
                   move_res.is_end()
                       ? boost::none
-                      : boost::optional<uint16_t>{move_res->insn->dest()});
+                      : boost::optional<reg_t>{move_res->insn->dest()});
 
   TRACE(CFG, 3, "callee after remap %s", SHOW(callee));
 
@@ -124,10 +124,10 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
  * Change the register numbers to not overlap with caller.
  */
 void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
-                                 uint16_t caller_regs_size) {
+                                 reg_t caller_regs_size) {
   for (auto& mie : cfg::InstructionIterable(*callee)) {
     auto insn = mie.insn;
-    for (uint16_t i = 0; i < insn->srcs_size(); ++i) {
+    for (size_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + caller_regs_size);
     }
     if (insn->has_dest()) {
@@ -200,7 +200,7 @@ void CFGInliner::move_arg_regs(cfg::ControlFlowGraph* callee,
                                const IRInstruction* invoke) {
   auto param_insns = callee->get_param_instructions();
 
-  uint16_t i = 0;
+  size_t i = 0;
   for (auto& mie : ir_list::InstructionIterable(param_insns)) {
     IRInstruction* load = mie.insn;
     IRInstruction* move =
@@ -220,7 +220,7 @@ void CFGInliner::move_arg_regs(cfg::ControlFlowGraph* callee,
  * Convert returns to moves.
  */
 void CFGInliner::move_return_reg(cfg::ControlFlowGraph* callee,
-                                 const boost::optional<uint16_t>& ret_reg) {
+                                 const boost::optional<reg_t>& ret_reg) {
   std::vector<cfg::InstructionIterator> to_delete;
   auto iterable = cfg::InstructionIterable(*callee);
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {

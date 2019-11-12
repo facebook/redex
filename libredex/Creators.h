@@ -69,10 +69,10 @@ struct Location {
   }
 
  private:
-  Location(DexType* t, int pos) : type(t), reg(pos) {}
+  Location(DexType* t, reg_t pos) : type(t), reg(pos) {}
 
   DexType* type;
-  uint16_t reg;
+  reg_t reg;
 
   friend struct MethodBlock;
   friend struct MethodCreator;
@@ -456,7 +456,7 @@ struct MethodCreator {
 
   void load_locals(DexMethod* meth);
 
-  Location make_local_at(DexType* type, int i) {
+  Location make_local_at(DexType* type, reg_t i) {
     always_assert(i < meth_code->get_registers_size());
     Location local{type, i};
     locals.push_back(std::move(local));

@@ -18,8 +18,6 @@ namespace ptrs = local_pointers;
 
 namespace {
 
-using reg_t = uint32_t;
-
 using ParamInstructionMap =
     std::unordered_map<const IRInstruction*, param_idx_t>;
 

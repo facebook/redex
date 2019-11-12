@@ -36,5 +36,5 @@ class ReduceGotosPass : public Pass {
   static void process_code_ifs(cfg::ControlFlowGraph&, Stats&);
 
  private:
-  static void shift_registers(cfg::ControlFlowGraph* cfg, uint16_t* reg);
+  static void shift_registers(cfg::ControlFlowGraph* cfg, uint32_t* reg);
 };

@@ -18,15 +18,13 @@ namespace optimize_enums {
 
 namespace impl {
 
-using register_t = ir_analyzer::register_t;
-
 using DexFieldConstantDomain = ConstantAbstractDomain<DexField*>;
 
 /**
  * For each register keep track of the field it holds.
  */
 using DexFieldConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, DexFieldConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, DexFieldConstantDomain>;
 
 namespace {
 
@@ -183,7 +181,7 @@ using UInt32ConstantDomain = ConstantAbstractDomain<uint32_t>;
  * For each register keep track of the literal it holds.
  */
 using UInt32ConstantEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, UInt32ConstantDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, UInt32ConstantDomain>;
 
 namespace {
 

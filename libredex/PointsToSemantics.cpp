@@ -723,7 +723,6 @@ namespace pts_impl {
 
 using namespace std::placeholders;
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // We represent an anchor by a pointer to the corresponding instruction. An
@@ -731,7 +730,7 @@ using namespace ir_analyzer;
 using AnchorDomain = PatriciaTreeSetAbstractDomain<IRInstruction*>;
 
 using AnchorEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AnchorDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AnchorDomain>;
 
 class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
  public:

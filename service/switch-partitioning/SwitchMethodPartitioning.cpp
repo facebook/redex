@@ -20,14 +20,14 @@ namespace {
  * The "determining" register is the one that holds the value that decides which
  * case block we go to.
  */
-uint16_t find_determining_reg(
+reg_t find_determining_reg(
     cfg::Block* b, const cp::intraprocedural::FixpointIterator& fixpoint) {
   auto last_it = b->get_last_insn();
   always_assert_log(last_it != b->end(), "non-leaf nodes should not be empty");
   auto last = last_it->insn;
   always_assert_log(is_branch(last->opcode()), "%s is not a branch instruction",
                     SHOW(last));
-  boost::optional<uint16_t> candidate_reg;
+  boost::optional<reg_t> candidate_reg;
   auto srcs_size = last->srcs_size();
   if (srcs_size == 1) {
     // SWITCH_* or IF_*Z
@@ -43,9 +43,9 @@ uint16_t find_determining_reg(
     //   IF_EQ v0 v1
     // this method should return 1
     const auto& env = fixpoint.get_exit_state_at(b);
-    uint16_t left_reg = last->src(0);
-    uint16_t right_reg = last->src(1);
-    const auto& is_known = [&env](uint16_t reg) -> bool {
+    reg_t left_reg = last->src(0);
+    reg_t right_reg = last->src(1);
+    const auto& is_known = [&env](reg_t reg) -> bool {
       const auto& domain = env.get<SignedConstantDomain>(reg);
       if (domain.is_top()) {
         return false;
@@ -80,7 +80,7 @@ uint16_t find_determining_reg(
  * Fill `m_prologue_blocks` and return the register that we're "switching" on
  * (even if it's not a real switch statement)
  */
-boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
+boost::optional<reg_t> SwitchMethodPartitioning::compute_prologue_blocks(
     cfg::ControlFlowGraph* cfg,
     const cp::intraprocedural::FixpointIterator& fixpoint,
     bool verify_default_case) {
@@ -136,7 +136,7 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
   //
   // Traverse the tree in starting at the end of the linear chain of prologue
   // blocks and stopping before we reach a leaf.
-  boost::optional<uint16_t> determining_reg = boost::none;
+  boost::optional<reg_t> determining_reg = boost::none;
   std::queue<cfg::Block*> to_visit;
   to_visit.push(m_prologue_blocks.back());
   while (!to_visit.empty()) {
@@ -166,7 +166,7 @@ boost::optional<uint16_t> SwitchMethodPartitioning::compute_prologue_blocks(
       }
 
       // Make sure all blocks agree on which register is the determiner
-      uint16_t candidate_reg = ::find_determining_reg(b, fixpoint);
+      reg_t candidate_reg = ::find_determining_reg(b, fixpoint);
       if (determining_reg == boost::none) {
         determining_reg = candidate_reg;
       } else {

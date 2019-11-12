@@ -17,7 +17,7 @@ namespace {
 
 // Return true if this block is a leaf.
 // Any block that is not part of the if/switch tree is considered a leaf.
-bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, uint16_t reg) {
+bool is_leaf(cfg::ControlFlowGraph* cfg, cfg::Block* b, reg_t reg) {
 
   // non-leaf nodes only have GOTO and BRANCH outgoing edges
   if (cfg->get_succ_edge_if(b, [](const cfg::Edge* e) {
@@ -65,7 +65,7 @@ bool equals(const SwitchEquivFinder::InstructionSet& a,
     return false;
   }
   const auto& has_equivalent =
-      [&b](const std::pair<uint16_t, IRInstruction*>& it) {
+      [&b](const std::pair<reg_t, IRInstruction*>& it) {
         const auto& search = b.find(it.first);
         if (search != b.end()) {
           bool just_one_null =
@@ -94,7 +94,7 @@ bool equals(const SwitchEquivFinder::InstructionSet& a,
 namespace cp = constant_propagation;
 
 // Return true if any of the sources of `insn` are `reg`.
-bool SwitchEquivFinder::has_src(IRInstruction* insn, uint16_t reg) {
+bool SwitchEquivFinder::has_src(IRInstruction* insn, reg_t reg) {
   for (size_t i = 0; i < insn->srcs_size(); ++i) {
     if (insn->src(i) == reg) {
       return true;
@@ -106,7 +106,7 @@ bool SwitchEquivFinder::has_src(IRInstruction* insn, uint16_t reg) {
 SwitchEquivFinder::SwitchEquivFinder(
     cfg::ControlFlowGraph* cfg,
     const cfg::InstructionIterator& root_branch,
-    uint16_t switching_reg,
+    reg_t switching_reg,
     uint32_t leaf_duplication_threshold)
     : m_cfg(cfg),
       m_root_branch(root_branch),

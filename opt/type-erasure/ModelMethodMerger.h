@@ -82,10 +82,10 @@ class ModelMethodMerger {
                                                  DexMethod* ctor);
   static void inline_dispatch_entries(DexMethod* dispatch);
   static void sink_common_ctor_to_return_block(DexMethod* dispatch);
-  static std::vector<IRInstruction*> make_string_const(uint16_t dest,
+  static std::vector<IRInstruction*> make_string_const(reg_t dest,
                                                        std::string val);
   static std::vector<IRInstruction*> make_check_cast(DexType* type,
-                                                     uint16_t src_dest);
+                                                     reg_t src_dest);
 
   TypeToMethodMap get_method_dedup_map() { return m_method_dedup_map; }
 

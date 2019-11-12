@@ -12,7 +12,7 @@
 
 namespace method_reference {
 
-IRInstruction* make_load_const(uint16_t dest, size_t val) {
+IRInstruction* make_load_const(reg_t dest, size_t val) {
   auto load = new IRInstruction(OPCODE_CONST);
   load->set_dest(dest);
   load->set_literal(static_cast<int32_t>(val));
@@ -21,7 +21,7 @@ IRInstruction* make_load_const(uint16_t dest, size_t val) {
 
 IRInstruction* make_invoke(DexMethod* callee,
                            IROpcode opcode,
-                           std::vector<uint16_t> args) {
+                           std::vector<reg_t> args) {
   always_assert(callee->is_def() && is_public(callee));
   auto invoke = (new IRInstruction(opcode))->set_method(callee);
   invoke->set_srcs_size(args.size());

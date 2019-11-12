@@ -332,7 +332,7 @@ void ModelMethodMerger::fix_visibility() {
 }
 
 std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
-    uint16_t dest, std::string val) {
+    reg_t dest, std::string val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -344,8 +344,8 @@ std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
   return res;
 }
 
-std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(
-    DexType* type, uint16_t src_dest) {
+std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
+                                                               reg_t src_dest) {
   auto check_cast = new IRInstruction(OPCODE_CHECK_CAST);
   check_cast->set_type(type)->set_src(0, src_dest);
   auto move_result_pseudo =
@@ -482,7 +482,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   //                                       INVOKE_DIRECT v7, v8
   //
   // Redundent moves should be cleaned up by opt passes like copy propagation.
-  std::vector<uint16_t> new_srcs;
+  std::vector<reg_t> new_srcs;
   auto param_insns =
       InstructionIterable(common_ctor->get_code()->get_param_instructions());
   auto param_it = param_insns.begin(), param_end = param_insns.end();

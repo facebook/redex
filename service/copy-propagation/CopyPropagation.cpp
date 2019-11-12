@@ -446,7 +446,7 @@ Stats CopyPropagation::run(IRCode* code, DexMethod* method) {
   // which instructions are in this category is by temporarily denormalizing
   // the registers.
   std::unordered_set<const IRInstruction*> range_set;
-  uint16_t max_dest = 0;
+  reg_t max_dest = 0;
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (opcode::has_range_form(insn->opcode())) {

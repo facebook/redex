@@ -19,8 +19,6 @@
 
 using namespace stringbuilder_outliner;
 
-using reg_t = uint32_t;
-
 constexpr auto RESULT_REGISTER = ir_analyzer::RESULT_REGISTER;
 
 FixpointIterator::FixpointIterator(const cfg::ControlFlowGraph& cfg)

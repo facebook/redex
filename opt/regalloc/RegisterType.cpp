@@ -60,7 +60,7 @@ static IROpcode move_op_for_type(RegisterType type) {
   not_reached();
 }
 
-IRInstruction* gen_move(RegisterType type, reg_t dest, reg_t src) {
+IRInstruction* gen_move(RegisterType type, vreg_t dest, vreg_t src) {
   auto insn = new IRInstruction(move_op_for_type(type));
   insn->set_dest(dest);
   insn->set_src(0, src);
@@ -322,7 +322,7 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   }
 }
 
-static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
+static RegisterType invoke_src_type(const IRInstruction* insn, vreg_t i) {
   auto* method = insn->get_method();
   // non-static invokes have an implicit `this` arg that is not reflected in
   // the method proto.
@@ -347,7 +347,7 @@ static RegisterType invoke_src_type(const IRInstruction* insn, reg_t i) {
   }
 }
 
-RegisterType src_reg_type(const IRInstruction* insn, reg_t i) {
+RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   auto op = insn->opcode();
   switch (op) {
   case OPCODE_NOP:

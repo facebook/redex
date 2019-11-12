@@ -22,14 +22,14 @@
 class SwitchEquivFinder final {
  public:
   using KeyToCase = std::map<boost::optional<int32_t>, cfg::Block*>;
-  using InstructionSet = std::map<uint16_t, IRInstruction*>;
+  using InstructionSet = std::map<reg_t, IRInstruction*>;
   using ExtraLoads = std::unordered_map<cfg::Block*, InstructionSet>;
 
-  static bool has_src(IRInstruction* insn, uint16_t reg);
+  static bool has_src(IRInstruction* insn, reg_t reg);
 
   SwitchEquivFinder(cfg::ControlFlowGraph* cfg,
                     const cfg::InstructionIterator& root_branch,
-                    uint16_t switching_reg,
+                    reg_t switching_reg,
                     uint32_t leaf_duplication_threshold = 0);
 
   SwitchEquivFinder() = delete;
@@ -57,7 +57,7 @@ class SwitchEquivFinder final {
   const cfg::InstructionIterator& m_root_branch;
   // The register that holds the value that we're "switching" on, even if this
   // is an if-else chain and not a switch statement
-  uint16_t m_switching_reg;
+  reg_t m_switching_reg;
   // When D8 converts a switch statement into an if-else chain (and constant
   // loads are lifted), then a case block may be deduplicated. The deduplicated
   // case block can have multiple incoming edges with different program states

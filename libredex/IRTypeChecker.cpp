@@ -16,7 +16,6 @@ using namespace type_inference;
 
 namespace {
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // We abort the type checking process at the first error encountered.
@@ -26,7 +25,7 @@ class TypeCheckingException final : public std::runtime_error {
       : std::runtime_error(what_arg) {}
 };
 
-std::ostringstream& print_register(std::ostringstream& out, register_t reg) {
+std::ostringstream& print_register(std::ostringstream& out, reg_t reg) {
   if (reg == RESULT_REGISTER) {
     out << "result";
   } else {
@@ -35,7 +34,7 @@ std::ostringstream& print_register(std::ostringstream& out, register_t reg) {
   return out;
 }
 
-void check_type_match(register_t reg, IRType actual, IRType expected) {
+void check_type_match(reg_t reg, IRType actual, IRType expected) {
   if (actual == BOTTOM) {
     // There's nothing to do for unreachable code.
     return;
@@ -53,7 +52,7 @@ void check_type_match(register_t reg, IRType actual, IRType expected) {
   }
 }
 
-void check_wide_type_match(register_t reg,
+void check_wide_type_match(reg_t reg,
                            IRType actual1,
                            IRType actual2,
                            IRType expected1,
@@ -79,7 +78,7 @@ void check_wide_type_match(register_t reg,
 }
 
 void assume_type(TypeEnvironment* state,
-                 register_t reg,
+                 reg_t reg,
                  IRType expected,
                  bool ignore_top = false) {
   if (state->is_bottom()) {
@@ -94,7 +93,7 @@ void assume_type(TypeEnvironment* state,
 }
 
 void assume_wide_type(TypeEnvironment* state,
-                      register_t reg,
+                      reg_t reg,
                       IRType expected1,
                       IRType expected2) {
   if (state->is_bottom()) {
@@ -113,7 +112,7 @@ void assume_wide_type(TypeEnvironment* state,
 // This is used for the operand of a comparison operation with zero. The
 // complexity here is that this operation may be performed on either an
 // integer or a reference.
-void assume_comparable_with_zero(TypeEnvironment* state, register_t reg) {
+void assume_comparable_with_zero(TypeEnvironment* state, reg_t reg) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -137,9 +136,7 @@ void assume_comparable_with_zero(TypeEnvironment* state, register_t reg) {
 // This is used for the operands of a comparison operation between two
 // registers. The complexity here is that this operation may be performed on
 // either two integers or two references.
-void assume_comparable(TypeEnvironment* state,
-                       register_t reg1,
-                       register_t reg2) {
+void assume_comparable(TypeEnvironment* state, reg_t reg1, reg_t reg2) {
   if (state->is_bottom()) {
     // There's nothing to do for unreachable code.
     return;
@@ -163,24 +160,24 @@ void assume_comparable(TypeEnvironment* state,
   }
 }
 
-void assume_integer(TypeEnvironment* state, register_t reg) {
+void assume_integer(TypeEnvironment* state, reg_t reg) {
   assume_type(state, reg, /* expected */ INT);
 }
 
-void assume_float(TypeEnvironment* state, register_t reg) {
+void assume_float(TypeEnvironment* state, reg_t reg) {
   assume_type(state, reg, /* expected */ FLOAT);
 }
 
-void assume_long(TypeEnvironment* state, register_t reg) {
+void assume_long(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(state, reg, /* expected1 */ LONG1, /* expected2 */ LONG2);
 }
 
-void assume_double(TypeEnvironment* state, register_t reg) {
+void assume_double(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(
       state, reg, /* expected1 */ DOUBLE1, /* expected2 */ DOUBLE2);
 }
 
-void assume_wide_scalar(TypeEnvironment* state, register_t reg) {
+void assume_wide_scalar(TypeEnvironment* state, reg_t reg) {
   assume_wide_type(
       state, reg, /* expected1 */ SCALAR1, /* expected2 */ SCALAR2);
 }
@@ -357,7 +354,7 @@ void IRTypeChecker::run() {
 }
 
 void IRTypeChecker::assume_scalar(TypeEnvironment* state,
-                                  register_t reg,
+                                  reg_t reg,
                                   bool in_move) const {
   assume_type(state,
               reg,
@@ -366,7 +363,7 @@ void IRTypeChecker::assume_scalar(TypeEnvironment* state,
 }
 
 void IRTypeChecker::assume_reference(TypeEnvironment* state,
-                                     register_t reg,
+                                     reg_t reg,
                                      bool in_move) const {
   assume_type(state,
               reg,
@@ -888,7 +885,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
 }
 
-IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
+IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
@@ -901,7 +898,7 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, uint16_t reg) const {
 }
 
 const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
-                                           uint16_t reg) const {
+                                           reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);

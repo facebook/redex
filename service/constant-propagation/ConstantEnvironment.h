@@ -27,8 +27,6 @@
  *   - Constant primitive values stored in fields
  */
 
-using reg_t = uint32_t;
-
 constexpr reg_t RESULT_REGISTER = std::numeric_limits<reg_t>::max();
 
 /*****************************************************************************

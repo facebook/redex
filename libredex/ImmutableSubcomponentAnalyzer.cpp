@@ -144,26 +144,25 @@ class AbstractAccessPathDomain final
 
 using namespace std::placeholders;
 
-using register_t = ir_analyzer::register_t;
 using namespace ir_analyzer;
 
 // Used for new-instance handling. Shouldn't collide with anything.
-register_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
+reg_t UNKNOWN_REGISTER = RESULT_REGISTER - 1;
 
 using AbstractAccessPathEnvironment =
-    PatriciaTreeMapAbstractEnvironment<register_t, AbstractAccessPathDomain>;
+    PatriciaTreeMapAbstractEnvironment<reg_t, AbstractAccessPathDomain>;
 
 class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
  public:
   Analyzer(const cfg::ControlFlowGraph& cfg,
            std::function<bool(DexMethodRef*)> is_immutable_getter,
-           const std::unordered_set<uint16_t> allowed_locals)
+           const std::unordered_set<reg_t> allowed_locals)
       : BaseIRAnalyzer<AbstractAccessPathEnvironment>(cfg),
         m_cfg(cfg),
         m_is_immutable_getter(is_immutable_getter),
         m_allowed_locals(allowed_locals) {}
 
-  bool is_local_analyzable(uint16_t reg) const {
+  bool is_local_analyzable(reg_t reg) const {
     return m_allowed_locals.count(reg) > 0;
   }
 
@@ -369,7 +368,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
   std::function<bool(DexMethodRef*)> m_is_immutable_getter;
   std::unordered_map<IRInstruction*, AbstractAccessPathEnvironment>
       m_environments;
-  const std::unordered_set<uint16_t> m_allowed_locals;
+  const std::unordered_set<reg_t> m_allowed_locals;
 };
 
 } // namespace isa_impl
@@ -380,8 +379,8 @@ ImmutableSubcomponentAnalyzer::~ImmutableSubcomponentAnalyzer() {}
 // analysis. For example, a register that is a dest exactly once can be
 // considered an AccessPath, much like param registers (this should not break
 // existing AccessPath comparison/equality checks).
-std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
-  std::unordered_map<uint16_t, size_t> dest_freq;
+std::unordered_set<reg_t> compute_unambiguous_registers(IRCode* code) {
+  std::unordered_map<reg_t, size_t> dest_freq;
   for (const auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
     if (insn->has_dest()) {
@@ -389,7 +388,7 @@ std::unordered_set<uint16_t> compute_unambiguous_registers(IRCode* code) {
       dest_freq[dest] = dest_freq[dest] + 1;
     }
   }
-  std::unordered_set<uint16_t> unambiguous;
+  std::unordered_set<reg_t> unambiguous;
   for (const auto& pair : dest_freq) {
     if (pair.second == 1) {
       unambiguous.emplace(pair.first);
@@ -408,8 +407,7 @@ ImmutableSubcomponentAnalyzer::ImmutableSubcomponentAnalyzer(
   code->build_cfg(/* editable */ false);
   cfg::ControlFlowGraph& cfg = code->cfg();
   cfg.calculate_exit_block();
-  std::unordered_set<uint16_t> unambiguous =
-      compute_unambiguous_registers(code);
+  std::unordered_set<reg_t> unambiguous = compute_unambiguous_registers(code);
   m_analyzer = std::make_unique<isa_impl::Analyzer>(
       cfg, is_immutable_getter, unambiguous);
 

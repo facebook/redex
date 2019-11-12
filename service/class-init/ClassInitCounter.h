@@ -60,14 +60,14 @@ enum SourceStatus {
 
 // Todo: switch to a pair of register and instruction
 struct FieldSet {
-  std::map<register_t, std::set<IRInstruction*>> regs;
+  std::map<reg_t, std::set<IRInstruction*>> regs;
   FlowStatus set;
   SourceStatus source;
 };
 
 struct MethodCall {
   FlowStatus call;
-  std::set<std::pair<IRInstruction*, register_t>> call_sites;
+  std::set<std::pair<IRInstruction*, reg_t>> call_sites;
 };
 
 /*
@@ -94,7 +94,7 @@ typedef std::map<IRInstruction*, FlowStatus> ArrayWriteMap;
 // Tracks a field write either to or using a tracked value
 class FieldWriteRegs final {
  public:
-  void add_field(DexFieldRef* field, register_t reg, IRInstruction* instr);
+  void add_field(DexFieldRef* field, reg_t reg, IRInstruction* instr);
   const FieldMap& get_fields() const { return m_fields; }
 
   bool consistent_with(const FieldWriteRegs& other);
@@ -122,7 +122,7 @@ class FieldReads final {
 // Tracks the method calls made on/with a tracked object
 class MethodCalls final {
  public:
-  void add_call(DexMethodRef* method, register_t in_reg, IRInstruction* instr);
+  void add_call(DexMethodRef* method, reg_t in_reg, IRInstruction* instr);
   bool consistent_with(const MethodCalls& other);
   void combine_paths(const MethodCalls& other);
   void merge(const MethodCalls& other);
@@ -138,13 +138,9 @@ class Escapes final {
  public:
   void add_return(IRInstruction* instr);
   void add_array(IRInstruction* instr);
-  void add_field_set(DexFieldRef* field, register_t reg, IRInstruction* instr);
-  void add_dmethod(DexMethodRef* method,
-                   register_t object,
-                   IRInstruction* instr);
-  void add_smethod(DexMethodRef* method,
-                   register_t object,
-                   IRInstruction* instr);
+  void add_field_set(DexFieldRef* field, reg_t reg, IRInstruction* instr);
+  void add_dmethod(DexMethodRef* method, reg_t object, IRInstruction* instr);
+  void add_smethod(DexMethodRef* method, reg_t object, IRInstruction* instr);
 
   bool consistent_with(const Escapes& other);
   void combine_paths(const Escapes& other);
@@ -305,20 +301,20 @@ class RegisterSet {
   RegisterSet() {}
 
   // Place Tracked value into register i, remember use
-  void insert(register_t i, std::shared_ptr<TrackedUses> uses) {
+  void insert(reg_t i, std::shared_ptr<TrackedUses> uses) {
     m_all_uses.insert(uses);
     m_registers[i] = uses;
   }
 
   // Set register i back to bottom
-  void clear(register_t i) {
+  void clear(reg_t i) {
     if (m_registers.count(i) != 0) {
       m_registers[i] = std::shared_ptr<TrackedUses>(nullptr);
     }
   }
 
   // Extract value for register i or bottom
-  std::shared_ptr<TrackedUses> get(register_t i) const {
+  std::shared_ptr<TrackedUses> get(reg_t i) const {
     auto val = m_registers.find(i);
     if (val == m_registers.end()) {
       return std::shared_ptr<TrackedUses>(nullptr);
@@ -328,7 +324,7 @@ class RegisterSet {
   }
 
   // Is the value at register i bottom
-  bool is_empty(register_t i) {
+  bool is_empty(reg_t i) {
     auto value = m_registers.find(i);
     return value == m_registers.end() || !(bool)value->second;
   }
@@ -354,7 +350,7 @@ class RegisterSet {
   void merge_effects(const RegisterSet& other);
 
   UsedSet m_all_uses;
-  std::unordered_map<register_t, std::shared_ptr<TrackedUses>> m_registers;
+  std::unordered_map<reg_t, std::shared_ptr<TrackedUses>> m_registers;
 };
 
 /**

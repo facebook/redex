@@ -32,8 +32,7 @@ class CFGInliner {
   /*
    * Change the register numbers to not overlap with caller.
    */
-  static void remap_registers(ControlFlowGraph* callee,
-                              uint16_t caller_regs_size);
+  static void remap_registers(ControlFlowGraph* callee, reg_t caller_regs_size);
 
   /*
    * Move ownership of blocks and edges from callee to caller
@@ -63,7 +62,7 @@ class CFGInliner {
    * Convert returns to moves.
    */
   static void move_return_reg(ControlFlowGraph* callee,
-                              const boost::optional<uint16_t>& ret_reg);
+                              const boost::optional<reg_t>& ret_reg);
 
   /*
    * Callees that were not in a try region when their CFGs were created, need to

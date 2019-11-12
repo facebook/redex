@@ -14,8 +14,6 @@
 #include "Resolver.h"
 #include "SideEffectSummary.h"
 
-using reg_t = ir_analyzer::register_t;
-
 namespace used_vars {
 
 using UsedRegisters = sparta::PatriciaTreeSetAbstractDomain<reg_t>;

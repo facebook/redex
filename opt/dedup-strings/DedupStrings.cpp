@@ -568,7 +568,7 @@ void DedupStrings::rewrite_const_string_instructions(
         // First, we collect all const-string instructions that we want to
         // rewrite
         const auto ii = InstructionIterable(code);
-        std::vector<std::pair<IRInstruction*, uint16_t>> const_strings;
+        std::vector<std::pair<IRInstruction*, reg_t>> const_strings;
         for (auto it = ii.begin(); it != ii.end(); it++) {
           // do we have a sequence of const-string + move-pseudo-result
           // instruction?

@@ -286,7 +286,7 @@ FieldSet merge(const FieldSet& main, const FieldSet& other) {
 
 MethodCall path_combine(const MethodCall& main, const MethodCall& other) {
   auto combined_call_sites = main.call_sites;
-  for (std::pair<IRInstruction*, register_t> o_instr : other.call_sites) {
+  for (std::pair<IRInstruction*, reg_t> o_instr : other.call_sites) {
     combined_call_sites.emplace(o_instr);
   }
   return MethodCall{path_combine(main.call, other.call), combined_call_sites};
@@ -338,7 +338,7 @@ void FieldWriteRegs::merge(const FieldWriteRegs& other) {
 }
 
 void FieldWriteRegs::add_field(DexFieldRef* field,
-                               register_t reg,
+                               reg_t reg,
                                IRInstruction* instr) {
   auto seen_field = m_fields.find(field);
 
@@ -468,7 +468,7 @@ void MethodCalls::merge(const MethodCalls& other) {
 }
 
 void MethodCalls::add_call(DexMethodRef* method,
-                           register_t in_reg,
+                           reg_t in_reg,
                            IRInstruction* instr) {
   auto seen_method = m_calls.find(method);
   if (seen_method == m_calls.end()) {
@@ -489,7 +489,7 @@ void Escapes::add_return(IRInstruction* instr) {
 }
 
 void Escapes::add_field_set(DexFieldRef* field,
-                            register_t reg,
+                            reg_t reg,
                             IRInstruction* instr) {
   auto exists_check = via_field_set.find(field);
   if (exists_check == via_field_set.end()) {
@@ -507,7 +507,7 @@ void Escapes::add_field_set(DexFieldRef* field,
 }
 
 void Escapes::add_dmethod(DexMethodRef* method,
-                          register_t object,
+                          reg_t object,
                           IRInstruction* instr) {
   auto exists_check = via_vmethod_call.find(method);
   if (exists_check == via_vmethod_call.end()) {
@@ -518,7 +518,7 @@ void Escapes::add_dmethod(DexMethodRef* method,
 }
 
 void Escapes::add_smethod(DexMethodRef* method,
-                          register_t object,
+                          reg_t object,
                           IRInstruction* instr) {
   auto exists_check = via_smethod_call.find(method);
   if (exists_check == via_smethod_call.end()) {
@@ -934,7 +934,7 @@ void RegisterSet::merge_effects(const RegisterSet& other) {
 
 void RegisterSet::merge_registers(const RegisterSet& comes_after,
                                   MergedUsedSet& merge_store) {
-  std::unordered_map<register_t, std::shared_ptr<TrackedUses>> merged_registers;
+  std::unordered_map<reg_t, std::shared_ptr<TrackedUses>> merged_registers;
   for (auto before_reg_value : m_registers) {
     auto before_tracked = before_reg_value.second;
     auto is_before_merged =
