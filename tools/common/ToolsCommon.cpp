@@ -122,7 +122,6 @@ void write_intermediate_dex(const RedexOptions& redex_options,
       }
       ss << ".dex";
 
-      std::vector<DexString*> empty;
       write_classes_to_dex(redex_options,
                            ss.str(),
                            &store.get_dexen()[i],
@@ -135,8 +134,7 @@ void write_intermediate_dex(const RedexOptions& redex_options,
                            nullptr,
                            nullptr,
                            nullptr /* IODIMetadata* */,
-                           stores[0].get_dex_magic(),
-                           empty);
+                           stores[0].get_dex_magic());
       auto basename = boost::filesystem::path(ss.str()).filename().string();
       store_files["list"].append(basename);
     }

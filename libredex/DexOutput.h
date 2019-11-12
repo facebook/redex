@@ -9,6 +9,8 @@
 
 #include <unordered_map>
 
+#include <boost/optional/optional.hpp>
+
 #include "ConfigFiles.h"
 #include "DexClass.h"
 #include "DexUtil.h"
@@ -44,6 +46,7 @@ class DexOutputIdx {
   dexproto_to_idx* m_proto;
   dexfield_to_idx* m_field;
   dexmethod_to_idx* m_method;
+  std::vector<DexTypeList*>* m_typelist;
   const uint8_t* m_base;
 
  public:
@@ -52,12 +55,14 @@ class DexOutputIdx {
                dexproto_to_idx* proto,
                dexfield_to_idx* field,
                dexmethod_to_idx* method,
+               std::vector<DexTypeList*>* typelist,
                const uint8_t* base) {
     m_string = string;
     m_type = type;
     m_proto = proto;
     m_field = field;
     m_method = method;
+    m_typelist = typelist;
     m_base = base;
   }
 
@@ -67,6 +72,7 @@ class DexOutputIdx {
     delete m_proto;
     delete m_field;
     delete m_method;
+    delete m_typelist;
   }
 
   dexstring_to_idx& string_to_idx() const { return *m_string; }
@@ -74,6 +80,7 @@ class DexOutputIdx {
   dexproto_to_idx& proto_to_idx() const { return *m_proto; }
   dexfield_to_idx& field_to_idx() const { return *m_field; }
   dexmethod_to_idx& method_to_idx() const { return *m_method; }
+  std::vector<DexTypeList*>& typelist_list() const { return *m_typelist; }
 
   uint32_t stringidx(DexString* s) const { return m_string->at(s); }
   uint16_t typeidx(DexType* t) const { return m_type->at(t); }
@@ -108,13 +115,14 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    const std::vector<DexString*>& extra_strings = std::vector<DexString*>());
+    const boost::optional<Gatherer>& secondary_gatherer = boost::none);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
 typedef bool (*cmp_dproto)(const DexProto*, const DexProto*);
 typedef bool (*cmp_dfield)(const DexFieldRef*, const DexFieldRef*);
 typedef bool (*cmp_dmethod)(const DexMethodRef*, const DexMethodRef*);
+typedef bool (*cmp_dtypelist)(const DexTypeList*, const DexTypeList*);
 
 /*
  * This API gathers all of the data referred to by a set of DexClasses in
@@ -151,6 +159,7 @@ class GatheredTypes {
   std::vector<DexType*> m_ltype;
   std::vector<DexFieldRef*> m_lfield;
   std::vector<DexMethodRef*> m_lmethod;
+  std::vector<DexTypeList*> m_additional_ltypelists;
   DexClasses* m_classes;
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
@@ -158,21 +167,23 @@ class GatheredTypes {
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
-  void gather_components();
+  void gather_components(const boost::optional<Gatherer>& secondary_gatherer);
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
   dextype_to_idx* get_type_index(cmp_dtype cmp = compare_dextypes);
   dexproto_to_idx* get_proto_index(cmp_dproto cmp = compare_dexprotos);
   dexfield_to_idx* get_field_index(cmp_dfield cmp = compare_dexfields);
   dexmethod_to_idx* get_method_index(cmp_dmethod cmp = compare_dexmethods);
+  std::vector<DexTypeList*>* get_typelist_list(
+      dexproto_to_idx* protos, cmp_dtypelist cmp = compare_dextypelists);
 
-  void build_cls_load_map(const std::vector<DexString*>& extra_strings);
+  void build_cls_load_map();
   void build_cls_map();
   void build_method_map();
 
  public:
   GatheredTypes(
       DexClasses* classes,
-      const std::vector<DexString*>& extra_strings = std::vector<DexString*>());
+      const boost::optional<Gatherer>& secondary_gatherer = boost::none);
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
@@ -298,23 +309,21 @@ class DexOutput {
   friend struct DexOutputTestHelper;
 
  public:
-  DexOutput(
-      const char* path,
-      DexClasses* classes,
-      LocatorIndex* locator_index,
-      bool emit_name_based_locators,
-      bool normal_primary_dex,
-      size_t store_number,
-      size_t dex_number,
-      DebugInfoKind debug_info_kind,
-      IODIMetadata* iodi_metadata,
-      const ConfigFiles& config_files,
-      PositionMapper* pos_mapper,
-      std::unordered_map<DexMethod*, uint64_t>* method_to_id,
-      std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
-          code_debug_lines,
-      const std::vector<DexString*>& extra_strings = std::vector<DexString*>(),
-      bool force_class_data_end_of_file = false);
+  DexOutput(const char* path,
+            DexClasses* classes,
+            LocatorIndex* locator_index,
+            bool emit_name_based_locators,
+            bool normal_primary_dex,
+            size_t store_number,
+            size_t dex_number,
+            DebugInfoKind debug_info_kind,
+            IODIMetadata* iodi_metadata,
+            const ConfigFiles& config_files,
+            PositionMapper* pos_mapper,
+            std::unordered_map<DexMethod*, uint64_t>* method_to_id,
+            std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
+                code_debug_lines,
+            const boost::optional<Gatherer>& secondary_gatherer = boost::none);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,

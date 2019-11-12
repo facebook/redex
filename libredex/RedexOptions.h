@@ -36,7 +36,7 @@ class RedexOptions {
   bool is_art_build{false};
   bool disable_dex_hasher{false};
   bool instrument_pass_enabled{false};
-  bool force_class_data_end_of_file{false};
+  bool redacted{false};
   int32_t min_sdk{0};
   Architecture arch{Architecture::UNKNOWN};
   DebugInfoKind debug_info_kind{DebugInfoKind::NoCustomSymbolication};

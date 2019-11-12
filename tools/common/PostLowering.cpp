@@ -11,9 +11,8 @@ void PostLowering::setup() {}
 
 void PostLowering::run(const DexClasses& dex) {}
 
-std::vector<DexString*> PostLowering::get_extra_strings(const DexClasses& dex) {
-  std::vector<DexString*> empty;
-  return empty;
+boost::optional<Gatherer> PostLowering::get_secondary_gatherer() {
+  return boost::none;
 }
 
 void PostLowering::cleanup(PassManager& mgr) {}
