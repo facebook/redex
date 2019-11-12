@@ -24,7 +24,15 @@ namespace cfg {
 void CFGInliner::inline_cfg(ControlFlowGraph* caller,
                             const InstructionIterator& callsite,
                             const ControlFlowGraph& callee_orig) {
-  always_assert(&callsite.cfg() == caller);
+  CFGInlinerPlugin base_plugin;
+  inline_cfg(caller, callsite, callee_orig, base_plugin);
+}
+
+void CFGInliner::inline_cfg(ControlFlowGraph* caller,
+                            const InstructionIterator& inline_site,
+                            const ControlFlowGraph& callee_orig,
+                            CFGInlinerPlugin& plugin) {
+  always_assert(&inline_site.cfg() == caller);
 
   // copy the callee because we're going to move its contents into the caller
   ControlFlowGraph callee;
@@ -33,7 +41,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
   TRACE(CFG, 3, "callee %s", SHOW(callee));
 
-  if (caller->get_succ_edge_of_type(callsite.block(), EDGE_THROW) != nullptr) {
+  if (caller->get_succ_edge_of_type(inline_site.block(), EDGE_THROW) !=
+      nullptr) {
     split_on_callee_throws(&callee);
   }
 
@@ -41,56 +50,82 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   const auto& callee_entry_block = callee.entry_block();
   const auto& callee_return_blocks = callee.return_blocks();
 
-  // make the invoke last of its block
-  Block* after_callee = maybe_split_block(caller, callsite);
-  TRACE(CFG, 3, "caller after split %s", SHOW(*caller));
+  bool inline_after = plugin.inline_after();
 
-  DexPosition* callsite_dbg_pos = get_dbg_pos(callsite);
-  if (callsite_dbg_pos) {
-    set_dbg_pos_parents(&callee, callsite_dbg_pos);
+  // Find the closest dbg position for the inline site, if split before
+  DexPosition* inline_site_dbg_pos =
+      inline_after ? nullptr : get_dbg_pos(inline_site);
+
+  // make the invoke last of its block or first based on inline_after
+  Block* split_on_inline = inline_after
+                               ? maybe_split_block(caller, inline_site)
+                               : maybe_split_block_before(caller, inline_site);
+  TRACE(CFG, 3, "split caller %s : %s", inline_after ? "after" : "before",
+        SHOW(*caller));
+
+  // Find the closest dbg position for the inline site, if split after
+  inline_site_dbg_pos =
+      inline_after ? get_dbg_pos(inline_site) : inline_site_dbg_pos;
+
+  if (inline_site_dbg_pos) {
+    set_dbg_pos_parents(&callee, inline_site_dbg_pos);
     // ensure that the caller's code after the inlined method retain their
     // original position
-    const auto& first = after_callee->begin();
-    if (first == after_callee->end() || first->type != MFLOW_POSITION) {
+    const auto& first = split_on_inline->begin();
+    if (first == split_on_inline->end() || first->type != MFLOW_POSITION) {
       // but don't add if there's already a position at the front of this
       // block
-      after_callee->m_entries.push_front(*(new MethodItemEntry(
-          std::make_unique<DexPosition>(*callsite_dbg_pos))));
+      split_on_inline->m_entries.push_front(*(new MethodItemEntry(
+          std::make_unique<DexPosition>(*inline_site_dbg_pos))));
     }
   }
+
+  plugin.update_before_reg_remap(caller, &callee);
 
   // make sure the callee's registers don't overlap with the caller's
   auto callee_regs_size = callee.get_registers_size();
   auto caller_regs_size = caller->get_registers_size();
   remap_registers(&callee, caller_regs_size);
 
-  move_arg_regs(&callee, callsite->insn);
-  const cfg::InstructionIterator& move_res = caller->move_result_of(callsite);
-  move_return_reg(&callee,
-                  move_res.is_end()
-                      ? boost::none
-                      : boost::optional<reg_t>{move_res->insn->dest()});
+  auto alt_srcs = plugin.inline_srcs();
+  move_arg_regs(&callee,
+                alt_srcs ? alt_srcs.value() : inline_site->insn->srcs());
 
+  auto return_reg = plugin.reg_for_return();
+
+  if (inline_site->insn->has_move_result_any()) {
+    const cfg::InstructionIterator& move_res =
+        caller->move_result_of(inline_site);
+    return_reg = return_reg
+                     ? return_reg
+                     : (move_res.is_end()
+                            ? boost::none
+                            : boost::optional<reg_t>{move_res->insn->dest()});
+    // delete the move-result if there is one to remove, before connecting the
+    // cfgs because it's in a block that may be merged into another
+    if (plugin.remove_inline_site() && !move_res.is_end()) {
+      caller->remove_insn(move_res);
+    }
+  }
+  move_return_reg(&callee, return_reg);
   TRACE(CFG, 3, "callee after remap %s", SHOW(callee));
 
-  // delete the move-result before connecting the cfgs because it's in a block
-  // that may be merged into another
-  if (!move_res.is_end()) {
-    caller->remove_insn(move_res);
-  }
+  plugin.update_after_reg_remap(caller, &callee);
 
   // redirect to callee
   const std::vector<Block*> callee_blocks = callee.blocks();
-  steal_contents(caller, callsite.block(), &callee);
-  connect_cfgs(caller, callsite.block(), callee_blocks, callee_entry_block,
-               callee_return_blocks, after_callee);
-  caller->set_registers_size(callee_regs_size + caller_regs_size);
+  steal_contents(caller, inline_site.block(), &callee);
+  connect_cfgs(caller, inline_site.block(), callee_blocks, callee_entry_block,
+               callee_return_blocks, split_on_inline);
+  caller->recompute_registers_size();
 
   TRACE(CFG, 3, "caller after connect %s", SHOW(*caller));
 
-  // delete the invoke after connecting the CFGs because remove_insn will
-  // remove the outgoing throw if we remove the callsite
-  caller->remove_insn(callsite);
+  if (plugin.remove_inline_site()) {
+    // delete the invoke after connecting the CFGs because remove_insn will
+    // remove the outgoing throw if we remove the callsite
+    caller->remove_insn(inline_site);
+  }
 
   if (ControlFlowGraph::DEBUG) {
     caller->sanity_check();
@@ -120,6 +155,26 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
   return goto_block;
 }
 
+Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
+                                            const InstructionIterator& it) {
+  always_assert(caller->editable());
+  always_assert(!it.block()->empty());
+
+  const IRList::iterator& raw_it = it.unwrap();
+  Block* old_block = it.block();
+  if (raw_it == old_block->get_first_insn()) {
+    // Insertion point is already the first instruction, so return its block
+    return old_block;
+  }
+  // Else inject an instruction and then split so 'it' is first of block
+  auto dummy_end_instruction = new IRInstruction(OPCODE_NOP);
+  caller->insert_before(it, {dummy_end_instruction});
+  caller->split_block(caller->find_insn(dummy_end_instruction, old_block));
+  Block* goto_block = old_block->goes_to();
+  always_assert(goto_block != nullptr);
+  return goto_block;
+}
+
 /*
  * Change the register numbers to not overlap with caller.
  */
@@ -127,7 +182,7 @@ void CFGInliner::remap_registers(cfg::ControlFlowGraph* callee,
                                  reg_t caller_regs_size) {
   for (auto& mie : cfg::InstructionIterable(*callee)) {
     auto insn = mie.insn;
-    for (size_t i = 0; i < insn->srcs_size(); ++i) {
+    for (reg_t i = 0; i < insn->srcs_size(); ++i) {
       insn->set_src(i, insn->src(i) + caller_regs_size);
     }
     if (insn->has_dest()) {
@@ -197,21 +252,19 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
  * Convert load-params to moves.
  */
 void CFGInliner::move_arg_regs(cfg::ControlFlowGraph* callee,
-                               const IRInstruction* invoke) {
+                               const std::vector<reg_t>& srcs) {
   auto param_insns = callee->get_param_instructions();
 
-  size_t i = 0;
+  reg_t i = 0;
   for (auto& mie : ir_list::InstructionIterable(param_insns)) {
     IRInstruction* load = mie.insn;
     IRInstruction* move =
         new IRInstruction(opcode::load_param_to_move(mie.insn->opcode()));
-    always_assert(i < invoke->srcs_size());
-    move->set_src(0, invoke->src(i));
+    move->set_src(0, srcs.at(i));
     move->set_dest(load->dest());
-    ++i;
-
     // replace the load instruction with the new move instruction
     mie.insn = move;
+    i++;
     delete load;
   }
 }
