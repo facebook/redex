@@ -236,7 +236,6 @@ void MultiMethodInliner::compute_callee_constant_arguments() {
                 ++ci.occurrences[key];
               });
         }
-        std::lock_guard<std::mutex> guard(m_info_mutex);
         info.constant_invoke_callers_analyzed++;
         info.constant_invoke_callers_unreachable_blocks += res->dead_blocks;
       },
@@ -521,7 +520,6 @@ void MultiMethodInliner::inline_callees(
       });
   if (found != callees.size()) {
     always_assert(found <= callees.size());
-    std::lock_guard<std::mutex> guard(m_info_mutex);
     info.not_found += callees.size() - found;
   }
 
@@ -651,7 +649,6 @@ void MultiMethodInliner::inline_inlinables(
     code->clear_cfg();
   }
 
-  std::lock_guard<std::mutex> guard(m_info_mutex);
   info.calls_inlined += inlined_callees.size();
 }
 
@@ -927,7 +924,6 @@ bool MultiMethodInliner::is_blacklisted(const DexMethod* callee) {
   }
   while (cls != nullptr) {
     if (m_config.get_black_list().count(cls->get_type())) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.blacklisted++;
       return true;
     }
@@ -944,7 +940,6 @@ bool MultiMethodInliner::is_estimate_over_max(uint64_t estimated_caller_size,
   // branch opcodes to encode large jumps.
   auto callee_size = get_callee_insn_size(callee);
   if (estimated_caller_size + callee_size > max - INSTRUCTION_BUFFER) {
-    std::lock_guard<std::mutex> guard(m_info_mutex);
     info.caller_too_large++;
     return true;
   }
@@ -1208,15 +1203,14 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     return *opt_inlined_cost;
   }
 
-  size_t callees_analyzed{0};
-  size_t callees_unreachable_blocks{0};
-  auto inlined_cost = ::get_inlined_cost(callee->get_code()).cost;
+  std::atomic<size_t> callees_analyzed{0};
+  std::atomic<size_t> callees_unreachable_blocks{0};
+  std::atomic<size_t> inlined_cost{::get_inlined_cost(callee->get_code()).cost};
   auto callee_constant_arguments_it = m_callee_constant_arguments.find(callee);
   if (callee_constant_arguments_it != m_callee_constant_arguments.end() &&
       inlined_cost <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
     const auto& callee_constant_arguments =
         callee_constant_arguments_it->second;
-    std::mutex mutex;
     auto process_key = [&](ConstantArgumentsOccurrences cao) {
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
@@ -1228,7 +1222,6 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
             constant_arguments.is_top() ? 0 : constant_arguments.size(),
             get_key(constant_arguments).c_str(), SHOW(callee), res.cost,
             res.dead_blocks);
-      std::lock_guard<std::mutex> guard(mutex);
       callees_unreachable_blocks += res.dead_blocks * count;
       inlined_cost += res.cost * count;
       callees_analyzed += count;
@@ -1258,10 +1251,10 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
     }
 
     always_assert(callees_analyzed > 0);
-    inlined_cost /= callees_analyzed;
+    inlined_cost = inlined_cost / callees_analyzed;
   }
   TRACE(INLINE, 4, "[too_many_callers] get_inlined_cost %s: %u", SHOW(callee),
-        inlined_cost);
+        (size_t)inlined_cost);
   m_inlined_costs.update(
       callee,
       [&](const DexMethod*, boost::optional<size_t>& value, bool exists) {
@@ -1274,7 +1267,6 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
         if (callees_analyzed == 0) {
           return;
         }
-        std::lock_guard<std::mutex> guard(m_info_mutex);
         info.constant_invoke_callees_analyzed += callees_analyzed;
         info.constant_invoke_callees_unreachable_blocks +=
             callees_unreachable_blocks;
@@ -1361,7 +1353,6 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
 bool MultiMethodInliner::caller_is_blacklisted(const DexMethod* caller) {
   auto cls = caller->get_class();
   if (m_config.get_caller_black_list().count(cls)) {
-    std::lock_guard<std::mutex> guard(m_info_mutex);
     info.blacklisted++;
     return true;
   }
@@ -1440,7 +1431,6 @@ bool MultiMethodInliner::cannot_inline_opcodes(
           }
         }
         if (!m_config.throws_inline && insn->opcode() == OPCODE_THROW) {
-          std::lock_guard<std::mutex> guard(m_info_mutex);
           info.throws++;
           can_inline = false;
           return editable_cfg_adapter::LOOP_BREAK;
@@ -1458,7 +1448,6 @@ bool MultiMethodInliner::cannot_inline_opcodes(
   // d8 however, generates code with multiple return statements in general.
   // The CFG inliner can handle multiple return callees.
   if (ret_count > 1 && !m_config.use_cfg_inliner) {
-    std::lock_guard<std::mutex> guard(m_info_mutex);
     info.multi_ret++;
     if (invk_insn) {
       log_nopt(INL_MULTIPLE_RETURNS, callee);
@@ -1483,7 +1472,6 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
   if (opcode == OPCODE_INVOKE_DIRECT) {
     auto method = resolver(insn->get_method(), MethodSearch::Direct);
     if (method == nullptr) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.need_vmethod++;
       return true;
     }
@@ -1494,7 +1482,6 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
     }
     if (is_init(method)) {
       if (!method->is_concrete() && !is_public(method)) {
-        std::lock_guard<std::mutex> guard(m_info_mutex);
         info.non_pub_ctor++;
         return true;
       }
@@ -1504,7 +1491,6 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
     if (can_rename(method)) {
       make_static->push_back(method);
     } else {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.need_vmethod++;
       return true;
     }
@@ -1519,7 +1505,6 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
  */
 bool MultiMethodInliner::nonrelocatable_invoke_super(IRInstruction* insn) {
   if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-    std::lock_guard<std::mutex> guard(m_info_mutex);
     info.invoke_super++;
     return true;
   }
@@ -1538,7 +1523,6 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
     auto method = insn->get_method();
     auto res_method = resolver(method, MethodSearch::Virtual);
     if (res_method == nullptr) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.unresolved_methods++;
       if (unknown_virtuals::is_method_known_to_be_public(method)) {
         info.known_public_methods++;
@@ -1549,7 +1533,6 @@ bool MultiMethodInliner::unknown_virtual(IRInstruction* insn) {
       return true;
     }
     if (res_method->is_external() && !is_public(res_method)) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.non_pub_virtual++;
       return true;
     }
@@ -1571,12 +1554,10 @@ bool MultiMethodInliner::unknown_field(IRInstruction* insn) {
                                              ? FieldSearch::Static
                                              : FieldSearch::Instance);
     if (field == nullptr) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.escaped_field++;
       return true;
     }
     if (!field->is_concrete() && !is_public(field)) {
-      std::lock_guard<std::mutex> guard(m_info_mutex);
       info.non_pub_field++;
       return true;
     }
@@ -1621,7 +1602,6 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
         auto insn = mie.insn;
         if (insn->has_type()) {
           if (xstores.illegal_ref(store_idx, insn->get_type())) {
-            std::lock_guard<std::mutex> guard(m_info_mutex);
             info.cross_store++;
             has_cross_store_ref = true;
             return editable_cfg_adapter::LOOP_BREAK;
@@ -1629,14 +1609,12 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
         } else if (insn->has_method()) {
           auto meth = insn->get_method();
           if (xstores.illegal_ref(store_idx, meth->get_class())) {
-            std::lock_guard<std::mutex> guard(m_info_mutex);
             info.cross_store++;
             has_cross_store_ref = true;
             return editable_cfg_adapter::LOOP_BREAK;
           }
           auto proto = meth->get_proto();
           if (xstores.illegal_ref(store_idx, proto->get_rtype())) {
-            std::lock_guard<std::mutex> guard(m_info_mutex);
             info.cross_store++;
             has_cross_store_ref = true;
             return editable_cfg_adapter::LOOP_BREAK;
@@ -1647,7 +1625,6 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
           }
           for (const auto& arg : args->get_type_list()) {
             if (xstores.illegal_ref(store_idx, arg)) {
-              std::lock_guard<std::mutex> guard(m_info_mutex);
               info.cross_store++;
               has_cross_store_ref = true;
               return editable_cfg_adapter::LOOP_BREAK;
@@ -1657,7 +1634,6 @@ bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
           auto field = insn->get_field();
           if (xstores.illegal_ref(store_idx, field->get_class()) ||
               xstores.illegal_ref(store_idx, field->get_type())) {
-            std::lock_guard<std::mutex> guard(m_info_mutex);
             info.cross_store++;
             has_cross_store_ref = true;
             return editable_cfg_adapter::LOOP_BREAK;

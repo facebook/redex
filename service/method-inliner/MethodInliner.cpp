@@ -400,24 +400,31 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 3, "max_call_stack_depth %ld",
         inliner.get_info().max_call_stack_depth);
   TRACE(INLINE, 3, "waited seconds %ld", inliner.get_info().waited_seconds);
-  TRACE(INLINE, 3, "blacklisted meths %ld", inliner.get_info().blacklisted);
-  TRACE(INLINE, 3, "virtualizing methods %ld", inliner.get_info().need_vmethod);
-  TRACE(INLINE, 3, "invoke super %ld", inliner.get_info().invoke_super);
-  TRACE(INLINE, 3, "override inputs %ld", inliner.get_info().write_over_ins);
-  TRACE(INLINE, 3, "escaped virtual %ld", inliner.get_info().escaped_virtual);
+  TRACE(INLINE, 3, "blacklisted meths %ld",
+        (size_t)inliner.get_info().blacklisted);
+  TRACE(INLINE, 3, "virtualizing methods %ld",
+        (size_t)inliner.get_info().need_vmethod);
+  TRACE(INLINE, 3, "invoke super %ld", (size_t)inliner.get_info().invoke_super);
+  TRACE(INLINE, 3, "escaped virtual %ld",
+        (size_t)inliner.get_info().escaped_virtual);
   TRACE(INLINE, 3, "known non public virtual %ld",
-        inliner.get_info().non_pub_virtual);
-  TRACE(INLINE, 3, "non public ctor %ld", inliner.get_info().non_pub_ctor);
-  TRACE(INLINE, 3, "unknown field %ld", inliner.get_info().escaped_field);
-  TRACE(INLINE, 3, "non public field %ld", inliner.get_info().non_pub_field);
-  TRACE(INLINE, 3, "throws %ld", inliner.get_info().throws);
-  TRACE(INLINE, 3, "multiple returns %ld", inliner.get_info().multi_ret);
+        (size_t)inliner.get_info().non_pub_virtual);
+  TRACE(INLINE, 3, "non public ctor %ld",
+        (size_t)inliner.get_info().non_pub_ctor);
+  TRACE(INLINE, 3, "unknown field %ld",
+        (size_t)inliner.get_info().escaped_field);
+  TRACE(INLINE, 3, "non public field %ld",
+        (size_t)inliner.get_info().non_pub_field);
+  TRACE(INLINE, 3, "throws %ld", (size_t)inliner.get_info().throws);
+  TRACE(INLINE, 3, "multiple returns %ld",
+        (size_t)inliner.get_info().multi_ret);
   TRACE(INLINE, 3, "references cross stores %ld",
-        inliner.get_info().cross_store);
-  TRACE(INLINE, 3, "not found %ld", inliner.get_info().not_found);
-  TRACE(INLINE, 3, "caller too large %ld", inliner.get_info().caller_too_large);
+        (size_t)inliner.get_info().cross_store);
+  TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
+  TRACE(INLINE, 3, "caller too large %ld",
+        (size_t)inliner.get_info().caller_too_large);
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
-        inliner.get_info().calls_inlined, inlined_count, deleted);
+        (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
 
   mgr.incr_metric("recursive", inliner.get_info().recursive);
   mgr.incr_metric("max_call_stack_depth",

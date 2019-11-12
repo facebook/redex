@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <set>
@@ -469,9 +470,6 @@ class MultiMethodInliner {
   // When calling change_visibility eagerly
   std::mutex m_change_visibility_mutex;
 
-  // When mutating info while inlining in parallel
-  std::mutex m_info_mutex;
-
   // Cache for should_inline function
   ConcurrentMap<const DexMethod*, boost::optional<bool>> m_should_inline;
 
@@ -492,31 +490,33 @@ class MultiMethodInliner {
    * Info about inlining.
    */
   struct InliningInfo {
-    size_t calls_inlined{0};
+    // statistics that must be incremented sequentially
     size_t recursive{0};
     size_t max_call_stack_depth{0};
-    size_t not_found{0};
-    size_t blacklisted{0};
-    size_t throws{0};
-    size_t multi_ret{0};
-    size_t need_vmethod{0};
-    size_t invoke_super{0};
-    size_t write_over_ins{0};
-    size_t escaped_virtual{0};
-    size_t known_public_methods{0};
-    size_t unresolved_methods{0};
-    size_t non_pub_virtual{0};
-    size_t escaped_field{0};
-    size_t non_pub_field{0};
-    size_t non_pub_ctor{0};
-    size_t cross_store{0};
-    size_t caller_too_large{0};
-    size_t constant_invoke_callers_analyzed{0};
-    size_t constant_invoke_callers_unreachable_blocks{0};
-    size_t constant_invoke_callees_analyzed{0};
-    size_t constant_invoke_callees_unreachable_blocks{0};
     size_t waited_seconds{0};
     int critical_path_length{0};
+
+    // statistics that may be incremented concurrently
+    std::atomic<size_t> calls_inlined{0};
+    std::atomic<size_t> not_found{0};
+    std::atomic<size_t> blacklisted{0};
+    std::atomic<size_t> throws{0};
+    std::atomic<size_t> multi_ret{0};
+    std::atomic<size_t> need_vmethod{0};
+    std::atomic<size_t> invoke_super{0};
+    std::atomic<size_t> escaped_virtual{0};
+    std::atomic<size_t> known_public_methods{0};
+    std::atomic<size_t> unresolved_methods{0};
+    std::atomic<size_t> non_pub_virtual{0};
+    std::atomic<size_t> escaped_field{0};
+    std::atomic<size_t> non_pub_field{0};
+    std::atomic<size_t> non_pub_ctor{0};
+    std::atomic<size_t> cross_store{0};
+    std::atomic<size_t> caller_too_large{0};
+    std::atomic<size_t> constant_invoke_callers_analyzed{0};
+    std::atomic<size_t> constant_invoke_callers_unreachable_blocks{0};
+    std::atomic<size_t> constant_invoke_callees_analyzed{0};
+    std::atomic<size_t> constant_invoke_callees_unreachable_blocks{0};
   };
   InliningInfo info;
 
