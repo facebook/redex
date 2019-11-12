@@ -22,7 +22,6 @@
 #include "ReachableClasses.h"
 #include "RedexResources.h"
 #include "TypeStringRewriter.h"
-#include "UnpackagePrivate.h"
 #include "Walkers.h"
 #include "Warning.h"
 
@@ -602,9 +601,6 @@ void RenameClassesPassV2::rename_classes(Scope& scope,
                                          ConfigFiles& conf,
                                          bool rename_annotations,
                                          PassManager& mgr) {
-  // Make everything public
-  unpackage_private(scope);
-
   rewriter::TypeStringMap name_mapping;
   uint32_t sequence = 0;
   for (auto clazz : scope) {
