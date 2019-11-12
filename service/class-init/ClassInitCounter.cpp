@@ -13,6 +13,8 @@
 #include "ControlFlow.h"
 #include "IRCode.h"
 
+using namespace cic;
+
 bool operator==(FieldSet a, FieldSet b) {
   if (a.set != b.set || a.source != b.source) {
     return false;
@@ -69,7 +71,7 @@ std::string show(SourceStatus s) {
   return "NotSource";
 }
 
-std::string show(const FieldMap& fields_writes) {
+std::string show(const FieldSetMap& fields_writes) {
   std::stringstream out;
   out << "[";
   for (auto field_set : fields_writes) {
@@ -159,7 +161,7 @@ std::string show(const InitLocation& init) {
   return out.str();
 }
 
-bool field_subset_eq(FieldMap base, FieldMap other) {
+bool field_subset_eq(FieldSetMap base, FieldSetMap other) {
   for (auto field : base) {
     auto other_field = other.find(field.first);
     if (other_field == other.end()) {
@@ -228,7 +230,7 @@ bool FieldWriteRegs::consistent_with(const FieldWriteRegs& other) {
 }
 
 // Note: templating these causes many errors
-std::vector<DexFieldRef*> get_keys(FieldMap m) {
+std::vector<DexFieldRef*> get_keys(FieldSetMap m) {
   std::vector<DexFieldRef*> m_keys = {};
   for (auto f : m) {
     m_keys.emplace_back(f.first);
@@ -675,6 +677,41 @@ void TrackedUses::combine_paths(const TrackedUses& other) {
   method_calls.combine_paths(other.method_calls);
   escapes.combine_paths(other.escapes);
   safe_escapes.combine_paths(other.safe_escapes);
+}
+
+const std::vector<std::pair<IRInstruction*, boost::optional<register_t>>>&
+Escapes::get_escape_instructions() {
+  std::vector<std::pair<IRInstruction*, boost::optional<register_t>>> escapes;
+  if (via_return) {
+    boost::optional<register_t> empty = {};
+    for (auto i : return_instrs) {
+      escapes.emplace_back(
+          (std::pair<IRInstruction*, boost::optional<register_t>>){i, empty});
+    }
+  }
+  for (auto f_set : via_field_set) {
+    for (auto reg_instrs : f_set.second.regs) {
+      for (auto i : reg_instrs.second) {
+        escapes.emplace_back(
+            (std::pair<IRInstruction*, boost::optional<register_t>>){
+                i, reg_instrs.first});
+      }
+    }
+  }
+
+  for (auto v_call : via_vmethod_call) {
+    printf("escape via v method %s\n", SHOW(v_call.first));
+    for (auto i_reg : v_call.second.call_sites) {
+      escapes.emplace_back(i_reg);
+    }
+  }
+  for (auto s_call : via_smethod_call) {
+    printf("escape via s method %s\n", SHOW(s_call.first));
+    for (auto i_reg : s_call.second.call_sites) {
+      escapes.emplace_back(i_reg);
+    }
+  }
+  return std::move(escapes);
 }
 
 void TrackedUses::merge(const TrackedUses& other) {
@@ -1257,7 +1294,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
   for (auto edge : block->succs()) {
     cfg::Block* next = edge->target();
     TRACE(CIC, 8, "making call from %zu to block %zu", block->id(), next->id());
-    analyze_block(container, method, block, edge->target());
+    analyze_block(container, method, block, next);
     assert(visited_blocks[next]->final_result_registers);
 
     TRACE(CIC, 8, "Combining paths after looking at block %zu from %zu",

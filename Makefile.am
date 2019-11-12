@@ -374,6 +374,7 @@ redex_all_SOURCES = \
 	service/method-inliner/Deleter.cpp \
 	service/method-inliner/Inliner.cpp \
 	service/method-inliner/MethodInliner.cpp \
+	service/method-inliner/ObjectInlinePlugin.cpp \
 	service/method-merger/MethodMerger.cpp \
 	service/reference-update/MethodReference.cpp \
 	service/reference-update/TypeReference.cpp \

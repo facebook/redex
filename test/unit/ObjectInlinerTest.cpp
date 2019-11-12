@@ -1,0 +1,218 @@
+/*
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+#include <gtest/gtest.h>
+
+#include "CFGInliner.h"
+#include "ControlFlow.h"
+#include "IRAssembler.h"
+#include "IRCode.h"
+#include "ObjectInlinePlugin.h"
+#include "RedexTest.h"
+
+cfg::InstructionIterator find_instruction_matching(cfg::ControlFlowGraph* cfg,
+                                                   IRInstruction* i) {
+  auto iterable = cfg::InstructionIterable(*cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); it++) {
+    auto insn = it->insn;
+    if (insn->opcode() == i->opcode()) {
+      if (insn->srcs() != i->srcs() ||
+          (insn->has_dest() && i->has_dest() && insn->dest() != i->dest()) ||
+          (i->has_method() && insn->has_method() &&
+           i->get_method() != insn->get_method()) ||
+          (i->has_field() && insn->has_field() &&
+           i->get_field() != insn->get_field())) {
+        continue;
+      }
+      return it;
+    }
+  }
+  always_assert_log(
+      false, "can't find instruction %s in %s", SHOW(i), SHOW(*cfg));
+}
+
+IRInstruction* find_put(cfg::ControlFlowGraph* cfg, DexFieldRef* field) {
+  auto iterable = cfg::InstructionIterable(*cfg);
+  for (auto it = iterable.begin(); it != iterable.end(); ++it) {
+    if (is_iput(it->insn->opcode()) && field == it->insn->get_field()) {
+      return it->insn;
+    }
+  }
+  always_assert_log(false, "can't find input in %s", SHOW(*cfg));
+}
+
+void test_object_inliner(
+    const std::string& caller_str,
+    const std::string& callee_str,
+    const std::string& callee_class,
+    const std::string& object_type_str,
+    const std::string& insert_before_instr,
+    uint16_t result_reg,
+    const std::vector<std::pair<std::string, uint16_t>> fields,
+    const std::vector<uint16_t> srcs,
+    const std::string& expected_str) {
+  DexType* callee_type = DexType::make_type(callee_class.c_str());
+  DexType* object_type = DexType::make_type(object_type_str.c_str());
+
+  std::vector<DexFieldRef*> field_refs = {};
+  for (auto field_data : fields) {
+    auto field_ref = DexField::make_field(callee_class + field_data.first);
+    field_ref->make_concrete(ACC_PUBLIC);
+    field_refs.emplace_back(field_ref);
+  }
+
+  cic::FieldSetMap field_map = {};
+
+  auto field_b =
+      DexField::make_field("LBaz;.wide:I")->make_concrete(ACC_PUBLIC);
+
+  auto caller_code = assembler::ircode_from_string(caller_str);
+  caller_code->build_cfg(true);
+  auto& caller = caller_code->cfg();
+
+  auto callee_code = assembler::ircode_from_string(callee_str);
+  callee_code->build_cfg(true);
+  auto& callee = callee_code->cfg();
+
+  auto instr_code = assembler::ircode_from_string(insert_before_instr);
+  auto insn = instr_code->begin()->insn;
+
+  for (size_t i = 0; i < fields.size(); i++) {
+    auto field = field_refs[i];
+    auto field_data = fields[i];
+    field_map.emplace(
+        field,
+        (cic::FieldSet){{{field_data.second, {find_put(&caller, field)}}},
+                        cic::AllPaths,
+                        cic::OneReg});
+  }
+
+  ObjectInlinePlugin plugin =
+      ObjectInlinePlugin(field_map, {0}, result_reg, 0, 0, callee_type);
+
+  cfg::CFGInliner::inline_cfg(
+      &caller, find_instruction_matching(&caller, insn), callee, plugin);
+
+  auto expected_code = assembler::ircode_from_string(expected_str);
+
+  caller.simplify();
+  const std::string& final_cfg = show(caller);
+  caller_code->clear_cfg();
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(caller_code.get()))
+      << final_cfg;
+}
+
+class ObjectInlinerTest : public RedexTest {};
+
+TEST_F(ObjectInlinerTest, simple_class_inline) {
+  const auto& caller_str = R"(
+    (
+    (load-param v0)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v1)
+    (new-instance "LBar;")
+    (move-result-pseudo-object v2)
+    (.pos:0 "LBar;.fumble:()V" "Bar" "22")
+    (invoke-virtual (v2 v1) "LBar;.child:(LFoo;)LBaz;")
+    (return v2)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v1)
+      (return v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v2)
+      (.pos:dbg_0 "LBar;.fumble:()V" Bar 22)
+      (nop)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v4)
+      (move v2 v4)
+      (invoke-virtual (v2 v1) "LBar;.child:(LFoo;)LBaz;")
+      (return v2)
+    )
+  )";
+  test_object_inliner(caller_str,
+                      callee_str,
+                      "LFoo;",
+                      "LBaz;",
+                      "((invoke-virtual (v2 v1) \"LBar;.child:(LFoo;)LBaz;\"))",
+                      2,
+                      {},
+                      {},
+                      expected_str);
+}
+
+TEST_F(ObjectInlinerTest, class_inline_with_fields) {
+  const auto& caller_str = R"(
+    (
+    (load-param v0)
+    (load-param v1)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v2)
+    (iput v1 v2 "LFoo;.prop:I")
+    (new-instance "LBar;")
+    (move-result-pseudo-object v3)
+    (.pos:0 "LBar;.fumble:()V" "Bar" "22")
+    (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
+    (return v3)
+    )
+  )";
+  const auto& callee_str = R"(
+    ( (load-param v0)
+      (.pos:1 "LFoo;.create:()V" "Foo" "23")
+      (iget v0 "LFoo;.prop:I")
+      (move-result-pseudo v1)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v2)
+      (iput v1 v2 "LBaz;.wide:I")
+      (return v2)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v2)
+      (move v4 v1)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v3)
+      (.pos:dbg_0 "LBar;.fumble:()V" Bar 22)
+      (nop)
+      (move v5 v0)
+      (.pos:1 "LFoo;.create:()V" "Foo" "23" dbg_0)
+      (move v6 v4)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v7)
+      (iput v6 v7 "LBaz;.wide:I")
+      (move v2 v7)
+      (.pos:dbg_2 "LBar;.fumble:()V" Bar 22)
+      (invoke-virtual (v3 v2) "LBar;.child:(LFoo;)LBaz;")
+      (return v3)
+    )
+  )";
+  test_object_inliner(caller_str,
+                      callee_str,
+                      "LFoo;",
+                      "LBaz;",
+                      "((invoke-virtual (v3 v2) \"LBar;.child:(LFoo;)LBaz;\"))",
+                      2,
+                      {{".prop:I", 1}},
+                      {},
+                      expected_str);
+}

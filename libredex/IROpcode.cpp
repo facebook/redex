@@ -1057,6 +1057,42 @@ IROpcode load_param_to_move(IROpcode op) {
   }
 }
 
+IROpcode iput_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_IPUT:
+  case OPCODE_IPUT_BOOLEAN:
+  case OPCODE_IPUT_BYTE:
+  case OPCODE_IPUT_CHAR:
+  case OPCODE_IPUT_SHORT:
+    return OPCODE_MOVE;
+  case OPCODE_IPUT_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_IPUT_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert_log(false, "Expected iput, got %s", SHOW(op));
+    not_reached();
+  }
+}
+
+IROpcode iget_to_move(IROpcode op) {
+  switch (op) {
+  case OPCODE_IGET:
+  case OPCODE_IGET_BOOLEAN:
+  case OPCODE_IGET_BYTE:
+  case OPCODE_IGET_CHAR:
+  case OPCODE_IGET_SHORT:
+    return OPCODE_MOVE;
+  case OPCODE_IGET_OBJECT:
+    return OPCODE_MOVE_OBJECT;
+  case OPCODE_IGET_WIDE:
+    return OPCODE_MOVE_WIDE;
+  default:
+    always_assert_log(false, "Expected iget, got %s", SHOW(op));
+    not_reached();
+  }
+}
+
 IROpcode move_result_pseudo_for_iget(IROpcode op) {
   switch (op) {
   case OPCODE_IGET_BOOLEAN:

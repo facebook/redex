@@ -47,6 +47,8 @@
  */
 
 // Describe the set of containers used in tracking object uses of a type.
+namespace cic {
+
 enum FlowStatus {
   Conditional,
   AllPaths,
@@ -86,7 +88,7 @@ struct MethodCall {
  *   consistent, but Object(i) consistent_with Merged({i, i'})
  */
 
-typedef std::map<DexFieldRef*, FieldSet, dexfields_comparator> FieldMap;
+typedef std::map<DexFieldRef*, FieldSet, dexfields_comparator> FieldSetMap;
 typedef std::map<DexFieldRef*, FlowStatus, dexfields_comparator> FieldReadMap;
 typedef std::map<DexMethodRef*, MethodCall, dexmethods_comparator> CallMap;
 typedef std::map<IRInstruction*, FlowStatus> ArrayWriteMap;
@@ -95,14 +97,14 @@ typedef std::map<IRInstruction*, FlowStatus> ArrayWriteMap;
 class FieldWriteRegs final {
  public:
   void add_field(DexFieldRef* field, reg_t reg, IRInstruction* instr);
-  const FieldMap& get_fields() const { return m_fields; }
+  const FieldSetMap& get_fields() const { return m_fields; }
 
   bool consistent_with(const FieldWriteRegs& other);
   void combine_paths(const FieldWriteRegs& other);
   void merge(const FieldWriteRegs& other);
 
  private:
-  FieldMap m_fields;
+  FieldSetMap m_fields;
 };
 
 // Tracks the fields that are read of a tracked object
@@ -147,9 +149,12 @@ class Escapes final {
   void merge(const Escapes& other);
 
   boost::optional<FlowStatus> via_return = {};
+  const std::vector<std::pair<IRInstruction*, boost::optional<register_t>>>&
+  get_escape_instructions();
+
   std::set<IRInstruction*> return_instrs;
   ArrayWriteMap via_array_write;
-  FieldMap via_field_set;
+  FieldSetMap via_field_set;
   CallMap via_vmethod_call;
   CallMap via_smethod_call;
 };
@@ -211,6 +216,7 @@ class ObjectUses : public TrackedUses {
   bool consistent_with(const TrackedUses& other);
 
   bool same_instr(const ObjectUses& other) const { return m_id == other.m_id; }
+
   size_t hash() const { return m_id->hash(); }
   IRInstruction* get_instr() const { return m_id; }
   DexType* get_represents_typ() const { return m_class_used; }
@@ -447,3 +453,5 @@ class ClassInitCounter final {
   std::unordered_map<cfg::Block*, std::shared_ptr<RegistersPerBlock>>
       visited_blocks;
 };
+
+} // namespace cic

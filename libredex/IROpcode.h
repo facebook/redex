@@ -274,6 +274,10 @@ bool is_cmp(IROpcode opcode);
 
 IROpcode load_param_to_move(IROpcode);
 
+IROpcode iget_to_move(IROpcode);
+
+IROpcode iput_to_move(IROpcode);
+
 IROpcode invert_conditional_branch(IROpcode op);
 
 IROpcode move_result_pseudo_for_iget(IROpcode op);
