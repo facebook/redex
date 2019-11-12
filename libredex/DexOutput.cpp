@@ -81,19 +81,19 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(DexClasses* classes,
-                             const std::vector<DexString*>& extra_strings)
+GatheredTypes::GatheredTypes(
+    DexClasses* classes, const boost::optional<Gatherer>& secondary_gatherer)
     : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
   m_lstring.push_back(DexString::make_string(""));
 
   // build maps for the different custom sorting options
-  build_cls_load_map(extra_strings);
+  build_cls_load_map();
   build_cls_map();
   build_method_map();
 
-  gather_components();
+  gather_components(secondary_gatherer);
 }
 
 std::unordered_set<DexString*> GatheredTypes::index_type_names() {
@@ -183,7 +183,8 @@ DexOutputIdx* GatheredTypes::get_dodx(const uint8_t* base) {
   dexproto_to_idx* proto = get_proto_index();
   dexfield_to_idx* field = get_field_index();
   dexmethod_to_idx* method = get_method_index();
-  return new DexOutputIdx(string, type, proto, field, method, base);
+  std::vector<DexTypeList*>* typelist = get_typelist_list(proto);
+  return new DexOutputIdx(string, type, proto, field, method, typelist, base);
 }
 
 dexstring_to_idx* GatheredTypes::get_string_index(cmp_dstring cmp) {
@@ -242,8 +243,29 @@ dexproto_to_idx* GatheredTypes::get_proto_index(cmp_dproto cmp) {
   return sidx;
 }
 
-void GatheredTypes::build_cls_load_map(
-    const std::vector<DexString*>& extra_strings) {
+std::vector<DexTypeList*>* GatheredTypes::get_typelist_list(
+    dexproto_to_idx* protos, cmp_dtypelist cmp) {
+  std::vector<DexTypeList*>* typel = new std::vector<DexTypeList*>();
+  auto class_defs_size = (uint32_t)m_classes->size();
+  typel->reserve(protos->size() + class_defs_size +
+                 m_additional_ltypelists.size());
+
+  for (auto& it : *protos) {
+    auto proto = it.first;
+    typel->push_back(proto->get_args());
+  }
+  for (uint32_t i = 0; i < class_defs_size; i++) {
+    DexClass* clz = m_classes->at(i);
+    typel->push_back(clz->get_interfaces());
+  }
+  typel->insert(typel->end(),
+                m_additional_ltypelists.begin(),
+                m_additional_ltypelists.end());
+  sort_unique(*typel, compare_dextypelists);
+  return typel;
+}
+
+void GatheredTypes::build_cls_load_map() {
   unsigned int index = 0;
   int type_strings = 0;
   int init_strings = 0;
@@ -296,16 +318,6 @@ void GatheredTypes::build_cls_load_map(
     });
   }
 
-  // Adding extra "custom" strings,
-  // NOTE: The locality of those can be improved ...
-  for (const auto& s : extra_strings) {
-    if (!m_cls_load_strings.count(s)) {
-      m_cls_load_strings[s] = index;
-      index++;
-      total_strings++;
-    }
-  }
-
   TRACE(CUSTOMSORT, 1,
         "found %d strings from types, %d from strings in init methods, %d "
         "total strings",
@@ -338,8 +350,17 @@ void GatheredTypes::build_method_map() {
   }
 }
 
-void GatheredTypes::gather_components() {
+void GatheredTypes::gather_components(
+    const boost::optional<Gatherer>& secondary_gatherer) {
   ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, *m_classes);
+  if (secondary_gatherer) {
+    secondary_gatherer.get()(m_lstring,
+                             m_ltype,
+                             m_lfield,
+                             m_lmethod,
+                             m_additional_ltypelists,
+                             *m_classes);
+  }
 }
 
 constexpr uint32_t k_max_dex_size = 16 * 1024 * 1024;
@@ -369,15 +390,15 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const std::vector<DexString*>& extra_strings,
-    bool force_class_data_end_of_file)
+    const boost::optional<Gatherer>& secondary_gatherer)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
-  m_gtypes = new GatheredTypes(classes, extra_strings);
+  m_force_class_data_end_of_file = secondary_gatherer != boost::none;
+  m_gtypes = new GatheredTypes(classes, secondary_gatherer);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
   m_pos_mapper = pos_mapper;
@@ -393,7 +414,6 @@ DexOutput::DexOutput(
   m_emit_name_based_locators = emit_name_based_locators;
   m_normal_primary_dex = normal_primary_dex;
   m_debug_info_kind = debug_info_kind;
-  m_force_class_data_end_of_file = force_class_data_end_of_file;
 }
 
 DexOutput::~DexOutput() {
@@ -711,16 +731,7 @@ void DexOutput::generate_type_data() {
 }
 
 void DexOutput::generate_typelist_data() {
-  std::vector<DexTypeList*> typel;
-  for (auto& it : dodx->proto_to_idx()) {
-    auto proto = it.first;
-    typel.push_back(proto->get_args());
-  }
-  for (uint32_t i = 0; i < hdr.class_defs_size; i++) {
-    DexClass* clz = m_classes->at(i);
-    typel.push_back(clz->get_interfaces());
-  }
-  sort_unique(typel, compare_dextypelists);
+  std::vector<DexTypeList*>& typel = dodx->typelist_list();
   align_output();
   uint32_t tl_start = m_offset;
   size_t num_tls = 0;
@@ -2341,7 +2352,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    const std::vector<DexString*>& extra_strings) {
+    const boost::optional<Gatherer>& secondary_gatherer) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2387,8 +2398,7 @@ dex_stats_t write_classes_to_dex(
                              pos_mapper,
                              method_to_id,
                              code_debug_lines,
-                             extra_strings,
-                             redex_options.force_class_data_end_of_file);
+                             secondary_gatherer);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

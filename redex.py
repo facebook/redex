@@ -246,8 +246,8 @@ def run_redex_binary(state):
     if state.args.is_art_build:
         args += ["--is-art-build"]
 
-    if state.args.force_class_data_end_of_file:
-        args += ["--force-class-data-end-of-file"]
+    if state.args.redacted:
+        args += ["--redacted"]
 
     if state.args.disable_dex_hasher:
         args += ["--disable-dex-hasher"]
@@ -635,7 +635,7 @@ Given an APK, produce a better APK!
         help="States that this is an art only build",
     )
     parser.add_argument(
-        "--force-class-data-end-of-file",
+        "--redacted",
         action="store_true",
         default=False,
         help="Specifies how dex files should be laid out",

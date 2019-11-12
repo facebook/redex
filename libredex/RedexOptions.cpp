@@ -17,7 +17,7 @@ void RedexOptions::serialize(Json::Value& entry_data) const {
   options["instrument_pass_enabled"] = instrument_pass_enabled;
   options["min_sdk"] = min_sdk;
   options["debug_info_kind"] = debug_info_kind_to_string(debug_info_kind);
-  options["force_class_data_end_of_file"] = force_class_data_end_of_file;
+  options["redacted"] = redacted;
 }
 
 void RedexOptions::deserialize(const Json::Value& entry_data) {
@@ -29,8 +29,7 @@ void RedexOptions::deserialize(const Json::Value& entry_data) {
   min_sdk = options_data["min_sdk"].asInt();
   debug_info_kind =
       parse_debug_info_kind(options_data["debug_info_kind"].asString());
-  force_class_data_end_of_file =
-      options_data["force_class_data_end_of_file"].asBool();
+  redacted = options_data["redacted"].asBool();
 }
 
 Architecture parse_architecture(const std::string& s) {

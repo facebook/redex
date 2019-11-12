@@ -265,9 +265,8 @@ Arguments parse_args(int argc, char* argv[]) {
           ->default_value(false),
       "If specified, states that the current run disables dex hasher.\n");
   od.add_options()(
-      "force-class-data-end-of-file",
-      po::bool_switch(&args.redex_options.force_class_data_end_of_file)
-          ->default_value(false),
+      "redacted",
+      po::bool_switch(&args.redex_options.redacted)->default_value(false),
       "If specified then resulting dex files will have class data placed at"
       " the end of the file, i.e. last map item entry just before map list.\n");
   od.add_options()(
@@ -941,8 +940,8 @@ void redex_backend(const std::string& output_dir,
   IODIMetadata iodi_metadata;
 
   PostLowering post_lowering;
-  // TODO(emmasevastian): Update flag.
-  bool run_post_lowering = redex_options.force_class_data_end_of_file;
+  bool run_post_lowering = redex_options.redacted;
+
   if (run_post_lowering) {
     post_lowering.setup();
   }
@@ -951,6 +950,8 @@ void redex_backend(const std::string& output_dir,
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
   }
+  auto secondary_gatherer =
+      run_post_lowering ? post_lowering.get_secondary_gatherer() : boost::none;
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
@@ -970,11 +971,6 @@ void redex_backend(const std::string& output_dir,
       }
       ss << ".dex";
 
-      auto extra_strings =
-          run_post_lowering
-              ? post_lowering.get_extra_strings(store.get_dexen()[i])
-              : std::vector<DexString*>();
-
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
                                ss.str(),
@@ -989,7 +985,7 @@ void redex_backend(const std::string& output_dir,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
-                               extra_strings);
+                               secondary_gatherer);
 
       if (run_post_lowering) {
         post_lowering.run(store.get_dexen()[i]);

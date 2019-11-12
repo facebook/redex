@@ -59,6 +59,13 @@ class DexString;
 class DexType;
 using Scope = std::vector<DexClass*>;
 
+using Gatherer = std::function<void(std::vector<DexString*>&,
+                                    std::vector<DexType*>&,
+                                    std::vector<DexFieldRef*>&,
+                                    std::vector<DexMethodRef*>&,
+                                    std::vector<DexTypeList*>&,
+                                    const std::vector<DexClass*>&)>;
+
 #if defined(__SSE4_2__) && defined(__linux__) && defined(__STRCMP_LESS__)
 extern "C" bool strcmp_less(const char* str1, const char* str2);
 #endif

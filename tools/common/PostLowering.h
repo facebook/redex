@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "DexClass.h"
+#include <boost/optional/optional.hpp>
 #include <string>
 
 #include "DexClass.h"
@@ -14,7 +16,7 @@
 
 class PostLowering {
  public:
-  std::vector<DexString*> get_extra_strings(const DexClasses& dex);
+  boost::optional<Gatherer> get_secondary_gatherer();
   void setup();
   void run(const DexClasses& dex);
   void cleanup(PassManager& mgr);
