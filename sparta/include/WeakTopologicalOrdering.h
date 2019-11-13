@@ -31,7 +31,7 @@ class WeakTopologicalOrdering;
 namespace wto_impl {
 
 // Forward declaration
-template <typename NodeId, typename NodeHash>
+template <typename NodeId, typename NodeHash, typename SuccFn>
 class WtoBuilder;
 
 /*
@@ -192,9 +192,8 @@ class WeakTopologicalOrdering final {
    * In order to construct a WTO, we just need to specify the root of the graph
    * and the successor function.
    */
-  WeakTopologicalOrdering(
-      const NodeId& root,
-      std::function<std::vector<NodeId>(const NodeId&)> successors) {
+  template <typename SuccFn>
+  WeakTopologicalOrdering(const NodeId& root, SuccFn successors) {
     if (successors(root).empty()) {
       // If the CFG consists of a single node with no control-flow edges, we
       // don't need to run the general algorithm. This avoids building all the
@@ -207,7 +206,8 @@ class WeakTopologicalOrdering final {
                                 /* next_component_position */ -1);
       return;
     }
-    wto_impl::WtoBuilder<NodeId, NodeHash> builder(successors, &m_components);
+    wto_impl::WtoBuilder<NodeId, NodeHash, SuccFn> builder(successors,
+                                                           &m_components);
     builder.build(root);
   }
 
@@ -247,11 +247,10 @@ class WeakTopologicalOrdering final {
 
 namespace wto_impl {
 
-template <typename NodeId, typename NodeHash>
+template <typename NodeId, typename NodeHash, typename SuccFn>
 class WtoBuilder final {
  public:
-  WtoBuilder(std::function<std::vector<NodeId>(const NodeId&)> successors,
-             std::vector<WtoComponent<NodeId>>* wto_space)
+  WtoBuilder(SuccFn successors, std::vector<WtoComponent<NodeId>>* wto_space)
       : m_successors(successors),
         m_wto_space(wto_space),
         m_free_position(0),
@@ -330,7 +329,7 @@ class WtoBuilder final {
     return number;
   }
 
-  std::function<std::vector<NodeId>(const NodeId&)> m_successors;
+  SuccFn m_successors;
   std::vector<WtoComponent<NodeId>>* m_wto_space;
   // The next available position at the end of the vector of components.
   int32_t m_free_position;
