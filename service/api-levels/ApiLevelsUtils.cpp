@@ -359,8 +359,8 @@ bool check_hierarchy(
  *
  * TODO(emmasevastian): Add extra checks: non public members? etc
  */
-void ApiLevelsUtils::check_and_update_release_to_framework() {
-  TypeSystem type_system(m_scope);
+void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
+  TypeSystem type_system(scope);
 
   // We need to check this in a loop, as an exclusion might have dependencies.
   while (true) {
@@ -399,14 +399,14 @@ void ApiLevelsUtils::check_and_update_release_to_framework() {
   }
 }
 
-void ApiLevelsUtils::gather_non_private_members() {
+void ApiLevelsUtils::gather_non_private_members(const Scope& scope) {
   m_methods_non_private.clear();
   m_fields_non_private.clear();
 
-  const auto& override_graph = method_override_graph::build_graph(m_scope);
+  const auto& override_graph = method_override_graph::build_graph(scope);
 
   // TODO(emmasevastian): parallelize.
-  for (DexClass* cls : m_scope) {
+  for (DexClass* cls : scope) {
     std::vector<DexMethodRef*> current_methods;
     std::vector<DexFieldRef*> current_fields;
 
@@ -443,11 +443,7 @@ void ApiLevelsUtils::gather_non_private_members() {
         m_fields_non_private.size());
 }
 
-/**
- * Loads information regarding support libraries / androidX etc to framework
- * APIs.
- */
-void ApiLevelsUtils::load_framework_api() {
+void ApiLevelsUtils::load_framework_api(const Scope& scope) {
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api =
       get_framework_classes();
   for (auto it = framework_cls_to_api.begin();
@@ -478,7 +474,7 @@ void ApiLevelsUtils::load_framework_api() {
   }
 
   std::unordered_set<std::string> simple_names_releases;
-  for (DexClass* cls : m_scope) {
+  for (DexClass* cls : scope) {
     if (cls->is_external()) {
       continue;
     }
@@ -510,20 +506,20 @@ void ApiLevelsUtils::load_framework_api() {
     }
   }
 
-  gather_non_private_members();
+  gather_non_private_members(scope);
 
   // Checks and updates the mapping from release libraries to framework classes.
-  check_and_update_release_to_framework();
+  check_and_update_release_to_framework(scope);
 }
 
 void ApiLevelsUtils::filter_types(
-    const std::unordered_set<const DexType*>& types) {
+    const std::unordered_set<const DexType*>& types, const Scope& scope) {
   for (const auto* type : types) {
     m_types_to_framework_api.erase(type);
   }
 
   // Make sure we clean up the dependencies.
-  check_and_update_release_to_framework();
+  check_and_update_release_to_framework(scope);
 }
 
 } // namespace api
