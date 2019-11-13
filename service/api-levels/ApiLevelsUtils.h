@@ -25,11 +25,10 @@ class ApiLevelsUtils {
   ApiLevelsUtils(const Scope& scope,
                  const std::string& framework_api_info_filename,
                  int api_level)
-      : m_scope(scope),
-        m_framework_api_info_filename(framework_api_info_filename),
+      : m_framework_api_info_filename(framework_api_info_filename),
         m_api_level(api_level) {
     // Setting up both m_types_to_framework_api and m_framework_classes
-    load_framework_api();
+    load_framework_api(scope);
   }
 
   const TypeToFrameworkAPI& get_types_to_framework_api() {
@@ -46,15 +45,15 @@ class ApiLevelsUtils {
    *
    * NOTE: This needs to run every time something changes in the scope.
    */
-  void gather_non_private_members();
+  void gather_non_private_members(const Scope& scope);
 
-  void filter_types(const std::unordered_set<const DexType*>& types);
+  void filter_types(const std::unordered_set<const DexType*>& types,
+                    const Scope& scope);
 
  private:
-  void load_framework_api();
-  void check_and_update_release_to_framework();
+  void load_framework_api(const Scope& scope);
+  void check_and_update_release_to_framework(const Scope& scope);
 
-  const Scope& m_scope;
   TypeToFrameworkAPI m_types_to_framework_api;
   std::unordered_set<DexType*> m_framework_classes;
   std::string m_framework_api_info_filename;
