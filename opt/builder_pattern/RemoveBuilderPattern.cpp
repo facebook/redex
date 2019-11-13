@@ -1,0 +1,347 @@
+// (c) Facebook, Inc. and its affiliates. Confidential and proprietary.
+
+#include "RemoveBuilderPattern.h"
+
+#include <boost/regex.hpp>
+
+#include "BuilderAnalysis.h"
+#include "BuilderTransform.h"
+#include "DexClass.h"
+#include "DexUtil.h"
+#include "PassManager.h"
+#include "TypeSystem.h"
+#include "Walkers.h"
+
+namespace builder_pattern {
+
+namespace {
+
+/**
+ * Example: Lcom/facebook/RandomClassName; -> RandomClassName
+ */
+std::string only_class_name(const DexType* type) {
+  std::string type_str(type->c_str());
+  size_t package_delim = type_str.rfind("/");
+  always_assert(package_delim != std::string::npos);
+
+  size_t class_start = package_delim + 1;
+  return type_str.substr(class_start, type_str.size() - package_delim - 2);
+}
+
+std::unordered_set<DexType*> get_associated_buildees(
+    const std::unordered_set<const DexType*>& builders) {
+
+  std::unordered_set<DexType*> buildees;
+  for (const auto& builder : builders) {
+    const std::string& builder_name = builder->str();
+    std::string buildee_name =
+        builder_name.substr(0, builder_name.size() - 9) + ";";
+
+    auto type = DexType::get_type(buildee_name.c_str());
+    if (type) {
+      buildees.emplace(type);
+    }
+  }
+
+  return buildees;
+}
+
+class RemoveClasses {
+ public:
+  RemoveClasses(const DexType* super_cls,
+                const Scope& scope,
+                const inliner::InlinerConfig& inliner_config,
+                const std::vector<DexType*>& blacklist,
+                bool propagate_escape_results,
+                DexStoresVector& stores)
+      : m_root(super_cls),
+        m_scope(scope),
+        m_blacklist(blacklist),
+        m_type_system(scope),
+        m_propagate_escape_results(propagate_escape_results),
+        m_transform(scope, m_type_system, super_cls, inliner_config, stores) {
+    gather_classes();
+  }
+
+  void optimize() {
+    collect_excluded_types();
+
+    if (m_root != type::java_lang_Object()) {
+      // We can't inline a method that has super calls.
+      for (const DexType* builder : m_classes) {
+        if (!m_transform.inline_super_calls_and_ctors(builder)) {
+          TRACE(BLD_PATTERN, 2,
+                "Excluding type %s since we cannot inline super calls for all "
+                "methods",
+                SHOW(builder));
+          m_excluded_types.emplace(builder);
+        }
+      }
+    }
+
+    update_usage();
+  }
+
+  void cleanup() { m_transform.cleanup(); }
+
+  void print_stats(PassManager& mgr) {
+    auto root_name = only_class_name(m_root);
+    mgr.set_metric(root_name + "_total_classes", m_classes.size());
+    mgr.set_metric(root_name + "_num_classes_excluded",
+                   m_excluded_types.size());
+    mgr.set_metric(root_name + "_num_total_usages", m_num_usages);
+    mgr.set_metric(root_name + "_num_removed_usages", m_num_removed_usages);
+    for (const auto& type : m_excluded_types) {
+      TRACE(BLD_PATTERN, 2, "Excluded type: %s", SHOW(type));
+    }
+    mgr.set_metric(root_name + "_num_classes_removed", m_removed_types.size());
+    for (const auto& type : m_removed_types) {
+      TRACE(BLD_PATTERN, 2, "Removed type: %s", SHOW(type));
+    }
+  }
+
+ private:
+  void gather_classes() {
+    const TypeSet& subclasses = m_type_system.get_children(m_root);
+    auto* object_type = type::java_lang_Object();
+    boost::regex re("\\$Builder;$");
+
+    // We are only tackling leaf classes.
+    for (const DexType* type : subclasses) {
+      if (m_type_system.get_children(type).size() == 0) {
+        if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
+          m_classes.emplace(type);
+        }
+      }
+    }
+  }
+
+  void update_usage() {
+    auto buildee_types = get_associated_buildees(m_classes);
+
+    walk::methods(m_scope, [&](DexMethod* method) {
+      if (!method || !method->get_code()) {
+        return;
+      }
+
+      if (m_classes.count(method->get_class()) ||
+          buildee_types.count(method->get_class())) {
+        // Skip builder and associated buildee methods.
+        return;
+      }
+
+      BuilderAnalysis analysis(m_classes, m_excluded_types, method);
+
+      // Keep a copy of the code, in order to restore it, if needed.
+      auto original_code = std::make_unique<IRCode>(*method->get_code());
+
+      bool are_builders_to_remove = inline_builders_and_check_method(
+          method, original_code.get(), &analysis);
+      m_num_usages += analysis.get_total_num_usages();
+
+      if (!are_builders_to_remove) {
+        method->set_code(std::move(original_code));
+        return;
+      }
+
+      // When we get here we know that we can remove the builders.
+      m_num_removed_usages += analysis.get_num_usages();
+
+      auto removed_types = analysis.get_instantiated_types();
+      TRACE(BLD_PATTERN, 2, "Removed following builders from %s", SHOW(method));
+      for (const auto& type : removed_types) {
+        m_removed_types.emplace(type);
+        TRACE(BLD_PATTERN, 2, "\t %s", SHOW(type));
+      }
+
+      m_transform.replace_fields(analysis.get_usage(), method);
+    });
+  }
+
+  void collect_excluded_types() {
+    walk::fields(m_scope, [&](DexField* field) {
+      auto type = field->get_type();
+      if (m_classes.count(type)) {
+        TRACE(BLD_PATTERN, 2,
+              "Excluding type since it is stored in a field: %s", SHOW(type));
+        m_excluded_types.emplace(type);
+      }
+    });
+
+    for (DexType* type : m_blacklist) {
+      if (m_classes.count(type)) {
+        TRACE(BLD_PATTERN, 2,
+              "Excluding type since it was in the blacklist: %s", SHOW(type));
+        m_excluded_types.emplace(type);
+      }
+    }
+  }
+
+  /**
+   * Returns true if there are builders that we can remove from the current
+   * method.
+   */
+  bool inline_builders_and_check_method(DexMethod* method,
+                                        IRCode* original_code,
+                                        BuilderAnalysis* analysis) {
+    bool builders_to_remove = false;
+
+    // To be used for local excludes. We cleanup m_excluded_types at the end.
+    std::unordered_set<const DexType*> local_excludes;
+
+    do {
+      analysis->run_analysis();
+      if (!analysis->has_usage()) {
+        TRACE(BLD_PATTERN, 6, "No builder to remove from %s", SHOW(method));
+        break;
+      }
+
+      // First bind virtual callsites to the current implementation, if any,
+      // in order to be able to inline them.
+      auto vinvoke_to_instance = analysis->get_vinvokes_to_this_infered_type();
+      m_transform.update_virtual_calls(vinvoke_to_instance);
+
+      // Inline all methods that are either called on the builder instance
+      // or take the builder as an argument, except for the ctors.
+      std::unordered_set<IRInstruction*> to_inline =
+          analysis->get_all_inlinable_insns();
+      if (to_inline.size() == 0) {
+        TRACE(BLD_PATTERN, 3,
+              "Everything that could be inlined was inlined for %s",
+              SHOW(method));
+
+        // Check if any of the instance builder types cannot be removed.
+        auto non_removable_types = analysis->non_removable_types();
+        if (non_removable_types.size() > 0) {
+          for (DexType* type : non_removable_types) {
+            if (m_excluded_types.count(type) == 0 &&
+                !m_propagate_escape_results) {
+              local_excludes.emplace(type);
+            }
+
+            m_excluded_types.emplace(type);
+          }
+
+          // Restore method and re-try. We will only
+          // try removing non-excluded types.
+          method->set_code(std::make_unique<IRCode>(*original_code));
+          continue;
+        } else {
+          TRACE(BLD_PATTERN, 2,
+                "Everything that could be inlined was inlined and none of "
+                "the instances escape for %s",
+                SHOW(method));
+          analysis->print_usage();
+          builders_to_remove = true;
+          break;
+        }
+      }
+
+      auto not_inlined_insns =
+          m_transform.get_not_inlined_insns(method, to_inline);
+
+      if (not_inlined_insns.size() > 0) {
+        auto to_eliminate =
+            analysis->get_instantiated_types(&not_inlined_insns);
+        for (const DexType* type : to_eliminate) {
+          if (m_excluded_types.count(type) == 0 &&
+              !m_propagate_escape_results) {
+            local_excludes.emplace(type);
+          }
+
+          m_excluded_types.emplace(type);
+        }
+
+        if (not_inlined_insns.size() == to_inline.size()) {
+          // Nothing left to do, since nothing was inlined.
+          TRACE(BLD_PATTERN, 4, "Couldn't inline any of the methods in %s",
+                SHOW(method));
+          for (const auto& insn : not_inlined_insns) {
+            TRACE(BLD_PATTERN, 5, "\t%s", SHOW(insn));
+          }
+          break;
+        } else {
+          // Restore method and re-try. We will only try inlining non-excluded
+          // types.
+          TRACE(BLD_PATTERN, 4, "Couldn't inline all the methods in %s",
+                SHOW(method));
+          for (const auto& insn : not_inlined_insns) {
+            TRACE(BLD_PATTERN, 5, "\t%s", SHOW(insn));
+          }
+          method->set_code(std::make_unique<IRCode>(*original_code));
+        }
+      }
+
+      // If we inlined everything, we still need to make sure we don't have
+      // new  methods to inlined (for example from something that was inlined
+      // in this step).
+    } while (true);
+
+    for (const DexType* type : local_excludes) {
+      m_excluded_types.erase(type);
+    }
+    return builders_to_remove;
+  }
+
+  const DexType* m_root;
+  const Scope& m_scope;
+  const std::vector<DexType*>& m_blacklist;
+  TypeSystem m_type_system;
+  bool m_propagate_escape_results;
+  BuilderTransform m_transform;
+  std::unordered_set<const DexType*> m_classes;
+  std::unordered_set<const DexType*> m_excluded_types;
+  std::unordered_set<const DexType*> m_removed_types;
+  size_t m_num_usages{0};
+  size_t m_num_removed_usages{0};
+};
+
+} // namespace
+
+void RemoveBuilderPatternPass::bind_config() {
+  std::vector<DexType*> roots;
+  bind("roots", {}, roots, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("blacklist", {}, m_blacklist, Configurable::default_doc(),
+       Configurable::bindflags::types::warn_if_unresolvable);
+  bind("propagate_escape_results", true, m_propagate_escape_results);
+
+  // TODO(T44502473): if we could pass a binding filter lambda instead of
+  // bindflags, this could be more simply expressed
+  after_configuration([this, roots] {
+    auto object_type = type::java_lang_Object();
+    m_roots.clear();
+    for (const auto& root : roots) {
+      if (!type_class(root)) continue;
+      if (root != object_type) {
+        auto super_cls = type_class(root)->get_super_class();
+        if (super_cls != object_type) {
+          fprintf(stderr,
+                  "[builders]: %s isn't a valid root as it extends %s\n",
+                  root->c_str(), super_cls->c_str());
+          continue;
+        }
+      }
+      m_roots.push_back(root);
+    }
+  });
+}
+
+void RemoveBuilderPatternPass::run_pass(DexStoresVector& stores,
+                                        ConfigFiles& conf,
+                                        PassManager& mgr) {
+  auto scope = build_class_scope(stores);
+
+  for (const auto& root : m_roots) {
+    RemoveClasses rm_builder_pattern(root, scope, conf.get_inliner_config(),
+                                     m_blacklist, m_propagate_escape_results,
+                                     stores);
+    rm_builder_pattern.optimize();
+    rm_builder_pattern.print_stats(mgr);
+    rm_builder_pattern.cleanup();
+  }
+}
+
+static RemoveBuilderPatternPass s_pass;
+
+} // namespace builder_pattern
