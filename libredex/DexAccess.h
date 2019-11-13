@@ -78,14 +78,13 @@ ACCESSFLAGS
 const DexAccessFlags VISIBILITY_MASK =
     static_cast<DexAccessFlags>(ACC_PUBLIC | ACC_PRIVATE | ACC_PROTECTED);
 
-inline bool is_package_protected(DexAccessFlags flags) {
-  return (flags & (DexAccessFlags::ACC_PRIVATE | DexAccessFlags::ACC_PUBLIC)) ==
-         0;
+inline bool is_package_private(DexAccessFlags flags) {
+  return (flags & VISIBILITY_MASK) == 0;
 }
 
 template <class DexMember>
-bool is_package_protected(DexMember* m) {
-  return is_package_protected(m->get_access());
+bool is_package_private(DexMember* m) {
+  return is_package_private(m->get_access());
 }
 
 template <class DexMember>

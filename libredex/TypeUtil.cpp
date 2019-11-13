@@ -170,13 +170,23 @@ bool check_cast(const DexType* type, const DexType* base_type) {
   return false;
 }
 
+/**
+ * Lcom/facebook/ClassA; ==> Lcom/facebook/
+ */
 std::string get_package_name(const DexType* type) {
-  std::string name = std::string(type->get_name()->c_str());
-  if (name.find("/") == std::string::npos) {
+  const auto& name = type->get_name()->str();
+  auto pos = name.find_last_of("/");
+  if (pos == std::string::npos) {
     return "";
   }
-  unsigned long pos = name.find_last_of("/");
-  return name.substr(0, pos);
+  return name.substr(0, pos + 1);
+}
+
+bool same_package(const DexType* type1, const DexType* type2) {
+  auto package1 = get_package_name(type1);
+  auto package2 = get_package_name(type2);
+  auto min_len = std::min(package1.size(), package2.size());
+  return package1.compare(0, min_len, package2, 0, min_len) == 0;
 }
 
 std::string get_simple_name(const DexType* type) {

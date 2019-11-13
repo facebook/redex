@@ -77,7 +77,7 @@ std::string get_merger_package_name(const DexType* type) {
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
       boost::starts_with(pkg_name, "Ldalvik")) {
-    return "Lcom/facebook/redex";
+    return "Lcom/facebook/redex/";
   }
   return pkg_name;
 }
@@ -154,7 +154,7 @@ DexClass* create_class(const DexType* type,
   DexType* t = const_cast<DexType*>(type);
   always_assert(!pkg_name.empty());
   auto name = std::string(type->get_name()->c_str());
-  name = pkg_name + "/" + name.substr(1);
+  name = pkg_name + name.substr(1);
   t->set_name(DexString::make_string(name));
   // Create class.
   ClassCreator creator(t);
