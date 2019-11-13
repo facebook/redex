@@ -1071,7 +1071,7 @@ void ControlFlowGraph::no_dangling_dex_positions() const {
   }
 
   for (const auto& entry : parents) {
-    always_assert_log(entry.second, "%lu is a dangling parent pointer in %s",
+    always_assert_log(entry.second, "%p is a dangling parent pointer in %s",
                       entry.first, SHOW(*this));
   }
 }

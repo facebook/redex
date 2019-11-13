@@ -1263,10 +1263,16 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
     if (is_throw(op) || is_return(op)) {
       // Throw and return end the block, we must remove all code after them.
       always_assert(std::next(insns_it) == end_index);
+      std::unordered_set<DexPosition*> dangling;
       for (auto it = pos; it != b->m_entries.end();) {
+        if (it->type == MFLOW_POSITION) {
+          dangling.insert(it->pos.get());
+        }
         it = b->m_entries.erase_and_dispose(it);
         invalidated_its = true;
       }
+      remove_dangling_parents(dangling);
+
       if (is_return(op)) {
         // This block now ends in a return, it must have no successors.
         delete_succ_edge_if(
