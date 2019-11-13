@@ -17,6 +17,8 @@
 ///  - `invoke-virtual` and `invoke-direct` on methods whose class is
 ///    uninstantiable can be replaced by a `throw null;`, because they can only
 ///    be called on a `null` instance.
+///  - Field accesses on an uninstantiable class can be replaced by a `throw
+///    null;` for the same reason as above.
 class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}

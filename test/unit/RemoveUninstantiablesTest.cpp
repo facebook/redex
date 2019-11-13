@@ -164,4 +164,61 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
       ))");
 }
 
+TEST_F(RemoveUninstantiablesTest, GetField) {
+  def_class("LFoo;");
+  def_class("LBar;", Bar_init);
+
+  DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
+  DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
+
+  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+
+  EXPECT_CHANGE(
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (iget v0 "LBar;.a:I")
+        (move-result-pseudo v1)
+        (iget v0 "LFoo;.a:I")
+        (move-result-pseudo v2)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (iget v0 "LBar;.a:I")
+        (move-result-pseudo v1)
+        (const v3 0)
+        (throw v3)
+      ))");
+}
+
+TEST_F(RemoveUninstantiablesTest, PutField) {
+  def_class("LFoo;");
+  def_class("LBar;", Bar_init);
+
+  DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
+  DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
+
+  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+
+  EXPECT_CHANGE(
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v1 0)
+        (iput v0 v1 "LBar;.a:I")
+        (const v2 0)
+        (iput v0 v2 "LFoo;.a:I")
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (const v1 0)
+        (iput v0 v1 "LBar;.a:I")
+        (const v2 0)
+        (const v3 0)
+        (throw v3)
+      ))");
+}
+
 } // namespace

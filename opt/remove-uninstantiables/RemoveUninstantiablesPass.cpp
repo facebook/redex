@@ -65,6 +65,27 @@ void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
         m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
       }
       break;
+
+    case OPCODE_IGET:
+    case OPCODE_IGET_BYTE:
+    case OPCODE_IGET_CHAR:
+    case OPCODE_IGET_WIDE:
+    case OPCODE_IGET_SHORT:
+    case OPCODE_IGET_OBJECT:
+    case OPCODE_IGET_BOOLEAN:
+    case OPCODE_IPUT:
+    case OPCODE_IPUT_BYTE:
+    case OPCODE_IPUT_CHAR:
+    case OPCODE_IPUT_WIDE:
+    case OPCODE_IPUT_SHORT:
+    case OPCODE_IPUT_OBJECT:
+    case OPCODE_IPUT_BOOLEAN:
+      if (is_uninstantiable_class(insn->get_field()->get_class())) {
+        auto tmp = get_scratch();
+        m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+      }
+      break;
+
     default:
       continue;
     }
