@@ -51,7 +51,7 @@ void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
     // in preparation.
     auto target = it++;
 
-    if (target->insn->has_move_result_any() &&
+    if (target->insn->has_move_result_any() && !it.is_end() &&
         cfg.move_result_of(target) == it) {
       // The iterator is now sitting over the target's move-result, which is
       // also going to be invalidated, increment again.
