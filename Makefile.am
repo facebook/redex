@@ -45,7 +45,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/object-sensitive-dce \
 	-I$(top_srcdir)/opt/optimize_enums \
 	-I$(top_srcdir)/opt/original_name \
-	-I$(top_srcdir)/opt/outliner \
 	-I$(top_srcdir)/opt/peephole \
 	-I$(top_srcdir)/opt/print-members \
 	-I$(top_srcdir)/opt/rebindrefs \
@@ -287,7 +286,6 @@ redex_all_SOURCES = \
 	opt/optimize_enums/OptimizeEnums.cpp \
 	opt/optimize_enums/OptimizeEnumsGeneratedAnalysis.cpp \
 	opt/original_name/OriginalNamePass.cpp \
-	opt/outliner/Outliner.cpp \
 	opt/peephole/Peephole.cpp \
 	opt/peephole/RedundantCheckCastRemover.cpp \
 	opt/print-members/PrintMembers.cpp \
