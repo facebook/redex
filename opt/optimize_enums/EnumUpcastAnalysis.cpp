@@ -690,7 +690,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
     // When doing static analysis, simply skip some javac-generated enum methods
     // <init>, values(), and valueOf(String).
     if (candidate_enums->count_unsafe(method->get_class()) &&
-        !rejected_enums.count_unsafe(method->get_class()) &&
+        !rejected_enums.count(method->get_class()) &&
         (is_init(method) || is_enum_values(method) ||
          is_enum_valueof(method))) {
       return;
