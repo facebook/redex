@@ -123,6 +123,9 @@ std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
         simple_cls_name_to_type.emplace(simple_name, pair.first);
     bool insertion_happened = inserted.second;
     if (!insertion_happened) {
+      TRACE(API_UTILS, 5,
+            "Excluding %s since we have similar class once already!",
+            SHOW(pair.first));
       filter.emplace_back(simple_name);
     }
   }
