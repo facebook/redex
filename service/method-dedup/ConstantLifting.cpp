@@ -94,8 +94,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       TRACE(METH_DEDUP, 9, "%s", SHOW(method->get_code()));
       continue;
     }
-    lifted.insert(method);
-    lifted_constants.emplace(method, const_vals);
+
     TRACE(METH_DEDUP,
           5,
           "constant lifting: const value %s",
@@ -158,6 +157,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       code->replace_opcode(insn, move_const_arg);
     }
 
+    lifted.insert(method);
+    lifted_constants.emplace(method, const_vals);
     TRACE(METH_DEDUP, 9, "const value lifted in \n%s", SHOW(code));
   }
   TRACE(METH_DEDUP,
