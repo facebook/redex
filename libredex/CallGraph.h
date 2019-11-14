@@ -37,10 +37,10 @@ class Graph;
 Graph single_callee_graph(const Scope&);
 
 struct CallSite {
-  DexMethod* callee;
+  const DexMethod* callee;
   IRList::iterator invoke;
 
-  CallSite(DexMethod* callee, IRList::iterator invoke)
+  CallSite(const DexMethod* callee, IRList::iterator invoke)
       : callee(callee), invoke(invoke) {}
 };
 
@@ -57,21 +57,23 @@ class BuildStrategy {
  public:
   virtual ~BuildStrategy() {}
 
-  virtual std::vector<DexMethod*> get_roots() const = 0;
+  virtual std::vector<const DexMethod*> get_roots() const = 0;
 
   virtual CallSites get_callsites(const DexMethod*) const = 0;
 };
 
 class Edge {
  public:
-  Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it);
+  Edge(const DexMethod* caller,
+       const DexMethod* callee,
+       IRList::iterator invoke_it);
   IRList::iterator invoke_iterator() const { return m_invoke_it; }
-  DexMethod* caller() const { return m_caller; }
-  DexMethod* callee() const { return m_callee; }
+  const DexMethod* caller() const { return m_caller; }
+  const DexMethod* callee() const { return m_callee; }
 
  private:
-  DexMethod* m_caller;
-  DexMethod* m_callee;
+  const DexMethod* m_caller;
+  const DexMethod* m_callee;
   IRList::iterator m_invoke_it;
 };
 
@@ -80,14 +82,14 @@ using Edges = std::vector<std::shared_ptr<Edge>>;
 class Node {
  public:
   /* implicit */
-  Node(DexMethod* m) : m_method(m) {}
-  DexMethod* method() const { return m_method; }
+  Node(const DexMethod* m) : m_method(m) {}
+  const DexMethod* method() const { return m_method; }
   bool operator==(const Node& that) const { return method() == that.method(); }
   const Edges& callers() const { return m_predecessors; }
   const Edges& callees() const { return m_successors; }
 
  private:
-  DexMethod* m_method;
+  const DexMethod* m_method;
   Edges m_predecessors;
   Edges m_successors;
 
@@ -116,18 +118,18 @@ class Graph final {
     if (m == nullptr) {
       return m_entry;
     }
-    return m_nodes.at(const_cast<DexMethod*>(m));
+    return m_nodes.at(m);
   }
 
  private:
-  Node& make_node(DexMethod*);
+  Node& make_node(const DexMethod*);
 
-  void add_edge(DexMethod* caller,
-                DexMethod* callee,
+  void add_edge(const DexMethod* caller,
+                const DexMethod* callee,
                 IRList::iterator invoke_it);
 
   Node m_entry = Node(nullptr);
-  std::unordered_map<DexMethod*, Node, boost::hash<Node>> m_nodes;
+  std::unordered_map<const DexMethod*, Node, boost::hash<Node>> m_nodes;
 };
 
 // A static-method-only API for use with the monotonic fixpoint iterator.

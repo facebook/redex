@@ -45,8 +45,8 @@ class SingleCalleeStrategy final : public BuildStrategy {
     return callsites;
   }
 
-  std::vector<DexMethod*> get_roots() const override {
-    std::vector<DexMethod*> roots;
+  std::vector<const DexMethod*> get_roots() const override {
+    std::vector<const DexMethod*> roots;
 
     walk::code(m_scope, [&](DexMethod* method, IRCode& code) {
       if (is_definitely_virtual(method) || root(method) || is_clinit(method)) {
@@ -74,14 +74,16 @@ Graph single_callee_graph(const Scope& scope) {
   return Graph(SingleCalleeStrategy(scope));
 }
 
-Edge::Edge(DexMethod* caller, DexMethod* callee, IRList::iterator invoke_it)
+Edge::Edge(const DexMethod* caller,
+           const DexMethod* callee,
+           IRList::iterator invoke_it)
     : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
 
 Graph::Graph(const BuildStrategy& strat) {
   // Add edges from the single "ghost" entry node to all the "real" entry
   // nodes in the graph.
   auto roots = strat.get_roots();
-  for (DexMethod* root : roots) {
+  for (const DexMethod* root : roots) {
     auto edge = std::make_shared<Edge>(nullptr, root, IRList::iterator());
     m_entry.m_successors.emplace_back(edge);
     make_node(root).m_predecessors.emplace_back(edge);
@@ -90,23 +92,26 @@ Graph::Graph(const BuildStrategy& strat) {
   // Obtain the callsites of each method recursively, building the graph in the
   // process.
   std::unordered_set<const DexMethod*> visited;
-  std::function<void(DexMethod*)> visit = [&](auto* caller) {
-    if (visited.count(caller) != 0) {
-      return;
-    }
-    visited.emplace(caller);
-    for (const auto& callsite : strat.get_callsites(caller)) {
-      this->add_edge(caller, callsite.callee, callsite.invoke);
-      visit(callsite.callee);
-    }
+  auto visit = [&](const auto* caller) {
+    auto visit_impl = [&](const auto* caller, auto& visit_fn) {
+      if (visited.count(caller) != 0) {
+        return;
+      }
+      visited.emplace(caller);
+      for (const auto& callsite : strat.get_callsites(caller)) {
+        this->add_edge(caller, callsite.callee, callsite.invoke);
+        visit_fn(callsite.callee, visit_fn);
+      }
+    };
+    visit_impl(caller, visit_impl);
   };
 
-  for (DexMethod* root : roots) {
+  for (const DexMethod* root : roots) {
     visit(root);
   }
 }
 
-Node& Graph::make_node(DexMethod* m) {
+Node& Graph::make_node(const DexMethod* m) {
   auto it = m_nodes.find(m);
   if (it != m_nodes.end()) {
     return it->second;
@@ -115,8 +120,8 @@ Node& Graph::make_node(DexMethod* m) {
   return m_nodes.at(m);
 }
 
-void Graph::add_edge(DexMethod* caller,
-                     DexMethod* callee,
+void Graph::add_edge(const DexMethod* caller,
+                     const DexMethod* callee,
                      IRList::iterator invoke_it) {
   auto edge = std::make_shared<Edge>(caller, callee, invoke_it);
   make_node(caller).m_successors.emplace_back(edge);
