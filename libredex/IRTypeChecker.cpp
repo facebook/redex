@@ -7,6 +7,8 @@
 
 #include "IRTypeChecker.h"
 
+#include <boost/optional/optional.hpp>
+
 #include "DexUtil.h"
 #include "Match.h"
 #include "Resolver.h"
@@ -216,6 +218,74 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
          opcode::is_move_result_pseudo(mie.insn->opcode());
 }
 
+Result check_load_params(const DexMethod* method) {
+  bool method_static = is_static(method);
+  auto arg_list = method->get_proto()->get_args();
+  const auto& signature = method->get_proto()->get_args()->get_type_list();
+  auto sig_it = signature.begin();
+
+  auto handle_instance =
+      [&](IRInstruction* insn) -> boost::optional<std::string> {
+    // Must be a param-object.
+    if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
+      return std::string(
+                 "First parameter must be loaded with load-param-object: ") +
+             show(insn);
+    }
+    return boost::none;
+  };
+  auto handle_other = [&](IRInstruction* insn) -> boost::optional<std::string> {
+    if (sig_it == signature.end()) {
+      return std::string("Not enough argument types for ") + show(insn);
+    }
+    bool ok = false;
+    switch (insn->opcode()) {
+    case IOPCODE_LOAD_PARAM_OBJECT:
+      ok = type::is_object(*sig_it);
+      break;
+    case IOPCODE_LOAD_PARAM:
+      ok = type::is_primitive(*sig_it) && !type::is_wide_type(*sig_it);
+      break;
+    case IOPCODE_LOAD_PARAM_WIDE:
+      ok = type::is_primitive(*sig_it) && type::is_wide_type(*sig_it);
+      break;
+    default:
+      always_assert(false);
+    }
+    if (!ok) {
+      return std::string("Incompatible load-param ") + show(insn) + " for " +
+             type::type_shorty(*sig_it);
+    }
+    ++sig_it;
+    return boost::none;
+  };
+
+  bool non_load_param_seen = false;
+  using handler_t = std::function<boost::optional<std::string>(IRInstruction*)>;
+  handler_t handler =
+      is_static(method) ? handler_t(handle_other) : handler_t(handle_instance);
+
+  for (const auto& mie :
+       InstructionIterable(method->get_code()->cfg().entry_block())) {
+    IRInstruction* insn = mie.insn;
+    if (!opcode::is_load_param(insn->opcode())) {
+      non_load_param_seen = true;
+      continue;
+    }
+    if (non_load_param_seen) {
+      return Result::make_error("Saw non-load-param instruction before " +
+                                show(insn));
+    }
+    auto res = handler(insn);
+    if (res) {
+      return Result::make_error(res.get());
+    }
+    handler = handler_t(handle_other);
+  }
+
+  return Result::Ok();
+}
+
 /*
  * Do a linear pass to sanity-check the structure of the bytecode.
  */
@@ -363,6 +433,16 @@ void IRTypeChecker::run() {
   // We then infer types for all the registers used in the method.
   code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
+
+  // Check that the load-params match the signature.
+  auto params_result = check_load_params(m_dex_method);
+  if (params_result != Result::Ok()) {
+    m_complete = true;
+    m_good = false;
+    m_what = params_result.error_message();
+    return;
+  }
+
   m_type_inference = std::make_unique<TypeInference>(cfg);
   m_type_inference->run(m_dex_method);
 

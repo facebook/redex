@@ -48,17 +48,34 @@ class IRTypeCheckerTest : public RedexTest {
             ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
     m_method->set_deobfuscated_name("testMethod");
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
+
+    m_virtual_method =
+        DexMethod::make_method(DexType::make_type("Lbar;"),
+                               DexString::make_string("testVirtualMethod"),
+                               proto)
+            ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    m_virtual_method->set_deobfuscated_name("testVirtualMethod");
+    m_virtual_method->set_code(
+        std::make_unique<IRCode>(m_virtual_method, /* temp_regs */ 5));
   }
 
   void add_code(const std::vector<IRInstruction*>& insns) {
-    IRCode* code = m_method->get_code();
+    add_code(m_method, insns);
+  }
+
+  void add_code(const std::unique_ptr<IRCode>& insns) {
+    add_code(m_method, insns);
+  }
+
+  void add_code(DexMethod* m, const std::vector<IRInstruction*>& insns) {
+    IRCode* code = m->get_code();
     for (const auto& insn : insns) {
       code->push_back(insn);
     }
   }
 
-  void add_code(const std::unique_ptr<IRCode>& insns) {
-    IRCode* code = m_method->get_code();
+  void add_code(DexMethod* m, const std::unique_ptr<IRCode>& insns) {
+    IRCode* code = m->get_code();
     for (const auto& insn : *insns) {
       code->push_back(insn);
     }
@@ -66,6 +83,7 @@ class IRTypeCheckerTest : public RedexTest {
 
  protected:
   DexMethod* m_method;
+  DexMethod* m_virtual_method;
 };
 
 TEST_F(IRTypeCheckerTest, load_param) {
@@ -710,3 +728,75 @@ TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
               "Encountered overwrite of `this` register by CONST v0, 0");
   }
 }
+
+TEST_F(IRTypeCheckerTest, loadParamVirtualFail) {
+  m_virtual_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param v0)
+        (const v1 0)
+        (return-object v1)
+      )
+    )"));
+  IRTypeChecker checker(m_virtual_method);
+  checker.run();
+  EXPECT_TRUE(checker.fail());
+  EXPECT_THAT(checker.what(),
+              MatchesRegex("^First parameter must be loaded with "
+                           "load-param-object: IOPCODE_LOAD_PARAM v0$"));
+}
+
+TEST_F(IRTypeCheckerTest, loadParamVirtualSuccess) {
+  m_virtual_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (const v1 0)
+        (return-object v1)
+      )
+    )"));
+  IRTypeChecker checker(m_virtual_method);
+  checker.run();
+  EXPECT_FALSE(checker.fail());
+}
+
+template <bool kVirtual>
+class LoadParamMutationTest : public IRTypeCheckerTest {
+ public:
+  void run() {
+    IRCode* code = (kVirtual ? m_virtual_method : m_method)->get_code();
+    recurse(code, code->begin());
+  }
+
+  void recurse(IRCode* code, IRList::iterator it) {
+    if (it == code->end()) {
+      return;
+    }
+
+    if (it->type == MFLOW_OPCODE && opcode::is_load_param(it->insn->opcode())) {
+      auto real_op = it->insn->opcode();
+      for (auto op = IOPCODE_LOAD_PARAM; op <= IOPCODE_LOAD_PARAM_WIDE;
+           op = static_cast<IROpcode>(static_cast<uint16_t>(op) + 1)) {
+        if (op == real_op) {
+          continue;
+        }
+        it->insn->set_opcode(op);
+        check_fail();
+      }
+      it->insn->set_opcode(real_op);
+    }
+
+    ++it;
+    recurse(code, it);
+  }
+
+  void check_fail() {
+    IRTypeChecker checker(kVirtual ? m_virtual_method : m_method);
+    checker.run();
+    EXPECT_TRUE(checker.fail());
+  }
+};
+
+using LoadParamMutationStaticTest = LoadParamMutationTest<false>;
+using LoadParamMutationVirtualTest = LoadParamMutationTest<true>;
+
+TEST_F(LoadParamMutationStaticTest, mutate) { run(); }
+TEST_F(LoadParamMutationVirtualTest, mutate) { run(); }
