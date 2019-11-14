@@ -124,11 +124,6 @@ ClassSerdes get_class_serdes(const DexClass* cls);
 DexType* get_throwable_type();
 
 /**
- * Return the package for a valid DexType.
- */
-std::string get_package_name(const DexType* type);
-
-/**
  * Return the simple name w/o the package name and the ending ';' for a valid
  * DexType. E.g., 'Lcom/facebook/Simple;' -> 'Simple'.
  */

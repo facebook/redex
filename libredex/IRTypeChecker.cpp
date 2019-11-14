@@ -9,7 +9,9 @@
 
 #include "DexUtil.h"
 #include "Match.h"
+#include "Resolver.h"
 #include "Show.h"
+#include "TypeUtil.h"
 
 using namespace sparta;
 using namespace type_inference;
@@ -285,6 +287,47 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
     }
   }
   return Result::Ok();
+}
+
+/**
+ * Validate if the caller has the permit to call a method or access a field.
+ *
+ * +-------------------------+--------+----------+-----------+-------+
+ * | Access Levels Modifier  | Class  | Package  | Subclass  | World |
+ * +-------------------------+--------+----------+-----------+-------+
+ * | public                  | Y      | Y        | Y         | Y     |
+ * | protected               | Y      | Y        | Y         | N     |
+ * | no modifier             | Y      | Y        | N         | N     |
+ * | private                 | Y      | N        | N         | N     |
+ * +-------------------------+--------+----------+-----------+-------+
+ */
+template <typename DexMember>
+void validate_access(const DexType* accessor, const DexMember* accessee) {
+  if (accessee == nullptr || is_public(accessee) ||
+      accessor == accessee->get_class()) {
+    return;
+  }
+  if (!is_private(accessee)) {
+    auto accessee_class = accessee->get_class();
+    auto from_same_package = type::same_package(accessor, accessee_class);
+    if (is_package_private(accessee) && from_same_package) {
+      return;
+    } else if (is_protected(accessee) &&
+               (from_same_package ||
+                type::check_cast(accessor, accessee_class))) {
+      return;
+    }
+  }
+  std::ostringstream out;
+  out << "\nillegal access to "
+      << (is_private(accessee)
+              ? "private "
+              : (is_package_private(accessee) ? "package-private "
+                                              : "protected "))
+      << show(accessee);
+  // TODO(fengliu): Throw exception instead of log to stderr.
+  TRACE(TYPE, 2, out.str().c_str());
+  // throw TypeCheckingException(out.str());
 }
 
 } // namespace
@@ -725,6 +768,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       always_assert(is_double(arg_type));
       assume_double(current_state, insn->src(src_idx++));
     }
+    auto resolved = resolve_method(dex_method, opcode_to_search(insn));
+    validate_access(m_dex_method->get_class(), resolved);
     break;
   }
   case OPCODE_NEG_INT:
@@ -884,6 +929,12 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_integer(current_state, insn->src(0));
     break;
   }
+  }
+  if (insn->has_field()) {
+    auto search = is_sfield_op(insn->opcode()) ? FieldSearch::Static
+                                               : FieldSearch::Instance;
+    auto resolved = resolve_field(insn->get_field(), search);
+    validate_access(m_dex_method->get_class(), resolved);
   }
 }
 

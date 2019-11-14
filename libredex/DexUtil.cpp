@@ -102,15 +102,6 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
   return clinit;
 }
 
-std::string get_package_name(const DexType* type) {
-  std::string name = std::string(type->get_name()->c_str());
-  if (name.find("/") == std::string::npos) {
-    return "";
-  }
-  unsigned long pos = name.find_last_of("/");
-  return name.substr(0, pos);
-}
-
 std::string get_simple_name(const DexType* type) {
   std::string name = std::string(type->get_name()->c_str());
   if (name.find("/") == std::string::npos) {

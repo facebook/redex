@@ -88,6 +88,15 @@ bool is_package_protected(DexMember* m) {
   return is_package_protected(m->get_access());
 }
 
+inline bool is_package_private(DexAccessFlags flags) {
+  return (flags & VISIBILITY_MASK) == 0;
+}
+
+template <class DexMember>
+bool is_package_private(DexMember* m) {
+  return is_package_private(m->get_access());
+}
+
 template <class DexMember>
 void set_public(DexMember* m) {
   m->set_access((m->get_access() & ~VISIBILITY_MASK) | ACC_PUBLIC);

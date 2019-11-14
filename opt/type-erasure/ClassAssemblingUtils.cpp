@@ -11,7 +11,7 @@
 
 #include "Creators.h"
 #include "DexStoreUtil.h"
-#include "DexUtil.h"
+#include "TypeUtil.h"
 #include "Model.h"
 
 namespace {
@@ -72,12 +72,12 @@ void change_super_class(DexClass* cls, DexType* super_type) {
 }
 
 std::string get_merger_package_name(const DexType* type) {
-  auto pkg_name = get_package_name(type);
+  auto pkg_name = type::get_package_name(type);
   // Avoid an Android OS like package name, which might confuse the custom class
   // loader.
   if (boost::starts_with(pkg_name, "Landroid") ||
       boost::starts_with(pkg_name, "Ldalvik")) {
-    return "Lcom/facebook/redex";
+    return "Lcom/facebook/redex/";
   }
   return pkg_name;
 }
@@ -154,7 +154,7 @@ DexClass* create_class(const DexType* type,
   DexType* t = const_cast<DexType*>(type);
   always_assert(!pkg_name.empty());
   auto name = std::string(type->get_name()->c_str());
-  name = pkg_name + "/" + name.substr(1);
+  name = pkg_name + name.substr(1);
   t->set_name(DexString::make_string(name));
   // Create class.
   ClassCreator creator(t);

@@ -115,6 +115,11 @@ bool check_cast(const DexType* type, const DexType* base_type);
 std::string get_package_name(const DexType* type);
 
 /**
+ * Check if the two types are from the same package.
+ */
+bool same_package(const DexType* type1, const DexType* type2);
+
+/**
  * Return the simple name w/o the package name and the ending ';' for a valid
  * DexType. E.g., 'Lcom/facebook/Simple;' -> 'Simple'.
  */
