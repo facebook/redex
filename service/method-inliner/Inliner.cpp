@@ -620,7 +620,7 @@ void MultiMethodInliner::inline_inlinables(
       // inline_method does not fail to inline.
       log_opt(INLINED, caller_method, callsite->insn);
 
-      inliner::inline_method(caller, callee, callsite);
+      inliner::inline_method_unsafe(caller, callee, callsite);
     }
     TRACE(INL, 2, "caller: %s\tcallee: %s", SHOW(caller), SHOW(callee));
     estimated_insn_size += get_callee_insn_size(callee_method);
@@ -1947,12 +1947,12 @@ void inline_method(DexMethod* caller,
                    IRCode* callee_code,
                    IRList::iterator pos) {
   change_visibility(callee_code, caller->get_class());
-  inline_method(caller->get_code(), callee_code, pos);
+  inline_method_unsafe(caller->get_code(), callee_code, pos);
 }
 
-void inline_method(IRCode* caller_code,
-                   IRCode* callee_code,
-                   IRList::iterator pos) {
+void inline_method_unsafe(IRCode* caller_code,
+                          IRCode* callee_code,
+                          IRList::iterator pos) {
   TRACE(INL, 5, "caller code:\n%s", SHOW(caller_code));
   TRACE(INL, 5, "callee code:\n%s", SHOW(callee_code));
 

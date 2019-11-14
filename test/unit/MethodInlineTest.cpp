@@ -28,7 +28,7 @@ void test_inliner(const std::string& caller_str,
       caller->begin(), caller->end(), [](const MethodItemEntry& mie) {
         return mie.type == MFLOW_OPCODE && is_invoke(mie.insn->opcode());
       });
-  inliner::inline_method(caller.get(), callee.get(), callsite);
+  inliner::inline_method_unsafe(caller.get(), callee.get(), callsite);
 
   auto expected = assembler::ircode_from_string(expected_str);
 
@@ -121,7 +121,8 @@ TEST_F(MethodInlineTest, insertMoves) {
   callee_code->push_back(dasm(OPCODE_CONST, {1_v, 1_L}));
   callee_code->push_back(dasm(OPCODE_RETURN_VOID));
 
-  inliner::inline_method(caller->get_code(), callee->get_code(), invoke_it);
+  inliner::inline_method_unsafe(
+      caller->get_code(), callee->get_code(), invoke_it);
 
   auto it = InstructionIterable(caller_code).begin();
   EXPECT_EQ(*it->insn, *dasm(OPCODE_CONST, {1_v, 1_L}));

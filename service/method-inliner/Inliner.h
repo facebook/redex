@@ -49,10 +49,10 @@ void inline_tail_call(DexMethod* caller,
                       IRList::iterator pos);
 
 /*
- * Inline `callee` into `caller` at `pos`.
- * This is a general-purpose inliner.
+ * Inline `callee` into `caller` at `pos` but not check if the caller method has
+ * the permit to call the inlined code.
  */
-void inline_method(IRCode* caller, IRCode* callee, IRList::iterator pos);
+void inline_method_unsafe(IRCode* caller, IRCode* callee, IRList::iterator pos);
 
 /**
  * Inline `callee` into `caller` at `pos` and try to change the visibility of

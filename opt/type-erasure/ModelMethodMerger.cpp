@@ -540,7 +540,7 @@ void ModelMethodMerger::inline_dispatch_entries(DexMethod* dispatch) {
   for (auto& pair : callsites) {
     auto callee_code = pair.first;
     auto& call_pos = pair.second;
-    inliner::inline_method(dispatch_code, callee_code, call_pos);
+    inliner::inline_method(dispatch, callee_code, call_pos);
   }
   TRACE(TERA,
         9,

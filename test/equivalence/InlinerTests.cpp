@@ -72,7 +72,7 @@ class InlinerTestAliasedInputs : public EquivalenceTest {
         break;
       }
     }
-    inliner::inline_method(m->get_code(), m_callee->get_code(), invoke_it);
+    inliner::inline_method(m, m_callee->get_code(), invoke_it);
   }
 };
 
@@ -143,7 +143,7 @@ class InlinerTestLargeIfOffset : public EquivalenceTest {
         break;
       }
     }
-    inliner::inline_method(m->get_code(), m_callee->get_code(), invoke_it);
+    inliner::inline_method(m, m_callee->get_code(), invoke_it);
     // make sure we actually bloated the method
     always_assert(m->get_code()->count_opcodes() > NOP_COUNT);
   }
