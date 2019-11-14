@@ -22,6 +22,23 @@
 #include "WorkQueue.h"
 
 /**
+ * A wrapper around a type which allocates it on a different cache line.
+ * This guarantees that different CPUs can access it concurrently without
+ * locking or evicting memory from the other cores.
+ */
+template <typename T>
+class CacheLinePadded {
+ public:
+  template <typename... Args>
+  CacheLinePadded(Args&&... args) : padded_obj(std::forward<Args>(args)...) {}
+
+  operator T&() { return padded_obj; }
+
+ private:
+  alignas(CACHE_LINE_SIZE) T padded_obj;
+};
+
+/**
  * A collection of methods useful for iterating over elements of DexClasses.
  *
  * The name is intentionally lowercase. Think of this as a namespace with public
@@ -366,17 +383,6 @@ class walk {
     void operator()(const T& addend, T* accumulator) { *accumulator += addend; }
   };
 
-  template <class T>
-  struct PlacementNewDeleter {
-    void operator()(T* t) {
-      t->~T();
-      free((void*)t);
-    }
-  };
-
-  template <class T>
-  using PlacementNewUniquePtr = std::unique_ptr<T, PlacementNewDeleter<T>>;
-
  public:
   /**
    * The parallel:: methods have very similar signatures (and names) to their
@@ -432,31 +438,26 @@ class walk {
         const std::function<void(DexMethod*, Accumulator*)>& walker,
         size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
-      std::vector<PlacementNewUniquePtr<Accumulator>> acc_vec(num_threads);
-      // Use aligned_alloc to avoid false sharing.
-      for (size_t i = 0; i < num_threads; ++i) {
-        acc_vec[i] = PlacementNewUniquePtr<Accumulator>(new (aligned_alloc(
-            CACHE_LINE_SIZE, sizeof(Accumulator))) Accumulator(init));
-      }
+      std::vector<CacheLinePadded<Accumulator>> acc_vec(num_threads, init);
 
       auto wq = workqueue_foreach<DexClass*>(
           [&](DexClass* cls) {
-            const auto& acc = acc_vec[redex_parallel::get_worker_id()];
+            Accumulator& acc = acc_vec[redex_parallel::get_worker_id()];
             for (auto dmethod : cls->get_dmethods()) {
               TraceContext context(dmethod->get_deobfuscated_name());
-              walker(dmethod, acc.get());
+              walker(dmethod, &acc);
             }
             for (auto vmethod : cls->get_vmethods()) {
               TraceContext context(vmethod->get_deobfuscated_name());
-              walker(vmethod, acc.get());
+              walker(vmethod, &acc);
             }
           },
           num_threads);
       run_all(wq, classes);
 
       auto reduce = Reduce();
-      for (const auto& acc : acc_vec) {
-        reduce(*acc, &init);
+      for (Accumulator& acc : acc_vec) {
+        reduce(acc, &init);
       }
       return init;
     }
