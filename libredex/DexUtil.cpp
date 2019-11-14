@@ -595,6 +595,7 @@ dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
 }
 
 void relocate_method(DexMethod* method, DexType* to_type) {
+  change_visibility(method, to_type);
   auto from_cls = type_class(method->get_class());
   auto to_cls = type_class(to_type);
   from_cls->remove_method(method);
