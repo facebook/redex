@@ -987,7 +987,8 @@ void redex_backend(const std::string& output_dir,
                                stores[0].get_dex_magic(),
                                secondary_gatherer);
 
-      if (run_post_lowering) {
+      // Excluding primary from post lowering processing.
+      if (run_post_lowering && !(store.is_root_store() && i == 0)) {
         post_lowering.run(store.get_dexen()[i]);
       }
 
