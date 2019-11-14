@@ -53,9 +53,9 @@ class MethodProfiles {
     return success;
   }
 
-  bool is_initialized() { return m_initialized; }
+  bool is_initialized() const { return m_initialized; }
 
-  bool has_stats() { return !m_method_stats.empty(); }
+  bool has_stats() const { return !m_method_stats.empty(); }
 
   const std::unordered_map<const DexMethodRef*, Stats>& method_stats() const {
     return m_method_stats;
