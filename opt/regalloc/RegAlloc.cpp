@@ -9,6 +9,7 @@
 
 #include <boost/functional/hash.hpp>
 
+#include "Debug.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
 #include "IRCode.h"
@@ -41,9 +42,10 @@ Stats RegAllocPass::allocate(
     TRACE(REG, 5, "After alloc: regs:%d code:\n%s", code.get_registers_size(),
           SHOW(&code));
     return allocator.get_stats();
-  } catch (std::exception&) {
-    fprintf(stderr, "Failed to allocate %s\n", SHOW(m));
-    fprintf(stderr, "%s\n", SHOW(code.cfg()));
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to allocate " << SHOW(m) << std::endl;
+    std::cerr << SHOW(code.cfg()) << std::endl;
+    print_stack_trace(std::cerr, e);
     throw;
   }
 }

@@ -8,6 +8,8 @@
 #pragma once
 
 #include "RedexException.h"
+
+#include <iosfwd>
 #include <stdexcept>
 
 constexpr bool debug =
@@ -74,5 +76,7 @@ constexpr bool debug =
 #define assert_type_log(e, type, msg, ...) \
   always_assert_type_log(e, type, msg, ##__VA_ARGS__)
 #endif // NDEBUG
+
+void print_stack_trace(std::ostream& os, const std::exception& e);
 
 void crash_backtrace_handler(int sig);

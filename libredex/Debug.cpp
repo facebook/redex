@@ -20,6 +20,9 @@
 #include <unistd.h>
 #endif
 
+#include <boost/exception/all.hpp>
+#include <boost/stacktrace.hpp>
+
 namespace {
 void crash_backtrace() {
 #ifndef _MSC_VER
@@ -61,6 +64,13 @@ std::string format2string(const char* fmt, ...) {
   return ret;
 }
 
+namespace {
+
+using traced =
+    boost::error_info<struct tag_stacktrace, boost::stacktrace::stacktrace>;
+
+} // namespace
+
 void assert_fail(const char* expr,
                  const char* file,
                  unsigned line,
@@ -76,5 +86,13 @@ void assert_fail(const char* expr,
   msg += v_format2string(fmt, ap);
 
   va_end(ap);
-  throw RedexException(type, msg);
+  throw boost::enable_error_info(RedexException(type, msg))
+      << traced(boost::stacktrace::stacktrace());
+}
+
+void print_stack_trace(std::ostream& os, const std::exception& e) {
+  const boost::stacktrace::stacktrace* st = boost::get_error_info<traced>(e);
+  if (st) {
+    os << *st << std::endl;
+  }
 }

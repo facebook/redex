@@ -781,8 +781,10 @@ std::unique_ptr<DexCode> IRCode::sync(const DexMethod* method) {
     dex_code->set_debug_item(std::move(m_dbg));
     while (try_sync(dex_code.get()) == false)
       ;
-  } catch (std::exception&) {
-    fprintf(stderr, "Failed to sync %s\n%s\n", SHOW(method), SHOW(this));
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to sync " << SHOW(method) << std::endl
+              << SHOW(this) << std::endl;
+    print_stack_trace(std::cerr, e);
     throw;
   }
   return dex_code;
