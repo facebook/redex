@@ -226,6 +226,11 @@ class KeepRuleMatcher {
         m_keep_rule(keep_rule),
         m_regex_map(regex_map) {}
 
+  ~KeepRuleMatcher() {
+    TRACE(PGR, 3, "%s matched %lu classes and %lu members",
+          show_keep(m_keep_rule).c_str(), m_class_matches, m_member_matches);
+  }
+
   void keep_processor(DexClass*);
 
   void mark_class_and_members_for_keep(DexClass* cls);
@@ -289,6 +294,8 @@ class KeepRuleMatcher {
   }
 
  private:
+  size_t m_member_matches{0};
+  size_t m_class_matches{0};
   RuleType m_rule_type;
   const KeepSpec& m_keep_rule;
   RegexMap& m_regex_map;
@@ -604,6 +611,7 @@ void KeepRuleMatcher::mark_class_and_members_for_keep(DexClass* cls) {
   if (m_keep_rule.mark_classes || m_keep_rule.mark_conditionally) {
     apply_keep_modifiers(m_keep_rule, cls);
     impl::KeepState::set_has_keep(cls, &m_keep_rule);
+    ++m_class_matches;
     if (cls->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping Class %s kept by %s",
             java_names::internal_to_external(cls->get_deobfuscated_name())
@@ -650,6 +658,7 @@ void KeepRuleMatcher::apply_rule(DexMember* member) {
     break;
   case RuleType::KEEP: {
     impl::KeepState::set_has_keep(member, &m_keep_rule);
+    ++m_member_matches;
     if (member->rstate.report_whyareyoukeeping()) {
       TRACE(PGR, 2, "whyareyoukeeping %s kept by %s", SHOW(member),
             show_keep(m_keep_rule).c_str());
@@ -694,16 +703,14 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
                                    bool process_external) {
   Timer t("Process keep for " + to_string(rule_type));
 
-  auto process_single_keep = [rule_type, process_external](
-                                 ClassMatcher& class_match,
-                                 const KeepSpec& keep_rule, DexClass* cls,
-                                 RegexMap& regex_map) {
+  auto process_single_keep = [process_external](ClassMatcher& class_match,
+                                                KeepRuleMatcher& rule_matcher,
+                                                DexClass* cls) {
     // Skip external classes.
     if (cls == nullptr || (!process_external && cls->is_external())) {
       return;
     }
     if (class_match.match(cls)) {
-      KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
       rule_matcher.keep_processor(cls);
     }
   };
@@ -712,13 +719,14 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
   auto wq = workqueue_foreach<const KeepSpec*>([&](const KeepSpec* keep_rule) {
     RegexMap regex_map;
     ClassMatcher class_match(*keep_rule);
+    KeepRuleMatcher rule_matcher(rule_type, *keep_rule, regex_map);
 
     for (const auto& cls : m_classes) {
-      process_single_keep(class_match, *keep_rule, cls, regex_map);
+      process_single_keep(class_match, rule_matcher, cls);
     }
     if (process_external) {
       for (const auto& cls : m_external_classes) {
-        process_single_keep(class_match, *keep_rule, cls, regex_map);
+        process_single_keep(class_match, rule_matcher, cls);
       }
     }
   });
@@ -732,7 +740,8 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
     const auto& className = keep_rule.class_spec.className;
     if (!classname_contains_wildcard(className)) {
       DexClass* cls = find_single_class(className);
-      process_single_keep(class_match, keep_rule, cls, regex_map);
+      KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
+      process_single_keep(class_match, rule_matcher, cls);
       continue;
     }
 
@@ -742,11 +751,11 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
         !classname_contains_wildcard(extendsClassName)) {
       DexClass* super = find_single_class(extendsClassName);
       if (super != nullptr) {
+        KeepRuleMatcher rule_matcher(rule_type, keep_rule, regex_map);
         auto children = get_all_children(m_hierarchy, super->get_type());
-        process_single_keep(class_match, keep_rule, super, regex_map);
+        process_single_keep(class_match, rule_matcher, super);
         for (auto const* type : children) {
-          process_single_keep(class_match, keep_rule, type_class(type),
-                              regex_map);
+          process_single_keep(class_match, rule_matcher, type_class(type));
         }
       }
       continue;
