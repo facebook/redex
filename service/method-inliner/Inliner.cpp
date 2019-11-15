@@ -896,6 +896,9 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
 
     if (callee->rstate.dont_inline()) {
+      if (insn) {
+        log_nopt(INL_DO_NOT_INLINE, caller, insn);
+      }
       return false;
     }
   }
