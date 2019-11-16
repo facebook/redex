@@ -1,9 +1,9 @@
 Landroid/util/ArrayMap; 1 Ljava/lang/Object; 2 0
-  M Landroid/util/ArrayMap;.indexOfKey:(Ljava/lang/Object;)I
-  M Landroid/util/ArrayMap;.indexOfValue:(Ljava/lang/Object;)I
+  M Landroid/util/ArrayMap;.indexOfKey:(Ljava/lang/Object;)I 1
+  M Landroid/util/ArrayMap;.indexOfValue:(Ljava/lang/Object;)I 1
 Landroid/util/ArraySet; 1 Ljava/lang/Object; 2 0
-  M Landroid/util/ArraySet;.<init>:(Ljava/util/Collection;)V
-  M Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z
+  M Landroid/util/ArraySet;.<init>:(Ljava/util/Collection;)V 1
+  M Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z 1
 Landroid/util/LongSparseArray; 1 Landroid/util/ArrayMap; 0 0
 Landroid/app/FragmentContainer; 1025 Ljava/lang/Object; 0 0
 Ljava/lang/Object; 1 None 0 0
