@@ -11,11 +11,27 @@
 
 namespace api {
 
+struct MRefInfo {
+  DexMethodRef* mref;
+  DexAccessFlags access_flags;
+
+  MRefInfo(DexMethodRef* _mref, DexAccessFlags _access_flags)
+      : mref(_mref), access_flags(_access_flags) {}
+};
+
+struct FRefInfo {
+  DexFieldRef* fref;
+  DexAccessFlags access_flags;
+
+  FRefInfo(DexFieldRef* _fref, DexAccessFlags _access_flags)
+      : fref(_fref), access_flags(_access_flags) {}
+};
+
 struct FrameworkAPI {
   DexType* cls;
   DexType* super_cls;
-  std::unordered_set<DexMethodRef*> mrefs;
-  std::unordered_set<DexFieldRef*> frefs;
+  std::vector<MRefInfo> mrefs_info;
+  std::vector<FRefInfo> frefs_info;
   DexAccessFlags access_flags;
 };
 

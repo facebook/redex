@@ -60,21 +60,27 @@ ApiLevelsUtils::get_framework_classes() {
     while (num_methods-- > 0) {
       std::string method_str;
       std::string tag;
-      infile >> tag >> method_str;
+      uint32_t m_access_flags;
+
+      infile >> tag >> method_str >> m_access_flags;
 
       always_assert(tag == "M");
       DexMethodRef* mref = DexMethod::make_method(method_str);
-      framework_api.mrefs.emplace(mref);
+      MRefInfo mref_info(mref, DexAccessFlags(m_access_flags));
+      framework_api.mrefs_info.push_back(std::move(mref_info));
     }
 
     while (num_fields-- > 0) {
       std::string field_str;
       std::string tag;
-      infile >> tag >> field_str;
+      uint32_t f_access_flags;
+
+      infile >> tag >> field_str >> f_access_flags;
 
       always_assert(tag == "F");
       DexFieldRef* fref = DexField::make_field(field_str);
-      framework_api.frefs.emplace(fref);
+      FRefInfo fref_info(fref, DexAccessFlags(f_access_flags));
+      framework_api.frefs_info.push_back(std::move(fref_info));
     }
 
     framework_cls_to_api[framework_api.cls] = std::move(framework_api);
@@ -141,14 +147,21 @@ std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
 namespace {
 
 bool find_method(const std::string& simple_deobfuscated_name,
-                 const std::unordered_set<DexMethodRef*>& mrefs,
-                 DexProto* meth_proto) {
-  for (DexMethodRef* mref : mrefs) {
+                 const std::vector<MRefInfo>& mrefs_info,
+                 DexProto* meth_proto,
+                 DexAccessFlags access_flags) {
+  for (const MRefInfo& mref_info : mrefs_info) {
+    auto* mref = mref_info.mref;
+
     if (mref->get_name()->str() == simple_deobfuscated_name &&
         mref->get_proto() == meth_proto) {
-      // TODO(emmasevastian): Still have to make this work with
-      //                      deobfuscated ones.
-      return true;
+
+      // We also need to check the access flags.
+      // NOTE: We accept cases where the methods are not declared final.
+      if (access_flags == mref_info.access_flags ||
+          (access_flags & ~ACC_FINAL) == mref_info.access_flags) {
+        return true;
+      }
     }
   }
 
@@ -182,8 +195,8 @@ bool check_methods(
         type_reference::get_new_proto(meth->get_proto(), release_to_framework);
     // NOTE: For now, this assumes no obfuscation happened. We need to update
     //       it, if it runs later.
-    if (!find_method(meth->get_simple_deobfuscated_name(), framework_api.mrefs,
-                     new_proto)) {
+    if (!find_method(meth->get_simple_deobfuscated_name(),
+                     framework_api.mrefs_info, new_proto, meth->get_access())) {
       TRACE(API_UTILS, 4,
             "Excluding %s since we couldn't find corresponding method: %s!",
             SHOW(framework_api.cls), show_deobfuscated(meth).c_str());
@@ -195,12 +208,20 @@ bool check_methods(
 }
 
 bool find_field(const std::string& simple_deobfuscated_name,
-                const std::unordered_set<DexFieldRef*>& frefs,
-                DexType* field_type) {
-  for (auto* fref : frefs) {
+                const std::vector<FRefInfo>& frefs_info,
+                DexType* field_type,
+                DexAccessFlags access_flags) {
+  for (const FRefInfo& fref_info : frefs_info) {
+    auto* fref = fref_info.fref;
     if (fref->get_name()->str() == simple_deobfuscated_name &&
         fref->get_type() == field_type) {
-      return true;
+
+      // We also need to check the access flags.
+      // NOTE: We accept cases where the methods are not declared final.
+      if (access_flags == fref_info.access_flags ||
+          (access_flags & ~ACC_FINAL) == fref_info.access_flags) {
+        return true;
+      }
     }
   }
 
@@ -231,8 +252,9 @@ bool check_fields(
       new_field_type = it->second;
     }
 
-    if (!find_field(field->get_simple_deobfuscated_name(), framework_api.frefs,
-                    new_field_type)) {
+    if (!find_field(field->get_simple_deobfuscated_name(),
+                    framework_api.frefs_info, new_field_type,
+                    field->get_access())) {
       TRACE(API_UTILS, 4,
             "Excluding %s since we couldn't find corresponding field: %s!",
             SHOW(framework_api.cls), show_deobfuscated(field).c_str());

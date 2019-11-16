@@ -81,17 +81,17 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   EXPECT_EQ(framework_cls_to_api.size(), 5);
 
   auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
-  EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs.size(), 2);
-  EXPECT_EQ(framework_cls_to_api.at(a_t).frefs.size(), 0);
+  EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs_info.size(), 2);
+  EXPECT_EQ(framework_cls_to_api.at(a_t).frefs_info.size(), 0);
 
   auto b_t = DexType::make_type("Landroid/util/ArraySet;");
-  EXPECT_EQ(framework_cls_to_api.at(b_t).mrefs.size(), 2);
+  EXPECT_EQ(framework_cls_to_api.at(b_t).mrefs_info.size(), 2);
 
   auto c_t = DexType::make_type("Landroid/util/LongSparseArray;");
-  EXPECT_EQ(framework_cls_to_api.at(c_t).mrefs.size(), 0);
+  EXPECT_EQ(framework_cls_to_api.at(c_t).mrefs_info.size(), 0);
 
   auto d_t = DexType::make_type("Landroid/app/FragmentContainer;");
-  EXPECT_EQ(framework_cls_to_api.at(d_t).mrefs.size(), 0);
+  EXPECT_EQ(framework_cls_to_api.at(d_t).mrefs_info.size(), 0);
 
   delete g_redex;
 }
