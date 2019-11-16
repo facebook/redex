@@ -56,6 +56,11 @@ class LithoComponent extends Component implements Cloneable {
       mRequired.clear();
     }
 
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (LithoComponent) component;
+    }
+
     public Builder prop1(int prop1) {
       this.mLithoComponent.prop1 = prop1;
       mRequired.set(0);
@@ -116,6 +121,11 @@ class LithoComponentWithStaticFields extends Component implements Cloneable {
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
+    }
+
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (LithoComponentWithStaticFields) component;
     }
 
     public Builder prop1(int prop1) {
@@ -179,6 +189,11 @@ class TestingComponentA extends Component implements Cloneable {
       mRequired.clear();
     }
 
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (TestingComponentA) component;
+    }
+
     public Builder prop1(int prop1) {
       this.mLithoComponent.prop1 = prop1;
       mRequired.set(0);
@@ -238,6 +253,11 @@ class TestingComponentB extends Component implements Cloneable {
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
+    }
+
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (TestingComponentB) component;
     }
 
     public Builder prop1(int prop1) {
@@ -301,6 +321,11 @@ class TestingComponentC extends Component implements Cloneable {
       mRequired.clear();
     }
 
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (TestingComponentC) component;
+    }
+
     public Builder prop1(int prop1) {
       this.mLithoComponent.prop1 = prop1;
       mRequired.set(0);
@@ -360,6 +385,11 @@ class TestingComponentD extends Component implements Cloneable {
       mLithoComponent = lithoComponentRef;
       mContext = context;
       mRequired.clear();
+    }
+
+    @Override
+    protected void setComponent(Component component) {
+      mLithoComponent = (TestingComponentD) component;
     }
 
     public Builder prop1(int prop1) {
