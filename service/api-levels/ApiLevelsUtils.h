@@ -16,6 +16,7 @@ struct FrameworkAPI {
   DexType* super_cls;
   std::unordered_set<DexMethodRef*> mrefs;
   std::unordered_set<DexFieldRef*> frefs;
+  DexAccessFlags access_flags;
 };
 
 using TypeToFrameworkAPI = std::unordered_map<const DexType*, FrameworkAPI>;
