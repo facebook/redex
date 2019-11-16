@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "IRInstruction.h"
 #include "PassManager.h"
+#include "TypeUtil.h"
 
 using TypeVector = std::vector<const DexType*>;
 
