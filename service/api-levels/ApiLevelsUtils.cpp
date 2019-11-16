@@ -47,13 +47,15 @@ ApiLevelsUtils::get_framework_classes() {
   std::string class_name;
   uint32_t num_methods;
   uint32_t num_fields;
+  uint32_t access_flags;
 
-  while (infile >> framework_cls_str >> super_cls_str >> num_methods >>
-         num_fields) {
+  while (infile >> framework_cls_str >> access_flags >> super_cls_str >>
+         num_methods >> num_fields) {
     framework_api.cls = DexType::make_type(framework_cls_str.c_str());
     always_assert_log(framework_cls_to_api.count(framework_api.cls) == 0,
                       "Duplicated class name!");
     framework_api.super_cls = DexType::make_type(super_cls_str.c_str());
+    framework_api.access_flags = DexAccessFlags(access_flags);
 
     while (num_methods-- > 0) {
       std::string method_str;
@@ -376,6 +378,16 @@ void ApiLevelsUtils::check_and_update_release_to_framework(const Scope& scope) {
     for (const auto& pair : m_types_to_framework_api) {
       DexClass* cls = type_class(pair.first);
       always_assert(cls);
+
+      if (cls->get_access() != pair.second.access_flags) {
+        TRACE(API_UTILS, 5,
+              "Excluding %s since it has different access flags "
+              "than the framework class: %d vs %d",
+              show_deobfuscated(cls).c_str(), cls->get_access(),
+              pair.second.access_flags);
+        to_remove.emplace(pair.first);
+        continue;
+      }
 
       if (!check_members(cls, pair.second, release_to_framework,
                          m_methods_non_private, m_fields_non_private)) {

@@ -31,6 +31,10 @@ std::vector<DexClass*> create_scope(bool add_parent) {
   auto c_cls = create_internal_class(c_t, a_t, {});
   scope.push_back(c_cls);
 
+  auto d_t = DexType::make_type("Landroidx/FragmentContainer;");
+  auto d_cls = create_internal_class(d_t, obj_t, {});
+  scope.push_back(d_cls);
+
   if (add_parent) {
     auto d_t = DexType::make_type("Landroidx/ArraySetParentClass;");
     auto d_cls = create_internal_class(d_t, obj_t, {});
@@ -74,7 +78,7 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
                                 21);
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
-  EXPECT_EQ(framework_cls_to_api.size(), 4);
+  EXPECT_EQ(framework_cls_to_api.size(), 5);
 
   auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
   EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs.size(), 2);
@@ -85,6 +89,9 @@ TEST(ApiUtilsTest, testParseInputFormat) {
 
   auto c_t = DexType::make_type("Landroid/util/LongSparseArray;");
   EXPECT_EQ(framework_cls_to_api.at(c_t).mrefs.size(), 0);
+
+  auto d_t = DexType::make_type("Landroid/app/FragmentContainer;");
+  EXPECT_EQ(framework_cls_to_api.at(d_t).mrefs.size(), 0);
 
   delete g_redex;
 }
