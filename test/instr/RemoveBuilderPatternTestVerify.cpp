@@ -81,7 +81,7 @@ TEST_F(PostVerify, RemoveTestBuilderWithStaticField) {
     }
   }
 
-  EXPECT_EQ(2, num_builder_static_accesses);
+  EXPECT_EQ(1, num_builder_static_accesses);
 }
 
 TEST_F(PreVerify, RemoveTestBuilderWhenCheckIfNull) {
