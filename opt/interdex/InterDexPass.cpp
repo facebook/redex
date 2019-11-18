@@ -14,27 +14,6 @@
 
 namespace {
 
-std::unordered_set<interdex::DexStatus, std::hash<int>>
-get_mixed_mode_dex_statuses(
-    const std::vector<std::string>& mixed_mode_dex_statuses) {
-  std::unordered_set<interdex::DexStatus, std::hash<int>> res;
-
-  static std::unordered_map<std::string, interdex::DexStatus> string_to_status =
-      {{"first_coldstart_dex", interdex::FIRST_COLDSTART_DEX},
-       {"first_extended_dex", interdex::FIRST_EXTENDED_DEX},
-       {"scroll_dex", interdex::SCROLL_DEX}};
-
-  for (const std::string& mixed_mode_dex : mixed_mode_dex_statuses) {
-    always_assert_log(string_to_status.count(mixed_mode_dex),
-                      "Dex Status %s not found. Please check the list "
-                      "of accepted statuses.\n",
-                      mixed_mode_dex.c_str());
-    res.emplace(string_to_status.at(mixed_mode_dex));
-  }
-
-  return res;
-}
-
 /**
  * Generated stores need to be added to the root store.
  * We achieve this, by adding all the dexes from those stores after the root
@@ -102,18 +81,6 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
-
-  std::vector<std::string> mixed_mode_dexes;
-  bind("mixed_mode_dexes", {}, mixed_mode_dexes);
-
-  after_configuration([this, mixed_mode_dexes] {
-    always_assert_log(
-        !m_can_touch_coldstart_cls || m_can_touch_coldstart_extended_cls,
-        "can_touch_coldstart_extended_cls needs to be true, when we can touch "
-        "coldstart classes. Please set can_touch_coldstart_extended_cls "
-        "to true\n");
-    m_mixed_mode_dex_statuses = get_mixed_mode_dex_statuses(mixed_mode_dexes);
-  });
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -139,12 +106,6 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                     m_emit_scroll_set_marker, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, reserve_mrefs);
-
-  // Check if we have a list of pre-defined dexes for mixed mode.
-  if (m_mixed_mode_dex_statuses.size()) {
-    TRACE(IDEX, 3, "Will compile pre-defined dex(es)");
-    interdex.set_mixed_mode_dex_statuses(std::move(m_mixed_mode_dex_statuses));
-  }
 
   interdex.run();
   treat_generated_stores(stores, &interdex);

@@ -75,7 +75,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     // cold-start dexes that are not in the primary dex. (Reshuffling methods
     // in the primary dex may cause issues as it may cause references to
     // secondary dexes to be inspected by the VM too early.)
-    always_assert(!dex_info.mixed_mode || dex_info.coldstart);
+    always_assert(dex_info.coldstart);
     if (!dex_info.coldstart || dex_info.primary) {
       return;
     }
