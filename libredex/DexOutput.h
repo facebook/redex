@@ -15,6 +15,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "Pass.h"
+#include "PostLowering.h"
 #include "ProguardMap.h"
 #include "Trace.h"
 
@@ -115,7 +116,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    const boost::optional<Gatherer>& secondary_gatherer = boost::none);
+    PostLowering const* post_lowering = nullptr);
 
 typedef bool (*cmp_dstring)(const DexString*, const DexString*);
 typedef bool (*cmp_dtype)(const DexType*, const DexType*);
@@ -167,7 +168,7 @@ class GatheredTypes {
   std::unordered_map<std::string, unsigned int> m_method_to_weight;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
 
-  void gather_components(const boost::optional<Gatherer>& secondary_gatherer);
+  void gather_components(PostLowering const* post_lowering);
   dexstring_to_idx* get_string_index(cmp_dstring cmp = compare_dexstrings);
   dextype_to_idx* get_type_index(cmp_dtype cmp = compare_dextypes);
   dexproto_to_idx* get_proto_index(cmp_dproto cmp = compare_dexprotos);
@@ -181,9 +182,8 @@ class GatheredTypes {
   void build_method_map();
 
  public:
-  GatheredTypes(
-      DexClasses* classes,
-      const boost::optional<Gatherer>& secondary_gatherer = boost::none);
+  GatheredTypes(DexClasses* classes,
+                PostLowering const* post_lowering = nullptr);
 
   DexOutputIdx* get_dodx(const uint8_t* base);
   template <class T = decltype(compare_dexstrings)>
@@ -323,7 +323,7 @@ class DexOutput {
             std::unordered_map<DexMethod*, uint64_t>* method_to_id,
             std::unordered_map<DexCode*, std::vector<DebugLineItem>>*
                 code_debug_lines,
-            const boost::optional<Gatherer>& secondary_gatherer = boost::none);
+            PostLowering const* post_lowering = nullptr);
   ~DexOutput();
   void prepare(SortMode string_mode,
                const std::vector<SortMode>& code_mode,
