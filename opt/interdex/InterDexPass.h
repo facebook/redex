@@ -44,10 +44,13 @@ constexpr const char* METRIC_RELOCATED_VIRTUAL_METHODS =
 
 class InterDexPass : public Pass {
  public:
-  InterDexPass() : Pass(INTERDEX_PASS_NAME) {
-    std::unique_ptr<InterDexRegistry> plugin =
-        std::make_unique<InterDexRegistry>();
-    PluginRegistry::get().register_pass(INTERDEX_PASS_NAME, std::move(plugin));
+  InterDexPass(bool register_plugins = true) : Pass(INTERDEX_PASS_NAME) {
+    if (register_plugins) {
+      std::unique_ptr<InterDexRegistry> plugin =
+          std::make_unique<InterDexRegistry>();
+      PluginRegistry::get().register_pass(INTERDEX_PASS_NAME,
+                                          std::move(plugin));
+    }
   }
 
   void bind_config() override;
