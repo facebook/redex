@@ -169,6 +169,7 @@ libredex_la_SOURCES = \
 	libredex/PluginRegistry.cpp \
 	libredex/PointsToSemantics.cpp \
 	libredex/PointsToSemanticsUtils.cpp \
+	libredex/PostLowering.cpp \
 	libredex/PrintSeeds.cpp \
 	libredex/ProguardConfiguration.cpp \
 	libredex/ProguardLexer.cpp \
@@ -366,7 +367,6 @@ redex_all_SOURCES = \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
 	tools/common/ToolsCommon.cpp \
-	tools/common/PostLowering.cpp \
 	tools/redex-all/main.cpp
 
 redex_all_LDADD = \

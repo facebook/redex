@@ -81,8 +81,8 @@ class CustomSort {
   }
 };
 
-GatheredTypes::GatheredTypes(
-    DexClasses* classes, const boost::optional<Gatherer>& secondary_gatherer)
+GatheredTypes::GatheredTypes(DexClasses* classes,
+                             PostLowering const* post_lowering)
     : m_classes(classes) {
   // ensure that the string id table contains the empty string, which is used
   // for the DexPosition mapping
@@ -93,7 +93,7 @@ GatheredTypes::GatheredTypes(
   build_cls_map();
   build_method_map();
 
-  gather_components(secondary_gatherer);
+  gather_components(post_lowering);
 }
 
 std::unordered_set<DexString*> GatheredTypes::index_type_names() {
@@ -350,16 +350,15 @@ void GatheredTypes::build_method_map() {
   }
 }
 
-void GatheredTypes::gather_components(
-    const boost::optional<Gatherer>& secondary_gatherer) {
+void GatheredTypes::gather_components(PostLowering const* post_lowering) {
   ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, *m_classes);
-  if (secondary_gatherer) {
-    secondary_gatherer.get()(m_lstring,
-                             m_ltype,
-                             m_lfield,
-                             m_lmethod,
-                             m_additional_ltypelists,
-                             *m_classes);
+  if (post_lowering) {
+    post_lowering->gather_components(m_lstring,
+                                     m_ltype,
+                                     m_lfield,
+                                     m_lmethod,
+                                     m_additional_ltypelists,
+                                     *m_classes);
   }
 }
 
@@ -390,15 +389,15 @@ DexOutput::DexOutput(
     PositionMapper* pos_mapper,
     std::unordered_map<DexMethod*, uint64_t>* method_to_id,
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
-    const boost::optional<Gatherer>& secondary_gatherer)
+    PostLowering const* post_lowering)
     : m_config_files(config_files) {
   m_classes = classes;
   m_iodi_metadata = iodi_metadata;
   m_output = (uint8_t*)malloc(k_max_dex_size);
   memset(m_output, 0, k_max_dex_size);
   m_offset = 0;
-  m_force_class_data_end_of_file = secondary_gatherer != boost::none;
-  m_gtypes = new GatheredTypes(classes, secondary_gatherer);
+  m_force_class_data_end_of_file = post_lowering != nullptr;
+  m_gtypes = new GatheredTypes(classes, post_lowering);
   dodx = m_gtypes->get_dodx(m_output);
   m_filename = path;
   m_pos_mapper = pos_mapper;
@@ -2352,7 +2351,7 @@ dex_stats_t write_classes_to_dex(
     std::unordered_map<DexCode*, std::vector<DebugLineItem>>* code_debug_lines,
     IODIMetadata* iodi_metadata,
     const std::string& dex_magic,
-    const boost::optional<Gatherer>& secondary_gatherer) {
+    PostLowering const* post_lowering) {
   const JsonWrapper& json_cfg = conf.get_json_config();
   bool force_single_dex = json_cfg.get("force_single_dex", false);
   if (force_single_dex) {
@@ -2398,7 +2397,7 @@ dex_stats_t write_classes_to_dex(
                              pos_mapper,
                              method_to_id,
                              code_debug_lines,
-                             secondary_gatherer);
+                             post_lowering);
 
   dout.prepare(string_sort_mode, code_sort_mode, conf, dex_magic);
   dout.write();

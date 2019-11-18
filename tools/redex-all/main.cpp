@@ -939,19 +939,13 @@ void redex_backend(const std::string& output_dir,
   std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
   IODIMetadata iodi_metadata;
 
-  PostLowering post_lowering;
-  bool run_post_lowering = redex_options.redacted;
-
-  if (run_post_lowering) {
-    post_lowering.setup();
-  }
+  std::unique_ptr<PostLowering> post_lowering =
+      redex_options.redacted ? PostLowering::create() : nullptr;
 
   if (is_iodi(dik)) {
     Timer t("Compute initial IODI metadata");
     iodi_metadata.mark_methods(stores);
   }
-  auto secondary_gatherer =
-      run_post_lowering ? post_lowering.get_secondary_gatherer() : boost::none;
   for (size_t store_number = 0; store_number < stores.size(); ++store_number) {
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
@@ -985,11 +979,11 @@ void redex_backend(const std::string& output_dir,
                                needs_addresses ? &code_debug_lines : nullptr,
                                is_iodi(dik) ? &iodi_metadata : nullptr,
                                stores[0].get_dex_magic(),
-                               secondary_gatherer);
+                               post_lowering.get());
 
       // Excluding primary from post lowering processing.
-      if (run_post_lowering && !(store.is_root_store() && i == 0)) {
-        post_lowering.run(store.get_dexen()[i]);
+      if (post_lowering && !(store.is_root_store() && i == 0)) {
+        post_lowering->run(store.get_dexen()[i]);
       }
 
       output_totals += this_dex_stats;
@@ -997,8 +991,8 @@ void redex_backend(const std::string& output_dir,
     }
   }
 
-  if (run_post_lowering) {
-    post_lowering.cleanup(manager);
+  if (post_lowering) {
+    post_lowering->finalize(manager.apk_manager());
   }
 
   {
