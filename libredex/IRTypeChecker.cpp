@@ -302,19 +302,20 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
  * +-------------------------+--------+----------+-----------+-------+
  */
 template <typename DexMember>
-void validate_access(const DexType* accessor, const DexMember* accessee) {
+void validate_access(const DexMethod* accessor, const DexMember* accessee) {
+  auto accessor_class = accessor->get_class();
   if (accessee == nullptr || is_public(accessee) ||
-      accessor == accessee->get_class()) {
+      accessor_class == accessee->get_class()) {
     return;
   }
   if (!is_private(accessee)) {
     auto accessee_class = accessee->get_class();
-    auto from_same_package = type::same_package(accessor, accessee_class);
+    auto from_same_package = type::same_package(accessor_class, accessee_class);
     if (is_package_private(accessee) && from_same_package) {
       return;
     } else if (is_protected(accessee) &&
                (from_same_package ||
-                type::check_cast(accessor, accessee_class))) {
+                type::check_cast(accessor_class, accessee_class))) {
       return;
     }
   }
@@ -324,7 +325,7 @@ void validate_access(const DexType* accessor, const DexMember* accessee) {
               ? "private "
               : (is_package_private(accessee) ? "package-private "
                                               : "protected "))
-      << show(accessee);
+      << show(accessee) << "\n from " << show(accessor);
   // TODO(fengliu): Throw exception instead of log to stderr.
   TRACE(TYPE, 2, out.str().c_str());
   // throw TypeCheckingException(out.str());
@@ -769,7 +770,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       assume_double(current_state, insn->src(src_idx++));
     }
     auto resolved = resolve_method(dex_method, opcode_to_search(insn));
-    validate_access(m_dex_method->get_class(), resolved);
+    validate_access(m_dex_method, resolved);
     break;
   }
   case OPCODE_NEG_INT:
@@ -934,7 +935,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     auto search = is_sfield_op(insn->opcode()) ? FieldSearch::Static
                                                : FieldSearch::Instance;
     auto resolved = resolve_field(insn->get_field(), search);
-    validate_access(m_dex_method->get_class(), resolved);
+    validate_access(m_dex_method, resolved);
   }
 }
 
