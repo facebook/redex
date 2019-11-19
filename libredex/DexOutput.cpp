@@ -433,6 +433,10 @@ void DexOutput::insert_map_item(uint16_t maptype,
   m_map_items.emplace_back(item);
 
   switch (maptype) {
+  case TYPE_HEADER_ITEM:
+    m_stats.header_item_count += size;
+    m_stats.header_item_bytes += bytes;
+    break;
   case TYPE_STRING_ID_ITEM:
     m_stats.string_id_count += size;
     m_stats.string_id_bytes += bytes;

@@ -171,6 +171,8 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
   const dex_map_list* map_list =
       reinterpret_cast<const dex_map_list*>(m_file.const_data() + dh->map_off);
+  bool header_seen = false;
+  uint32_t header_index = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
 
@@ -179,7 +181,20 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
     switch (item.type) {
     case TYPE_HEADER_ITEM:
-      // No stats gathered.
+      always_assert_log(
+          !header_seen,
+          "Expected header_item to be unique in the map_list, "
+          "but encountered one at index i=%u and another at index j=%u.",
+          header_index,
+          i);
+      header_seen = true;
+      header_index = i;
+      always_assert_log(1 == item.size,
+                        "Expected count of header_items in the map_list to be "
+                        "exactly 1, but got ct=%u.",
+                        item.size);
+      stats->header_item_count += item.size;
+      stats->header_item_bytes += item.size * sizeof(dex_header);
       break;
     case TYPE_STRING_ID_ITEM:
       stats->string_id_count += item.size;
@@ -431,10 +446,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       // No stats gathered.
       break;
     default:
-      fprintf(stderr,
-              "warning: map_list item #%u is of unknown type: 0x%04hX\n",
-              i,
-              item.type);
+      fprintf(
+          stderr,
+          "warning: map_list item at index i=%u is of unknown type T=0x%04hX\n",
+          i,
+          item.type);
     }
   }
 }

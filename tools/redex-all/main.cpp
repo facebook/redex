@@ -545,6 +545,8 @@ Json::Value get_stats(const dex_stats_t& stats) {
   val["num_dbg_items"] = stats.num_dbg_items;
   val["dbg_total_size"] = stats.dbg_total_size;
 
+  val["header_item_count"] = stats.header_item_count;
+  val["header_item_bytes"] = stats.header_item_bytes;
   val["string_id_count"] = stats.string_id_count;
   val["string_id_bytes"] = stats.string_id_bytes;
   val["type_id_count"] = stats.type_id_count;

@@ -12,6 +12,11 @@
 
 class DexLoaderTest : public RedexTest {};
 
+TEST_F(DexLoaderTest, dex_header_item_size) {
+  // https://source.android.com/devices/tech/dalvik/dex-format#type-codes
+  EXPECT_EQ(0x70, sizeof(dex_header));
+}
+
 TEST_F(DexLoaderTest, align_ptr) {
   EXPECT_EQ((uint8_t*)0, align_ptr((uint8_t*)0, 1));
   EXPECT_EQ((uint8_t*)1, align_ptr((uint8_t*)1, 1));

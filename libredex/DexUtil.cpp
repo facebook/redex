@@ -389,6 +389,8 @@ dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
   lhs.num_dbg_items += rhs.num_dbg_items;
   lhs.dbg_total_size += rhs.dbg_total_size;
 
+  lhs.header_item_count += rhs.header_item_count;
+  lhs.header_item_bytes += rhs.header_item_bytes;
   lhs.string_id_count += rhs.string_id_count;
   lhs.string_id_bytes += rhs.string_id_bytes;
   lhs.type_id_count += rhs.type_id_count;
