@@ -282,7 +282,125 @@ Result check_load_params(const DexMethod* method) {
     }
     handler = handler_t(handle_other);
   }
+  return Result::Ok();
+}
 
+// Every variable created by a new-instance call should be initialized by a
+// proper invoke-direct <init>. Here, we perform simple check to find some
+// missing calls resulting in use of uninitialized variables. We correctly track
+// variables in a basic block, the most common form of allocation+init.
+Result check_uninitialized(const DexMethod* method) {
+  auto* code = method->get_code();
+  std::map<uint16_t, IRInstruction*> uninitialized_regs;
+  std::map<IRInstruction*, std::set<uint16_t>> uninitialized_regs_rev;
+  auto remove_from_uninitialized_list = [&](uint16_t reg) {
+    auto it = uninitialized_regs.find(reg);
+    if (it != uninitialized_regs.end()) {
+      uninitialized_regs_rev[it->second].erase(reg);
+      uninitialized_regs.erase(reg);
+    }
+  };
+
+  for (auto it = code->begin(); it != code->end(); ++it) {
+    if (it->type != MFLOW_OPCODE) {
+      continue;
+    }
+    auto* insn = it->insn;
+    auto op = insn->opcode();
+
+    if (op == OPCODE_NEW_INSTANCE) {
+      ++it;
+      while (it != code->end() && it->type != MFLOW_OPCODE)
+        ++it;
+      if (it == code->end() ||
+          it->insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
+        auto prev = it;
+        prev--;
+        return Result::make_error("No opcode-move-result after new-instance " +
+                                  show(*prev) + " in \n" + show(code->cfg()));
+      }
+
+      auto reg_dest = it->insn->dest();
+      remove_from_uninitialized_list(reg_dest);
+
+      uninitialized_regs[reg_dest] = insn;
+      uninitialized_regs_rev[insn].insert(reg_dest);
+      continue;
+    }
+
+    if (is_move(op) && !opcode::is_move_result_any(op)) {
+      assert(insn->srcs().size() > 0);
+      auto src = insn->srcs()[0];
+      auto dest = insn->dest();
+      if (src == dest) continue;
+
+      auto it_src = uninitialized_regs.find(src);
+      // We no longer care about the old dest
+      remove_from_uninitialized_list(dest);
+      // But if src was uninitialized, dest is now too
+      if (it_src != uninitialized_regs.end()) {
+        uninitialized_regs[dest] = it_src->second;
+        uninitialized_regs_rev[it_src->second].insert(dest);
+      }
+      continue;
+    }
+
+    auto create_error = [&](const IRInstruction* instruction,
+                            const IRCode* code) {
+      return Result::make_error("Use of uninitialized variable " +
+                                show(instruction) + " detected at " +
+                                show(*it) + " in \n" + show(code->cfg()));
+    };
+
+    if (op == OPCODE_INVOKE_DIRECT) {
+      auto const& sources = insn->srcs();
+      auto object = sources[0];
+
+      auto object_it = uninitialized_regs.find(object);
+      if (object_it != uninitialized_regs.end()) {
+        auto* object_ir = object_it->second;
+        if (insn->get_method()->get_name()->str() != "<init>") {
+          return create_error(object_ir, code);
+        }
+        if (insn->get_method()->get_class()->str() !=
+            object_ir->get_type()->str()) {
+          return Result::make_error("Variable " + show(object_ir) +
+                                    "initialized with the wrong type at " +
+                                    show(*it) + " in \n" + show(code->cfg()));
+        }
+        for (auto reg : uninitialized_regs_rev[object_ir]) {
+          uninitialized_regs.erase(reg);
+        }
+        uninitialized_regs_rev.erase(object_ir);
+      }
+
+      for (unsigned int i = 1; i < sources.size(); i++) {
+        auto u_it = uninitialized_regs.find(sources[i]);
+        if (u_it != uninitialized_regs.end())
+          return create_error(u_it->second, code);
+      }
+      continue;
+    }
+
+    auto const& sources = insn->srcs();
+    for (auto reg : sources) {
+      auto u_it = uninitialized_regs.find(reg);
+      if (u_it != uninitialized_regs.end())
+        return create_error(u_it->second, code);
+    }
+
+    if (insn->has_dest()) remove_from_uninitialized_list(insn->dest());
+
+    // We clear the structures after any branch, this doesn't cover all the
+    // possible issues, but is simple
+    auto branchingness = opcode::branchingness(op);
+    if (op == OPCODE_THROW ||
+        (branchingness != opcode::Branchingness::BRANCH_NONE &&
+         branchingness != opcode::Branchingness::BRANCH_THROW)) {
+      uninitialized_regs.clear();
+      uninitialized_regs_rev.clear();
+    }
+  }
   return Result::Ok();
 }
 
@@ -352,7 +470,7 @@ Result check_structure(const DexMethod* method, bool check_no_overwrite_this) {
                                 show(*it) + " in \n" + show(code));
     }
   }
-  return Result::Ok();
+  return check_uninitialized(method);
 }
 
 /**
@@ -422,6 +540,7 @@ void IRTypeChecker::run() {
     return;
   }
 
+  code->build_cfg(/* editable */ false);
   auto result = check_structure(m_dex_method, m_check_no_overwrite_this);
   if (result != Result::Ok()) {
     m_complete = true;
@@ -431,7 +550,6 @@ void IRTypeChecker::run() {
   }
 
   // We then infer types for all the registers used in the method.
-  code->build_cfg(/* editable */ false);
   const cfg::ControlFlowGraph& cfg = code->cfg();
 
   // Check that the load-params match the signature.

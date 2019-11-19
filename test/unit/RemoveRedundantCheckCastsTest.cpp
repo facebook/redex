@@ -138,6 +138,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "C;")
       (move-result-pseudo-object v0)
     )
@@ -152,6 +153,7 @@ TEST_F(RemoveRedundantCheckCastsTest, simplestCase) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -192,6 +194,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -206,6 +209,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -220,6 +224,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
       (check-cast v0 "C;")
       (move-result-pseudo-object v0)
     )
@@ -234,6 +239,7 @@ TEST_F(RemoveRedundantCheckCastsTest, skipParentCheckCast) {
     (
       (new-instance "A;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "A;.<init>:()V")
     )
   )";
   auto expected_code = assembler::ircode_from_string(expected_str);
@@ -248,6 +254,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -262,6 +269,7 @@ TEST_F(RemoveRedundantCheckCastsTest, subclassCheckCast) {
     (
       (new-instance "C;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "C;.<init>:()V")
       (check-cast v0 "B;")
       (move-result-pseudo-object v0)
     )
@@ -278,6 +286,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (check-cast v0 "I_B0;")
       (move-result-pseudo-object v1)
     )
@@ -292,6 +301,7 @@ TEST_F(RemoveRedundantCheckCastsTest, directInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -307,6 +317,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (check-cast v0 "I_C;")
       (move-result-pseudo-object v1)
     )
@@ -321,6 +332,7 @@ TEST_F(RemoveRedundantCheckCastsTest, parentInterfaceCheckCast_WithMove) {
     (
       (new-instance "B;")
       (move-result-pseudo-object v0)
+      (invoke-direct (v0) "B;.<init>:()V")
       (move-object v1 v0)
     )
   )";
@@ -340,11 +352,13 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (if-eqz v0 :lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "B;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "B;.<init>:()V")
 
       (:lb1)
       (check-cast v1 "I_C;")
@@ -366,13 +380,13 @@ TEST_F(RemoveRedundantCheckCastsTest, sameTypeInterfaceCheckCast) {
       (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-
+      (invoke-direct (v0) "B;.<init>:()V")
       (:lb0)
       (return-void)
-
       (:lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "B;.<init>:()V")
       (goto :lb0)
     )
   )";
@@ -392,11 +406,13 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (if-eqz v0 :lb0)
       (new-instance "B;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "B;.<init>:()V")
       (goto :lb1)
 
       (:lb0)
       (new-instance "A;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "A;.<init>:()V")
 
       (:lb1)
       (check-cast v1 "I_C;")
@@ -418,13 +434,13 @@ TEST_F(RemoveRedundantCheckCastsTest, differentTypeInterfaceCheckCast) {
       (if-eqz v0 :lb1)
       (new-instance "B;")
       (move-result-pseudo-object v1)
-
+      (invoke-direct (v0) "B;.<init>:()V")
       (:lb0)
       (return-void)
-
       (:lb1)
       (new-instance "A;")
       (move-result-pseudo-object v1)
+      (invoke-direct (v0) "A;.<init>:()V")
       (goto :lb0)
     )
   )";

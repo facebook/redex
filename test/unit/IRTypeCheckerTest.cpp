@@ -672,6 +672,108 @@ TEST_F(IRTypeCheckerTest, joinDexTypesSharingCommonBaseSimple) {
   EXPECT_EQ(type_base, checker.get_dex_type(insns[9], 0));
 }
 
+TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "C;")
+        (move-result-pseudo-object v0)
+        (invoke-direct (v0) "C;.<init>:()V")
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.good()) << checker.what();
+  }
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "C;")
+        (move-result-pseudo-object v0)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.good()) << checker.what();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "C;")
+        (move-result-pseudo-object v0)
+        (move-object v1 v0)
+        (return-object v1)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.good());
+    EXPECT_THAT(checker.what(),
+                MatchesRegex("^Use of uninitialized variable.*"));
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (new-instance "C;")
+      (move-result-pseudo-object v0)
+      (move-object v1 v0)
+      (invoke-direct (v0) "C;.<init>:()V")
+      (return-object v1)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.good()) << checker.what();
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+    (
+      (new-instance "C;")
+      (move-result-pseudo-object v0)
+      (move-object v1 v0)
+      (return-object v1)
+    )
+  )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_FALSE(checker.good());
+    EXPECT_THAT(checker.what(),
+                MatchesRegex("^Use of uninitialized variable.*"));
+  }
+
+  {
+    auto method = DexMethod::make_method("LFoo;.bar:(LBar;)LFoo;")
+                      ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
+    method->set_code(assembler::ircode_from_string(R"(
+      (
+        (new-instance "C;")
+        (move-result-pseudo-object v0)
+        (new-instance "C;")
+        (move-result-pseudo-object v5)
+        (invoke-direct (v5) "C;.<init>:()V")
+        (return-object v5)
+        (return-object v0)
+      )
+    )"));
+    IRTypeChecker checker(method);
+    checker.run();
+    EXPECT_TRUE(checker.good()) << checker.what();
+  }
+}
+
 TEST_F(IRTypeCheckerTest, checkNoOverwriteThis) {
   // Good
   {

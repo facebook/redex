@@ -208,7 +208,7 @@ TEST_F(PeepholeNPETest, ThrowNonNPENotVerifiable) {
      (
       (new-instance "Ljava/lang/IllegalArgumentException;")
       (move-result-pseudo-object v0)
-      (invoke-direct (v0) "Ljava/lang/NullPointerException;.<init>:()V")
+      (invoke-direct (v0) "Ljava/lang/IllegalArgumentException;.<init>:()V")
       (throw v0)
      )
     )";
