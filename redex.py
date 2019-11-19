@@ -206,11 +206,15 @@ def run_and_stream_stderr(args, env, pass_fds):
         err_out = []
         # Copy and stash the output.
         for line in proc.stderr:
-            str_line = line.decode(sys.stdout.encoding)
+            try:
+                str_line = line.decode(sys.stdout.encoding)
+            except UnicodeDecodeError:
+                str_line = "<UnicodeDecodeError>\n"
             sys.stderr.write(str_line)
             err_out.append(str_line)
             if len(err_out) > 1000:
                 err_out = err_out[100:]
+
         returncode = proc.wait()
 
         return (returncode, err_out)
