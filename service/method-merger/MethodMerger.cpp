@@ -41,9 +41,9 @@ std::vector<DexMethod*> get_direct_instance_methods(
   return methods;
 }
 
-MethodOrderedSet methodgroups_to_methodset(
+std::unordered_set<DexMethod*> methodgroups_to_methodset(
     const method_merger::MethodGroups& method_groups) {
-  MethodOrderedSet method_set;
+  std::unordered_set<DexMethod*> method_set;
   for (auto& methods : method_groups) {
     method_set.insert(methods.begin(), methods.end());
   }

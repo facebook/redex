@@ -75,8 +75,8 @@ void replace_method_args_head(DexMethod* meth, DexType* new_head) {
                true /* update deobfuscated name */);
 }
 
-void fix_visibility_helper(DexMethod* method,
-                           MethodOrderedSet& vmethods_created) {
+template <typename T>
+void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
   // Fix non-static non-ctor private callees
   for (auto& mie : InstructionIterable(method->get_code())) {
     auto insn = mie.insn;
@@ -276,7 +276,7 @@ ModelMethodMerger::ModelMethodMerger(
 }
 
 void ModelMethodMerger::fix_visibility() {
-  MethodOrderedSet vmethods_created;
+  std::unordered_set<DexMethod*> vmethods_created;
   for (const auto& pair : m_merger_ctors) {
     const std::vector<DexMethod*>& ctors = pair.second;
     for (DexMethod* m : ctors) {

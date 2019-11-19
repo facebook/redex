@@ -15,8 +15,6 @@
 #include "TypeReference.h"
 #include "TypeTags.h"
 
-using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
-
 namespace {
 
 constexpr const char* METHOD_META =
@@ -44,9 +42,6 @@ bool overlaps_with_an_existing_virtual_scope(DexType* type,
 
 } // namespace
 
-using MethodToConstants =
-    std::map<DexMethod*, ConstantValues, dexmethods_comparator>;
-
 const DexType* s_method_meta_anno;
 
 ConstantLifting::ConstantLifting() : m_num_const_lifted_methods(0) {
@@ -69,8 +64,8 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
     const TypeTags* type_tags,
     const std::vector<DexMethod*>& methods,
     const size_t stud_method_threshold) {
-  MethodOrderedSet lifted;
-  MethodToConstants lifted_constants;
+  std::unordered_set<DexMethod*> lifted;
+  std::unordered_map<DexMethod*, ConstantValues> lifted_constants;
   for (auto method : methods) {
     always_assert(has_anno(method, s_method_meta_anno));
     auto kinds_str = parse_str_anno_value(method, s_method_meta_anno,

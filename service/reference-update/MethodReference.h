@@ -13,8 +13,6 @@
 #include "DexStore.h"
 #include "IRInstruction.h"
 
-using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
-
 namespace method_reference {
 
 // A callsite instruction in caller. mie should always contain an IRInstruction.
@@ -65,8 +63,10 @@ void update_call_refs_simple(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee);
 
-CallSites collect_call_refs(const Scope& scope,
-                            const MethodOrderedSet& callees);
+// Allowed types: * std::set<DexMethod*, dexmethods_comparator>
+//                * std::unordered_set<DexMethod*>
+template <typename T>
+CallSites collect_call_refs(const Scope& scope, const T& callees);
 
 /**
  * Replace instance method call with static method call.

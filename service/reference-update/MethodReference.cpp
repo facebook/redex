@@ -98,8 +98,8 @@ void update_call_refs_simple(
   walk::parallel::code(scope, patcher);
 }
 
-CallSites collect_call_refs(const Scope& scope,
-                            const MethodOrderedSet& callees) {
+template <typename T>
+CallSites collect_call_refs(const Scope& scope, const T& callees) {
   if (callees.empty()) {
     CallSites empty;
     return empty;
@@ -141,6 +141,12 @@ CallSites collect_call_refs(const Scope& scope,
       walk::parallel::methods<CallSites, Append>(scope, patcher);
   return call_sites;
 }
+
+using MethodOrderedSet = std::set<DexMethod*, dexmethods_comparator>;
+template CallSites collect_call_refs<MethodOrderedSet>(
+    const Scope& scope, const MethodOrderedSet& callees);
+template CallSites collect_call_refs<std::unordered_set<DexMethod*>>(
+    const Scope& scope, const std::unordered_set<DexMethod*>& callees);
 
 int wrap_instance_call_with_static(
     DexStoresVector& stores,
