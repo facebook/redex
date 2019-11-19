@@ -73,14 +73,6 @@ struct class_load_work {
   int num;
 };
 
-const uint8_t* align_ptr(const uint8_t* ptr, size_t alignment) {
-  if ((size_t)ptr % alignment != 0) {
-    return ptr + (alignment - ((size_t)ptr % alignment));
-  } else {
-    return ptr;
-  }
-}
-
 void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   if (!stats) {
     return;
@@ -97,6 +89,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       enc_arrays;
   std::set<DexTypeList*, dextypelists_comparator> type_lists;
   std::unordered_set<uint32_t> anno_offsets;
+
   for (uint32_t cidx = 0; cidx < dh->class_defs_size; ++cidx) {
     auto* clz = m_classes->at(cidx);
     if (clz == nullptr) {
@@ -185,6 +178,9 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     const uint8_t* initial_encdata = encdata;
 
     switch (item.type) {
+    case TYPE_HEADER_ITEM:
+      // No stats gathered.
+      break;
     case TYPE_STRING_ID_ITEM:
       stats->string_id_count += item.size;
       stats->string_id_bytes += item.size * sizeof(dex_string_id);
@@ -340,26 +336,6 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
       stats->string_data_bytes += encdata - initial_encdata;
       break;
-    case TYPE_ANNOTATIONS_DIR_ITEM:
-      stats->annotations_directory_count += item.size;
-
-      for (uint32_t j = 0; j < item.size; ++j) {
-        encdata = align_ptr(encdata, 4);
-
-        dex_annotations_directory_item* annotations_directory_item =
-            (dex_annotations_directory_item*)encdata;
-        encdata += sizeof(dex_annotations_directory_item);
-
-        encdata += sizeof(dex_field_annotation) *
-                   annotations_directory_item->fields_size;
-        encdata += sizeof(dex_method_annotation) *
-                   annotations_directory_item->methods_size;
-        encdata += sizeof(dex_parameter_annotation) *
-                   annotations_directory_item->parameters_size;
-      }
-
-      stats->annotations_directory_bytes += encdata - initial_encdata;
-      break;
     case TYPE_DEBUG_INFO_ITEM:
       stats->num_dbg_items += item.size;
       for (uint32_t j = 0; j < item.size; j++) {
@@ -426,6 +402,39 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       }
       stats->dbg_total_size += encdata - initial_encdata;
       break;
+    case TYPE_ANNOTATION_ITEM:
+      // TBD!
+      break;
+    case TYPE_ENCODED_ARRAY_ITEM:
+      // TBD!
+      break;
+    case TYPE_ANNOTATIONS_DIR_ITEM:
+      stats->annotations_directory_count += item.size;
+
+      for (uint32_t j = 0; j < item.size; ++j) {
+        encdata = align_ptr(encdata, 4);
+        dex_annotations_directory_item* annotations_directory_item =
+            (dex_annotations_directory_item*)encdata;
+
+        encdata += sizeof(dex_annotations_directory_item);
+        encdata += sizeof(dex_field_annotation) *
+                   annotations_directory_item->fields_size;
+        encdata += sizeof(dex_method_annotation) *
+                   annotations_directory_item->methods_size;
+        encdata += sizeof(dex_parameter_annotation) *
+                   annotations_directory_item->parameters_size;
+      }
+
+      stats->annotations_directory_bytes += encdata - initial_encdata;
+      break;
+    case TYPE_HIDDENAPI_CLASS_DATA_ITEM:
+      // No stats gathered.
+      break;
+    default:
+      fprintf(stderr,
+              "warning: map_list item #%u is of unknown type: 0x%04hX\n",
+              i,
+              item.type);
     }
   }
 }

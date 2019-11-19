@@ -24,3 +24,13 @@ DexClasses load_classes_from_dex(const dex_header* dh,
                                  bool balloon = true);
 const std::string load_dex_magic_from_dex(const char* location);
 void balloon_for_test(const Scope& scope);
+
+static inline const uint8_t* align_ptr(const uint8_t* const ptr,
+                                       const size_t alignment) {
+  const size_t alignment_error = ((size_t)ptr) % alignment;
+  if (alignment_error != 0) {
+    return ptr - alignment_error + alignment;
+  } else {
+    return ptr;
+  }
+}
