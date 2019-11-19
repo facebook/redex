@@ -7,9 +7,9 @@
 
 #pragma once
 
-#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "Util.h"
 
@@ -25,7 +25,11 @@
 
 #define DEX_HEADER_DEXMAGIC_V35 "dex\n035"
 #define DEX_HEADER_DEXMAGIC_V37 "dex\n037"
+#define DEX_HEADER_DEXMAGIC_V38 "dex\n038"
+#define DEX_HEADER_DEXMAGIC_V39 "dex\n039"
+
 #define ENDIAN_CONSTANT (0x12345678)
+#define REVERSE_ENDIAN_CONSTANT (0x78563412)
 
 /* clang-format off */
 #define TYPE_HEADER_ITEM             (0x0000)
@@ -94,13 +98,9 @@ PACKED(struct dex_header {
   uint32_t data_off;
 });
 
-PACKED(struct dex_string_id {
-  uint32_t offset;
-});
+PACKED(struct dex_string_id { uint32_t offset; });
 
-PACKED(struct dex_type_id {
-  uint32_t string_idx;
-});
+PACKED(struct dex_type_id { uint32_t string_idx; });
 
 PACKED(struct dex_map_item {
   uint16_t type;
@@ -196,6 +196,7 @@ PACKED(struct dex_annotations_directory_item {
   uint32_t parameters_size;
 });
 
+/* clang-format off */
 using DexDebugItemOpcode = uint8_t;
 enum DexDebugItemOpcodeValues : uint8_t {
   DBG_END_SEQUENCE         = 0x00,
@@ -209,6 +210,7 @@ enum DexDebugItemOpcodeValues : uint8_t {
   DBG_SET_EPILOGUE_BEGIN   = 0x08,
   DBG_SET_FILE             = 0x09
 };
+/* clang-format on */
 
 constexpr int32_t DBG_FIRST_SPECIAL = 0x0a;
 constexpr int32_t DBG_LAST_SPECIAL = 0xff;
