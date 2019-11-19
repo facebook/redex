@@ -22,21 +22,34 @@
 #include "WorkQueue.h"
 
 /**
- * A wrapper around a type which allocates it on a different cache line.
- * This guarantees that different CPUs can access it concurrently without
- * locking or evicting memory from the other cores.
+ * A wrapper around a type which allocates it aligned to the cache line.
+ * This avoids potential cache line bouncing as different cores issue
+ * concurrent writes to distinct instances of \p T that would otherwise have
+ * occupied the same line.
  */
 template <typename T>
-class CacheLinePadded {
+class CacheAligned {
  public:
   template <typename... Args>
-  CacheLinePadded(Args&&... args) : padded_obj(std::forward<Args>(args)...) {}
+  CacheAligned(Args&&... args) : m_aligned(std::forward<Args>(args)...) {}
 
-  operator T&() { return padded_obj; }
+  inline operator T&();
 
  private:
-  alignas(CACHE_LINE_SIZE) T padded_obj;
+  alignas(CACHE_LINE_SIZE) T m_aligned;
 };
+
+template <typename T>
+inline CacheAligned<T>::operator T&() {
+  struct Canary {
+    int x;
+    CacheAligned<T> aligned;
+  };
+  static_assert(offsetof(Canary, aligned) % CACHE_LINE_SIZE == 0,
+                "Expecting alignment to cache line size.");
+
+  return m_aligned;
+}
 
 /**
  * A collection of methods useful for iterating over elements of DexClasses.
@@ -438,7 +451,7 @@ class walk {
         const std::function<void(DexMethod*, Accumulator*)>& walker,
         size_t num_threads = redex_parallel::default_num_threads(),
         Accumulator init = Accumulator()) {
-      std::vector<CacheLinePadded<Accumulator>> acc_vec(num_threads, init);
+      std::vector<CacheAligned<Accumulator>> acc_vec(num_threads, init);
 
       auto wq = workqueue_foreach<DexClass*>(
           [&](DexClass* cls) {
