@@ -68,11 +68,11 @@ enum SCORE {
     return null;
   }
 
+  private SCORE instance_direct() { return this; }
+
   // Virtual methods are safe.
   // POSTCHECK-DAG: method: direct redex.SCORE.is_max$REDEX${{.*}}:(java.lang.Integer)boolean
-  public boolean is_max() {
-    return this == THREE;
-  }
+  public boolean is_max() { return instance_direct() == THREE; }
 
   // POSTCHECK-DAG: method: direct redex.SCORE.toString$REDEX${{.*}}:(java.lang.Integer)java.lang.String
   public String toString() {

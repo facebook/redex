@@ -332,6 +332,15 @@ class OptimizeEnums {
           return false;
         }
 
+        for (auto& dmethod : cls->get_dmethods()) {
+          if (is_static(dmethod) || is_constructor(dmethod)) {
+            continue;
+          }
+          if (!can_rename(dmethod)) {
+            return false;
+          }
+        }
+
         for (auto& vmethod : cls->get_vmethods()) {
           if (!can_rename(vmethod)) {
             return false;

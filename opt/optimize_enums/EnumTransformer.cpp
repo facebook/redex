@@ -51,8 +51,9 @@
  *  -- invoke-virtual LCandidateEnum;.toString:()String =>
  *                    LCandidateEnum;.redex$OE$name:(Integer)String
  *
- *  We also make all virtual methods static and keep them in their original
- * class while also changing their invocations to static.
+ *  We also make all virtual methods and instance direct methods to be static
+ * and keep them in their original class while also changing their invocations
+ * to static.
  * 3. Clean up the static fields of candidate enums and update these enum
  * classes to inherit java.lang.Object instead of java.lang.Enum.
  * 4. Update specs of methods and fields based on name mangling.
@@ -75,8 +76,9 @@ struct EnumUtil {
   // later.
   ConcurrentSet<DexMethodRef*> m_substitute_methods;
 
-  // Store virtual methods of candidate enums that will be made static later.
-  ConcurrentSet<DexMethod*> m_virtual_methods;
+  // Store virtual and direct methods of candidate enums that will be
+  // made static later.
+  ConcurrentSet<DexMethod*> m_instance_methods;
 
   // Store methods for getting instance fields to be generated later.
   ConcurrentMap<DexFieldRef*, DexMethodRef*> m_get_instance_field_methods;
@@ -226,7 +228,7 @@ struct EnumUtil {
     } else {
       auto method = resolve_method(method_ref, MethodSearch::Virtual);
       always_assert(method);
-      m_virtual_methods.insert(method);
+      m_instance_methods.insert(method);
       return method_ref;
     }
   }
@@ -636,6 +638,12 @@ class CodeTransformer final {
         update_invoke_user_method(env, cfg, block, mie);
       }
     } break;
+    case OPCODE_INVOKE_DIRECT: {
+      auto method = insn->get_method();
+      if (!is_init(method)) {
+        update_invoke_user_method(env, cfg, block, mie);
+      }
+    } break;
     case OPCODE_INVOKE_STATIC: {
       auto method = insn->get_method();
       if (method == m_enum_util->STRING_VALUEOF_METHOD) {
@@ -937,7 +945,7 @@ class CodeTransformer final {
   }
 
   /**
-   * If this is an invocation of a user-defined virtual method on a
+   * If this is an invocation of a user-defined virtual or direct method on a
    * CandidateEnum, then we make that method static. If that method is
    * toString(), then we call one of the appropriate methods Enum.name()
    * or CandidateEnum.toString(). Otherwise we do nothing.
@@ -962,9 +970,9 @@ class CodeTransformer final {
             type_class(candidate_type)) == nullptr) {
       update_invoke_name(env, cfg, block, mie);
     } else {
-      auto method = resolve_method(method_ref, MethodSearch::Virtual);
+      auto method = resolve_method(method_ref, opcode_to_search(insn));
       always_assert(method);
-      m_enum_util->m_virtual_methods.insert(method);
+      m_enum_util->m_instance_methods.insert(method);
       auto new_insn = (new IRInstruction(*insn))
                           ->set_opcode(OPCODE_INVOKE_STATIC)
                           ->set_method(method);
@@ -1100,11 +1108,13 @@ class EnumTransformer final {
           code_updater.run();
         });
     create_substitute_methods(m_enum_util->m_substitute_methods);
-    std::set<DexMethod*, dexmethods_comparator> virtual_methods(
-        m_enum_util->m_virtual_methods.begin(),
-        m_enum_util->m_virtual_methods.end());
-    for (auto vmethod : virtual_methods) {
-      mutators::make_static(vmethod);
+    std::vector<DexMethod*> instance_methods(
+        m_enum_util->m_instance_methods.begin(),
+        m_enum_util->m_instance_methods.end());
+    std::sort(instance_methods.begin(), instance_methods.end(),
+              dexmethods_comparator());
+    for (auto method : instance_methods) {
+      mutators::make_static(method);
     }
     std::map<DexFieldRef*, DexMethodRef*, dexfields_comparator> field_to_method(
         m_enum_util->m_get_instance_field_methods.begin(),
