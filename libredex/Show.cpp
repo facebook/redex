@@ -566,7 +566,8 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
     ss << boost::io::quoted(show(insn->get_string()));
     break;
   case opcode::Ref::Type:
-    ss << show(insn->get_type());
+    ss << (deobfuscated ? show_deobfuscated(insn->get_type())
+                        : show(insn->get_type()));
     break;
   case opcode::Ref::Field:
     if (deobfuscated) {
