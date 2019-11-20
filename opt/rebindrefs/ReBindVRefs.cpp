@@ -64,12 +64,19 @@ void try_desuperify(const DexMethod* caller,
                                    insn->get_method()->get_proto(),
                                    MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
-  if (callee != nullptr && !callee->is_external() && is_final(callee)) {
-    TRACE(BIND, 5, "Desuperifying %s because %s is final", SHOW(insn),
-          SHOW(callee));
-    insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
-    stats->num_desupered++;
+  if (callee == nullptr || callee->is_external() || !is_final(callee)) {
+    return;
   }
+  // Skip if the callee is an interface default method (037).
+  auto callee_cls = type_class(callee->get_class());
+  if (is_interface(callee_cls)) {
+    return;
+  }
+
+  TRACE(BIND, 5, "Desuperifying %s because %s is final", SHOW(insn),
+        SHOW(callee));
+  insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
+  stats->num_desupered++;
 }
 
 Stats replaced_virtual_refs(const mog::Graph& override_graph,
