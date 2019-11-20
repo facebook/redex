@@ -187,10 +187,8 @@ bool check_methods(
 
   DexType* current_type = methods.at(0)->get_class();
   for (DexMethod* meth : methods) {
-    if (!is_public(meth) || !meth->get_code() ||
-        methods_non_private.count(meth) == 0) {
+    if (!is_public(meth) || methods_non_private.count(meth) == 0) {
       // TODO(emmasevastian): When should we check non-public methods?
-      // TODO(emmasevastian): When should we still check if it is abstract?
       continue;
     }
 
