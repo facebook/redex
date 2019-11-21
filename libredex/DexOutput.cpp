@@ -487,7 +487,7 @@ void DexOutput::insert_map_item(uint16_t maptype,
     break;
   case TYPE_CLASS_DATA_ITEM:
     m_stats.class_data_count += size;
-    m_stats.class_data_count += bytes;
+    m_stats.class_data_bytes += bytes;
     break;
   case TYPE_CODE_ITEM:
     m_stats.code_count += size;
