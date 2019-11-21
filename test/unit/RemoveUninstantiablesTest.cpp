@@ -18,13 +18,13 @@ class RemoveUninstantiablesTest : public RedexTest {};
 
 /// Expect \c RemoveUninstantiablesPass to convert \p ACTUAL into \p EXPECTED
 /// where both parameters are strings containing IRCode in s-expression form.
-#define EXPECT_CHANGE(ACTUAL, EXPECTED)                               \
+#define EXPECT_CHANGE(OPERATION, ACTUAL, EXPECTED)                    \
   do {                                                                \
     auto actual_ir = assembler::ircode_from_string(ACTUAL);           \
     const auto expected_ir = assembler::ircode_from_string(EXPECTED); \
                                                                       \
     actual_ir->build_cfg();                                           \
-    RemoveUninstantiablesPass::remove_from_cfg(actual_ir->cfg());     \
+    RemoveUninstantiablesPass::OPERATION(actual_ir->cfg());           \
     actual_ir->clear_cfg();                                           \
                                                                       \
     EXPECT_CODE_EQ(expected_ir.get(), actual_ir.get());               \
@@ -68,18 +68,18 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (instance-of v0 "LFoo;")
-        (move-result-pseudo v1)
-        (instance-of v0 "LBar;")
-        (move-result-pseudo v1)
-      ))",
-      /* EXPECTED */ R"((
-        (const v1 0)
-        (instance-of v0 "LBar;")
-        (move-result-pseudo v1)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (instance-of v0 "LFoo;")
+                  (move-result-pseudo v1)
+                  (instance-of v0 "LBar;")
+                  (move-result-pseudo v1)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v1 0)
+                  (instance-of v0 "LBar;")
+                  (move-result-pseudo v1)
+                ))");
 }
 
 TEST_F(RemoveUninstantiablesTest, Invoke) {
@@ -89,79 +89,79 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-virtual (v0) "LFoo;.qux:()LFoo;")
-        (move-result-object v1)
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v2 0)
-        (throw v2)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-virtual (v0) "LFoo;.qux:()LFoo;")
+                  (move-result-object v1)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v2 0)
+                  (throw v2)
+                ))");
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-virtual (v0) "LFoo;.baz:()V")
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v1 0)
-        (throw v1)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-virtual (v0) "LFoo;.baz:()V")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-virtual (v0) "LBar;.baz:()V")
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (invoke-virtual (v0) "LBar;.baz:()V")
-        (return-void)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-virtual (v0) "LBar;.baz:()V")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (invoke-virtual (v0) "LBar;.baz:()V")
+                  (return-void)
+                ))");
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-direct (v0) "LFoo;.qux:()LFoo;")
-        (move-result-object v1)
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v2 0)
-        (throw v2)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-direct (v0) "LFoo;.qux:()LFoo;")
+                  (move-result-object v1)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v2 0)
+                  (throw v2)
+                ))");
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-direct (v0) "LFoo;.baz:()V")
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v1 0)
-        (throw v1)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-direct (v0) "LFoo;.baz:()V")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (invoke-direct (v0) "LBar;.baz:()V")
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (invoke-direct (v0) "LBar;.baz:()V")
-        (return-void)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (invoke-direct (v0) "LBar;.baz:()V")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (invoke-direct (v0) "LBar;.baz:()V")
+                  (return-void)
+                ))");
 }
 
 TEST_F(RemoveUninstantiablesTest, GetField) {
@@ -174,22 +174,22 @@ TEST_F(RemoveUninstantiablesTest, GetField) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (iget v0 "LBar;.a:I")
-        (move-result-pseudo v1)
-        (iget v0 "LFoo;.a:I")
-        (move-result-pseudo v2)
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (iget v0 "LBar;.a:I")
-        (move-result-pseudo v1)
-        (const v3 0)
-        (throw v3)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (iget v0 "LBar;.a:I")
+                  (move-result-pseudo v1)
+                  (iget v0 "LFoo;.a:I")
+                  (move-result-pseudo v2)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (iget v0 "LBar;.a:I")
+                  (move-result-pseudo v1)
+                  (const v3 0)
+                  (throw v3)
+                ))");
 }
 
 TEST_F(RemoveUninstantiablesTest, PutField) {
@@ -202,23 +202,23 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (const v1 0)
-        (iput v0 v1 "LBar;.a:I")
-        (const v2 0)
-        (iput v0 v2 "LFoo;.a:I")
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v1 0)
-        (iput v0 v1 "LBar;.a:I")
-        (const v2 0)
-        (const v3 0)
-        (throw v3)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (iput v0 v1 "LBar;.a:I")
+                  (const v2 0)
+                  (iput v0 v2 "LFoo;.a:I")
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (iput v0 v1 "LBar;.a:I")
+                  (const v2 0)
+                  (const v3 0)
+                  (throw v3)
+                ))");
 }
 
 TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
@@ -236,29 +236,29 @@ TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(
-      /* ACTUAL */ R"((
-        (const v0 0)
-        (iget-object v0 "LBar;.mFoo:LFoo;")
-        (move-result-pseudo v1)
-        (iget-object v0 "LBar;.mBar:LBar;")
-        (move-result-pseudo v2)
-        (sget-object "LBar.sFoo:LFoo;")
-        (move-result-pseudo v3)
-        (sget-object "LBar.sBar:LBar;")
-        (move-result-pseudo v4)
-        (return-void)
-      ))",
-      /* EXPECTED */ R"((
-        (const v0 0)
-        (const v1 0)
-        (iget-object v0 "LBar;.mBar:LBar;")
-        (move-result-pseudo v2)
-        (const v3 0)
-        (sget-object "LBar.sBar:LBar;")
-        (move-result-pseudo v4)
-        (return-void)
-      ))");
+  EXPECT_CHANGE(remove_from_cfg,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (iget-object v0 "LBar;.mFoo:LFoo;")
+                  (move-result-pseudo v1)
+                  (iget-object v0 "LBar;.mBar:LBar;")
+                  (move-result-pseudo v2)
+                  (sget-object "LBar.sFoo:LFoo;")
+                  (move-result-pseudo v3)
+                  (sget-object "LBar.sBar:LBar;")
+                  (move-result-pseudo v4)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (const v1 0)
+                  (iget-object v0 "LBar;.mBar:LBar;")
+                  (move-result-pseudo v2)
+                  (const v3 0)
+                  (sget-object "LBar.sBar:LBar;")
+                  (move-result-pseudo v4)
+                  (return-void)
+                ))");
 }
 
 } // namespace
