@@ -221,4 +221,44 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
       ))");
 }
 
+TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
+  def_class("LFoo;");
+  def_class("LBar;", Bar_init);
+
+  DexField::make_field("LBar;.mFoo:LFoo;")->make_concrete(ACC_PUBLIC);
+  DexField::make_field("LBar;.sFoo:LFoo;")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+
+  DexField::make_field("LBar;.mBar:LBar;")->make_concrete(ACC_PUBLIC);
+  DexField::make_field("LBar;.sBar:LBar;")
+      ->make_concrete(ACC_PUBLIC | ACC_STATIC);
+
+  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+
+  EXPECT_CHANGE(
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (iget-object v0 "LBar;.mFoo:LFoo;")
+        (move-result-pseudo v1)
+        (iget-object v0 "LBar;.mBar:LBar;")
+        (move-result-pseudo v2)
+        (sget-object "LBar.sFoo:LFoo;")
+        (move-result-pseudo v3)
+        (sget-object "LBar.sBar:LBar;")
+        (move-result-pseudo v4)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (const v1 0)
+        (iget-object v0 "LBar;.mBar:LBar;")
+        (move-result-pseudo v2)
+        (const v3 0)
+        (sget-object "LBar.sBar:LBar;")
+        (move-result-pseudo v4)
+        (return-void)
+      ))");
+}
+
 } // namespace

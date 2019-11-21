@@ -51,42 +51,38 @@ void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
-    switch (insn->opcode()) {
+    auto op = insn->opcode();
+    switch (op) {
     case OPCODE_INSTANCE_OF:
       if (is_uninstantiable_class(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
       }
-      break;
+      continue;
+
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
       if (is_uninstantiable_class(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
         m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
       }
-      break;
-
-    case OPCODE_IGET:
-    case OPCODE_IGET_BYTE:
-    case OPCODE_IGET_CHAR:
-    case OPCODE_IGET_WIDE:
-    case OPCODE_IGET_SHORT:
-    case OPCODE_IGET_OBJECT:
-    case OPCODE_IGET_BOOLEAN:
-    case OPCODE_IPUT:
-    case OPCODE_IPUT_BYTE:
-    case OPCODE_IPUT_CHAR:
-    case OPCODE_IPUT_WIDE:
-    case OPCODE_IPUT_SHORT:
-    case OPCODE_IPUT_OBJECT:
-    case OPCODE_IPUT_BOOLEAN:
-      if (is_uninstantiable_class(insn->get_field()->get_class())) {
-        auto tmp = get_scratch();
-        m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
-      }
-      break;
+      continue;
 
     default:
+      break;
+    }
+
+    if ((is_iget(op) || is_iput(op)) &&
+        is_uninstantiable_class(insn->get_field()->get_class())) {
+      auto tmp = get_scratch();
+      m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+      continue;
+    }
+
+    if ((is_iget(op) || is_sget(op)) &&
+        is_uninstantiable_class(insn->get_field()->get_type())) {
+      auto dest = cfg.move_result_of(it)->insn->dest();
+      m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
       continue;
     }
   }

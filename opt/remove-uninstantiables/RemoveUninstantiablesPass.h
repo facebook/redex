@@ -19,6 +19,8 @@
 ///    be called on a `null` instance.
 ///  - Field accesses on an uninstantiable class can be replaced by a `throw
 ///    null;` for the same reason as above.
+///  - Field accesses returning an uninstantiable class will always return
+///    `null`.
 class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
