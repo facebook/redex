@@ -29,7 +29,9 @@ void public_everything(const Scope& scope) {
   });
 
   DexType* dalvikinner = DexType::get_type("Ldalvik/annotation/InnerClass;");
-  always_assert(dalvikinner != nullptr);
+  if (!dalvikinner) {
+    return;
+  }
 
   walk::annotations(scope, [&dalvikinner](DexAnnotation* anno) {
     if (anno->type() != dalvikinner) return;
