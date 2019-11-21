@@ -36,7 +36,8 @@ IRInstruction* ir_throw(uint32_t src) {
 
 } // namespace
 
-void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
+void RemoveUninstantiablesPass::replace_uninstantiable_refs(
+    cfg::ControlFlowGraph& cfg) {
   using Insert = cfg::CFGMutation::Insert;
   cfg::CFGMutation m(cfg);
 
@@ -88,6 +89,20 @@ void RemoveUninstantiablesPass::remove_from_cfg(cfg::ControlFlowGraph& cfg) {
   }
 }
 
+void RemoveUninstantiablesPass::replace_all_with_throw(
+    cfg::ControlFlowGraph& cfg) {
+
+  auto* entry = cfg.entry_block();
+  always_assert_log(entry, "Expect an entry block");
+
+  auto it = entry->to_cfg_instruction_iterator(
+      entry->get_first_non_param_loading_insn());
+  always_assert_log(!it.is_end(), "Expecting a non-param loading instruction");
+
+  auto tmp = cfg.allocate_temp();
+  cfg.insert_before(it, {ir_const(tmp, 0), ir_throw(tmp)});
+}
+
 void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles&,
                                          PassManager&) {
@@ -99,7 +114,11 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
     }
 
     code->build_cfg();
-    remove_from_cfg(code->cfg());
+    if (!is_static(method) && is_uninstantiable_class(method->get_class())) {
+      replace_all_with_throw(code->cfg());
+    } else {
+      replace_uninstantiable_refs(code->cfg());
+    }
     code->clear_cfg();
   });
 }

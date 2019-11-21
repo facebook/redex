@@ -13,6 +13,8 @@
 /// Looks for mentions of classes that have no constructors and use the fact
 /// they can't be instantiated to simplify those mentions:
 ///
+///  - If an instance method belongs to an uninstantiable class, its body can be
+///    replaced with `throw null;`.
 ///  - `instance-of` with an uninstantiable type parameter always returns false.
 ///  - `invoke-virtual` and `invoke-direct` on methods whose class is
 ///    uninstantiable can be replaced by a `throw null;`, because they can only
@@ -27,7 +29,13 @@ class RemoveUninstantiablesPass : public Pass {
 
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.
-  static void remove_from_cfg(cfg::ControlFlowGraph& cfg);
+  static void replace_uninstantiable_refs(cfg::ControlFlowGraph& cfg);
+
+  /// Replace the instructions in \p cfg with `throw null;`.  Preserves the
+  /// initial run of load-param instructions in the ControlFlowGraph.
+  ///
+  /// \pre Assumes that \p cfg is a non-empty instance method body.
+  static void replace_all_with_throw(cfg::ControlFlowGraph& cfg);
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

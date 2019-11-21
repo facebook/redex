@@ -30,6 +30,20 @@ class RemoveUninstantiablesTest : public RedexTest {};
     EXPECT_CODE_EQ(expected_ir.get(), actual_ir.get());               \
   } while (0)
 
+/// Expect method with full signature \p SIGNATURE to exist, and have a
+/// body corresponding to \p EXPECTED, a string containing IRCode in
+/// s-expression form.
+#define EXPECT_METHOD(SIGNATURE, EXPECTED)                            \
+  do {                                                                \
+    std::string signature = (SIGNATURE);                              \
+    auto method = DexMethod::get_method(signature);                   \
+    EXPECT_NE(nullptr, method) << "Method not found: " << signature;  \
+                                                                      \
+    auto actual_ir = method->as_def()->get_code();                    \
+    const auto expected_ir = assembler::ircode_from_string(EXPECTED); \
+    EXPECT_CODE_EQ(expected_ir.get(), actual_ir);                     \
+  } while (0)
+
 /// Register a new class with \p name, and methods \p methods, given in
 /// s-expression form.
 template <typename... Methods>
@@ -42,23 +56,55 @@ DexClass* def_class(const char* name, Methods... methods) {
 }
 
 const char* const Bar_init = R"(
-(method (public static) "LBar;.<init>:()V"
-  ((return-void))
+(method (private) "LBar;.<init>:()V"
+  ((load-param-object v0)
+   (return-void))
 ))";
 
 const char* const Bar_baz = R"(
 (method (public) "LBar;.baz:()V"
-  ((return-void))
+  ((load-param-object v0)
+   (return-void))
+))";
+
+/**
+ * int qux(Foo foo) {
+ *   int ret;
+ *   if (foo.qux() instanceof Foo) {
+ *     ret = 42;
+ *   } else {
+ *     ret = 43;
+ *   }
+ *   return ret;
+ * }
+ */
+const char* const Bar_qux = R"(
+(method (public) "LBar;.qux:(LFoo;)I"
+  ((load-param-object v0) ; this
+   (load-param-object v1) ; foo
+   (invoke-virtual (v1) "LFoo;.qux:()LFoo;")
+   (move-result-object v2)
+   (instance-of v2 "LFoo;")
+   (move-result-pseudo v3)
+   (if-eqz v3 :else)
+   (const v4 42)
+   (goto :end)
+   (:else)
+   (const v4 43)
+   (:end)
+   (return v4))
 ))";
 
 const char* const Foo_baz = R"(
 (method (public) "LFoo;.baz:()V"
-  ((return-void))
+  ((load-param-object v0)
+   (return-void))
 ))";
 
 const char* const Foo_qux = R"(
 (method (public) "LFoo;.qux:()LFoo;"
-  ((return-object v0))
+  ((load-param-object v0)
+   (return-object v0))
 ))";
 
 TEST_F(RemoveUninstantiablesTest, InstanceOf) {
@@ -68,7 +114,7 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (instance-of v0 "LFoo;")
                   (move-result-pseudo v1)
@@ -89,7 +135,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-virtual (v0) "LFoo;.qux:()LFoo;")
@@ -102,7 +148,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                   (throw v2)
                 ))");
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-virtual (v0) "LFoo;.baz:()V")
@@ -114,7 +160,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                   (throw v1)
                 ))");
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-virtual (v0) "LBar;.baz:()V")
@@ -126,7 +172,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                   (return-void)
                 ))");
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-direct (v0) "LFoo;.qux:()LFoo;")
@@ -139,7 +185,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                   (throw v2)
                 ))");
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-direct (v0) "LFoo;.baz:()V")
@@ -151,7 +197,7 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
                   (throw v1)
                 ))");
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (invoke-direct (v0) "LBar;.baz:()V")
@@ -174,7 +220,7 @@ TEST_F(RemoveUninstantiablesTest, GetField) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (iget v0 "LBar;.a:I")
@@ -202,7 +248,7 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (const v1 0)
@@ -236,7 +282,7 @@ TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
   ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
   ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
 
-  EXPECT_CHANGE(remove_from_cfg,
+  EXPECT_CHANGE(replace_uninstantiable_refs,
                 /* ACTUAL */ R"((
                   (const v0 0)
                   (iget-object v0 "LBar;.mFoo:LFoo;")
@@ -258,6 +304,67 @@ TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
                   (sget-object "LBar.sBar:LBar;")
                   (move-result-pseudo v4)
                   (return-void)
+                ))");
+}
+
+TEST_F(RemoveUninstantiablesTest, ReplaceAllWithThrow) {
+  EXPECT_CHANGE(replace_all_with_throw,
+                /* ACTUAL */ R"((
+                  (load-param-object v0)
+                  (const v1 0)
+                  (if-eqz v1 :l1)
+                  (const v2 1)
+                  (return-void)
+                  (:l1)
+                  (const v2 2)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (load-param-object v0)
+                  (const v3 0)
+                  (throw v3)
+                ))");
+}
+
+TEST_F(RemoveUninstantiablesTest, RunPass) {
+  DexStoresVector dss{{"test_store"}};
+
+  auto* Foo = def_class("LFoo;", Foo_baz, Foo_qux);
+  auto* Bar = def_class("LBar;", Bar_init, Bar_baz, Bar_qux);
+  dss.back().add_classes({Foo, Bar});
+
+  RemoveUninstantiablesPass pass;
+  PassManager pm({&pass});
+
+  ConfigFiles c(Json::nullValue);
+  pm.run_passes(dss, c);
+
+  EXPECT_METHOD("LFoo;.baz:()V",
+                R"((
+                  (load-param-object v0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
+
+  EXPECT_METHOD("LFoo;.qux:()LFoo;",
+                R"((
+                  (load-param-object v0)
+                  (const v1 0)
+                  (throw v1)
+                ))");
+
+  EXPECT_METHOD("LBar;.baz:()V",
+                R"((
+                  (load-param-object v0)
+                  (return-void)
+                ))");
+
+  EXPECT_METHOD("LBar;.qux:(LFoo;)I",
+                R"((
+                  (load-param-object v0)
+                  (load-param-object v1)
+                  (const v5 0)
+                  (throw v5)
                 ))");
 }
 
