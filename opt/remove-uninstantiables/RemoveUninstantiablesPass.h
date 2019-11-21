@@ -27,15 +27,31 @@ class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
 
+  /// Counts of references to uninstantiable classes removed.
+  struct Stats {
+    int instance_ofs = 0;
+    int invokes = 0;
+    int field_accesses_on_uninstantiable = 0;
+    int instance_methods_of_uninstantiable = 0;
+    int get_uninstantiables = 0;
+
+    Stats& operator+=(const Stats&);
+    Stats operator+(const Stats&) const;
+
+    /// Updates metrics tracked by \p mgr corresponding to these statistics.
+    /// Simultaneously prints the statistics via TRACE.
+    void report(PassManager& mgr) const;
+  };
+
   /// Look for mentions of uninstantiable classes in \p cfg and modify them
   /// in-place.
-  static void replace_uninstantiable_refs(cfg::ControlFlowGraph& cfg);
+  static Stats replace_uninstantiable_refs(cfg::ControlFlowGraph& cfg);
 
   /// Replace the instructions in \p cfg with `throw null;`.  Preserves the
   /// initial run of load-param instructions in the ControlFlowGraph.
   ///
   /// \pre Assumes that \p cfg is a non-empty instance method body.
-  static void replace_all_with_throw(cfg::ControlFlowGraph& cfg);
+  static Stats replace_all_with_throw(cfg::ControlFlowGraph& cfg);
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 };

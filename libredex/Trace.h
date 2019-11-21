@@ -97,6 +97,7 @@
   TM(RME)            \
   TM(RMGOTO)         \
   TM(RMU)            \
+  TM(RMUNINST)       \
   TM(RMUF)           \
   TM(RM_INTF)        \
   TM(RP)             \

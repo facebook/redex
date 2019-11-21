@@ -11,6 +11,7 @@
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "IRCode.h"
+#include "Trace.h"
 #include "Walkers.h"
 
 #include <boost/optional.hpp>
@@ -36,7 +37,45 @@ IRInstruction* ir_throw(uint32_t src) {
 
 } // namespace
 
-void RemoveUninstantiablesPass::replace_uninstantiable_refs(
+RemoveUninstantiablesPass::Stats& RemoveUninstantiablesPass::Stats::operator+=(
+    const Stats& that) {
+  this->instance_ofs += that.instance_ofs;
+  this->invokes += that.invokes;
+  this->field_accesses_on_uninstantiable +=
+      that.field_accesses_on_uninstantiable;
+  this->instance_methods_of_uninstantiable +=
+      that.instance_methods_of_uninstantiable;
+  this->get_uninstantiables += that.get_uninstantiables;
+  return *this;
+}
+
+RemoveUninstantiablesPass::Stats RemoveUninstantiablesPass::Stats::operator+(
+    const Stats& that) const {
+  auto copy = *this;
+  copy += that;
+  return copy;
+}
+
+void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
+#define REPORT(STAT)                                                       \
+  do {                                                                     \
+    mgr.incr_metric(#STAT, STAT);                                          \
+    TRACE(RMUNINST, 2, "  " #STAT ": %d/%d", STAT, mgr.get_metric(#STAT)); \
+  } while (0)
+
+  TRACE(RMUNINST, 2, "RemoveUninstantiablesPass Stats:");
+
+  REPORT(instance_ofs);
+  REPORT(invokes);
+  REPORT(field_accesses_on_uninstantiable);
+  REPORT(instance_methods_of_uninstantiable);
+  REPORT(get_uninstantiables);
+
+#undef REPORT
+}
+
+RemoveUninstantiablesPass::Stats
+RemoveUninstantiablesPass::replace_uninstantiable_refs(
     cfg::ControlFlowGraph& cfg) {
   using Insert = cfg::CFGMutation::Insert;
   cfg::CFGMutation m(cfg);
@@ -49,6 +88,7 @@ void RemoveUninstantiablesPass::replace_uninstantiable_refs(
     return *reg;
   };
 
+  Stats stats;
   auto ii = InstructionIterable(cfg);
   for (auto it = ii.begin(); it != ii.end(); ++it) {
     auto insn = it->insn;
@@ -58,6 +98,7 @@ void RemoveUninstantiablesPass::replace_uninstantiable_refs(
       if (is_uninstantiable_class(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
+        stats.instance_ofs++;
       }
       continue;
 
@@ -66,6 +107,7 @@ void RemoveUninstantiablesPass::replace_uninstantiable_refs(
       if (is_uninstantiable_class(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
         m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+        stats.invokes++;
       }
       continue;
 
@@ -77,6 +119,7 @@ void RemoveUninstantiablesPass::replace_uninstantiable_refs(
         is_uninstantiable_class(insn->get_field()->get_class())) {
       auto tmp = get_scratch();
       m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+      stats.field_accesses_on_uninstantiable++;
       continue;
     }
 
@@ -84,14 +127,16 @@ void RemoveUninstantiablesPass::replace_uninstantiable_refs(
         is_uninstantiable_class(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
+      stats.get_uninstantiables++;
       continue;
     }
   }
+
+  return stats;
 }
 
-void RemoveUninstantiablesPass::replace_all_with_throw(
-    cfg::ControlFlowGraph& cfg) {
-
+RemoveUninstantiablesPass::Stats
+RemoveUninstantiablesPass::replace_all_with_throw(cfg::ControlFlowGraph& cfg) {
   auto* entry = cfg.entry_block();
   always_assert_log(entry, "Expect an entry block");
 
@@ -101,26 +146,38 @@ void RemoveUninstantiablesPass::replace_all_with_throw(
 
   auto tmp = cfg.allocate_temp();
   cfg.insert_before(it, {ir_const(tmp, 0), ir_throw(tmp)});
+
+  Stats stats;
+  stats.instance_methods_of_uninstantiable++;
+  return stats;
 }
 
 void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
                                          ConfigFiles&,
-                                         PassManager&) {
+                                         PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  walk::parallel::methods(scope, [](DexMethod* method) {
-    auto code = method->get_code();
-    if (method->rstate.no_optimizations() || code == nullptr) {
-      return;
-    }
+  Stats stats =
+      walk::parallel::methods<Stats>(scope, [](DexMethod* method) -> Stats {
+        Stats stats;
 
-    code->build_cfg();
-    if (!is_static(method) && is_uninstantiable_class(method->get_class())) {
-      replace_all_with_throw(code->cfg());
-    } else {
-      replace_uninstantiable_refs(code->cfg());
-    }
-    code->clear_cfg();
-  });
+        auto code = method->get_code();
+        if (method->rstate.no_optimizations() || code == nullptr) {
+          return stats;
+        }
+
+        code->build_cfg();
+        if (!is_static(method) &&
+            is_uninstantiable_class(method->get_class())) {
+          stats += replace_all_with_throw(code->cfg());
+        } else {
+          stats += replace_uninstantiable_refs(code->cfg());
+        }
+        code->clear_cfg();
+
+        return stats;
+      });
+
+  stats.report(mgr);
 }
 
 static RemoveUninstantiablesPass s_pass;
