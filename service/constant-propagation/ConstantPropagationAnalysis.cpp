@@ -235,8 +235,7 @@ bool PrimitiveAnalyzer::analyze_const(const IRInstruction* insn,
 bool PrimitiveAnalyzer::analyze_instance_of(const IRInstruction* insn,
                                             ConstantEnvironment* env) {
   auto src = env->get(insn->src(0)).maybe_get<SignedConstantDomain>();
-  if ((src && src->get_constant() && *(src->get_constant()) == 0) ||
-      (is_uninstantiable_class(insn->get_type()))) {
+  if (src && src->get_constant() && *(src->get_constant()) == 0) {
     env->set(RESULT_REGISTER, SignedConstantDomain(0));
     return true;
   }

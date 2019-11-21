@@ -332,7 +332,6 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   auto* insn = it->insn;
   auto opcode = insn->opcode();
   size_t src_index;
-  DexType* required_instance_type = nullptr;
   switch (opcode) {
   case OPCODE_MONITOR_ENTER:
   case OPCODE_MONITOR_EXIT:
@@ -343,37 +342,6 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_AGET_SHORT:
   case OPCODE_AGET_OBJECT:
   case OPCODE_AGET_BOOLEAN:
-  case OPCODE_ARRAY_LENGTH:
-  case OPCODE_FILL_ARRAY_DATA:
-  case OPCODE_INVOKE_SUPER:
-  case OPCODE_INVOKE_INTERFACE: {
-    src_index = 0;
-    break;
-  }
-  case OPCODE_INVOKE_VIRTUAL:
-  case OPCODE_INVOKE_DIRECT: {
-    auto method = resolve_method(insn->get_method(), opcode_to_search(insn));
-    always_assert(method == nullptr || !is_static(method));
-    if (opcode == OPCODE_INVOKE_DIRECT &&
-        (method == nullptr || is_init(method))) {
-      return false;
-    }
-    src_index = 0;
-    if (method != nullptr && !method->is_external()) {
-      required_instance_type = method->get_class();
-    }
-    break;
-  }
-  case OPCODE_APUT:
-  case OPCODE_APUT_BYTE:
-  case OPCODE_APUT_CHAR:
-  case OPCODE_APUT_WIDE:
-  case OPCODE_APUT_SHORT:
-  case OPCODE_APUT_OBJECT:
-  case OPCODE_APUT_BOOLEAN: {
-    src_index = 1;
-    break;
-  }
   case OPCODE_IGET:
   case OPCODE_IGET_BYTE:
   case OPCODE_IGET_CHAR:
@@ -381,20 +349,30 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   case OPCODE_IGET_SHORT:
   case OPCODE_IGET_OBJECT:
   case OPCODE_IGET_BOOLEAN:
+  case OPCODE_ARRAY_LENGTH:
+  case OPCODE_FILL_ARRAY_DATA:
+  case OPCODE_INVOKE_SUPER:
+  case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_VIRTUAL:
+  case OPCODE_INVOKE_DIRECT:
+    src_index = 0;
+    break;
+  case OPCODE_APUT:
+  case OPCODE_APUT_BYTE:
+  case OPCODE_APUT_CHAR:
+  case OPCODE_APUT_WIDE:
+  case OPCODE_APUT_SHORT:
+  case OPCODE_APUT_OBJECT:
+  case OPCODE_APUT_BOOLEAN:
   case OPCODE_IPUT:
   case OPCODE_IPUT_BYTE:
   case OPCODE_IPUT_CHAR:
   case OPCODE_IPUT_WIDE:
   case OPCODE_IPUT_SHORT:
   case OPCODE_IPUT_OBJECT:
-  case OPCODE_IPUT_BOOLEAN: {
-    src_index = is_iget(opcode) ? 0 : 1;
-    auto* field = resolve_field(insn->get_field());
-    if (field && !field->is_external()) {
-      required_instance_type = field->get_class();
-    }
+  case OPCODE_IPUT_BOOLEAN:
+    src_index = 1;
     break;
-  }
   default: {
     return false;
   }
@@ -404,9 +382,7 @@ bool Transform::replace_with_throw(const ConstantEnvironment& env,
   auto value = env.get(reg).maybe_get<SignedConstantDomain>();
   std::vector<IRInstruction*> new_insns;
   if (!value || !value->get_constant() || *value->get_constant() != 0) {
-    if (!is_uninstantiable_class(required_instance_type)) {
-      return false;
-    }
+    return false;
   }
 
   // We'll replace this instruction with

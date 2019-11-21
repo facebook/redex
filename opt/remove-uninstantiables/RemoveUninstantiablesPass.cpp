@@ -107,3 +107,5 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
     code->clear_cfg();
   });
 }
+
+static RemoveUninstantiablesPass s_pass;
