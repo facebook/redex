@@ -73,27 +73,30 @@ def pgize(name):
     return name.strip()[1:][:-1].replace("/", ".")
 
 
-def write_debugger_commands(args):
+"""
+What to prepend to a shell command in order to run it under a debugger,
+keyed by that debugger's name.
+"""
+DBG_CMD = {"gdb": ["gdb", "--args"], "lldb": ["lldb", "--"]}
+
+
+def write_debugger_command(dbg, args):
+    """Write out a shell script that allows us to rerun redex-all under a debugger.
+
+    The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
-    Write out a shell script that allows us to rerun redex-all under gdb.
-    """
-    fd, gdb_script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-gdb-")
+    assert dbg in DBG_CMD
+
+    fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
     with os.fdopen(fd, "w") as f:
         f.write("#! /usr/bin/env bash\n")
         f.write("cd %s || exit\n" % quote(os.getcwd()))
-        f.write("gdb --args ")
+        f.write(" ".join(DBG_CMD[dbg]))
+        f.write(" ")
         f.write(" ".join(map(quote, args)))
         os.fchmod(fd, 0o775)
 
-    fd, lldb_script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-lldb-")
-    with os.fdopen(fd, "w") as f:
-        f.write("#! /usr/bin/env bash\n")
-        f.write("cd %s || exit\n" % quote(os.getcwd()))
-        f.write("lldb -- ")
-        f.write(" ".join(map(quote, args)))
-        os.fchmod(fd, 0o775)
-
-    return {"gdb_script_name": gdb_script_name, "lldb_script_name": lldb_script_name}
+    return script_name
 
 
 def add_extra_environment_args(env):
@@ -359,15 +362,11 @@ def run_redex_binary(state):
             state.args.output_ir,
         ]
 
-    if state.debugger == "lldb":
-        args = ["lldb", "--"] + args
-    elif state.debugger == "gdb":
-        args = ["gdb", "--args"] + args
-
+    dbg_prefix = DBG_CMD.get(state.debugger, [])
     start = timer()
 
     if state.args.debug:
-        print("cd %s && %s" % (os.getcwd(), " ".join(map(quote, args))))
+        print("cd %s && %s" % (os.getcwd(), " ".join(dbg_prefix + map(quote, args))))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
@@ -381,7 +380,7 @@ def run_redex_binary(state):
 
         try:
             proc, handler = run_and_stream_stderr(
-                args, env, (logger.trace_fp.fileno(),)
+                dbg_prefix + args, env, (logger.trace_fp.fileno(),)
             )
             sigint_handler.set_proc(proc)
             sigint_handler.set_state(RedexState.STARTED)
@@ -394,15 +393,13 @@ def run_redex_binary(state):
                 # Check for crash traces.
                 maybe_addr2line(err_out)
 
-                script_filenames = write_debugger_commands(args)
+                gdb_script_name = write_debugger_command("gdb", args)
+                lldb_script_name = write_debugger_command("lldb", args)
                 raise RuntimeError(
-                    ("redex-all crashed with exit code %s! " % returncode)
-                    + (
-                        "You can re-run it "
-                        "under gdb by running %(gdb_script_name)s or under lldb "
-                        "by running %(lldb_script_name)s"
-                    )
-                    % script_filenames
+                    (
+                        "redex-all crashed with exit code {}! You can re-run it "
+                        + "under gdb by running {} or under lldb by running {}"
+                    ).format(returncode, gdb_script_name, lldb_script_name)
                 )
             return True
         except OSError as err:
