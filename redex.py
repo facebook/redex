@@ -101,12 +101,19 @@ def write_debugger_command(dbg, src_root, args):
     The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
     fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
+
+    # Parametrise redex binary.
+    args = [quote(a) for a in args]
+    redex_binary = args[0]
+    args[0] = '"$REDEX_BINARY"'
+
     with os.fdopen(fd, "w") as f:
         f.write("#! /usr/bin/env bash\n")
+        f.write('REDEX_BINARY="${REDEX_BINARY:-%s}"\n' % redex_binary)
         f.write("cd %s || exit\n" % quote(os.getcwd()))
         f.write(" ".join(dbg_prefix(dbg, src_root)))
         f.write(" ")
-        f.write(" ".join(map(quote, args)))
+        f.write(" ".join(args))
         os.fchmod(fd, 0o775)
 
     return script_name
