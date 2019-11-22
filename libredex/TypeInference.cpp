@@ -265,7 +265,7 @@ void TypeInference::refine_double(TypeEnvironment* state, reg_t reg) const {
                    /* expected2 */ DOUBLE2);
 }
 
-void TypeInference::run(DexMethod* dex_method) {
+void TypeInference::run(const DexMethod* dex_method) {
   run(is_static(dex_method), dex_method->get_class(),
       dex_method->get_proto()->get_args());
 }

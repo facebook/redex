@@ -178,7 +178,7 @@ class TypeInference final
   TypeInference(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<TypeEnvironment>(cfg), m_cfg(cfg) {}
 
-  void run(DexMethod* dex_method);
+  void run(const DexMethod* dex_method);
 
   void run(bool is_static, DexType* declaring_type, DexTypeList* args);
 
