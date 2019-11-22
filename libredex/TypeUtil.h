@@ -176,4 +176,17 @@ DexType* make_array_type(const DexType* type);
  */
 DexType* make_array_type(const DexType* type, uint32_t level);
 
+/**
+ * Returns the corresponding wrapper type of primitive types
+ * e.g.
+ *   I -> Ljava/lang/Integer;
+ *   Z -> Ljava/lang/Boolean;
+ *   ... etc.
+ * returns nullptr if argument `type` is not a primitive type or is void
+ */
+DexType* get_boxed_reference_type(const DexType* type);
+
+DexMethodRef* get_unboxing_method_for_type(const DexType* type);
+DexMethodRef* get_value_of_method_for_type(const DexType* type);
+
 }; // namespace type
