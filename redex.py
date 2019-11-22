@@ -73,25 +73,38 @@ def pgize(name):
     return name.strip()[1:][:-1].replace("/", ".")
 
 
-"""
-What to prepend to a shell command in order to run it under a debugger,
-keyed by that debugger's name.
-"""
-DBG_CMD = {"gdb": ["gdb", "--args"], "lldb": ["lldb", "--"]}
+def dbg_prefix(dbg, src_root=None):
+    """Return a debugger command prefix.
+
+    `dbg` is either "gdb" or "lldb", indicating which debugger to invoke.
+    `src_root` is an optional parameter that indicates the root directory that
+        all references to source files in debug information is relative to.
+
+    Returns a list of strings, which when prefixed onto a shell command
+        invocation will run that shell command under the debugger.
+    """
+    assert dbg in ["gdb", "lldb"]
+
+    cmd = [dbg]
+    if dbg == "gdb" and src_root is not None:
+        cmd += ["-ex", quote("directory %s" % src_root)]
+
+    DBG_END = {"gdb": "--args", "lldb": "--"}
+    cmd.append(DBG_END[dbg])
+
+    return cmd
 
 
-def write_debugger_command(dbg, args):
+def write_debugger_command(dbg, src_root, args):
     """Write out a shell script that allows us to rerun redex-all under a debugger.
 
     The choice of debugger is governed by `dbg` which can be either "gdb" or "lldb".
     """
-    assert dbg in DBG_CMD
-
     fd, script_name = tempfile.mkstemp(suffix=".sh", prefix="redex-{}-".format(dbg))
     with os.fdopen(fd, "w") as f:
         f.write("#! /usr/bin/env bash\n")
         f.write("cd %s || exit\n" % quote(os.getcwd()))
-        f.write(" ".join(DBG_CMD[dbg]))
+        f.write(" ".join(dbg_prefix(dbg, src_root)))
         f.write(" ")
         f.write(" ".join(map(quote, args)))
         os.fchmod(fd, 0o775)
@@ -362,11 +375,15 @@ def run_redex_binary(state):
             state.args.output_ir,
         ]
 
-    dbg_prefix = DBG_CMD.get(state.debugger, [])
+    prefix = (
+        dbg_prefix(state.debugger, state.args.debug_source_root)
+        if state.debugger is not None
+        else []
+    )
     start = timer()
 
     if state.args.debug:
-        print("cd %s && %s" % (os.getcwd(), " ".join(dbg_prefix + map(quote, args))))
+        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + map(quote, args))))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
@@ -380,7 +397,7 @@ def run_redex_binary(state):
 
         try:
             proc, handler = run_and_stream_stderr(
-                dbg_prefix + args, env, (logger.trace_fp.fileno(),)
+                prefix + args, env, (logger.trace_fp.fileno(),)
             )
             sigint_handler.set_proc(proc)
             sigint_handler.set_state(RedexState.STARTED)
@@ -393,8 +410,12 @@ def run_redex_binary(state):
                 # Check for crash traces.
                 maybe_addr2line(err_out)
 
-                gdb_script_name = write_debugger_command("gdb", args)
-                lldb_script_name = write_debugger_command("lldb", args)
+                gdb_script_name = write_debugger_command(
+                    "gdb", state.args.debug_source_root, args
+                )
+                lldb_script_name = write_debugger_command(
+                    "lldb", state.args.debug_source_root, args
+                )
                 raise RuntimeError(
                     (
                         "redex-all crashed with exit code {}! You can re-run it "
@@ -754,6 +775,13 @@ Given an APK, produce a better APK!
         "--output-ir",
         default="",
         help="Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder",
+    )
+
+    parser.add_argument(
+        "--debug-source-root",
+        default=None,
+        nargs="?",
+        help="Root directory that all references to source files in debug information is given relative to.",
     )
     return parser
 
