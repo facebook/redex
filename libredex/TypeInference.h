@@ -189,7 +189,8 @@ class TypeInference final
 
   void traceState(TypeEnvironment* state) const;
 
-  std::unordered_map<IRInstruction*, TypeEnvironment>& get_type_environments() {
+  std::unordered_map<const IRInstruction*, TypeEnvironment>&
+  get_type_environments() {
     return m_type_envs;
   }
 
@@ -197,7 +198,7 @@ class TypeInference final
   void populate_type_environments();
 
   const cfg::ControlFlowGraph& m_cfg;
-  std::unordered_map<IRInstruction*, TypeEnvironment> m_type_envs;
+  std::unordered_map<const IRInstruction*, TypeEnvironment> m_type_envs;
 
   TypeDomain refine_type(const TypeDomain& type,
                          IRType expected,
