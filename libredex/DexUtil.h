@@ -147,14 +147,6 @@ void create_store(const std::string& store_name,
                   DexStoresVector& stores,
                   DexClasses classes);
 
-/*
- * This exists because in the absence of a register allocator, we need each
- * transformation to keep the ins registers at the end of the frame. Once the
- * register allocator is switched on this function should no longer have many
- * use cases.
- */
-size_t sum_param_sizes(const IRCode*);
-
 /**
  * Determine if the given dex item has the given annotation
  *
