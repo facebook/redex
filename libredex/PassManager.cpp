@@ -138,13 +138,15 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
-void PassManager::run_type_checker(const Scope& scope,
-                                   bool verify_moves,
-                                   bool check_no_overwrite_this) {
+// TODO(fengliu): Kill the `validate_access` flag.
+void PassManager::run_verifier(const Scope& scope,
+                               bool verify_moves,
+                               bool check_no_overwrite_this,
+                               bool validate_access) {
   TRACE(PM, 1, "Running IRTypeChecker...");
   Timer t("IRTypeChecker");
   walk::parallel::methods(scope, [=](DexMethod* dex_method) {
-    IRTypeChecker checker(dex_method);
+    IRTypeChecker checker(dex_method, validate_access);
     if (verify_moves) {
       checker.verify_moves();
     }
@@ -278,8 +280,9 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       if (run_type_checker) {
         // It's OK to overwrite the `this` register if we are not yet at the
         // output phase -- the register allocator can fix it up later.
-        this->run_type_checker(scope, verify_moves,
-                               /* check_no_overwrite_this */ false);
+        this->run_verifier(scope, verify_moves,
+                           /* check_no_overwrite_this */ false,
+                           /* validate_access */ false);
       }
     }
     m_current_pass_info = nullptr;
@@ -287,8 +290,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
 
   // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  run_type_checker(scope, verify_moves,
-                   get_redex_options().no_overwrite_this());
+  run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
+               /* validate_access */ true);
 
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + conf.get_printseeds() +

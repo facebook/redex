@@ -32,7 +32,7 @@ class IRTypeChecker final {
   // definition must be located after the definition of TypeInference.
   ~IRTypeChecker();
 
-  explicit IRTypeChecker(DexMethod* dex_method);
+  explicit IRTypeChecker(DexMethod* dex_method, bool validate_access = false);
 
   IRTypeChecker(const IRTypeChecker&) = delete;
 
@@ -123,6 +123,7 @@ class IRTypeChecker final {
                          TypeEnvironment* current_state) const;
 
   DexMethod* m_dex_method;
+  const bool m_validate_access;
   bool m_complete;
   bool m_verify_moves;
   bool m_check_no_overwrite_this;

@@ -84,9 +84,10 @@ class PassManager {
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
 
-  static void run_type_checker(const Scope& scope,
-                               bool verify_moves,
-                               bool check_no_overwrite_this);
+  static void run_verifier(const Scope& scope,
+                           bool verify_moves,
+                           bool check_no_overwrite_this,
+                           bool validate_access);
 
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;

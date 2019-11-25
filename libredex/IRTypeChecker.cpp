@@ -503,24 +503,34 @@ void validate_access(const DexMethod* accessor, const DexMember* accessee) {
       return;
     }
   }
+
   std::ostringstream out;
   out << "\nillegal access to "
       << (is_private(accessee)
               ? "private "
               : (is_package_private(accessee) ? "package-private "
                                               : "protected "))
-      << show(accessee) << "\n from " << show(accessor);
-  // TODO(fengliu): Throw exception instead of log to stderr.
-  TRACE(TYPE, 2, out.str().c_str());
-  // throw TypeCheckingException(out.str());
+      << show_deobfuscated(accessee) << "\n from "
+      << show_deobfuscated(accessor);
+
+  // If the accessee is external, we don't report the error, just log it.
+  // TODO(fengliu): We should enforce the correctness when visiting external dex
+  // members.
+  if (accessee->is_external()) {
+    TRACE(TYPE, 2, out.str().c_str());
+    return;
+  }
+
+  throw TypeCheckingException(out.str());
 }
 
 } // namespace
 
 IRTypeChecker::~IRTypeChecker() {}
 
-IRTypeChecker::IRTypeChecker(DexMethod* dex_method)
+IRTypeChecker::IRTypeChecker(DexMethod* dex_method, bool validate_access)
     : m_dex_method(dex_method),
+      m_validate_access(validate_access),
       m_complete(false),
       m_verify_moves(false),
       m_check_no_overwrite_this(false),
@@ -964,8 +974,10 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
       always_assert(type::is_double(arg_type));
       assume_double(current_state, insn->src(src_idx++));
     }
-    auto resolved = resolve_method(dex_method, opcode_to_search(insn));
-    validate_access(m_dex_method, resolved);
+    if (m_validate_access) {
+      auto resolved = resolve_method(dex_method, opcode_to_search(insn));
+      validate_access(m_dex_method, resolved);
+    }
     break;
   }
   case OPCODE_NEG_INT:
@@ -1126,7 +1138,7 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     break;
   }
   }
-  if (insn->has_field()) {
+  if (insn->has_field() && m_validate_access) {
     auto search = is_sfield_op(insn->opcode()) ? FieldSearch::Static
                                                : FieldSearch::Instance;
     auto resolved = resolve_field(insn->get_field(), search);
