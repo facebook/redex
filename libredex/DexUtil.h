@@ -20,53 +20,6 @@
 #include "TypeUtil.h"
 
 /**
- * Return true if method signatures (name and proto) match.
- */
-inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
-  return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
-}
-
-/**
- * Return true if the parent chain leads to known classes.
- * False if one of the parent is in a scope unknown to redex.
- */
-bool has_hierarchy_in_scope(DexClass* cls);
-
-/**
- * Basic datatypes used by bytecode.
- */
-enum class DataType : uint8_t {
-  Void,
-  Boolean,
-  Byte,
-  Short,
-  Char,
-  Int,
-  Long,
-  Float,
-  Double,
-  Object,
-  Array
-};
-
-/**
- * Return the basic datatype of given DexType.
- */
-DataType type_to_datatype(const DexType* t);
-
-/**
- * Subclass check. Copied from VirtualScope.
- * We can make this much faster in time.
- */
-bool is_subclass(const DexType* parent, const DexType* child);
-
-/**
- * Whether the given type refers to a proper class that has no ctor,
- * and is not external or native.
- */
-bool is_uninstantiable_class(DexType* type);
-
-/**
  * Change the visibility of members accessed in a method.
  * We make everything public, except if a scope argument is given; then accessed
  * members in the same scope will not be made public (We could be more precise

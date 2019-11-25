@@ -9,6 +9,23 @@
 
 #include "DexClass.h"
 
+/**
+ * Basic datatypes used by bytecode.
+ */
+enum class DataType : uint8_t {
+  Void,
+  Boolean,
+  Byte,
+  Short,
+  Char,
+  Int,
+  Long,
+  Float,
+  Double,
+  Object,
+  Array
+};
+
 namespace type {
 
 DexType* _void();
@@ -188,5 +205,22 @@ DexType* get_boxed_reference_type(const DexType* type);
 
 DexMethodRef* get_unboxing_method_for_type(const DexType* type);
 DexMethodRef* get_value_of_method_for_type(const DexType* type);
+
+/**
+ * Return the basic datatype of given DexType.
+ */
+DataType to_datatype(const DexType* t);
+
+/**
+ * Subclass check. Copied from VirtualScope.
+ * We can make this much faster in time.
+ */
+bool is_subclass(const DexType* parent, const DexType* child);
+
+/**
+ * Whether the given type refers to a proper class that has no ctor,
+ * and is not external or native.
+ */
+bool is_uninstantiable_class(DexType* type);
 
 }; // namespace type

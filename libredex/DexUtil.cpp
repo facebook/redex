@@ -19,45 +19,6 @@
 #include "Resolver.h"
 #include "UnknownVirtuals.h"
 
-DataType type_to_datatype(const DexType* t) {
-  auto const name = t->get_name()->c_str();
-  switch (name[0]) {
-  case 'V':
-    return DataType::Void;
-  case 'Z':
-    return DataType::Boolean;
-  case 'B':
-    return DataType::Byte;
-  case 'S':
-    return DataType::Short;
-  case 'C':
-    return DataType::Char;
-  case 'I':
-    return DataType::Int;
-  case 'J':
-    return DataType::Long;
-  case 'F':
-    return DataType::Float;
-  case 'D':
-    return DataType::Double;
-  case 'L':
-    return DataType::Object;
-  case '[':
-    return DataType::Array;
-  }
-  not_reached();
-}
-
-bool has_hierarchy_in_scope(DexClass* cls) {
-  DexType* super = nullptr;
-  const DexClass* super_cls = cls;
-  while (super_cls) {
-    super = super_cls->get_super_class();
-    super_cls = type_class_internal(super);
-  }
-  return super == type::java_lang_Object();
-}
-
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
   vis2 &= VISIBILITY_MASK;
@@ -304,29 +265,6 @@ void relocate_method(DexMethod* method, DexType* to_type) {
                  true /* rename on collision */,
                  true /* update deobfuscated name */);
   to_cls->add_method(method);
-}
-
-bool is_subclass(const DexType* parent, const DexType* child) {
-  auto super = child;
-  while (super != nullptr) {
-    if (parent == super) return true;
-    const auto cls = type_class(super);
-    if (cls == nullptr) break;
-    super = cls->get_super_class();
-  }
-  return false;
-}
-
-bool is_uninstantiable_class(DexType* type) {
-  if (type == nullptr || type::is_array(type) || type::is_primitive(type)) {
-    return false;
-  }
-  auto cls = type_class(type);
-  if (cls == nullptr || is_interface(cls) || is_native(cls) ||
-      cls->is_external() || !cls->rstate.can_delete()) {
-    return false;
-  }
-  return !cls->has_ctors();
 }
 
 void change_visibility(DexMethod* method, DexType* scope) {

@@ -589,7 +589,7 @@ bool has_only_argument(DexMethod* method, DexType* type) {
 }
 
 IROpcode get_iget_type(DexField* field) {
-  switch (type_to_datatype(field->get_type())) {
+  switch (type::to_datatype(field->get_type())) {
   case DataType::Array:
   case DataType::Object:
     return OPCODE_IGET_OBJECT;

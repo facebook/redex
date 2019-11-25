@@ -104,8 +104,8 @@ TEST_F(RemoveUninstantiablesTest, InstanceOf) {
   def_class("LFoo;");
   def_class("LBar;", Bar_init);
 
-  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
-  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
   RemoveUninstantiablesPass::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
@@ -129,8 +129,8 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
   def_class("LFoo;", Foo_baz, Foo_qux);
   def_class("LBar;", Bar_init, Bar_baz);
 
-  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
-  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
   RemoveUninstantiablesPass::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
@@ -227,8 +227,8 @@ TEST_F(RemoveUninstantiablesTest, GetField) {
   DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
   DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
 
-  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
-  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
   RemoveUninstantiablesPass::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
@@ -258,8 +258,8 @@ TEST_F(RemoveUninstantiablesTest, PutField) {
   DexField::make_field("LFoo;.a:I")->make_concrete(ACC_PUBLIC);
   DexField::make_field("LBar;.a:I")->make_concrete(ACC_PUBLIC);
 
-  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
-  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
   RemoveUninstantiablesPass::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,
@@ -295,8 +295,8 @@ TEST_F(RemoveUninstantiablesTest, GetUninstantiable) {
   DexField::make_field("LBar;.sBar:LBar;")
       ->make_concrete(ACC_PUBLIC | ACC_STATIC);
 
-  ASSERT_TRUE(is_uninstantiable_class(DexType::get_type("LFoo;")));
-  ASSERT_FALSE(is_uninstantiable_class(DexType::get_type("LBar;")));
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
 
   RemoveUninstantiablesPass::Stats stats;
   EXPECT_CHANGE(replace_uninstantiable_refs,

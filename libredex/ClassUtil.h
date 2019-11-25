@@ -41,4 +41,10 @@ Serdes get_serdes(const DexClass* cls);
  */
 DexMethod* get_or_create_clinit(DexClass* cls);
 
+/**
+ * Return true if the parent chain leads to known classes.
+ * False if one of the parent is in a scope unknown to redex.
+ */
+bool has_hierarchy_in_scope(DexClass* cls);
+
 }; // namespace klass

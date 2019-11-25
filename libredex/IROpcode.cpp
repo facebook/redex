@@ -1201,7 +1201,7 @@ IROpcode pseudo_to_move_result(IROpcode op) {
 }
 
 IROpcode sget_opcode_for_field(const DexField* field) {
-  switch (type_to_datatype(field->get_type())) {
+  switch (type::to_datatype(field->get_type())) {
   case DataType::Array:
   case DataType::Object:
     return OPCODE_SGET_OBJECT;

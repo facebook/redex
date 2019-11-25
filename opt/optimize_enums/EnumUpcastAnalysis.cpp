@@ -313,8 +313,8 @@ class EnumUpcastDetector {
       EnumTypes a_types = env->get(insn->src(0));
       auto this_types = discard_primitives(a_types);
       // Method is equals or compareTo.
-      if (signatures_match(method, ENUM_EQUALS_METHOD) ||
-          signatures_match(method, ENUM_COMPARETO_METHOD)) {
+      if (method::signatures_match(method, ENUM_EQUALS_METHOD) ||
+          method::signatures_match(method, ENUM_COMPARETO_METHOD)) {
         EnumTypes b_types = env->get(insn->src(1));
         auto that_types = discard_primitives(b_types);
         DexType* this_type = this_types.empty() ? nullptr : *this_types.begin();
@@ -326,10 +326,10 @@ class EnumUpcastDetector {
           reject(insn, that_types, rejected_enums, CAST_PARAMETER);
         }
         return;
-      } else if (signatures_match(method, ENUM_TOSTRING_METHOD) ||
-                 signatures_match(method, ENUM_HASHCODE_METHOD) ||
-                 signatures_match(method, ENUM_NAME_METHOD) ||
-                 signatures_match(method, ENUM_ORDINAL_METHOD)) {
+      } else if (method::signatures_match(method, ENUM_TOSTRING_METHOD) ||
+                 method::signatures_match(method, ENUM_HASHCODE_METHOD) ||
+                 method::signatures_match(method, ENUM_NAME_METHOD) ||
+                 method::signatures_match(method, ENUM_ORDINAL_METHOD)) {
         if (this_types.size() > 1) {
           reject(insn, this_types, rejected_enums, MULTI_ENUM_TYPES);
         }

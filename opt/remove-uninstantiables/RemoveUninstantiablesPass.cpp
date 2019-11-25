@@ -95,7 +95,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     auto op = insn->opcode();
     switch (op) {
     case OPCODE_INSTANCE_OF:
-      if (is_uninstantiable_class(insn->get_type())) {
+      if (type::is_uninstantiable_class(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
         m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
         stats.instance_ofs++;
@@ -104,7 +104,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
 
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_VIRTUAL:
-      if (is_uninstantiable_class(insn->get_method()->get_class())) {
+      if (type::is_uninstantiable_class(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
         m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
         stats.invokes++;
@@ -116,7 +116,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     }
 
     if ((is_iget(op) || is_iput(op)) &&
-        is_uninstantiable_class(insn->get_field()->get_class())) {
+        type::is_uninstantiable_class(insn->get_field()->get_class())) {
       auto tmp = get_scratch();
       m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
       stats.field_accesses_on_uninstantiable++;
@@ -124,7 +124,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     }
 
     if ((is_iget(op) || is_sget(op)) &&
-        is_uninstantiable_class(insn->get_field()->get_type())) {
+        type::is_uninstantiable_class(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
       m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
       stats.get_uninstantiables++;
@@ -167,7 +167,7 @@ void RemoveUninstantiablesPass::run_pass(DexStoresVector& stores,
 
         code->build_cfg();
         if (!is_static(method) &&
-            is_uninstantiable_class(method->get_class())) {
+            type::is_uninstantiable_class(method->get_class())) {
           stats += replace_all_with_throw(code->cfg());
         } else {
           stats += replace_uninstantiable_refs(code->cfg());

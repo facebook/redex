@@ -80,4 +80,10 @@ inline bool has_code(const DexMethodRef* meth) {
          static_cast<const DexMethod*>(meth)->get_code() != nullptr;
 }
 
+/**
+ * Return true if method signatures (name and proto) match.
+ */
+inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
+  return a->get_name() == b->get_name() && a->get_proto() == b->get_proto();
+}
 }; // namespace method

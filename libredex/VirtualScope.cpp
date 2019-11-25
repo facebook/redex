@@ -692,7 +692,8 @@ const VirtualScope* find_rooted_scope(const SignatureMap& sig_map,
   const auto& scopes = protos->second.find(meth->get_proto());
   always_assert(scopes != protos->second.end());
   for (const auto& scope : scopes->second) {
-    if (scope.type == type && signatures_match(scope.methods[0].first, meth)) {
+    if (scope.type == type &&
+        method::signatures_match(scope.methods[0].first, meth)) {
       return &scope;
     }
   }
@@ -795,7 +796,7 @@ const VirtualScope& find_virtual_scope(const SignatureMap& sig_map,
   const auto meth_type = meth->get_class();
   for (const auto& scope : scopes->second) {
     if (scope.type == type::java_lang_Object()) return scope;
-    if (is_subclass(scope.type, meth_type)) return scope;
+    if (type::is_subclass(scope.type, meth_type)) return scope;
   }
   always_assert_log(false, "unreachable. Scope not found for %s\n", SHOW(meth));
 }

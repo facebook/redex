@@ -228,7 +228,7 @@ void AnalysisImpl::collect_children(const TypeSet& intfs) {
  */
 void AnalysisImpl::check_impl_hierarchy() {
   for (auto& intf_it : single_impls) {
-    if (!has_hierarchy_in_scope(type_class(intf_it.second.cls))) {
+    if (!klass::has_hierarchy_in_scope(type_class(intf_it.second.cls))) {
       escape_interface(intf_it.first, IMPL_PARENT_ESCAPED);
     }
   }

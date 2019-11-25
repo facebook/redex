@@ -319,7 +319,7 @@ struct EnumUtil {
       return cache.at(cls);
     }
     for (auto vmethod : cls->get_vmethods()) {
-      if (signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
+      if (method::signatures_match(vmethod, ENUM_TOSTRING_METHOD)) {
         cache.insert(std::make_pair(cls, vmethod));
         return vmethod;
       }
@@ -619,18 +619,22 @@ class CodeTransformer final {
       break;
     case OPCODE_INVOKE_VIRTUAL: {
       auto method = insn->get_method();
-      if (signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
+      if (method::signatures_match(method, m_enum_util->ENUM_ORDINAL_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_INTVALUE_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_EQUALS_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_EQUALS_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_EQUALS_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_COMPARETO_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_COMPARETO_METHOD)) {
         update_invoke_virtual(env, cfg, block, mie,
                               m_enum_util->INTEGER_COMPARETO_METHOD);
-      } else if (signatures_match(method, m_enum_util->ENUM_NAME_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_NAME_METHOD)) {
         update_invoke_name(env, cfg, block, mie);
-      } else if (signatures_match(method, m_enum_util->ENUM_HASHCODE_METHOD)) {
+      } else if (method::signatures_match(method,
+                                          m_enum_util->ENUM_HASHCODE_METHOD)) {
         update_invoke_hashcode(env, cfg, block, mie);
       } else if (method == m_enum_util->STRINGBUILDER_APPEND_OBJ_METHOD) {
         update_invoke_stringbuilder_append(env, cfg, block, mie);
@@ -965,7 +969,8 @@ class CodeTransformer final {
 
     // If this is toString() and there is no CandidateEnum.toString(), then we
     // call Enum.name() instead.
-    if (signatures_match(method_ref, m_enum_util->ENUM_TOSTRING_METHOD) &&
+    if (method::signatures_match(method_ref,
+                                 m_enum_util->ENUM_TOSTRING_METHOD) &&
         m_enum_util->get_user_defined_tostring_method(
             type_class(candidate_type)) == nullptr) {
       update_invoke_name(env, cfg, block, mie);

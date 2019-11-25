@@ -365,7 +365,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
 
 IRInstruction* make_iget(DexField* field, reg_t src) {
   auto const opcode = [&]() {
-    switch (type_to_datatype(field->get_type())) {
+    switch (type::to_datatype(field->get_type())) {
     case DataType::Array:
     case DataType::Object:
       return OPCODE_IGET_OBJECT;

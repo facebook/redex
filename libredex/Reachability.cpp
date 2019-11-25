@@ -31,12 +31,12 @@ static ReachableObject SEED_SINGLETON{};
 DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
   if (!cls) return nullptr;
   for (auto const& m : cls->get_vmethods()) {
-    if (signatures_match(method, m)) {
+    if (method::signatures_match(method, m)) {
       return m;
     }
   }
   for (auto const& m : cls->get_dmethods()) {
-    if (signatures_match(method, m)) {
+    if (method::signatures_match(method, m)) {
       return m;
     }
   }

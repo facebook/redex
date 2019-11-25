@@ -59,4 +59,14 @@ DexMethod* get_or_create_clinit(DexClass* cls) {
   return clinit;
 }
 
+bool has_hierarchy_in_scope(DexClass* cls) {
+  DexType* super = nullptr;
+  const DexClass* super_cls = cls;
+  while (super_cls) {
+    super = super_cls->get_super_class();
+    super_cls = type_class_internal(super);
+  }
+  return super == type::java_lang_Object();
+}
+
 }; // namespace klass

@@ -27,19 +27,21 @@ sparta::AbstractValueKind DexTypeValue::join_with(const DexTypeValue& other) {
     return sparta::AbstractValueKind::Value;
   }
   // Direct subclass relation.
-  if (is_subclass(get_dex_type(), other.get_dex_type())) {
+  if (type::is_subclass(get_dex_type(), other.get_dex_type())) {
     return sparta::AbstractValueKind::Value;
-  } else if (is_subclass(other.get_dex_type(), get_dex_type())) {
+  } else if (type::is_subclass(other.get_dex_type(), get_dex_type())) {
     m_dex_type = other.get_dex_type();
     return sparta::AbstractValueKind::Value;
   }
   // Share common base type simple scenario.
   auto this_super_cls = this_cls->get_super_class();
   auto other_super_cls = other_cls->get_super_class();
-  if (this_super_cls && is_subclass(this_super_cls, other.get_dex_type())) {
+  if (this_super_cls &&
+      type::is_subclass(this_super_cls, other.get_dex_type())) {
     m_dex_type = this_super_cls;
     return sparta::AbstractValueKind::Value;
-  } else if (other_super_cls && is_subclass(other_super_cls, get_dex_type())) {
+  } else if (other_super_cls &&
+             type::is_subclass(other_super_cls, get_dex_type())) {
     m_dex_type = other_super_cls;
     return sparta::AbstractValueKind::Value;
   }

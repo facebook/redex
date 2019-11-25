@@ -1181,7 +1181,7 @@ void Model::add_interface_scope(MergerType& merger,
   always_assert(intf_scope.methods.size() > 0);
   const auto& vmethod = intf_scope.methods[0];
   for (auto& intf_meths : merger.intfs_methods) {
-    if (signatures_match(intf_meths.methods[0], vmethod.first)) {
+    if (method::signatures_match(intf_meths.methods[0], vmethod.first)) {
       insert(intf_meths);
       return;
     }
