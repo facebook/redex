@@ -12,6 +12,7 @@
 #include "Debug.h"
 #include "DexUtil.h"
 #include "GraphColoring.h"
+#include "IRAssembler.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "LiveRange.h"
@@ -43,9 +44,19 @@ Stats RegAllocPass::allocate(
           SHOW(&code));
     return allocator.get_stats();
   } catch (const std::exception& e) {
-    std::cerr << "Failed to allocate " << SHOW(m) << std::endl;
-    std::cerr << SHOW(code.cfg()) << std::endl;
+    std::cerr << "Failed to allocate " << SHOW(m) << ": " << e.what()
+              << std::endl;
     print_stack_trace(std::cerr, e);
+
+    std::string cfg_tmp;
+    if (code.cfg_built()) {
+      cfg_tmp = SHOW(code.cfg());
+      code.clear_cfg();
+    }
+    std::cerr << "As s-expr: " << std::endl
+              << assembler::to_s_expr(&code) << std::endl;
+    std::cerr << "As CFG: " << std::endl << cfg_tmp << std::endl;
+
     throw;
   }
 }
