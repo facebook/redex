@@ -18,45 +18,6 @@
 #include "IRInstruction.h"
 #include "ReachableClasses.h"
 
-/**
- * Determine if the method is a constructor.
- *
- * Notes:
- * - Does NOT distinguish between <init> and <clinit>, will return true
- *   for static class initializers
- */
-
-inline bool is_constructor(const DexMethod* meth) {
-  return meth->get_access() & ACC_CONSTRUCTOR;
-}
-
-inline bool is_constructor(const DexMethodRef* meth) {
-  return meth->is_def() && is_constructor(static_cast<const DexMethod*>(meth));
-}
-
-/** Determine if the method takes no arguments. */
-inline bool has_no_args(const DexMethodRef* meth) {
-  return meth->get_proto()->get_args()->get_type_list().empty();
-}
-
-/** Determine if the method takes exactly n arguments. */
-inline bool has_n_args(const DexMethodRef* meth, size_t n) {
-  return meth->get_proto()->get_args()->get_type_list().size() == n;
-}
-
-/**
- * Determine if the method has code.
- *
- * Notes:
- * - Native methods are not considered to "have code"
- */
-inline bool has_code(const DexMethodRef* meth) {
-  return meth->is_def() &&
-      static_cast<const DexMethod*>(meth)->get_code() != nullptr;
-}
-
-// Helpers
-
 namespace m {
 
 // N.B. recursive template for matching opcode pattern against insn sequence

@@ -480,20 +480,6 @@ bool gather_invoked_methods_that_prevent_relocation(
   return can_relocate;
 }
 
-bool no_invoke_super(const DexMethod* method) {
-  auto code = method->get_code();
-  always_assert(code);
-
-  for (const auto& mie : InstructionIterable(code)) {
-    auto insn = mie.insn;
-    if (insn->opcode() == OPCODE_INVOKE_SUPER) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
 bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   if (!gather_invoked_methods_that_prevent_relocation(method)) {
     return false;
@@ -504,15 +490,4 @@ bool relocate_method_if_no_changes(DexMethod* method, DexType* to_type) {
   change_visibility(method);
 
   return true;
-}
-
-bool references_external(DexMethodRef* mref) {
-  if (mref->is_external()) {
-    return true;
-  }
-  auto ref_cls = type_class(mref->get_class());
-  if (ref_cls && ref_cls->is_external()) {
-    return true;
-  }
-  return false;
 }

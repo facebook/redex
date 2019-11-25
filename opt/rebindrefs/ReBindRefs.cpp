@@ -193,7 +193,7 @@ struct Rebinder {
     // external already we don't rebind to the top. We are likely going to screw
     // up delicated logic in Android support library or Android x that handles
     // different OS versions.
-    if (references_external(mref)) {
+    if (method::references_external(mref)) {
       return;
     }
     auto cls = type_class(mtype);

@@ -200,7 +200,7 @@ class FinalInlineImpl {
       return;
     }
     always_assert_log(
-        is_static(clinit) && is_constructor(clinit),
+        is_static(clinit) && method::is_constructor(clinit),
         "static constructor doesn't have the proper access bits set\n");
     for (auto& mie : InstructionIterable(clinit->get_code())) {
       auto opcode = mie.insn;

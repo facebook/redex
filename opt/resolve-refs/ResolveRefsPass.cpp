@@ -40,7 +40,7 @@ void resolve_method_refs(IRInstruction* insn,
   // If the existing ref is external already we don't touch it. We are likely
   // going to screw up delicated logic in Android support library or Android x
   // that handles different OS versions.
-  if (references_external(mref)) {
+  if (method::references_external(mref)) {
     return;
   }
   auto cls = type_class(mdef->get_class());

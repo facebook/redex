@@ -280,7 +280,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     if (!m->is_concrete() || m->is_external() || !m->get_code() ||
         !can_rename(m) || root(m) || m->rstate.no_optimizations() ||
         !gather_invoked_methods_that_prevent_relocation(m) ||
-        !no_invoke_super(m) || m->rstate.is_generated()) {
+        !method::no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }
     return is_static(m) && !method::is_clinit(m);

@@ -8,7 +8,6 @@
 #include "MethodUtil.h"
 
 #include "ControlFlow.h"
-#include "DexClass.h"
 
 namespace method {
 
@@ -26,6 +25,31 @@ bool is_trivial_clinit(const DexMethod* method) {
   return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
     return mie.insn->opcode() != OPCODE_RETURN_VOID;
   });
+}
+
+bool no_invoke_super(const DexMethod* method) {
+  auto code = method->get_code();
+  always_assert(code);
+
+  for (const auto& mie : InstructionIterable(code)) {
+    auto insn = mie.insn;
+    if (insn->opcode() == OPCODE_INVOKE_SUPER) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool references_external(DexMethodRef* mref) {
+  if (mref->is_external()) {
+    return true;
+  }
+  auto ref_cls = type_class(mref->get_class());
+  if (ref_cls && ref_cls->is_external()) {
+    return true;
+  }
+  return false;
 }
 
 }; // namespace method

@@ -214,7 +214,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   }
 
-  if (!is_constructor(method)) {
+  if (!method::is_constructor(method)) {
     return false;
   }
 
@@ -229,7 +229,7 @@ bool is_trivial_builder_constructor(DexMethod* method) {
     return false;
   } else {
     auto invoked = resolve_method(it->insn->get_method(), MethodSearch::Direct);
-    if (invoked == nullptr || !is_constructor(invoked)) {
+    if (invoked == nullptr || !method::is_constructor(invoked)) {
       return false;
     }
   }
@@ -254,7 +254,7 @@ std::vector<DexMethod*> get_non_trivial_init_methods(IRCode* code,
     if (is_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == type) {
-        if (is_constructor(invoked) &&
+        if (method::is_constructor(invoked) &&
             !is_trivial_builder_constructor(invoked)) {
           methods.emplace_back(invoked);
         }

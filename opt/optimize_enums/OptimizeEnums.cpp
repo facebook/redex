@@ -334,7 +334,7 @@ class OptimizeEnums {
         }
 
         for (auto& dmethod : cls->get_dmethods()) {
-          if (is_static(dmethod) || is_constructor(dmethod)) {
+          if (is_static(dmethod) || method::is_constructor(dmethod)) {
             continue;
           }
           if (!can_rename(dmethod)) {
@@ -482,7 +482,8 @@ class OptimizeEnums {
     } else {
       const DexMethodRef* ref = it->insn->get_method();
       // Enum.<init>
-      if (ref->get_class() != type::java_lang_Enum() || !is_constructor(ref)) {
+      if (ref->get_class() != type::java_lang_Enum() ||
+          !method::is_constructor(ref)) {
         return false;
       }
     }

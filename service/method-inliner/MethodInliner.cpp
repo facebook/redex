@@ -101,7 +101,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
 
     direct_methods++;
     if (code == nullptr) direct_no_code++;
-    if (is_constructor(method)) {
+    if (method::is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
       if (method::is_clinit(method) || !can_inline_init(method, *code)) {
         dont_inline = true;

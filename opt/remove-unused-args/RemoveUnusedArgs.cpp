@@ -205,7 +205,7 @@ bool RemoveArgs::update_method_signature(
       method->get_class(), method->get_name(), updated_proto);
   if (colliding_mref) {
     auto colliding_method = colliding_mref->as_def();
-    if (colliding_method && is_constructor(colliding_method)) {
+    if (colliding_method && method::is_constructor(colliding_method)) {
       // We can't rename constructors, so we give up on removing args.
       return false;
     }

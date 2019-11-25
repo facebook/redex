@@ -33,7 +33,7 @@ std::vector<DexMethod*> get_direct_instance_methods(
     const std::vector<DexMethod*>& dmethods) {
   std::vector<DexMethod*> methods;
   for (auto method : dmethods) {
-    if (is_static(method) || is_constructor(method)) {
+    if (is_static(method) || method::is_constructor(method)) {
       continue;
     }
     methods.push_back(method);

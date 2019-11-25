@@ -125,13 +125,6 @@ bool gather_invoked_methods_that_prevent_relocation(
     std::unordered_set<DexMethodRef*>* methods_preventing_relocation = nullptr);
 
 /**
- * Check that the method contains no invoke-super instruction; this is a
- * requirement to relocate a method outside of its original inheritance
- * hierarchy.
- */
-bool no_invoke_super(const DexMethod* method);
-
-/**
  * Relocates the method only if
  * gather_invoked_methods_that_prevent_relocation returns true.
  * It also updates the visibility of the accessed members.
@@ -269,8 +262,6 @@ bool has_anno(const T* t, const std::unordered_set<DexType*>& anno_types) {
   }
   return false;
 }
-
-bool references_external(DexMethodRef* mref);
 
 struct dex_stats_t {
   int num_types = 0;

@@ -238,7 +238,7 @@ DexMethod* trivial_ctor_wrapper(DexMethod* m) {
   if (it->insn->opcode() != OPCODE_RETURN_VOID) return nullptr;
   auto method = invoke->get_method();
   if (!method->is_concrete() ||
-      !is_constructor(static_cast<DexMethod*>(method))) {
+      !method::is_constructor(static_cast<DexMethod*>(method))) {
     return nullptr;
   }
   return static_cast<DexMethod*>(method);
@@ -299,7 +299,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
       if (dmethod->rstate.dont_inline()) continue;
       // constructors are special and all we can remove are synthetic ones
       if (synthConfig.remove_constructors && is_synthetic(dmethod) &&
-          is_constructor(dmethod)) {
+          method::is_constructor(dmethod)) {
         auto ctor = trivial_ctor_wrapper(dmethod);
         if (ctor) {
           TRACE(SYNT, 2, "Trivial constructor wrapper: %s", SHOW(dmethod));
@@ -308,7 +308,7 @@ WrapperMethods analyze(const ClassHierarchy& ch,
         }
         continue;
       }
-      if (is_constructor(dmethod)) continue;
+      if (method::is_constructor(dmethod)) continue;
 
       if (is_static_synthetic(dmethod)) {
         auto field = trivial_get_field_wrapper(dmethod);

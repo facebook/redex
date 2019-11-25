@@ -525,7 +525,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
   }
 
   for (const auto& meth : data.methoddefs) {
-    if (is_constructor(meth)) continue;
+    if (method::is_constructor(meth)) continue;
     auto name = type_reference::new_name(meth);
     TRACE(INTF, 9, "Changing def name for %s to %s", SHOW(meth), SHOW(name));
     rename(meth, name);
