@@ -19,8 +19,6 @@
 #include "PassManager.h"
 #include "TypeUtil.h"
 
-using TypeVector = std::vector<const DexType*>;
-
 /**
  * Return true if method signatures (name and proto) match.
  */
