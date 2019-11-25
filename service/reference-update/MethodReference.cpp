@@ -32,7 +32,7 @@ IRInstruction* make_invoke(DexMethod* callee,
 }
 
 void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
-  if (is_static(new_callee.method) || is_any_init(new_callee.method) ||
+  if (is_static(new_callee.method) || method::is_any_init(new_callee.method) ||
       new_callee.method->is_virtual()) {
     set_public(new_callee.method);
   }

@@ -85,8 +85,8 @@ void fix_visibility_helper(DexMethod* method, T& vmethods_created) {
       continue;
     }
     auto callee = resolve_method(insn->get_method(), MethodSearch::Direct);
-    if (callee == nullptr || !callee->is_concrete() || is_any_init(callee) ||
-        is_public(callee)) {
+    if (callee == nullptr || !callee->is_concrete() ||
+        method::is_any_init(callee) || is_public(callee)) {
       continue;
     }
     always_assert(is_private(callee));
@@ -180,7 +180,8 @@ static void find_common_ctor_invocations(
     auto meth = resolve_method(last_non_goto_insn->insn->get_method(),
                                MethodSearch::Direct);
     // Make sure we found the same init method
-    if (!meth || !is_init(meth) || (common_ctor && common_ctor != meth)) {
+    if (!meth || !method::is_init(meth) ||
+        (common_ctor && common_ctor != meth)) {
       invocations.clear();
       return;
     }
@@ -261,9 +262,9 @@ ModelMethodMerger::ModelMethodMerger(
     std::vector<DexMethod*> ctors;
     std::vector<DexMethod*> non_ctors;
     for (const auto m : merger->dmethods) {
-      if (is_init(m)) {
+      if (method::is_init(m)) {
         ctors.push_back(m);
-      } else if (!is_clinit(m)) {
+      } else if (!method::is_clinit(m)) {
         non_ctors.push_back(m);
       }
     }

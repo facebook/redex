@@ -785,7 +785,8 @@ class DedupBlocksImpl {
     std::unordered_set<IRInstruction*> block_insns;
     for (auto it = iterable.begin(); it != iterable.end(); it++) {
       auto insn = it->insn;
-      if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
+      if (is_invoke_direct(insn->opcode()) &&
+          method::is_init(insn->get_method())) {
         TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] found init invocation: %s",
               SHOW(insn));
         if (!fixpoint_iter) {
@@ -841,7 +842,8 @@ class DedupBlocksImpl {
       auto env = fixpoint_iter.get_entry_state_at(block);
       for (auto& mie : InstructionIterable(block)) {
         IRInstruction* insn = mie.insn;
-        if (is_invoke_direct(insn->opcode()) && is_init(insn->get_method())) {
+        if (is_invoke_direct(insn->opcode()) &&
+            method::is_init(insn->get_method())) {
           auto defs = defs_in.get(insn->src(0));
           always_assert(!defs.is_top());
           always_assert(defs.elements().size() == 1);

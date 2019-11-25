@@ -221,8 +221,8 @@ class EnumUpcastDetector {
     always_assert(insn->opcode() == OPCODE_INVOKE_DIRECT);
     auto invoked = insn->get_method();
     auto container = invoked->get_class();
-    if (m_candidate_enums->count_unsafe(container) && is_init(invoked) &&
-        is_clinit(m_method)) {
+    if (m_candidate_enums->count_unsafe(container) &&
+        method::is_init(invoked) && method::is_clinit(m_method)) {
       return;
     }
     process_general_invocation(insn, env, rejected_enums);
@@ -691,7 +691,7 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
     // <init>, values(), and valueOf(String).
     if (candidate_enums->count_unsafe(method->get_class()) &&
         !rejected_enums.count(method->get_class()) &&
-        (is_init(method) || is_enum_values(method) ||
+        (method::is_init(method) || is_enum_values(method) ||
          is_enum_valueof(method))) {
       return;
     }

@@ -125,7 +125,7 @@ void redex::print_method(std::ostream& output,
   std::string method_name = extract_member_name(method->get_name()->c_str());
   // Record if this is a constructor to supress return value printing
   // before the method name.
-  bool is_constructor = is_init(method);
+  bool is_constructor = method::is_init(method);
   if (is_constructor) {
     method_name = extract_suffix(class_name);
     is_constructor = true;

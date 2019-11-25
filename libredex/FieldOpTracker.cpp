@@ -20,7 +20,7 @@
 namespace field_op_tracker {
 
 bool is_own_init(DexField* field, const DexMethod* method) {
-  return (is_clinit(method) || is_init(method)) &&
+  return (method::is_clinit(method) || method::is_init(method)) &&
          method->get_class() == field->get_class();
 }
 

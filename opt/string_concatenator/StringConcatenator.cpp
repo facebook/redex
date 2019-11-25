@@ -381,7 +381,7 @@ void StringConcatenatorPass::run_pass(DexStoresVector& stores,
         if (code == nullptr) {
           return Stats{};
         }
-        if (!is_clinit(m)) {
+        if (!method::is_clinit(m)) {
           // TODO maybe later? If we expand to non-clinit methods, `analyze()`
           // will have to consider StringBuilders passed in as arguments.
           return Stats{};

@@ -107,22 +107,6 @@ bool has_hierarchy_in_scope(DexClass* cls) {
   return super == type::java_lang_Object();
 }
 
-bool is_trivial_clinit(const DexMethod* method) {
-  always_assert(is_clinit(method));
-  auto ii = InstructionIterable(method->get_code());
-  return std::none_of(ii.begin(), ii.end(), [](const MethodItemEntry& mie) {
-    return mie.insn->opcode() != OPCODE_RETURN_VOID;
-  });
-}
-
-bool is_init(const DexMethodRef* method) {
-  return strcmp(method->get_name()->c_str(), "<init>") == 0;
-}
-
-bool is_clinit(const DexMethodRef* method) {
-  return strcmp(method->get_name()->c_str(), "<clinit>") == 0;
-}
-
 DexAccessFlags merge_visibility(uint32_t vis1, uint32_t vis2) {
   vis1 &= VISIBILITY_MASK;
   vis2 &= VISIBILITY_MASK;
@@ -479,7 +463,7 @@ bool gather_invoked_methods_that_prevent_relocation(
         always_assert(meth->is_def());
         if (meth->is_external() && !is_public(meth)) {
           meth = nullptr;
-        } else if (opcode == OPCODE_INVOKE_DIRECT && !is_init(meth)) {
+        } else if (opcode == OPCODE_INVOKE_DIRECT && !method::is_init(meth)) {
           meth = nullptr;
         }
       }

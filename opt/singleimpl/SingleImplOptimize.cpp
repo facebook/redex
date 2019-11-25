@@ -532,7 +532,7 @@ void OptimizationImpl::rename_possible_collisions(const DexType* intf,
   }
   for (const auto& refs_it : data.methodrefs) {
     if (refs_it.first->is_def()) continue;
-    always_assert(!is_init(refs_it.first));
+    always_assert(!method::is_init(refs_it.first));
     auto name = type_reference::new_name(refs_it.first);
     TRACE(INTF, 9, "Changing ref name for %s to %s", SHOW(refs_it.first),
           SHOW(name));

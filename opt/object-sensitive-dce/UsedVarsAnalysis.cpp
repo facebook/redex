@@ -180,7 +180,7 @@ bool FixpointIterator::is_required(const IRInstruction* insn,
       return used_vars.contains(RESULT_REGISTER);
     }
     const auto& env = m_insn_env_map.at(insn);
-    if (is_init(method) &&
+    if (method::is_init(method) &&
         (used_vars.contains(insn->src(0)) ||
          is_used_or_escaping_write(env, used_vars, insn->src(0)))) {
       return true;

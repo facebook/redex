@@ -1483,7 +1483,7 @@ bool MultiMethodInliner::create_vmethod(IRInstruction* insn,
       // No need to give up here, or make it static. Visibility is just fine.
       return false;
     }
-    if (is_init(method)) {
+    if (method::is_init(method)) {
       if (!method->is_concrete() && !is_public(method)) {
         info.non_pub_ctor++;
         return true;

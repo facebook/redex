@@ -181,7 +181,7 @@ bool can_remove_init(const DexMethod* m,
   auto const& dmeths = clazz->get_dmethods();
   for (auto meth : dmeths) {
     if (meth->get_code() == nullptr) continue;
-    if (is_init(meth)) {
+    if (method::is_init(meth)) {
       if (meth != m && called.count_unsafe(meth) > 0) {
         return true;
       }
@@ -337,7 +337,7 @@ void DeadRefs::find_unreachable(Scope& scope) {
     auto const& dmeths = clazz->get_dmethods();
     bool hasInit = false;
     for (auto meth : dmeths) {
-      if (is_init(meth)) {
+      if (method::is_init(meth)) {
         hasInit = true;
         break;
       }
@@ -394,7 +394,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
     auto const& dmeths = clazz->get_dmethods();
     for (auto meth : dmeths) {
       if (meth->get_code() == nullptr) continue;
-      if (is_init(meth)) {
+      if (method::is_init(meth)) {
         ci.initmethods.push_back(meth);
       } else {
         // Method names beginning with '<' are internal VM calls

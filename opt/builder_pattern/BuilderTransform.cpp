@@ -238,7 +238,7 @@ void BuilderTransform::replace_fields(const InstantiationToUsage& usage,
           // We only accept `Object.<init>()` here, since we can't inline it
           // any further. Keep Object.<init> inplace to avoid confusing dex2oat.
           always_assert(invoked->get_class() == type::java_lang_Object() &&
-                        is_init(invoked));
+                        method::is_init(invoked));
         } else {
           deletes.emplace(insn);
         }

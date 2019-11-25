@@ -252,7 +252,7 @@ bool will_fail_relocate(DexMethod* method) {
       }
 
       always_assert(meth->is_def());
-      if (!is_init(meth)) {
+      if (!method::is_init(meth)) {
         return true;
       }
     }

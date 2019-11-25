@@ -283,7 +283,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         !no_invoke_super(m) || m->rstate.is_generated()) {
       return false;
     }
-    return is_static(m) && !is_clinit(m);
+    return is_static(m) && !method::is_clinit(m);
   };
 
   PassManager& m_mgr;

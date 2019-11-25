@@ -141,7 +141,7 @@ void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
   auto dmethods = cls->get_dmethods();
   ASSERT_EQ(dmethods.size(), num_dmethods);
   for (auto m : dmethods) {
-    ASSERT_FALSE(is_init(m));
+    ASSERT_FALSE(method::is_init(m));
     ASSERT_NE(m->c_str(), "<init>");
   }
   auto vmethods = cls->get_vmethods();

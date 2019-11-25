@@ -104,7 +104,7 @@ void get_call_to_super(
           resolve_method(insn_method, MethodSearch::Any);
       if (insn_method_def &&
           insn_method_def->get_class() == mergeable->get_type()) {
-        if (is_init(insn_method_def)) {
+        if (method::is_init(insn_method_def)) {
           (*init_callers)[insn_method_def].emplace(method->get_code());
           TRACE(VMERGE,
                 5,

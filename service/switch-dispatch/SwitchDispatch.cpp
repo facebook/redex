@@ -408,7 +408,7 @@ dispatch::Type possible_type(DexMethod* method) {
   if (method->is_external() || !method->get_code()) {
     return dispatch::OTHER_TYPE;
   }
-  if (is_init(method)) {
+  if (method::is_init(method)) {
     return dispatch::CTOR;
   } else if (is_static(method)) {
     return dispatch::STATIC;

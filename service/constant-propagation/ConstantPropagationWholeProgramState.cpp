@@ -169,7 +169,8 @@ void WholeProgramState::collect(
         auto* insn = mie.insn;
         intra_cp->analyze_instruction(insn, &env);
         collect_field_values(insn, env,
-                             is_clinit(method) ? method->get_class() : nullptr);
+                             method::is_clinit(method) ? method->get_class()
+                                                       : nullptr);
         collect_return_values(insn, env, method);
       }
     }

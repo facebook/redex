@@ -31,7 +31,7 @@ namespace mog = method_override_graph;
 namespace {
 
 static bool can_inline_init(DexMethod* caller, IRCode& code) {
-  always_assert(is_init(caller));
+  always_assert(method::is_init(caller));
   // Check that there is no call to a super constructor, and no assignments to
   // (non-inherited) instance fields before constructor call.
   // (There not being such a super call implies that there must be a call to
@@ -61,7 +61,7 @@ static bool can_inline_init(DexMethod* caller, IRCode& code) {
     if (callee == nullptr) {
       return false;
     }
-    if (!is_init(callee)) {
+    if (!method::is_init(callee)) {
       continue;
     }
     if (callee->get_class() == super_type) {
@@ -103,7 +103,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
     if (code == nullptr) direct_no_code++;
     if (is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
-      if (is_clinit(method) || !can_inline_init(method, *code)) {
+      if (method::is_clinit(method) || !can_inline_init(method, *code)) {
         dont_inline = true;
       }
     } else {

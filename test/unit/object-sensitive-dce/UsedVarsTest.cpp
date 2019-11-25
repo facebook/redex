@@ -125,7 +125,7 @@ TEST_F(UsedVarsTest, join) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -180,7 +180,7 @@ TEST_F(UsedVarsTest, noDeleteInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -213,7 +213,7 @@ TEST_F(UsedVarsTest, noDeleteAliasedInit) {
   ptrs::InvokeToSummaryMap invoke_to_esc_summary_map;
   for (auto& mie : InstructionIterable(*code)) {
     auto insn = mie.insn;
-    if (is_invoke(insn->opcode()) && is_init(insn->get_method())) {
+    if (is_invoke(insn->opcode()) && method::is_init(insn->get_method())) {
       invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
       invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
     }
@@ -257,7 +257,7 @@ TEST_F(UsedVarsTest, noDeleteInitForUnreadObject) {
     auto insn = mie.insn;
     if (is_invoke(insn->opcode())) {
       auto method = insn->get_method();
-      if (is_init(method)) {
+      if (method::is_init(method)) {
         invoke_to_eff_summary_map.emplace(insn, side_effects::Summary({0}));
         invoke_to_esc_summary_map.emplace(insn, ptrs::EscapeSummary{});
       } else if (method->get_name()->str() == "nosideeffects") {

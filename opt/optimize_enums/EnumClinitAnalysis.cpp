@@ -167,7 +167,8 @@ class EnumOrdinalAnalyzer
       env->set_object_field(insn->src(0), state.enum_name_field, name);
       env->set_object_field(insn->src(0), state.enum_ordinal_field, ordinal);
       return true;
-    } else if (is_init(method) && method->get_class() == state.clinit_class) {
+    } else if (method::is_init(method) &&
+               method->get_class() == state.clinit_class) {
       // TODO(fengliu) : Analyze enums with an instance string field.
       cp::semantically_inline_method(
           method->get_code(),

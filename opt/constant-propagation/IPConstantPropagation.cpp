@@ -45,7 +45,7 @@ std::unique_ptr<intraprocedural::FixpointIterator> analyze_procedure(
 
   auto env = env_with_params(&code, args);
   DexType* class_under_init{nullptr};
-  if (is_clinit(method)) {
+  if (method::is_clinit(method)) {
     class_under_init = method->get_class();
     set_encoded_values(type_class(class_under_init), &env);
   }
@@ -162,7 +162,7 @@ void PassImpl::optimize(const Scope& scope, const FixpointIterator& fp_iter) {
         } else {
           Transform::Config config(m_config.transform);
           config.class_under_init =
-              is_clinit(method) ? method->get_class() : nullptr;
+              method::is_clinit(method) ? method->get_class() : nullptr;
           Transform tf(config);
           return tf.apply(*intra_cp, fp_iter.get_whole_program_state(), &code);
         }

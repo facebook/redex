@@ -40,7 +40,7 @@ void CrossDexRelocator::gather_possibly_relocatable_methods(
     for (DexMethod* m : cls->get_dmethods()) {
       if (((relocate_static_methods && is_static(m)) ||
            (relocate_non_static_direct_methods && !is_static(m) &&
-            !is_init(m))) &&
+            !method::is_init(m))) &&
           can_relocate_common(m)) {
         possibly_relocatable_methods.push_back(m);
       }

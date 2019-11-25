@@ -310,7 +310,7 @@ std::unordered_set<DexMethodRef*> get_pure_methods() {
 
 MethodOverrideAction get_base_or_overriding_method_action(
     const DexMethod* method, bool ignore_methods_with_assumenosideeffects) {
-  if (method == nullptr || is_clinit(method) ||
+  if (method == nullptr || method::is_clinit(method) ||
       method->rstate.no_optimizations()) {
     return MethodOverrideAction::UNKNOWN;
   }

@@ -72,7 +72,8 @@ IRInstruction* get_ctor_call(const DexMethod* method,
       return insn;
     }
 
-    if (is_init(method_inv) && method_inv->get_class() == method->get_class()) {
+    if (method::is_init(method_inv) &&
+        method_inv->get_class() == method->get_class()) {
       return insn;
     }
   }

@@ -281,7 +281,7 @@ cp::WholeProgramState analyze_and_simplify_clinits(const Scope& scope) {
       // Delete the instructions rendered dead by the removal of those sputs.
       LocalDce(pure_methods).dce(code);
       // If the clinit is empty now, delete it.
-      if (is_trivial_clinit(clinit)) {
+      if (method::is_trivial_clinit(clinit)) {
         cls->remove_method(clinit);
       }
     }
@@ -487,7 +487,7 @@ bool get_ifields_read(
   }
   visited->emplace(method);
   if (method != nullptr) {
-    if (is_init(method) && parent_intf_set.count(method->get_class())) {
+    if (method::is_init(method) && parent_intf_set.count(method->get_class())) {
       // For call on its parent's ctor, no need to proceed.
       return true;
     }
@@ -670,8 +670,8 @@ cp::EligibleIfields gather_ifield_candidates(
       auto op = insn->opcode();
       if (is_iput(op)) {
         auto field = resolve_field(insn->get_field(), FieldSearch::Instance);
-        if (field == nullptr ||
-            (is_init(method) && method->get_class() == field->get_class())) {
+        if (field == nullptr || (method::is_init(method) &&
+                                 method->get_class() == field->get_class())) {
           // If couldn't resolve the field, or this method is this field's
           // class's init function, move on.
           continue;
@@ -710,7 +710,7 @@ size_t inline_final_gets(
     cp::FieldType field_type) {
   size_t inlined_count{0};
   walk::code(scope, [&](const DexMethod* method, IRCode& code) {
-    if (field_type == cp::FieldType::STATIC && is_clinit(method)) {
+    if (field_type == cp::FieldType::STATIC && method::is_clinit(method)) {
       return;
     }
     std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
@@ -724,7 +724,7 @@ size_t inline_final_gets(
         if (field == nullptr || black_list_types.count(field->get_class())) {
           continue;
         }
-        if (field_type == cp::FieldType::INSTANCE && is_init(method) &&
+        if (field_type == cp::FieldType::INSTANCE && method::is_init(method) &&
             method->get_class() == field->get_class()) {
           // Don't propagate a field's value in ctors of its class with value
           // after ctor finished.

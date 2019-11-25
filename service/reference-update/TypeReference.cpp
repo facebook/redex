@@ -409,7 +409,7 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   }
   DexProto* new_proto = DexProto::make_proto(
       rtype, DexTypeList::make_type_list(std::move(new_args)));
-  if (is_init(method)) {
+  if (method::is_init(method)) {
     always_assert(method->is_def());
     // Don't check for init collisions here, since mangling() can execute in a
     // parallel context.
@@ -585,7 +585,7 @@ void update_method_signature_type_references(
       // Otherwise, add it to colliding_directs.
       auto collision = DexMethod::get_method(
           method->get_class(), method->get_name(), new_proto);
-      if (!collision || (!is_init(method) && can_rename(method))) {
+      if (!collision || (!method::is_init(method) && can_rename(method))) {
         TRACE(REFU, 8, "sig: updating direct method %s", SHOW(method));
         DexMethodSpec spec;
         spec.proto = new_proto;

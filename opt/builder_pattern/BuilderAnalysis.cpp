@@ -389,7 +389,7 @@ std::unordered_set<IRInstruction*> BuilderAnalysis::get_all_inlinable_insns() {
       continue;
     }
 
-    if (is_init(method)) {
+    if (method::is_init(method)) {
       auto this_reg = insn->src(0);
       auto val = m_insn_to_env->at(insn).get(this_reg).get_constant();
       if (!val || get_instantiated_type(*val) != method->get_class()) {

@@ -640,7 +640,7 @@ class CodeTransformer final {
     } break;
     case OPCODE_INVOKE_DIRECT: {
       auto method = insn->get_method();
-      if (!is_init(method)) {
+      if (!method::is_init(method)) {
         update_invoke_user_method(env, cfg, block, mie);
       }
     } break;
@@ -1460,7 +1460,7 @@ class EnumTransformer final {
     // Delete <init>, values() and valueOf(String) methods, and clean <clinit>.
     for (auto mit = dmethods.begin(); mit != dmethods.end();) {
       auto method = *mit;
-      if (is_clinit(method)) {
+      if (method::is_clinit(method)) {
         clean_clinit(enum_constants, enum_cls, method, values_field);
         if (empty(method->get_code())) {
           mit = dmethods.erase(mit);

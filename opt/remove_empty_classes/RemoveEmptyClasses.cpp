@@ -19,7 +19,7 @@ constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
 
 void remove_clinit_if_trivial(DexClass* cls) {
   DexMethod* clinit = cls->get_clinit();
-  if (clinit && is_trivial_clinit(clinit)) {
+  if (clinit && method::is_trivial_clinit(clinit)) {
     cls->remove_method(clinit);
   }
 }

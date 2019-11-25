@@ -161,7 +161,7 @@ std::vector<DexMethod*> get_devirtualizable_dmethods(
       continue;
     }
     for (auto m : cls->get_dmethods()) {
-      if (is_any_init(m) || is_static(m)) {
+      if (method::is_any_init(m) || is_static(m)) {
         continue;
       }
       ret.push_back(m);

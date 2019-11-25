@@ -281,7 +281,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
     if (is_invoke(insn->opcode())) {
       auto invoked = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (invoked != nullptr && invoked->get_class() == parent_type &&
-          is_init(invoked)) {
+          method::is_init(invoked)) {
         insns.emplace(insn);
       }
     }
@@ -1001,7 +1001,7 @@ bool tainted_reg_escapes(
         continue;
       }
 
-      if (is_init(invoked) ||
+      if (method::is_init(invoked) ||
           (invoked->get_class() == ty && !is_invoke_static(op))) {
         // if a builder is passed as the first arg to a virtual function or a
         // ctor, we can treat it as non-escaping, since we also check that
@@ -1022,7 +1022,8 @@ bool tainted_reg_escapes(
             // Don't consider builders that get passed to the buildee's
             // constructor. `update_buildee_constructor` will sort this
             // out later.
-            if (is_init(invoked) && invoked->get_class() == get_buildee(ty) &&
+            if (method::is_init(invoked) &&
+                invoked->get_class() == get_buildee(ty) &&
                 has_only_argument(invoked, ty)) {
 
               // If the 'fields constructor' already exist, don't continue.
@@ -1135,7 +1136,7 @@ std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
   std::vector<DexMethod*> methods = get_all_methods(code, type);
   methods.erase(remove_if(methods.begin(),
                           methods.end(),
-                          [&](DexMethod* m) { return is_init(m); }),
+                          [&](DexMethod* m) { return method::is_init(m); }),
                 methods.end());
 
   return methods;

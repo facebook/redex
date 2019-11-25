@@ -14,6 +14,7 @@
 
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "MethodUtil.h"
 #include "PassManager.h"
 #include "TypeUtil.h"
 
@@ -63,12 +64,6 @@ inline bool signatures_match(const DexMethodRef* a, const DexMethodRef* b) {
 bool has_hierarchy_in_scope(DexClass* cls);
 
 /**
- * Return true if the clinit is Trivial.
- * A trivial clinit should only contain a return-void instruction.
- */
-bool is_trivial_clinit(const DexMethod* method);
-
-/**
  * Basic datatypes used by bytecode.
  */
 enum class DataType : uint8_t {
@@ -89,23 +84,6 @@ enum class DataType : uint8_t {
  * Return the basic datatype of given DexType.
  */
 DataType type_to_datatype(const DexType* t);
-
-/**
- * True if the method is a constructor (matches the "<init>" name)
- */
-bool is_init(const DexMethodRef* method);
-
-/**
- * True if the method is a static constructor (matches the "<clinit>" name)
- */
-bool is_clinit(const DexMethodRef* method);
-
-/**
- * Whether the method is a ctor or static ctor.
- */
-inline bool is_any_init(const DexMethodRef* method) {
-  return is_init(method) || is_clinit(method);
-}
 
 /**
  * Subclass check. Copied from VirtualScope.

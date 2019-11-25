@@ -159,7 +159,7 @@ void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
     std::vector<DexMethod*>& lmeth) {
   std::stable_sort(lmeth.begin(), lmeth.end(),
                    [](const DexMethod* a, const DexMethod* b) {
-                     if (is_clinit(a) && !is_clinit(b)) {
+                     if (method::is_clinit(a) && !method::is_clinit(b)) {
                        return true;
                      } else {
                        return false;
@@ -285,7 +285,7 @@ void GatheredTypes::build_cls_load_map() {
     // now add in any strings found in <clinit>
     // since they are likely to be accessed during class load
     for (const auto& m : cls->get_dmethods()) {
-      if (is_clinit(m)) {
+      if (method::is_clinit(m)) {
         std::vector<DexString*> method_strings;
         m->gather_strings(method_strings);
         for (const auto& s : method_strings) {

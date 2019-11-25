@@ -388,9 +388,9 @@ void TransitiveClosureMarker::push_typelike_strings(
 void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
   TRACE(REACH, 4, "Visiting class: %s", SHOW(cls));
   for (auto& m : cls->get_dmethods()) {
-    if (is_clinit(m)) {
+    if (method::is_clinit(m)) {
       push(cls, m);
-    } else if (is_init(m)) {
+    } else if (method::is_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
       // .class or Class.forName()
       if (m->get_proto()->get_args()->get_type_list().size() == 0) {

@@ -41,7 +41,7 @@ std::vector<DexType*> find(const Scope& scope, const GetNewSpec& get_new_spec) {
   for (const DexClass* cls : scope) {
     std::unordered_set<DexMethodSpec> new_specs;
     for (const DexMethod* m : cls->get_dmethods()) {
-      if (is_init(m)) {
+      if (method::is_init(m)) {
         std::vector<DexType*> unsafe_refs;
         const auto& new_spec = get_new_spec(m, &unsafe_refs);
         if (new_spec) {

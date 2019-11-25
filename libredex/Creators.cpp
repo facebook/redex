@@ -711,7 +711,7 @@ DexMethod* MethodCreator::make_static_from(DexString* name,
                                            DexMethod* meth,
                                            DexClass* target_cls) {
   redex_assert(!is_static(meth));
-  redex_assert(!is_init(meth) && !is_clinit(meth));
+  redex_assert(!method::is_init(meth) && !method::is_clinit(meth));
   auto smeth = static_cast<DexMethod*>(
       DexMethod::make_method(target_cls->get_type(), name, proto));
   smeth->make_concrete(

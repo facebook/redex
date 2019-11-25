@@ -108,7 +108,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
         break;
       }
 
-      if (is_init(invoked) &&
+      if (method::is_init(invoked) &&
           invoked->get_class() == m_current_enum->get_type()) {
         // We keep track of the ordinal value of the newly created instance
         // in the register that holds the instance.
