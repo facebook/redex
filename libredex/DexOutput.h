@@ -13,6 +13,7 @@
 
 #include "ConfigFiles.h"
 #include "DexClass.h"
+#include "DexStats.h"
 #include "DexUtil.h"
 #include "Pass.h"
 #include "PostLowering.h"

@@ -139,6 +139,7 @@ libredex_la_SOURCES = \
 	libredex/DexOpcode.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \
+	libredex/DexStats.cpp \
 	libredex/DexStore.cpp \
 	libredex/DexStoreUtil.cpp \
 	libredex/DexTypeDomain.cpp \
