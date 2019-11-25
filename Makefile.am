@@ -121,6 +121,7 @@ libredex_la_SOURCES = \
 	libredex/CFGMutation.cpp \
 	libredex/CallGraph.cpp \
 	libredex/ClassHierarchy.cpp \
+	libredex/ClassUtil.cpp \
 	libredex/ConfigFiles.cpp \
 	libredex/Configurable.cpp \
 	libredex/ControlFlow.cpp \

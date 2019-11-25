@@ -276,7 +276,7 @@ std::unordered_set<const DexType*>
 RenameClassesPassV2::build_dont_rename_serde_relationships(Scope& scope) {
   std::unordered_set<const DexType*> dont_rename_serde_relationships;
   for (const auto& cls : scope) {
-    ClassSerdes cls_serdes = get_class_serdes(cls);
+    klass::Serdes cls_serdes = klass::get_serdes(cls);
     const char* rawname = cls->get_name()->c_str();
     std::string name = std::string(rawname);
     name.pop_back();
