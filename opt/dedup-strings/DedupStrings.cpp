@@ -38,6 +38,8 @@ constexpr const char* METRIC_DEXES_WITHOUT_HOST = "num_dexes_without_host";
 constexpr const char* METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS =
     "num_excluded_duplicate_non_load_strings";
 constexpr const char* METRIC_FACTORY_METHODS = "num_factory_methods";
+constexpr const char* METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS =
+    "num_excluded_out_of_factory_methods_strings";
 
 } // namespace
 
@@ -337,12 +339,19 @@ DedupStrings::get_strings_to_dedup(
   // factory methods, and where to put to the factory method
   std::vector<DexString*> strings_in_dexes[dexen.size()];
   std::unordered_set<size_t> hosting_dexnrs;
-  for (const auto& p : occurrences) {
-    // We are going to look at the situation of a particular string here
+  std::vector<DexString*> ordered_strings;
+  ordered_strings.reserve(occurrences.size());
+  for (auto& p : occurrences) {
     const auto& m = p.second;
     always_assert(m.size() >= 1);
     if (m.size() == 1) continue;
-    const auto s = p.first;
+    ordered_strings.push_back(p.first);
+  }
+  std::sort(ordered_strings.begin(), ordered_strings.end(), compare_dexstrings);
+  for (DexString* s : ordered_strings) {
+    // We are going to look at the situation of a particular string here
+    const auto& m = occurrences.at_unsafe(s);
+    always_assert(m.size() > 1);
     const auto entry_size = s->get_entry_size();
     const auto get_size_reduction = [entry_size, non_load_strings](
                                         DexString* str, size_t dexnr,
@@ -392,6 +401,7 @@ DedupStrings::get_strings_to_dedup(
               "[dedup strings] non perf sensitive string: {%s} dex #%u cannot "
               "be used as dedup strings max factory methods limit reached",
               SHOW(s), dexnr);
+        ++m_stats.excluded_out_of_factory_methods_strings;
         continue;
       }
 
@@ -419,8 +429,7 @@ DedupStrings::get_strings_to_dedup(
     // We have a zero max_cost if and only if we didn't find any suitable
     // hosting_dexnr
     if (!host_info) {
-      TRACE(DS, 3,
-            "[dedup strings] non perf sensitive string: {%s} - no host",
+      TRACE(DS, 3, "[dedup strings] non perf sensitive string: {%s} - no host",
             SHOW(s));
       continue;
     }
@@ -529,10 +538,9 @@ DedupStrings::get_strings_to_dedup(
       auto const s = strings[i];
       auto& info = strings_to_dedup[s];
 
-      TRACE(
-          DS, 2,
-          "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
-          dexnr, i, info.duplicate_string_loads, SHOW(s));
+      TRACE(DS, 2,
+            "[dedup strings] hosting dex %u index %u dup-loads %u string {%s}",
+            dexnr, i, info.duplicate_string_loads, SHOW(s));
 
       redex_assert(info.index == 0xFFFFFFFF);
       redex_assert(info.const_string_method == nullptr);
@@ -708,15 +716,18 @@ void DedupStringsPass::run_pass(DexStoresVector& stores,
   mgr.incr_metric(METRIC_EXCLUDED_DUPLICATE_NON_LOAD_STRINGS,
                   stats.excluded_duplicate_non_load_strings);
   mgr.incr_metric(METRIC_FACTORY_METHODS, stats.factory_methods);
+  mgr.incr_metric(METRIC_EXCLUDED_OUT_OF_FACTORY_METHODS_STRINGS,
+                  stats.excluded_out_of_factory_methods_strings);
   TRACE(DS, 1,
         "[dedup strings] duplicate strings: %u, size: %u, loads: %u; "
         "expected size reduction: %u; "
         "dexes without host: %u; "
-        "excluded duplicate non-load strings: %u; factory methods: %u",
+        "excluded duplicate non-load strings: %u; factory methods: %u; "
+        "excluded out of factory methods strings: %u",
         stats.duplicate_strings, stats.duplicate_strings_size,
         stats.duplicate_string_loads, stats.expected_size_reduction,
         stats.dexes_without_host_cls, stats.excluded_duplicate_non_load_strings,
-        stats.factory_methods);
+        stats.factory_methods, stats.excluded_out_of_factory_methods_strings);
 }
 
 static DedupStringsPass s_pass;
