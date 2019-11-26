@@ -19,7 +19,6 @@
 #include "Resolver.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "Walkers.h"
 
@@ -62,7 +61,7 @@ struct AnalysisImpl : SingleImplAnalysis {
  * Return nullptr otherwise.
  */
 DexType* AnalysisImpl::get_and_check_single_impl(DexType* type) {
-  if (exists(single_impls, type)) {
+  if (single_impls.count(type)) {
     return type;
   }
   if (type::is_array(type)) {

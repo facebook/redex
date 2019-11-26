@@ -14,14 +14,13 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "ClassHierarchy.h"
 #include "Debug.h"
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
-#include "ClassHierarchy.h"
 #include "Walkers.h"
 
 size_t SingleImplPass::s_invoke_intf_count = 0;

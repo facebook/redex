@@ -331,7 +331,6 @@ redex_all_SOURCES = \
 	opt/singleimpl/SingleImplAnalyze.cpp \
 	opt/singleimpl/SingleImplOptimize.cpp \
 	opt/singleimpl/SingleImplStats.cpp \
-	opt/singleimpl/SingleImplUtil.cpp \
 	opt/simplify_cfg/SimplifyCFG.cpp \
 	opt/staticrelo/StaticReloV2.cpp \
 	opt/string_concatenator/StringConcatenator.cpp \

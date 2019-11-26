@@ -21,7 +21,6 @@
 #include "Resolver.h"
 #include "SingleImpl.h"
 #include "SingleImplDefs.h"
-#include "SingleImplUtil.h"
 #include "Trace.h"
 #include "TypeReference.h"
 #include "Walkers.h"
