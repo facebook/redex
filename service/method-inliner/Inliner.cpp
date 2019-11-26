@@ -840,7 +840,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
                                       const IRInstruction* insn,
                                       size_t estimated_insn_size) {
   // don't inline cross store references
-  if (cross_store_reference(callee)) {
+  if (cross_store_reference(caller, callee)) {
     if (insn) {
       log_nopt(INL_CROSS_STORE_REFS, caller, insn);
     }
@@ -1597,8 +1597,9 @@ bool MultiMethodInliner::check_android_os_version(IRInstruction* insn) {
   return false;
 }
 
-bool MultiMethodInliner::cross_store_reference(const DexMethod* callee) {
-  size_t store_idx = xstores.get_store_idx(callee->get_class());
+bool MultiMethodInliner::cross_store_reference(const DexMethod* caller,
+                                               const DexMethod* callee) {
+  size_t store_idx = xstores.get_store_idx(caller->get_class());
   bool has_cross_store_ref = false;
   editable_cfg_adapter::iterate(
       callee->get_code(), [&](const MethodItemEntry& mie) {

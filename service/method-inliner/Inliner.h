@@ -256,7 +256,7 @@ class MultiMethodInliner {
    * Return true if a caller is in a DEX in a store and any opcode in callee
    * refers to a DexMember in a different store .
    */
-  bool cross_store_reference(const DexMethod* context);
+  bool cross_store_reference(const DexMethod* caller, const DexMethod* callee);
 
   bool is_estimate_over_max(uint64_t estimated_insn_size,
                             const DexMethod* callee,
