@@ -12,7 +12,9 @@
 #include "Walkers.h"
 
 size_t delete_methods(
-    std::vector<DexClass*>& scope, std::unordered_set<DexMethod*>& removable,
+    std::vector<DexClass*>& scope,
+    std::unordered_set<DexMethod*>& removable,
+    ConcurrentSet<DexMethod*>& delayed_make_static,
     std::function<DexMethod*(DexMethodRef*, MethodSearch search)> resolver) {
 
   // if a removable candidate is invoked do not delete
@@ -35,6 +37,7 @@ size_t delete_methods(
                       "%s is concrete but does not have a DexClass\n",
                       SHOW(callee));
     cls->remove_method(callee);
+    delayed_make_static.erase(callee);
     DexMethod::erase_method(callee);
     deleted++;
     TRACE(DELMET, 4, "removing %s", SHOW(callee));

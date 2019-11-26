@@ -22,19 +22,5 @@
 size_t delete_methods(
     std::vector<DexClass*>& scope,
     std::unordered_set<DexMethod*>& removable,
+    ConcurrentSet<DexMethod*>& delayed_make_static,
     std::function<DexMethod*(DexMethodRef*, MethodSearch)> resolver);
-
-/**
- * Attempt to delete all removable candidates if there are no reference to
- * the method and the method is not marked as "do not delete".
- * Walks all opcodes in scope to check if the method is called.
- * Uses the default resolver to map method references to method definitions.
- */
-inline size_t delete_methods(
-    std::vector<DexClass*>& scope,
-    std::unordered_set<DexMethod*>& removable) {
-  return delete_methods(scope, removable,
-      [](DexMethodRef* method, MethodSearch search) {
-        return resolve_method(method, search);
-  });
-}

@@ -162,6 +162,10 @@ class MultiMethodInliner {
                     const IRInstruction* insn,
                     size_t estimated_insn_size);
 
+  ConcurrentSet<DexMethod*>& get_delayed_make_static() {
+    return m_delayed_make_static;
+  }
+
  private:
   void caller_inline(DexMethod* caller,
                      const std::vector<DexMethod*>& nonrecursive_callees);
