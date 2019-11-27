@@ -8,6 +8,7 @@
 import bisect
 import copy
 import enum
+import io
 import numbers
 import operator
 import optparse
@@ -15,6 +16,7 @@ import os
 import re
 import string
 import sys
+import zipfile
 from io import BytesIO
 
 import file_extract
@@ -1575,12 +1577,14 @@ def mangle_classname(demangled):
 class File:
     """Represents a DEX (Dalvik Executable) file"""
 
-    def __init__(self, path, proguard_path):
+    def __init__(self, path, file_like=None, proguard_path=None):
         self.path = path
         self.proguard = None
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
-        self.data = file_extract.FileExtract(open(self.path, "rb"), "=", 4)
+        if file_like is None:
+            file_like = open(path, "rb")
+        self.data = file_extract.FileExtract(file_like, "=", 4)
         self.header = header_item(self.data)
         self.map_list = None
         self.string_ids = None
@@ -4427,15 +4431,59 @@ def main():
         print("No input files. {}".format(usage))
         return
 
-    for path in files:
-        if os.path.splitext(path)[1] == ".apk":
-            print("error: dex.py operates on dex files, please unpack your apk")
-            return
+    def generate_dex_objects(files):
+        for path in files:
+            base = os.path.basename(path)
+            ext = os.path.splitext(path)[1]
 
+            def handle_zip(zip_file, path, name):
+                # Naive implementation uses ZipFile entries which are file-like:
+                #   info = zip_file.getinfo(name)
+                #   return (path, info.file_size, file.open(info))
+                # Problem is that performance is abysmal. So we unpack into
+                # memory.
+                info = zip_file.getinfo(name)
+                data = zip_file.read(info)
+                return (path, info.file_size, io.BytesIO(data))
+
+            # Special handling for direct zip access.
+            if "!" in base and ext == ".dex":
+                zip_path = os.path.join(os.path.dirname(path), base[0 : base.find("!")])
+                name = base[base.find("!") + 1 :]
+                file = zipfile.ZipFile(zip_path, "r")
+                names = set(file.namelist())
+                if name not in names:
+                    print("%s does not contain %s" % (zip_path, name))
+                    break
+                yield handle_zip(file, path, name)
+                continue
+
+            if ext == ".dex":
+                # Plain dex file, open as file.
+                yield (path, os.path.getsize(path), open(path, "rb"))
+                continue
+
+            if ext == ".apk" or ext == ".jar" or ext == ".zip":
+                file = zipfile.ZipFile(path, "r")
+                names = set(file.namelist())
+                if "classes.dex" not in names:
+                    print("%s does not contain classes.dex" % path)
+                    break
+                yield handle_zip(file, path + "!classes.dex", "classes.dex")
+                for i in range(2, 100000):
+                    name = "classes%d.dex" % i
+                    if name not in names:
+                        break
+                    yield handle_zip(file, path + "!" + name, name)
+                continue
+
+            print("error: dex.py does not know how to handle %s" % path)
+            break
+
+    for path, file_size, file_like in generate_dex_objects(files):
         print("Dex file: %s" % (path))
-        file_size = os.path.getsize(path)
         total_file_size += file_size
-        dex = File(path, options.proguard)
+        dex = File(path, file_like, options.proguard)
         if options.class_filter:
             dex_class = dex.find_class(options.class_filter)
             if dex_class:
