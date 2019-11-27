@@ -33,13 +33,8 @@ ApiLevelsUtils::get_framework_classes() {
   std::unordered_map<DexType*, FrameworkAPI> framework_cls_to_api;
 
   std::ifstream infile(m_framework_api_info_filename.c_str());
-  if (!infile) {
-    fprintf(stderr, "WARNING: Failed to open framework api file: %s\n",
-            m_framework_api_info_filename.c_str());
-    TRACE(API_UTILS, 1, "Failed to open framework api file: %s\n",
-          m_framework_api_info_filename.c_str());
-    return framework_cls_to_api;
-  }
+  assert_log(infile, "Failed to open framework api file: %s\n",
+             m_framework_api_info_filename.c_str());
 
   FrameworkAPI framework_api;
   std::string framework_cls_str;
