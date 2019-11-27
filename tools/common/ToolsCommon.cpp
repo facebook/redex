@@ -42,8 +42,7 @@ void load_entry_file(const std::string& input_ir_dir, Json::Value* entry_data) {
 void write_entry_file(const std::string& output_ir_dir,
                       const Json::Value& entry_data) {
   std::ofstream ostrm(output_ir_dir + ENTRY_FILE);
-  Json::StyledStreamWriter writer;
-  writer.write(ostrm, entry_data);
+  ostrm << entry_data;
 }
 
 /**

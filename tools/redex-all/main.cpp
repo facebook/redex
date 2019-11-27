@@ -346,8 +346,7 @@ Arguments parse_args(int argc, char* argv[]) {
       pass_configs[static_cast<int>(i)] = reflect_config(pass->reflect());
     }
     reflected_config["passes"] = pass_configs;
-    Json::StyledStreamWriter writer;
-    writer.write(std::cout, reflected_config);
+    std::cout << reflected_config << std::flush;
     exit(EXIT_SUCCESS);
   }
 
@@ -1004,10 +1003,9 @@ void redex_backend(const std::string& output_dir,
       auto opt_decisions_output_path = conf.metafile(OPT_DECISIONS);
       auto opt_data =
           opt_metadata::OptDataMapper::get_instance().serialize_sql();
-      Json::StyledStreamWriter writer;
       {
         std::ofstream opt_data_out(opt_decisions_output_path);
-        writer.write(opt_data_out, opt_data);
+        opt_data_out << opt_data;
       }
     }
   }
@@ -1203,10 +1201,9 @@ int main(int argc, char* argv[]) {
   }
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
-  Json::StyledStreamWriter writer;
   {
     std::ofstream out(stats_output_path);
-    writer.write(out, stats);
+    out << stats;
   }
 
   TRACE(MAIN, 1, "Done.");
