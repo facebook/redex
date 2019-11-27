@@ -245,7 +245,7 @@ class encoded_field(AutoParser):
             items[i].field_idx += items[i - 1].field_idx
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "FIELD FLAGS\n"
 
     def get_dump_flat(self):
@@ -276,7 +276,7 @@ class encoded_method(AutoParser):
             items[i].method_idx += items[i - 1].method_idx
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "METHOD FLAGS\n"
 
     def get_dump_flat(self):
@@ -367,7 +367,7 @@ class class_def_item(AutoParser):
         self.interface_ids = None
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return (
             "CLASS      ACCESS     SUPERCLASS INTERFACES SOURCE"
             "     ANNOTATION CLASS_DATA STATIC_VALUES\n"
@@ -512,20 +512,28 @@ class DBG(enum.IntEnum):
 
     @classmethod
     def _missing_(cls, value):
+        val = value
         if isinstance(value, file_extract.FileExtract):
-            return cls(value.get_uint8())
-        elif DBG.is_special_opcode(value):
-            return value
-        else:
+            val = value.get_uint8()
+        try:
+            return cls(val)
+        except ValueError:
             return super()._missing_(value)
 
     def dump(self, prefix=None, f=sys.stdout, print_name=True, parent_path=None):
         f.write(self.name)
 
 
+def decode_DBG_or_val(value):
+    val = value
+    if isinstance(value, file_extract.FileExtract):
+        val = value.get_uint8()
+    return val if DBG.is_special_opcode(val) else DBG(val)
+
+
 class debug_info_op(AutoParser):
     items = [
-        {"class": DBG, "name": "op"},
+        {"decode": decode_DBG_or_val, "name": "op"},
         {
             "switch": "op",
             "cases": {
@@ -943,7 +951,7 @@ class field_id_item(AutoParser):
         AutoParser.__init__(self, self.items, data, context)
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "CLASS  TYPE   NAME\n"
 
     def get_dump_flat(self):
@@ -1065,7 +1073,7 @@ class method_id_item(AutoParser):
         AutoParser.__init__(self, self.items, data, context)
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "CLASS  PROTO  NAME\n"
 
     def get_dump_flat(self):
@@ -1092,7 +1100,7 @@ class proto_id_item(AutoParser):
         return True
 
     @classmethod
-    def get_table_header(self):
+    def get_table_header(cls):
         return "SHORTY_IDX RETURN     PARAMETERS\n"
 
     def get_parameters(self):
@@ -4496,7 +4504,6 @@ def main():
             for cls in classes:
                 methods = cls.get_methods()
                 for method in methods:
-                    method.dump(options, f=sys.stdout)
                     opcodes_bytes_size = method.get_code_byte_size()
                     file_opcodes_byte_size += opcodes_bytes_size
                     total_opcode_byte_size += opcodes_bytes_size
