@@ -125,6 +125,7 @@ TEST_F(ObjectInlinerTest, simple_class_inline) {
   )";
   const auto& callee_str = R"(
     (
+      (load-param v0)
       (new-instance "LBaz;")
       (move-result-pseudo-object v1)
       (return v1)
@@ -139,6 +140,7 @@ TEST_F(ObjectInlinerTest, simple_class_inline) {
       (move-result-pseudo-object v2)
       (.pos:dbg_0 "LBar;.fumble:()V" Bar 22)
       (nop)
+      (move v3 v0)
       (new-instance "LBaz;")
       (move-result-pseudo-object v4)
       (move v2 v4)

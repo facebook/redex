@@ -106,8 +106,12 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
 void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
                                                 ControlFlowGraph* callee) {
 
+  // After remap, this reg has been moved and
+  // load params have been changed to moves
+  IRInstruction* original_load_this = callee->entry_block()->begin()->insn;
+  reg_t callee_this = original_load_this->dest();
   std::set<DexFieldRef*, dexfields_comparator> used_fields;
-  std::set<reg_t> this_refs = {m_callee_this_reg};
+  std::set<reg_t> this_refs = {callee_this, m_callee_this_reg};
 
   for (auto block : callee->blocks()) {
     IRInstruction* awaiting_dest_instr = nullptr;
@@ -118,10 +122,13 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
       auto opcode = insn->opcode();
       if (is_iget(opcode)) {
         auto field = insn->get_field();
-        bool is_self_call = field->get_class() == m_callee_class &&
-                            this_refs.find(insn->srcs()[0]) != this_refs.end();
+        bool is_self_call = this_refs.count(insn->src(0)) != 0;
         if (is_self_call) {
           auto no_field_needed = m_set_field_sets.find(field);
+          TRACE(CFG,
+                4,
+                "ObjectPlugin update callee, looking at field %s",
+                SHOW(insn));
           if (no_field_needed == m_set_field_sets.end()) {
             auto set_default = new IRInstruction(OPCODE_CONST);
             set_default->set_literal(0);
@@ -142,12 +149,14 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
         }
       } else if (is_move(opcode)) {
         // track this references to aid in redirection
-        if (this_refs.find(insn->dest()) != this_refs.end() &&
-            this_refs.find(insn->src(0)) != this_refs.end()) {
-        } else if (this_refs.find(insn->dest()) != this_refs.end() &&
-                   this_refs.find(insn->src(0)) == this_refs.end()) {
+        if (this_refs.count(insn->dest()) != 0 &&
+            this_refs.count(insn->src(0)) != 0) {
+          // No change move
+        } else if (insn != original_load_this &&
+                   this_refs.count(insn->dest()) != 0 &&
+                   this_refs.count(insn->src(0)) == 0) {
           this_refs.erase(insn->dest());
-        } else if (this_refs.find(insn->src(0)) != this_refs.end()) {
+        } else if (this_refs.count(insn->src(0)) != 0) {
           this_refs.insert(insn->dest());
         }
       } else if (opcode::is_move_result_any(opcode)) {

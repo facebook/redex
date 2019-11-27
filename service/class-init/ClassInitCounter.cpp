@@ -142,7 +142,8 @@ std::string show(const ObjectUses& object_uses) {
 
 std::string show(const InitLocation& init) {
   std::stringstream out;
-  out << "{\"Init\" : { \"count\" : " << init.get_count() << ", \"data\" : [";
+  out << "{\"Init\" : { \"type\" : " << SHOW(init.m_typ)
+      << ", \"count\" : " << init.get_count() << ", \"data\" : [";
   for (auto class_inits : init.get_inits()) {
     for (auto method_inits : class_inits.second) {
       for (auto instr_inits : method_inits.second) {
@@ -565,12 +566,13 @@ bool Escapes::consistent_with(const Escapes& other) {
 }
 
 void Escapes::combine_paths(const Escapes& other) {
-  if (!((via_return && via_return.value() == AllPaths) &&
-        (other.via_return && other.via_return.value() == AllPaths))) {
-    via_return = Conditional;
-  }
-  for (auto o_instr : other.return_instrs) {
-    return_instrs.insert(o_instr);
+  if (return_instrs.size() >= 1 || other.return_instrs.size() >= 1) {
+    via_return =
+        path_combine(via_return ? via_return.value() : Conditional,
+                     other.via_return ? other.via_return.value() : Conditional);
+    for (auto o_instr : other.return_instrs) {
+      return_instrs.insert(o_instr);
+    }
   }
   for (auto array : via_array_write) {
     auto other_flow = other.via_array_write.find(array.first);
@@ -643,6 +645,9 @@ void Escapes::merge(const Escapes& other) {
   if (!via_return && other.via_return) {
     via_return = other.via_return;
   }
+  for (auto insn : other.return_instrs) {
+    return_instrs.insert(insn);
+  }
   for (auto i_flow : other.via_array_write) {
     if (via_array_write.count(i_flow.first) == 0) {
       via_array_write[i_flow.first] = i_flow.second;
@@ -679,39 +684,33 @@ void TrackedUses::combine_paths(const TrackedUses& other) {
   safe_escapes.combine_paths(other.safe_escapes);
 }
 
-const std::vector<std::pair<IRInstruction*, boost::optional<register_t>>>&
+std::vector<std::pair<IRInstruction*, reg_t>>
 Escapes::get_escape_instructions() {
-  std::vector<std::pair<IRInstruction*, boost::optional<register_t>>> escapes;
+  std::vector<std::pair<IRInstruction*, reg_t>> escapes;
   if (via_return) {
-    boost::optional<register_t> empty = {};
     for (auto i : return_instrs) {
-      escapes.emplace_back(
-          (std::pair<IRInstruction*, boost::optional<register_t>>){i, empty});
+      escapes.emplace_back(std::make_pair(i, i->src(0)));
     }
   }
   for (auto f_set : via_field_set) {
     for (auto reg_instrs : f_set.second.regs) {
       for (auto i : reg_instrs.second) {
-        escapes.emplace_back(
-            (std::pair<IRInstruction*, boost::optional<register_t>>){
-                i, reg_instrs.first});
+        escapes.emplace_back(std::make_pair(i, reg_instrs.first));
       }
     }
   }
 
   for (auto v_call : via_vmethod_call) {
-    printf("escape via v method %s\n", SHOW(v_call.first));
     for (auto i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
   for (auto s_call : via_smethod_call) {
-    printf("escape via s method %s\n", SHOW(s_call.first));
     for (auto i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
-  return std::move(escapes);
+  return escapes;
 }
 
 void TrackedUses::merge(const TrackedUses& other) {
@@ -1068,7 +1067,9 @@ std::shared_ptr<ObjectUses> InitLocation::add_init(DexClass* container,
     // So increase count of the number of initializations
     m_count++;
   }
-  auto usage = std::make_shared<ObjectUses>(container->get_type(), instr);
+  TRACE(CIC, 8, "Adding init to %s, from instruction %s", SHOW(m_typ),
+        SHOW(instr));
+  auto usage = std::make_shared<ObjectUses>(m_typ, instr);
   m_inits[container][caller][instr].emplace_back(usage);
   return usage;
 }
@@ -1106,7 +1107,7 @@ void ClassInitCounter::find_children(
   for (DexClass* current : classes) {
     if (current->get_super_class() == parent) {
       auto type = current->get_type();
-      m_type_to_inits.insert({type, InitLocation()});
+      m_type_to_inits.insert({type, InitLocation(type)});
     }
   }
   return;
@@ -1179,6 +1180,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
       DexType* typ = i->get_type();
       registers.clear(ir_analyzer::RESULT_REGISTER);
       if (m_type_to_inits.count(typ) != 0) {
+        TRACE(CIC, 5, "Adding an init for type %s", SHOW(typ));
         std::shared_ptr<ObjectUses> use =
             m_type_to_inits[typ].add_init(container, method, i);
         registers.insert(ir_analyzer::RESULT_REGISTER, use);
@@ -1334,8 +1336,9 @@ void ClassInitCounter::inits_any_children(DexClass* container,
   visited_blocks =
       std::unordered_map<cfg::Block*, std::shared_ptr<RegistersPerBlock>>();
 
-  TRACE(CIC, 5, "starting analysis for method %s.%s\n",
-        container->get_name()->c_str(), method->get_name()->c_str());
+  TRACE(CIC, 5, "starting analysis for method %s.%s with %zu blocks\n",
+        container->get_name()->c_str(), method->get_name()->c_str(),
+        graph.num_blocks());
 
   analyze_block(container, method, nullptr, block);
   auto& merged_set = m_stored_mergeds[container->get_type()][method];

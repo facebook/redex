@@ -149,8 +149,7 @@ class Escapes final {
   void merge(const Escapes& other);
 
   boost::optional<FlowStatus> via_return = {};
-  const std::vector<std::pair<IRInstruction*, boost::optional<register_t>>>&
-  get_escape_instructions();
+  std::vector<std::pair<IRInstruction*, reg_t>> get_escape_instructions();
 
   std::set<IRInstruction*> return_instrs;
   ArrayWriteMap via_array_write;
@@ -373,6 +372,8 @@ class InitLocation final {
                dexclasses_comparator>;
 
  public:
+  InitLocation(DexType* typ) : m_typ(typ) {}
+  InitLocation() = default;
   uint32_t get_count() const { return m_count; }
 
   // adds the data structure for this initialization, returning a ref to it
@@ -383,6 +384,8 @@ class InitLocation final {
                      DexMethod* caller,
                      const ObjectUses& obj);
   const InitMap& get_inits() const { return m_inits; }
+
+  DexType* m_typ = nullptr;
 
  private:
   InitMap m_inits;
