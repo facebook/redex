@@ -14,13 +14,17 @@
 using namespace cic;
 using namespace cfg;
 
-ObjectInlinePlugin::ObjectInlinePlugin(const FieldSetMap& field_sets,
-                                       const std::vector<reg_t>& srcs,
-                                       reg_t value_register,
-                                       boost::optional<reg_t> caller_this,
-                                       reg_t callee_this,
-                                       DexType* callee_type)
+ObjectInlinePlugin::ObjectInlinePlugin(
+    const FieldSetMap& field_sets,
+    const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>&
+        field_swaps,
+    const std::vector<reg_t>& srcs,
+    reg_t value_register,
+    boost::optional<reg_t> caller_this,
+    reg_t callee_this,
+    DexType* callee_type)
     : m_initial_field_sets(field_sets),
+      m_field_swaps(field_swaps),
       m_srcs(srcs),
       m_value_reg(value_register),
       m_caller_this_reg(caller_this),
@@ -111,7 +115,7 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
   IRInstruction* original_load_this = callee->entry_block()->begin()->insn;
   reg_t callee_this = original_load_this->dest();
   std::set<DexFieldRef*, dexfields_comparator> used_fields;
-  std::set<reg_t> this_refs = {callee_this, m_callee_this_reg};
+  std::set<reg_t> this_refs = {callee_this};
 
   for (auto block : callee->blocks()) {
     IRInstruction* awaiting_dest_instr = nullptr;
@@ -125,10 +129,19 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
         bool is_self_call = this_refs.count(insn->src(0)) != 0;
         if (is_self_call) {
           auto no_field_needed = m_set_field_sets.find(field);
+          auto swap_field = m_field_swaps.find(field);
           TRACE(CFG,
                 4,
                 "ObjectPlugin update callee, looking at field %s",
                 SHOW(insn));
+
+          if (swap_field != m_field_swaps.end()) {
+            assert(m_caller_this_reg);
+            insn->set_field(swap_field->second);
+            insn->set_src(0, m_caller_this_reg.value());
+            used_fields.emplace(swap_field->first);
+            continue;
+          }
           if (no_field_needed == m_set_field_sets.end()) {
             auto set_default = new IRInstruction(OPCODE_CONST);
             set_default->set_literal(0);
@@ -136,10 +149,8 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
           } else {
             auto move = new IRInstruction(opcode::iget_to_move(opcode));
             assert(no_field_needed->second.regs.size() == 1);
-            for (auto reg : no_field_needed->second.regs) {
-              move->set_src(0, reg.first);
-              break;
-            }
+            // Extract the solo reg, and set as src.
+            move->set_src(0, no_field_needed->second.regs.begin()->first);
             used_fields.emplace(field);
             awaiting_dest_instr = move;
           }

@@ -19,12 +19,15 @@ using namespace cfg;
 class ObjectInlinePlugin : public CFGInlinerPlugin {
 
  public:
-  ObjectInlinePlugin(const FieldSetMap& field_sets,
-                     const std::vector<reg_t>& srcs,
-                     reg_t value_register,
-                     boost::optional<reg_t> caller_this,
-                     reg_t callee_this,
-                     DexType* callee_type);
+  ObjectInlinePlugin(
+      const FieldSetMap& field_sets,
+      const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>&
+          field_swaps,
+      const std::vector<reg_t>& srcs,
+      reg_t value_register,
+      boost::optional<reg_t> caller_this,
+      reg_t callee_this,
+      DexType* callee_type);
 
   /*
    * Copy the callee blocks into caller, fixing up self references, field
@@ -49,6 +52,8 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
   FieldSetMap m_initial_field_sets;
   FieldSetMap m_set_field_sets;
   FieldSetMap m_unaccessed_field_sets;
+  const std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator>
+      m_field_swaps;
   std::vector<reg_t> m_srcs;
   reg_t m_value_reg;
   boost::optional<reg_t> m_caller_this_reg;
