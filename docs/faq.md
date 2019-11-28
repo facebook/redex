@@ -49,22 +49,16 @@ or other complex ways an entity could be reached.
 
 Here's how you ensure Redex will not delete or rename something:
 
-Annotate any class, method, or field you want to keep with `@DoNotStrip`.
+Annotate any class, method, or field you want to keep with `@DoNotStrip`, and
+add this to your ProGuard config file (which should be passed to redex.py via
+the `--proguard-config` flag):
 
-Add this to your redex config (at the uppermost level of the json) to
-prevent deletion:
 ```
-"keep_annotations": [
-  "Lcom/path/to/your/DoNotStrip;"
-]
-```
-
-and add this to your config to prevent renaming:
-```
-"RenameClassesPassV2" : {
-  "dont_rename_annotated": [
-    "Lcom/path/to/your/DoNotStrip;"
-  ]
+# Do not strip classes annotated with @DoNotStrip
+-keep @com.path.to.your.DoNotStrip class *
+# Do not strip annotated fields or methods either
+-keepclassmembers class * {
+    @com.path.to.your.DoNotStrip *;
 }
 ```
 
