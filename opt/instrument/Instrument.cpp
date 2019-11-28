@@ -894,8 +894,7 @@ void do_simple_method_tracing(DexClass* analysis_cls,
       return 0;
     }
 
-    const size_t sum_opcode_sizes =
-        method->get_code()->sum_non_internal_opcode_sizes();
+    const size_t sum_opcode_sizes = method->get_code()->sum_opcode_sizes();
     total_size += sum_opcode_sizes;
 
     // Excluding analysis methods myselves.
