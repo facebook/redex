@@ -42,7 +42,9 @@ class PassManager {
     boost::optional<hashing::DexHash> hash;
   };
 
-  void run_passes(DexStoresVector&, ConfigFiles&);
+  void run_passes(DexStoresVector&,
+                  ConfigFiles&,
+                  bool ignore_final_verifier_result = false);
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
@@ -83,11 +85,6 @@ class PassManager {
   void init(const Json::Value& config);
 
   hashing::DexHash run_hasher(const char* name, const Scope& scope);
-
-  static void run_verifier(const Scope& scope,
-                           bool verify_moves,
-                           bool check_no_overwrite_this,
-                           bool validate_access);
 
   ApkManager m_apk_mgr;
   std::vector<Pass*> m_registered_passes;

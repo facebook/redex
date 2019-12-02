@@ -1179,7 +1179,7 @@ int main(int argc, char* argv[]) {
                         args.redex_options);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, conf);
+      manager.run_passes(stores, conf, !!args.stop_pass_idx);
     }
 
     if (args.stop_pass_idx == boost::none) {
