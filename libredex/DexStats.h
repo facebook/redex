@@ -37,6 +37,8 @@ struct dex_stats_t {
   int num_dbg_items = 0;
   int dbg_total_size = 0;
 
+  int instruction_bytes = 0;
+
   /* Stats collected from the Map List section of a Dex. */
   int header_item_count = 0;
   int header_item_bytes = 0;

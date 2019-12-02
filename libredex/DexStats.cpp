@@ -33,6 +33,7 @@ dex_stats_t& operator+=(dex_stats_t& lhs, const dex_stats_t& rhs) {
   lhs.field_refs_total_size += rhs.field_refs_total_size;
   lhs.num_dbg_items += rhs.num_dbg_items;
   lhs.dbg_total_size += rhs.dbg_total_size;
+  lhs.instruction_bytes += rhs.instruction_bytes;
 
   lhs.header_item_count += rhs.header_item_count;
   lhs.header_item_bytes += rhs.header_item_bytes;

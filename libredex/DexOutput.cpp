@@ -933,8 +933,10 @@ void DexOutput::generate_code_items(const std::vector<SortMode>& mode) {
     m_method_bytecode_offsets.emplace_back(meth->get_name()->c_str(), m_offset);
     m_code_item_emits.emplace_back(meth, code,
                                    (dex_code_item*)(m_output + m_offset));
+    auto insns_size = ((const dex_code_item*)(m_output + m_offset))->insns_size;
     m_offset += size;
     m_stats.num_instructions += code->get_instructions().size();
+    m_stats.instruction_bytes += insns_size * 2;
   }
   insert_map_item(TYPE_CODE_ITEM, (uint32_t)m_code_item_emits.size(), ci_start,
                   m_offset - ci_start);
