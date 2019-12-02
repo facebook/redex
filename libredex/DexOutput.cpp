@@ -1655,6 +1655,9 @@ uint32_t emit_instruction_offset_debug_info(
       *dbgcount += 1;
     }
   }
+  auto post_iodi_offset = offset;
+  TRACE(IODI, 2, "[IODI] IODI programs took up %d bytes\n",
+        post_iodi_offset - initial_offset);
   // 3)
   auto size_offset_end = param_size_to_oset.end();
   for (auto& it : code_items) {
@@ -1691,6 +1694,8 @@ uint32_t emit_instruction_offset_debug_info(
       *dbgcount += 1;
     }
   }
+  TRACE(IODI, 2, "[IODI] Non-IODI programs took up %d bytes\n",
+        offset - post_iodi_offset);
   // Return how much data we've encoded
   return offset - initial_offset;
 }
