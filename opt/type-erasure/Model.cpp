@@ -1081,8 +1081,15 @@ void Model::collect_methods() {
             "%ld dmethods in %s",
             cls->get_dmethods().size(),
             SHOW(cls->get_type()));
+      bool has_ctor = false;
       for (const auto& method : cls->get_dmethods()) {
+        if (method::is_init(method)) {
+          has_ctor = true;
+        }
         merger.dmethods.emplace_back(method);
+      }
+      if (!has_ctor) {
+        TRACE(TERA, 1, "[TERA] No ctor found for mergeable %s\n", SHOW(type));
       }
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
