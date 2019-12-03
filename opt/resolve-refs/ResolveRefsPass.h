@@ -31,10 +31,13 @@ class ResolveRefsPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void bind_config() override {
-    // Allowing resolving method ref to an external one.
-    bind("resolve_to_external", false, m_resolve_to_external);
+    bind("resolve_to_external", false, m_resolve_to_external,
+         "Allowing resolving method ref to an external one");
+    bind("desuperify", true, m_desuperify,
+         "Convert invoke-super calls to invoke-virtual where possible");
   }
 
  private:
   bool m_resolve_to_external;
+  bool m_desuperify;
 };

@@ -361,6 +361,10 @@ inline bool is_invoke_virtual(IROpcode op) {
   return op == OPCODE_INVOKE_VIRTUAL;
 }
 
+inline bool is_invoke_interface(IROpcode op) {
+  return op == OPCODE_INVOKE_INTERFACE;
+}
+
 inline bool is_invoke_super(IROpcode op) { return op == OPCODE_INVOKE_SUPER; }
 
 inline bool is_invoke_direct(IROpcode op) { return op == OPCODE_INVOKE_DIRECT; }

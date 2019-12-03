@@ -59,17 +59,17 @@ void try_desuperify(const DexMethod* caller,
   if (cls == nullptr) {
     return;
   }
+  // Skip if the callee is an interface default method (037).
+  auto callee_cls = type_class(insn->get_method()->get_class());
+  if (is_interface(callee_cls)) {
+    return;
+  }
   // resolve_method_ref will start its search in the superclass of :cls.
   auto callee = resolve_method_ref(cls, insn->get_method()->get_name(),
                                    insn->get_method()->get_proto(),
                                    MethodSearch::Virtual);
   // External methods may not always be final across runtime versions
   if (callee == nullptr || callee->is_external() || !is_final(callee)) {
-    return;
-  }
-  // Skip if the callee is an interface default method (037).
-  auto callee_cls = type_class(callee->get_class());
-  if (is_interface(callee_cls)) {
     return;
   }
 
