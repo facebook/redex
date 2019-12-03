@@ -1213,8 +1213,10 @@ void InstrumentPass::run_pass(DexStoresVector& stores,
                               PassManager& pm) {
   // TODO(fengliu): We may need change this but leave it here for local test.
   if (m_options.instrumentation_strategy == "methods_replacement") {
-    method_reference::wrap_instance_call_with_static(
-        stores, m_options.methods_replacement);
+    auto num_wrapped_invocations =
+        method_reference::wrap_instance_call_with_static(
+            stores, m_options.methods_replacement);
+    pm.set_metric("wrapped_invocations", num_wrapped_invocations);
     return;
   }
   if (!cfg.get_json_config().get("instrument_pass_enabled", false) &&
