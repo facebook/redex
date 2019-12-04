@@ -34,8 +34,24 @@ DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
   // dexer behavior that keeps types mostly-intact.
 
   // We first need to filter at least "<" to avoid undefined behavior below.
-  // Take the opportunity to aim for object types.
+  // Take the opportunity to aim for object types and try a simplistic test
+  // that our assumptions about how signatures are broken up around arrays
+  // are correct.
   redex_assert(!anno_str.empty());
+  auto is_object_array = [&]() {
+    if (anno_str[0] != '[') {
+      return false;
+    }
+    for (size_t i = 1; i < anno_str.length(); ++i) {
+      char c = anno_str[i];
+      if (c == '[') {
+        continue;
+      }
+      return c == 'L';
+    }
+    return false;
+  };
+  assert_log(!is_object_array(), "%s", anno_str.c_str());
   if (anno_str[0] != 'L') {
     return nullptr;
   }
