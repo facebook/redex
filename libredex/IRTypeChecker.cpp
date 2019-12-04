@@ -219,8 +219,6 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 }
 
 Result check_load_params(const DexMethod* method) {
-  bool method_static = is_static(method);
-  auto arg_list = method->get_proto()->get_args();
   const auto& signature = method->get_proto()->get_args()->get_type_list();
   auto sig_it = signature.begin();
 
@@ -280,6 +278,10 @@ Result check_load_params(const DexMethod* method) {
     if (res) {
       return Result::make_error(res.get());
     }
+    // Instance methods have an extra 'load-param' at the beginning for the
+    // instance object.
+    // Once we've checked that, though, the rest is the same so move on to
+    // using 'handle_other' in all cases.
     handler = handler_t(handle_other);
   }
   return Result::Ok();
