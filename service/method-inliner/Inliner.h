@@ -120,7 +120,9 @@ class MultiMethodInliner {
       MultiMethodInlinerMode mode = InterDex,
       const CalleeCallerInsns& true_virtual_callers = {},
       const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
-          method_profile_stats = {});
+          method_profile_stats = {},
+      const std::unordered_map<const DexMethod*, size_t>&
+          same_method_implementations = {});
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -386,6 +388,8 @@ class MultiMethodInliner {
   void async_prioritized_method_execute(DexMethod* method,
                                         std::function<void()> f);
 
+  size_t get_same_method_implementations(const DexMethod* callee);
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -531,6 +535,11 @@ class MultiMethodInliner {
   const MultiMethodInlinerMode m_mode;
 
   const std::unordered_set<const DexMethodRef*> m_hot_methods;
+
+  // Represents the size of the largest same-method-implementation group that a
+  // method belongs in; the default value is 1.
+  const std::unordered_map<const DexMethod*, size_t>&
+      m_same_method_implementations;
 
   const std::unordered_set<DexMethodRef*> m_pure_methods;
 

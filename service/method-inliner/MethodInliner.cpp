@@ -153,7 +153,8 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
  */
 std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     const Scope& scope,
-    std::unique_ptr<const mog::Graph>& method_override_graph) {
+    const mog::Graph& method_override_graph,
+    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
   std::unordered_map<const DexMethod*, DexMethod*> method_to_implementations;
   walk::methods(scope, [&](DexMethod* method) {
     if (method->is_external() || root(method) || !method->is_virtual() ||
@@ -169,7 +170,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       return;
     }
     const auto& overriding_methods =
-        mog::get_overriding_methods(*method_override_graph, method);
+        mog::get_overriding_methods(method_override_graph, method);
     if (overriding_methods.size() == 0) {
       return;
     }
@@ -202,9 +203,18 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     };
     if (std::all_of(std::next(filtered_methods.begin()), filtered_methods.end(),
                     compare_method_ir)) {
-      method_to_implementations[method] = comparing_method;
+      auto update_method_to_implementations =
+          [&](const DexMethod* method_to_update,
+              DexMethod* representative_method) {
+            method_to_implementations[method_to_update] = representative_method;
+            if (filtered_methods.size() > 1) {
+              auto& count = (*same_method_implementations)[method_to_update];
+              count = std::max(count, filtered_methods.size());
+            }
+          };
+      update_method_to_implementations(method, comparing_method);
       for (auto overriding_method : overriding_methods) {
-        method_to_implementations[overriding_method] = comparing_method;
+        update_method_to_implementations(overriding_method, comparing_method);
       }
     }
   });
@@ -221,13 +231,15 @@ using CallerInsns =
  * We are currently ruling out candidates that access field/methods or
  * return an object type.
  */
-void gather_true_virtual_methods(const Scope& scope,
-                                 CalleeCallerInsns* true_virtual_callers,
-                                 std::unordered_set<DexMethod*>* methods) {
+void gather_true_virtual_methods(
+    const Scope& scope,
+    CalleeCallerInsns* true_virtual_callers,
+    std::unordered_set<DexMethod*>* methods,
+    std::unordered_map<const DexMethod*, size_t>* same_method_implementations) {
   auto method_override_graph = mog::build_graph(scope);
   auto non_virtual = mog::get_non_true_virtuals(*method_override_graph, scope);
-  auto same_implementation_map =
-      get_same_implementation_map(scope, method_override_graph);
+  auto same_implementation_map = get_same_implementation_map(
+      scope, *method_override_graph, same_method_implementations);
   std::unordered_set<DexMethod*> non_virtual_set{non_virtual.begin(),
                                                  non_virtual.end()};
   // Add mapping from callee to monomorphic callsites.
@@ -356,9 +368,11 @@ void run_inliner(DexStoresVector& stores,
 
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
+  std::unordered_map<const DexMethod*, size_t> same_method_implementations;
 
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
-    gather_true_virtual_methods(scope, &true_virtual_callers, &methods);
+    gather_true_virtual_methods(scope, &true_virtual_callers, &methods,
+                                &same_method_implementations);
   }
   // keep a map from refs to defs or nullptr if no method was found
   MethodRefCache resolved_refs;
@@ -374,7 +388,8 @@ void run_inliner(DexStoresVector& stores,
   // inline candidates
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
-                             true_virtual_callers, method_profile_stats);
+                             true_virtual_callers, method_profile_stats,
+                             same_method_implementations);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {
