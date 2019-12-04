@@ -29,7 +29,17 @@ DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
   bool has_bracket = false;
   bool added_semicolon = false;
   std::string anno_str = anno->str();
-  // anno_str looks like one of these
+
+  // anno_str is some arbitrary segment of a full signature. We rely on standard
+  // dexer behavior that keeps types mostly-intact.
+
+  // We first need to filter at least "<" to avoid undefined behavior below.
+  // Take the opportunity to aim for object types.
+  redex_assert(!anno_str.empty());
+  if (anno_str[0] != 'L') {
+    return nullptr;
+  }
+  // anno_str now likely looks like one of these:
   // Lcom/baz/Foo<
   // Lcom/baz/Foo;
   // Lcom/baz/Foo
@@ -37,14 +47,14 @@ DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
     anno_str.pop_back();
     has_bracket = true;
   }
-  // anno_str looks like one of these
+  // anno_str likely looks like one of these:
   // Lcom/baz/Foo;
   // Lcom/baz/Foo
   if (anno_str.back() != ';') {
     anno_str.push_back(';');
     added_semicolon = true;
   }
-  // anno_str looks like this
+  // anno_str likely looks like this:
   // Lcom/baz/Foo;
 
   // Use get_string because if it's in the map, then it must also already exist
@@ -53,23 +63,23 @@ DexString* lookup_signature_annotation(const rewriter::TypeStringMap& mapping,
     return nullptr;
   }
   auto obfu = mapping.get_new_type_name(transformed_anno);
-  if (obfu) {
-    if (!added_semicolon && !has_bracket) {
-      return obfu;
-    }
-    std::string obfu_str = obfu->str();
-    // We need to transform back to the old_name format of the input
-    if (added_semicolon) {
-      always_assert(obfu_str.back() == ';');
-      obfu_str.pop_back();
-    }
-    if (has_bracket) {
-      always_assert(obfu_str.back() != '<');
-      obfu_str.push_back('<');
-    }
-    return DexString::make_string(obfu_str);
+  if (!obfu) {
+    return nullptr;
   }
-  return nullptr;
+  if (!added_semicolon && !has_bracket) {
+    return obfu;
+  }
+  // We need to transform back to the old_name format of the input
+  std::string obfu_str = obfu->str();
+  if (added_semicolon) {
+    always_assert(obfu_str.back() == ';');
+    obfu_str.pop_back();
+  }
+  if (has_bracket) {
+    always_assert(obfu_str.back() != '<');
+    obfu_str.push_back('<');
+  }
+  return DexString::make_string(obfu_str);
 }
 
 uint32_t get_array_level(const DexString* name) {
