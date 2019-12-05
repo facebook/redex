@@ -41,6 +41,13 @@ class CFGMutation {
   CFGMutation& operator=(CFGMutation&&) = delete;
 
   /// Add a new change to this mutation.
+  /// Mutation may have multiple changes associated with \p
+  ///     anchor.
+  /// Mutation restrictions:
+  ///  - It's not possible to have two \c Replacing instructions
+  ///     for a single anchor.
+  ///  - It's not possible to \c Insert::After terminal operation without
+  ///     \c Replacing it.
   ///
   /// \p where indicates where to add the  \p instructions, relative to the
   ///     anchor.  \c Before means preserve the anchor instruction and add the
@@ -55,8 +62,17 @@ class CFGMutation {
   ///     change.  This can be an empty list.
   ///
   /// \pre The anchor iterator must be dereferenceable (i.e. not \c end() ).
-  /// \pre This mutation must not have any other change associated with \p
-  ///     anchor.
+  ///
+  /// Here is the resulting order of instructions applying multiple changes
+  /// to a single \c anchor it.
+  ///
+  /// add_change(Before, it, as)
+  /// add_change(Replacing, it, rs)
+  /// add_change(Before, it, bs)
+  /// add_change(After, it, ys)
+  /// add_change(After, it, zs)
+  ///
+  /// as ++ bs ++ rs ++ ys ++ zs
   void add_change(Insert where,
                   const cfg::InstructionIterator& anchor,
                   std::vector<IRInstruction*> instructions);
@@ -67,11 +83,11 @@ class CFGMutation {
   void flush();
 
  private:
+  static bool is_terminal(IROpcode op);
+
   /// A memento of a change we wish to make to the CFG.
   class ChangeSet {
    public:
-    ChangeSet(Insert where, std::vector<IRInstruction*> instructions);
-
     /// Apply this change on the control flow graph \p cfg, using \p it as the
     /// anchoring instruction. Moves \p it if the change invalidates the anchor.
     ///
@@ -79,11 +95,16 @@ class CFGMutation {
     ///    after the anchor's initial position.
     ///  - Note the iterator may not be moved at all, even if the change is
     ///    applied.
-    void apply(ControlFlowGraph& cfg, InstructionIterator& it);
+    void apply(ControlFlowGraph& cfg, InstructionIterator& it) const;
+
+    /// Accumulates changes for a specific instruction.
+    /// Check \link CFGMutation::add_change \endlink for more details
+    void add_change(Insert where, std::vector<IRInstruction*> insn_change);
 
    private:
-    Insert m_where;
-    std::vector<IRInstruction*> m_instructions;
+    std::vector<IRInstruction*> m_insert_before;
+    boost::optional<std::vector<IRInstruction*>> m_replace;
+    std::vector<IRInstruction*> m_insert_after;
   };
 
   cfg::ControlFlowGraph& m_cfg;
@@ -94,18 +115,34 @@ inline CFGMutation::CFGMutation(cfg::ControlFlowGraph& cfg) : m_cfg(cfg) {}
 
 inline CFGMutation::~CFGMutation() { flush(); }
 
+inline void CFGMutation::ChangeSet::add_change(
+    Insert where, std::vector<IRInstruction*> insns) {
+
+  switch (where) {
+  case CFGMutation::Insert::Before:
+    m_insert_before.insert(m_insert_before.end(), insns.begin(), insns.end());
+    break;
+  case CFGMutation::Insert::After:
+    m_insert_after.insert(m_insert_after.end(), insns.begin(), insns.end());
+    break;
+  case CFGMutation::Insert::Replacing:
+    always_assert_log(!m_replace.has_value(),
+                      "It's not possible to have two Replacing instructions "
+                      "for a single anchor.");
+    m_replace = std::move(insns);
+    break;
+  }
+}
+
 inline void CFGMutation::add_change(Insert where,
                                     const cfg::InstructionIterator& anchor,
                                     std::vector<IRInstruction*> instructions) {
   always_assert(!anchor.is_end());
-  auto p = m_changes.emplace(anchor->insn,
-                             ChangeSet(where, std::move(instructions)));
-  always_assert_log(
-      p.second, "Conflicting change for anchor: %s.", SHOW(anchor->insn));
+  m_changes[anchor->insn].add_change(where, std::move(instructions));
 }
 
-inline CFGMutation::ChangeSet::ChangeSet(
-    Insert where, std::vector<IRInstruction*> instructions)
-    : m_where(where), m_instructions(std::move(instructions)) {}
+inline bool CFGMutation::is_terminal(IROpcode op) {
+  return is_branch(op) || is_throw(op) || is_return(op);
+}
 
 } // namespace cfg

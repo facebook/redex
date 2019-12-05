@@ -1259,10 +1259,10 @@ bool ControlFlowGraph::insert(const InstructionIterator& position,
                       "create_branch() instead");
 
     IRList::iterator new_inserted_it = b->m_entries.insert_before(pos, insn);
-
     if (is_throw(op) || is_return(op)) {
-      // Throw and return end the block, we must remove all code after them.
-      always_assert(std::next(insns_it) == end_index);
+      // Stop adding instructions when we understand that op
+      // is the end of the block.
+      insns_it = std::prev(end_index);
       std::unordered_set<DexPosition*> dangling;
       for (auto it = pos; it != b->m_entries.end();) {
         if (it->type == MFLOW_POSITION) {

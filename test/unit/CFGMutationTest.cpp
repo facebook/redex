@@ -278,4 +278,102 @@ TEST_F(CFGMutationTest, ReplaceHasMovePseudo) {
       ))");
 }
 
+TEST_F(CFGMutationTest, MultipleInsertsAfter) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+        m.add_change(CFGMutation::Insert::After,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.add_change(CFGMutation::Insert::After,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v3 3)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (const v1 1)
+        (const v2 2)
+        (const v3 3)
+        (return-void)
+      ))");
+}
+
+TEST_F(CFGMutationTest, MultipleInsertsBefore) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+        m.add_change(CFGMutation::Insert::Before,
+                     nth_insn(cfg, 1),
+                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.add_change(CFGMutation::Insert::Before,
+                     nth_insn(cfg, 1),
+                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v3 3)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (const v1 1)
+        (const v2 2)
+        (const v3 3)
+        (return-void)
+      ))");
+}
+
+TEST_F(CFGMutationTest, MultipleChanges) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+        m.add_change(CFGMutation::Insert::After,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.add_change(CFGMutation::Insert::Before,
+                     nth_insn(cfg, 1),
+                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.add_change(CFGMutation::Insert::Replacing,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v1 1)
+        (const v2 2)
+        (const v3 3)
+        (return-void)
+      ))");
+}
+
+TEST_F(CFGMutationTest, InsertBeforeInstanceOf) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+
+        m.add_change(CFGMutation::Insert::Before,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {0_v, 0_L})});
+      },
+      /* ACTUAL */ R"((
+        (instance-of v0 "Ljava/lang/Object;")
+        (move-result-pseudo v1)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (instance-of v0 "Ljava/lang/Object;")
+        (move-result-pseudo v1)
+        (return-void)
+      ))");
+}
+
 } // namespace

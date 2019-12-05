@@ -18,7 +18,6 @@ void CFGMutation::flush() {
       ++it;
       continue;
     }
-
     auto& change = c->second;
     change.apply(m_cfg, it);
 
@@ -34,33 +33,51 @@ void CFGMutation::flush() {
 }
 
 void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
-                                   InstructionIterator& it) {
+                                   InstructionIterator& it) const {
+  always_assert_log(
+      !is_terminal(it->insn->opcode()) || m_replace.has_value() ||
+          m_insert_after.empty(),
+      "Insert after terminal operation without replacing it is prohibited.");
+
   // Save in case of iterator invalidation.
   Block* b = it.block();
-
   bool invalidated = false;
-  switch (m_where) {
-  case CFGMutation::Insert::Before:
-    invalidated = cfg.insert_before(it, m_instructions);
-    break;
-  case CFGMutation::Insert::After:
-    invalidated = cfg.insert_after(it, m_instructions);
-    break;
-  case CFGMutation::Insert::Replacing: {
-    // The target will be invalidated by the replacement, increment the iterator
-    // in preparation.
-    auto target = it++;
 
-    if (target->insn->has_move_result_any() && !it.is_end() &&
-        cfg.move_result_of(target) == it) {
+  if (!m_replace.has_value() && m_insert_after.empty()) {
+    invalidated = cfg.insert_before(it, m_insert_before);
+  } else if (!m_replace.has_value() && m_insert_before.empty()) {
+    invalidated = cfg.insert_after(it, m_insert_after);
+  } else {
+    std::vector<IRInstruction*> replacement;
+    if (!m_insert_before.empty()) {
+      std::copy(m_insert_before.begin(),
+                m_insert_before.end(),
+                std::back_inserter(replacement));
+    }
+    if (m_replace.has_value()) {
+      std::copy(m_replace.get().begin(),
+                m_replace.get().end(),
+                std::back_inserter(replacement));
+    } else {
+      // Copying to avoid problem, replacing insn B with A-B-C
+      auto* insn_copy = new IRInstruction(*it->insn);
+      replacement.emplace_back(insn_copy);
+    }
+
+    if (!m_insert_after.empty()) {
+      std::copy(m_insert_after.begin(),
+                m_insert_after.end(),
+                std::back_inserter(replacement));
+    }
+
+    auto target = it++;
+    if (target->insn->has_move_result_any() &&
+        cfg.move_result_of(target) == it && !it.is_end()) {
       // The iterator is now sitting over the target's move-result, which is
       // also going to be invalidated, increment again.
       ++it;
     }
-
-    invalidated = cfg.replace_insns(target, m_instructions);
-    break;
-  }
+    invalidated = cfg.replace_insns(target, replacement);
   }
 
   if (invalidated) {
