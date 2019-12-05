@@ -14,6 +14,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "CFGMutation.h"
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -1686,6 +1687,17 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
   int m_stats_removed = 0;
   int m_stats_inserted = 0;
 
+  struct ReplacementItem {
+    cfg::Block* block;
+    IRInstruction* insn;
+    std::vector<IRInstruction*> replacement;
+
+    ReplacementItem(cfg::Block* block,
+                    IRInstruction* insn,
+                    std::vector<IRInstruction*> replacement)
+        : block(block), insn(insn), replacement(replacement) {}
+  };
+
  public:
   explicit PeepholeOptimizer(PassManager& mgr,
                              const std::vector<std::vector<Pattern>>& patterns,
@@ -1711,33 +1723,36 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
 
   void peephole(DexMethod* method) {
     auto code = method->get_code();
-    code->build_cfg(/* editable */ false);
+    code->build_cfg(/* editable */ true);
+    auto& cfg = code->cfg();
 
     // do optimizations one at a time
     // so they can match on the same pattern without interfering
     for (size_t i = 0; i < m_matchers.size(); ++i) {
       auto& matcher = m_matchers[i];
-      std::vector<IRInstruction*> deletes;
-      std::vector<std::pair<IRInstruction*, std::vector<IRInstruction*>>>
-          inserts;
-      const auto& blocks = code->cfg().blocks();
+      std::vector<ReplacementItem> deletes;
+      std::vector<ReplacementItem> inserts;
+
+      const auto& blocks = cfg.blocks();
       for (const auto& block : blocks) {
         // Currently, all patterns do not span over multiple basic blocks. So
         // reset all matching states on visiting every basic block.
         matcher.reset();
 
-        for (auto& mei : InstructionIterable(block)) {
-          if (!matcher.try_match(mei.insn)) {
+        for (auto& mie : InstructionIterable(block)) {
+          if (!matcher.try_match(mie.insn)) {
             continue;
           }
           m_stats.at(i)++;
           TRACE(PEEPHOLE, 7, "PATTERN %s MATCHED!",
                 matcher.pattern.name.c_str());
+
+          std::vector<IRInstruction*> empty;
           for (auto insn : matcher.matched_instructions) {
             if (opcode::is_move_result_pseudo(insn->opcode())) {
               continue;
             }
-            deletes.push_back(insn);
+            deletes.push_back(ReplacementItem(block, insn, empty));
           }
 
           auto replace = matcher.get_replacements();
@@ -1748,19 +1763,30 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           m_stats_inserted += replace.size();
           m_stats_removed += matcher.match_index;
 
-          inserts.emplace_back(mei.insn, replace);
+          inserts.emplace_back(block, matcher.matched_instructions[0], replace);
           matcher.reset();
         }
       }
 
-      for (auto& pair : inserts) {
-        std::vector<IRInstruction*> vec{begin(pair.second), end(pair.second)};
-        code->insert_after(pair.first, vec);
+      cfg::CFGMutation mutator(cfg);
+
+      for (const auto& insert : inserts) {
+        auto it = cfg.find_insn(insert.insn, insert.block);
+        if (!it.is_end()) {
+          mutator.add_change(cfg::CFGMutation::Insert::Before, it,
+                             insert.replacement);
+        }
       }
-      for (auto& insn : deletes) {
-        code->remove_opcode(insn);
+
+      for (const auto& del : deletes) {
+        auto it = cfg.find_insn(del.insn, del.block);
+        if (!it.is_end()) {
+          mutator.add_change(cfg::CFGMutation::Insert::Replacing, it, {});
+        }
       }
     }
+
+    code->clear_cfg();
   }
 
   void print_stats() {

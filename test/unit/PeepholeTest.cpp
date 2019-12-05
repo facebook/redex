@@ -236,5 +236,23 @@ TEST_F(PeepholeNPETest, ThrowNPEBasicBlock) {
       (throw v0)
      )
     )";
-  ASSERT_TRUE(run_test(original_code, original_code));
+  auto original_code_reordered = R"(
+     (
+      (const v1 0)
+      (if-eqz v1 :other_exception)
+      (const-string "Test")
+      (move-result-pseudo-object v1)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0 v1) "Ljava/lang/NullPointerException;.<init>:(Ljava/lang/String;)V")
+      (:the_throw)
+      (throw v0)
+      (:other_exception)
+      (new-instance "Ljava/lang/NullPointerException;")
+      (move-result-pseudo-object v0)
+      (invoke-direct (v0) "Ljava/lang/NullPointerException;.<init>:()V")
+      (goto :the_throw)
+     )
+    )";
+  ASSERT_TRUE(run_test(original_code, original_code_reordered));
 }

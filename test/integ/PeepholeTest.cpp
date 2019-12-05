@@ -136,10 +136,8 @@ class PeepholeTest : public ::testing::Test {
   virtual void SetUp() override {
     saved_context = g_redex;
     g_redex = new RedexContext();
-
     const char* dexfile = std::getenv("dexfile");
     ASSERT_NE(nullptr, dexfile);
-
     DexMetadata dm;
     dm.set_id("classes");
     DexStore root_store(dm);
