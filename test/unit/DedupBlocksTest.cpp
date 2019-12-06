@@ -16,6 +16,7 @@
 #include "IRAssembler.h"
 #include "IRCode.h"
 #include "RedexTest.h"
+#include "VirtualScope.h"
 
 struct Branch {
   MethodItemEntry* source;
@@ -27,6 +28,7 @@ void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
   DexMetadata dm;
   dm.set_id("classes");
   DexStore store(dm);
+
   store.add_classes(classes);
   stores.emplace_back(std::move(store));
   PassManager manager(passes);
@@ -50,6 +52,7 @@ struct DedupBlocksTest : public RedexTest {
     m_type = DexType::make_type("testClass");
 
     m_creator = new ClassCreator(m_type);
+    m_creator->set_super(type::java_lang_Object());
     m_class = m_creator->get_class();
   }
 
@@ -65,7 +68,7 @@ struct DedupBlocksTest : public RedexTest {
   void run_dedup_blocks() {
     std::vector<Pass*> passes = {new DedupBlocksPass()};
     std::vector<DexClass*> classes = {m_class};
-    run_passes(passes, classes);
+    run_passes(passes, std::move(classes));
   }
 
   ~DedupBlocksTest() {}
