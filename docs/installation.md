@@ -38,7 +38,7 @@ sudo apt-get install \
     libjsoncpp-dev
 ```
 
-Redex requires boost version >= 1.71. The versions in the Ubuntu 14.04 and
+Redex requires boost version >= 1.71.  The versions in the Ubuntu 14.04 and
 14.10 repositories are too old. This script will install boost for you instead:
 ```
 sudo ./get_boost.sh
