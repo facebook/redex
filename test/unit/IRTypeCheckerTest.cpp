@@ -678,6 +678,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
+        (load-param-object v0)
+        (load-param-object v1)
         (new-instance "C;")
         (move-result-pseudo-object v0)
         (invoke-direct (v0) "C;.<init>:()V")
@@ -692,6 +694,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
+        (load-param-object v0)
+        (load-param-object v1)
         (new-instance "C;")
         (move-result-pseudo-object v0)
       )
@@ -706,6 +710,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
+        (load-param-object v0)
+        (load-param-object v1)
         (new-instance "C;")
         (move-result-pseudo-object v0)
         (move-object v1 v0)
@@ -724,6 +730,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
     (
+      (load-param-object v0)
+      (load-param-object v1)
       (new-instance "C;")
       (move-result-pseudo-object v0)
       (move-object v1 v0)
@@ -741,6 +749,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
     (
+      (load-param-object v0)
+      (load-param-object v1)
       (new-instance "C;")
       (move-result-pseudo-object v0)
       (move-object v1 v0)
@@ -759,6 +769,8 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
                       ->make_concrete(ACC_PUBLIC, /* is_virtual */ true);
     method->set_code(assembler::ircode_from_string(R"(
       (
+        (load-param-object v0)
+        (load-param-object v1)
         (new-instance "C;")
         (move-result-pseudo-object v0)
         (new-instance "C;")
@@ -851,13 +863,116 @@ TEST_F(IRTypeCheckerTest, loadParamVirtualSuccess) {
   m_virtual_method->set_code(assembler::ircode_from_string(R"(
       (
         (load-param-object v0)
-        (const v1 0)
-        (return-object v1)
+        (load-param v1)
+        (load-param v2)
+        (load-param-wide v3)
+        (load-param v4)
+        (load-param-wide v5)
+        (load-param v6)
+        (load-param v7)
+        (load-param-object v8)
+        (return-object v8)
       )
     )"));
   IRTypeChecker checker(m_virtual_method);
   checker.run();
   EXPECT_FALSE(checker.fail());
+}
+
+TEST_F(IRTypeCheckerTest, loadParamStaticCountSuccess) {
+  m_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param v0)
+        (load-param v1)
+        (load-param-wide v2)
+        (load-param v3)
+        (load-param-wide v4)
+        (load-param v5)
+        (load-param v6)
+        (load-param-object v7)
+        (const v7 0)
+        (return-object v7)
+      )
+    )"));
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_FALSE(checker.fail());
+}
+
+TEST_F(IRTypeCheckerTest, loadParamStaticCountLessFail) {
+  m_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param v0)
+        (load-param v1)
+        (load-param-wide v2)
+        (const v3 0)
+        (return-object v3)
+      )
+    )"));
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_EQ(checker.what(),
+            "Number of existing load-param instructions (3) is lower than "
+            "expected (8)");
+}
+
+TEST_F(IRTypeCheckerTest, loadParamInstanceCountLessFail) {
+  m_virtual_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (const v3 0)
+        (return-object v3)
+      )
+    )"));
+  IRTypeChecker checker(m_virtual_method);
+  checker.run();
+  EXPECT_EQ(checker.what(),
+            "Number of existing load-param instructions (1) is lower than "
+            "expected (9)");
+}
+
+TEST_F(IRTypeCheckerTest, loadParamInstanceCountMoreFail) {
+  m_virtual_method->set_code(assembler::ircode_from_string(R"(
+      (
+        (load-param-object v0)
+        (load-param v1)
+        (load-param v2)
+        (load-param-wide v3)
+        (load-param v4)
+        (load-param-wide v5)
+        (load-param v6)
+        (load-param v7)
+        (load-param-object v8)
+        (load-param v9)
+        (const v7 0)
+        (return-object v7)
+      )
+    )"));
+  IRTypeChecker checker(m_virtual_method);
+  checker.run();
+  EXPECT_EQ(checker.what(),
+            "Not enough argument types for IOPCODE_LOAD_PARAM v9");
+}
+
+TEST_F(IRTypeCheckerTest, loadParamStaticCountMoreFail) {
+  m_method->set_code(assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (load-param v1)
+      (load-param-wide v2)
+      (load-param v3)
+      (load-param-wide v4)
+      (load-param v5)
+      (load-param v6)
+      (load-param-object v7)
+      (load-param v8)
+      (return-object v7)
+    )
+    )"));
+  IRTypeChecker checker(m_method);
+  checker.run();
+  EXPECT_EQ(checker.what(),
+            "Not enough argument types for IOPCODE_LOAD_PARAM v8");
 }
 
 template <bool kVirtual>

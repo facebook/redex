@@ -219,8 +219,10 @@ static bool is_move_result_pseudo(const MethodItemEntry& mie) {
 }
 
 Result check_load_params(const DexMethod* method) {
+  bool is_static_method = is_static(method);
   const auto& signature = method->get_proto()->get_args()->get_type_list();
   auto sig_it = signature.begin();
+  size_t load_insns_cnt = 0;
 
   auto handle_instance =
       [&](IRInstruction* insn) -> boost::optional<std::string> {
@@ -261,7 +263,7 @@ Result check_load_params(const DexMethod* method) {
   bool non_load_param_seen = false;
   using handler_t = std::function<boost::optional<std::string>(IRInstruction*)>;
   handler_t handler =
-      is_static(method) ? handler_t(handle_other) : handler_t(handle_instance);
+      is_static_method ? handler_t(handle_other) : handler_t(handle_instance);
 
   for (const auto& mie :
        InstructionIterable(method->get_code()->cfg().entry_block())) {
@@ -270,6 +272,7 @@ Result check_load_params(const DexMethod* method) {
       non_load_param_seen = true;
       continue;
     }
+    ++load_insns_cnt;
     if (non_load_param_seen) {
       return Result::make_error("Saw non-load-param instruction before " +
                                 show(insn));
@@ -284,6 +287,15 @@ Result check_load_params(const DexMethod* method) {
     // using 'handle_other' in all cases.
     handler = handler_t(handle_other);
   }
+
+  size_t expected_load_params_cnt =
+      method->get_proto()->get_args()->size() + !is_static_method;
+  if (load_insns_cnt != expected_load_params_cnt) {
+    return Result::make_error(
+        "Number of existing load-param instructions (" + show(load_insns_cnt) +
+        ") is lower than expected (" + show(expected_load_params_cnt) + ")");
+  }
+
   return Result::Ok();
 }
 
