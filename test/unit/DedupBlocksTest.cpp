@@ -50,6 +50,7 @@ struct DedupBlocksTest : public RedexTest {
     m_type = DexType::make_type("testClass");
 
     m_creator = new ClassCreator(m_type);
+    m_creator->set_super(type::java_lang_Object());
     m_class = m_creator->get_class();
   }
 
@@ -65,7 +66,7 @@ struct DedupBlocksTest : public RedexTest {
   void run_dedup_blocks() {
     std::vector<Pass*> passes = {new DedupBlocksPass()};
     std::vector<DexClass*> classes = {m_class};
-    run_passes(passes, classes);
+    run_passes(passes, std::move(classes));
   }
 
   ~DedupBlocksTest() {}

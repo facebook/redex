@@ -45,6 +45,7 @@ void LevelChecker::init(int32_t min_level, const Scope& scope) {
 
   walk::parallel::classes(scope, init_class);
   walk::parallel::methods(scope, init_method);
+  propagate_levels(scope);
 }
 
 int32_t LevelChecker::get_method_level(DexMethod* method) {
@@ -129,6 +130,61 @@ bool is_android_sdk_type(const DexType* type) {
   std::string android_sdk_prefix = "Landroid/";
   const std::string& name = type->str();
   return boost::starts_with(name, android_sdk_prefix);
+}
+
+namespace {
+
+/**
+ * Assumes min api was setup for all classes and propagates those down the
+ * hierarchy.
+ */
+void propagate_levels(const ClassHierarchy& ch,
+                      DexClass* cls,
+                      int32_t min_level) {
+  int32_t current_min_level = cls->rstate.get_api_level();
+  min_level = std::max(min_level, current_min_level);
+
+  auto* intfs = cls->get_interfaces();
+  if (intfs) {
+    const auto& interfaces = intfs->get_type_list();
+    for (auto* intf : interfaces) {
+      auto* intf_cls = type_class(intf);
+      if (intf_cls) {
+        min_level = std::max(min_level, intf_cls->rstate.get_api_level());
+      }
+    }
+  }
+
+  if (current_min_level < min_level) {
+    cls->rstate.set_api_level(min_level);
+  }
+
+  const auto& children_types = get_children(ch, cls->get_type());
+  for (const DexType* children_type : children_types) {
+    auto* children_cls = type_class(children_type);
+    propagate_levels(ch, children_cls, min_level);
+  }
+}
+
+} // namespace
+
+void LevelChecker::propagate_levels(const Scope& scope) {
+  const auto* obj_type = type::java_lang_Object();
+  ClassHierarchy ch = build_type_hierarchy(scope);
+
+  // First propagate levels for interfaces.
+  for (DexClass* cls : scope) {
+    if (is_interface(cls) && cls->get_super_class() == obj_type) {
+      ::api::propagate_levels(ch, cls, s_min_level);
+    }
+  }
+
+  // And then for the rest.
+  for (DexClass* cls : scope) {
+    if (!is_interface(cls) && cls->get_super_class() == obj_type) {
+      ::api::propagate_levels(ch, cls, s_min_level);
+    }
+  }
 }
 
 } // namespace api

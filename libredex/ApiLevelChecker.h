@@ -94,6 +94,7 @@ class LevelChecker {
   static DexClass* get_outer_class(const DexClass* cls);
   static void init_class(DexClass* clazz);
   static void init_method(DexMethod* method);
+  static void propagate_levels(const Scope& scope);
 
   /**
    * These states are only meant to be edited during `init`. After
