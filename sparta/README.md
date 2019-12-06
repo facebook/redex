@@ -26,7 +26,7 @@ SPARTA is the analytic engine that powers most optimization passes of the [ReDex
 
 ## Dependencies
 
-SPARTA requires Boost 1.58 or later. 
+SPARTA requires Boost 1.71 or later.
 
 ### macOS
 

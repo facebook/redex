@@ -30,7 +30,7 @@ macro(set_common_cxx_flags_for_sparta)
 endmacro()
 
 macro(add_dependent_packages_for_sparta)
-    find_package(Boost 1.58.0 REQUIRED COMPONENTS thread)
+    find_package(Boost 1.71.0 REQUIRED COMPONENTS thread)
     print_dirs("${Boost_INCLUDE_DIRS}" "Boost_INCLUDE_DIRS")
     print_dirs("${Boost_LIBRARIES}" "Boost_LIBRARIES")
 
