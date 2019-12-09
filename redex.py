@@ -86,8 +86,11 @@ def dbg_prefix(dbg, src_root=None):
     assert dbg in ["gdb", "lldb"]
 
     cmd = [dbg]
-    if dbg == "gdb" and src_root is not None:
-        cmd += ["-ex", quote("directory %s" % src_root)]
+    if src_root is not None:
+        if dbg == "gdb":
+            cmd += ["-ex", quote("directory %s" % src_root)]
+        elif dbg == "lldb":
+            cmd += ["-o", quote('settings set target.source-map "." "%s"' % src_root)]
 
     DBG_END = {"gdb": "--args", "lldb": "--"}
     cmd.append(DBG_END[dbg])
