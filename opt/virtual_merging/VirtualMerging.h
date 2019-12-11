@@ -18,6 +18,7 @@ struct VirtualMergingStats {
   size_t invoke_super_methods_refs{0};
   size_t invoke_super_unresolved_method_refs{0};
   size_t mergeable_virtual_methods{0};
+  size_t annotated_methods{0};
   size_t cross_store_refs{0};
   size_t cross_dex_refs{0};
   size_t unavailable_overridden_methods{0};

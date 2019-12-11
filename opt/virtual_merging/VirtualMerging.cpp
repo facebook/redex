@@ -58,6 +58,8 @@ constexpr const char* METRIC_MERGEABLE_VIRTUAL_SCOPES =
     "num_mergeable_virtual_scopes";
 constexpr const char* METRIC_MERGEABLE_VIRTUAL_METHODS =
     "num_mergeable_virtual_methods";
+constexpr const char* METRIC_MERGEABLE_VIRTUAL_METHODS_ANNOTATED_METHODS =
+    "num_mergeable_virtual_method_annotated_methods";
 constexpr const char* METRIC_MERGEABLE_VIRTUAL_METHODS_CROSS_STORE_REFS =
     "num_mergeable_virtual_method_cross_store_refs";
 constexpr const char* METRIC_MERGEABLE_VIRTUAL_METHODS_CROSS_DEX_REFS =
@@ -164,11 +166,6 @@ void VirtualMerging::compute_mergeable_scope_methods() {
       return;
     }
 
-    if (!can_rename_DEPRECATED(overriding_method) || root(overriding_method) ||
-        overriding_method->rstate.no_optimizations()) {
-      return;
-    }
-
     auto it = m_unsupported_named_protos.find(overriding_method->get_name());
     if (it != m_unsupported_named_protos.end() &&
         it->second.count(overriding_method->get_proto())) {
@@ -217,6 +214,12 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
           auto method = p.first;
           methods.push_back(method);
           types_to_methods.emplace(method->get_class(), method);
+          if (!can_rename_DEPRECATED(method) || root(method) ||
+              method->rstate.no_optimizations()) {
+            // If we find any method in this virtual scope which we shouldn't
+            // touch, we exclude the entire virtual scope.
+            return;
+          }
         }
         // sorting to make things deterministic
         std::sort(methods.begin(), methods.end(), dexmethods_comparator());
@@ -335,7 +338,9 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
         p.second.inconcrete_overridden_methods;
   }
 
-  always_assert(overriding_methods == m_stats.mergeable_virtual_methods);
+  always_assert(overriding_methods <= m_stats.mergeable_virtual_methods);
+  m_stats.annotated_methods =
+      m_stats.mergeable_virtual_methods - overriding_methods;
   for (auto& p : mergeable_pairs_by_virtual_scopes) {
     const auto& mergeable_pairs = p.second;
     m_stats.mergeable_pairs += mergeable_pairs.size();
@@ -344,8 +349,8 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
   always_assert(mergeable_pairs_by_virtual_scopes.size() ==
                 m_mergeable_pairs_by_virtual_scopes.size());
   always_assert(m_stats.mergeable_pairs ==
-                m_stats.mergeable_virtual_methods - m_stats.cross_store_refs -
-                    m_stats.cross_dex_refs -
+                m_stats.mergeable_virtual_methods - m_stats.annotated_methods -
+                    m_stats.cross_store_refs - m_stats.cross_dex_refs -
                     m_stats.inconcrete_overridden_methods);
 }
 
@@ -668,6 +673,8 @@ void VirtualMergingPass::run_pass(DexStoresVector& stores,
                   stats.invoke_super_unresolved_method_refs);
   mgr.incr_metric(METRIC_MERGEABLE_VIRTUAL_METHODS,
                   stats.mergeable_virtual_methods);
+  mgr.incr_metric(METRIC_MERGEABLE_VIRTUAL_METHODS_ANNOTATED_METHODS,
+                  stats.annotated_methods);
   mgr.incr_metric(METRIC_MERGEABLE_VIRTUAL_METHODS_CROSS_STORE_REFS,
                   stats.cross_store_refs);
   mgr.incr_metric(METRIC_MERGEABLE_VIRTUAL_METHODS_CROSS_DEX_REFS,
