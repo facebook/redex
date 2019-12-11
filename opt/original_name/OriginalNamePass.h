@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "Pass.h"
 #include "ClassHierarchy.h"
+#include "Pass.h"
 
 class OriginalNamePass : public Pass {
  public:

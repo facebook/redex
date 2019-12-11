@@ -667,24 +667,24 @@ void reject_unsafe_enums(const std::vector<DexClass*>& classes,
   auto candidate_enums = &config->candidate_enums;
   ConcurrentSet<DexType*> rejected_enums;
 
-  walk::parallel::fields(classes, [candidate_enums,
-                                   &rejected_enums](DexField* field) {
-    if (can_rename(field)) {
-      return;
-    }
-    if (candidate_enums->count_unsafe(field->get_class())) {
-      auto access = field->get_access();
-      if (check_required_access_flags(enum_field_access(), access) ||
-          check_required_access_flags(synth_access(), access)) {
-        return;
-      }
-    }
-    auto type = const_cast<DexType*>(
-        type::get_element_type_if_array(field->get_type()));
-    if (candidate_enums->count_unsafe(type)) {
-      rejected_enums.insert(type);
-    }
-  });
+  walk::parallel::fields(
+      classes, [candidate_enums, &rejected_enums](DexField* field) {
+        if (can_rename(field)) {
+          return;
+        }
+        if (candidate_enums->count_unsafe(field->get_class())) {
+          auto access = field->get_access();
+          if (check_required_access_flags(enum_field_access(), access) ||
+              check_required_access_flags(synth_access(), access)) {
+            return;
+          }
+        }
+        auto type = const_cast<DexType*>(
+            type::get_element_type_if_array(field->get_type()));
+        if (candidate_enums->count_unsafe(type)) {
+          rejected_enums.insert(type);
+        }
+      });
 
   walk::parallel::methods(classes, [&](DexMethod* method) {
     // When doing static analysis, simply skip some javac-generated enum methods

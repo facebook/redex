@@ -157,8 +157,7 @@ class SummaryBuilder final {
           summary->modified_params.emplace(m_param_insn_map.at(insn));
         }
       } else {
-        TRACE(OSDCE, 3, "Escaping write to value allocated by %s",
-              SHOW(insn));
+        TRACE(OSDCE, 3, "Escaping write to value allocated by %s", SHOW(insn));
         summary->effects |= EFF_WRITE_MAY_ESCAPE;
       }
     }

@@ -19,14 +19,15 @@ size_t delete_methods(
 
   // if a removable candidate is invoked do not delete
   walk::opcodes(scope, [](DexMethod* meth) { return true; },
-      [&](DexMethod* meth, IRInstruction* insn) {
-        if (is_invoke(insn->opcode())) {
-          auto callee = resolver(insn->get_method(), opcode_to_search(insn));
-          if (callee != nullptr) {
-            removable.erase(callee);
-          }
-        }
-      });
+                [&](DexMethod* meth, IRInstruction* insn) {
+                  if (is_invoke(insn->opcode())) {
+                    auto callee =
+                        resolver(insn->get_method(), opcode_to_search(insn));
+                    if (callee != nullptr) {
+                      removable.erase(callee);
+                    }
+                  }
+                });
 
   size_t deleted = 0;
   for (auto callee : removable) {

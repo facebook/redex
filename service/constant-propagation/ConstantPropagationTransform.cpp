@@ -174,7 +174,8 @@ void Transform::simplify_instruction(const ConstantEnvironment& env,
     break;
   }
 
-  default: {}
+  default: {
+  }
   }
 }
 

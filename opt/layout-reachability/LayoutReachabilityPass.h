@@ -11,7 +11,7 @@
 #include "PassManager.h"
 
 class LayoutReachabilityPass : Pass {
-public:
+ public:
   LayoutReachabilityPass() : Pass("LayoutReachabilityPass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;

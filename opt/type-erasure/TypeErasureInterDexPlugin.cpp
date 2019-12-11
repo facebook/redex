@@ -167,9 +167,7 @@ void TypeErasureInterDexPlugin::filter_extra_mergeables(
   for (const auto& pair : m_cls_to_mergeables) {
     DexClass* cls = type_class(pair.first);
     if (classes_set.count(cls) == 0) {
-      TRACE(TERA,
-            5,
-            "[interdex] Class %s did not end up in the dex",
+      TRACE(TERA, 5, "[interdex] Class %s did not end up in the dex",
             SHOW(cls));
 
       const auto& mergeables = pair.second;
@@ -228,8 +226,8 @@ DexClasses TypeErasureInterDexPlugin::additional_classes(
     auto merger_classes = mm.merge_model(m_scope, empty_stores, model);
     mm.update_redex_stats(model.get_class_name_prefix(), m_mgr);
     m_generated_types.insert(merger_classes.begin(), merger_classes.end());
-    additional_classes.insert(
-        additional_classes.end(), merger_classes.begin(), merger_classes.end());
+    additional_classes.insert(additional_classes.end(), merger_classes.begin(),
+                              merger_classes.end());
   }
 
   m_current_mergeables.clear();

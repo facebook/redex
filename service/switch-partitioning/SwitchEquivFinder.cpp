@@ -177,8 +177,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
               edges_to_move.emplace_back(succ, copy);
               m_extra_loads.emplace(copy, loads);
             } else {
-              TRACE(SWITCH_EQUIV, 2,
-                    "Failure Reason: divergent entry states");
+              TRACE(SWITCH_EQUIV, 2, "Failure Reason: divergent entry states");
               TRACE(SWITCH_EQUIV, 3, "B%d in %s", next->id(), SHOW(*m_cfg));
               return false;
             }
@@ -249,8 +248,7 @@ std::vector<cfg::Edge*> SwitchEquivFinder::find_leaves() {
       cfg::Block* b = block_and_count.first;
       uint16_t count = block_and_count.second;
       if (b->preds().size() > count) {
-        TRACE(SWITCH_EQUIV,
-              2,
+        TRACE(SWITCH_EQUIV, 2,
               "Failure Reason: Additional ways to reach blocks");
         TRACE(SWITCH_EQUIV, 3,
               "  B%d has %d preds but was hit %d times in \n%s", b->id(),
@@ -405,8 +403,7 @@ void SwitchEquivFinder::find_case_keys(const std::vector<cfg::Edge*>& leaves) {
     const auto& it = pair.first;
     bool already_there = !pair.second;
     if (already_there && it->second != b) {
-      TRACE(
-          SWITCH_EQUIV, 2, "Failure Reason: Divergent key to block mapping");
+      TRACE(SWITCH_EQUIV, 2, "Failure Reason: Divergent key to block mapping");
       TRACE(SWITCH_EQUIV, 3, "%s", SHOW(*m_cfg));
       return false;
     }

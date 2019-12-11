@@ -47,7 +47,9 @@ using MethodInsns =
 
 class Breadcrumbs {
  public:
-  explicit Breadcrumbs(const Scope& scope, DexStoresVector& stores, bool reject_illegal_refs_root_store);
+  explicit Breadcrumbs(const Scope& scope,
+                       DexStoresVector& stores,
+                       bool reject_illegal_refs_root_store);
   void check_breadcrumbs();
   void report_deleted_types(bool report_only, PassManager& mgr);
   std::string get_methods_with_bad_refs();

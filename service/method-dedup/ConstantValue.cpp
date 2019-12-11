@@ -54,10 +54,8 @@ ConstantValue::ConstantValue(const TypeTags* type_tags,
             "const value: unable to find type %s",
             val_str.c_str());
     } else {
-      TRACE(METH_DEDUP,
-            9,
-            "const value: no type tag found %s",
-            val_str.c_str());
+      TRACE(
+          METH_DEDUP, 9, "const value: no type tag found %s", val_str.c_str());
     }
     // Cannot find type or not type tag.
     m_kind = ConstantKind::INVALID;

@@ -755,8 +755,8 @@ void ModelMethodMerger::merge_ctors() {
   // Update call sites
   //////////////////////////////////////////
   auto call_sites = method_reference::collect_call_refs(m_scope, ctor_set);
-  update_call_refs(
-      call_sites, type_tags, old_to_new_callee, pass_type_tag_param);
+  update_call_refs(call_sites, type_tags, old_to_new_callee,
+                   pass_type_tag_param);
 }
 
 void ModelMethodMerger::dedup_non_ctor_non_virt_methods() {

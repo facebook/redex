@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "Interference.h"
 #include "IRCode.h"
+#include "Interference.h"
 #include "Liveness.h"
 
 namespace regalloc {

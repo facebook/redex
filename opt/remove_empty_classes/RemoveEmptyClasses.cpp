@@ -8,14 +8,14 @@
 #include <stdio.h>
 #include <unordered_set>
 
-#include "Walkers.h"
-#include "ReachableClasses.h"
-#include "RemoveEmptyClasses.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "ReachableClasses.h"
+#include "RemoveEmptyClasses.h"
+#include "Walkers.h"
 
 constexpr const char* METRIC_REMOVED_EMPTY_CLASSES =
-  "num_empty_classes_removed";
+    "num_empty_classes_removed";
 
 void remove_clinit_if_trivial(DexClass* cls) {
   DexMethod* clinit = cls->get_clinit();
@@ -27,9 +27,8 @@ void remove_clinit_if_trivial(DexClass* cls) {
 bool is_empty_class(DexClass* cls,
                     std::unordered_set<const DexType*>& class_references) {
   bool empty_class = cls->get_dmethods().empty() &&
-  cls->get_vmethods().empty() &&
-  cls->get_sfields().empty() &&
-  cls->get_ifields().empty();
+                     cls->get_vmethods().empty() &&
+                     cls->get_sfields().empty() && cls->get_ifields().empty();
   uint32_t access = cls->get_access();
   auto name = cls->get_type()->get_name()->c_str();
   TRACE(EMPTY, 4, ">> Empty Analysis for %s", name);
@@ -45,9 +44,8 @@ bool is_empty_class(DexClass* cls,
   return remove;
 }
 
-void process_annotation(
-    std::unordered_set<const DexType*>* class_references,
-    DexAnnotation* annotation) {
+void process_annotation(std::unordered_set<const DexType*>* class_references,
+                        DexAnnotation* annotation) {
   std::vector<DexType*> ltype;
   annotation->gather_types(ltype);
   for (DexType* dextype : ltype) {
@@ -103,8 +101,9 @@ size_t remove_empty_classes(Scope& classes) {
   // which should not be deleted even if they are deemed to be empty.
   std::unordered_set<const DexType*> class_references;
 
-  walk::annotations(classes, [&](DexAnnotation* annotation)
-    { process_annotation(&class_references, annotation); });
+  walk::annotations(classes, [&](DexAnnotation* annotation) {
+    process_annotation(&class_references, annotation);
+  });
 
   // Check the method protos and all the code.
   walk::methods(classes, [&class_references](DexMethod* meth) {
@@ -132,8 +131,10 @@ size_t remove_empty_classes(Scope& classes) {
 
   TRACE(EMPTY, 3, "About to erase classes.");
   classes.erase(remove_if(classes.begin(), classes.end(),
-    [&](DexClass* cls) { return is_empty_class(cls, class_references); }),
-    classes.end());
+                          [&](DexClass* cls) {
+                            return is_empty_class(cls, class_references);
+                          }),
+                classes.end());
 
   auto num_classes_removed = classes_before_size - classes.size();
   TRACE(EMPTY, 1, "Empty classes removed: %ld", num_classes_removed);
@@ -144,7 +145,9 @@ void RemoveEmptyClassesPass::run_pass(DexStoresVector& stores,
                                       ConfigFiles& /* conf */,
                                       PassManager& mgr) {
   if (mgr.no_proguard_rules()) {
-    TRACE(EMPTY, 1, "RemoveEmptyClassesPass not run because no ProGuard configuration was provided.");
+    TRACE(EMPTY, 1,
+          "RemoveEmptyClassesPass not run because no ProGuard configuration "
+          "was provided.");
     return;
   }
   auto scope = build_class_scope(stores);

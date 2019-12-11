@@ -10,8 +10,8 @@
 
 #include "BaseIRAnalyzer.h"
 #include "ControlFlow.h"
-#include "EnumConfig.h"
 #include "DexUtil.h"
+#include "EnumConfig.h"
 #include "PatriciaTreeMapAbstractEnvironment.h"
 #include "PatriciaTreeSetAbstractDomain.h"
 

@@ -8,8 +8,8 @@
 #include "CheckBreadcrumbs.h"
 
 #include <algorithm>
-#include <unordered_set>
 #include <sstream>
+#include <unordered_set>
 
 #include "DexAccess.h"
 #include "DexClass.h"
@@ -67,7 +67,8 @@ bool class_contains(const DexMethod* method) {
 using Fields = std::vector<const DexField*>;
 using Methods = std::vector<const DexMethod*>;
 using Instructions = std::vector<const IRInstruction*>;
-using MethodInsns = std::map<const DexMethod*, Instructions, dexmethods_comparator>;
+using MethodInsns =
+    std::map<const DexMethod*, Instructions, dexmethods_comparator>;
 
 size_t illegal_elements(const MethodInsns& method_to_insns,
                         const char* msj,
@@ -76,8 +77,8 @@ size_t illegal_elements(const MethodInsns& method_to_insns,
   for (const auto& pair : method_to_insns) {
     const auto method = pair.first;
     const auto& insns = pair.second;
-    ss << "Illegal " << msj << " in method "
-       << method->get_deobfuscated_name() << std::endl;
+    ss << "Illegal " << msj << " in method " << method->get_deobfuscated_name()
+       << std::endl;
     num_illegal_cross_store_refs += insns.size();
     for (const auto insn : insns) {
       ss << "\t" << show_deobfuscated(insn) << std::endl;
@@ -89,7 +90,9 @@ size_t illegal_elements(const MethodInsns& method_to_insns,
 
 } // namespace
 
-Breadcrumbs::Breadcrumbs(const Scope& scope, DexStoresVector& stores, bool reject_illegal_refs_root_store)
+Breadcrumbs::Breadcrumbs(const Scope& scope,
+                         DexStoresVector& stores,
+                         bool reject_illegal_refs_root_store)
     : m_scope(scope),
       m_xstores(stores),
       m_reject_illegal_refs_root_store(reject_illegal_refs_root_store) {

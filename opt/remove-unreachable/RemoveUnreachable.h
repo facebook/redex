@@ -15,15 +15,9 @@ class RemoveUnreachablePass : public Pass {
   RemoveUnreachablePass() : Pass("RemoveUnreachablePass") {}
 
   void bind_config() override {
-    bind("ignore_string_literals",
-         {},
-         m_ignore_sets.string_literals);
-    bind("ignore_string_literal_annos",
-         {},
-         m_ignore_sets.string_literal_annos);
-    bind("ignore_system_annos",
-         {},
-         m_ignore_sets.system_annos);
+    bind("ignore_string_literals", {}, m_ignore_sets.string_literals);
+    bind("ignore_string_literal_annos", {}, m_ignore_sets.string_literal_annos);
+    bind("ignore_system_annos", {}, m_ignore_sets.system_annos);
     bind("keep_class_in_string", true, m_ignore_sets.keep_class_in_string);
     bind("emit_graph_on_run", boost::optional<uint32_t>{}, m_emit_graph_on_run);
     after_configuration([this] {

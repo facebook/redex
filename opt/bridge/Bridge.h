@@ -14,5 +14,4 @@ class BridgePass : public Pass {
   BridgePass() : Pass("BridgePass") {}
 
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
 };

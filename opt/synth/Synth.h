@@ -7,8 +7,8 @@
 
 #pragma once
 
-#include "PassManager.h"
 #include "DexClass.h"
+#include "PassManager.h"
 #include "SynthConfig.h"
 
 class SynthPass : public Pass {

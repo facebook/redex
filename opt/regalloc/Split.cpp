@@ -98,11 +98,12 @@ IRInstruction* gen_store_for_split(
   }
 }
 
-void store_info_for_branch(const std::pair<cfg::Block*, cfg::Block*>& block_edge,
-                           cfg::Block* s,
-                           IRInstruction* mov,
-                           MethodItemEntry* pred_branch,
-                           BlockLoadInfo* block_load_info) {
+void store_info_for_branch(
+    const std::pair<cfg::Block*, cfg::Block*>& block_edge,
+    cfg::Block* s,
+    IRInstruction* mov,
+    MethodItemEntry* pred_branch,
+    BlockLoadInfo* block_load_info) {
   block_load_info->mode_and_insn[block_edge].add_insn_mode(mov, BRANCH);
   MethodItemEntry* succ_target = nullptr;
   for (auto find_target_it = s->begin(); find_target_it != s->end();
@@ -169,7 +170,8 @@ size_t split_for_block(const SplitPlan& split_plan,
         bool can_insert_directly =
             split_costs.death_at_other(reg).at(succ->target()) ==
             succ->target()->preds().size();
-        if ((succ->type() == cfg::EDGE_GOTO || succ->type() == cfg::EDGE_BRANCH) &&
+        if ((succ->type() == cfg::EDGE_GOTO ||
+             succ->type() == cfg::EDGE_BRANCH) &&
             can_insert_directly) {
           // Use other_loaded_regs to make sure we don't load a register
           // several times in the same place.
@@ -192,7 +194,8 @@ size_t split_for_block(const SplitPlan& split_plan,
           continue;
         }
 
-        auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
+        auto block_edge =
+            std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
         auto lastmei = block->rbegin();
         // Because in find_split we limited the try-catch edge to only deal
         // with catch block where reg died on all the exception edge toward it.
@@ -318,7 +321,8 @@ size_t split_for_last_use(const SplitPlan& split_plan,
           for (auto& succ : block->succs()) {
             IRInstruction* mov =
                 gen_load_for_split(ig, l, load_store_reg, code);
-            auto block_edge = std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
+            auto block_edge =
+                std::pair<cfg::Block*, cfg::Block*>(block, succ->target());
             if (succ->type() == cfg::EDGE_BRANCH) {
               // Branches, need to change target.
               store_info_for_branch(block_edge,

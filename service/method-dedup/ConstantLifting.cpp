@@ -205,10 +205,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
       // remove original call.
       code->remove_opcode(insn);
     }
-    TRACE(METH_DEDUP,
-          9,
-          " patched call site in %s\n%s",
-          SHOW(meth),
+    TRACE(METH_DEDUP, 9, " patched call site in %s\n%s", SHOW(meth),
           SHOW(code));
   }
 

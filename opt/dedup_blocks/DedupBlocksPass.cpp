@@ -430,8 +430,8 @@ class DedupBlocksImpl {
     }
 
     TRACE(DEDUP_BLOCKS, 4,
-          "split_postfix: partitioned %d blocks into %d groups",
-          blocks.size(), splitGroupMap.size());
+          "split_postfix: partitioned %d blocks into %d groups", blocks.size(),
+          splitGroupMap.size());
 
     struct CountGroup {
       size_t count = 0;

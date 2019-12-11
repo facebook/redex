@@ -87,9 +87,8 @@ MergerToField get_type_tag_fields(
 void update_code_type_refs(
     const Scope& scope,
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
-  TRACE(TERA,
-        8,
-        "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
+  TRACE(
+      TERA, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
   TypeSet mergeables;
   for (const auto& pair : mergeable_to_merger) {
     mergeables.insert(pair.first);
@@ -164,8 +163,7 @@ void update_code_type_refs(
               SHOW(type));
       } else {
         insn->set_type(const_cast<DexType*>(merger_type));
-        TRACE(
-            TERA, 9, "  replacing %s referencing %s", SHOW(insn), SHOW(type));
+        TRACE(TERA, 9, "  replacing %s referencing %s", SHOW(insn), SHOW(type));
       }
     }
   };
@@ -283,11 +281,8 @@ void update_instance_of(
       }
 
       always_assert(type_class(type));
-      TRACE(TERA,
-            9,
-            " patching INSTANCE_OF at %s %s",
-            SHOW(insn),
-            SHOW(caller));
+      TRACE(
+          TERA, 9, " patching INSTANCE_OF at %s %s", SHOW(insn), SHOW(caller));
       // Load type_tag.
       auto type_tag = type_tags.get_type_tag(type);
       auto type_tag_reg = code.allocate_temp();
