@@ -23,7 +23,6 @@ static auto mallctl =
 #else
 MallctlFn mallctl = nullptr;
 #endif
-
 }
 
 namespace {
