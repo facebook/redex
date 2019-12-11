@@ -21,6 +21,7 @@
  * the InstructionAnalyzerCombiner.
  */
 
+/* clang-format off */
 // Opcodes are grouped on the basis that most analyses will want to handle all
 // opcodes in a given group similarly.
 #define OPCODE_GROUPS \
@@ -56,6 +57,8 @@
   X(unop)             \
   X(binop)            \
   X(binop_lit)
+
+/* clang-format on */
 
 /*
  * A sub-analyzer is simply a description of how to mutate an Environment given

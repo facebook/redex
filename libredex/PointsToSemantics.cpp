@@ -83,6 +83,8 @@ std::ostream& operator<<(std::ostream& o, const PointsToVariable& v) {
 
 namespace pts_impl {
 
+/* clang-format off */
+
 #define OP_STRING_TABLE                 \
   {                                     \
     OP_STRING(PTS_CONST_STRING),        \
@@ -116,6 +118,8 @@ std::unordered_map<PointsToOperationKind, std::string, std::hash<int>>
 std::unordered_map<std::string, PointsToOperationKind> string_to_op_table =
     OP_STRING_TABLE;
 #undef OP_STRING
+
+/* clang-format on */
 
 s_expr op_kind_to_s_expr(PointsToOperationKind kind) {
   auto it = op_to_string_table.find(kind);
@@ -165,9 +169,7 @@ boost::optional<DexMethodRef*> s_expr_to_dex_method(const s_expr& e) {
   std::string name_str;
   std::string rtype_str;
   s_expr signature;
-  if (!s_patn({s_patn(&type_str),
-               s_patn(&name_str),
-               s_patn(&rtype_str),
+  if (!s_patn({s_patn(&type_str), s_patn(&name_str), s_patn(&rtype_str),
                s_patn({}, signature)})
            .match_with(e)) {
     return {};
@@ -620,7 +622,9 @@ std::ostream& operator<<(std::ostream& o, const PointsToAction& a) {
         o << "I";
         break;
       }
-      default: { always_assert(false); }
+      default: {
+        always_assert(false);
+      }
       }
       o << "}";
     }
@@ -971,7 +975,9 @@ class PointsToActionGenerator final {
     case OPCODE_INVOKE_INTERFACE: {
       return type::is_object(insn->get_method()->get_proto()->get_rtype());
     }
-    default: { return false; }
+    default: {
+      return false;
+    }
     }
   }
 
@@ -1165,9 +1171,8 @@ class PointsToActionGenerator final {
     int32_t arg_pos = 0;
     for (DexType* dex_type : signature) {
       if (type::is_object(dex_type)) {
-        args.push_back(
-            {arg_pos,
-             get_variable_from_anchor_set(state.get(insn->src(src_idx++)))});
+        args.push_back({arg_pos, get_variable_from_anchor_set(
+                                     state.get(insn->src(src_idx++)))});
       } else {
         // We skip this argument.
         ++src_idx;
@@ -1422,6 +1427,8 @@ class Shrinker final {
   VariableSet m_vars_to_keep;
 };
 
+/* clang-format off */
+
 #define KIND_STRING_TABLE         \
   {                               \
     KIND_STRING(PTS_APK),         \
@@ -1439,6 +1446,8 @@ std::unordered_map<MethodKind, std::string, std::hash<int>>
 std::unordered_map<std::string, MethodKind> string_to_method_kind_table =
     KIND_STRING_TABLE;
 #undef KIND_STRING
+
+/* clang-format on */
 
 s_expr method_kind_to_s_expr(MethodKind kind) {
   auto it = method_kind_to_string_table.find(kind);
@@ -1476,10 +1485,9 @@ s_expr PointsToMethodSemantics::to_s_expr() const {
                  m_points_to_actions.end(),
                  std::back_inserter(actions),
                  [](const PointsToAction& a) { return a.to_s_expr(); });
-  return s_expr({dex_method_to_s_expr(m_dex_method),
-                 method_kind_to_s_expr(m_kind),
-                 s_expr(static_cast<int32_t>(m_variable_counter)),
-                 s_expr(actions)});
+  return s_expr(
+      {dex_method_to_s_expr(m_dex_method), method_kind_to_s_expr(m_kind),
+       s_expr(static_cast<int32_t>(m_variable_counter)), s_expr(actions)});
 }
 
 boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
@@ -1489,9 +1497,7 @@ boost::optional<PointsToMethodSemantics> PointsToMethodSemantics::from_s_expr(
   std::string kind_str;
   int32_t var_counter;
   s_expr actions_expr;
-  if (!s_patn({s_patn(dex_method_expr),
-               s_patn(&kind_str),
-               s_patn(&var_counter),
+  if (!s_patn({s_patn(dex_method_expr), s_patn(&kind_str), s_patn(&var_counter),
                s_patn({}, actions_expr)})
            .match_with(e)) {
     return {};

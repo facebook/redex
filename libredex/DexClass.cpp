@@ -1063,8 +1063,7 @@ DexClass::DexClass(DexIdx* idx,
       m_anno(nullptr),
       m_external(false),
       m_perf_sensitive(false),
-      m_location(location) {
-}
+      m_location(location) {}
 
 void DexTypeList::gather_types(std::vector<DexType*>& ltype) const {
   for (auto const& type : m_list) {

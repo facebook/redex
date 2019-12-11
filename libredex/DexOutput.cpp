@@ -2092,7 +2092,9 @@ void write_pg_mapping(const std::string& filename, DexClasses* classes) {
 
   auto deobf_meth = [&](DexMethod* method) {
     if (method) {
+      /* clang-format off */
       // Example: 672:672:boolean customShouldDelayInitMessage(android.os.Handler,android.os.Message)
+      /* clang-format on */
       auto* proto = method->get_proto();
       std::ostringstream ss;
       auto* code = method->get_dex_code();
