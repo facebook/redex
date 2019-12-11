@@ -31,8 +31,11 @@ DexFieldRef* make_field_ref(DexType* cls, const char* name, DexType* type) {
   return DexField::make_field(cls, DexString::make_string(name), type);
 }
 
-DexField* make_field_def(DexType* cls, const char* name, DexType* type,
-    DexAccessFlags access = ACC_PUBLIC, bool external = false) {
+DexField* make_field_def(DexType* cls,
+                         const char* name,
+                         DexType* type,
+                         DexAccessFlags access = ACC_PUBLIC,
+                         bool external = false) {
   auto field = static_cast<DexField*>(
       DexField::make_field(cls, DexString::make_string(name), type));
   if (external) {
@@ -44,9 +47,12 @@ DexField* make_field_def(DexType* cls, const char* name, DexType* type,
   return field;
 }
 
-DexClass* create_class(DexType* type, DexType* super,
-    std::vector<DexType*>& intfs, std::vector<DexField*>& fields,
-    DexAccessFlags access = ACC_PUBLIC, bool external = false) {
+DexClass* create_class(DexType* type,
+                       DexType* super,
+                       std::vector<DexType*>& intfs,
+                       std::vector<DexField*>& fields,
+                       DexAccessFlags access = ACC_PUBLIC,
+                       bool external = false) {
   ClassCreator creator(type);
   creator.set_access(access);
   if (external) creator.set_external();
@@ -62,9 +68,11 @@ DexClass* create_class(DexType* type, DexType* super,
   return creator.create();
 }
 
-DexClass* create_class(DexType* type, DexType* super,
-    std::vector<DexField*>& fields,
-    DexAccessFlags access = ACC_PUBLIC, bool external = false) {
+DexClass* create_class(DexType* type,
+                       DexType* super,
+                       std::vector<DexField*>& fields,
+                       DexAccessFlags access = ACC_PUBLIC,
+                       bool external = false) {
   std::vector<DexType*> intfs{};
   return create_class(type, super, intfs, fields, access, external);
 }
@@ -80,12 +88,15 @@ void create_scope() {
   auto d = DexType::make_type("D");
   auto u = DexType::make_type("U");
   auto e = DexType::make_type("E");
-  std::vector<DexField*> intf_fields{
-      make_field_def(intf, "fin_f", int_t, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, true)};
-  auto class_Intf = create_class(intf, obj_t, intf_fields, ACC_PUBLIC | ACC_INTERFACE);
-  std::vector<DexField*> a_fields{make_field_def(a, "f1", int_t, ACC_PUBLIC, true)};
+  std::vector<DexField*> intf_fields{make_field_def(
+      intf, "fin_f", int_t, ACC_PUBLIC | ACC_STATIC | ACC_FINAL, true)};
+  auto class_Intf =
+      create_class(intf, obj_t, intf_fields, ACC_PUBLIC | ACC_INTERFACE);
+  std::vector<DexField*> a_fields{
+      make_field_def(a, "f1", int_t, ACC_PUBLIC, true)};
   auto cls_A = create_class(a, obj_t, a_fields, ACC_PUBLIC, true);
-  std::vector<DexField*> b_fields{make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)};
+  std::vector<DexField*> b_fields{
+      make_field_def(b, "f2", string_t, ACC_PUBLIC | ACC_STATIC)};
   std::vector<DexType*> intfs{intf};
   auto cls_B = create_class(b, a, intfs, b_fields);
   std::vector<DexField*> no_fields{};
@@ -101,112 +112,116 @@ TEST_F(ResolverTest, ResolveField) {
   create_scope();
 
   // different cases for int A.f1
-  DexFieldRef* fdef = DexField::get_field(DexType::get_type("A"),
-      DexString::get_string("f1"), DexType::get_type("I"));
+  DexFieldRef* fdef =
+      DexField::get_field(DexType::get_type("A"), DexString::get_string("f1"),
+                          DexType::get_type("I"));
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
-  DexFieldRef* fref = make_field_ref(
-      DexType::get_type("A"), "f1", DexType::get_type("I"));
+  DexFieldRef* fref =
+      make_field_ref(DexType::get_type("A"), "f1", DexType::get_type("I"));
   EXPECT_TRUE(fdef->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == fdef);
   EXPECT_TRUE(resolve_field(DexType::get_type("A"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Static) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("D"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Static) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("B"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Instance) == fdef);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Instance) == fdef);
   EXPECT_TRUE(resolve_field(DexType::get_type("B"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Static) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("C"),
-      DexString::get_string("f1"),
-      DexType::get_type("I")) == fdef);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I")) == fdef);
   EXPECT_TRUE(resolve_field(DexType::get_type("C"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Static) == nullptr);
-  fref = make_field_ref(
-      DexType::get_type("B"), "f1", DexType::get_type("I"));
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Static) == nullptr);
+  fref = make_field_ref(DexType::get_type("B"), "f1", DexType::get_type("I"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == nullptr);
-  fref = make_field_ref(
-      DexType::get_type("C"), "f1", DexType::get_type("I"));
+  fref = make_field_ref(DexType::get_type("C"), "f1", DexType::get_type("I"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == nullptr);
 
   // different cases for static String B.f2
-  fdef = DexField::get_field(DexType::get_type("B"),
-      DexString::get_string("f2"), DexType::get_type("Ljava/lang/String;"));
+  fdef =
+      DexField::get_field(DexType::get_type("B"), DexString::get_string("f2"),
+                          DexType::get_type("Ljava/lang/String;"));
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
-  fref = make_field_ref(
-      DexType::get_type("A"), "f2", DexType::get_type("Ljava/lang/String;"));
+  fref = make_field_ref(DexType::get_type("A"), "f2",
+                        DexType::get_type("Ljava/lang/String;"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == nullptr);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == nullptr);
-  fref = make_field_ref(
-      DexType::get_type("B"), "f2", DexType::get_type("Ljava/lang/String;"));
+  fref = make_field_ref(DexType::get_type("B"), "f2",
+                        DexType::get_type("Ljava/lang/String;"));
   EXPECT_TRUE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == fdef);
-  fref = make_field_ref(
-      DexType::get_type("C"), "f2", DexType::get_type("Ljava/lang/String;"));
+  fref = make_field_ref(DexType::get_type("C"), "f2",
+                        DexType::get_type("Ljava/lang/String;"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
 
   // different cases for D.f
-  fdef = DexField::get_field(DexType::get_type("D"),
-      DexString::get_string("f"), DexType::get_type("A"));
+  fdef = DexField::get_field(DexType::get_type("D"), DexString::get_string("f"),
+                             DexType::get_type("A"));
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
   EXPECT_TRUE(resolve_field(fdef) == fdef);
   EXPECT_TRUE(resolve_field(fdef, FieldSearch::Instance) == fdef);
 
   // interface final field
   fdef = DexField::get_field(DexType::get_type("Intf"),
-      DexString::get_string("fin_f"), DexType::get_type("I"));
+                             DexString::get_string("fin_f"),
+                             DexType::get_type("I"));
   EXPECT_TRUE(fdef != nullptr && fdef->is_def());
   EXPECT_TRUE(resolve_field(fdef) == fdef);
   EXPECT_TRUE(resolve_field(fdef, FieldSearch::Static) == fdef);
-  fref = make_field_ref(DexType::get_type("B"), "fin_f", DexType::get_type("I"));
+  fref =
+      make_field_ref(DexType::get_type("B"), "fin_f", DexType::get_type("I"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
-  fref = make_field_ref(DexType::get_type("C"), "fin_f", DexType::get_type("I"));
+  fref =
+      make_field_ref(DexType::get_type("C"), "fin_f", DexType::get_type("I"));
   EXPECT_FALSE(fref->is_def());
   EXPECT_TRUE(resolve_field(fref) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Static) == fdef);
   EXPECT_TRUE(resolve_field(fref, FieldSearch::Instance) == nullptr);
 
   // random non existent field
-  fdef = DexField::make_field(DexType::get_type("U"),
-      DexString::get_string("f"), DexType::get_type("I"));
+  fdef =
+      DexField::make_field(DexType::get_type("U"), DexString::get_string("f"),
+                           DexType::get_type("I"));
   EXPECT_FALSE(fdef->is_def());
   EXPECT_TRUE(resolve_field(fdef) == nullptr);
   EXPECT_TRUE(resolve_field(fdef, FieldSearch::Instance) == nullptr);
   EXPECT_TRUE(resolve_field(fdef, FieldSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("E"),
-      DexString::get_string("f1"),
-      DexType::get_type("I"),
-      FieldSearch::Static) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I"),
+                            FieldSearch::Static) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("E"),
-      DexString::get_string("f1"),
-      DexType::get_type("Ljava/lang/String;"),
-      FieldSearch::Instance) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("Ljava/lang/String;"),
+                            FieldSearch::Instance) == nullptr);
   EXPECT_TRUE(resolve_field(DexType::get_type("E"),
-      DexString::get_string("f1"),
-      DexType::get_type("I")) == nullptr);
+                            DexString::get_string("f1"),
+                            DexType::get_type("I")) == nullptr);
 }

@@ -14,10 +14,10 @@
 #include "IRCode.h"
 #include "RedexTest.h"
 
-#include "LocalDce.h"
-#include "DelInit.h"
-#include "RemoveEmptyClasses.h"
 #include "ConstantPropagation.h"
+#include "DelInit.h"
+#include "LocalDce.h"
+#include "RemoveEmptyClasses.h"
 
 /*
 
@@ -75,7 +75,7 @@ enum ClassType {
   OTHERCLASS = 2,
 };
 
-ClassType filter_test_classes(const DexString *cls_name) {
+ClassType filter_test_classes(const DexString* cls_name) {
   if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Propagation;") == 0)
     return MAINCLASS;
   if (strcmp(cls_name->c_str(), "Lcom/facebook/redextest/Alpha;") == 0)
@@ -94,7 +94,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
     if (filter_test_classes(cls->get_name()) < 2) {
       TRACE(CONSTP, 1, "Class %s", SHOW(cls));
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 1, "dmethod: %s",  dm->get_name()->c_str());
+        TRACE(CONSTP, 1, "dmethod: %s", dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "if_false") == 0 ||
             strcmp(dm->get_name()->c_str(), "if_true") == 0 ||
             strcmp(dm->get_name()->c_str(), "if_unknown") == 0) {
@@ -106,9 +106,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
 
   Pass* constp = nullptr;
   constp = new ConstantPropagationPass();
-  std::vector<Pass*> passes = {
-    constp
-  };
+  std::vector<Pass*> passes = {constp};
 
   run_passes(passes);
 
@@ -117,7 +115,7 @@ TEST_F(ConstantPropagationTest, constantPropagation) {
     TRACE(CONSTP, 1, "Class %s", SHOW(cls));
     if (filter_test_classes(cls->get_name()) == MAINCLASS) {
       for (const auto& dm : cls->get_dmethods()) {
-        TRACE(CONSTP, 1, "dmethod: %s",  dm->get_name()->c_str());
+        TRACE(CONSTP, 1, "dmethod: %s", dm->get_name()->c_str());
         if (strcmp(dm->get_name()->c_str(), "if_false") == 0) {
           const auto& insns = InstructionIterable(dm->get_code());
           TRACE(CONSTP, 1, "%s", SHOW(insns));

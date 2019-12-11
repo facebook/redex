@@ -5,9 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 #include <gtest/gtest.h>
-
 
 #include "DexClass.h"
 #include "DexInstruction.h"
@@ -54,16 +52,16 @@ TEST_F(PropagationTest1, localDCE1) {
   for (const auto& cls : *classes) {
     TRACE(DCE, 2, "Class %s", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s", dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s", SHOW(dm->get_code()));
       }
     }
   }
 
   std::vector<Pass*> passes = {
-    new PeepholePass(),
-    new LocalDcePass(),
+      new PeepholePass(),
+      new LocalDcePass(),
   };
 
   run_passes(passes);
@@ -72,9 +70,9 @@ TEST_F(PropagationTest1, localDCE1) {
   for (const auto& cls : *classes) {
     TRACE(DCE, 2, "Class %s", SHOW(cls));
     for (const auto& dm : cls->get_dmethods()) {
-      TRACE(DCE, 2, "dmethod: %s",  dm->get_name()->c_str());
+      TRACE(DCE, 2, "dmethod: %s", dm->get_name()->c_str());
       if (strcmp(dm->get_name()->c_str(), "propagate") == 0) {
-        TRACE(DCE, 2, "dmethod: %s",  SHOW(dm->get_code()));
+        TRACE(DCE, 2, "dmethod: %s", SHOW(dm->get_code()));
         for (auto& mie : InstructionIterable(dm->get_code())) {
           auto instruction = mie.insn;
           // Make sure there is no invoke-virtual in the optimized method.

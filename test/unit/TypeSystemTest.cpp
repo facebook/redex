@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <memory>
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <memory>
 
 #include "DexClass.h"
 #include "RedexTest.h"
@@ -158,35 +158,37 @@ TEST_F(TypeSystemTest, empty) {
   TypeSystem type_system(scope);
   EXPECT_EQ(type_system.get_children(a_t).size(), 2);
   EXPECT_THAT(type_system.get_children(a_t),
-      ::testing::UnorderedElementsAre(c_t, g_t));
+              ::testing::UnorderedElementsAre(c_t, g_t));
   EXPECT_EQ(type_system.get_children(b_t).size(), 2);
   EXPECT_THAT(type_system.get_children(b_t),
-      ::testing::UnorderedElementsAre(m_t, p_t));
+              ::testing::UnorderedElementsAre(m_t, p_t));
   EXPECT_EQ(type_system.get_children(c_t).size(), 3);
   EXPECT_THAT(type_system.get_children(c_t),
-      ::testing::UnorderedElementsAre(d_t, e_t, f_t));
+              ::testing::UnorderedElementsAre(d_t, e_t, f_t));
   EXPECT_EQ(type_system.get_children(o_t).size(), 0);
   EXPECT_EQ(type_system.get_children(i_t).size(), 1);
   EXPECT_THAT(type_system.get_children(i_t),
-      ::testing::UnorderedElementsAre(j_t));
+              ::testing::UnorderedElementsAre(j_t));
   EXPECT_EQ(type_system.get_children(odd_t).size(), 2);
   EXPECT_THAT(type_system.get_children(odd_t),
-      ::testing::UnorderedElementsAre(odd1_t, odd2_t));
+              ::testing::UnorderedElementsAre(odd1_t, odd2_t));
   EXPECT_EQ(type_system.get_children(odd1_t).size(), 2);
   EXPECT_THAT(type_system.get_children(odd1_t),
-      ::testing::UnorderedElementsAre(odd11_t, odd12_t));
+              ::testing::UnorderedElementsAre(odd11_t, odd12_t));
   EXPECT_EQ(type_system.get_children(odd11_t).size(), 0);
 
   TypeSet types;
   type_system.get_all_children(a_t, types);
   EXPECT_EQ(types.size(), 9);
-  EXPECT_THAT(types, ::testing::UnorderedElementsAre(
-      c_t, d_t, e_t, f_t, g_t, h_t, i_t, j_t, l_t));
+  EXPECT_THAT(types,
+              ::testing::UnorderedElementsAre(
+                  c_t, d_t, e_t, f_t, g_t, h_t, i_t, j_t, l_t));
   types.clear();
   type_system.get_all_children(b_t, types);
   EXPECT_EQ(types.size(), 7);
-  EXPECT_THAT(types, ::testing::UnorderedElementsAre(
-      m_t, n_t, o_t, p_t, q_t, r_t, s_t));
+  EXPECT_THAT(
+      types,
+      ::testing::UnorderedElementsAre(m_t, n_t, o_t, p_t, q_t, r_t, s_t));
   types.clear();
   type_system.get_all_children(c_t, types);
   EXPECT_EQ(types.size(), 3);
@@ -201,8 +203,8 @@ TEST_F(TypeSystemTest, empty) {
   types.clear();
   type_system.get_all_children(odd_t, types);
   EXPECT_EQ(types.size(), 4);
-  EXPECT_THAT(types, ::testing::UnorderedElementsAre(
-      odd1_t, odd2_t, odd11_t, odd12_t));
+  EXPECT_THAT(
+      types, ::testing::UnorderedElementsAre(odd1_t, odd2_t, odd11_t, odd12_t));
   types.clear();
   type_system.get_all_children(odd1_t, types);
   EXPECT_EQ(types.size(), 2);
@@ -214,25 +216,25 @@ TEST_F(TypeSystemTest, empty) {
 
   EXPECT_EQ(type_system.parent_chain(a_t).size(), 2);
   EXPECT_THAT(type_system.parent_chain(a_t),
-      ::testing::UnorderedElementsAre(a_t, obj_t));
+              ::testing::UnorderedElementsAre(a_t, obj_t));
   EXPECT_EQ(type_system.parent_chain(b_t).size(), 2);
   EXPECT_THAT(type_system.parent_chain(b_t),
-      ::testing::UnorderedElementsAre(b_t, obj_t));
+              ::testing::UnorderedElementsAre(b_t, obj_t));
   EXPECT_EQ(type_system.parent_chain(f_t).size(), 4);
   EXPECT_THAT(type_system.parent_chain(f_t),
-      ::testing::UnorderedElementsAre(f_t, c_t, a_t, obj_t));
+              ::testing::UnorderedElementsAre(f_t, c_t, a_t, obj_t));
   EXPECT_EQ(type_system.parent_chain(o_t).size(), 4);
   EXPECT_THAT(type_system.parent_chain(o_t),
-      ::testing::UnorderedElementsAre(o_t, m_t, b_t, obj_t));
+              ::testing::UnorderedElementsAre(o_t, m_t, b_t, obj_t));
   EXPECT_EQ(type_system.parent_chain(j_t).size(), 6);
   EXPECT_THAT(type_system.parent_chain(j_t),
-      ::testing::UnorderedElementsAre(j_t, i_t, h_t, g_t, a_t, obj_t));
+              ::testing::UnorderedElementsAre(j_t, i_t, h_t, g_t, a_t, obj_t));
   EXPECT_EQ(type_system.parent_chain(odd11_t).size(), 3);
   EXPECT_THAT(type_system.parent_chain(odd11_t),
-      ::testing::UnorderedElementsAre(odd11_t, odd1_t, odd_t));
+              ::testing::UnorderedElementsAre(odd11_t, odd1_t, odd_t));
   EXPECT_EQ(type_system.parent_chain(odd2_t).size(), 2);
   EXPECT_THAT(type_system.parent_chain(odd2_t),
-      ::testing::UnorderedElementsAre(odd2_t, odd_t));
+              ::testing::UnorderedElementsAre(odd2_t, odd_t));
 
   EXPECT_TRUE(type_system.is_subtype(obj_t, a_t));
   EXPECT_TRUE(type_system.is_subtype(a_t, f_t));
@@ -278,21 +280,22 @@ TEST_F(TypeSystemTest, empty) {
   EXPECT_FALSE(type_system.implements(odd2_t, i2_t));
 
   EXPECT_EQ(type_system.get_implementors(i1_t).size(), 6);
-  EXPECT_THAT(type_system.get_implementors(i1_t),
+  EXPECT_THAT(
+      type_system.get_implementors(i1_t),
       ::testing::UnorderedElementsAre(d_t, f_t, i_t, j_t, r_t, odd11_t));
   EXPECT_EQ(type_system.get_implementors(i2_t).size(), 4);
   EXPECT_THAT(type_system.get_implementors(i2_t),
-      ::testing::UnorderedElementsAre(e_t, f_t, l_t, s_t));
+              ::testing::UnorderedElementsAre(e_t, f_t, l_t, s_t));
   EXPECT_EQ(type_system.get_implementors(i4_t).size(), 3);
   EXPECT_THAT(type_system.get_implementors(i4_t),
-      ::testing::UnorderedElementsAre(m_t, n_t, o_t));
+              ::testing::UnorderedElementsAre(m_t, n_t, o_t));
   EXPECT_EQ(type_system.get_implementors(i1_1_43_t).size(), 1);
   EXPECT_THAT(type_system.get_implementors(i1_1_43_t),
-      ::testing::UnorderedElementsAre(n_t));
+              ::testing::UnorderedElementsAre(n_t));
   EXPECT_EQ(type_system.get_implementors(a_t).size(), 0);
   EXPECT_EQ(type_system.get_implementors(iout1_t).size(), 3);
   EXPECT_THAT(type_system.get_implementors(iout1_t),
-      ::testing::UnorderedElementsAre(odd1_t, odd11_t, odd12_t));
+              ::testing::UnorderedElementsAre(odd1_t, odd11_t, odd12_t));
 
   types.clear();
   type_system.get_all_super_interfaces(i1_2_t, types);
@@ -315,13 +318,13 @@ TEST_F(TypeSystemTest, empty) {
 
   EXPECT_EQ(type_system.get_interface_children(i1_t).size(), 1);
   EXPECT_THAT(type_system.get_interface_children(i1_t),
-      ::testing::UnorderedElementsAre(i1_1_t));
+              ::testing::UnorderedElementsAre(i1_1_t));
   EXPECT_EQ(type_system.get_interface_children(i2_t).size(), 1);
   EXPECT_THAT(type_system.get_interface_children(i2_t),
-      ::testing::UnorderedElementsAre(i1_2_t));
+              ::testing::UnorderedElementsAre(i1_2_t));
   EXPECT_EQ(type_system.get_interface_children(i4_t).size(), 1);
   EXPECT_THAT(type_system.get_interface_children(i4_t),
-      ::testing::UnorderedElementsAre(i1_43_t));
+              ::testing::UnorderedElementsAre(i1_43_t));
   EXPECT_EQ(type_system.get_interface_children(i1_1_43_t).size(), 0);
   EXPECT_EQ(type_system.get_interface_children(i1_1_t).size(), 0);
   EXPECT_EQ(type_system.get_interface_children(iout1_t).size(), 0);
@@ -348,26 +351,26 @@ TEST_F(TypeSystemTest, empty) {
 
   EXPECT_EQ(type_system.get_implemented_interfaces(f_t).size(), 2);
   EXPECT_THAT(type_system.get_implemented_interfaces(f_t),
-      ::testing::UnorderedElementsAre(i1_t, i2_t));
+              ::testing::UnorderedElementsAre(i1_t, i2_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(j_t).size(), 2);
   EXPECT_THAT(type_system.get_implemented_interfaces(j_t),
-      ::testing::UnorderedElementsAre(i1_t, i1_1_t));
+              ::testing::UnorderedElementsAre(i1_t, i1_1_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(n_t).size(), 4);
   EXPECT_THAT(type_system.get_implemented_interfaces(n_t),
-      ::testing::UnorderedElementsAre(i1_1_43_t, i1_43_t, i3_t, i4_t));
+              ::testing::UnorderedElementsAre(i1_1_43_t, i1_43_t, i3_t, i4_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(a_t).size(), 0);
   EXPECT_EQ(type_system.get_implemented_interfaces(h_t).size(), 0);
   EXPECT_EQ(type_system.get_implemented_interfaces(odd2_t).size(), 1);
   EXPECT_THAT(type_system.get_implemented_interfaces(odd2_t),
-      ::testing::UnorderedElementsAre(iout2_t));
+              ::testing::UnorderedElementsAre(iout2_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(odd1_t).size(), 1);
   EXPECT_THAT(type_system.get_implemented_interfaces(odd1_t),
-      ::testing::UnorderedElementsAre(iout1_t));
+              ::testing::UnorderedElementsAre(iout1_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(odd11_t).size(), 2);
   EXPECT_THAT(type_system.get_implemented_interfaces(odd11_t),
-      ::testing::UnorderedElementsAre(iout1_t, i1_t));
+              ::testing::UnorderedElementsAre(iout1_t, i1_t));
   EXPECT_EQ(type_system.get_implemented_interfaces(odd12_t).size(), 1);
   EXPECT_THAT(type_system.get_implemented_interfaces(odd12_t),
-      ::testing::UnorderedElementsAre(iout1_t));
+              ::testing::UnorderedElementsAre(iout1_t));
   EXPECT_THAT(type_system.get_implemented_interfaces(odd_t).size(), 0);
 }

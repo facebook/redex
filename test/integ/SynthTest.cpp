@@ -63,7 +63,9 @@ class SynthTest1 : public RedexIntegrationTest {
 
 TEST_F(SynthTest1, synthetic) {
   std::vector<Pass*> passes = {
-      new ReBindRefsPass(), new SynthPass(), new LocalDcePass(),
+      new ReBindRefsPass(),
+      new SynthPass(),
+      new LocalDcePass(),
   };
 
   run_passes(passes);
@@ -112,17 +114,20 @@ TEST_F(SynthTest1, synthetic) {
       ASSERT_TRUE(gamma_synth_found);
     }
 
-    // Make sure the const_4 insn before the call to synthetic constructor is removed
-    if (strcmp(class_name, "Lcom/facebook/redextest/SyntheticConstructor$InnerClass;") == 0) {
+    // Make sure the const_4 insn before the call to synthetic constructor is
+    // removed
+    if (strcmp(class_name,
+               "Lcom/facebook/redextest/SyntheticConstructor$InnerClass;") ==
+        0) {
       for (const auto& method : cls->get_dmethods()) {
         if (strcmp(method->get_name()->c_str(), "<init>") == 0) {
-          TRACE(DCE, 2, "dmethod: %s",  SHOW(method->get_code()));
+          TRACE(DCE, 2, "dmethod: %s", SHOW(method->get_code()));
           for (auto& mie : InstructionIterable(method->get_code())) {
             auto instruction = mie.insn;
             // Make sure there is no const-4 in the optimized method.
             ASSERT_NE(instruction->opcode(), OPCODE_CONST);
-  			  }
-  			}
+          }
+        }
       }
     }
 

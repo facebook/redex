@@ -18,12 +18,12 @@ TEST_F(PostVerify, EmptyClasses) {
       find_class_named(classes, "Lcom/facebook/redextest/EmptyClasses;");
   auto inner_empty =
       find_class_named(classes, "Lcom/facebook/redextest/InnerEmpty;");
-  auto inner_inner_class =
-      find_class_named(classes, "Lcom/facebook/redextest/InnerEmpty$InnerClass;");
+  auto inner_inner_class = find_class_named(
+      classes, "Lcom/facebook/redextest/InnerEmpty$InnerClass;");
   auto inner_empty_2 =
       find_class_named(classes, "Lcom/facebook/redextest/InnerEmpty2;");
-  auto inner_inner_class_2 =
-      find_class_named(classes, "Lcom/facebook/redextest/InnerEmpty2$InnerClass2;");
+  auto inner_inner_class_2 = find_class_named(
+      classes, "Lcom/facebook/redextest/InnerEmpty2$InnerClass2;");
   auto not_empty =
       find_class_named(classes, "Lcom/facebook/redextest/NotAnEmptyClass;");
   auto not_empty_2 =
@@ -34,22 +34,19 @@ TEST_F(PostVerify, EmptyClasses) {
       find_class_named(classes, "Lcom/facebook/redextest/NotAnEmptyClass4;");
   auto not_empty_5 =
       find_class_named(classes, "Lcom/facebook/redextest/NotAnEmptyClass5;");
-  auto yes_no =
-      find_class_named(classes, "Lcom/facebook/redextest/YesNo;");
+  auto yes_no = find_class_named(classes, "Lcom/facebook/redextest/YesNo;");
   auto my_yes_no =
       find_class_named(classes, "Lcom/facebook/redextest/MyYesNo;");
   auto easily_done =
       find_class_named(classes, "Lcom/facebook/redextest/EasilyDone;");
-  auto by_20r_3 =
-      find_class_named(classes, "Lcom/facebook/redextest/By2Or3;");
+  auto by_20r_3 = find_class_named(classes, "Lcom/facebook/redextest/By2Or3;");
   auto my_by_20r_3 =
       find_class_named(classes, "Lcom/facebook/redextest/MyBy2Or3;");
   auto wombat_exception =
       find_class_named(classes, "Lcom/facebook/redextest/WombatException;");
-  auto wombat =
-      find_class_named(classes, "Lcom/facebook/redextest/Wombat;");
-  auto empty_but_extended =
-      find_class_named(classes, "Lcom/facebook/redextest/EmptyButLaterExtended;");
+  auto wombat = find_class_named(classes, "Lcom/facebook/redextest/Wombat;");
+  auto empty_but_extended = find_class_named(
+      classes, "Lcom/facebook/redextest/EmptyButLaterExtended;");
   auto extender =
       find_class_named(classes, "Lcom/facebook/redextest/Extender;");
   auto not_used_here =

@@ -1338,8 +1338,8 @@ TEST_F(CommonSubexpressionEliminationTest, conditionally_pure_methods) {
 
 TEST_F(CommonSubexpressionEliminationTest,
        conditionally_pure_methods_with_mutation) {
-   // Calling a conditionally pure method twice with a relevant write in
-   // between means that the second call can NOT be cse'ed.
+  // Calling a conditionally pure method twice with a relevant write in
+  // between means that the second call can NOT be cse'ed.
   ClassCreator o_creator(DexType::make_type("LO;"));
   o_creator.set_super(type::java_lang_Object());
 
@@ -1374,8 +1374,8 @@ TEST_F(CommonSubexpressionEliminationTest,
 
 TEST_F(CommonSubexpressionEliminationTest,
        overriden_conditionally_pure_methods) {
-   // A virtual base method is not actually conditionally pure if there is an
-   // overriding method in a derived class that performs writes.
+  // A virtual base method is not actually conditionally pure if there is an
+  // overriding method in a derived class that performs writes.
 
   // define base type
 

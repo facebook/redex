@@ -883,44 +883,45 @@ TEST_F(ProguardTest, assortment) {
                                            "Iota$Gamma;.numbat:(I)I");
     ASSERT_EQ(nullptr, gamma_numbat);
 
+    { // keepclasseswithmembers tests
+      auto omega =
+          find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega;");
+      ASSERT_NE(nullptr, omega);
 
-   { // keepclasseswithmembers tests
-    auto omega =
-        find_class_named(classes, "Lcom/facebook/redex/test/proguard/Omega;");
-    ASSERT_NE(nullptr, omega);
+      auto omega_alpha = find_class_named(
+          classes, "Lcom/facebook/redex/test/proguard/Omega$Alpha;");
+      ASSERT_NE(nullptr, omega_alpha);
+      EXPECT_TRUE(root(omega_alpha));
+      auto omega_alpha_red = find_vmethod_named(
+          omega_alpha,
+          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.red:()V");
+      ASSERT_NE(nullptr, omega_alpha_red);
+      EXPECT_TRUE(root(omega_alpha_red));
+      auto omega_alpha_green0 = find_vmethod_named(
+          omega_alpha,
+          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green0:()V");
+      ASSERT_NE(nullptr, omega_alpha_green0);
+      EXPECT_TRUE(root(omega_alpha_green0));
+      auto omega_alpha_green1 = find_vmethod_named(
+          omega_alpha,
+          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green1:()V");
+      ASSERT_NE(nullptr, omega_alpha_green1);
+      EXPECT_TRUE(root(omega_alpha_green1));
+      auto omega_alpha_blue = find_vmethod_named(
+          omega_alpha,
+          "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue:()V");
+      ASSERT_NE(nullptr, omega_alpha_blue);
+      EXPECT_FALSE(root(omega_alpha_blue));
 
-    auto omega_alpha = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Omega$Alpha;");
-    ASSERT_NE(nullptr, omega_alpha);
-    EXPECT_TRUE(root(omega_alpha));
-    auto omega_alpha_red = find_vmethod_named(
-        omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.red:()V");
-    ASSERT_NE(nullptr, omega_alpha_red);
-    EXPECT_TRUE(root(omega_alpha_red));
-    auto omega_alpha_green0 = find_vmethod_named(
-        omega_alpha,
-        "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green0:()V");
-    ASSERT_NE(nullptr, omega_alpha_green0);
-    EXPECT_TRUE(root(omega_alpha_green0));
-    auto omega_alpha_green1 = find_vmethod_named(
-        omega_alpha,
-        "Lcom/facebook/redex/test/proguard/Omega$Alpha;.green1:()V");
-    ASSERT_NE(nullptr, omega_alpha_green1);
-    EXPECT_TRUE(root(omega_alpha_green1));
-    auto omega_alpha_blue = find_vmethod_named(
-        omega_alpha, "Lcom/facebook/redex/test/proguard/Omega$Alpha;.blue:()V");
-    ASSERT_NE(nullptr, omega_alpha_blue);
-    EXPECT_FALSE(root(omega_alpha_blue));
+      auto omega_beta = find_class_named(
+          classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
+      ASSERT_NE(nullptr, omega_beta);
+      EXPECT_FALSE(root(omega_beta));
 
-    auto omega_beta = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Omega$Beta;");
-    ASSERT_NE(nullptr, omega_beta);
-    EXPECT_FALSE(root(omega_beta));
-
-    auto omega_gamma = find_class_named(
-        classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
-    ASSERT_NE(nullptr, omega_gamma);
-    EXPECT_FALSE(root(omega_gamma));
-   }
+      auto omega_gamma = find_class_named(
+          classes, "Lcom/facebook/redex/test/proguard/Omega$Gamma;");
+      ASSERT_NE(nullptr, omega_gamma);
+      EXPECT_FALSE(root(omega_gamma));
+    }
   }
 }

@@ -59,11 +59,11 @@ struct ConstPropTest : public RedexTest {
 
   void expect_empty_clinit(DexClass* clazz) {
     auto clinit = clazz->get_clinit();
-    ASSERT_NE(clinit, nullptr) << "Class " << clazz->c_str()
-                               << " missing clinit";
+    ASSERT_NE(clinit, nullptr)
+        << "Class " << clazz->c_str() << " missing clinit";
     auto code = clinit->get_code();
-    EXPECT_EQ(code->count_opcodes(), 0) << "Class " << clazz->c_str()
-                                        << " has non-empty clinit";
+    EXPECT_EQ(code->count_opcodes(), 0)
+        << "Class " << clazz->c_str() << " has non-empty clinit";
   }
 
   void expect_field_eq(DexClass* clazz,
@@ -73,8 +73,8 @@ struct ConstPropTest : public RedexTest {
     auto field_name = DexString::make_string(name);
     auto field =
         resolve_field(clazz->get_type(), field_name, type, FieldSearch::Static);
-    ASSERT_NE(field, nullptr) << "Failed resolving field " << name
-                              << " in class " << clazz->c_str();
+    ASSERT_NE(field, nullptr)
+        << "Failed resolving field " << name << " in class " << clazz->c_str();
     auto val = field->get_static_value();
     ASSERT_NE(val, nullptr) << "Failed getting static value for field "
                             << field->c_str() << " in class " << clazz->c_str();
@@ -131,8 +131,8 @@ DexField* add_concrete_field(DexClass* cls,
                              boost::any val) {
   auto container = cls->get_type();
   auto field_name = DexString::make_string(name);
-  auto field = static_cast<DexField*>(
-      DexField::make_field(container, field_name, type));
+  auto field =
+      static_cast<DexField*>(DexField::make_field(container, field_name, type));
   auto ev = make_ev(type, val);
   field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
   cls->add_field(field);
@@ -240,7 +240,8 @@ TEST_F(ConstPropTest, simplePropagateMultiField) {
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
       {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
-      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
+      {"CONST_DOUBLE", m_double_type,
+       static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");
@@ -344,7 +345,8 @@ TEST_F(ConstPropTest, multiLevelPropagate) {
       {"CONST_CHAR", m_char_type, static_cast<uint64_t>('c')},
       {"CONST_SHORT", m_short_type, static_cast<uint64_t>(555)},
       {"CONST_LONG", m_long_type, static_cast<uint64_t>(0x1000200030004000)},
-      {"CONST_DOUBLE", m_double_type, static_cast<uint64_t>(1.0000000000000002)},
+      {"CONST_DOUBLE", m_double_type,
+       static_cast<uint64_t>(1.0000000000000002)},
       {"CONST_STRING", m_string_type, DexString::make_string("foo")}};
   auto parent = create_class("Lcom/redex/Parent;");
   auto child = create_class("Lcom/redex/Child;");

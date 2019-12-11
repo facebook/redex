@@ -41,7 +41,8 @@ void test_inliner(const std::string& caller_str,
   const std::string& final_cfg = show(caller);
   caller_code->clear_cfg();
   EXPECT_EQ(assembler::to_string(expected_code.get()),
-            assembler::to_string(caller_code.get())) << final_cfg;
+            assembler::to_string(caller_code.get()))
+      << final_cfg;
 }
 
 class CFGInlinerTest : public RedexTest {};

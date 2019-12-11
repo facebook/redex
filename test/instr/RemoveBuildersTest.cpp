@@ -145,8 +145,9 @@ TEST_F(PostVerify, RemoveBarBuilder) {
 
   // No build call.
   EXPECT_EQ(nullptr,
-            find_invoke(
-                initialize_bar_different_regs, DOPCODE_INVOKE_VIRTUAL, "build"));
+            find_invoke(initialize_bar_different_regs,
+                        DOPCODE_INVOKE_VIRTUAL,
+                        "build"));
   EXPECT_EQ(nullptr,
             find_invoke(initialize_bar, DOPCODE_INVOKE_VIRTUAL, "build"));
   EXPECT_EQ(nullptr,
@@ -311,14 +312,13 @@ TEST_F(PostVerify, RemoveDarBuilder) {
 
   auto using_no_escape_builders = find_class_named(
       classes, "Lcom/facebook/redex/test/instr/UsingNoEscapeBuilder;");
-  auto initialize_dar =
-      find_vmethod_named(*using_no_escape_builders, "initializeDar_KeepBuilder");
+  auto initialize_dar = find_vmethod_named(*using_no_escape_builders,
+                                           "initializeDar_KeepBuilder");
   EXPECT_NE(nullptr, initialize_dar);
 
   // Build call not inlined.
   EXPECT_NE(nullptr,
-            find_invoke(
-                initialize_dar, DOPCODE_INVOKE_VIRTUAL, "build"));
+            find_invoke(initialize_dar, DOPCODE_INVOKE_VIRTUAL, "build"));
 }
 
 TEST_F(PostVerify, RemoveCarBuilder_uninitializedModelInOneCase) {
@@ -353,7 +353,7 @@ TEST_F(PreVerify, RemoveBPCBuilder) {
   EXPECT_NE(nullptr, bpc);
 
   auto bpc_builder =
-    find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder;");
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder;");
   EXPECT_NE(nullptr, bpc_builder);
 }
 
@@ -362,7 +362,7 @@ TEST_F(PostVerify, RemoveBPCBuilder) {
   EXPECT_NE(nullptr, bpc);
 
   auto bpc_builder =
-    find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder");
+      find_class_named(classes, "Lcom/facebook/redex/test/instr/BPC$Builder");
   EXPECT_EQ(nullptr, bpc_builder);
 
   auto using_no_escape_builders = find_class_named(
@@ -372,6 +372,6 @@ TEST_F(PostVerify, RemoveBPCBuilder) {
   EXPECT_NE(nullptr, initialize_bpc);
 
   DexType* builder_type =
-    DexType::get_type("Lcom/facebook/redex/test/instr/BPC$Builder");
+      DexType::get_type("Lcom/facebook/redex/test/instr/BPC$Builder");
   check_no_builder(initialize_bpc, builder_type);
 }

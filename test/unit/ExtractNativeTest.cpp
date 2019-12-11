@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <string>
 #include <gtest/gtest.h>
+#include <string>
 
 #include "RedexResources.h"
 
