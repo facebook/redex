@@ -6,8 +6,8 @@
  */
 
 #include "PrintUtil.h"
-#include <stdio.h>
 #include <cstdarg>
+#include <stdio.h>
 
 bool clean = false;
 bool raw = false;

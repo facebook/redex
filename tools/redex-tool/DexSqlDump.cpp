@@ -5,15 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
- /*
+/*
 
 Workflow:
 
 $ ./native/redex/redex.py -u <APK>
 $ buck run  //native/redex:redex-tool -- dex-sql-dump  \
-      --apkdir <APKDIR> --dexendir <DEXEN_DIR> \
-      --jars <ANDROID_JAR> --proguard-map <RENAME_MAP> \
-      --output dex.sql
+     --apkdir <APKDIR> --dexendir <DEXEN_DIR> \
+     --jars <ANDROID_JAR> --proguard-map <RENAME_MAP> \
+     --output dex.sql
 $ sqlite3 dex.db < dex.sql
 $ sqlite3 dex.db "SELECT COUNT(*) FROM dex;"   # verify sane-looking value
 $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
@@ -23,8 +23,8 @@ $ ./native/redex/tools/redex-tool/DexSqlQuery.py dex.db
 
 #include <boost/algorithm/string/replace.hpp>
 #include <queue>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "ClassHierarchy.h"
 #include "ControlFlow.h"
@@ -42,22 +42,27 @@ static std::unordered_map<DexMethod*, int> method_ids;
 static std::unordered_map<DexField*, int> field_ids;
 static std::unordered_map<DexString*, int> string_ids;
 
-void dump_field_refs(FILE* fdout, const char* prefix, DexField* field, int field_id) {
+void dump_field_refs(FILE* fdout,
+                     const char* prefix,
+                     DexField* field,
+                     int field_id) {
   static int next_string_ref = 0;
   auto* static_value = field->get_static_value();
   if (!static_value || (static_value->evtype() != DEVT_STRING)) return;
   auto* static_string_value = static_cast<DexEncodedValueString*>(static_value);
   auto string_id = string_ids[static_string_value->string()];
-  fprintf(
-    fdout,
-    "INSERT INTO %sfield_string_refs VALUES (%d, %d, %d);\n",
-    prefix,
-    next_string_ref++,
-    field_id,
-    string_id);
+  fprintf(fdout,
+          "INSERT INTO %sfield_string_refs VALUES (%d, %d, %d);\n",
+          prefix,
+          next_string_ref++,
+          field_id,
+          string_id);
 }
 
-void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int method_id) {
+void dump_method_refs(FILE* fdout,
+                      const char* prefix,
+                      DexMethod* method,
+                      int method_id) {
   auto code = method->get_code();
   if (!code) return;
 
@@ -71,99 +76,103 @@ void dump_method_refs(FILE* fdout, const char* prefix, DexMethod* method, int me
     if (insn->has_string()) {
       if (string_ids.count(insn->get_string())) {
         auto string_id = string_ids[insn->get_string()];
-        fprintf(
-          fdout,
-          "INSERT INTO %smethod_string_refs VALUES (%d, %d, %d, %d);\n",
-          prefix,
-          next_string_ref++,
-          method_id,
-          string_id,
-          insn->opcode());
+        fprintf(fdout,
+                "INSERT INTO %smethod_string_refs VALUES (%d, %d, %d, %d);\n",
+                prefix,
+                next_string_ref++,
+                method_id,
+                string_id,
+                insn->opcode());
       }
     }
     if (insn->has_type()) {
       auto cls = type_class(insn->get_type());
       if (cls && class_ids.count(cls)) {
         auto class_id = class_ids[cls];
-        fprintf(
-          fdout,
-          "INSERT INTO %smethod_class_refs VALUES (%d, %d, %d, %d);\n",
-          prefix,
-          next_class_ref++,
-          method_id,
-          class_id,
-          insn->opcode());
+        fprintf(fdout,
+                "INSERT INTO %smethod_class_refs VALUES (%d, %d, %d, %d);\n",
+                prefix,
+                next_class_ref++,
+                method_id,
+                class_id,
+                insn->opcode());
       }
     }
     if (insn->has_field()) {
       auto field = resolve_field(insn->get_field());
       if (field != nullptr && field_ids.count(field)) {
         auto field_id = field_ids[field];
-        fprintf(
-          fdout,
-          "INSERT INTO %smethod_field_refs VALUES (%d, %d, %d, %d);\n",
-          prefix,
-          next_field_ref++,
-          method_id,
-          field_id,
-          insn->opcode());
+        fprintf(fdout,
+                "INSERT INTO %smethod_field_refs VALUES (%d, %d, %d, %d);\n",
+                prefix,
+                next_field_ref++,
+                method_id,
+                field_id,
+                insn->opcode());
       }
     }
     if (insn->has_method()) {
       auto meth = resolve_method(insn->get_method(), opcode_to_search(insn));
       if (meth != nullptr && method_ids.count(meth)) {
         auto method_ref_id = method_ids[meth];
-        fprintf(
-          fdout,
-          "INSERT INTO %smethod_method_refs VALUES (%d, %d, %d, %d);\n",
-          prefix,
-          next_method_ref++,
-          method_id,
-          method_ref_id,
-          insn->opcode());
+        fprintf(fdout,
+                "INSERT INTO %smethod_method_refs VALUES (%d, %d, %d, %d);\n",
+                prefix,
+                next_method_ref++,
+                method_id,
+                method_ref_id,
+                insn->opcode());
       }
     }
   }
 }
 
-void dump_class(FILE* fdout, const char* prefix, const char* dex_id, DexClass* cls, int class_id) {
+void dump_class(FILE* fdout,
+                const char* prefix,
+                const char* dex_id,
+                DexClass* cls,
+                int class_id) {
   // TODO: annotations?
   // TODO: inheritance?
   // TODO: string usage
   // TODO: size estimate
   auto deobfuscated_name = cls->get_deobfuscated_name();
-  fprintf(
-    fdout,
-    "INSERT INTO %sclasses VALUES (%d,'%s','%s','%s',%u);\n",
-    prefix,
-    class_id,
-    dex_id,
-    deobfuscated_name.c_str(),
-    cls->get_name()->c_str(),
-    cls->get_access()
-  );
+  fprintf(fdout,
+          "INSERT INTO %sclasses VALUES (%d,'%s','%s','%s',%u);\n",
+          prefix,
+          class_id,
+          dex_id,
+          deobfuscated_name.c_str(),
+          cls->get_name()->c_str(),
+          cls->get_access());
 }
 
-void dump_field(FILE* fdout, const char* prefix, int class_id, DexField* field, int field_id) {
+void dump_field(FILE* fdout,
+                const char* prefix,
+                int class_id,
+                DexField* field,
+                int field_id) {
   // TODO: more fixup here on this crapped up name/signature
   // TODO: break down signature
   // TODO: annotations?
   // TODO: string usage (encoded_value for static fields)
   auto deobfuscated_name = field->get_deobfuscated_name();
   auto field_name = strchr(deobfuscated_name.c_str(), ';');
-  fprintf(
-    fdout,
-    "INSERT INTO %sfields VALUES(%d, %d, '%s', '%s', %u);\n",
-    prefix,
-    field_id,
-    class_id,
-    field_name,
-    field->get_name()->c_str(),
-    field->get_access()
-  );
+  fprintf(fdout,
+          "INSERT INTO %sfields VALUES(%d, %d, '%s', '%s', %u);\n",
+          prefix,
+          field_id,
+          class_id,
+          field_name,
+          field->get_name()->c_str(),
+          field->get_access());
 }
 
-void dump_method(FILE* fdout, const char* prefix, int class_id, DexMethod* method, int method_id) {
+void dump_method(FILE* fdout,
+                 const char* prefix,
+                 int class_id,
+                 DexMethod* method,
+                 int method_id) {
   // TODO: more fixup here on this crapped up name/signature
   // TODO: break down signature
   // TODO: throws?
@@ -172,27 +181,23 @@ void dump_method(FILE* fdout, const char* prefix, int class_id, DexMethod* metho
   // TODO: size estimate
   auto deobfuscated_name = method->get_deobfuscated_name();
   auto method_name = strchr(deobfuscated_name.c_str(), ';');
-  fprintf(
-    fdout,
-    "INSERT INTO %smethods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
-    prefix,
-    method_id,
-    class_id,
-    method_name,
-    method->get_name()->c_str(),
-    method->get_access(),
-    method->get_code() ? method->get_code()->sum_opcode_sizes() : 0
-  );
+  fprintf(fdout,
+          "INSERT INTO %smethods VALUES (%d,%d,'%s','%s',%d,%lu);\n",
+          prefix,
+          method_id,
+          class_id,
+          method_name,
+          method->get_name()->c_str(),
+          method->get_access(),
+          method->get_code() ? method->get_code()->sum_opcode_sizes() : 0);
 }
 
-void dump_sql(
-  FILE* fdout,
-  DexStoresVector& stores,
-  ProguardMap& pg_map,
-  const char* prefix) {
-  fprintf(
-    fdout,
-R"___(
+void dump_sql(FILE* fdout,
+              DexStoresVector& stores,
+              ProguardMap& pg_map,
+              const char* prefix) {
+  fprintf(fdout,
+          R"___(
 DROP TABLE IF EXISTS %1$sfield_string_refs;
 DROP TABLE IF EXISTS %1$smethod_string_refs;
 DROP TABLE IF EXISTS %1$smethod_field_refs;
@@ -264,8 +269,7 @@ CREATE TABLE %1$smethod_string_refs (
   opcode INTEGER NOT NULL
 );
 )___",
-    prefix
-  );
+          prefix);
   int next_class_id = 0;
   int next_method_id = 0;
   int next_field_id = 0;
@@ -277,7 +281,7 @@ CREATE TABLE %1$smethod_string_refs (
     auto store_name = store.get_name();
     auto& dexen = store.get_dexen();
     apply_deobfuscated_names(dexen, pg_map);
-    for (size_t dex_idx = 0 ; dex_idx < dexen.size() ; ++dex_idx) {
+    for (size_t dex_idx = 0; dex_idx < dexen.size(); ++dex_idx) {
       auto& dex = dexen[dex_idx];
       GatheredTypes gtypes(&dex);
       auto strings = gtypes.get_cls_order_dexstring_emitlist();
@@ -287,7 +291,11 @@ CREATE TABLE %1$smethod_string_refs (
         // Escape string before inserting. ' -> ''
         std::string esc(dexstr->c_str());
         boost::replace_all(esc, "'", "''");
-        fprintf(fdout, "INSERT INTO %sstrings VALUES(%d, '%s');\n", prefix, id, esc.c_str());
+        fprintf(fdout,
+                "INSERT INTO %sstrings VALUES(%d, '%s');\n",
+                prefix,
+                id,
+                esc.c_str());
       }
       std::string dex_id_str(store_name + "/" + std::to_string(dex_idx));
       const char* dex_id = dex_id_str.c_str();
@@ -324,7 +332,7 @@ CREATE TABLE %1$smethod_string_refs (
   fprintf(fdout, "BEGIN TRANSACTION;\n");
   for (auto& store : stores) {
     auto& dexen = store.get_dexen();
-    for (size_t dex_idx = 0 ; dex_idx < dexen.size() ; ++dex_idx) {
+    for (size_t dex_idx = 0; dex_idx < dexen.size(); ++dex_idx) {
       auto& dex = dexen[dex_idx];
       for (const auto& cls : dex) {
         for (const auto& meth : cls->get_dmethods()) {
@@ -356,17 +364,15 @@ CREATE TABLE %1$smethod_string_refs (
   for (auto& cls : scope) {
     TypeSet results;
     get_all_children_or_implementors(ch, scope, cls, results);
-    for(auto type : results) {
+    for (auto type : results) {
       auto type_cls = type_class(type);
       if (type_cls) {
-        fprintf(
-          fdout,
-          "INSERT INTO %sis_a VALUES(%d, %d, %d);\n",
-          prefix,
-          next_is_a_id++,
-          class_ids[type_cls],
-          class_ids[cls]
-        );
+        fprintf(fdout,
+                "INSERT INTO %sis_a VALUES(%d, %d, %d);\n",
+                prefix,
+                next_is_a_id++,
+                class_ids[type_cls],
+                class_ids[cls]);
       }
     }
   }
@@ -375,35 +381,36 @@ CREATE TABLE %1$smethod_string_refs (
 
 class DexSqlDump : public Tool {
  public:
-  DexSqlDump() : Tool("dex-sql-dump", "dump an apk to a sql insertion script") {}
+  DexSqlDump()
+      : Tool("dex-sql-dump", "dump an apk to a sql insertion script") {}
 
   void add_options(po::options_description& options) const override {
     add_standard_options(options);
-    options.add_options()
-      ("proguard-map,p",
-       po::value<std::string>()->value_name("redex-rename-map.txt"),
-       "path to a rename map")
-      ("output,o",
-       po::value<std::string>()->value_name("dex.sql"),
-       "path to output sql dump file (defaults to stdout)")
-      ("table-prefix,t",
-       po::value<std::string>()->value_name("pre_"),
-       "prefix to use on all table names")
-    ;
+    options.add_options()(
+        "proguard-map,p",
+        po::value<std::string>()->value_name("redex-rename-map.txt"),
+        "path to a rename map")(
+        "output,o",
+        po::value<std::string>()->value_name("dex.sql"),
+        "path to output sql dump file (defaults to stdout)")(
+        "table-prefix,t",
+        po::value<std::string>()->value_name("pre_"),
+        "prefix to use on all table names");
   }
 
   void run(const po::variables_map& options) override {
-    auto stores = init(
-      options["jars"].as<std::string>(),
-      options["apkdir"].as<std::string>(),
-      options["dexendir"].as<std::string>());
-    ProguardMap pgmap(options.count("proguard-map") ?
-      options["proguard-map"].as<std::string>() : "/dev/null");
+    auto stores = init(options["jars"].as<std::string>(),
+                       options["apkdir"].as<std::string>(),
+                       options["dexendir"].as<std::string>());
+    ProguardMap pgmap(options.count("proguard-map")
+                          ? options["proguard-map"].as<std::string>()
+                          : "/dev/null");
     const std::string& filename = options["output"].as<std::string>();
-    FILE* fdout = options.count("output") ?
-      fopen(filename.c_str(), "w") : stdout;
-    std::string prefix = options.count("table-prefix") ?
-      options["table-prefix"].as<std::string>() : "";
+    FILE* fdout =
+        options.count("output") ? fopen(filename.c_str(), "w") : stdout;
+    std::string prefix = options.count("table-prefix")
+                             ? options["table-prefix"].as<std::string>()
+                             : "";
     if (!fdout) {
       fprintf(stderr,
               "Could not open %s for writing; terminating\n",
@@ -418,4 +425,4 @@ class DexSqlDump : public Tool {
 
 static DexSqlDump s_tool;
 
-}
+} // namespace
