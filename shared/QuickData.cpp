@@ -149,6 +149,7 @@ void QuickData::load_data(const char* location) {
   std::unique_ptr<MappedFile> file;
   file.reset(MappedFile::mmap_file(
       length, PROT_READ, MAP_PRIVATE, fileno(fd), location, &error_msg));
+  fclose(fd);
   if (file.get() == nullptr) {
     CHECK(!error_msg.empty());
     std::ostringstream error_str;
