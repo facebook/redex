@@ -551,7 +551,7 @@ void EnumFixpointIterator::analyze_instruction(IRInstruction* insn,
       EnumTypes array_types = env->get(insn->src(0));
       for (const auto& array_type : array_types.elements()) {
         const auto type = type::get_array_element_type(array_type);
-        if (type && type::is_primitive(type)) {
+        if (type && !type::is_primitive(type)) {
           types.add(type);
         }
       }
