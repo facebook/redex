@@ -11,6 +11,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 #include "PassManager.h"
+#include "WorkQueue.h"
 
 namespace {
 
@@ -176,7 +177,7 @@ void InterDexPass::run_pass_on_nonroot_store(DexStoresVector& stores,
   InterDex interdex(original_scope, dexen, mgr.apk_manager(), conf, plugins,
                     m_linear_alloc_limit, m_type_refs_limit, m_static_prune,
                     m_normal_primary_dex, false /* force single dex */,
-                    m_emit_scroll_set_marker, m_emit_canaries,
+                    m_emit_scroll_set_marker, false /* emit canaries */,
                     false /* minimize_cross_dex_refs */, cross_dex_refs_config,
                     cross_dex_relocator_config, reserve_mrefs);
 
@@ -196,13 +197,17 @@ void InterDexPass::run_pass(DexStoresVector& stores,
     return;
   }
 
+  auto wq = workqueue_foreach<DexStore*>([&](DexStore* store) {
+    run_pass_on_nonroot_store(stores, store->get_dexen(), conf, mgr);
+  });
   for (auto& store : stores) {
     if (store.is_root_store()) {
       run_pass(stores, store.get_dexen(), conf, mgr);
     } else {
-      run_pass_on_nonroot_store(stores, store.get_dexen(), conf, mgr);
+      wq.add_item(&store);
     }
   }
+  wq.run_all();
 }
 
 static InterDexPass s_pass;
