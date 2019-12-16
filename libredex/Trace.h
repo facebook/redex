@@ -134,7 +134,8 @@
   TM(IODI)           \
   TM(MODULARITY)     \
   TM(VM)             \
-  TM(POST_LOWERING)
+  TM(POST_LOWERING)  \
+  TM(LOOP)
 
 enum TraceModule : int {
 #define TM(x) x,

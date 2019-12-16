@@ -371,6 +371,7 @@ redex_all_SOURCES = \
 	service/dataflow/ConstantUses.cpp \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/local-dce/LocalDce.cpp \
+	service/loop-info/LoopInfo.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
