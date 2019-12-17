@@ -16,39 +16,9 @@
 
 namespace reaching_defs {
 
-class Domain final : public sparta::AbstractDomainReverseAdaptor<
-                         sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>,
-                         Domain> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
+using Domain = sparta::PatriciaTreeSetAbstractDomain<IRInstruction*>;
 
-  // Some older compilers complain that the class is not default constructible.
-  // We intended to use the default constructors of the base class (via using
-  // AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor), but some
-  // compilers fail to catch this. So we insert a redundant '= default'.
-  Domain() = default;
-
-  size_t size() const { return unwrap().size(); }
-
-  const sparta::PatriciaTreeSet<IRInstruction*>& elements() const {
-    return unwrap().elements();
-  }
-};
-
-class Environment final
-    : public sparta::AbstractDomainReverseAdaptor<
-          sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>,
-          Environment> {
- public:
-  using AbstractDomainReverseAdaptor::AbstractDomainReverseAdaptor;
-
-  Domain get(reg_t reg) { return unwrap().get(reg); }
-
-  Environment& set(reg_t reg, const Domain& value) {
-    unwrap().set(reg, value);
-    return *this;
-  }
-};
+using Environment = sparta::PatriciaTreeMapAbstractEnvironment<reg_t, Domain>;
 
 class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
