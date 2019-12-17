@@ -138,4 +138,43 @@ CallSites collect_call_refs(const Scope& scope,
       });
   return call_sites;
 }
+
+int wrap_instance_call_with_static(
+    DexStoresVector& stores,
+    const std::unordered_map<DexMethod*, DexMethod*>& methods_replacement) {
+  auto classes = build_class_scope(stores);
+  std::unordered_set<DexType*> excluded_types;
+  for (const auto& pair : methods_replacement) {
+    always_assert(!is_static(pair.first));
+    always_assert(is_static(pair.second));
+    excluded_types.insert(pair.second->get_class());
+  }
+  std::atomic<uint32_t> total(0);
+  // The excluded types are supposed to be wrapper and the only callers of the
+  // original methods.
+  walk::parallel::methods(classes, [&](DexMethod* method) {
+    if (excluded_types.count(method->get_class())) {
+      return;
+    }
+    auto code = method->get_code();
+    if (code) {
+      for (auto& mie : InstructionIterable(code)) {
+        IRInstruction* insn = mie.insn;
+        if (insn->opcode() != OPCODE_INVOKE_VIRTUAL) {
+          continue;
+        }
+        auto method_ref = insn->get_method();
+        auto it = methods_replacement.find(static_cast<DexMethod*>(method_ref));
+        if (it != methods_replacement.end()) {
+          always_assert(is_static(it->second));
+          insn->set_opcode(OPCODE_INVOKE_STATIC);
+          insn->set_method(it->second);
+          ++total;
+        }
+      }
+    }
+  });
+  return total;
+}
+
 } // namespace method_reference
