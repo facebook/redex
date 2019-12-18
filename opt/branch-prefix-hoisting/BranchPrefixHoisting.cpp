@@ -13,6 +13,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "IROpcode.h"
@@ -298,7 +299,8 @@ int BranchPrefixHoistingPass::process_cfg(cfg::ControlFlowGraph& cfg) {
   bool performed_transformation = false;
   do {
     performed_transformation = false;
-    const std::vector<cfg::Block*>& blocks = cfg.blocks_post();
+    const std::vector<cfg::Block*>& blocks =
+        graph::postorder_sort<cfg::GraphInterface>(cfg);
     // iterate from the back, may get to the optimal state quicker
     for (auto block : blocks) {
       // when we are processing hoist for one block, other blocks may be changed

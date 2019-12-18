@@ -15,6 +15,7 @@
 #include "ControlFlow.h"
 #include "DexClass.h"
 #include "DexUtil.h"
+#include "GraphUtil.h"
 #include "IRCode.h"
 #include "IRInstruction.h"
 #include "MethodOverrideGraph.h"
@@ -134,7 +135,7 @@ void LocalDce::dce(IRCode* code) {
     code->build_cfg(/* editable */ true);
   }
   auto& cfg = code->cfg();
-  const auto& blocks = cfg.blocks_post();
+  const auto& blocks = graph::postorder_sort<cfg::GraphInterface>(cfg);
   auto regs = cfg.get_registers_size();
   std::unordered_map<cfg::BlockId, boost::dynamic_bitset<>> liveness;
   for (cfg::Block* b : blocks) {

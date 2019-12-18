@@ -376,10 +376,12 @@ class ControlFlowGraph {
 
   // Return vector of blocks in reverse post order (RPO). If there is a path
   // from Block A to Block B, then A appears before B in this vector.
-  std::vector<Block*> blocks_reverse_post() const;
-  // Return vector of blocks in post order (PO). If there is a path
-  // from Block A to Block B, then A appears after B in this vector.
-  std::vector<Block*> blocks_post() const;
+  //
+  //
+  // DEPRECATED: Use graph::postorder_sort instead, which is faster. The only
+  // functional difference is that the new version doesn't include unreachable
+  // blocks in the sorted output.
+  std::vector<Block*> blocks_reverse_post_deprecated() const;
 
   Block* create_block();
 

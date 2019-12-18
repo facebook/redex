@@ -14,6 +14,7 @@
 #include <utility>
 
 #include "DexUtil.h"
+#include "GraphUtil.h"
 #include "Transform.h"
 #include "WeakTopologicalOrdering.h"
 
@@ -1647,7 +1648,7 @@ std::vector<Block*> ControlFlowGraph::blocks() const {
 }
 
 // Uses a standard depth-first search ith a side table of already-visited nodes.
-std::vector<Block*> ControlFlowGraph::blocks_post_helper(bool reverse) const {
+std::vector<Block*> ControlFlowGraph::blocks_reverse_post_deprecated() const {
   std::stack<Block*> stack;
   for (const auto& entry : m_blocks) {
     // include unreachable blocks too
@@ -1680,18 +1681,8 @@ std::vector<Block*> ControlFlowGraph::blocks_post_helper(bool reverse) const {
       stack.pop();
     }
   }
-  if (reverse) {
-    std::reverse(postorder.begin(), postorder.end());
-  }
+  std::reverse(postorder.begin(), postorder.end());
   return postorder;
-}
-
-std::vector<Block*> ControlFlowGraph::blocks_reverse_post() const {
-  return blocks_post_helper(true);
-}
-
-std::vector<Block*> ControlFlowGraph::blocks_post() const {
-  return blocks_post_helper(false);
 }
 
 ControlFlowGraph::~ControlFlowGraph() {
@@ -2317,7 +2308,7 @@ std::unordered_map<Block*, DominatorInfo>
 ControlFlowGraph::immediate_dominators() const {
   // Get postorder of blocks and create map of block to postorder number.
   std::unordered_map<Block*, DominatorInfo> postorder_dominator;
-  const auto& postorder_blocks = blocks_post();
+  auto postorder_blocks = graph::postorder_sort<cfg::GraphInterface>(*this);
   for (size_t i = 0; i < postorder_blocks.size(); ++i) {
     postorder_dominator[postorder_blocks[i]].postorder = i;
   }
