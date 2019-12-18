@@ -34,10 +34,11 @@ struct InsertSwitchTest : public RedexTest {
 // Code:    if r == i then A else if r == i+1 then B else if r == i+2 then C; D
 // Result:  switch r {ABC}; D
 TEST_F(InsertSwitchTest, simpleCompactSwitch) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
+      (load-param v1)
+      (load-param v2)
+      (load-param v3)
       (const v4 2)
 
       ; let's have an infinite loop so that the last block has a succ
@@ -76,6 +77,9 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
+      (load-param v1)
+      (load-param v2)
+      (load-param v3)
       (const v4 2)
 
       (:begin)
@@ -108,10 +112,11 @@ TEST_F(InsertSwitchTest, simpleCompactSwitch) {
 // Code:    if r==i A else if r==i+10 B else if r==i+2 C
 // Result:  switch r {ABC}
 TEST_F(InsertSwitchTest, simplifySparseSwitch) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
+      (load-param v1)
+      (load-param v2)
+      (load-param v3)
       (const v4 2)
 
       (:begin)
@@ -149,6 +154,9 @@ TEST_F(InsertSwitchTest, simplifySparseSwitch) {
 
   auto expected_code = assembler::ircode_from_string(R"(
     (
+      (load-param v1)
+      (load-param v2)
+      (load-param v3)
       (const v4 2)
 
       (:begin)
@@ -181,10 +189,10 @@ TEST_F(InsertSwitchTest, simplifySparseSwitch) {
 // Code:    if r==i A else if r==i+10 B
 // Result:  no change
 TEST_F(InsertSwitchTest, skipSmallChain) {
-  using namespace dex_asm;
-
   auto code = assembler::ircode_from_string(R"(
     (
+      (load-param v1)
+      (load-param v2)
       (const v3 2)
 
       (:begin)
