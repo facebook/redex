@@ -858,6 +858,10 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
   }
 }
 
+/*
+ * Test case of get_num_outer_preds issue that
+ * https://github.com/facebookincubator/SPARTA/pull/7 fixed.
+ */
 TEST(WeakPartialOrderingTest, handlingOuterPreds) {
   {
     SimpleGraph2 g;
@@ -947,6 +951,24 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
         EXPECT_EQ(wpo.get_node(wpo.get_head_of_exit(v)), wpo.get_node(v))
             << wpo.get_node(v);
         wto << ')';
+
+        if (wpo.get_node(v) == "46") {
+          // get_num_outer_preds of exit node "46" should return two pair,
+          // one is head node "46" and number 2, another pair is node "74"
+          // and number 1.
+          int count_preds = 0;
+          for (auto pred_pair : wpo.get_num_outer_preds(v)) {
+            if (pred_pair.second == 1) {
+              ++count_preds;
+              EXPECT_EQ(wpo.get_node(pred_pair.first), "74");
+            }
+            if (pred_pair.second == 2) {
+              ++count_preds;
+              EXPECT_EQ(wpo.get_node(pred_pair.first), "46");
+            }
+          }
+          EXPECT_EQ(count_preds, 2);
+        }
       } else {
         if (!first) {
           wto << ' ';
