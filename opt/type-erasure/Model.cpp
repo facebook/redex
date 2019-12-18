@@ -1089,7 +1089,7 @@ void Model::collect_methods() {
         merger.dmethods.emplace_back(method);
       }
       if (!has_ctor) {
-        TRACE(TERA, 1, "[TERA] No ctor found for mergeable %s", SHOW(type));
+        TRACE(TERA, 2, "[TERA] No ctor found for mergeable %s", SHOW(type));
       }
 
       const auto& virt_scopes = m_type_system.get_class_scopes().get(type);
