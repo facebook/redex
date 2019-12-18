@@ -88,7 +88,7 @@ ConstantUses::ConstantUses(const cfg::ControlFlowGraph& cfg, DexMethod* method)
               m_constant_uses[def].emplace_back(insn, src_index);
               auto opcode = insn->opcode();
               if (src_index == 0 &&
-                  (opcode == OPCODE_APUT || opcode == OPCODE_APUT_WIDE)) {
+                  (opcode == OPCODE_APUT || OPCODE_APUT_WIDE)) {
                 need_type_inference = true;
               }
             }
