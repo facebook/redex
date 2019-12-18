@@ -25,19 +25,19 @@ struct RefStats {
   size_t num_invoke_super_removed = 0;
 
   void print(PassManager* mgr) {
-    TRACE(RESO, 1, "[ref reso] method ref resolved %d\n", num_mref_resolved);
-    TRACE(RESO, 1, "[ref reso] field ref resolved %d\n", num_fref_resolved);
+    TRACE(RESO, 1, "[ref reso] method ref resolved %d", num_mref_resolved);
+    TRACE(RESO, 1, "[ref reso] field ref resolved %d", num_fref_resolved);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-virtual refined %d\n",
+          "[ref reso] invoke-virtual refined %d",
           num_invoke_virtual_refined);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-interface replaced %d\n",
+          "[ref reso] invoke-interface replaced %d",
           num_invoke_interface_replaced);
     TRACE(RESO,
           1,
-          "[ref reso] invoke-super removed %d\n",
+          "[ref reso] invoke-super removed %d",
           num_invoke_super_removed);
     mgr->incr_metric("method_refs_resolved", num_mref_resolved);
     mgr->incr_metric("field_refs_resolved", num_fref_resolved);
@@ -80,7 +80,7 @@ void resolve_method_refs(IRInstruction* insn,
   if (cls && cls->is_external() && !is_public(cls)) {
     return;
   }
-  TRACE(RESO, 2, "Resolving %s\n\t=>%s\n", SHOW(mref), SHOW(mdef));
+  TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(mref), SHOW(mdef));
   insn->set_method(mdef);
   stats.num_mref_resolved++;
   if (cls != nullptr && !is_public(cls)) {
@@ -97,7 +97,7 @@ void resolve_field_refs(IRInstruction* insn,
   }
   const auto real_ref = resolve_field(fref, field_search);
   if (real_ref && !real_ref->is_external() && real_ref != fref) {
-    TRACE(RESO, 2, "Resolving %s\n\t=>%s\n", SHOW(fref), SHOW(real_ref));
+    TRACE(RESO, 2, "Resolving %s\n\t=>%s", SHOW(fref), SHOW(real_ref));
     insn->set_field(real_ref);
     stats.num_fref_resolved++;
     auto cls = type_class(real_ref->get_class());

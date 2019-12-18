@@ -384,7 +384,7 @@ bool RedexContext::class_already_loaded(DexClass* cls) {
     const auto& cur_loc = cls->get_location();
     if (prev_loc == cur_loc || dup_classes::is_known_dup(cls)) {
       // benign duplicates
-      TRACE(MAIN, 1, "Warning: found a duplicate class: %s\n", SHOW(cls));
+      TRACE(MAIN, 1, "Warning: found a duplicate class: %s", SHOW(cls));
     } else {
       const std::string& class_name = show(cls);
       TRACE(MAIN,
