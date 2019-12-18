@@ -14,6 +14,7 @@
 #include "ControlFlow.h"
 #include "Debug.h"
 #include "DexUtil.h"
+#include "Dominators.h"
 #include "IRCode.h"
 #include "Show.h"
 #include "Transform.h"
@@ -847,7 +848,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
 
   auto& cfg = code->cfg();
   cfg::Block* start_block = cfg.entry_block();
-  auto postorder_dominator = cfg.immediate_dominators();
+  auto doms = dominators::SimpleFastDominators<cfg::GraphInterface>(cfg);
   for (auto param : params) {
     auto block_uses = find_first_uses(param, start_block);
     // Since this function only gets called for param regs that need to be
@@ -859,7 +860,7 @@ std::unordered_map<reg_t, IRList::iterator> Allocator::find_param_splits(
       // insert a load at its end.
       cfg::Block* idom = block_uses[0];
       for (size_t index = 1; index < block_uses.size(); ++index) {
-        idom = cfg.idom_intersect(postorder_dominator, idom, block_uses[index]);
+        idom = doms.intersect(idom, block_uses[index]);
       }
       TRACE(REG, 5, "Inserting param load of v%u in B%u", param, idom->id());
       // We need to check insn before end of block to make sure we didn't
