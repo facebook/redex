@@ -69,11 +69,15 @@ MergerToField get_type_tag_fields(
     bool generate_type_tags) {
   MergerToField merger_to_type_tag_field;
   for (const auto model_root_type : model_root_types) {
+    DexField* field = nullptr;
+    if (input_has_type_tag) {
+      field =
+          scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, model_root_type);
+      set_public(field);
+    }
     for (auto merger : mergers) {
-      DexField* field = nullptr;
       if (input_has_type_tag) {
-        field =
-            scan_type_tag_field(EXTERNAL_TYPE_TAG_FIELD_NAME, model_root_type);
+        always_assert(field);
         merger_to_type_tag_field[merger] = field;
       } else if (generate_type_tags) {
         field = scan_type_tag_field(INTERNAL_TYPE_TAG_FIELD_NAME, merger->type);
@@ -573,6 +577,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
   for (auto merger : to_materialize) {
     auto type = const_cast<DexType*>(merger->type);
     for (auto mergeable : merger->mergeables) {
+      loosen_access_modifier(type_class(mergeable));
       merged_type_names[mergeable->get_name()->str()] = type->get_name()->str();
       mergeable_to_merger[mergeable] = type;
     }
