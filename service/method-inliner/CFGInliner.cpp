@@ -110,14 +110,18 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   move_return_reg(&callee, return_reg);
   TRACE(CFG, 3, "callee after remap %s", SHOW(callee));
 
-  plugin.update_after_reg_remap(caller, &callee);
+  bool need_reg_size_recompute = plugin.update_after_reg_remap(caller, &callee);
 
   // redirect to callee
   const std::vector<Block*> callee_blocks = callee.blocks();
   steal_contents(caller, inline_site.block(), &callee);
   connect_cfgs(caller, inline_site.block(), callee_blocks, callee_entry_block,
                callee_return_blocks, split_on_inline);
-  caller->recompute_registers_size();
+  if (need_reg_size_recompute) {
+    caller->recompute_registers_size();
+  } else {
+    caller->set_registers_size(caller_regs_size + callee_regs_size);
+  }
 
   TRACE(CFG, 3, "caller after connect %s", SHOW(*caller));
 
@@ -331,8 +335,8 @@ void CFGInliner::split_on_callee_throws(ControlFlowGraph* callee) {
 }
 
 /*
- * Add a throw edge from each may_throw to each catch that is thrown to from
- * the callsite
+ * Add a throw edge from each may_throw to each catch that is thrown to from the
+ * callsite
  *   * If there are already throw edges in callee, add this edge to the end
  *     of the list
  *
@@ -344,11 +348,12 @@ void CFGInliner::add_callee_throws_to_caller(
     const std::vector<Edge*>& caller_catches) {
 
   // There are two requirements about the catch indices here:
-  //   1) New throw edges must be added to the end of a callee's existing
-  //   throw chain. This is ensured by using the max index of the already
-  //   existing throws 2) New throw edges must go to the callsite's catch
-  //   blocks in the same order that the existing catch chain does. This is
-  //   ensured by sorting caller_catches by their throw indices.
+  //   1) New throw edges must be added to the end of a callee's existing throw
+  //   chain. This is ensured by using the max index of the already existing
+  //   throws
+  //   2) New throw edges must go to the callsite's catch blocks in the same
+  //   order that the existing catch chain does. This is ensured by sorting
+  //   caller_catches by their throw indices.
 
   // Add throw edges from callee_block to all the caller catches
   const auto& add_throw_edges =
@@ -364,11 +369,10 @@ void CFGInliner::add_callee_throws_to_caller(
   for (Block* callee_block : callee_blocks) {
     const auto& existing_throws = callee_block->get_outgoing_throws_in_order();
     if (existing_throws.empty()) {
-      // Blocks that end in a throwing instruction but don't have outgoing
-      // throw instructions yet.
+      // Blocks that end in a throwing instruction but don't have outgoing throw
+      // instructions yet.
       //   * Instructions that can throw that were not in a try region before
-      //   being inlined. These may have been created by
-      //   split_on_callee_throws.
+      //   being inlined. These may have been created by split_on_callee_throws.
       //   * OPCODE_THROW instructions without any catch blocks before being
       //   inlined.
       IRList::iterator last = callee_block->get_last_insn();
@@ -380,8 +384,8 @@ void CFGInliner::add_callee_throws_to_caller(
       }
     } else if (existing_throws.back()->m_throw_info->catch_type != nullptr) {
       // Blocks that throw already
-      //   * Instructions that can throw that were already in a try region
-      //   with catch blocks
+      //   * Instructions that can throw that were already in a try region with
+      //   catch blocks
       //   * But don't add to the end of a throw list if there's a catchall
       //   already
       add_throw_edges(callee_block,
@@ -440,9 +444,9 @@ DexPosition* CFGInliner::get_dbg_pos(const cfg::InstructionIterator& callsite) {
   }
 
   // TODO: Positions should be connected to instructions rather than preceding
-  // them in the flow of instructions. Having the positions depend on the
-  // order of instructions is a very linear way to encode the information
-  // which isn't very amenable to the editable CFG.
+  // them in the flow of instructions. Having the positions depend on the order
+  // of instructions is a very linear way to encode the information which isn't
+  // very amenable to the editable CFG.
 
   // while there's a single predecessor, follow that edge
   const auto& cfg = callsite.cfg();

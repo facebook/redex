@@ -136,13 +136,17 @@ class CFGInlinerPlugin {
   // Will be called before any of caller or callee's registers have changed
   // Override this method to modify either after the copy is made and before
   // any registers are adjusted.
-  virtual void update_before_reg_remap(ControlFlowGraph* caller,
-                                       ControlFlowGraph* callee) {}
+  virtual void update_before_reg_remap(ControlFlowGraph*, ControlFlowGraph*) {}
   // Will be called after both register remap and load parameter to move have
   // changed callee, but before callee's blocks are merged into caller.
   // Override to modify either before the merge occurs.
-  virtual void update_after_reg_remap(ControlFlowGraph* caller,
-                                      ControlFlowGraph* callee) {}
+  //
+  // Returns `true` if registers have been added and a full recompute
+  // of registers is needed. Recomputing registers requires a full traversal of
+  // the CFG, which is expensive. Avoid if possible.
+  virtual bool update_after_reg_remap(ControlFlowGraph*, ControlFlowGraph*) {
+    return false;
+  }
 
   // Optionally provide a set of registers for the sources of callee's
   // parameters If none is returned, inliner extracts registers from the sources

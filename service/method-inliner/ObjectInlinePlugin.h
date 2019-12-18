@@ -38,7 +38,7 @@ class ObjectInlinePlugin : public CFGInlinerPlugin {
 
   void update_before_reg_remap(ControlFlowGraph* caller,
                                ControlFlowGraph* callee) override;
-  void update_after_reg_remap(ControlFlowGraph* caller,
+  bool update_after_reg_remap(ControlFlowGraph* caller,
                               ControlFlowGraph* callee) override;
   const boost::optional<std::reference_wrapper<std::vector<reg_t>>>
   inline_srcs() override;

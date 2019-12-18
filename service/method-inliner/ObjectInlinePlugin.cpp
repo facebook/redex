@@ -107,7 +107,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
  * Store unaccessed fields in m_unaccessed_field_sets for others to
  * handle
  */
-void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
+bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
                                                 ControlFlowGraph* callee) {
 
   // After remap, this reg has been moved and
@@ -187,4 +187,6 @@ void ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph* caller,
       m_unaccessed_field_sets.insert(fs);
     }
   }
+  // Registers were changed. A full recompute is needed.
+  return true;
 }
