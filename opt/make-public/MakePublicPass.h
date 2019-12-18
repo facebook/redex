@@ -10,9 +10,9 @@
 #include "Pass.h"
 
 /**
- * This pass makes makes everything that's package-private public,
- * RenameClassesPassV2 depends on this transformation to work correctly. We
- * extract this logic out to do the same without renaming.
+ * This pass currently makes things public except direct methods.
+ * If we want to make direct methods public, we should make them static first
+ * and change the related opcodes from invoke-direct to invoke-static.
  */
 class MakePublicPass : public Pass {
  public:

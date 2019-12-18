@@ -127,6 +127,7 @@ libredex_la_SOURCES = \
 	libredex/ControlFlow.cpp \
 	libredex/Creators.cpp \
 	libredex/Debug.cpp \
+	libredex/DexAccess.cpp \
 	libredex/DexAnnotation.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
