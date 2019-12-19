@@ -132,15 +132,11 @@ class RemoveClasses {
 
       BuilderAnalysis analysis(m_classes, m_excluded_types, method);
 
-      // Keep a copy of the code, in order to restore it, if needed.
-      auto original_code = std::make_unique<IRCode>(*method->get_code());
-
-      bool are_builders_to_remove = inline_builders_and_check_method(
-          method, original_code.get(), &analysis);
+      bool are_builders_to_remove =
+          inline_builders_and_check_method(method, &analysis);
       m_num_usages += analysis.get_total_num_usages();
 
       if (!are_builders_to_remove) {
-        method->set_code(std::move(original_code));
         return;
       }
 
@@ -182,18 +178,23 @@ class RemoveClasses {
    * method.
    */
   bool inline_builders_and_check_method(DexMethod* method,
-                                        IRCode* original_code,
                                         BuilderAnalysis* analysis) {
     bool builders_to_remove = false;
 
     // To be used for local excludes. We cleanup m_excluded_types at the end.
     std::unordered_set<const DexType*> local_excludes;
 
+    std::unique_ptr<IRCode> original_code = nullptr;
+
     do {
       analysis->run_analysis();
       if (!analysis->has_usage()) {
         TRACE(BLD_PATTERN, 6, "No builder to remove from %s", SHOW(method));
         break;
+      }
+      if (original_code == nullptr) {
+        // Keep a copy of the code, in order to restore it, if needed.
+        original_code = std::make_unique<IRCode>(*method->get_code());
       }
 
       // First bind virtual callsites to the current implementation, if any,
@@ -279,6 +280,9 @@ class RemoveClasses {
 
     for (const DexType* type : local_excludes) {
       m_excluded_types.erase(type);
+    }
+    if (!builders_to_remove && original_code != nullptr) {
+      method->set_code(std::move(original_code));
     }
     return builders_to_remove;
   }
