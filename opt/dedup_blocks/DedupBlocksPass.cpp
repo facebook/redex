@@ -814,16 +814,11 @@ class DedupBlocksImpl {
         }
         auto def = *defs.elements().begin();
         auto def_opcode = def->opcode();
-        always_assert(opcode::is_move_result_any(def_opcode) ||
+        always_assert(is_new_instance(def_opcode) ||
                       opcode::is_load_param(def_opcode));
-        // Log def instruction if...
-        // - it is not an earlier instruction from the current block, or
-        // - (it is from the current block and) it's the leading move (pseudo)
-        //   result instruction in the current block, which implies that the
-        //   instruction actually creating this result is from another block
-        if (!block_insns.count(def) ||
-            (opcode::is_move_result_any(def_opcode) &&
-             block->get_first_insn()->insn == def)) {
+        // Log def instruction if it is not an earlier instruction from the
+        // current block.
+        if (!block_insns.count(def)) {
           res.push_back(def);
         } else {
           TRACE(DEDUP_BLOCKS, 5, "[dedup blocks] defined in block");
