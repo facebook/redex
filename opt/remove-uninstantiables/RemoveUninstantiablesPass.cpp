@@ -132,6 +132,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     }
   }
 
+  m.flush();
   return stats;
 }
 

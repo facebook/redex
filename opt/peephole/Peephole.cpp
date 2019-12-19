@@ -1784,6 +1784,8 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
           mutator.add_change(cfg::CFGMutation::Insert::Replacing, it, {});
         }
       }
+
+      mutator.flush();
     }
 
     code->clear_cfg();
