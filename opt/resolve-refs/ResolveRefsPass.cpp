@@ -7,6 +7,8 @@
 
 #include "ResolveRefsPass.h"
 
+#include <boost/algorithm/string.hpp>
+
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"
@@ -67,12 +69,6 @@ void resolve_method_refs(IRInstruction* insn,
     return;
   }
   if (!resolve_to_external && mdef->is_external()) {
-    return;
-  }
-  // If the existing ref is external already we don't touch it. We are likely
-  // going to screw up delicated logic in Android support library or Android x
-  // that handles different OS versions.
-  if (method::references_external(mref)) {
     return;
   }
   auto cls = type_class(mdef->get_class());
@@ -194,23 +190,74 @@ void try_desuperify(const DexMethod* caller,
   stats.num_invoke_super_removed++;
 }
 
-boost::optional<DexMethod*> get_inferred_method_def(
-    const mog::Graph& override_graph,
-    DexMethod* callee,
-    const DexType* inferred_type) {
-  auto overrides = mog::get_overriding_methods(override_graph, callee);
-  for (auto* m : overrides) {
-    // TODO: include non-exact match.
-    if (m->get_class() == inferred_type && m->is_def()) {
-      return boost::optional<DexMethod*>(const_cast<DexMethod*>(m));
+bool is_excluded_external(const std::vector<std::string>& excluded_externals,
+                          std::string name) {
+  for (auto& excluded : excluded_externals) {
+    if (boost::starts_with(name, excluded)) {
+      return true;
     }
   }
+
+  return false;
+}
+
+/*
+ * Support library and Android X are designed to handle incompatibility and
+ * disrepancies between different Android versions. It's riskier to change the
+ * external method references in these libraries based on the one version of
+ * external API we are building against.
+ *
+ * For instance, Landroid/os/BaseBundle; is added API level 21 as the base type
+ * of Landroid/os/Bundle;. If we are building against an external library newer
+ * than 21, we might rebind a method reference on Landroid/os/Bundle; to
+ * Landroid/os/BaseBundle;. The output apk will not work on 4.x devices. In
+ * theory, issues like this can be covered by the exclusion list. But in
+ * practice is hard to enumerate the entire list of external classes that should
+ * be excluded. Given that the support libraries are dedicated to handle this
+ * kind discrepancies. It's safer to not touch it.
+ */
+bool is_support_lib_type(const DexType* type) {
+  std::string android_x_prefix = "Landroidx/";
+  std::string android_support_prefix = "Landroid/support/";
+  const std::string& name = type->str();
+  return boost::starts_with(name, android_x_prefix) ||
+         boost::starts_with(name, android_support_prefix);
+}
+
+boost::optional<DexMethod*> get_inferred_method_def(
+    const std::vector<std::string>& excluded_externals,
+    const bool is_support_lib,
+    DexMethod* callee,
+    const DexType* inferred_type) {
+
+  auto inferred_cls = type_class(inferred_type);
+  if (!inferred_cls || is_interface(inferred_cls)) {
+    return boost::none;
+  }
+  auto resolved = resolve_method(inferred_cls, callee->get_name(),
+                                 callee->get_proto(), MethodSearch::Virtual);
+  // 1. If the resolved target is excluded, we bail.
+  if (!resolved || !resolved->is_def() ||
+      is_excluded_external(excluded_externals, show(resolved))) {
+    return boost::none;
+  }
+
+  // 2. If it's an exact match, we take the resolved target.
+  // 3. If not an exact match and if it's not referenced in support libraries,
+  // we take the resolved target.
+  if (resolved->get_class() == inferred_type || !is_support_lib) {
+    TRACE(RESO, 2, "Inferred to %s for type %s\n", SHOW(resolved),
+          SHOW(inferred_type));
+    return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
+  }
+
   return boost::none;
 }
 
-RefStats refine_virtual_callsites(const mog::Graph& override_graph,
-                                  DexMethod* method,
-                                  bool desuperify) {
+RefStats refine_virtual_callsites(
+    const std::vector<std::string>& excluded_externals,
+    DexMethod* method,
+    bool desuperify) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -222,6 +269,7 @@ RefStats refine_virtual_callsites(const mog::Graph& override_graph,
   type_inference::TypeInference inference(cfg);
   inference.run(method);
   auto& envs = inference.get_type_environments();
+  auto is_support_lib = is_support_lib_type(method->get_class());
 
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;
@@ -245,7 +293,8 @@ RefStats refine_virtual_callsites(const mog::Graph& override_graph,
 
     if (dex_type && callee->get_class() != *dex_type) {
       // replace it with the actual implementation if any provided.
-      auto m_def = get_inferred_method_def(override_graph, callee, *dex_type);
+      auto m_def = get_inferred_method_def(excluded_externals, is_support_lib,
+                                           callee, *dex_type);
       if (!m_def) {
         continue;
       }
@@ -268,13 +317,11 @@ void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* conf */,
                                PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  // TODO: insert external classes?
-  auto override_graph = mog::build_graph(scope);
   RefStats stats =
       walk::parallel::methods<RefStats>(scope, [&](DexMethod* method) {
         auto stats = resolve_refs(method, m_resolve_to_external);
-        stats +=
-            refine_virtual_callsites(*override_graph, method, m_desuperify);
+        stats += refine_virtual_callsites(m_excluded_externals, method,
+                                          m_desuperify);
         return stats;
       });
   stats.print(&mgr);

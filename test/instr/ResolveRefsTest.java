@@ -10,6 +10,7 @@ package com.facebook.redextest;
 import static org.fest.assertions.api.Assertions.assertThat;
 
 import com.facebook.annotations.OkToExtend;
+import com.facebook.redex.test.instr.KeepForRedexTest;
 import org.junit.Test;
 
 @OkToExtend
@@ -36,8 +37,10 @@ class SubThree extends SubTwo {
   static Base getInstance() { return new SubThree(); }
 }
 
+@KeepForRedexTest
 public class ResolveRefsTest {
 
+  @KeepForRedexTest
   @Test
   public void testSimpleInvokeVirtual() {
     Base b = new Base();
@@ -50,6 +53,7 @@ public class ResolveRefsTest {
     assertThat(s3.foo()).isEqualTo("SubThree");
   }
 
+  @KeepForRedexTest
   @Test
   public void testFactoryBaseInvokeVirtual() {
     Base b = Base.getInstance();
@@ -62,6 +66,7 @@ public class ResolveRefsTest {
     assertThat(b.foo()).isEqualTo("SubThree");
   }
 
+  @KeepForRedexTest
   @Test
   public void testFactoryCastInvokeVirtual() {
     SubOne s1 = (SubOne) SubOne.getInstance();

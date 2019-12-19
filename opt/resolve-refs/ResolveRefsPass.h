@@ -35,9 +35,12 @@ class ResolveRefsPass : public Pass {
          "Allowing resolving method ref to an external one");
     bind("desuperify", true, m_desuperify,
          "Convert invoke-super calls to invoke-virtual where possible");
+    bind("excluded_externals", {}, m_excluded_externals,
+         "Externals types/prefixes excluded from reference resolution");
   }
 
  private:
   bool m_resolve_to_external;
   bool m_desuperify;
+  std::vector<std::string> m_excluded_externals;
 };
