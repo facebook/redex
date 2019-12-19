@@ -9,6 +9,14 @@
 
 namespace cfg {
 
+void CFGMutation::clear() {
+  for (auto& change : m_changes) {
+    change.second.dispose();
+  }
+
+  m_changes.clear();
+}
+
 void CFGMutation::flush() {
   auto ii = InstructionIterable(m_cfg);
   for (auto it = ii.begin(); !it.is_end();) {
@@ -29,7 +37,7 @@ void CFGMutation::flush() {
   // The effect of one change can erase the anchor for another.  The changes
   // left behind are the ones whose anchors were removed. They will never be
   // applied so clear them.
-  m_changes.clear();
+  clear();
 }
 
 void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
@@ -84,6 +92,25 @@ void CFGMutation::ChangeSet::apply(ControlFlowGraph& cfg,
     // move iterator to the end of the last iterator's block to avoid missing
     // any instructions.
     it = b->to_cfg_instruction_iterator(b->end());
+  }
+}
+
+namespace {
+
+void dispose_insns(std::vector<IRInstruction*>& insns) {
+  for (auto* insn : insns) {
+    delete insn;
+  }
+  insns.clear();
+}
+
+} // namespace
+
+void CFGMutation::ChangeSet::dispose() {
+  dispose_insns(m_insert_before);
+  dispose_insns(m_insert_after);
+  if (m_replace) {
+    dispose_insns(*m_replace);
   }
 }
 

@@ -376,4 +376,29 @@ TEST_F(CFGMutationTest, InsertBeforeInstanceOf) {
       ))");
 }
 
+TEST_F(CFGMutationTest, Clear) {
+  EXPECT_MUTATION(
+      [](ControlFlowGraph& cfg) {
+        CFGMutation m(cfg);
+        m.add_change(CFGMutation::Insert::After,
+                     nth_insn(cfg, 0),
+                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.clear();
+        m.add_change(CFGMutation::Insert::After,
+                     nth_insn(cfg, 1),
+                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+      },
+      /* ACTUAL */ R"((
+        (const v0 0)
+        (const v2 2)
+        (return-void)
+      ))",
+      /* EXPECTED */ R"((
+        (const v0 0)
+        (const v2 2)
+        (const v3 3)
+        (return-void)
+      ))");
+}
+
 } // namespace
