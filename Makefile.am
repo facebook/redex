@@ -150,6 +150,7 @@ libredex_la_SOURCES = \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
 	libredex/GlobalConfig.cpp \
+	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \
 	libredex/ImmutableSubcomponentAnalyzer.cpp \
 	libredex/InitCollisionFinder.cpp \

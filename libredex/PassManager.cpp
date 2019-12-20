@@ -20,6 +20,7 @@
 #include "DexLoader.h"
 #include "DexOutput.h"
 #include "DexUtil.h"
+#include "GraphVisualizer.h"
 #include "IRCode.h"
 #include "IRTypeChecker.h"
 #include "InstructionLowering.h"
@@ -35,6 +36,8 @@
 namespace {
 
 const std::string PASS_ORDER_KEY = "pass_order";
+
+constexpr const char* CFG_DUMP_BASE_NAME = "redex-cfg-dumps.cfg";
 
 std::string get_apk_dir(const Json::Value& config) {
   auto apkdir = config["apk_dir"].asString();
@@ -279,6 +282,15 @@ void PassManager::run_passes(DexStoresVector& stores,
         boost::optional<hashing::DexHash>(this->run_hasher(nullptr, scope));
   }
 
+  // CFG visualizer infra. Dump all given classes.
+  visualizer::Classes class_cfgs(
+      conf.metafile(CFG_DUMP_BASE_NAME),
+      conf.get_json_config().get("write_cfg_each_pass", false));
+  class_cfgs.add_all(
+      conf.get_json_config().get("dump_cfg_classes", std::string("")));
+  constexpr visualizer::Options VISUALIZER_PASS_OPTIONS = (visualizer::Options)(
+      visualizer::Options::SKIP_NO_CHANGE | visualizer::Options::FORCE_CFG);
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
@@ -300,6 +312,8 @@ void PassManager::run_passes(DexStoresVector& stores,
       // IRCode form
       always_assert_log(!code.editable_cfg_built(), "%s has a cfg!", SHOW(m));
     });
+
+    class_cfgs.add_pass(pass->name(), VISUALIZER_PASS_OPTIONS);
 
     bool run_hasher = run_hasher_after_each_pass;
     bool run_type_checker = run_type_checker_after_each_pass ||
@@ -333,6 +347,9 @@ void PassManager::run_passes(DexStoresVector& stores,
       redex_assert(ignore_final_verifier_result);
     }
   }
+
+  class_cfgs.add_pass("After all passes");
+  class_cfgs.write();
 
   if (!conf.get_printseeds().empty()) {
     Timer t("Writing outgoing classes to file " + conf.get_printseeds() +
