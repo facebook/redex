@@ -78,6 +78,9 @@ void construct_level_order_traversal(
 
 class Loop {
  public:
+  using iterator = std::vector<cfg::Block*>::iterator;
+  using reverse_iterator = std::vector<cfg::Block*>::reverse_iterator;
+  using subloop_iterator = std::unordered_set<Loop*>::iterator;
   Loop(const std::vector<cfg::Block*>& blocks,
        const std::unordered_set<Loop*>& subloops,
        cfg::Block* loop_preheader)
@@ -86,7 +89,6 @@ class Loop {
         m_subloops(subloops),
         m_loop_preheader(loop_preheader),
         m_parent_loop(nullptr) {}
-
   Loop(const std::vector<cfg::Block*>& blocks,
        const std::unordered_set<Loop*>& subloops,
        cfg::Block* loop_preheader,
@@ -96,24 +98,22 @@ class Loop {
         m_subloops(subloops),
         m_loop_preheader(loop_preheader),
         m_parent_loop(parent_loop) {}
-
   cfg::Block* get_header();
-
   cfg::Block* get_preheader();
-
   Loop* get_parent_loop();
-
   void set_preheader(cfg::Block* ph);
-
   bool contains(Loop* l) const;
-
   bool contains(cfg::Block* block) const;
-
   int get_loop_depth() const;
-
-  void get_exit_blocks(std::unordered_set<cfg::Block*>& result);
-
+  std::unordered_set<cfg::Block*> get_exit_blocks() const;
+  std::vector<cfg::Block*> get_blocks() const;
   void update_parent_loop_fields();
+  iterator begin();
+  iterator end();
+  reverse_iterator rbegin();
+  reverse_iterator rend();
+  subloop_iterator subloop_begin();
+  subloop_iterator subloop_end();
 
  private:
   Loop(const Loop&) = delete;
@@ -127,12 +127,20 @@ class Loop {
 
 class LoopInfo {
  public:
+  using iterator = std::vector<Loop*>::iterator;
+  using reverse_iterator = std::vector<Loop*>::reverse_iterator;
   explicit LoopInfo(cfg::ControlFlowGraph& cfg);
+  Loop* get_loop_for(cfg::Block* block);
   size_t num_loops();
+  iterator begin();
+  iterator end();
+  reverse_iterator rbegin();
+  reverse_iterator rend();
 
  private:
   std::vector<Loop*> m_loops;
   std::unordered_map<cfg::Block*, int> m_loop_depth;
+  std::unordered_map<cfg::Block*, Loop*> m_block_location;
 };
 
 } // namespace loop_impl

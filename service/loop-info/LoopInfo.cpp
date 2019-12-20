@@ -56,10 +56,11 @@ int Loop::get_loop_depth() const {
 }
 
 /**
- * Populates the unordered set result with blocks that are not in the Loop but
- * that have at least one predecessor inside the loop.
+ * Returns the blocks that are not in the Loop but that have at least one
+ * predecessor inside the loop.
  */
-void Loop::get_exit_blocks(std::unordered_set<cfg::Block*>& result) {
+std::unordered_set<cfg::Block*> Loop::get_exit_blocks() const {
+  std::unordered_set<cfg::Block*> result;
   for (auto block : m_blocks) {
     for (auto edge : block->succs()) {
       if (!contains(edge->target())) {
@@ -67,7 +68,13 @@ void Loop::get_exit_blocks(std::unordered_set<cfg::Block*>& result) {
       }
     }
   }
+  return result;
 }
+
+/**
+ * Returns the blocks that are in the loop
+ */
+std::vector<cfg::Block*> Loop::get_blocks() const { return m_blocks; }
 
 /**
  * Recursively updates the parent_loop fields for this loop and all subloops
@@ -78,6 +85,18 @@ void Loop::update_parent_loop_fields() {
     sub->update_parent_loop_fields();
   }
 }
+
+Loop::iterator Loop::begin() { return m_blocks.begin(); }
+
+Loop::iterator Loop::end() { return m_blocks.end(); }
+
+Loop::reverse_iterator Loop::rbegin() { return m_blocks.rbegin(); }
+
+Loop::reverse_iterator Loop::rend() { return m_blocks.rend(); }
+
+Loop::subloop_iterator Loop::subloop_begin() { return m_subloops.begin(); }
+
+Loop::subloop_iterator Loop::subloop_end() { return m_subloops.end(); }
 
 /*
  * Traverses the control flow graph and constructs loop objects for all loops
@@ -147,7 +166,7 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
 
     always_assert(blocks_in_loop.size() != 0);
     auto loop_header = blocks_in_loop.front();
-    auto& loop_header_preds = loop_header->preds();
+    auto loop_header_preds = loop_header->preds();
     auto loop_preheader = cfg.create_block();
 
     for (auto edge : loop_header_preds) {
@@ -165,6 +184,10 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
 
     loop_heads.emplace(loop_header, loop);
     m_loops.emplace_back(loop);
+
+    for (auto block : blocks_in_loop) {
+      m_block_location.emplace(block, loop);
+    }
   }
 
   // we traversed level_order backwards, so reverse loops to make it level
@@ -181,4 +204,21 @@ LoopInfo::LoopInfo(cfg::ControlFlowGraph& cfg) {
   }
 }
 
+/**
+ * Returns the innermost loop that contains block, or nullptr if block is not
+ * contained in a loop
+ */
+Loop* LoopInfo::get_loop_for(cfg::Block* block) {
+  auto it = m_block_location.find(block);
+  return it != m_block_location.end() ? it->second : nullptr;
+}
+
 size_t LoopInfo::num_loops() { return m_loops.size(); }
+
+LoopInfo::iterator LoopInfo::begin() { return m_loops.begin(); }
+
+LoopInfo::iterator LoopInfo::end() { return m_loops.end(); }
+
+LoopInfo::reverse_iterator LoopInfo::rbegin() { return m_loops.rbegin(); }
+
+LoopInfo::reverse_iterator LoopInfo::rend() { return m_loops.rend(); }
