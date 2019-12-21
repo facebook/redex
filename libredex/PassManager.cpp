@@ -46,36 +46,13 @@ std::string get_apk_dir(const Json::Value& config) {
 }
 
 // TODO(fengliu): Kill the `validate_access` flag.
-boost::optional<std::string> run_verifier(const Scope& scope,
-                                          bool verify_moves,
-                                          bool check_no_overwrite_this,
-                                          bool validate_access) {
+void run_verifier(const Scope& scope,
+                  bool verify_moves,
+                  bool check_no_overwrite_this,
+                  bool validate_access) {
   TRACE(PM, 1, "Running IRTypeChecker...");
   Timer t("IRTypeChecker");
-
-  static constexpr size_t RES_LIMIT = 5;
-  struct Res {
-    size_t entries;
-    std::string data;
-
-    Res& operator+=(const Res& rhs) {
-      size_t old_entries = entries;
-      entries += rhs.entries;
-      if (rhs.entries) {
-        if (old_entries) {
-          if (old_entries < RES_LIMIT) {
-            data += "\n";
-            data += rhs.data;
-          }
-        } else {
-          data = rhs.data;
-        }
-      }
-      return *this;
-    }
-  };
-
-  Res res = walk::parallel::methods<Res>(scope, [=](DexMethod* dex_method) {
+  walk::parallel::methods(scope, [=](DexMethod* dex_method) {
     IRTypeChecker checker(dex_method, validate_access);
     if (verify_moves) {
       checker.verify_moves();
@@ -84,23 +61,14 @@ boost::optional<std::string> run_verifier(const Scope& scope,
       checker.check_no_overwrite_this();
     }
     checker.run();
-    if (checker.good()) {
-      return Res{0, ""};
+    if (checker.fail()) {
+      std::string msg = checker.what();
+      fprintf(stderr, "ABORT! Inconsistency found in Dex code for %s.\n %s\n",
+              SHOW(dex_method), msg.c_str());
+      fprintf(stderr, "Code:\n%s\n", SHOW(dex_method->get_code()));
+      exit(EXIT_FAILURE);
     }
-
-    std::ostringstream oss;
-    oss << "Inconsistency found in Dex code for " << SHOW(dex_method) << ": "
-        << checker.what() << std::endl
-        << "Code: " << SHOW(dex_method->get_code());
-    return Res{1, oss.str()};
   });
-  if (!res.entries) {
-    return boost::none;
-  }
-  if (res.entries > RES_LIMIT) {
-    res.data += "\n" + std::to_string(res.entries) + " bad methods found!";
-  }
-  return res.data;
 }
 
 } // namespace
@@ -199,9 +167,7 @@ hashing::DexHash PassManager::run_hasher(const char* pass_name,
   return hash;
 }
 
-void PassManager::run_passes(DexStoresVector& stores,
-                             ConfigFiles& conf,
-                             bool ignore_final_verifier_result) {
+void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   DexStoreClassesIterator it(stores);
   Scope scope = build_class_scope(it);
 
@@ -336,17 +302,10 @@ void PassManager::run_passes(DexStoresVector& stores,
     m_current_pass_info = nullptr;
   }
 
+  // Always run the type checker before generating the optimized dex code.
   scope = build_class_scope(it);
-  {
-    // Run the type checker before generating the optimized dex code.
-    auto res = run_verifier(scope, verify_moves,
-                            get_redex_options().no_overwrite_this(),
-                            /* validate_access */ true);
-    if (res) {
-      std::cerr << *res << std::endl;
-      redex_assert(ignore_final_verifier_result);
-    }
-  }
+  run_verifier(scope, verify_moves, get_redex_options().no_overwrite_this(),
+               /* validate_access */ true);
 
   class_cfgs.add_pass("After all passes");
   class_cfgs.write();

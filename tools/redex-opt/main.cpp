@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
   const auto& passes = PassRegistry::get().get_passes();
   PassManager manager(passes, config_data, args.redex_options);
   manager.set_testing_mode();
-  manager.run_passes(stores, conf, /* ignore_final_verifier_result= */ true);
+  manager.run_passes(stores, conf);
 
   redex::write_all_intermediate(conf, args.output_ir_dir, args.redex_options,
                                 stores, entry_data);

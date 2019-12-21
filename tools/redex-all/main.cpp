@@ -483,9 +483,9 @@ Arguments parse_args(int argc, char* argv[]) {
     if (passes_list.size() > (size_t)idx) {
       passes_list.resize(idx);
     }
-    if (idx == 0 || passes_list[idx - 1].asString() != "RegAllocPass") {
-      passes_list.append("RegAllocPass");
-    }
+    // Append the two passes when `--stop-pass` is enabled.
+    passes_list.append("MakePublicPass");
+    passes_list.append("RegAllocPass");
     if (args.out_dir.empty() || !redex::dir_is_writable(args.out_dir)) {
       std::cerr << "output-ir is empty or not writable" << std::endl;
       exit(EXIT_FAILURE);
@@ -1179,7 +1179,7 @@ int main(int argc, char* argv[]) {
                         args.redex_options);
     {
       Timer t("Running optimization passes");
-      manager.run_passes(stores, conf, !!args.stop_pass_idx);
+      manager.run_passes(stores, conf);
     }
 
     if (args.stop_pass_idx == boost::none) {

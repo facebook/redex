@@ -42,9 +42,7 @@ class PassManager {
     boost::optional<hashing::DexHash> hash;
   };
 
-  void run_passes(DexStoresVector&,
-                  ConfigFiles&,
-                  bool ignore_final_verifier_result = false);
+  void run_passes(DexStoresVector&, ConfigFiles&);
   void incr_metric(const std::string& key, int value);
   void set_metric(const std::string& key, int value);
   int get_metric(const std::string& key);
