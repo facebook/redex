@@ -342,11 +342,39 @@ class IRInstruction final {
     if (has_field()) {
       lfield.push_back(m_field);
     }
+    if (has_callsite()) {
+      m_callsite->gather_fields(lfield);
+    }
+    if (has_methodhandle()) {
+      m_methodhandle->gather_fields(lfield);
+    }
   }
 
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const {
     if (has_method()) {
       lmethod.push_back(m_method);
+    }
+    if (has_callsite()) {
+      m_callsite->gather_methods(lmethod);
+    }
+    if (has_methodhandle()) {
+      m_methodhandle->gather_methods(lmethod);
+    }
+  }
+
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+    if (has_callsite()) {
+      lcallsite.push_back(m_callsite);
+    }
+  }
+
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const {
+    if (has_methodhandle()) {
+      lmethodhandle.push_back(m_methodhandle);
+    }
+    if (has_callsite()) {
+      m_callsite->gather_methodhandles(lmethodhandle);
     }
   }
 

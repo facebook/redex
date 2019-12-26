@@ -13,6 +13,8 @@ class NoopPostLowering : public PostLowering {
                          std::vector<DexType*>&,
                          std::vector<DexFieldRef*>&,
                          std::vector<DexMethodRef*>&,
+                         std::vector<DexCallSite*>&,
+                         std::vector<DexMethodHandle*>&,
                          std::vector<DexTypeList*>&,
                          const std::vector<DexClass*>&) const override {}
   void run(const DexClasses& dex) override {}

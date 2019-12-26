@@ -21,6 +21,8 @@ class PostLowering {
                                  std::vector<DexType*>&,
                                  std::vector<DexFieldRef*>&,
                                  std::vector<DexMethodRef*>&,
+                                 std::vector<DexCallSite*>&,
+                                 std::vector<DexMethodHandle*>&,
                                  std::vector<DexTypeList*>&,
                                  const std::vector<DexClass*>&) const = 0;
   virtual void run(const DexClasses& dex) = 0;

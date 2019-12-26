@@ -12,6 +12,11 @@
 #include "DexOutput.h"
 #include "DexUtil.h"
 
+void DexEncodedValueMethodType::gather_strings(
+    std::vector<DexString*>& lstring) const {
+  m_proto->gather_strings(lstring);
+}
+
 void DexEncodedValueString::gather_strings(
     std::vector<DexString*>& lstring) const {
   lstring.push_back(m_string);
@@ -29,6 +34,21 @@ void DexEncodedValueField::gather_fields(
 void DexEncodedValueMethod::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
   lmethod.push_back(m_method);
+}
+
+void DexEncodedValueMethodHandle::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
+  m_methodhandle->gather_methods(lmethod);
+}
+
+void DexEncodedValueMethodHandle::gather_fields(
+    std::vector<DexFieldRef*>& lfield) const {
+  m_methodhandle->gather_fields(lfield);
+}
+
+void DexEncodedValueMethodHandle::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  lmethodhandle.push_back(m_methodhandle);
 }
 
 void DexEncodedValueArray::gather_strings(
@@ -281,14 +301,14 @@ void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
 }
 
 void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
-  always_assert_log(false,
-                    "DexEncodedValueMethodType::encode not supported yet!");
+  uint32_t pidx = dodx->protoidx(m_proto);
+  type_encoder(encdata, m_evtype, pidx);
 }
 
 void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
                                          uint8_t*& encdata) {
-  always_assert_log(false,
-                    "DexEncodedValueMethodHandle::encode not supported yet!");
+  uint32_t mhidx = dodx->methodhandleidx(m_methodhandle);
+  type_encoder(encdata, m_evtype, mhidx);
 }
 
 void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {

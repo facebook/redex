@@ -1157,6 +1157,22 @@ void ControlFlowGraph::gather_methods(
   }
 }
 
+void ControlFlowGraph::gather_callsites(
+    std::vector<DexCallSite*>& callsites) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_callsites(callsites);
+  }
+}
+
+void ControlFlowGraph::gather_methodhandles(
+    std::vector<DexMethodHandle*>& methodhandles) const {
+  always_assert(editable());
+  for (const auto& entry : m_blocks) {
+    entry.second->m_entries.gather_methodhandles(methodhandles);
+  }
+}
+
 cfg::InstructionIterator ControlFlowGraph::primary_instruction_of_move_result(
     const cfg::InstructionIterator& it) {
   auto move_result_insn = it->insn;

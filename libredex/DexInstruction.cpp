@@ -702,13 +702,57 @@ void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
 uint16_t DexOpcodeCallSite::size() const { return 3; }
 
 void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  always_assert_log(false, "DexOpcodeCallSite::encode not yet implemented");
+  encode_opcode(dodx, insns);
+  uint16_t idx = dodx->callsiteidx(m_callsite);
+  *insns++ = idx;
+  encode_args(insns);
+}
+
+void DexOpcodeCallSite::gather_callsites(
+    std::vector<DexCallSite*>& lcallsite) const {
+  lcallsite.emplace_back(m_callsite);
+}
+
+void DexOpcodeCallSite::gather_strings(std::vector<DexString*>& lstring) const {
+  m_callsite->gather_strings(lstring);
+}
+
+void DexOpcodeCallSite::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  m_callsite->gather_methodhandles(lmethodhandle);
+}
+
+void DexOpcodeCallSite::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
+  m_callsite->gather_methods(lmethod);
+}
+
+void DexOpcodeCallSite::gather_fields(std::vector<DexFieldRef*>& lfield) const {
+  m_callsite->gather_fields(lfield);
 }
 
 uint16_t DexOpcodeMethodHandle::size() const { return 3; }
 
 void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) {
-  always_assert_log(false, "DexOpcodeMethodHandle::encode not yet implemented");
+  encode_opcode(dodx, insns);
+  uint16_t idx = dodx->methodhandleidx(m_methodhandle);
+  *insns++ = idx;
+  encode_args(insns);
+}
+
+void DexOpcodeMethodHandle::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
+  m_methodhandle->gather_methods(lmethod);
+}
+
+void DexOpcodeMethodHandle::gather_fields(
+    std::vector<DexFieldRef*>& lfield) const {
+  m_methodhandle->gather_fields(lfield);
+}
+
+void DexOpcodeMethodHandle::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  lmethodhandle.push_back(m_methodhandle);
 }
 
 uint16_t DexOpcodeData::size() const { return m_data_count + 1; }

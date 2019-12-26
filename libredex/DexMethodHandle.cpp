@@ -38,6 +38,19 @@ DexFieldRef* DexMethodHandle::fieldref() const {
   return m_fieldref;
 }
 
+void DexMethodHandle::gather_methods(
+    std::vector<DexMethodRef*>& lmethod) const {
+  if (isInvokeType(m_type)) {
+    lmethod.push_back(m_methodref);
+  }
+}
+
+void DexMethodHandle::gather_fields(std::vector<DexFieldRef*>& lfield) const {
+  if (!isInvokeType(m_type)) {
+    lfield.push_back(m_fieldref);
+  }
+}
+
 bool DexMethodHandle::isInvokeType(MethodHandleType type) {
   switch (type) {
   case METHOD_HANDLE_TYPE_INVOKE_STATIC:

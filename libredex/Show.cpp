@@ -1079,7 +1079,7 @@ std::ostream& operator<<(std::ostream& o, const DexCallSite& cs) {
   o << "[" << &cs << "] ";
   o << "CALLSITE: METHODHANDLE=" << show(cs.method_handle());
   o << " METHODNAME=" << show(cs.method_name());
-  o << " METHODTYPE=" << show(cs.method_proto());
+  o << " METHODTYPE=" << show(cs.method_type());
   return o;
 }
 

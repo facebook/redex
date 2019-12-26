@@ -164,6 +164,8 @@ struct MethodItemEntry {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   opcode::Branchingness branchingness() const;
 };
@@ -357,6 +359,8 @@ class IRList {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   IRList::iterator erase(IRList::iterator it) { return m_list.erase(it); }
   IRList::iterator erase_and_dispose(IRList::iterator it) {

@@ -97,8 +97,10 @@ void MethodItemEntry::gather_methods(
     std::vector<DexMethodRef*>& lmethod) const {
   switch (type) {
   case MFLOW_TRY:
-    break;
   case MFLOW_CATCH:
+  case MFLOW_POSITION:
+  case MFLOW_FALLTHROUGH:
+  case MFLOW_TARGET:
     break;
   case MFLOW_OPCODE:
     insn->gather_methods(lmethod);
@@ -106,10 +108,50 @@ void MethodItemEntry::gather_methods(
   case MFLOW_DEX_OPCODE:
     dex_insn->gather_methods(lmethod);
     break;
+  case MFLOW_DEBUG:
+    dbgop->gather_methods(lmethod);
+    break;
+  }
+}
+
+void MethodItemEntry::gather_callsites(
+    std::vector<DexCallSite*>& lcallsite) const {
+  switch (type) {
+  case MFLOW_TRY:
+  case MFLOW_CATCH:
+  case MFLOW_POSITION:
+  case MFLOW_FALLTHROUGH:
+  case MFLOW_TARGET:
+    break;
+  case MFLOW_OPCODE:
+    insn->gather_callsites(lcallsite);
+    break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_callsites(lcallsite);
+    break;
+  case MFLOW_DEBUG:
+    dbgop->gather_callsites(lcallsite);
+    break;
+  }
+}
+
+void MethodItemEntry::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  switch (type) {
+  case MFLOW_TRY:
+    break;
+  case MFLOW_CATCH:
+    break;
+  case MFLOW_OPCODE:
+    insn->gather_methodhandles(lmethodhandle);
+    break;
+  case MFLOW_DEX_OPCODE:
+    dex_insn->gather_methodhandles(lmethodhandle);
+    break;
   case MFLOW_TARGET:
     break;
   case MFLOW_DEBUG:
-    dbgop->gather_methods(lmethod);
+    dbgop->gather_methodhandles(lmethodhandle);
     break;
   case MFLOW_POSITION:
     break;
@@ -557,6 +599,19 @@ void IRList::gather_fields(std::vector<DexFieldRef*>& lfield) const {
 void IRList::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
   for (auto& mie : m_list) {
     mie.gather_methods(lmethod);
+  }
+}
+
+void IRList::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  for (auto& mie : m_list) {
+    mie.gather_callsites(lcallsite);
+  }
+}
+
+void IRList::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  for (auto& mie : m_list) {
+    mie.gather_methodhandles(lmethodhandle);
   }
 }
 

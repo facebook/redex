@@ -20,6 +20,30 @@
 #include "RedexContext.h"
 #include "Walkers.h"
 
+using CallSitePredicate = const std::function<bool(DexCallSite*)>&;
+int ensureCallSite(DexIdx* idx, CallSitePredicate predicate) {
+  for (int i = 0; i < idx->get_callsite_ids_size(); ++i) {
+    auto cs = idx->get_callsiteidx(i);
+    if (predicate(cs)) return i;
+  }
+  return -1;
+}
+
+using MethodHandlePredicate = const std::function<bool(DexMethodHandle*)>&;
+int ensureMethodHandle(DexIdx* idx, MethodHandlePredicate predicate) {
+  for (int i = 0; i < idx->get_methodhandle_ids_size(); ++i) {
+    auto mh = idx->get_methodhandleidx(i);
+    if (predicate(mh)) return i;
+  }
+  return -1;
+}
+
+static const char* DEX038_CLASS_NAME = "Lcom/facebook/redextest/Dex038;";
+static const char* SUPPLIER_CLASS_NAME = "Ljava/util/function/Supplier;";
+static const char* STRING_CLASS_NAME = "Ljava/lang/String;";
+static const char* VOID_RETURN_OBJECT_PROTO = "()Ljava/lang/Object;";
+static const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
+
 void testReadDex(const char* dexfile) {
   DexLoader dl(dexfile);
   dex_stats_t stats{0};
@@ -29,12 +53,6 @@ void testReadDex(const char* dexfile) {
   EXPECT_EQ(idx->get_callsite_ids_size(), 7);
   EXPECT_EQ(idx->get_methodhandle_ids_size(), 8);
 
-  const char* DEX038_CLASS_NAME = "Lcom/facebook/redextest/Dex038;";
-  const char* SUPPLIER_CLASS_NAME = "Ljava/util/function/Supplier;";
-  const char* STRING_CLASS_NAME = "Ljava/lang/String;";
-  const char* VOID_RETURN_OBJECT_PROTO = "()Ljava/lang/Object;";
-  const char* VOID_RETURN_STRING_PROTO = "()Ljava/lang/String;";
-
   // clang-format off
 
   // !!! N.B. !!! right now these tests assume a reliable ordering of 
@@ -42,236 +60,243 @@ void testReadDex(const char* dexfile) {
 
   // verify lambda metafactory method handle shared by every callsite
 
-  {
-    // Method Handle #4:
-    //   type        : invoke-static
-    //   target      : Ljava/lang/invoke/LambdaMetafactory; metafactory
-    //   target_type : (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;
-    auto metafactoryMethodHandle = idx->get_methodhandleidx(4);
-    EXPECT_EQ(metafactoryMethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC);
-    EXPECT_STREQ(metafactoryMethodHandle->methodref()->get_name()->c_str(), "metafactory");
-    EXPECT_STREQ(metafactoryMethodHandle->methodref()->get_class()->get_name()->c_str(), "Ljava/lang/invoke/LambdaMetafactory;");
-    EXPECT_STREQ(SHOW(metafactoryMethodHandle->methodref()->get_proto()), "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;");
-  }
+  //   type        : invoke-static
+  //   target      : Ljava/lang/invoke/LambdaMetafactory; metafactory
+  //   target_type : (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;
+  int metafactoryMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return 
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "metafactory") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), "Ljava/lang/invoke/LambdaMetafactory;") &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;");
+  });
+  EXPECT_NE(metafactoryMethodHandleIdx, -1);
+  DexMethodHandle* metafactoryMethodHandle = idx->get_methodhandleidx(metafactoryMethodHandleIdx);
 
   // verify all other method handles
 
-  {
-    // Method Handle #0:
-    //   type        : invoke-static
-    //   target      : Lcom/facebook/redextest/Dex038; lambda$run$0
-    //   target_type : ()Ljava/lang/String; 
-    auto invokeStatic$lambda$run$0MethodHandle = idx->get_methodhandleidx(0);
-    EXPECT_EQ(invokeStatic$lambda$run$0MethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC);
-    EXPECT_STREQ(invokeStatic$lambda$run$0MethodHandle->methodref()->get_name()->c_str(), "lambda$run$0");
-    EXPECT_STREQ(invokeStatic$lambda$run$0MethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$0MethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-static
+  //   target      : Lcom/facebook/redextest/Dex038; lambda$run$0
+  //   target_type : ()Ljava/lang/String; 
+  int lambdaRun0MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return 
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$0") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(lambdaRun0MethodHandleIdx, -1);
+  DexMethodHandle* lambdaRun0MethodHandle = idx->get_methodhandleidx(lambdaRun0MethodHandleIdx);
 
-  {
-    // Method Handle #1:
-    //   type        : invoke-static
-    //   target      : Lcom/facebook/redextest/Dex038; lambda$run$1
-    //   target_type : ()Ljava/lang/String;    
-    auto invokeStatic$lambda$run$1MethodHandle = idx->get_methodhandleidx(1);
-    EXPECT_EQ(invokeStatic$lambda$run$1MethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC);
-    EXPECT_STREQ(invokeStatic$lambda$run$1MethodHandle->methodref()->get_name()->c_str(), "lambda$run$1");
-    EXPECT_STREQ(invokeStatic$lambda$run$1MethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$1MethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-static
+  //   target      : Lcom/facebook/redextest/Dex038; lambda$run$1
+  //   target_type : ()Ljava/lang/String;    
+  int lambdaRun1MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$1") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(lambdaRun1MethodHandleIdx, -1);
+  DexMethodHandle* lambdaRun1MethodHandle = idx->get_methodhandleidx(lambdaRun1MethodHandleIdx);
 
-  {
-    // Method Handle #2:
-    //   type        : invoke-static
-    //   target      : Lcom/facebook/redextest/Dex038; lambda$run$2
-    //   target_type : ()Ljava/lang/String;
-    auto invokeStatic$lambda$run$2MethodHandle = idx->get_methodhandleidx(2);
-    EXPECT_EQ(invokeStatic$lambda$run$2MethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC);
-    EXPECT_STREQ(invokeStatic$lambda$run$2MethodHandle->methodref()->get_name()->c_str(), "lambda$run$2");
-    EXPECT_STREQ(invokeStatic$lambda$run$2MethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$2MethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-static
+  //   target      : Lcom/facebook/redextest/Dex038; lambda$run$2
+  //   target_type : ()Ljava/lang/String;
+  int lambdaRun2MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$2") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(lambdaRun2MethodHandleIdx, -1);
+  DexMethodHandle* lambdaRun2MethodHandle = idx->get_methodhandleidx(lambdaRun2MethodHandleIdx);
 
-  {
-    // Method Handle #3:
-    //   type        : invoke-static
-    //   target      : Lcom/facebook/redextest/Dex038; staticStringSupplier
-    //   target_type : ()Ljava/lang/String;    
-    auto invokeStaticStringSupplierMethodHandle = idx->get_methodhandleidx(3);
-    EXPECT_EQ(invokeStaticStringSupplierMethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_STATIC);
-    EXPECT_STREQ(invokeStaticStringSupplierMethodHandle->methodref()->get_name()->c_str(), "staticStringSupplier");
-    EXPECT_STREQ(invokeStaticStringSupplierMethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStaticStringSupplierMethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-static
+  //   target      : Lcom/facebook/redextest/Dex038; staticStringSupplier
+  //   target_type : ()Ljava/lang/String;    
+  int staticStringSupplierMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "staticStringSupplier") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(staticStringSupplierMethodHandleIdx, -1);
+  DexMethodHandle* staticStringSupplierMethodHandle = idx->get_methodhandleidx(staticStringSupplierMethodHandleIdx);
 
-  {
-    // Method Handle #5:
-    //   type        : invoke-instance
-    //   target      : Lcom/facebook/redextest/Dex038; instanceStringSupplier
-    //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;
-    auto invokeInstanceStringSupplierMethodHandle = idx->get_methodhandleidx(5);
-    EXPECT_EQ(invokeInstanceStringSupplierMethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_INSTANCE);
-    EXPECT_STREQ(invokeInstanceStringSupplierMethodHandle->methodref()->get_name()->c_str(), "instanceStringSupplier");
-    EXPECT_STREQ(invokeInstanceStringSupplierMethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeInstanceStringSupplierMethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-instance
+  //   target      : Lcom/facebook/redextest/Dex038; instanceStringSupplier
+  //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;
+  int instanceStringSupplierMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_INSTANCE &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "instanceStringSupplier") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(instanceStringSupplierMethodHandleIdx, -1);
+  DexMethodHandle* instanceStringSupplierMethodHandle = idx->get_methodhandleidx(instanceStringSupplierMethodHandleIdx);
 
-  {
-    // Method Handle #6:
-    //   type        : invoke-constructor
-    //   target      : Ljava/lang/String; <init>
-    //   target_type : (Ljava/lang/String;)V    
-    auto invokeConstructorMethodHandle = idx->get_methodhandleidx(6);
-    EXPECT_EQ(invokeConstructorMethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR);
-    EXPECT_STREQ(invokeConstructorMethodHandle->methodref()->get_name()->c_str(), "<init>");
-    EXPECT_STREQ(invokeConstructorMethodHandle->methodref()->get_class()->get_name()->c_str(), STRING_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeConstructorMethodHandle->methodref()->get_proto()), "()V");
-  }
+  //   type        : invoke-constructor
+  //   target      : Ljava/lang/String; <init>
+  //   target_type : (Ljava/lang/String;)V    
+  int constructorMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "<init>") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), STRING_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), "()V");
+  });
+  EXPECT_NE(constructorMethodHandleIdx, -1);
+  DexMethodHandle* constructorMethodHandle = idx->get_methodhandleidx(constructorMethodHandleIdx);
 
-  {
-    // Method Handle #7:
-    //   type        : invoke-direct
-    //   target      : Lcom/facebook/redextest/Dex038; privateInstanceStringSupplier
-    //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;  
-    auto invokeDirectMethodHandle = idx->get_methodhandleidx(7);
-    EXPECT_EQ(invokeDirectMethodHandle->type(), METHOD_HANDLE_TYPE_INVOKE_DIRECT);
-    EXPECT_STREQ(invokeDirectMethodHandle->methodref()->get_name()->c_str(), "privateInstanceStringSupplier");
-    EXPECT_STREQ(invokeDirectMethodHandle->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeDirectMethodHandle->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
-  }
+  //   type        : invoke-direct
+  //   target      : Lcom/facebook/redextest/Dex038; privateInstanceStringSupplier
+  //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;  
+  int directMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
+    return
+      mh->type() == METHOD_HANDLE_TYPE_INVOKE_DIRECT &&
+      !strcmp(mh->methodref()->get_name()->c_str(), "privateInstanceStringSupplier") &&
+      !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
+      !strcmp(SHOW(mh->methodref()->get_proto()), VOID_RETURN_STRING_PROTO);
+  });
+  EXPECT_NE(directMethodHandleIdx, -1);
+  DexMethodHandle* directMethodHandle = idx->get_methodhandleidx(directMethodHandleIdx);
+  
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : (Lcom/facebook/redextest/Dex038;)Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == instanceStringSupplierMethodHandle &&
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #0 // offset 2166
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : (Lcom/facebook/redextest/Dex038;)Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 5 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
-    auto invokeInstanceStringSupplierCallsite = idx->get_callsiteidx(0);
-    EXPECT_EQ(invokeInstanceStringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeInstanceStringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeInstanceStringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeInstanceStringSupplierCallsite->method_proto()->get_args()), DEX038_CLASS_NAME);
-    EXPECT_EQ(invokeInstanceStringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeInstanceStringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeInstanceStringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(5)); 
-    EXPECT_STREQ(SHOW(invokeInstanceStringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #1 // offset 2179
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : (Lcom/facebook/redextest/Dex038;)Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == directMethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #1 // offset 2179
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : (Lcom/facebook/redextest/Dex038;)Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 7 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)
-    auto invokeDirectStringSupplierCallsite = idx->get_callsiteidx(1);
-    EXPECT_EQ(invokeDirectStringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeDirectStringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeDirectStringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeDirectStringSupplierCallsite->method_proto()->get_args()), DEX038_CLASS_NAME);
-    EXPECT_EQ(invokeDirectStringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeDirectStringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeDirectStringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(7)); 
-    EXPECT_STREQ(SHOW(invokeDirectStringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #2 // offset 2192
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), "") &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == constructorMethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #2 // offset 2192
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 6 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)
-    auto invokeConstructorStringSupplierCallsite = idx->get_callsiteidx(2);
-    EXPECT_EQ(invokeConstructorStringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeConstructorStringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeConstructorStringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeConstructorStringSupplierCallsite->method_proto()->get_args()), "");
-    EXPECT_EQ(invokeConstructorStringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeConstructorStringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeConstructorStringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(6)); 
-    EXPECT_STREQ(SHOW(invokeConstructorStringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #3 // offset 2205
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), "") &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == staticStringSupplierMethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #3 // offset 2205
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 3 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)
-    auto invokeStaticStringSupplierCallsite = idx->get_callsiteidx(3);
-    EXPECT_EQ(invokeStaticStringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeStaticStringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeStaticStringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStaticStringSupplierCallsite->method_proto()->get_args()), "");
-    EXPECT_EQ(invokeStaticStringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeStaticStringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeStaticStringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(3)); 
-    EXPECT_STREQ(SHOW(invokeStaticStringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #4 // offset 2218
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), "") &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun0MethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #4 // offset 2218
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 0 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
-    auto invokeStatic$lambda$run$0StringSupplierCallsite = idx->get_callsiteidx(4);
-    EXPECT_EQ(invokeStatic$lambda$run$0StringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeStatic$lambda$run$0StringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeStatic$lambda$run$0StringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$0StringSupplierCallsite->method_proto()->get_args()), "");
-    EXPECT_EQ(invokeStatic$lambda$run$0StringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$0StringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeStatic$lambda$run$0StringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(0)); 
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$0StringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #5 // offset 2231
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), "") &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun1MethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
-  {
-    // Call Site #5 // offset 2231
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 1 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)
-    auto invokeStatic$lambda$run$1StringSupplierCallsite = idx->get_callsiteidx(5);
-    EXPECT_EQ(invokeStatic$lambda$run$1StringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeStatic$lambda$run$1StringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeStatic$lambda$run$1StringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$1StringSupplierCallsite->method_proto()->get_args()), "");
-    EXPECT_EQ(invokeStatic$lambda$run$1StringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$1StringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeStatic$lambda$run$1StringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(1)); 
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$1StringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
-
-  {
-    // Call Site #6 // offset 2244
-    //   link_argument[0] : 4 (MethodHandle)
-    //   link_argument[1] : get (String)
-    //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
-    //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
-    //   link_argument[4] : 2 (MethodHandle)
-    //   link_argument[5] : ()Ljava/lang/String; (MethodType)
-    auto invokeStatic$lambda$run$2StringSupplierCallsite = idx->get_callsiteidx(6);
-    EXPECT_EQ(invokeStatic$lambda$run$2StringSupplierCallsite->method_handle(), idx->get_methodhandleidx(4));
-    EXPECT_STREQ(invokeStatic$lambda$run$2StringSupplierCallsite->method_name()->c_str(), "get");
-    EXPECT_STREQ(invokeStatic$lambda$run$2StringSupplierCallsite->method_proto()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$2StringSupplierCallsite->method_proto()->get_args()), "");
-    EXPECT_EQ(invokeStatic$lambda$run$2StringSupplierCallsite->args().size(), 3);
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$2StringSupplierCallsite->args()[0]), VOID_RETURN_OBJECT_PROTO);
-    EXPECT_EQ(((DexEncodedValueMethodHandle*)invokeStatic$lambda$run$2StringSupplierCallsite->args()[1])->methodhandle(), idx->get_methodhandleidx(2)); 
-    EXPECT_STREQ(SHOW(invokeStatic$lambda$run$2StringSupplierCallsite->args()[2]), VOID_RETURN_STRING_PROTO);
-  }
+  // Call Site #6 // offset 2244
+  //   link_argument[0] : N (MethodHandle)
+  //   link_argument[1] : get (String)
+  //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
+  //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
+  //   link_argument[4] : N (MethodHandle)
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
+  EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
+    return
+      cs->method_handle() == metafactoryMethodHandle &&
+      !strcmp(cs->method_name()->c_str(), "get") &&
+      !strcmp(cs->method_type()->get_rtype()->get_name()->c_str(), SUPPLIER_CLASS_NAME) &&
+      !strcmp(SHOW(cs->method_type()->get_args()), "") &&
+      cs->args().size() == 3 &&
+      !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun2MethodHandle && 
+      !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
+  }), -1);
 
   // clang-format on
 }
@@ -283,4 +308,62 @@ TEST(Dex038Test, ReadDex038) {
   EXPECT_NE(nullptr, dexfile);
 
   testReadDex(dexfile);
+}
+
+TEST(Dex038Test, ReadWriteDex038) {
+  g_redex = new RedexContext();
+
+  const char* dexfile = std::getenv("dexfile");
+  EXPECT_NE(nullptr, dexfile);
+
+  DexMetadata dm;
+  dm.set_id("classes");
+  DexStore root_store(dm);
+  root_store.add_classes(load_classes_from_dex(dexfile, true, 38));
+  DexClasses& classes = root_store.get_dexen().back();
+  std::vector<DexStore> stores;
+  stores.emplace_back(std::move(root_store));
+
+  //  DexClasses classes = load_classes_from_dex(dexfile, true, 38);
+  std::cout << "Loaded classes: " << classes.size() << std::endl;
+
+  std::unique_ptr<PositionMapper> pos_mapper(PositionMapper::make(""));
+  std::unordered_map<DexMethod*, uint64_t> method_to_id;
+  std::unordered_map<DexCode*, std::vector<DebugLineItem>> code_debug_lines;
+
+  Json::Value conf_obj = Json::nullValue;
+  char tmpdir_template[] = "dex038_test_XXXXXX";
+  std::string tmpdir = mkdtemp(tmpdir_template);
+  ConfigFiles dummy_cfg(conf_obj, tmpdir);
+  RedexOptions dummy_options;
+
+  std::string metafiles = tmpdir + "/meta";
+  int status = mkdir(metafiles.c_str(), 0755);
+  if (status) {
+    EXPECT_EQ(EEXIST, errno);
+  }
+
+  instruction_lowering::run(stores, true);
+
+  std::string output_dex = tmpdir + "/output.dex";
+  write_classes_to_dex(dummy_options,
+                       output_dex,
+                       &classes,
+                       nullptr,
+                       false,
+                       0,
+                       0,
+                       dummy_cfg,
+                       pos_mapper.get(),
+                       &method_to_id,
+                       &code_debug_lines,
+                       nullptr,
+                       "dex\n038\0");
+
+  delete g_redex;
+  g_redex = new RedexContext();
+
+  testReadDex(output_dex.c_str());
+
+  delete g_redex;
 }

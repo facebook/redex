@@ -239,6 +239,12 @@ class DexOpcodeCallSite : public DexInstruction {
  public:
   uint16_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const override;
+  void gather_strings(std::vector<DexString*>& lstring) const override;
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   DexOpcodeCallSite* clone() const override {
     return new DexOpcodeCallSite(*this);
   }
@@ -261,6 +267,10 @@ class DexOpcodeMethodHandle : public DexInstruction {
  public:
   uint16_t size() const override;
   void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lmethodhandle) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
   DexOpcodeMethodHandle* clone() const override {
     return new DexOpcodeMethodHandle(*this);
   }

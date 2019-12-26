@@ -260,7 +260,10 @@ void DedupStrings::gather_non_load_strings(
   std::vector<DexType*> ltype;
   std::vector<DexFieldRef*> lfield;
   std::vector<DexMethodRef*> lmethod;
-  gather_components(lstring, ltype, lfield, lmethod, classes,
+  std::vector<DexCallSite*> lcallsite;
+  std::vector<DexMethodHandle*> lmethodhandle;
+  gather_components(lstring, ltype, lfield, lmethod, lcallsite, lmethodhandle,
+                    classes,
                     /* exclude_loads */ true);
 
   strings->insert(lstring.begin(), lstring.end());

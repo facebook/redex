@@ -1069,3 +1069,20 @@ void IRCode::gather_methods(std::vector<DexMethodRef*>& lmethod) const {
     m_ir_list->gather_methods(lmethod);
   }
 }
+
+void IRCode::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_callsites(lcallsite);
+  } else {
+    m_ir_list->gather_callsites(lcallsite);
+  }
+}
+
+void IRCode::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  if (editable_cfg_built()) {
+    m_cfg->gather_methodhandles(lmethodhandle);
+  } else {
+    m_ir_list->gather_methodhandles(lmethodhandle);
+  }
+}

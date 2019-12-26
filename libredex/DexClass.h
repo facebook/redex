@@ -1068,6 +1068,8 @@ class DexMethod : public DexMethodRef {
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
   void gather_strings(std::vector<DexString*>& lstring,
                       bool exclude_loads = false) const;
+  void gather_callsites(std::vector<DexCallSite*>& ltype) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   /*
    * DexCode <-> IRCode conversion methods.
@@ -1254,6 +1256,8 @@ class DexClass {
                       bool exclude_loads = false) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   // Whether to optimize for perf, instead of space.
   // This bit is only set by the InterDex pass and not available earlier.
@@ -1410,6 +1414,8 @@ void gather_components(std::vector<DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
+                       std::vector<DexCallSite*>& lcallsite,
+                       std::vector<DexMethodHandle*>& lmethodhandle,
                        const DexClasses& classes,
                        bool exclude_loads = false);
 

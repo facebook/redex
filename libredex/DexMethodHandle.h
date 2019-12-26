@@ -7,9 +7,9 @@
 
 #pragma once
 
+#include "DexDefs.h"
 #include "RedexContext.h"
 
-#include "DexDefs.h"
 #include <string>
 #include <vector>
 
@@ -25,6 +25,9 @@ class DexMethodHandle {
   MethodHandleType type() const { return m_type; }
   DexMethodRef* methodref() const;
   DexFieldRef* fieldref() const;
+
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const;
 
   static bool isInvokeType(MethodHandleType type);
 

@@ -1224,6 +1224,25 @@ DexMethod* DexClass::find_method_from_simple_deobfuscated_name(
   return nullptr;
 }
 
+void DexClass::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  for (auto const& m : m_dmethods) {
+    m->gather_callsites(lcallsite);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_callsites(lcallsite);
+  }
+}
+
+void DexClass::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  for (auto const& m : m_dmethods) {
+    m->gather_methodhandles(lmethodhandle);
+  }
+  for (auto const& m : m_vmethods) {
+    m->gather_methodhandles(lmethodhandle);
+  }
+}
+
 void DexFieldRef::gather_types_shallow(std::vector<DexType*>& ltype) const {
   ltype.push_back(m_spec.cls);
   ltype.push_back(m_spec.type);
@@ -1267,6 +1286,16 @@ void DexMethod::gather_types(std::vector<DexType*>& ltype) const {
   }
 }
 
+void DexMethod::gather_callsites(std::vector<DexCallSite*>& lcallsite) const {
+  // We handle m_spec.cls and proto in the first-layer gather.
+  if (m_code) m_code->gather_callsites(lcallsite);
+}
+
+void DexMethod::gather_methodhandles(
+    std::vector<DexMethodHandle*>& lmethodhandle) const {
+  // We handle m_spec.cls and proto in the first-layer gather.
+  if (m_code) m_code->gather_methodhandles(lmethodhandle);
+}
 void DexMethod::gather_strings(std::vector<DexString*>& lstring,
                                bool exclude_loads) const {
   // We handle m_name and proto in the first-layer gather.
@@ -1410,6 +1439,8 @@ void gather_components(std::vector<DexString*>& lstring,
                        std::vector<DexType*>& ltype,
                        std::vector<DexFieldRef*>& lfield,
                        std::vector<DexMethodRef*>& lmethod,
+                       std::vector<DexCallSite*>& lcallsite,
+                       std::vector<DexMethodHandle*>& lmethodhandle,
                        const DexClasses& classes,
                        bool exclude_loads) {
   // Gather references reachable from each class.
@@ -1418,11 +1449,15 @@ void gather_components(std::vector<DexString*>& lstring,
     cls->gather_types(ltype);
     cls->gather_fields(lfield);
     cls->gather_methods(lmethod);
+    cls->gather_callsites(lcallsite);
+    cls->gather_methodhandles(lmethodhandle);
   }
 
   // Remove duplicates to speed up the later loops.
   sort_unique(lstring);
   sort_unique(ltype);
+  sort_unique(lmethodhandle);
+  sort_unique(lcallsite);
 
   // Gather types and strings needed for field and method refs.
   sort_unique(lmethod);

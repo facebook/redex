@@ -232,6 +232,7 @@ class DexEncodedValueMethodType : public DexEncodedValue {
     m_proto = proto;
   }
 
+  void gather_strings(std::vector<DexString*>& lstring) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   DexProto* proto() const { return m_proto; }
@@ -263,6 +264,12 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
     m_methodhandle = methodhandle;
   }
 
+  void gather_fields(
+      std::vector<DexFieldRef*>& lfield) const override;
+  void gather_methods(
+      std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_methodhandles(
+      std::vector<DexMethodHandle*>& lhandles) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
 
   DexMethodHandle* methodhandle() const { return m_methodhandle; }
@@ -271,6 +278,7 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
   }
   std::string show() const override { return ::show(m_methodhandle); }
   std::string show_deobfuscated() const override {
+    // TODO(T58570881) - fix deobfuscation
     return ::show(m_methodhandle);
   }
   bool operator==(const DexEncodedValue& that) const override {

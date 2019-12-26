@@ -23,11 +23,16 @@
 #include <locator.h>
 using facebook::Locator;
 
+class DexCallSite;
+class DexMethodHandle;
+
 typedef std::unordered_map<DexString*, uint32_t> dexstring_to_idx;
 typedef std::unordered_map<DexType*, uint16_t> dextype_to_idx;
 typedef std::unordered_map<DexProto*, uint32_t> dexproto_to_idx;
 typedef std::unordered_map<DexFieldRef*, uint32_t> dexfield_to_idx;
 typedef std::unordered_map<DexMethodRef*, uint32_t> dexmethod_to_idx;
+typedef std::unordered_map<DexCallSite*, uint32_t> dexcallsite_to_idx;
+typedef std::unordered_map<DexMethodHandle*, uint32_t> dexmethodhandle_to_idx;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
 LocatorIndex make_locator_index(DexStoresVector& stores,
@@ -49,6 +54,8 @@ class DexOutputIdx {
   dexfield_to_idx* m_field;
   dexmethod_to_idx* m_method;
   std::vector<DexTypeList*>* m_typelist;
+  dexcallsite_to_idx* m_callsite;
+  dexmethodhandle_to_idx* m_methodhandle;
   const uint8_t* m_base;
 
  public:
@@ -58,6 +65,8 @@ class DexOutputIdx {
                dexfield_to_idx* field,
                dexmethod_to_idx* method,
                std::vector<DexTypeList*>* typelist,
+               dexcallsite_to_idx* callsite,
+               dexmethodhandle_to_idx* methodhandle,
                const uint8_t* base) {
     m_string = string;
     m_type = type;
@@ -65,6 +74,8 @@ class DexOutputIdx {
     m_field = field;
     m_method = method;
     m_typelist = typelist;
+    m_callsite = callsite;
+    m_methodhandle = methodhandle;
     m_base = base;
   }
 
@@ -75,6 +86,8 @@ class DexOutputIdx {
     delete m_field;
     delete m_method;
     delete m_typelist;
+    delete m_callsite;
+    delete m_methodhandle;
   }
 
   dexstring_to_idx& string_to_idx() const { return *m_string; }
@@ -83,18 +96,28 @@ class DexOutputIdx {
   dexfield_to_idx& field_to_idx() const { return *m_field; }
   dexmethod_to_idx& method_to_idx() const { return *m_method; }
   std::vector<DexTypeList*>& typelist_list() const { return *m_typelist; }
+  dexcallsite_to_idx& callsite_to_idx() const { return *m_callsite; }
+  dexmethodhandle_to_idx& methodhandle_to_idx() const {
+    return *m_methodhandle;
+  }
 
   uint32_t stringidx(DexString* s) const { return m_string->at(s); }
   uint16_t typeidx(DexType* t) const { return m_type->at(t); }
   uint16_t protoidx(DexProto* p) const { return m_proto->at(p); }
   uint32_t fieldidx(DexFieldRef* f) const { return m_field->at(f); }
   uint32_t methodidx(DexMethodRef* m) const { return m_method->at(m); }
+  uint32_t callsiteidx(DexCallSite* c) const { return m_callsite->at(c); }
+  uint32_t methodhandleidx(DexMethodHandle* c) const {
+    return m_methodhandle->at(c);
+  }
 
   size_t stringsize() const { return m_string->size(); }
   size_t typesize() const { return m_type->size(); }
   size_t protosize() const { return m_proto->size(); }
   size_t fieldsize() const { return m_field->size(); }
   size_t methodsize() const { return m_method->size(); }
+  size_t callsitesize() const { return m_callsite->size(); }
+  size_t methodhandlesize() const { return m_methodhandle->size(); }
 
   uint32_t get_offset(uint8_t* ptr) { return (uint32_t)(ptr - m_base); }
 
@@ -125,6 +148,36 @@ typedef bool (*cmp_dproto)(const DexProto*, const DexProto*);
 typedef bool (*cmp_dfield)(const DexFieldRef*, const DexFieldRef*);
 typedef bool (*cmp_dmethod)(const DexMethodRef*, const DexMethodRef*);
 typedef bool (*cmp_dtypelist)(const DexTypeList*, const DexTypeList*);
+typedef bool (*cmp_callsite)(const DexCallSite*, const DexCallSite*);
+typedef bool (*cmp_methodhandle)(const DexMethodHandle*,
+                                 const DexMethodHandle*);
+
+inline bool compare_dexcallsites(const DexCallSite* a, const DexCallSite* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
+  // TODO(T59683693) -- need real ordering
+  return a < b;
+}
+
+inline bool compare_dexmethodhandles(const DexMethodHandle* a,
+                                     const DexMethodHandle* b) {
+  if (a == nullptr) {
+    return b != nullptr;
+  } else if (b == nullptr) {
+    return false;
+  }
+  if (a->type() != b->type()) {
+    return a->type() < b->type();
+  }
+  if (DexMethodHandle::isInvokeType(a->type())) {
+    return compare_dexmethods(a->methodref(), b->methodref());
+  } else {
+    return compare_dexfields(a->fieldref(), b->fieldref());
+  }
+}
 
 /*
  * This API gathers all of the data referred to by a set of DexClasses in
@@ -162,6 +215,8 @@ class GatheredTypes {
   std::vector<DexFieldRef*> m_lfield;
   std::vector<DexMethodRef*> m_lmethod;
   std::vector<DexTypeList*> m_additional_ltypelists;
+  std::vector<DexCallSite*> m_lcallsite;
+  std::vector<DexMethodHandle*> m_lmethodhandle;
   DexClasses* m_classes;
   std::unordered_map<const DexString*, unsigned int> m_cls_load_strings;
   std::unordered_map<const DexString*, unsigned int> m_cls_strings;
@@ -177,6 +232,10 @@ class GatheredTypes {
   dexmethod_to_idx* get_method_index(cmp_dmethod cmp = compare_dexmethods);
   std::vector<DexTypeList*>* get_typelist_list(
       dexproto_to_idx* protos, cmp_dtypelist cmp = compare_dextypelists);
+  dexcallsite_to_idx* get_callsite_index(
+      cmp_callsite cmp = compare_dexcallsites);
+  dexmethodhandle_to_idx* get_methodhandle_index(
+      cmp_methodhandle cmp = compare_dexmethodhandles);
 
   void build_cls_load_map();
   void build_cls_map();
@@ -192,6 +251,8 @@ class GatheredTypes {
   std::vector<DexString*> get_cls_order_dexstring_emitlist();
   std::vector<DexString*> keep_cls_strings_together_emitlist();
   std::vector<DexMethod*> get_dexmethod_emitlist();
+  std::vector<DexMethodHandle*> get_dexmethodhandle_emitlist();
+  std::vector<DexCallSite*> get_dexcallsite_emitlist();
 
   void gather_class(int num);
 
@@ -255,6 +316,7 @@ class DexOutput {
   std::unordered_map<DexCode*, std::vector<DebugLineItem>>* m_code_debug_lines;
   std::vector<std::pair<std::string, uint32_t>> m_method_bytecode_offsets;
   std::unordered_map<DexClass*, uint32_t> m_static_values;
+  std::unordered_map<DexCallSite*, uint32_t> m_call_site_items;
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
@@ -275,6 +337,8 @@ class DexOutput {
   void generate_method_data();
   void generate_class_data();
   void generate_class_data_items();
+  void generate_callsite_data();
+  void generate_methodhandle_data();
 
   // Sort code according to a sequence of sorting modes, ordered by precedence.
   // e.g. passing {SortMode::CLINIT_FIRST, SortMode::CLASS_ORDER} means that

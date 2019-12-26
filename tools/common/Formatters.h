@@ -16,3 +16,5 @@ std::string format_annotation(ddump_data* rd, const uint8_t** _aitem);
 std::string format_annotation_item(ddump_data* rd, const uint8_t** _aitem);
 std::string format_encoded_value(ddump_data* rd, const uint8_t** _aitem);
 std::string format_method(ddump_data* rd, int idx);
+std::string format_callsite(ddump_data* rd, const uint8_t** _aitem);
+std::string format_method_handle_type(MethodHandleType type);

@@ -629,34 +629,52 @@ void dump_clsdata(ddump_data* rd, bool print_headers) {
 void dump_callsites(ddump_data* rd, bool print_headers) {
   auto map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  const dex_callsite_id* callsites = nullptr;
   int count = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
     if (item.type == TYPE_CALL_SITE_ID_ITEM) {
       count = item.size;
+      callsites = reinterpret_cast<dex_callsite_id*>(rd->dexmmap + item.offset);
     }
   }
 
   // TODO(T58569493) - emit full call site info
   if (print_headers) {
     redump("\nCALL SITE TABLE: %d\n", count);
+    for (int i = 0; i < count; ++i) {
+      const uint8_t* ptr =
+          reinterpret_cast<uint8_t*>(rd->dexmmap + callsites[i].callsite_off);
+      redump("[%0x] offset:0x%0x %s\n", i, callsites[i].callsite_off,
+             format_callsite(rd, &ptr).c_str());
+    }
   }
 }
 
 void dump_methodhandles(ddump_data* rd, bool print_headers) {
   auto map = rd->dexmmap + rd->dexh->map_off;
   const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  const dex_methodhandle_id* methodhandles = nullptr;
   int count = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
     const auto& item = map_list->items[i];
     if (item.type == TYPE_METHOD_HANDLE_ITEM) {
       count = item.size;
+      methodhandles =
+          reinterpret_cast<dex_methodhandle_id*>(rd->dexmmap + item.offset);
     }
   }
 
   // TODO(T58569493) - emit full method handle info
   if (print_headers) {
     redump("\nMETHOD HANDLE TABLE: %d\n", count);
+    for (int i = 0; i < count; ++i) {
+      redump("[0x%x] field_or_method_id:0x%x type:%s\n", i,
+             methodhandles[i].field_or_method_id,
+             format_method_handle_type(
+                 (MethodHandleType)methodhandles[i].method_handle_type)
+                 .c_str());
+    }
   }
 }
 

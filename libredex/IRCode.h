@@ -136,6 +136,8 @@ class IRCode {
   void gather_types(std::vector<DexType*>& ltype) const;
   void gather_fields(std::vector<DexFieldRef*>& lfield) const;
   void gather_methods(std::vector<DexMethodRef*>& lmethod) const;
+  void gather_callsites(std::vector<DexCallSite*>& lcallsite) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& lmethodhandle) const;
 
   /* Return the control flow graph of this method as a vector of blocks. */
   cfg::ControlFlowGraph& cfg() { return *m_cfg; }

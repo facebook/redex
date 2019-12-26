@@ -85,6 +85,7 @@ enum MethodHandleType {
  * we do on this has to do with making sure we're working on a non-opt
  * dex.  See link to Dalvik Executable Format above.
  */
+
 PACKED(struct dex_header {
   char magic[8];
   uint32_t checksum;

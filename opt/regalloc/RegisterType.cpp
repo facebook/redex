@@ -290,6 +290,8 @@ RegisterType dest_reg_type(const IRInstruction* insn) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
     always_assert_log(false, "No dest");
     not_reached();
   case OPCODE_CONST_STRING:
@@ -323,7 +325,11 @@ static RegisterType invoke_src_type(const IRInstruction* insn, vreg_t i) {
   auto* method = insn->get_method();
   // non-static invokes have an implicit `this` arg that is not reflected in
   // the method proto.
-  if (insn->opcode() != OPCODE_INVOKE_STATIC) {
+  //
+  // TODO(T59333250): WHAT ABOUT invoke-custom and invoke-polymorphic
+  if (insn->opcode() != OPCODE_INVOKE_CUSTOM &&
+      insn->opcode() != OPCODE_INVOKE_POLYMORPHIC &&
+      insn->opcode() != OPCODE_INVOKE_STATIC) {
     if (i == 0) {
       return RegisterType::OBJECT;
     } else {
@@ -561,6 +567,8 @@ RegisterType src_reg_type(const IRInstruction* insn, vreg_t i) {
   case OPCODE_INVOKE_DIRECT:
   case OPCODE_INVOKE_STATIC:
   case OPCODE_INVOKE_INTERFACE:
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
     return invoke_src_type(insn, i);
   case OPCODE_CONST_STRING:
   case OPCODE_CONST_CLASS:

@@ -178,6 +178,10 @@ enum OpcodeFormat : uint8_t {
   OP(INVOKE_DIRECT_RANGE, 0x76, f3rc, "invoke-direct-range")            \
   OP(INVOKE_STATIC_RANGE, 0x77, f3rc, "invoke-static-range")            \
   OP(INVOKE_INTERFACE_RANGE, 0x78, f3rc, "invoke-interface-range")      \
+  OP(INVOKE_POLYMORPHIC, 0xfa, f45cc, "invoke-polymorphic")             \
+  OP(INVOKE_POLYMORPHIC_RANGE, 0xfb, f4rcc, "invoke-polymorphic-range") \
+  OP(INVOKE_CUSTOM, 0xfc, f35c, "invoke-custom")                        \
+  OP(INVOKE_CUSTOM_RANGE, 0xfd, f3rc, "invoke-custom-range")            \
   OP(NEG_INT, 0x7b, f12x, "neg-int")                                    \
   OP(NOT_INT, 0x7c, f12x, "not-int")                                    \
   OP(NEG_LONG, 0x7d, f12x, "neg-long")                                  \
@@ -281,11 +285,7 @@ enum OpcodeFormat : uint8_t {
   OP(XOR_INT_LIT8, 0xdf, f22b, "xor-int/lit8")                          \
   OP(SHL_INT_LIT8, 0xe0, f22b, "shl-int/lit8")                          \
   OP(SHR_INT_LIT8, 0xe1, f22b, "shr-int/lit8")                          \
-  OP(USHR_INT_LIT8, 0xe2, f22b, "ushr-int/lit8")                        \
-  OP(INVOKE_POLYMORPHIC, 0xfa, f45cc, "invoke-polymorphic")             \
-  OP(INVOKE_POLYMORPHIC_RANGE, 0xfb, f4rcc, "invoke-polymorphic-range") \
-  OP(INVOKE_CUSTOM, 0xfc, f35c, "invoke-custom")                        \
-  OP(INVOKE_CUSTOM_RANGE, 0xfd, f3rc, "invoke-custom-range")
+  OP(USHR_INT_LIT8, 0xe2, f22b, "ushr-int/lit8")
 
 #define QDOPS                                                              \
   OP(RETURN_VOID_NO_BARRIER, 0x73, f10x, "return-void-no-barrier")         \
@@ -550,11 +550,15 @@ enum DexOpcode : uint16_t {
   case DOPCODE_INVOKE_DIRECT:            \
   case DOPCODE_INVOKE_STATIC:            \
   case DOPCODE_INVOKE_INTERFACE:         \
+  case DOPCODE_INVOKE_CUSTOM:            \
+  case DOPCODE_INVOKE_POLYMORPHIC:       \
   case DOPCODE_INVOKE_VIRTUAL_RANGE:     \
   case DOPCODE_INVOKE_SUPER_RANGE:       \
   case DOPCODE_INVOKE_DIRECT_RANGE:      \
   case DOPCODE_INVOKE_STATIC_RANGE:      \
-  case DOPCODE_INVOKE_INTERFACE_RANGE:
+  case DOPCODE_INVOKE_INTERFACE_RANGE:   \
+  case DOPCODE_INVOKE_CUSTOM_RANGE:      \
+  case DOPCODE_INVOKE_POLYMORPHIC_RANGE:
 
 #define SWITCH_FORMAT_QUICK_METHOD_REF \
   case DOPCODE_INVOKE_VIRTUAL_QUICK:   \

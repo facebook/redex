@@ -717,6 +717,8 @@ class ControlFlowGraph {
   void gather_types(std::vector<DexType*>& types) const;
   void gather_fields(std::vector<DexFieldRef*>& fields) const;
   void gather_methods(std::vector<DexMethodRef*>& methods) const;
+  void gather_callsites(std::vector<DexCallSite*>& callsites) const;
+  void gather_methodhandles(std::vector<DexMethodHandle*>& methodhandles) const;
 
   cfg::InstructionIterator primary_instruction_of_move_result(
       const cfg::InstructionIterator& it);
