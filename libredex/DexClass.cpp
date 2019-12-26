@@ -1388,6 +1388,8 @@ void IRInstruction::gather_types(std::vector<DexType*>& ltype) const {
   case opcode::Ref::String:
   case opcode::Ref::Literal:
   case opcode::Ref::Data:
+  case opcode::Ref::CallSite:
+  case opcode::Ref::MethodHandle:
     break;
 
   case opcode::Ref::Type:

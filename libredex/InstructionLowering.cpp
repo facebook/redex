@@ -286,6 +286,10 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
     return new DexOpcodeField(op, insn->get_field());
   case opcode::Ref::Method:
     return new DexOpcodeMethod(op, insn->get_method());
+  case opcode::Ref::CallSite:
+    return new DexOpcodeCallSite(op, insn->get_callsite());
+  case opcode::Ref::MethodHandle:
+    return new DexOpcodeMethodHandle(op, insn->get_methodhandle());
   }
 }
 

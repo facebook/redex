@@ -94,7 +94,7 @@ void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon,
                      bool verbose,
-                     bool support_dex_v37) {
+                     int support_dex_version) {
   namespace fs = boost::filesystem;
   fs::path dexen_dir_path(dexen_dir_str);
   redex_assert(fs::is_directory(dexen_dir_path));
@@ -147,8 +147,8 @@ void load_root_dexen(DexStore& store,
       TRACE(MAIN, 1, "Loading %s", dex.string().c_str());
     }
     // N.B. throaway stats for now
-    DexClasses classes =
-        load_classes_from_dex(dex.string().c_str(), balloon, support_dex_v37);
+    DexClasses classes = load_classes_from_dex(dex.string().c_str(), balloon,
+                                               support_dex_version);
     store.add_classes(std::move(classes));
   }
 }

@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/iostreams/device/mapped_file.hpp>
-
 #include "DexAccess.h"
+#include "DexCallSite.h"
 #include "DexDefs.h"
 #include "DexLoader.h"
+#include "DexMethodHandle.h"
 #include "IRCode.h"
 #include "Trace.h"
 #include "Walkers.h"
@@ -19,43 +19,37 @@
 #include <stdexcept>
 #include <vector>
 
-class DexLoader {
-  DexIdx* m_idx;
-  const dex_class_def* m_class_defs;
-  DexClasses* m_classes;
-  boost::iostreams::mapped_file m_file;
-  std::string m_dex_location;
-
- public:
-  explicit DexLoader(const char* location)
-      : m_idx(nullptr), m_dex_location(location) {}
-  ~DexLoader() {
-    if (m_idx) delete m_idx;
-    if (m_file.is_open()) m_file.close();
-  }
-  const dex_header* get_dex_header(const char* location);
-  DexClasses load_dex(const char* location,
-                      dex_stats_t* stats,
-                      bool support_dex_v37);
-  DexClasses load_dex(const dex_header* hdr, dex_stats_t* stats);
-  void load_dex_class(int num);
-  void gather_input_stats(dex_stats_t* stats, const dex_header* dh);
-};
+DexLoader::DexLoader(const char* location)
+    : m_idx(nullptr),
+      m_file(new boost::iostreams::mapped_file()),
+      m_dex_location(location) {}
 
 static void validate_dex_header(const dex_header* dh,
                                 size_t dexsize,
-                                bool support_dex_v37) {
-  if (support_dex_v37) {
-    // support_dex_v37 flag enables parsing v37 dex, but does not disable
-    // parsing v35 dex.
-    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic)) &&
-        memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
-      always_assert_log(false, "Bad v35 or v37 dex magic %s\n", dh->magic);
-    }
-  } else {
-    if (memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic))) {
-      always_assert_log(false, "Bad v35 dex magic %s\n", dh->magic);
-    }
+                                int support_dex_version) {
+  bool supported = false;
+  switch (support_dex_version) {
+  case 38:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V38, sizeof(dh->magic));
+    /* intentional fallthrough to also check for v37 */
+  case 37:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V37, sizeof(dh->magic));
+    /* intentional fallthrough to also check for v35 */
+  case 35:
+    supported = supported ||
+                !memcmp(dh->magic, DEX_HEADER_DEXMAGIC_V35, sizeof(dh->magic));
+    break;
+  default:
+    always_assert_log(
+        false, "Unrecognized support_dex_version %d\n", support_dex_version);
+  }
+  if (!supported) {
+    always_assert_log(false,
+                      "Bad dex magic %s for support_dex_version %d\n",
+                      dh->magic,
+                      support_dex_version);
   }
   always_assert_log(
       dh->file_size == dexsize,
@@ -84,6 +78,9 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   stats->num_strings += dh->string_ids_size;
   stats->num_protos += dh->proto_ids_size;
   stats->num_bytes += dh->file_size;
+  // T58562665: TODO - actually update states for callsites/methodhandles
+  stats->num_callsites += 0;
+  stats->num_methodhandles += 0;
 
   std::unordered_set<DexEncodedValueArray, boost::hash<DexEncodedValueArray>>
       enc_arrays;
@@ -170,7 +167,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
   }
 
   const dex_map_list* map_list =
-      reinterpret_cast<const dex_map_list*>(m_file.const_data() + dh->map_off);
+      reinterpret_cast<const dex_map_list*>(m_file->const_data() + dh->map_off);
   bool header_seen = false;
   uint32_t header_index = 0;
   for (uint32_t i = 0; i < map_list->size; i++) {
@@ -222,11 +219,11 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
       break;
     case TYPE_CALL_SITE_ID_ITEM:
       stats->call_site_id_count += item.size;
-      stats->call_site_id_bytes += item.size * sizeof(dex_call_site_id_item);
+      stats->call_site_id_bytes += item.size * sizeof(dex_callsite_id);
       break;
     case TYPE_METHOD_HANDLE_ITEM:
       stats->method_handle_count += item.size;
-      stats->method_handle_bytes += item.size * sizeof(dex_method_handle_item);
+      stats->method_handle_bytes += item.size * sizeof(dex_methodhandle_id);
       break;
     case TYPE_MAP_LIST:
       stats->map_list_count += item.size;
@@ -457,7 +454,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
 
 void DexLoader::load_dex_class(int num) {
   const dex_class_def* cdef = m_class_defs + num;
-  DexClass* dc = DexClass::create(m_idx, cdef, m_dex_location);
+  DexClass* dc = DexClass::create(m_idx.get(), cdef, m_dex_location);
   // We may be inserting a nullptr here. Need to remove them later
   //
   // We're inserting nullptr because we can't mess up the indices of the other
@@ -466,19 +463,19 @@ void DexLoader::load_dex_class(int num) {
 }
 
 const dex_header* DexLoader::get_dex_header(const char* location) {
-  m_file.open(location, boost::iostreams::mapped_file::readonly);
-  if (!m_file.is_open()) {
+  m_file->open(location, boost::iostreams::mapped_file::readonly);
+  if (!m_file->is_open()) {
     fprintf(stderr, "error: cannot create memory-mapped file: %s\n", location);
     exit(EXIT_FAILURE);
   }
-  return reinterpret_cast<const dex_header*>(m_file.const_data());
+  return reinterpret_cast<const dex_header*>(m_file->const_data());
 }
 
 DexClasses DexLoader::load_dex(const char* location,
                                dex_stats_t* stats,
-                               bool support_dex_v37) {
+                               int support_dex_version) {
   const dex_header* dh = get_dex_header(location);
-  validate_dex_header(dh, m_file.size(), support_dex_v37);
+  validate_dex_header(dh, m_file->size(), support_dex_version);
   return load_dex(dh, stats);
 }
 
@@ -486,7 +483,7 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   if (dh->class_defs_size == 0) {
     return DexClasses(0);
   }
-  m_idx = new DexIdx(dh);
+  m_idx = std::make_unique<DexIdx>(dh);
   auto off = (uint64_t)dh->class_defs_off;
   m_class_defs =
       reinterpret_cast<const dex_class_def*>((const uint8_t*)dh + off);
@@ -550,18 +547,18 @@ static void balloon_all(const Scope& scope) {
 
 DexClasses load_classes_from_dex(const char* location,
                                  bool balloon,
-                                 bool support_dex_v37) {
+                                 int support_dex_version) {
   dex_stats_t stats;
-  return load_classes_from_dex(location, &stats, balloon, support_dex_v37);
+  return load_classes_from_dex(location, &stats, balloon, support_dex_version);
 }
 
 DexClasses load_classes_from_dex(const char* location,
                                  dex_stats_t* stats,
                                  bool balloon,
-                                 bool support_dex_v37) {
+                                 int support_dex_version) {
   TRACE(MAIN, 1, "Loading classes from dex from %s", location);
   DexLoader dl(location);
-  auto classes = dl.load_dex(location, stats, support_dex_v37);
+  auto classes = dl.load_dex(location, stats, support_dex_version);
   if (balloon) {
     balloon_all(classes);
   }

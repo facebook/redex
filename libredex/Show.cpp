@@ -12,10 +12,12 @@
 #include "ControlFlow.h"
 #include "Creators.h"
 #include "DexAnnotation.h"
+#include "DexCallSite.h"
 #include "DexClass.h"
 #include "DexDebugInstruction.h"
 #include "DexIdx.h"
 #include "DexInstruction.h"
+#include "DexMethodHandle.h"
 #include "DexUtil.h"
 #include "IRCode.h"
 #include "IROpcode.h"
@@ -589,6 +591,20 @@ std::string show_insn(const IRInstruction* insn, bool deobfuscated) {
   case opcode::Ref::Data:
     ss << "<data>"; // TODO: print something more informative
     break;
+  case opcode::Ref::CallSite:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_callsite());
+    } else {
+      ss << show(insn->get_callsite());
+    }
+    break;
+  case opcode::Ref::MethodHandle:
+    if (deobfuscated) {
+      ss << show_deobfuscated(insn->get_methodhandle());
+    } else {
+      ss << show(insn->get_methodhandle());
+    }
+    break;
   }
   return ss.str();
 }
@@ -1047,6 +1063,26 @@ std::ostream& operator<<(std::ostream& o, const MethodItemEntry& mie) {
   return o;
 }
 
+std::ostream& operator<<(std::ostream& o, const DexMethodHandle& mh) {
+  o << "[" << &mh << "] ";
+  o << "METHODHANDLE: TYPE=" << show(mh.type());
+  o << " FIELD_OR_METHOD_ID=";
+  if (DexMethodHandle::isInvokeType(mh.type())) {
+    o << show(mh.methodref());
+  } else {
+    o << show(mh.fieldref());
+  }
+  return o;
+}
+
+std::ostream& operator<<(std::ostream& o, const DexCallSite& cs) {
+  o << "[" << &cs << "] ";
+  o << "CALLSITE: METHODHANDLE=" << show(cs.method_handle());
+  o << " METHODNAME=" << show(cs.method_name());
+  o << " METHODTYPE=" << show(cs.method_proto());
+  return o;
+}
+
 std::string show(const IRList* ir) {
   std::string ret;
   for (auto const& mei : *ir) {
@@ -1252,4 +1288,20 @@ std::string show_deobfuscated(const DexProto* p) {
   b << "(" << show_deobfuscated(p->get_args()) << ")"
     << show_deobfuscated(p->get_rtype());
   return b.str();
+}
+
+std::string show_deobfuscated(const DexCallSite* callsite) {
+  if (!callsite) {
+    return "";
+  }
+  // TODO(T58570881) - actually deobfuscate
+  return SHOW(callsite);
+}
+
+std::string show_deobfuscated(const DexMethodHandle* methodhandle) {
+  if (!methodhandle) {
+    return "";
+  }
+  // TODO(T58570881) - actually deobfuscate
+  return SHOW(methodhandle);
 }

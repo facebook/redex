@@ -261,6 +261,12 @@ bit_width_t src_bit_width(DexOpcode op, uint16_t i) {
   case FMT_f41c_s:
     redex_assert(i == 0);
     return 16;
+  case FMT_f45cc:
+    redex_assert(i <= 4);
+    return 4;
+  case FMT_f4rcc:
+    redex_assert(i == 0);
+    return 16;
   case FMT_f52c_d:
     redex_assert(i == 0);
     return 16;
@@ -358,6 +364,8 @@ bit_width_t dest_bit_width(DexOpcode op) {
   case FMT_f41c_d:
     return 16;
   case FMT_f41c_s:
+  case FMT_f45cc:
+  case FMT_f4rcc:
     redex_assert(false);
   case FMT_f52c_d:
     return 16;
@@ -392,6 +400,8 @@ bool has_dest(DexOpcode op) {
   case FMT_f35c:
   case FMT_f3rc:
   case FMT_f41c_s:
+  case FMT_f45cc:
+  case FMT_f4rcc:
   case FMT_f52c_s:
   case FMT_f5rc:
   case FMT_f57c:
@@ -446,6 +456,7 @@ unsigned min_srcs_size(DexOpcode op) {
   case FMT_f51l:
   case FMT_f5rc:
   case FMT_f41c_d:
+  case FMT_f4rcc:
   case FMT_fopcode:
   case FMT_iopcode:
     return 0;
@@ -471,6 +482,7 @@ unsigned min_srcs_size(DexOpcode op) {
   case FMT_f23x_s:
     return 3;
   case FMT_f35c:
+  case FMT_f45cc:
   case FMT_f57c:
     return 0;
   case FMT_f20bc:

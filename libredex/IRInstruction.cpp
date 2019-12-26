@@ -247,6 +247,8 @@ uint64_t IRInstruction::hash() const {
     }
     break;
   }
+  case opcode::Ref::CallSite:
+  case opcode::Ref::MethodHandle:
   case opcode::Ref::Field:
   case opcode::Ref::Method:
   case opcode::Ref::Literal:

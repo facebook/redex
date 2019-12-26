@@ -945,6 +945,8 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
     assume_reference(current_state, insn->src(0));
     break;
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:

@@ -474,6 +474,12 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
     }
     return get_type_demand(arg_types.at(src_index));
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC:
+    always_assert_log(
+        false,
+        "Unsupported instruction {%s} in ConstantUses::get_type_demand\n",
+        SHOW(insn));
   }
 }
 

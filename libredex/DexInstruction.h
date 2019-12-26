@@ -32,7 +32,9 @@ class DexInstruction : public Gatherable {
     REF_STRING,
     REF_TYPE,
     REF_FIELD,
-    REF_METHOD
+    REF_METHOD,
+    REF_CALLSITE,
+    REF_METHODHANDLE,
   } m_ref_type{REF_NONE};
 
  private:
@@ -96,6 +98,8 @@ class DexInstruction : public Gatherable {
   bool has_type() const { return m_ref_type == REF_TYPE; }
   bool has_field() const { return m_ref_type == REF_FIELD; }
   bool has_method() const { return m_ref_type == REF_METHOD; }
+  bool has_callsite() const { return m_ref_type == REF_CALLSITE; }
+  bool has_methodhandle() const { return m_ref_type == REF_METHODHANDLE; }
 
   /*
    * Number of registers used.
@@ -226,6 +230,54 @@ class DexOpcodeMethod : public DexInstruction {
   DexMethodRef* get_method() const { return m_method; }
 
   void set_method(DexMethodRef* method) { m_method = method; }
+};
+
+class DexOpcodeCallSite : public DexInstruction {
+ private:
+  DexCallSite* m_callsite;
+
+ public:
+  uint16_t size() const override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  DexOpcodeCallSite* clone() const override {
+    return new DexOpcodeCallSite(*this);
+  }
+
+  DexOpcodeCallSite(DexOpcode opcode, DexCallSite* callsite, uint16_t arg = 0)
+      : DexInstruction(opcode, arg) {
+    m_callsite = callsite;
+    m_ref_type = REF_CALLSITE;
+  }
+
+  DexCallSite* get_callsite() const { return m_callsite; }
+
+  void set_callsite(DexCallSite* callsite) { m_callsite = callsite; }
+};
+
+class DexOpcodeMethodHandle : public DexInstruction {
+ private:
+  DexMethodHandle* m_methodhandle;
+
+ public:
+  uint16_t size() const override;
+  void encode(DexOutputIdx* dodx, uint16_t*& insns) override;
+  DexOpcodeMethodHandle* clone() const override {
+    return new DexOpcodeMethodHandle(*this);
+  }
+
+  DexOpcodeMethodHandle(DexOpcode opcode,
+                        DexMethodHandle* methodhandle,
+                        uint16_t arg = 0)
+      : DexInstruction(opcode, arg) {
+    m_methodhandle = methodhandle;
+    m_ref_type = REF_METHODHANDLE;
+  }
+
+  DexMethodHandle* get_methodhandle() const { return m_methodhandle; }
+
+  void set_methodhandle(DexMethodHandle* methodhandle) {
+    m_methodhandle = methodhandle;
+  }
 };
 
 class DexOpcodeData : public DexInstruction {

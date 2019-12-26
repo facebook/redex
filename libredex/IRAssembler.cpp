@@ -96,6 +96,12 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
   case opcode::Ref::Type:
     s_exprs.emplace_back(insn->get_type()->get_name()->str());
     break;
+  case opcode::Ref::CallSite:
+    s_exprs.emplace_back(show(insn->get_callsite()));
+    break;
+  case opcode::Ref::MethodHandle:
+    s_exprs.emplace_back(show(insn->get_methodhandle()));
+    break;
   }
 
   if (is_branch(op)) {
@@ -242,6 +248,14 @@ std::unique_ptr<IRInstruction> instruction_from_s_expr(
         .must_match(tail, "Expecting type specifier for " + opcode_str);
     DexType* ty = DexType::make_type(type_str.c_str());
     insn->set_type(ty);
+    break;
+  }
+  case opcode::Ref::CallSite: {
+    always_assert_log(false, "callsites currently unsupported in s-exprs");
+    break;
+  }
+  case opcode::Ref::MethodHandle: {
+    always_assert_log(false, "methodhandles currently unsupported in s-exprs");
     break;
   }
   }

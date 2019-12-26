@@ -25,6 +25,8 @@ enum class Ref {
   Type,
   Field,
   Method,
+  CallSite,
+  MethodHandle,
   Data,
 };
 
@@ -124,6 +126,8 @@ enum class Ref {
   OP(INVOKE_DIRECT     , Ref::Method, "invoke-direct") \
   OP(INVOKE_STATIC     , Ref::Method, "invoke-static") \
   OP(INVOKE_INTERFACE  , Ref::Method, "invoke-interface") \
+  OP(INVOKE_POLYMORPHIC, Ref::MethodHandle, "invoke-polymorphic") \
+  OP(INVOKE_CUSTOM     , Ref::CallSite, "invoke-custom") \
   OP(NEG_INT           , Ref::None, "neg-int") \
   OP(NOT_INT           , Ref::None, "not-int") \
   OP(NEG_LONG          , Ref::None, "neg-long") \

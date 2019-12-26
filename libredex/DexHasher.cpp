@@ -101,6 +101,10 @@ void DexClassHasher::hash(const IRInstruction* insn) {
     hash(insn->get_field());
   } else if (insn->has_method()) {
     hash(insn->get_method());
+  } else if (insn->has_callsite()) {
+    hash(insn->get_callsite());
+  } else if (insn->has_methodhandle()) {
+    hash(insn->get_methodhandle());
   } else if (insn->has_data()) {
     auto data = insn->get_data();
     hash(data->data_size());

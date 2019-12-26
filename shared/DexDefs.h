@@ -54,15 +54,27 @@
 #define TYPE_ANNOTATIONS_DIR_ITEM      (0x2006)
 #define TYPE_HIDDENAPI_CLASS_DATA_ITEM (0xF000)
 
-#define METHOD_HANDLE_TYPE_STATIC_PUT         (0x00)
-#define METHOD_HANDLE_TYPE_STATIC_GET         (0x00)
-#define METHOD_HANDLE_TYPE_INSTANCE_PUT       (0x00)
-#define METHOD_HANDLE_TYPE_INSTANCE_GET       (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_STATIC      (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_INSTANCE    (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_DIRECT      (0x00)
-#define METHOD_HANDLE_TYPE_INVOKE_INTERFACE   (0x00)
+enum MethodHandleType {
+  // Method handle is a static field setter (accessor)
+  METHOD_HANDLE_TYPE_STATIC_PUT = 0x00,
+  // Method handle is a static field getter (accessor)
+  METHOD_HANDLE_TYPE_STATIC_GET = 0x01,
+  // Method handle is an instance field setter (accessor)
+  METHOD_HANDLE_TYPE_INSTANCE_PUT = 0x02,
+  // Method handle is an instance field getter (accessor)
+  METHOD_HANDLE_TYPE_INSTANCE_GET = 0x03,
+  // Method handle is a static method invoker
+  METHOD_HANDLE_TYPE_INVOKE_STATIC = 0x04,
+  // Method handle is an instance method invoker
+  METHOD_HANDLE_TYPE_INVOKE_INSTANCE = 0x05,
+  // Method handle is a constructor method invoker
+  METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR = 0x06,
+  // Method handle is a direct method invoker
+  METHOD_HANDLE_TYPE_INVOKE_DIRECT = 0x07,
+  // Method handle is an interface method invoker
+  METHOD_HANDLE_TYPE_INVOKE_INTERFACE = 0x08 
+};
+
 /* clang-format on */
 
 #define type_id_item uint32_t
@@ -145,13 +157,13 @@ PACKED(struct dex_proto_id {
   uint32_t param_off;
 });
 
-PACKED(struct dex_call_site_id_item { uint32_t call_site_off; });
+PACKED(struct dex_callsite_id { uint32_t callsite_off; });
 
-PACKED(struct dex_method_handle_item {
+PACKED(struct dex_methodhandle_id {
   uint16_t method_handle_type;
-  uint16_t unused_a;
+  uint16_t unused1;
   uint16_t field_or_method_id;
-  uint16_t unused_b;
+  uint16_t unused2;
 });
 
 PACKED(struct dex_field_annotation {

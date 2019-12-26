@@ -14,7 +14,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-static const char* dex_header_string = "dex\n035";
+static const char* dex_v35_header_string = "dex\n035";
+static const char* dex_v37_header_string = "dex\n037";
+static const char* dex_v38_header_string = "dex\n038";
 
 void get_dex_map_items(ddump_data* rd,
                        unsigned int* _count,
@@ -62,7 +64,9 @@ void open_dex_file(const char* filename, ddump_data* rd) {
     exit(1);
   }
   rd->dexh = (dex_header*)rd->dexmmap;
-  if (memcmp(rd->dexh->magic, dex_header_string, sizeof(rd->dexh->magic))) {
+  if (memcmp(rd->dexh->magic, dex_v35_header_string, sizeof(rd->dexh->magic)) &&
+      memcmp(rd->dexh->magic, dex_v37_header_string, sizeof(rd->dexh->magic)) &&
+      memcmp(rd->dexh->magic, dex_v38_header_string, sizeof(rd->dexh->magic))) {
     fprintf(stderr, "Bad dex magic, bailing\n");
     exit(1);
   }

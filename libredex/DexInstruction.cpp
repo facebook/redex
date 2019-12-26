@@ -8,7 +8,9 @@
 #include "DexInstruction.h"
 
 #include "Debug.h"
+#include "DexCallSite.h"
 #include "DexIdx.h"
+#include "DexMethodHandle.h"
 #include "DexOutput.h"
 #include "Warning.h"
 
@@ -52,6 +54,8 @@ unsigned DexInstruction::count_from_opcode() const {
       4, /* FMT_f51l   */
       1, /* FMT_f41c_d */
       1, /* FMT_f41c_s */
+      1, /* FMT_f45cc  */ // TODO(T59275897)
+      1, /* FMT_f4rcc  */ // TODO(T59275897)
       2, /* FMT_f52c_d */
       2, /* FMT_f52c_s */
       2, /* FMT_f5rc */
@@ -97,6 +101,7 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f31i:
   case FMT_f31c:
   case FMT_f3rc:
+  case FMT_f4rcc:
   case FMT_f51l:
   case FMT_f5rc:
   case FMT_f41c_d:
@@ -124,6 +129,7 @@ unsigned DexInstruction::srcs_size() const {
   case FMT_f23x_s:
     return 3;
   case FMT_f35c:
+  case FMT_f45cc:
   case FMT_f57c:
     return arg_word_count();
   case FMT_f20bc:
@@ -230,6 +236,7 @@ uint16_t DexInstruction::src(int i) const {
     return (m_opcode >> 12) & 0xf;
   case FMT_f22x:
   case FMT_f3rc:
+  case FMT_f4rcc:
     redex_assert(i == 0);
     return m_arg[0];
   case FMT_f23x_d:
@@ -253,6 +260,7 @@ uint16_t DexInstruction::src(int i) const {
     redex_assert(i == 0);
     return m_arg[1];
   case FMT_f35c:
+  case FMT_f45cc:
     redex_assert(i < 5);
     switch (i) {
     case 0:
@@ -374,6 +382,7 @@ DexInstruction* DexInstruction::set_src(int i, uint16_t vreg) {
     m_arg[1] = vreg;
     return this;
   case FMT_f35c:
+  case FMT_f45cc:
     redex_assert(i < 5);
     redex_assert((vreg & 0xf) == vreg);
     switch (i) {
@@ -568,7 +577,7 @@ DexInstruction* DexInstruction::set_offset(int32_t offset) {
 
 uint16_t DexInstruction::range_base() const {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f3rc || format == FMT_f5rc);
+  redex_assert(format == FMT_f3rc || format == FMT_f4rcc || format == FMT_f5rc);
   if (format == FMT_f5rc) {
     return m_arg[1];
   }
@@ -577,14 +586,14 @@ uint16_t DexInstruction::range_base() const {
 
 uint16_t DexInstruction::range_size() const {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f3rc || format == FMT_f5rc);
+  redex_assert(format == FMT_f3rc || format == FMT_f4rcc || format == FMT_f5rc);
   if (format == FMT_f5rc) return m_arg[0];
   return (m_opcode >> 8) & 0xff;
 }
 
 DexInstruction* DexInstruction::set_range_base(uint16_t base) {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f3rc || format == FMT_f5rc);
+  redex_assert(format == FMT_f3rc || format == FMT_f4rcc || format == FMT_f5rc);
   if (format == FMT_f5rc) {
     m_arg[1] = base;
   } else {
@@ -595,7 +604,7 @@ DexInstruction* DexInstruction::set_range_base(uint16_t base) {
 
 DexInstruction* DexInstruction::set_range_size(uint16_t size) {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f3rc || format == FMT_f5rc);
+  redex_assert(format == FMT_f3rc || format == FMT_f4rcc || format == FMT_f5rc);
   if (format == FMT_f5rc) {
     m_arg[0] = size;
   } else {
@@ -607,7 +616,7 @@ DexInstruction* DexInstruction::set_range_size(uint16_t size) {
 
 uint16_t DexInstruction::arg_word_count() const {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f35c || format == FMT_f57c);
+  redex_assert(format == FMT_f35c || format == FMT_f45cc || format == FMT_f57c);
   if (format == FMT_f57c) {
     return (m_arg[0]) & 0xf;
   }
@@ -616,7 +625,7 @@ uint16_t DexInstruction::arg_word_count() const {
 
 DexInstruction* DexInstruction::set_arg_word_count(uint16_t count) {
   auto format = dex_opcode::format(opcode());
-  redex_assert(format == FMT_f35c || format == FMT_f57c);
+  redex_assert(format == FMT_f35c || format == FMT_f45cc || format == FMT_f57c);
   redex_assert((count & 0xf) == count);
   if (format == FMT_f57c) {
     m_arg[0] = (m_arg[0] & 0xfff0) | count;
@@ -688,6 +697,18 @@ void DexOpcodeMethod::encode(DexOutputIdx* dodx, uint16_t*& insns) {
   uint16_t idx = dodx->methodidx(m_method);
   *insns++ = idx;
   encode_args(insns);
+}
+
+uint16_t DexOpcodeCallSite::size() const { return 3; }
+
+void DexOpcodeCallSite::encode(DexOutputIdx* dodx, uint16_t*& insns) {
+  always_assert_log(false, "DexOpcodeCallSite::encode not yet implemented");
+}
+
+uint16_t DexOpcodeMethodHandle::size() const { return 3; }
+
+void DexOpcodeMethodHandle::encode(DexOutputIdx* dodx, uint16_t*& insns) {
+  always_assert_log(false, "DexOpcodeMethodHandle::encode not yet implemented");
 }
 
 uint16_t DexOpcodeData::size() const { return m_data_count + 1; }
@@ -962,6 +983,22 @@ DexInstruction* DexInstruction::make_instruction(DexIdx* idx,
     DexMethodRef* meth = idx->get_methodidx(midx);
     return new DexOpcodeMethod(fopcode, meth, arg);
   }
+  /* MethodHandle: */
+  case DOPCODE_INVOKE_POLYMORPHIC:
+  case DOPCODE_INVOKE_POLYMORPHIC_RANGE: {
+    uint16_t csidx = *insns++;
+    uint16_t arg = *insns++;
+    DexMethodHandle* methodhandle = idx->get_methodhandleidx(csidx);
+    return new DexOpcodeMethodHandle(fopcode, methodhandle, arg);
+  }
+  /* CallSite: */
+  case DOPCODE_INVOKE_CUSTOM:
+  case DOPCODE_INVOKE_CUSTOM_RANGE: {
+    uint16_t csidx = *insns++;
+    uint16_t arg = *insns++;
+    DexCallSite* callsite = idx->get_callsiteidx(csidx);
+    return new DexOpcodeCallSite(fopcode, callsite, arg);
+  }
   /* StringRef: */
   case DOPCODE_CONST_STRING: {
     uint16_t sidx = *insns++;
@@ -1034,11 +1071,15 @@ DexInstruction* DexInstruction::make_instruction(DexOpcode op) {
   case DOPCODE_INVOKE_DIRECT:
   case DOPCODE_INVOKE_STATIC:
   case DOPCODE_INVOKE_INTERFACE:
+  case DOPCODE_INVOKE_CUSTOM:
+  case DOPCODE_INVOKE_POLYMORPHIC:
   case DOPCODE_INVOKE_VIRTUAL_RANGE:
   case DOPCODE_INVOKE_SUPER_RANGE:
   case DOPCODE_INVOKE_DIRECT_RANGE:
   case DOPCODE_INVOKE_STATIC_RANGE:
   case DOPCODE_INVOKE_INTERFACE_RANGE:
+  case DOPCODE_INVOKE_CUSTOM_RANGE:
+  case DOPCODE_INVOKE_POLYMORPHIC_RANGE:
     return new DexOpcodeMethod(op, nullptr);
   /* StringRef: */
   case DOPCODE_CONST_STRING:
@@ -1089,6 +1130,16 @@ bool DexInstruction::operator==(const DexInstruction& that) const {
     auto this_ = static_cast<const DexOpcodeMethod*>(this);
     auto that_ = static_cast<const DexOpcodeMethod*>(&that);
     return this_->get_method() == that_->get_method();
+  }
+  case REF_CALLSITE: {
+    auto this_ = static_cast<const DexOpcodeCallSite*>(this);
+    auto that_ = static_cast<const DexOpcodeCallSite*>(&that);
+    return this_->get_callsite() == that_->get_callsite();
+  }
+  case REF_METHODHANDLE: {
+    auto this_ = static_cast<const DexOpcodeMethodHandle*>(this);
+    auto that_ = static_cast<const DexOpcodeMethodHandle*>(&that);
+    return this_->get_methodhandle() == that_->get_methodhandle();
   }
   }
 }

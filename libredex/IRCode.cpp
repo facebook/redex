@@ -401,6 +401,12 @@ void translate_dex_to_ir(
     } else if (dex_insn->has_method()) {
       insn->set_method(
           static_cast<const DexOpcodeMethod*>(dex_insn)->get_method());
+    } else if (dex_insn->has_callsite()) {
+      insn->set_callsite(
+          static_cast<const DexOpcodeCallSite*>(dex_insn)->get_callsite());
+    } else if (dex_insn->has_methodhandle()) {
+      insn->set_methodhandle(static_cast<const DexOpcodeMethodHandle*>(dex_insn)
+                                 ->get_methodhandle());
     } else if (dex_opcode::has_literal(dex_op)) {
       insn->set_literal(dex_insn->get_literal());
     } else if (op == OPCODE_FILL_ARRAY_DATA) {

@@ -7,7 +7,9 @@
 
 #pragma once
 
+#include "DexCallSite.h"
 #include "DexInstruction.h"
+#include "DexMethodHandle.h"
 #include "Show.h"
 
 /*
@@ -152,6 +154,12 @@ class IRInstruction final {
   bool has_literal() const {
     return opcode::ref(m_opcode) == opcode::Ref::Literal;
   }
+  bool has_callsite() const {
+    return opcode::ref(m_opcode) == opcode::Ref::CallSite;
+  }
+  bool has_methodhandle() const {
+    return opcode::ref(m_opcode) == opcode::Ref::MethodHandle;
+  }
 
   bool has_data() const { return opcode::ref(m_opcode) == opcode::Ref::Data; }
 
@@ -289,6 +297,28 @@ class IRInstruction final {
     return this;
   }
 
+  DexCallSite* get_callsite() const {
+    always_assert(has_callsite());
+    return m_callsite;
+  }
+
+  IRInstruction* set_callsite(DexCallSite* callsite) {
+    always_assert(has_callsite());
+    m_callsite = callsite;
+    return this;
+  }
+
+  DexMethodHandle* get_methodhandle() const {
+    always_assert(has_methodhandle());
+    return m_methodhandle;
+  }
+
+  IRInstruction* set_methodhandle(DexMethodHandle* methodhandle) {
+    always_assert(has_methodhandle());
+    m_methodhandle = methodhandle;
+    return this;
+  }
+
   DexOpcodeData* get_data() const {
     always_assert(has_data());
     return m_data;
@@ -335,6 +365,8 @@ class IRInstruction final {
     DexFieldRef* m_field;
     DexMethodRef* m_method;
     DexOpcodeData* m_data;
+    DexCallSite* m_callsite;
+    DexMethodHandle* m_methodhandle;
   };
   // Put m_srcs at the end for dense packing
   std::vector<reg_t> m_srcs;

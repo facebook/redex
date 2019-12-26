@@ -378,6 +378,8 @@ class InstructionAnalyzerCombiner final {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_DIRECT:
     case OPCODE_INVOKE_STATIC:
+    case OPCODE_INVOKE_POLYMORPHIC:
+    case OPCODE_INVOKE_CUSTOM:
     case OPCODE_INVOKE_INTERFACE:
       return analyze_invoke(std::index_sequence_for<Analyzers...>{}, insn, env);
     case OPCODE_CHECK_CAST:

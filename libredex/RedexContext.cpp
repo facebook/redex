@@ -13,6 +13,7 @@
 #include <unordered_set>
 
 #include "Debug.h"
+#include "DexCallSite.h"
 #include "DexClass.h"
 #include "DuplicateClasses.h"
 

@@ -626,6 +626,40 @@ void dump_clsdata(ddump_data* rd, bool print_headers) {
   }
 }
 
+void dump_callsites(ddump_data* rd, bool print_headers) {
+  auto map = rd->dexmmap + rd->dexh->map_off;
+  const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  int count = 0;
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    const auto& item = map_list->items[i];
+    if (item.type == TYPE_CALL_SITE_ID_ITEM) {
+      count = item.size;
+    }
+  }
+
+  // TODO(T58569493) - emit full call site info
+  if (print_headers) {
+    redump("\nCALL SITE TABLE: %d\n", count);
+  }
+}
+
+void dump_methodhandles(ddump_data* rd, bool print_headers) {
+  auto map = rd->dexmmap + rd->dexh->map_off;
+  const dex_map_list* map_list = reinterpret_cast<const dex_map_list*>(map);
+  int count = 0;
+  for (uint32_t i = 0; i < map_list->size; i++) {
+    const auto& item = map_list->items[i];
+    if (item.type == TYPE_METHOD_HANDLE_ITEM) {
+      count = item.size;
+    }
+  }
+
+  // TODO(T58569493) - emit full method handle info
+  if (print_headers) {
+    redump("\nMETHOD HANDLE TABLE: %d\n", count);
+  }
+}
+
 static void dump_code_items(ddump_data* rd,
                             dex_code_item* code_items,
                             uint32_t size) {

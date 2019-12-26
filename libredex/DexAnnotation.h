@@ -32,6 +32,8 @@ enum DexEncodedValueTypes : uint8_t {
   DEVT_LONG = 0x06,
   DEVT_FLOAT = 0x10,
   DEVT_DOUBLE = 0x11,
+  DEVT_METHOD_TYPE = 0x15,
+  DEVT_METHOD_HANDLE = 0x16,
   DEVT_STRING = 0x17,
   DEVT_TYPE = 0x18,
   DEVT_FIELD = 0x19,
@@ -217,6 +219,71 @@ class DexEncodedValueMethod : public DexEncodedValue {
   size_t hash_value() const override {
     size_t seed = boost::hash<uint8_t>()(m_evtype);
     boost::hash_combine(seed, (uintptr_t)m_method);
+    return seed;
+  }
+};
+
+class DexEncodedValueMethodType : public DexEncodedValue {
+  DexProto* m_proto;
+
+ public:
+  explicit DexEncodedValueMethodType(DexProto* proto)
+      : DexEncodedValue(DEVT_METHOD_TYPE) {
+    m_proto = proto;
+  }
+
+  void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+
+  DexProto* proto() const { return m_proto; }
+  void set_proto(DexProto* proto) { m_proto = proto; }
+  std::string show() const override { return ::show(m_proto); }
+  std::string show_deobfuscated() const override {
+    return ::show_deobfuscated(m_proto);
+  }
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_proto ==
+           static_cast<const DexEncodedValueMethodType*>(&that)->m_proto;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_proto);
+    return seed;
+  }
+};
+
+class DexEncodedValueMethodHandle : public DexEncodedValue {
+  DexMethodHandle* m_methodhandle;
+
+ public:
+  explicit DexEncodedValueMethodHandle(DexMethodHandle* methodhandle)
+      : DexEncodedValue(DEVT_METHOD_HANDLE) {
+    m_methodhandle = methodhandle;
+  }
+
+  void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;
+
+  DexMethodHandle* methodhandle() const { return m_methodhandle; }
+  void set_methodhandle(DexMethodHandle* methodhandle) {
+    m_methodhandle = methodhandle;
+  }
+  std::string show() const override { return ::show(m_methodhandle); }
+  std::string show_deobfuscated() const override {
+    return ::show(m_methodhandle);
+  }
+  bool operator==(const DexEncodedValue& that) const override {
+    if (m_evtype != that.evtype()) {
+      return false;
+    }
+    return m_methodhandle ==
+           static_cast<const DexEncodedValueMethodHandle*>(&that)
+               ->m_methodhandle;
+  }
+  size_t hash_value() const override {
+    size_t seed = boost::hash<uint8_t>()(m_evtype);
+    boost::hash_combine(seed, (uintptr_t)m_methodhandle);
     return seed;
   }
 };

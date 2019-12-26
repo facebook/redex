@@ -21,6 +21,8 @@ class DexString;
 class DexFieldRef;
 class DexMethodRef;
 class DexProto;
+class DexCallSite;
+class DexMethodHandle;
 
 class DexIdx {
  private:
@@ -36,18 +38,26 @@ class DexIdx {
   uint32_t m_method_ids_size;
   dex_proto_id* m_proto_ids;
   uint32_t m_proto_ids_size;
+  dex_callsite_id* m_callsite_ids;
+  uint32_t m_callsite_ids_size;
+  dex_methodhandle_id* m_methodhandle_ids;
+  uint32_t m_methodhandle_ids_size;
 
   DexString** m_string_cache;
   DexType** m_type_cache;
   DexFieldRef** m_field_cache;
   DexMethodRef** m_method_cache;
   DexProto** m_proto_cache;
+  DexCallSite** m_callsite_cache = nullptr;
+  DexMethodHandle** m_methodhandle_cache = nullptr;
 
   DexType* get_typeidx_fromdex(uint32_t typeidx);
   DexString* get_stringidx_fromdex(uint32_t stridx);
   DexFieldRef* get_fieldidx_fromdex(uint32_t fidx);
   DexMethodRef* get_methodidx_fromdex(uint32_t midx);
   DexProto* get_protoidx_fromdex(uint32_t pidx);
+  DexCallSite* get_callsiteidx_fromdex(uint32_t csidx);
+  DexMethodHandle* get_methodhandleidx_fromdex(uint32_t mhidx);
 
  public:
   explicit DexIdx(const dex_header* dh);
@@ -107,6 +117,36 @@ class DexIdx {
     }
     redex_assert(m_method_cache[midx]);
     return m_method_cache[midx];
+  }
+
+  uint32_t get_callsite_ids_size() { return m_callsite_ids_size; }
+
+  DexCallSite* get_callsiteidx(uint32_t csidx) {
+    always_assert_type_log(
+        csidx < m_callsite_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "CallSite index is out of bound. index: %d, cache size: %d", csidx,
+        m_callsite_ids_size);
+
+    if (m_callsite_cache[csidx] == nullptr) {
+      m_callsite_cache[csidx] = get_callsiteidx_fromdex(csidx);
+    }
+    redex_assert(m_callsite_cache[csidx]);
+    return m_callsite_cache[csidx];
+  }
+
+  uint32_t get_methodhandle_ids_size() { return m_methodhandle_ids_size; }
+
+  DexMethodHandle* get_methodhandleidx(uint32_t mhidx) {
+    always_assert_type_log(
+        mhidx < m_methodhandle_ids_size, RedexError::CACHE_INDEX_OUT_OF_BOUND,
+        "Methodhandle index is out of bound. index: %d, cache size: %d", mhidx,
+        m_methodhandle_ids_size);
+
+    if (m_methodhandle_cache[mhidx] == nullptr) {
+      m_methodhandle_cache[mhidx] = get_methodhandleidx_fromdex(mhidx);
+    }
+    redex_assert(m_methodhandle_cache[mhidx]);
+    return m_methodhandle_cache[mhidx];
   }
 
   DexProto* get_protoidx(uint32_t pidx) {

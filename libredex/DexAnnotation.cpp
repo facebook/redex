@@ -280,6 +280,17 @@ void DexEncodedValueMethod::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   type_encoder(encdata, m_evtype, midx);
 }
 
+void DexEncodedValueMethodType::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
+  always_assert_log(false,
+                    "DexEncodedValueMethodType::encode not supported yet!");
+}
+
+void DexEncodedValueMethodHandle::encode(DexOutputIdx* dodx,
+                                         uint8_t*& encdata) {
+  always_assert_log(false,
+                    "DexEncodedValueMethodHandle::encode not supported yet!");
+}
+
 void DexEncodedValueArray::encode(DexOutputIdx* dodx, uint8_t*& encdata) {
   /*
    * Static values are implied to be DEVT_ARRAY, and thus don't
@@ -421,6 +432,17 @@ DexEncodedValue* DexEncodedValue::get_encoded_value(DexIdx* idx,
                  << ((7 - evarg) * 8);
     return new DexEncodedValue(evt, v);
   }
+  case DEVT_METHOD_TYPE: {
+    uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
+    DexProto* evproto = idx->get_protoidx(evidx);
+    return new DexEncodedValueMethodType(evproto);
+  }
+  case DEVT_METHOD_HANDLE: {
+    uint32_t evidx = (uint32_t)read_evarg(encdata, evarg);
+    DexMethodHandle* evmethodhandle = idx->get_methodhandleidx(evidx);
+    return new DexEncodedValueMethodHandle(evmethodhandle);
+  }
+
   case DEVT_NULL:
     return new DexEncodedValueBit(evt, false);
   case DEVT_BOOLEAN:

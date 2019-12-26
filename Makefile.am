@@ -129,6 +129,7 @@ libredex_la_SOURCES = \
 	libredex/Debug.cpp \
 	libredex/DexAccess.cpp \
 	libredex/DexAnnotation.cpp \
+	libredex/DexCallSite.cpp \
 	libredex/DexClass.cpp \
 	libredex/DexDebugInstruction.cpp \
 	libredex/DexEncoding.cpp \
@@ -137,6 +138,7 @@ libredex_la_SOURCES = \
 	libredex/DexInstruction.cpp \
 	libredex/DexLoader.cpp \
 	libredex/DexMemberRefs.cpp \
+	libredex/DexMethodHandle.cpp \
 	libredex/DexOpcode.cpp \
 	libredex/DexOutput.cpp \
 	libredex/DexPosition.cpp \

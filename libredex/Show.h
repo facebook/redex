@@ -33,6 +33,8 @@ class DexAnnotationDirectory;
 class DexDebugInstruction;
 class IRInstruction;
 class IRCode;
+class DexCallSite;
+class DexMethodHandle;
 
 namespace cfg {
 class Block;
@@ -99,6 +101,8 @@ std::ostream& operator<<(std::ostream&, const DexPosition&);
 std::ostream& operator<<(std::ostream&, const DexFieldRef&);
 std::ostream& operator<<(std::ostream&, const IRInstruction&);
 std::ostream& operator<<(std::ostream&, const MethodItemEntry&);
+std::ostream& operator<<(std::ostream&, const DexCallSite&);
+std::ostream& operator<<(std::ostream&, const DexMethodHandle&);
 
 std::string show(const DexFieldRef*);
 std::string show(const DexDebugEntry*);
@@ -131,6 +135,8 @@ std::string show_deobfuscated(const DexEncodedValue*);
 std::string show_deobfuscated(const DexTypeList*);
 std::string show_deobfuscated(const DexProto*);
 std::string show_deobfuscated(const DexType*);
+std::string show_deobfuscated(const DexCallSite*);
+std::string show_deobfuscated(const DexMethodHandle*);
 
 // SHOW(x) is syntax sugar for show(x).c_str()
 #define SHOW(...) show(__VA_ARGS__).c_str()

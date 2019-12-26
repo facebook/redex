@@ -135,7 +135,7 @@ void load_root_dexen(DexStore& store,
                      const std::string& dexen_dir_str,
                      bool balloon = false,
                      bool verbose = true,
-                     bool support_dex_v37 = false);
+                     int support_dex_version = 35);
 
 /**
  * Creates a generated store based on the given classes.

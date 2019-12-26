@@ -23,6 +23,7 @@
 #include "DexMemberRefs.h"
 #include "KeepReason.h"
 
+class DexCallSite;
 class DexDebugInstruction;
 class DexString;
 class DexType;
@@ -30,6 +31,7 @@ class DexFieldRef;
 class DexTypeList;
 class DexProto;
 class DexMethodRef;
+class DexMethodHandle;
 class DexClass;
 struct DexFieldSpec;
 struct DexDebugEntry;
@@ -92,6 +94,9 @@ struct RedexContext {
   DexMethodRef* get_method(const DexType* type,
                            const DexString* name,
                            const DexProto* proto);
+
+  DexMethodHandle* make_methodhandle();
+  DexMethodHandle* get_methodhandle();
 
   void erase_method(DexMethodRef*);
   void mutate_method(DexMethodRef* method,

@@ -722,6 +722,12 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
     refine_reference(current_state, insn->src(0));
     break;
   }
+  case OPCODE_INVOKE_CUSTOM:
+  case OPCODE_INVOKE_POLYMORPHIC: {
+    // TODO(T59277083)
+    always_assert_log(false, "TypeInference::analyze_instruction does not support invoke-custom and invoke-polymorphic yet");
+    break;
+  }
   case OPCODE_INVOKE_VIRTUAL:
   case OPCODE_INVOKE_SUPER:
   case OPCODE_INVOKE_DIRECT:
