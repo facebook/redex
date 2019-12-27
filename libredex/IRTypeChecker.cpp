@@ -1174,8 +1174,8 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   return it->second.get_type(reg).element();
 }
 
-const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
-                                           reg_t reg) const {
+const boost::optional<const DexType*> IRTypeChecker::get_dex_type(
+    IRInstruction* insn, reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);
@@ -1184,7 +1184,7 @@ const DexType* IRTypeChecker::get_dex_type(IRInstruction* insn,
     // unreachable code and return BOTTOM.
     return nullptr;
   }
-  return *it->second.get_dex_type(reg);
+  return it->second.get_dex_type(reg);
 }
 
 std::ostream& operator<<(std::ostream& output, const IRTypeChecker& checker) {
