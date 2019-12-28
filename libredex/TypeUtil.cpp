@@ -102,6 +102,21 @@ bool is_object(const DexType* type) {
   return (sig == 'L') || (sig == '[');
 }
 
+bool is_java_lang_object_array(const DexType* type) {
+  if (!is_array(type)) {
+    return false;
+  }
+  return get_array_component_type(type) == java_lang_Object();
+}
+
+bool is_reference_array(const DexType* type) {
+  if (!is_array(type)) {
+    return false;
+  }
+  auto ctype = get_array_component_type(type);
+  return !is_primitive(ctype);
+}
+
 bool is_integer(const DexType* type) {
   char sig = type->get_name()->c_str()[0];
   switch (sig) {

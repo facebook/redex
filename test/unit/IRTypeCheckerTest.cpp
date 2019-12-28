@@ -49,6 +49,16 @@ class IRTypeCheckerTest : public RedexTest {
     m_method->set_deobfuscated_name("testMethod");
     m_method->set_code(std::make_unique<IRCode>(m_method, /* temp_regs */ 5));
 
+    proto = DexProto::make_proto(type::java_lang_Object(), args);
+    m_method_ret_obj =
+        DexMethod::make_method(DexType::make_type("Lbar;"),
+                               DexString::make_string("testMethodRetObj"),
+                               proto)
+            ->make_concrete(ACC_PUBLIC | ACC_STATIC, /* is_virtual */ false);
+    m_method_ret_obj->set_deobfuscated_name("testMethodRetObj");
+    m_method_ret_obj->set_code(
+        std::make_unique<IRCode>(m_method_ret_obj, /* temp_regs */ 5));
+
     m_virtual_method =
         DexMethod::make_method(DexType::make_type("Lbar;"),
                                DexString::make_string("testVirtualMethod"),
@@ -67,6 +77,14 @@ class IRTypeCheckerTest : public RedexTest {
     add_code(m_method, insns);
   }
 
+  void add_code_ret_obj(const std::vector<IRInstruction*>& insns) {
+    add_code(m_method_ret_obj, insns);
+  }
+
+  void add_code_ret_obj(const std::unique_ptr<IRCode>& insns) {
+    add_code(m_method_ret_obj, insns);
+  }
+
   void add_code(DexMethod* m, const std::vector<IRInstruction*>& insns) {
     IRCode* code = m->get_code();
     for (const auto& insn : insns) {
@@ -83,6 +101,7 @@ class IRTypeCheckerTest : public RedexTest {
 
  protected:
   DexMethod* m_method;
+  DexMethod* m_method_ret_obj;
   DexMethod* m_virtual_method;
 };
 
@@ -547,8 +566,8 @@ TEST_F(IRTypeCheckerTest, zeroOrReference) {
       dasm(OPCODE_MONITOR_EXIT, {0_v}),
       dasm(OPCODE_THROW, {1_v}),
   };
-  add_code(insns);
-  IRTypeChecker checker(m_method);
+  add_code_ret_obj(insns);
+  IRTypeChecker checker(m_method_ret_obj);
   checker.run();
   EXPECT_TRUE(checker.good()) << checker.what();
   EXPECT_EQ("OK", checker.what());
@@ -903,9 +922,9 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
       (
         (load-param-object v0)
         (load-param-object v1)
-        (new-instance "C;")
+        (new-instance "LFoo;")
         (move-result-pseudo-object v0)
-        (invoke-direct (v0) "C;.<init>:()V")
+        (invoke-direct (v0) "LFoo;.<init>:()V")
       )
     )"));
     IRTypeChecker checker(method);
@@ -919,7 +938,7 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
       (
         (load-param-object v0)
         (load-param-object v1)
-        (new-instance "C;")
+        (new-instance "LFoo;")
         (move-result-pseudo-object v0)
       )
     )"));
@@ -935,7 +954,7 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
       (
         (load-param-object v0)
         (load-param-object v1)
-        (new-instance "C;")
+        (new-instance "LFoo;")
         (move-result-pseudo-object v0)
         (move-object v1 v0)
         (return-object v1)
@@ -955,10 +974,10 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
     (
       (load-param-object v0)
       (load-param-object v1)
-      (new-instance "C;")
+      (new-instance "LFoo;")
       (move-result-pseudo-object v0)
       (move-object v1 v0)
-      (invoke-direct (v0) "C;.<init>:()V")
+      (invoke-direct (v0) "LFoo;.<init>:()V")
       (return-object v1)
     )
   )"));
@@ -974,7 +993,7 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
     (
       (load-param-object v0)
       (load-param-object v1)
-      (new-instance "C;")
+      (new-instance "LFoo;")
       (move-result-pseudo-object v0)
       (move-object v1 v0)
       (return-object v1)
@@ -994,11 +1013,11 @@ TEST_F(IRTypeCheckerTest, invokeInitAfterNewInstance) {
       (
         (load-param-object v0)
         (load-param-object v1)
-        (new-instance "C;")
+        (new-instance "LFoo;")
         (move-result-pseudo-object v0)
-        (new-instance "C;")
+        (new-instance "LFoo;")
         (move-result-pseudo-object v5)
-        (invoke-direct (v5) "C;.<init>:()V")
+        (invoke-direct (v5) "LFoo;.<init>:()V")
         (return-object v5)
         (return-object v0)
       )

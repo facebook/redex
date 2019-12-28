@@ -55,6 +55,66 @@ void check_type_match(reg_t reg, IRType actual, IRType expected) {
   }
 }
 
+/*
+ * If the inferred type is Ljava/lang/Object;, it's a fall back from a
+ * conflicting join. There's no point performing more precise type checking
+ * since we don't know about its type.
+ * If the inferred type is Ljava/lang/Throwable;, it comes from MOVE_EXCEPTION.
+ * Since we don't model exception handler here, there's no way for us to know
+ * the precise exception type. We approximate all exception type to
+ * Ljava/lang/Throwable;. Therefore, it is not feasible to check type assignment
+ * on exception types.
+ */
+bool is_inference_fallback_type(const DexType* type) {
+  return type == type::java_lang_Object() ||
+         type == type::java_lang_Throwable();
+}
+
+/*
+ * We might not have the external DexClass to fully determine the hierarchy.
+ * Therefore, be more conservative when assigning to external DexType.
+ */
+bool check_cast_helper(const DexType* from, const DexType* to) {
+  auto to_cls = type_class(to);
+  if (!to_cls || to_cls->is_external()) {
+    return true;
+  }
+  return type::check_cast(from, to);
+}
+
+// Type assignment check between two reference types. We assume that both `from`
+// and `to` are reference types.
+// Took reference from:
+// http://androidxref.com/6.0.1_r10/xref/art/runtime/verifier/reg_type-inl.h#88
+bool check_is_assignable_from(const DexType* from, const DexType* to) {
+  always_assert(from && to);
+  always_assert_log(!type::is_primitive(from), "%s", SHOW(from));
+  TRACE(TYPE, 2, "assign check %s to %s", SHOW(from), SHOW(to));
+
+  if (from == to) {
+    return true; // Fast path if the two are equal.
+  }
+  if (type::is_primitive(from)) {
+    return false; // Expect rhs to be a reference type.
+  }
+  if (to == type::java_lang_Object()) {
+    return true; // All reference types can be assigned to Object.
+  }
+  if (type::is_java_lang_object_array(to)) {
+    // All reference arrays may be assigned to Object[]
+    return type::is_reference_array(from);
+  }
+  if (type::is_array(from) && type::is_array(to)) {
+    if (type::get_array_level(from) != type::get_array_level(to)) {
+      return false;
+    }
+    auto efrom = type::get_array_element_type(from);
+    auto eto = type::get_array_element_type(to);
+    return check_cast_helper(efrom, eto);
+  }
+  return check_cast_helper(from, to);
+}
+
 void check_wide_type_match(reg_t reg,
                            IRType actual1,
                            IRType actual2,
@@ -701,6 +761,18 @@ void IRTypeChecker::check_instruction(IRInstruction* insn,
   }
   case OPCODE_RETURN_OBJECT: {
     assume_reference(current_state, insn->src(0));
+    auto dtype = current_state->get_dex_type(insn->src(0));
+    auto rtype = m_dex_method->get_proto()->get_rtype();
+    // If the inferred type is a fallback, there's no point performing the
+    // accurate type assignment checking.
+    if (dtype && !is_inference_fallback_type(*dtype)) {
+      if (!check_is_assignable_from(*dtype, rtype)) {
+        std::ostringstream out;
+        out << "Returning " << dtype << ", but expected from declaration "
+            << rtype << std::endl;
+        throw TypeCheckingException(out.str());
+      }
+    }
     break;
   }
   case OPCODE_CONST: {

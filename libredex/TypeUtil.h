@@ -108,6 +108,10 @@ bool is_double(const DexType* type);
 
 bool is_void(const DexType* type);
 
+bool is_java_lang_object_array(const DexType* type);
+
+bool is_reference_array(const DexType* type);
+
 /*
  * Return the shorty char for this type.
  * int -> I
