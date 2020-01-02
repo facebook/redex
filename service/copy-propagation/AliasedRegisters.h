@@ -110,8 +110,6 @@ class Value {
     case Kind::REGISTER:
       return m_reg == other.m_reg;
     case Kind::CONST_LITERAL:
-      return m_literal == other.m_literal &&
-             m_type_demand == other.m_type_demand;
     case Kind::CONST_LITERAL_UPPER:
       return m_literal == other.m_literal &&
              m_type_demand == other.m_type_demand;
@@ -120,7 +118,6 @@ class Value {
     case Kind::CONST_TYPE:
       return m_type == other.m_type;
     case Kind::STATIC_FINAL:
-      return m_field == other.m_field;
     case Kind::STATIC_FINAL_UPPER:
       return m_field == other.m_field;
     case Kind::NONE:

@@ -409,7 +409,7 @@ Stats& Stats::operator+=(const Stats& that) {
   return *this;
 }
 
-Stats CopyPropagation::run(Scope scope) {
+Stats CopyPropagation::run(const Scope& scope) {
   return walk::parallel::methods<Stats>(
       scope,
       [this](DexMethod* m) {
@@ -427,7 +427,7 @@ Stats CopyPropagation::run(Scope scope) {
           IRTypeChecker checker(m);
           checker.run();
           if (!checker.good()) {
-            std::string msg = checker.what();
+            const std::string& msg = checker.what();
             TRACE(RME,
                   1,
                   "%s: Inconsistency in Dex code. %s",

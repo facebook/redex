@@ -219,15 +219,24 @@ AliasedRegisters::vertex_t AliasedRegisters::find_or_create(const Value& r) {
 // return true if there is a path of length exactly 1 from r1 to r2
 bool AliasedRegisters::has_edge_between(const Value& r1,
                                         const Value& r2) const {
-  // make sure we have both vertices
+  // find the vertex for r1
   const auto& search1 = find(r1);
-  const auto& search2 = find(r2);
   const auto& end = boost::vertices(m_graph).second;
-  if (search1 == end || search2 == end) {
+  if (search1 == end) {
     return false;
   }
+  vertex_t v1 = *search1;
 
-  return are_adjacent(*search1, *search2);
+  // search the neighbors of v1 for a vertex with value r2.
+  const auto& adj = boost::adjacent_vertices(v1, m_graph);
+  const auto& adj_begin = adj.first;
+  const auto& adj_end = adj.second;
+  for (auto it = adj_begin; it != adj_end; ++it) {
+    if (m_graph[*it] == r2) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool AliasedRegisters::are_adjacent(vertex_t v1, vertex_t v2) const {

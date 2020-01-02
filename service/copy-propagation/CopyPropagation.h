@@ -45,7 +45,7 @@ class CopyPropagation final {
  public:
   explicit CopyPropagation(const Config& config) : m_config(config) {}
 
-  Stats run(Scope scope);
+  Stats run(const Scope& scope);
 
   Stats run(IRCode*, DexMethod* = nullptr);
 
