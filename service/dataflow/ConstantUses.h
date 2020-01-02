@@ -39,6 +39,9 @@ class ConstantUses {
   // demand across all execution paths.
   TypeDemand get_constant_type_demand(IRInstruction*) const;
 
+  // Whether type inference information was required to be computed.
+  bool has_type_inference() const;
+
  private:
   static TypeDemand get_type_demand(DexType* type);
   TypeDemand get_type_demand(IRInstruction* insn, size_t src_index) const;

@@ -483,4 +483,6 @@ TypeDemand ConstantUses::get_type_demand(IRInstruction* insn,
   }
 }
 
+bool ConstantUses::has_type_inference() const { return !!m_type_inference; }
+
 } // namespace constant_uses

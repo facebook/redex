@@ -30,6 +30,7 @@ struct Stats {
   size_t moves_eliminated{0};
   size_t replaced_sources{0};
   size_t skipped_due_to_too_many_registers{0};
+  size_t type_inferences{0};
 
   Stats() = default;
   Stats(size_t elim, size_t replaced, size_t skipped)

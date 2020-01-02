@@ -103,6 +103,9 @@ class AliasFixpointIterator final
     if (m_config.eliminate_const_literals_with_same_type_demands) {
       if (!m_constant_uses) {
         m_constant_uses.reset(new constant_uses::ConstantUses(m_cfg, m_method));
+        if (m_constant_uses->has_type_inference()) {
+          m_stats.type_inferences++;
+        }
       }
       return m_constant_uses->get_constant_type_demand(insn);
     }
@@ -402,6 +405,7 @@ Stats& Stats::operator+=(const Stats& that) {
   moves_eliminated += that.moves_eliminated;
   replaced_sources += that.replaced_sources;
   skipped_due_to_too_many_registers += that.skipped_due_to_too_many_registers;
+  type_inferences += that.type_inferences;
   return *this;
 }
 

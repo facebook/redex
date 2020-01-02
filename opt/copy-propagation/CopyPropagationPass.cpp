@@ -35,6 +35,7 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
                   stats.replaced_sources);
   mgr.incr_metric("methods_skipped_due_to_too_many_registers",
                   stats.skipped_due_to_too_many_registers);
+  mgr.incr_metric("method_type_inferences", stats.type_inferences);
   TRACE(RME,
         1,
         "%d redundant moves eliminated",
@@ -47,6 +48,10 @@ void CopyPropagationPass::run_pass(DexStoresVector& stores,
         1,
         "%d methods skipped due to too many registers",
         mgr.get_metric("methods_skipped_due_to_too_many_registers"));
+  TRACE(RME,
+        1,
+        "%d methods had type inference computed",
+        mgr.get_metric("method_type_inferences"));
 }
 
 static CopyPropagationPass s_pass;
