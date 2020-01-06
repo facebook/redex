@@ -7,6 +7,7 @@
 
 #include "RemoveUnusedFields.h"
 
+#include "CFGMutation.h"
 #include "DexClass.h"
 #include "FieldOpTracker.h"
 #include "IRCode.h"
@@ -106,9 +107,8 @@ class RemoveUnusedFields final {
     // and remove the writes to unread fields.
     walk::parallel::code(m_scope, [&](const DexMethod*, IRCode& code) {
       auto& cfg = code.cfg();
+      cfg::CFGMutation m(cfg);
       auto iterable = cfg::InstructionIterable(cfg);
-      std::vector<cfg::InstructionIterator> to_replace;
-      std::vector<cfg::InstructionIterator> to_remove;
       for (auto insn_it = iterable.begin(); insn_it != iterable.end();
            ++insn_it) {
         auto* insn = insn_it->insn;
@@ -116,40 +116,42 @@ class RemoveUnusedFields final {
           continue;
         }
         auto field = resolve_field(insn->get_field());
+        bool replace_insn = false;
+        bool remove_insn = false;
         if (m_unread_fields.count(field)) {
           always_assert(is_iput(insn->opcode()) || is_sput(insn->opcode()));
           TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-          to_remove.push_back(insn_it);
+          remove_insn = true;
         } else if (m_unwritten_fields.count(field)) {
           always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
           TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
-          to_replace.push_back(insn_it);
+          replace_insn = true;
         } else if (m_zero_written_fields.count(field)) {
           if (is_iput(insn->opcode()) || is_sput(insn->opcode())) {
             TRACE(RMUF, 5, "Removing %s", SHOW(insn));
-            to_remove.push_back(insn_it);
+            remove_insn = true;
           } else {
             always_assert(is_iget(insn->opcode()) || is_sget(insn->opcode()));
             TRACE(RMUF, 5, "Replacing %s with const 0", SHOW(insn));
-            to_replace.push_back(insn_it);
+            replace_insn = true;
           }
         }
-      }
-      for (auto insn_it : to_replace) {
-        auto move_result = cfg.move_result_of(insn_it);
-        if (move_result.is_end()) {
-          continue;
+        using Insert = cfg::CFGMutation::Insert;
+        if (replace_insn) {
+          auto move_result = cfg.move_result_of(insn_it);
+          if (move_result.is_end()) {
+            continue;
+          }
+          auto write_insn = move_result->insn;
+          IRInstruction* const0 = new IRInstruction(
+              write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
+          const0->set_dest(write_insn->dest())->set_literal(0);
+          m.add_change(Insert::Replacing, insn_it, {const0});
+        } else if (remove_insn) {
+          m.add_change(Insert::Replacing, insn_it, {});
         }
-        auto insn = move_result->insn;
-        IRInstruction* const0 = new IRInstruction(
-            insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
-        const0->set_dest(insn->dest())->set_literal(0);
-        auto invalidated = cfg.replace_insn(insn_it, const0);
-        always_assert(!invalidated);
       }
-      for (auto insn_it : to_remove) {
-        cfg.remove_insn(insn_it);
-      }
+      m.flush();
       code.clear_cfg();
     });
   }
