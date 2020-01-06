@@ -120,7 +120,9 @@ size_t dedup_methods_helper(
   for (auto& group : grouped_methods) {
     auto replacement = *group.begin();
     for (auto m : group) {
-      duplicates_to_replacement[m] = replacement;
+      if (m != replacement) {
+        duplicates_to_replacement[m] = replacement;
+      }
       // Update dedup map
       if (new_to_old == boost::none) {
         continue;

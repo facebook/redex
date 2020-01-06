@@ -66,6 +66,10 @@ void patch_callsite(const CallSite& callsite, const NewCallee& new_callee) {
 void update_call_refs_simple(
     const Scope& scope,
     const std::unordered_map<DexMethod*, DexMethod*>& old_to_new_callee) {
+  if (old_to_new_callee.empty()) {
+    return;
+  }
+
   auto patcher = [&](DexMethod* meth, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;

@@ -1454,9 +1454,9 @@ void Model::update_model(Model& model) {
   model.shape_model();
   TRACE(TERA, 3, "Model:\n%s\nShape Model done", model.print().c_str());
 
-  TRACE(TERA, 2, "Final Model");
+  TRACE(TERA, 3, "Final Model");
   model.collect_methods();
-  TRACE(TERA, 2, "Model:\n%s\nFinal Model done", model.print().c_str());
+  TRACE(TERA, 3, "Model:\n%s\nFinal Model done", model.print().c_str());
 }
 
 Model Model::build_model(const Scope& scope,
