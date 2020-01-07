@@ -247,8 +247,10 @@ class TransitiveClosureMarker {
         m_reachable_objects(reachable_objects),
         m_worker_state(worker_state),
         m_stats(stats) {
-    m_class_forname = DexMethod::get_method(
-        "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
+    if (s_class_forname == nullptr) {
+      s_class_forname = DexMethod::get_method(
+          "Ljava/lang/Class;.forName:(Ljava/lang/String;)Ljava/lang/Class;");
+    }
   }
 
   virtual ~TransitiveClosureMarker() = default;
@@ -303,7 +305,6 @@ class TransitiveClosureMarker {
   template <class Parent, class Object>
   void record_reachability(Parent* parent, Object* object);
 
-  const DexMethodRef* m_class_forname;
   const IgnoreSets& m_ignore_sets;
   const method_override_graph::Graph& m_method_override_graph;
   bool m_record_reachability;
@@ -311,6 +312,8 @@ class TransitiveClosureMarker {
   ReachableObjects* m_reachable_objects;
   MarkWorkerState* m_worker_state;
   Stats* m_stats;
+
+  static DexMethodRef* s_class_forname;
 };
 
 std::unique_ptr<ReachableObjects> compute_reachable_objects(

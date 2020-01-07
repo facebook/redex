@@ -60,6 +60,8 @@ DexMethod* resolve(const DexMethodRef* method, const DexClass* cls) {
 
 namespace reachability {
 
+DexMethodRef* TransitiveClosureMarker::s_class_forname = nullptr;
+
 std::ostream& operator<<(std::ostream& os, const ReachableObject& obj) {
   switch (obj.type) {
   case ReachableObjectType::ANNO:
@@ -322,12 +324,12 @@ References TransitiveClosureMarker::gather(const DexField* field) const {
 
 bool TransitiveClosureMarker::has_class_forname(DexMethod* meth) {
   auto code = meth->get_code();
-  if (!code || !m_class_forname) {
+  if (!code || !s_class_forname) {
     return false;
   }
   for (auto& mie : InstructionIterable(code)) {
     auto insn = mie.insn;
-    if (insn->has_method() && insn->get_method() == m_class_forname) {
+    if (insn->has_method() && insn->get_method() == s_class_forname) {
       return true;
     }
   }
