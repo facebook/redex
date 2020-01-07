@@ -99,7 +99,11 @@ PassManager::PassManager(
     // nonexistent passes are caught as early as possible
     auto pass = find_pass(getenv("PROFILE_PASS"));
     always_assert(pass != nullptr);
-    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), pass);
+    boost::optional<std::string> post_cmd = boost::none;
+    if (getenv("PROFILE_POST_COMMAND")) {
+      post_cmd = std::string(getenv("PROFILE_POST_COMMAND"));
+    }
+    m_profiler_info = ProfilerInfo(getenv("PROFILE_COMMAND"), post_cmd, pass);
     fprintf(stderr, "Will run profiler for %s\n", pass->name().c_str());
   }
   if (getenv("MALLOC_PROFILE_PASS")) {
@@ -264,10 +268,11 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     m_current_pass_info = &m_pass_info[i];
 
     {
+      bool run_profiler = m_profiler_info && m_profiler_info->pass == pass;
       ScopedCommandProfiling cmd_prof(
-          m_profiler_info && m_profiler_info->pass == pass
-              ? boost::make_optional(m_profiler_info->command)
-              : boost::none);
+          run_profiler ? boost::make_optional(m_profiler_info->command)
+                       : boost::none,
+          run_profiler ? m_profiler_info->post_cmd : boost::none);
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }

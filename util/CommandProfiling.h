@@ -10,10 +10,13 @@
 
 class ScopedCommandProfiling final {
  public:
-  ScopedCommandProfiling(boost::optional<std::string> cmd);
+  explicit ScopedCommandProfiling(
+      boost::optional<std::string> cmd,
+      boost::optional<std::string> post_cmd = boost::none);
 
   ~ScopedCommandProfiling();
 
  private:
   pid_t m_profiler{-1};
+  boost::optional<std::string> m_post_cmd;
 };
