@@ -108,17 +108,11 @@ class ApplicationModule(object):
         extracted_apk_dir,
         dex_dir,
         have_locators,
-        have_name_based_locators,
         locator_store_id,
         fast_repackage,
     ):
         self.dex_mode.repackage(
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            have_name_based_locators,
-            locator_store_id,
-            fast_repackage,
+            extracted_apk_dir, dex_dir, have_locators, locator_store_id, fast_repackage
         )
 
 
@@ -128,17 +122,14 @@ class DexMetadata(object):
         store=None,
         dependencies=None,
         have_locators=False,
-        have_name_based_locators=False,
         is_root_relative=False,
         locator_store_id=0,
         superpack_files=0,
     ):
         self._have_locators = False
-        self._have_name_based_locators = False
         self._store = store
         self._dependencies = dependencies
         self._have_locators = have_locators
-        self._have_name_based_locators = have_name_based_locators
         self._is_root_relative = is_root_relative
         self._dexen = []
         self._locator_store_id = locator_store_id
@@ -163,8 +154,6 @@ class DexMetadata(object):
                 meta.write(".root_relative\n")
             if self._have_locators:
                 meta.write(".locators\n")
-            if self._have_name_based_locators:
-                meta.write(".name_based_locators\n")
             if self._locator_store_id > 0:
                 meta.write(".locator_id " + str(self._locator_store_id) + "\n")
             if self.superpack_files > 0:
@@ -185,14 +174,7 @@ class BaseDexMode(object):
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, dex_dir)
 
-    def repackage(
-        self,
-        extracted_apk_dir,
-        dex_dir,
-        have_locators,
-        have_name_based_locators,
-        fast_repackage,
-    ):
+    def repackage(self, extracted_apk_dir, dex_dir, have_locators, fast_repackage):
         primary_dex = join(dex_dir, self._dex_prefix + ".dex")
         if os.path.exists(primary_dex):
             shutil.move(primary_dex, extracted_apk_dir)
@@ -245,24 +227,17 @@ class Api21DexMode(BaseDexMode):
         extracted_apk_dir,
         dex_dir,
         have_locators,
-        have_name_based_locators,
         locator_store_id=0,
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            have_name_based_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
         metadata_dir = join(extracted_apk_dir, self._secondary_dir)
 
         metadata = DexMetadata(
             is_root_relative=self._is_root_relative,
             have_locators=have_locators,
-            have_name_based_locators=have_name_based_locators,
             store=self._store_id,
             dependencies=self._dependencies,
             locator_store_id=locator_store_id,
@@ -353,22 +328,15 @@ class SubdirDexMode(BaseDexMode):
         extracted_apk_dir,
         dex_dir,
         have_locators,
-        have_name_based_locators,
         locator_store_id=0,
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            have_name_based_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
 
         metadata = DexMetadata(
             have_locators=have_locators,
-            have_name_based_locators=have_name_based_locators,
             store=self._store_id,
             dependencies=self._dependencies,
             locator_store_id=locator_store_id,
@@ -510,17 +478,11 @@ class XZSDexMode(BaseDexMode):
         extracted_apk_dir,
         dex_dir,
         have_locators,
-        have_name_based_locators,
         locator_store_id=0,
         fast_repackage=False,
     ):
         BaseDexMode.repackage(
-            self,
-            extracted_apk_dir,
-            dex_dir,
-            have_locators,
-            have_name_based_locators,
-            fast_repackage,
+            self, extracted_apk_dir, dex_dir, have_locators, fast_repackage
         )
 
         dex_sizes = {}
@@ -530,7 +492,6 @@ class XZSDexMode(BaseDexMode):
         concat_jar_meta = join(dex_dir, "metadata.txt")
         dex_metadata = DexMetadata(
             have_locators=have_locators,
-            have_name_based_locators=have_name_based_locators,
             store=self._store_id,
             dependencies=self._dependencies,
             locator_store_id=locator_store_id,

@@ -55,7 +55,7 @@ void testReadDex(const char* dexfile) {
 
   // clang-format off
 
-  // !!! N.B. !!! right now these tests assume a reliable ordering of 
+  // !!! N.B. !!! right now these tests assume a reliable ordering of
   // callsite/methodhandles by the dexer. it's definitely fragile.
 
   // verify lambda metafactory method handle shared by every callsite
@@ -64,7 +64,7 @@ void testReadDex(const char* dexfile) {
   //   target      : Ljava/lang/invoke/LambdaMetafactory; metafactory
   //   target_type : (Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;
   int metafactoryMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
-    return 
+    return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
       !strcmp(mh->methodref()->get_name()->c_str(), "metafactory") &&
       !strcmp(mh->methodref()->get_class()->get_name()->c_str(), "Ljava/lang/invoke/LambdaMetafactory;") &&
@@ -77,9 +77,9 @@ void testReadDex(const char* dexfile) {
 
   //   type        : invoke-static
   //   target      : Lcom/facebook/redextest/Dex038; lambda$run$0
-  //   target_type : ()Ljava/lang/String; 
+  //   target_type : ()Ljava/lang/String;
   int lambdaRun0MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
-    return 
+    return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
       !strcmp(mh->methodref()->get_name()->c_str(), "lambda$run$0") &&
       !strcmp(mh->methodref()->get_class()->get_name()->c_str(), DEX038_CLASS_NAME) &&
@@ -90,7 +90,7 @@ void testReadDex(const char* dexfile) {
 
   //   type        : invoke-static
   //   target      : Lcom/facebook/redextest/Dex038; lambda$run$1
-  //   target_type : ()Ljava/lang/String;    
+  //   target_type : ()Ljava/lang/String;
   int lambdaRun1MethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
@@ -116,7 +116,7 @@ void testReadDex(const char* dexfile) {
 
   //   type        : invoke-static
   //   target      : Lcom/facebook/redextest/Dex038; staticStringSupplier
-  //   target_type : ()Ljava/lang/String;    
+  //   target_type : ()Ljava/lang/String;
   int staticStringSupplierMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_STATIC &&
@@ -142,7 +142,7 @@ void testReadDex(const char* dexfile) {
 
   //   type        : invoke-constructor
   //   target      : Ljava/lang/String; <init>
-  //   target_type : (Ljava/lang/String;)V    
+  //   target_type : (Ljava/lang/String;)V
   int constructorMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_CONSTRUCTOR &&
@@ -155,7 +155,7 @@ void testReadDex(const char* dexfile) {
 
   //   type        : invoke-direct
   //   target      : Lcom/facebook/redextest/Dex038; privateInstanceStringSupplier
-  //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;  
+  //   target_type : (Lcom/facebook/redextest/Dex038;)Ljava/lang/String;
   int directMethodHandleIdx = ensureMethodHandle(idx, [](DexMethodHandle* mh) {
     return
       mh->type() == METHOD_HANDLE_TYPE_INVOKE_DIRECT &&
@@ -165,13 +165,13 @@ void testReadDex(const char* dexfile) {
   });
   EXPECT_NE(directMethodHandleIdx, -1);
   DexMethodHandle* directMethodHandle = idx->get_methodhandleidx(directMethodHandleIdx);
-  
+
   //   link_argument[0] : N (MethodHandle)
   //   link_argument[1] : get (String)
   //   link_argument[2] : (Lcom/facebook/redextest/Dex038;)Ljava/util/function/Supplier; (MethodType)
   //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
   //   link_argument[4] : N (MethodHandle)
-  //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
   EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
     return
       cs->method_handle() == metafactoryMethodHandle &&
@@ -199,7 +199,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), DEX038_CLASS_NAME) &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == directMethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == directMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -218,7 +218,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == constructorMethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == constructorMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -237,7 +237,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == staticStringSupplierMethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == staticStringSupplierMethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -247,7 +247,7 @@ void testReadDex(const char* dexfile) {
   //   link_argument[2] : ()Ljava/util/function/Supplier; (MethodType)
   //   link_argument[3] : ()Ljava/lang/Object; (MethodType)
   //   link_argument[4] : N (MethodHandle)
-  //   link_argument[5] : ()Ljava/lang/String; (MethodType)    
+  //   link_argument[5] : ()Ljava/lang/String; (MethodType)
   EXPECT_NE(ensureCallSite(idx, [&](DexCallSite* cs) {
     return
       cs->method_handle() == metafactoryMethodHandle &&
@@ -256,7 +256,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun0MethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun0MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -275,7 +275,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun1MethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun1MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -294,7 +294,7 @@ void testReadDex(const char* dexfile) {
       !strcmp(SHOW(cs->method_type()->get_args()), "") &&
       cs->args().size() == 3 &&
       !strcmp(SHOW(cs->args()[0]), VOID_RETURN_OBJECT_PROTO) &&
-      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun2MethodHandle && 
+      ((DexEncodedValueMethodHandle*)cs->args()[1])->methodhandle() == lambdaRun2MethodHandle &&
       !strcmp(SHOW(cs->args()[2]), VOID_RETURN_STRING_PROTO);
   }), -1);
 
@@ -350,7 +350,6 @@ TEST(Dex038Test, ReadWriteDex038) {
                        output_dex,
                        &classes,
                        nullptr,
-                       false,
                        0,
                        0,
                        dummy_cfg,

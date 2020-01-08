@@ -100,7 +100,6 @@ int main(int argc, char* argv[]) {
                        dex,
                        &classes,
                        nullptr /* LocatorIndex* */,
-                       false /* name-based locators */,
                        0,
                        0,
                        conf,

@@ -67,7 +67,6 @@ DexClasses run_redex(std::unordered_map<std::string, uint64_t>* mid = nullptr,
   DexOutput output("tmp.dex", /* filename */
                    dexen.data(),
                    nullptr, /* locator_index */
-                   false, /* emit_name_based_locators */
                    false, /* normal_primary_dex */
                    0,
                    0,

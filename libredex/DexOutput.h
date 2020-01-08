@@ -35,8 +35,7 @@ typedef std::unordered_map<DexCallSite*, uint32_t> dexcallsite_to_idx;
 typedef std::unordered_map<DexMethodHandle*, uint32_t> dexmethodhandle_to_idx;
 
 using LocatorIndex = std::unordered_map<DexString*, Locator>;
-LocatorIndex make_locator_index(DexStoresVector& stores,
-                                bool emit_name_based_locators);
+LocatorIndex make_locator_index(DexStoresVector& stores);
 
 enum class SortMode {
   CLASS_ORDER,
@@ -131,7 +130,6 @@ dex_stats_t write_classes_to_dex(
     const std::string& filename,
     DexClasses* classes,
     LocatorIndex* locator_index /* nullable */,
-    bool emit_name_based_locators,
     size_t store_number,
     size_t dex_number,
     const ConfigFiles& conf,
@@ -320,7 +318,6 @@ class DexOutput {
   dex_header hdr;
   std::vector<dex_map_item> m_map_items;
   LocatorIndex* m_locator_index;
-  bool m_emit_name_based_locators;
   bool m_normal_primary_dex;
   const ConfigFiles& m_config_files;
   std::unordered_set<std::string> m_method_sorting_whitelisted_substrings;
@@ -367,7 +364,7 @@ class DexOutput {
   void write_symbol_files();
   void align_output() { m_offset = (m_offset + 3) & ~3; }
   void emit_locator(Locator locator);
-  void emit_name_based_locators();
+  void emit_magic_locators();
   std::unique_ptr<Locator> locator_for_descriptor(
       const std::unordered_set<DexString*>& type_names, DexString* descriptor);
 
@@ -377,7 +374,6 @@ class DexOutput {
   DexOutput(const char* path,
             DexClasses* classes,
             LocatorIndex* locator_index,
-            bool emit_name_based_locators,
             bool normal_primary_dex,
             size_t store_number,
             size_t dex_number,

@@ -93,12 +93,14 @@ namespace facebook {
 // the locator string for last class in the dex, and the locator string for
 // the first class in the dex.
 //
+
+//
 // At runtime, all this kicks in when the manifest.txt file contains
 // the line
-//   .emit_name_based_locator_strings
-// This line is added by Redex when renaming for name-based locators is enabled.
+//   .emit_locator_strings
+// This line is added by Redex when locator strings are enabled.
 // Then, our various class loaders would load the range information on startup,
-// and for class load requests  always first check if a type descriptor
+// and for class load requests always first check if a type descriptor
 // represents a global class index, and then find the dex into whose range the
 // index falls, and then derive the locator information as described.
 // Only for classes that didn't get renamed, and for which the global class
