@@ -868,37 +868,39 @@ DexType* check_current_instance(const TypeSet& types, IRInstruction* insn) {
   return type;
 }
 
-std::unordered_map<DexType*, std::unordered_set<DexType*>> get_type_usages(
+ConcurrentMap<DexType*, std::unordered_set<DexType*>> get_type_usages(
     const TypeSet& types, const Scope& scope) {
-  std::unordered_map<DexType*, std::unordered_set<DexType*>> res;
+  ConcurrentMap<DexType*, std::unordered_set<DexType*>> res;
 
-  walk::opcodes(
-      scope, [](DexMethod*) { return true; },
-      [&](DexMethod* method, IRInstruction* insn) {
-        auto current_instance = check_current_instance(types, insn);
-        if (current_instance) {
-          res[current_instance].emplace(method->get_class());
+  walk::parallel::opcodes(scope, [&](DexMethod* method, IRInstruction* insn) {
+    auto cls = method->get_class();
+    const auto& updater =
+        [&cls](DexType* /* key */, std::unordered_set<DexType*>& set,
+               bool /* already_exists */) { set.emplace(cls); };
+
+    auto current_instance = check_current_instance(types, insn);
+    if (current_instance) {
+      res.update(current_instance, updater);
+    }
+
+    if (insn->has_method()) {
+      auto callee = resolve_method(insn->get_method(), opcode_to_search(insn));
+      if (!callee) {
+        return;
+      }
+      auto proto = callee->get_proto();
+      auto rtype = proto->get_rtype();
+      if (rtype && types.count(rtype)) {
+        res.update(rtype, updater);
+      }
+
+      for (const auto& type : proto->get_args()->get_type_list()) {
+        if (type && types.count(type)) {
+          res.update(type, updater);
         }
-
-        if (insn->has_method()) {
-          auto callee =
-              resolve_method(insn->get_method(), opcode_to_search(insn));
-          if (!callee) {
-            return;
-          }
-          auto proto = callee->get_proto();
-          auto rtype = proto->get_rtype();
-          if (rtype && types.count(rtype)) {
-            res[rtype].emplace(method->get_class());
-          }
-
-          for (const auto& type : proto->get_args()->get_type_list()) {
-            if (type && types.count(type)) {
-              res[type].emplace(method->get_class());
-            }
-          }
-        }
-      });
+      }
+    }
+  });
 
   return res;
 }
@@ -921,7 +923,7 @@ size_t get_interdex_group(
 } // namespace
 
 std::vector<TypeSet> Model::group_per_interdex_set(const TypeSet& types) {
-  auto type_to_usages = get_type_usages(types, m_scope);
+  const auto& type_to_usages = get_type_usages(types, m_scope);
   std::vector<TypeSet> new_groups(s_num_interdex_groups);
   for (const auto& pair : type_to_usages) {
     auto index = get_interdex_group(pair.second, s_cls_to_interdex_group,
