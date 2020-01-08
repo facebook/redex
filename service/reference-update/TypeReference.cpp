@@ -463,7 +463,8 @@ std::string get_method_signature(const DexMethod* method) {
   return ss.str();
 }
 
-bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets) {
+bool proto_has_reference_to(const DexProto* proto,
+                            const UnorderedTypeSet& targets) {
   auto rtype = type::get_element_type_if_array(proto->get_rtype());
   if (targets.count(rtype)) {
     return true;
@@ -566,7 +567,7 @@ void update_method_signature_type_references(
     };
   }
 
-  TypeSet old_types;
+  UnorderedTypeSet old_types;
   for (auto& pair : old_to_new) {
     old_types.insert(pair.first);
   }
@@ -614,14 +615,13 @@ void update_method_signature_type_references(
   }
 
   // Ensure that no method references left that still refer old types.
-  walk::parallel::code(scope, [&old_to_new](DexMethod*, IRCode& code) {
+  walk::parallel::code(scope, [&old_types](DexMethod*, IRCode& code) {
     for (auto& mie : InstructionIterable(code)) {
       auto insn = mie.insn;
       if (insn->has_method()) {
         auto proto = insn->get_method()->get_proto();
-        auto new_proto = get_new_proto(proto, old_to_new);
         always_assert_log(
-            proto == new_proto,
+            !proto_has_reference_to(proto, old_types),
             "Find old type in method reference %s, please make sure that "
             "ReBindRefsPass is enabled before the crashed pass.\n",
             SHOW(insn));

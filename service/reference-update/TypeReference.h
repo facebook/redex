@@ -14,6 +14,7 @@
 #include "DexClass.h"
 
 using TypeSet = std::set<const DexType*, dextypes_comparator>;
+using UnorderedTypeSet = std::unordered_set<const DexType*>;
 
 namespace type_reference {
 
@@ -77,7 +78,8 @@ DexString* new_name(const DexFieldRef* field);
 // A helper to stringify method signature for the method dedup mapping file.
 std::string get_method_signature(const DexMethod* method);
 
-bool proto_has_reference_to(const DexProto* proto, const TypeSet& targets);
+bool proto_has_reference_to(const DexProto* proto,
+                            const UnorderedTypeSet& targets);
 
 /**
  * Get a new proto by updating the type references on the proto from an old type

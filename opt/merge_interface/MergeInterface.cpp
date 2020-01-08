@@ -149,7 +149,7 @@ std::vector<DexClassSet> collect_can_merge(
  */
 void strip_out_collision(const Scope& scope,
                          std::vector<DexClassSet>* candidates) {
-  TypeSet mergeables;
+  UnorderedTypeSet mergeables;
 
   std::unordered_map<const DexType*, DexType*> intf_merge_map;
   for (auto it = candidates->begin(); it != candidates->end(); ++it) {

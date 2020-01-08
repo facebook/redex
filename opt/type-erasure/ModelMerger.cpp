@@ -93,7 +93,7 @@ void update_code_type_refs(
     const std::unordered_map<const DexType*, DexType*>& mergeable_to_merger) {
   TRACE(
       TERA, 8, "  Updating NEW_INSTANCE, NEW_ARRAY, CHECK_CAST & CONST_CLASS");
-  TypeSet mergeables;
+  UnorderedTypeSet mergeables;
   for (const auto& pair : mergeable_to_merger) {
     mergeables.insert(pair.first);
   }
