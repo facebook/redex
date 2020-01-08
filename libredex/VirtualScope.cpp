@@ -361,6 +361,7 @@ void merge(const BaseSigs& base_sigs,
     auto& derived_protos_map = derived_sig_entry.second;
     for (const auto& derived_scopes_it : derived_protos_map) {
       const auto proto = derived_scopes_it.first;
+      auto& virt_scopes = base_sig_map[name][proto];
       // the signature in derived does not exists in base
       if (!is_base_sig(name, proto)) {
         TRACE(VIRT,
@@ -378,7 +379,7 @@ void merge(const BaseSigs& base_sigs,
                 SHOW(proto),
                 scope.methods.size(),
                 SHOW(scope.methods[0].first));
-          base_sig_map[name][proto].push_back(scope);
+          virt_scopes.push_back(scope);
         }
         continue;
       }
@@ -387,19 +388,18 @@ void merge(const BaseSigs& base_sigs,
       // needs to merge
       // first scope in base_sig_map must be that of the type under
       // analysis because we built it first and added to the empty vector
-      always_assert(base_sig_map[name][proto].size() > 0);
+      always_assert(virt_scopes.size() > 0);
       TRACE(VIRT,
             4,
             "- found existing scopes for %s:%s (%ld) - first: %s, %ld, %ld",
             SHOW(name),
             SHOW(proto),
-            base_sig_map[name][proto].size(),
-            SHOW(base_sig_map[name][proto][0].type),
-            base_sig_map[name][proto][0].methods.size(),
-            base_sig_map[name][proto][0].interfaces.size());
-      always_assert(
-          base_sig_map[name][proto][0].type == type::java_lang_Object() ||
-          !is_interface(type_class(base_sig_map[name][proto][0].type)));
+            virt_scopes.size(),
+            SHOW(virt_scopes[0].type),
+            virt_scopes[0].methods.size(),
+            virt_scopes[0].interfaces.size());
+      always_assert(virt_scopes[0].type == type::java_lang_Object() ||
+                    !is_interface(type_class(virt_scopes[0].type)));
       // walk every scope in derived that we have to merge
       TRACE(VIRT, 4, "-- walking scopes");
       for (const auto& scope : derived_scopes_it.second) {
@@ -421,10 +421,10 @@ void merge(const BaseSigs& base_sigs,
           TRACE(VIRT,
                 4,
                 "-- merging with base scopes %s(%ld) : %s",
-                SHOW(base_sig_map[name][proto][0].type),
-                base_sig_map[name][proto][0].methods.size(),
-                SHOW(base_sig_map[name][proto][0].methods[0].first));
-          merge(base_sig_map[name][proto][0], scope);
+                SHOW(virt_scopes[0].type),
+                virt_scopes[0].methods.size(),
+                SHOW(virt_scopes[0].methods[0].first));
+          merge(virt_scopes[0], scope);
           continue;
         }
         // interface case. If derived was for an interface in base
@@ -437,7 +437,7 @@ void merge(const BaseSigs& base_sigs,
                 SHOW(proto),
                 SHOW(scope.type),
                 SHOW(scope.methods[0].first));
-          base_sig_map[name][proto].push_back(scope);
+          virt_scopes.push_back(scope);
           continue;
         }
         TRACE(VIRT,
