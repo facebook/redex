@@ -934,15 +934,12 @@ def finalize_redex(state):
 
     log("Repacking dex files")
     have_locators = state.config_dict.get("emit_locator_strings")
-    have_name_based_locators = state.config_dict.get("emit_name_based_locator_strings")
     log("Emit Locator Strings: %s" % have_locators)
-    log("Emit Name Based Locator Strings: %s" % have_name_based_locators)
 
     state.dex_mode.repackage(
         get_dex_file_path(state.args, state.extracted_apk_dir),
         state.dex_dir,
         have_locators,
-        have_name_based_locators,
         fast_repackage=state.args.dev,
     )
 
@@ -958,7 +955,6 @@ def finalize_redex(state):
             state.extracted_apk_dir,
             state.dex_dir,
             have_locators,
-            have_name_based_locators,
             locator_store_id,
             fast_repackage=state.args.dev,
         )

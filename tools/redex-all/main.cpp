@@ -911,15 +911,10 @@ void redex_backend(const std::string& output_dir,
   const JsonWrapper& json_config = conf.get_json_config();
 
   LocatorIndex* locator_index = nullptr;
-  bool emit_name_based_locators = false;
   if (json_config.get("emit_locator_strings", false)) {
-    emit_name_based_locators =
-        json_config.get("emit_name_based_locator_strings", false);
     TRACE(LOC, 1,
-          "Will emit%s class-locator strings for classloader optimization",
-          emit_name_based_locators ? " name-based" : "");
-    locator_index =
-        new LocatorIndex(make_locator_index(stores, emit_name_based_locators));
+          "Will emit class-locator strings for classloader optimization");
+    locator_index = new LocatorIndex(make_locator_index(stores));
   }
 
   dex_stats_t output_totals;
@@ -970,7 +965,6 @@ void redex_backend(const std::string& output_dir,
                                ss.str(),
                                &store.get_dexen()[i],
                                locator_index,
-                               emit_name_based_locators,
                                store_number,
                                i,
                                conf,
