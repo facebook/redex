@@ -350,9 +350,13 @@ DexString* file_name_from_method_string(const DexString* method) {
   if (innercls_pos != std::string::npos) {
     end = innercls_pos;
   }
+  always_assert(end != std::string::npos);
   auto start = s.rfind("/", end);
-  always_assert(start != std::string::npos && end != std::string::npos);
-  ++start; // Skip over the "/"
+  if (start != std::string::npos) {
+    ++start; // Skip over the "/"
+  } else {
+    start = 1; // Skip over the "L"
+  }
   return DexString::make_string(s.substr(start, end - start) + ".java");
 }
 
