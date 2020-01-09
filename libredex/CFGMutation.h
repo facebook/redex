@@ -23,8 +23,6 @@ namespace cfg {
 /// TODO(T59235117) Flush mutation in the destructor.
 class CFGMutation {
  public:
-  enum class Insert { Before, After, Replacing };
-
   /// Create a new mutation to apply to \p cfg.
   CFGMutation(ControlFlowGraph& cfg);
 
@@ -39,41 +37,62 @@ class CFGMutation {
   CFGMutation& operator=(CFGMutation&&) = delete;
 
   /// Add a new change to this mutation.
-  /// Mutation may have multiple changes associated with \p
-  ///     anchor.
-  /// Mutation restrictions:
-  ///  - It's not possible to have two \c Replacing instructions
-  ///     for a single anchor.
-  ///  - It's not possible to \c Insert::After terminal operation without
-  ///     \c Replacing it.
-  ///
-  /// \p where indicates where to add the  \p instructions, relative to the
-  ///     anchor.  \c Before means preserve the anchor instruction and add the
-  ///     instructions before it.  \c After means preserve the anchor
-  ///     instruction and add the instructions after it.  \c Replacing behaves
-  ///     like either \c Before or \c After followed by removing the anchor
-  ///     instruction.
-  /// \p anchor is the instruction that the change is made relative to.  If at
-  ///     the time the change is applied, the anchor does not exist, the change
-  ///     will be ignored.
-  /// \p instructions are the instructions that are inserted as part of the
-  ///     change.  This can be an empty list.
-  ///
-  /// \pre The anchor iterator must be dereferenceable (i.e. not \c end() ).
-  ///
+  /// Mutation may have multiple changes associated with \c anchor.
   /// Here is the resulting order of instructions applying multiple changes
   /// to a single \c anchor it.
   ///
-  /// add_change(Before, it, as)
-  /// add_change(Replacing, it, rs)
-  /// add_change(Before, it, bs)
-  /// add_change(After, it, ys)
-  /// add_change(After, it, zs)
+  /// insert_before(it, as)
+  /// replace(it, rs)
+  /// insert_before(it, bs)
+  /// insert_after(it, ys)
+  /// insert_after(it, zs)
   ///
   /// as ++ bs ++ rs ++ ys ++ zs
-  void add_change(Insert where,
-                  const cfg::InstructionIterator& anchor,
-                  std::vector<IRInstruction*> instructions);
+
+  /// Insert a new change before \p anchor.
+  /// Mutation may have multiple changes associated with \c anchor.
+  ///     insert_before preserves the anchor instruction and add the
+  ///     instructions before it.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored.
+  /// \p instructions are the instructions that are inserted as part of the
+  ///     change. This can be an empty list.
+  void insert_before(const cfg::InstructionIterator& anchor,
+                     std::vector<IRInstruction*> instructions);
+
+  /// Insert a new change after \p anchor.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored. This preserve the anchor instruction and add the
+  ///     instructions after it.
+  /// \p instructions are the instructions that are inserted as part of the
+  ///     change.
+  /// Mutation restrictions:
+  ///  - It's not possible to insert_after terminal operation without
+  ///    replacing it. This can be an empty list.
+  void insert_after(const cfg::InstructionIterator& anchor,
+                    std::vector<IRInstruction*> instructions);
+
+  /// Replace with a new change at this \p anchor.
+  /// replace behaves like either Before or After followed by removing the
+  /// anchor instruction.
+  /// \p anchor is the instruction that the change is made relative to. If at
+  ///     the time the change is applied, the anchor does not exist, the change
+  ///     will be ignored.
+  /// \p instructions are the instructions that are inserted as part of the
+  ///     change. This can be an empty list.
+  /// Mutation restrictions:
+  ///  - It's not possible to have two replacing instructions for a single
+  ///    anchor.
+  void replace(const cfg::InstructionIterator& anchor,
+               std::vector<IRInstruction*> instructions);
+
+  /// Remove change at this \p anchor.
+  /// \p anchor is the instruction that is removed. If at the time the change
+  ///     is applied, the anchor does not exist, the change will be ignored.
+  ///  - It's not possible to have two remove instructions for a single anchor.
+  void remove(const cfg::InstructionIterator& anchor);
 
   /// Remove all pending changes without applying them.
   void clear();
@@ -89,6 +108,7 @@ class CFGMutation {
   /// A memento of a change we wish to make to the CFG.
   class ChangeSet {
    public:
+    enum class Insert { Before, After, Replacing };
     /// Apply this change on the control flow graph \p cfg, using \p it as the
     /// anchoring instruction. Moves \p it if the change invalidates the anchor.
     ///
@@ -122,13 +142,13 @@ inline void CFGMutation::ChangeSet::add_change(
     Insert where, std::vector<IRInstruction*> insns) {
 
   switch (where) {
-  case CFGMutation::Insert::Before:
+  case Insert::Before:
     m_insert_before.insert(m_insert_before.end(), insns.begin(), insns.end());
     break;
-  case CFGMutation::Insert::After:
+  case Insert::After:
     m_insert_after.insert(m_insert_after.end(), insns.begin(), insns.end());
     break;
-  case CFGMutation::Insert::Replacing:
+  case Insert::Replacing:
     always_assert_log(!m_replace.has_value(),
                       "It's not possible to have two Replacing instructions "
                       "for a single anchor.");
@@ -137,11 +157,32 @@ inline void CFGMutation::ChangeSet::add_change(
   }
 }
 
-inline void CFGMutation::add_change(Insert where,
-                                    const cfg::InstructionIterator& anchor,
-                                    std::vector<IRInstruction*> instructions) {
+inline void CFGMutation::insert_before(
+    const cfg::InstructionIterator& anchor,
+    std::vector<IRInstruction*> instructions) {
   always_assert(!anchor.is_end());
-  m_changes[anchor->insn].add_change(where, std::move(instructions));
+  m_changes[anchor->insn].add_change(ChangeSet::Insert::Before,
+                                     std::move(instructions));
+}
+
+inline void CFGMutation::insert_after(
+    const cfg::InstructionIterator& anchor,
+    std::vector<IRInstruction*> instructions) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_change(ChangeSet::Insert::After,
+                                     std::move(instructions));
+}
+
+inline void CFGMutation::replace(const cfg::InstructionIterator& anchor,
+                                 std::vector<IRInstruction*> instructions) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_change(ChangeSet::Insert::Replacing,
+                                     std::move(instructions));
+}
+
+inline void CFGMutation::remove(const cfg::InstructionIterator& anchor) {
+  always_assert(!anchor.is_end());
+  m_changes[anchor->insn].add_change(ChangeSet::Insert::Replacing, {});
 }
 
 inline bool CFGMutation::is_terminal(IROpcode op) {

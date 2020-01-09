@@ -77,7 +77,6 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
 RemoveUninstantiablesPass::Stats
 RemoveUninstantiablesPass::replace_uninstantiable_refs(
     cfg::ControlFlowGraph& cfg) {
-  using Insert = cfg::CFGMutation::Insert;
   cfg::CFGMutation m(cfg);
 
   // Lazily generate a scratch register.
@@ -97,7 +96,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     case OPCODE_INSTANCE_OF:
       if (type::is_uninstantiable_class(insn->get_type())) {
         auto dest = cfg.move_result_of(it)->insn->dest();
-        m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
+        m.replace(it, {ir_const(dest, 0)});
         stats.instance_ofs++;
       }
       continue;
@@ -106,7 +105,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     case OPCODE_INVOKE_VIRTUAL:
       if (type::is_uninstantiable_class(insn->get_method()->get_class())) {
         auto tmp = get_scratch();
-        m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+        m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
         stats.invokes++;
       }
       continue;
@@ -118,7 +117,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     if ((is_iget(op) || is_iput(op)) &&
         type::is_uninstantiable_class(insn->get_field()->get_class())) {
       auto tmp = get_scratch();
-      m.add_change(Insert::Replacing, it, {ir_const(tmp, 0), ir_throw(tmp)});
+      m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
       stats.field_accesses_on_uninstantiable++;
       continue;
     }
@@ -126,7 +125,7 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
     if ((is_iget(op) || is_sget(op)) &&
         type::is_uninstantiable_class(insn->get_field()->get_type())) {
       auto dest = cfg.move_result_of(it)->insn->dest();
-      m.add_change(Insert::Replacing, it, {ir_const(dest, 0)});
+      m.replace(it, {ir_const(dest, 0)});
       stats.get_uninstantiables++;
       continue;
     }

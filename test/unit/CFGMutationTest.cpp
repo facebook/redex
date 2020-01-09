@@ -65,9 +65,7 @@ TEST_F(CFGMutationTest, InsertBefore) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {1_v, 1_L})});
         m.flush();
       },
       /* ACTUAL */ R"((
@@ -87,9 +85,7 @@ TEST_F(CFGMutationTest, InsertAfter) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
         m.flush();
       },
       /* ACTUAL */ R"((
@@ -109,9 +105,7 @@ TEST_F(CFGMutationTest, Replacing) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
-        m.add_change(CFGMutation::Insert::Replacing,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.replace(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {1_v, 1_L})});
         m.flush();
       },
       /* ACTUAL */ R"((
@@ -130,12 +124,8 @@ TEST_F(CFGMutationTest, AdjacentChanges) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {3_v, 3_L})});
         m.flush();
       },
       /* ACTUAL */ R"((
@@ -156,13 +146,9 @@ TEST_F(CFGMutationTest, Flush) {
   EXPECT_MUTATION(
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
         m.flush();
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 2),
-                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.insert_after(nth_insn(cfg, 2), {dasm(OPCODE_CONST, {3_v, 3_L})});
         m.flush();
       },
       /* ACTUAL */ R"((
@@ -192,12 +178,9 @@ TEST_F(CFGMutationTest, InsertReturn) {
         EXPECT_EQ(const_2->insn->opcode(), OPCODE_CONST);
         EXPECT_EQ(const_2->insn->get_literal(), 2);
 
-        m.add_change(CFGMutation::Insert::Before,
-                     const_2,
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_before(const_2, {dasm(OPCODE_CONST, {1_v, 1_L})});
 
-        m.add_change(
-            CFGMutation::Insert::Before, const_1, {dasm(OPCODE_RETURN_VOID)});
+        m.insert_before(const_1, {dasm(OPCODE_RETURN_VOID)});
 
         m.flush();
       },
@@ -231,18 +214,13 @@ TEST_F(CFGMutationTest, InsertMayThrow) {
       [Object](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_INSTANCE_OF, Object, {0_v}),
-                      dasm(IOPCODE_MOVE_RESULT_PSEUDO, {1_v})});
+        m.insert_after(nth_insn(cfg, 0),
+                       {dasm(OPCODE_INSTANCE_OF, Object, {0_v}),
+                        dasm(IOPCODE_MOVE_RESULT_PSEUDO, {1_v})});
 
-        m.add_change(CFGMutation::Insert::Replacing,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.replace(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {2_v, 2_L})});
 
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 2),
-                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.insert_before(nth_insn(cfg, 2), {dasm(OPCODE_CONST, {3_v, 3_L})});
 
         m.flush();
       },
@@ -270,9 +248,7 @@ TEST_F(CFGMutationTest, ReplaceHasMovePseudo) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::Replacing,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.replace(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {1_v, 1_L})});
 
         m.flush();
       },
@@ -294,12 +270,8 @@ TEST_F(CFGMutationTest, MultipleInsertsAfter) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {2_v, 2_L})});
 
         m.flush();
       },
@@ -322,12 +294,8 @@ TEST_F(CFGMutationTest, MultipleInsertsBefore) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {2_v, 2_L})});
 
         m.flush();
       },
@@ -350,15 +318,9 @@ TEST_F(CFGMutationTest, MultipleChanges) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {2_v, 2_L})});
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {3_v, 3_L})});
-        m.add_change(CFGMutation::Insert::Replacing,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {2_v, 2_L})});
+        m.insert_before(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.replace(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
 
         m.flush();
       },
@@ -379,9 +341,7 @@ TEST_F(CFGMutationTest, InsertBeforeInstanceOf) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::Before,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {0_v, 0_L})});
+        m.insert_before(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {0_v, 0_L})});
 
         m.flush();
       },
@@ -403,14 +363,10 @@ TEST_F(CFGMutationTest, Clear) {
       [](ControlFlowGraph& cfg) {
         CFGMutation m(cfg);
 
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 0),
-                     {dasm(OPCODE_CONST, {1_v, 1_L})});
+        m.insert_after(nth_insn(cfg, 0), {dasm(OPCODE_CONST, {1_v, 1_L})});
         m.clear();
 
-        m.add_change(CFGMutation::Insert::After,
-                     nth_insn(cfg, 1),
-                     {dasm(OPCODE_CONST, {3_v, 3_L})});
+        m.insert_after(nth_insn(cfg, 1), {dasm(OPCODE_CONST, {3_v, 3_L})});
         m.flush();
       },
       /* ACTUAL */ R"((

@@ -136,7 +136,6 @@ class RemoveUnusedFields final {
             replace_insn = true;
           }
         }
-        using Insert = cfg::CFGMutation::Insert;
         if (replace_insn) {
           auto move_result = cfg.move_result_of(insn_it);
           if (move_result.is_end()) {
@@ -146,9 +145,9 @@ class RemoveUnusedFields final {
           IRInstruction* const0 = new IRInstruction(
               write_insn->dest_is_wide() ? OPCODE_CONST_WIDE : OPCODE_CONST);
           const0->set_dest(write_insn->dest())->set_literal(0);
-          m.add_change(Insert::Replacing, insn_it, {const0});
+          m.replace(insn_it, {const0});
         } else if (remove_insn) {
-          m.add_change(Insert::Replacing, insn_it, {});
+          m.remove(insn_it);
         }
       }
       m.flush();

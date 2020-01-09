@@ -1773,15 +1773,14 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
       for (const auto& insert : inserts) {
         auto it = cfg.find_insn(insert.insn, insert.block);
         if (!it.is_end()) {
-          mutator.add_change(cfg::CFGMutation::Insert::Before, it,
-                             insert.replacement);
+          mutator.insert_before(it, insert.replacement);
         }
       }
 
       for (const auto& del : deletes) {
         auto it = cfg.find_insn(del.insn, del.block);
         if (!it.is_end()) {
-          mutator.add_change(cfg::CFGMutation::Insert::Replacing, it, {});
+          mutator.remove(it);
         }
       }
 
