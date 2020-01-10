@@ -576,6 +576,108 @@ TEST(ConstantPropagation, ConditionalConstantInferInterval) {
   EXPECT_CODE_EQ(code.get(), expected_code.get());
 }
 
+TEST(ConstantPropagation, ConditionalConstantCompareIntervals) {
+  auto code = assembler::ircode_from_string(R"( (
+       (load-param v0)
+       (load-param v1)
+
+       (if-gtz v0 :if-gtz-label)
+       ; here v0 is <= 0
+       (if-ltz v1 :if-ltz-label)
+       ; here v1 is >= 0
+       (if-le v0 v1 :exit)
+
+       (const v3 0)
+       (:if-gtz-label)
+       (const v4 0)
+       (:if-ltz-label)
+       (const v5 0)
+       (:exit)
+       (return-void)
+      )
+  )");
+  do_const_prop(code.get());
+
+  auto expected_code = assembler::ircode_from_string(R"( (
+       (load-param v0)
+       (load-param v1)
+
+       (if-gtz v0 :if-gtz-label)
+       ; here v0 is <= 0
+       (if-ltz v1 :if-ltz-label)
+       ; here v1 is >= 0
+       (goto :exit)
+
+       (const v3 0)
+       (:if-gtz-label)
+       (const v4 0)
+       (:if-ltz-label)
+       (const v5 0)
+       (:exit)
+       (return-void)
+      )
+  )");
+
+  EXPECT_CODE_EQ(code.get(), expected_code.get());
+}
+
+// This test catches the regression described in D8676637.
+TEST(ConstantPropagation, MayMustCompare) {
+  {
+    auto code = assembler::ircode_from_string(R"( (
+       (load-param v0)
+       (load-param v1)
+
+       (if-gtz v0 :if-gtz-label)
+       ; here v0 is <= 0
+       (if-ltz v1 :if-ltz-label)
+       ; here v1 is >= 0
+
+       (const v2 0)
+       ; v0 < v1 may not be true since v0 == v1 is possible
+       (if-lt v0 v1 :if-lt-label)
+       (const v3 0)
+       (:if-gtz-label)
+       (const v4 0)
+       (:if-ltz-label)
+       (const v5 0)
+       (:if-lt-label)
+       (return-void)
+      )
+  )");
+    auto expected = assembler::to_s_expr(code.get());
+    do_const_prop(code.get());
+    EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+  }
+
+  {
+    auto code = assembler::ircode_from_string(R"( (
+       (load-param v0)
+       (load-param v1)
+
+       (if-gtz v0 :if-gtz-label)
+       ; here v0 is <= 0
+       (if-ltz v1 :if-ltz-label)
+       ; here v1 is >= 0
+
+       (const v2 0)
+       ; v1 > v0 may not be true since v0 == v1 is possible
+       (if-gt v1 v0 :if-gt-label)
+       (const v3 0)
+       (:if-gtz-label)
+       (const v4 0)
+       (:if-ltz-label)
+       (const v5 0)
+       (:if-gt-label)
+       (return-void)
+      )
+  )");
+    auto expected = assembler::to_s_expr(code.get());
+    do_const_prop(code.get());
+    EXPECT_EQ(assembler::to_s_expr(code.get()), expected);
+  }
+}
+
 TEST(ConstantPropagation, FoldBitwiseAndLit) {
   auto code = assembler::ircode_from_string(R"(
     (
