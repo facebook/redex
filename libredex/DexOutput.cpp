@@ -158,11 +158,14 @@ void GatheredTypes::sort_dexmethod_emitlist_cls_order(
 
 void GatheredTypes::sort_dexmethod_emitlist_profiled_order(
     std::vector<DexMethod*>& lmeth) {
+  std::unordered_map<DexMethod*, unsigned int> cache;
+  cache.reserve(lmeth.size());
   std::stable_sort(
       lmeth.begin(),
       lmeth.end(),
       dexmethods_profiled_comparator(&m_method_to_weight,
-                                     &m_method_sorting_whitelisted_substrings));
+                                     &m_method_sorting_whitelisted_substrings,
+                                     &cache));
 }
 
 void GatheredTypes::sort_dexmethod_emitlist_clinit_order(
@@ -398,7 +401,8 @@ void GatheredTypes::gather_components(PostLowering const* post_lowering) {
   ::gather_components(m_lstring, m_ltype, m_lfield, m_lmethod, m_lcallsite,
                       m_lmethodhandle, *m_classes);
   if (post_lowering) {
-    // TODO(T59333341) - need to consider how dex038 works with ditto post lowering
+    // TODO(T59333341) - need to consider how dex038 works with ditto post
+    // lowering
     post_lowering->gather_components(m_lstring,
                                      m_ltype,
                                      m_lfield,

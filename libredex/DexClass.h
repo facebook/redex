@@ -1311,14 +1311,14 @@ struct dexmethods_comparator {
 };
 
 inline unsigned int get_method_weight_if_available(
-    DexMethodRef* mref,
+    const DexMethod* method,
     const std::unordered_map<std::string, unsigned int>* method_to_weight) {
 
-  if (mref->is_def()) {
-    DexMethod* method = static_cast<DexMethod*>(mref);
-    const std::string& deobfname = method->get_fully_deobfuscated_name();
-    if (!deobfname.empty() && method_to_weight->count(deobfname)) {
-      return method_to_weight->at(deobfname);
+  const std::string& deobfname = method->get_fully_deobfuscated_name();
+  if (!deobfname.empty()) {
+    const auto& search = method_to_weight->find(deobfname);
+    if (search != method_to_weight->end()) {
+      return search->second;
     }
   }
 
@@ -1328,12 +1328,10 @@ inline unsigned int get_method_weight_if_available(
 }
 
 inline unsigned int get_method_weight_override(
-    DexMethodRef* mref,
+    const DexMethod* method,
     const std::unordered_set<std::string>* whitelisted_substrings) {
-  DexMethod* method = static_cast<DexMethod*>(mref);
   const std::string& deobfname = method->get_deobfuscated_name();
   for (const std::string& substr : *whitelisted_substrings) {
-
     if (deobfname.find(substr) != std::string::npos) {
       return 100;
     }
@@ -1342,51 +1340,58 @@ inline unsigned int get_method_weight_override(
   return 0;
 }
 
-/* Order based on method profile data */
-inline bool compare_dexmethods_profiled(
-    DexMethodRef* a,
-    DexMethodRef* b,
-    std::unordered_map<std::string, unsigned int>* method_to_weight,
-    std::unordered_set<std::string>* whitelisted_substrings) {
-  if (a == nullptr) {
-    return b != nullptr;
-  } else if (b == nullptr) {
-    return false;
-  }
-
-  unsigned int weight_a = get_method_weight_if_available(a, method_to_weight);
-  unsigned int weight_b = get_method_weight_if_available(b, method_to_weight);
-
-  // For methods not included in the profiled methods file, move them to the top
-  // section anyway if they match one of the whitelisted substrings.
-  if (weight_a == 0) {
-    weight_a = get_method_weight_override(a, whitelisted_substrings);
-  }
-
-  if (weight_b == 0) {
-    weight_b = get_method_weight_override(b, whitelisted_substrings);
-  }
-
-  if (weight_a == weight_b) {
-    return compare_dexmethods(a, b);
-  }
-
-  return weight_a > weight_b;
-}
-
 struct dexmethods_profiled_comparator {
-  std::unordered_map<std::string, unsigned int>* method_to_weight;
-  std::unordered_set<std::string>* whitelisted_substrings;
+  const std::unordered_map<std::string, unsigned int>* method_to_weight;
+  const std::unordered_set<std::string>* whitelisted_substrings;
+  // This cache should be a pointer so that copied
+  // comparators can still share the same cache for better performance
+  std::unordered_map<DexMethod*, unsigned int>* cache;
 
   dexmethods_profiled_comparator(
-      std::unordered_map<std::string, unsigned int>* method_to_weight_val,
-      std::unordered_set<std::string>* whitelisted_substrings_val)
+      const std::unordered_map<std::string, unsigned int>* method_to_weight_val,
+      const std::unordered_set<std::string>* whitelisted_substrings_val,
+      std::unordered_map<DexMethod*, unsigned int>* cache)
       : method_to_weight(method_to_weight_val),
-        whitelisted_substrings(whitelisted_substrings_val) {}
+        whitelisted_substrings(whitelisted_substrings_val),
+        cache(cache) {
+    always_assert(method_to_weight_val != nullptr);
+    always_assert(whitelisted_substrings_val != nullptr);
+    always_assert(cache != nullptr);
+  }
 
-  bool operator()(DexMethodRef* a, DexMethodRef* b) const {
-    return compare_dexmethods_profiled(a, b, method_to_weight,
-                                       whitelisted_substrings);
+  bool operator()(DexMethod* a, DexMethod* b) {
+    if (a == nullptr) {
+      return b != nullptr;
+    } else if (b == nullptr) {
+      return false;
+    }
+
+    auto get_weight = [this](DexMethod* m) -> unsigned int {
+      const auto& search = cache->find(m);
+      if (search != cache->end()) {
+        return search->second;
+      }
+
+      auto w = get_method_weight_if_available(m, method_to_weight);
+      if (w == 0) {
+        // For methods not included in the profiled methods file, move them to
+        // the top section anyway if they match one of the whitelisted
+        // substrings.
+        w = get_method_weight_override(m, whitelisted_substrings);
+      }
+
+      cache->emplace(m, w);
+      return w;
+    };
+
+    unsigned int weight_a = get_weight(a);
+    unsigned int weight_b = get_weight(b);
+
+    if (weight_a == weight_b) {
+      return compare_dexmethods(a, b);
+    }
+
+    return weight_a > weight_b;
   }
 };
 
