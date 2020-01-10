@@ -51,6 +51,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/rebindrefs \
 	-I$(top_srcdir)/opt/redundant_move_elimination \
 	-I$(top_srcdir)/opt/regalloc \
+	-I$(top_srcdir)/opt/remove-apilevel-checks \
 	-I$(top_srcdir)/opt/remove-builders \
 	-I$(top_srcdir)/opt/remove-interfaces \
 	-I$(top_srcdir)/opt/remove_redundant_check_casts \
@@ -309,6 +310,7 @@ redex_all_SOURCES = \
 	opt/regalloc/RegisterType.cpp \
 	opt/regalloc/Split.cpp \
 	opt/regalloc/VirtualRegistersFile.cpp \
+	opt/remove-apilevel-checks/RemoveApiLevelChecks.cpp \
 	opt/remove-builders/RemoveBuilders.cpp \
 	opt/remove-builders/RemoveBuildersHelper.cpp \
 	opt/remove-interfaces/RemoveInterfacePass.cpp \
