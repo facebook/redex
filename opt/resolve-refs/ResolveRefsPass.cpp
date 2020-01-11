@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string.hpp>
 
+#include "ApiLevelChecker.h"
 #include "DexUtil.h"
 #include "MethodOverrideGraph.h"
 #include "Resolver.h"
@@ -201,29 +202,6 @@ bool is_excluded_external(const std::vector<std::string>& excluded_externals,
   return false;
 }
 
-/*
- * Support library and Android X are designed to handle incompatibility and
- * disrepancies between different Android versions. It's riskier to change the
- * external method references in these libraries based on the one version of
- * external API we are building against.
- *
- * For instance, Landroid/os/BaseBundle; is added API level 21 as the base type
- * of Landroid/os/Bundle;. If we are building against an external library newer
- * than 21, we might rebind a method reference on Landroid/os/Bundle; to
- * Landroid/os/BaseBundle;. The output apk will not work on 4.x devices. In
- * theory, issues like this can be covered by the exclusion list. But in
- * practice is hard to enumerate the entire list of external classes that should
- * be excluded. Given that the support libraries are dedicated to handle this
- * kind discrepancies. It's safer to not touch it.
- */
-bool is_support_lib_type(const DexType* type) {
-  std::string android_x_prefix = "Landroidx/";
-  std::string android_support_prefix = "Landroid/support/";
-  const std::string& name = type->str();
-  return boost::starts_with(name, android_x_prefix) ||
-         boost::starts_with(name, android_support_prefix);
-}
-
 boost::optional<DexMethod*> get_inferred_method_def(
     const std::vector<std::string>& excluded_externals,
     const bool is_support_lib,
@@ -269,7 +247,7 @@ RefStats refine_virtual_callsites(
   type_inference::TypeInference inference(cfg);
   inference.run(method);
   auto& envs = inference.get_type_environments();
-  auto is_support_lib = is_support_lib_type(method->get_class());
+  auto is_support_lib = api::is_support_lib_type(method->get_class());
 
   for (auto& mie : InstructionIterable(code)) {
     IRInstruction* insn = mie.insn;

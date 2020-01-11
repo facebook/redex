@@ -126,10 +126,19 @@ int32_t LevelChecker::get_min_level() {
   return s_min_level;
 }
 
+constexpr const char* ANDROID_SDK_PREFIX = "Landroid/";
+constexpr const char* ANDROID_X_PREFIX = "Landroidx/";
+constexpr const char* ANDROID_SUPPORT_LIB_PREFIX = "Landroid/support/";
+
 bool is_android_sdk_type(const DexType* type) {
-  std::string android_sdk_prefix = "Landroid/";
   const std::string& name = type->str();
-  return boost::starts_with(name, android_sdk_prefix);
+  return boost::starts_with(name, ANDROID_SDK_PREFIX);
+}
+
+bool is_support_lib_type(const DexType* type) {
+  const std::string& name = type->str();
+  return boost::starts_with(name, ANDROID_X_PREFIX) ||
+         boost::starts_with(name, ANDROID_SUPPORT_LIB_PREFIX);
 }
 
 namespace {

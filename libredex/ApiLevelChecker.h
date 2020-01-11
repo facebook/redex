@@ -109,4 +109,21 @@ class LevelChecker {
 
 bool is_android_sdk_type(const DexType* type);
 
+/*
+ * Support library and Android X are designed to handle incompatibility and
+ * disrepancies between different Android versions. It's riskier to change the
+ * external method references in these libraries based on the one version of
+ * external API we are building against.
+ *
+ * For instance, Landroid/os/BaseBundle; is added API level 21 as the base type
+ * of Landroid/os/Bundle;. If we are building against an external library newer
+ * than 21, we might rebind a method reference on Landroid/os/Bundle; to
+ * Landroid/os/BaseBundle;. The output apk will not work on 4.x devices. In
+ * theory, issues like this can be covered by the exclusion list. But in
+ * practice is hard to enumerate the entire list of external classes that should
+ * be excluded. Given that the support libraries are dedicated to handle this
+ * kind discrepancies. It's safer to not touch it.
+ */
+bool is_support_lib_type(const DexType* type);
+
 } // namespace api

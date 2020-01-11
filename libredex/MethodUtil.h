@@ -40,8 +40,6 @@ bool is_trivial_clinit(const DexMethod* method);
  */
 bool no_invoke_super(const DexMethod* method);
 
-bool references_external(DexMethodRef* mref);
-
 /**
  * Determine if the method is a constructor.
  *

@@ -41,15 +41,4 @@ bool no_invoke_super(const DexMethod* method) {
   return true;
 }
 
-bool references_external(DexMethodRef* mref) {
-  if (mref->is_external()) {
-    return true;
-  }
-  auto ref_cls = type_class(mref->get_class());
-  if (ref_cls && ref_cls->is_external()) {
-    return true;
-  }
-  return false;
-}
-
 }; // namespace method
