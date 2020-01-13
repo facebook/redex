@@ -38,7 +38,7 @@ class StaticStringBuilder {
   StaticStringBuilder& operator<<(std::string&& s) {
     always_assert(m_index < num_strings);
     m_total_chars += s.size();
-    m_strings[m_index] = s;
+    m_strings[m_index] = std::move(s);
     ++m_index;
     return *this;
   }
@@ -67,7 +67,7 @@ class DynamicStringBuilder {
   // Take ownership of s
   DynamicStringBuilder& operator<<(std::string&& s) {
     m_total_chars += s.size();
-    m_strings.push_back(s);
+    m_strings.push_back(std::move(s));
     return *this;
   }
 
