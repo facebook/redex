@@ -260,11 +260,6 @@ void analyze_reflection(const Scope& scope) {
   });
 }
 
-template <typename DexMember>
-void mark_only_reachable_directly(DexMember* m) {
-  m->rstate.ref_by_type();
-}
-
 /**
  * Indicates that a class is being used via reflection.
  *
@@ -549,73 +544,6 @@ void initialize_reachable_for_json_serde(
   }
 }
 
-template <typename DexMember>
-bool anno_set_contains(DexMember m,
-                       const std::unordered_set<DexType*>& keep_annotations) {
-  auto const& anno_set = m->get_anno_set();
-  if (anno_set == nullptr) return false;
-  auto const& annos = anno_set->get_annotations();
-  for (auto const& anno : annos) {
-    if (keep_annotations.count(anno->type())) {
-      return true;
-    }
-  }
-  return false;
-}
-
-void keep_annotated_classes(
-    const Scope& scope, const std::unordered_set<DexType*>& keep_annotations) {
-  for (auto const& cls : scope) {
-    if (anno_set_contains(cls, keep_annotations)) {
-      mark_only_reachable_directly(cls);
-    }
-    for (auto const& m : cls->get_dmethods()) {
-      if (anno_set_contains(m, keep_annotations)) {
-        mark_only_reachable_directly(m);
-      }
-    }
-    for (auto const& m : cls->get_vmethods()) {
-      if (anno_set_contains(m, keep_annotations)) {
-        mark_only_reachable_directly(m);
-      }
-    }
-    for (auto const& m : cls->get_sfields()) {
-      if (anno_set_contains(m, keep_annotations)) {
-        mark_only_reachable_directly(m);
-      }
-    }
-    for (auto const& m : cls->get_ifields()) {
-      if (anno_set_contains(m, keep_annotations)) {
-        mark_only_reachable_directly(m);
-      }
-    }
-  }
-}
-
-/*
- * This method handles the keep_class_members from the configuration file.
- */
-void keep_class_members(const Scope& scope,
-                        const std::vector<std::string>& keep_class_mems) {
-  for (auto const& cls : scope) {
-    const std::string& name = cls->get_type()->get_name()->str();
-    for (auto const& class_mem : keep_class_mems) {
-      std::string class_mem_str = std::string(class_mem.c_str());
-      std::size_t pos = class_mem_str.find(name);
-      if (pos != std::string::npos) {
-        std::string rem_str = class_mem_str.substr(pos + name.size());
-        for (auto const& f : cls->get_sfields()) {
-          if (rem_str.find(f->get_name()->str()) != std::string::npos) {
-            mark_only_reachable_directly(f);
-            mark_only_reachable_directly(cls);
-          }
-        }
-        break;
-      }
-    }
-  }
-}
-
 void keep_methods(const Scope& scope, const std::vector<std::string>& ms) {
   std::set<std::string> methods_to_keep(ms.begin(), ms.end());
   for (auto const& cls : scope) {
@@ -693,18 +621,12 @@ void analyze_serializable(const Scope& scope) {
  *  - View or Fragment classes used in layouts
  *  - Classes that are in certain packages (specified in the reflected_packages
  *    section of the config) and classes that extend from them
- *  - Classes marked with special annotations (keep_annotations in config)
  *  - Classes reachable from native libraries
  */
-void init_reachable_classes(
-    const Scope& scope,
-    const JsonWrapper& config,
-    const std::unordered_set<DexType*>& no_optimizations_anno) {
+void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
   std::string apk_dir;
   std::vector<std::string> reflected_package_names;
-  std::vector<std::string> annotations;
-  std::vector<std::string> class_members;
   std::vector<std::string> methods;
   std::unordered_set<std::string> prune_unexported_components;
   bool compute_xml_reachability;
@@ -712,29 +634,12 @@ void init_reachable_classes(
 
   config.get("apk_dir", "", apk_dir);
   config.get("keep_packages", {}, reflected_package_names);
-  config.get("keep_annotations", {}, annotations);
-  config.get("keep_class_members", {}, class_members);
   config.get("keep_methods", {}, methods);
   config.get("compute_xml_reachability", true, compute_xml_reachability);
   config.get("prune_unexported_components", {}, prune_unexported_components);
   config.get("analyze_native_lib_reachability", true,
              analyze_native_lib_reachability);
 
-  std::unordered_set<DexType*> annotation_types(no_optimizations_anno.begin(),
-                                                no_optimizations_anno.end());
-
-  for (auto const& annostr : annotations) {
-    DexType* anno = DexType::get_type(annostr.c_str());
-    if (anno) {
-      annotation_types.insert(anno);
-    } else {
-      fprintf(stderr, "WARNING: keep annotation %s not found\n",
-              annostr.c_str());
-    }
-  }
-
-  keep_annotated_classes(scope, annotation_types);
-  keep_class_members(scope, class_members);
   keep_methods(scope, methods);
 
   if (apk_dir.size()) {
@@ -820,7 +725,6 @@ void recompute_reachable_from_xml_layouts(const Scope& scope,
 
 std::string ReferencedState::str() const {
   std::ostringstream s;
-  s << inner_struct.m_by_type;
   s << inner_struct.m_by_string;
   s << inner_struct.m_by_resources;
   s << inner_struct.m_is_serde;

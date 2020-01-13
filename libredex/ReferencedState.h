@@ -31,10 +31,6 @@ class ReferencedState {
     // libraries. Note that this doesn't allow us to distinguish
     // native -> Java references from Java -> native refs.
     bool m_by_string{false};
-    // This is a superset of m_by_string -- i.e. it's true if m_by_string is
-    // true. It also gets set ot true if this DexMember is referenced by one of
-    // the "keep_" settings in the Redex config.
-    bool m_by_type{false};
     // Whether it is referenced from an XML layout.
     bool m_by_resources{false};
     // Whether it is a json serializer/deserializer class for a reachable class.
@@ -91,8 +87,6 @@ class ReferencedState {
 
   void join_with(const ReferencedState& other) {
     if (this != &other) {
-      this->inner_struct.m_by_type =
-          this->inner_struct.m_by_type | other.inner_struct.m_by_type;
       this->inner_struct.m_by_string =
           this->inner_struct.m_by_string | other.inner_struct.m_by_string;
       this->inner_struct.m_by_resources =
@@ -166,9 +160,7 @@ class ReferencedState {
 
   // For example, a classname in a layout, e.g. <com.facebook.MyCustomView /> or
   // Class c = Class.forName("com.facebook.FooBar");
-  void ref_by_string() {
-    inner_struct.m_by_type = inner_struct.m_by_string = true;
-  }
+  void ref_by_string() { inner_struct.m_by_string = true; }
 
   bool is_referenced_by_string() const { return inner_struct.m_by_string; }
 
@@ -198,9 +190,6 @@ class ReferencedState {
   void set_is_serde() { inner_struct.m_is_serde = true; }
 
   bool is_serde() const { return inner_struct.m_is_serde; }
-
-  // A direct reference from code (not reflection)
-  void ref_by_type() { inner_struct.m_by_type = true; }
 
   void set_root() { set_root(keep_reason::UNKNOWN); }
 

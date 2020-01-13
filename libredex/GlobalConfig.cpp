@@ -62,8 +62,6 @@ void GlobalConfig::bind_config() {
   bind("ir_type_checker", IRTypeCheckerConfig(), ir_type_checker_param);
   bind("json_serde_supercls", {}, string_vector_param);
   bind("keep_all_annotation_classes", true, bool_param);
-  bind("keep_annotations", {}, string_vector_param);
-  bind("keep_class_members", {}, string_vector_param);
   bind("keep_methods", {}, string_vector_param);
   bind("keep_packages", {}, string_vector_param);
   bind("legacy_reflection_reachability", false, bool_param);

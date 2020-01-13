@@ -885,8 +885,7 @@ void redex_frontend(ConfigFiles& conf, /* input */
   {
     Timer t("Initializing reachable classes");
     // init reachable will change rstate of classes, methods and fields
-    init_reachable_classes(scope, json_config,
-                           conf.get_no_optimizations_annos());
+    init_reachable_classes(scope, json_config);
   }
 }
 

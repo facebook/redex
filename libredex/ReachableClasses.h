@@ -12,10 +12,7 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
-void init_reachable_classes(
-    const Scope& scope,
-    const JsonWrapper& config,
-    const std::unordered_set<DexType*>& no_optimizations_anno);
+void init_reachable_classes(const Scope& scope, const JsonWrapper& config);
 
 void recompute_reachable_from_xml_layouts(const Scope& scope,
                                           const std::string& apk_dir);
