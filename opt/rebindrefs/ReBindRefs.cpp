@@ -37,46 +37,6 @@ bool is_array_clone(DexMethodRef* mref, DexType* mtype) {
 }
 
 struct Rebinder {
-  Rebinder(Scope& scope,
-           PassManager& mgr,
-           bool rebind_to_external,
-           std::vector<std::string>& excluded_externals)
-      : m_scope(scope),
-        m_pass_mgr(mgr),
-        m_rebind_to_external(rebind_to_external),
-        m_excluded_externals(excluded_externals) {}
-
-  void rewrite_refs() {
-    walk::parallel::methods(m_scope, [&](DexMethod* method) {
-      if (!method || !method->get_code()) {
-        return;
-      }
-      bool is_support_lib = api::is_support_lib_type(method->get_class());
-      for (auto& mie : InstructionIterable(method->get_code())) {
-        auto insn = mie.insn;
-        switch (insn->opcode()) {
-        case OPCODE_INVOKE_VIRTUAL: {
-          rebind_invoke_virtual(is_support_lib, insn);
-          break;
-        }
-        case OPCODE_INVOKE_SUPER:
-        case OPCODE_INVOKE_INTERFACE:
-        case OPCODE_INVOKE_STATIC: {
-          // Do nothing for now.
-          break;
-        }
-        default:
-          break;
-        }
-      }
-    });
-  }
-
-  void print_stats() {
-    m_mrefs.print("method_refs", &m_pass_mgr);
-    m_array_clone_refs.print("array_clone", &m_pass_mgr);
-  }
-
  private:
   template <typename T>
   struct RefStats {
@@ -92,7 +52,7 @@ struct Rebinder {
 
     void insert(T tin) { insert(tin, T()); }
 
-    void print(const char* tag, PassManager* mgr) {
+    void print(const char* tag, PassManager& mgr) const {
       TRACE(BIND, 1, "%11s [call sites: %6d, old refs: %6lu, new refs: %6lu]",
             tag, count, in.size(), out.size());
 
@@ -100,14 +60,79 @@ struct Rebinder {
       string tagStr{tag};
       string count_metric = tagStr + string("_candidates");
       string rebound_metric = tagStr + string("_rebound");
-      mgr->incr_metric(count_metric, count);
+      mgr.incr_metric(count_metric, count);
 
       auto rebound =
           static_cast<ssize_t>(in.size()) - static_cast<ssize_t>(out.size());
-      mgr->incr_metric(rebound_metric, rebound);
+      mgr.incr_metric(rebound_metric, rebound);
+    }
+
+    RefStats& operator+=(const RefStats& rhs) {
+      count += rhs.count;
+      if (!rhs.in.empty()) {
+        in.insert(rhs.in.begin(), rhs.in.end());
+      }
+      if (!rhs.out.empty()) {
+        out.insert(rhs.out.begin(), rhs.out.end());
+      }
+      return *this;
     }
   };
 
+ public:
+  struct RebinderRefs {
+    RefStats<DexMethodRef*> mrefs;
+    RefStats<DexMethodRef*> array_clone_refs;
+
+    void print(PassManager& mgr) const {
+      mrefs.print("method_refs", mgr);
+      array_clone_refs.print("array_clone", mgr);
+    }
+
+    RebinderRefs& operator+=(const RebinderRefs& rhs) {
+      mrefs += rhs.mrefs;
+      array_clone_refs += rhs.array_clone_refs;
+      return *this;
+    }
+  };
+
+  Rebinder(Scope& scope,
+           bool rebind_to_external,
+           std::vector<std::string>& excluded_externals)
+      : m_scope(scope),
+        m_rebind_to_external(rebind_to_external),
+        m_excluded_externals(excluded_externals) {}
+
+  RebinderRefs rewrite_refs() {
+    return walk::parallel::methods<RebinderRefs>(
+        m_scope, [&](DexMethod* method) {
+          if (!method || !method->get_code()) {
+            return RebinderRefs();
+          }
+          bool is_support_lib = api::is_support_lib_type(method->get_class());
+          RebinderRefs rebinder_refs;
+          for (auto& mie : InstructionIterable(method->get_code())) {
+            auto insn = mie.insn;
+            switch (insn->opcode()) {
+            case OPCODE_INVOKE_VIRTUAL: {
+              rebind_invoke_virtual(is_support_lib, insn, rebinder_refs);
+              break;
+            }
+            case OPCODE_INVOKE_SUPER:
+            case OPCODE_INVOKE_INTERFACE:
+            case OPCODE_INVOKE_STATIC: {
+              // Do nothing for now.
+              break;
+            }
+            default:
+              break;
+            }
+          }
+          return rebinder_refs;
+        });
+  }
+
+ private:
   /**
    * Java allows relaxing visibility down the hierarchy chain so while
    * rebinding we don't want to bind to a method up the hierarchy that would
@@ -143,11 +168,15 @@ struct Rebinder {
     return top_impl;
   }
 
-  void rebind_invoke_virtual(bool is_support_lib, IRInstruction* mop) {
+  void rebind_invoke_virtual(bool is_support_lib,
+                             IRInstruction* mop,
+                             RebinderRefs& rebinder_refs) {
     const auto mref = mop->get_method();
     auto mtype = mref->get_class();
     if (is_array_clone(mref, mtype)) {
-      rebind_method_opcode(is_support_lib, mop, mref, rebind_array_clone(mref));
+      rebind_method_opcode(is_support_lib, mop, mref,
+                           rebind_array_clone(mref, rebinder_refs),
+                           rebinder_refs);
       return;
     }
     // leave java.lang.String alone not to interfere with OP_EXECUTE_INLINE
@@ -158,7 +187,7 @@ struct Rebinder {
     auto cls = type_class(mtype);
     auto real_ref =
         bind_to_visible_ancestor(cls, mref->get_name(), mref->get_proto());
-    rebind_method_opcode(is_support_lib, mop, mref, real_ref);
+    rebind_method_opcode(is_support_lib, mop, mref, real_ref, rebinder_refs);
   }
 
   bool is_excluded_external(std::string name) {
@@ -174,7 +203,8 @@ struct Rebinder {
   void rebind_method_opcode(bool is_support_lib,
                             IRInstruction* mop,
                             DexMethodRef* mref,
-                            DexMethodRef* real_ref) {
+                            DexMethodRef* real_ref,
+                            RebinderRefs& rebinder_refs) {
     if (!real_ref || real_ref == mref) {
       return;
     }
@@ -203,26 +233,23 @@ struct Rebinder {
       return;
     }
     TRACE(BIND, 2, "Rebinding %s\n\t=>%s", SHOW(mref), SHOW(real_ref));
-    m_mrefs.insert(mref, real_ref);
+    rebinder_refs.mrefs.insert(mref, real_ref);
     mop->set_method(real_ref);
     if (cls != nullptr && !is_public(cls)) {
       set_public(cls);
     }
   }
 
-  DexMethodRef* rebind_array_clone(DexMethodRef* mref) {
+  DexMethodRef* rebind_array_clone(DexMethodRef* mref,
+                                   RebinderRefs& rebinder_refs) {
     DexMethodRef* real_ref = object_array_clone();
-    m_array_clone_refs.insert(mref, real_ref);
+    rebinder_refs.array_clone_refs.insert(mref, real_ref);
     return real_ref;
   }
 
   Scope& m_scope;
-  PassManager& m_pass_mgr;
   bool m_rebind_to_external;
   std::vector<std::string> m_excluded_externals;
-
-  RefStats<DexMethodRef*> m_mrefs;
-  RefStats<DexMethodRef*> m_array_clone_refs;
 };
 
 } // namespace
@@ -231,9 +258,9 @@ void ReBindRefsPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& /* conf */,
                               PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  Rebinder rb(scope, mgr, m_rebind_to_external, m_excluded_externals);
-  rb.rewrite_refs();
-  rb.print_stats();
+  Rebinder rb(scope, m_rebind_to_external, m_excluded_externals);
+  auto stats = rb.rewrite_refs();
+  stats.print(mgr);
 }
 
 static ReBindRefsPass s_pass;
