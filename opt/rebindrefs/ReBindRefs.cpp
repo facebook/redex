@@ -257,6 +257,13 @@ struct Rebinder {
 void ReBindRefsPass::run_pass(DexStoresVector& stores,
                               ConfigFiles& /* conf */,
                               PassManager& mgr) {
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  // Disable rebind to external for API level older than 19.
+  if (min_sdk < 19) {
+    m_rebind_to_external = false;
+    TRACE(BIND, 2, "Disabling rebind to external for min_sdk %d", min_sdk);
+  }
+
   Scope scope = build_class_scope(stores);
   Rebinder rb(scope, m_rebind_to_external, m_excluded_externals);
   auto stats = rb.rewrite_refs();
