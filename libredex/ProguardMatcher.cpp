@@ -373,12 +373,20 @@ bool KeepRuleMatcher::has_annotation(const DexMember* member,
   if (annos == nullptr) {
     return false;
   }
-  auto annotation_regex = proguard_parser::form_type_regex(annotation);
-  const boost::regex& annotation_matcher = register_matcher(annotation_regex);
-  for (const auto& anno : annos->get_annotations()) {
-    if (boost::regex_match(get_deobfuscated_name(anno->type()),
-                           annotation_matcher)) {
-      return true;
+  if (!proguard_parser::has_special_char(annotation)) {
+    for (const auto& anno : annos->get_annotations()) {
+      if (get_deobfuscated_name(anno->type()) == annotation) {
+        return true;
+      }
+    }
+  } else {
+    auto annotation_regex = proguard_parser::form_type_regex(annotation);
+    const boost::regex& annotation_matcher = register_matcher(annotation_regex);
+    for (const auto& anno : annos->get_annotations()) {
+      if (boost::regex_match(get_deobfuscated_name(anno->type()),
+                             annotation_matcher)) {
+        return true;
+      }
     }
   }
   return false;

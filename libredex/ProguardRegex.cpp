@@ -130,6 +130,32 @@ std::string form_type_regex(std::string proguard_regex) {
   return r;
 }
 
+// Return true if `proguard_regex` has any characters in it that would require
+// the use of regex. Return false if simple string equality would work
+bool has_special_char(const std::string& proguard_regex) {
+  for (const char ch : proguard_regex) {
+    switch (ch) {
+    case '.':
+    case '|':
+    case '*':
+    case '?':
+    case '+':
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+    case '[':
+    case ']':
+    case '^':
+    case '$':
+    case '\\':
+    case '%':
+      return true;
+    }
+  }
+  return false;
+}
+
 // Convert a ProGuard Java type type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
 std::string convert_wildcard_type(std::string typ) {
