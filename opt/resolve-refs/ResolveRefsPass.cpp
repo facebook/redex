@@ -60,16 +60,15 @@ struct RefStats {
   }
 };
 
-void resolve_method_refs(IRInstruction* insn,
-                         RefStats& stats,
-                         bool resolve_to_external) {
+void resolve_method_refs(IRInstruction* insn, RefStats& stats) {
   always_assert(insn->has_method());
   auto mref = insn->get_method();
   auto mdef = resolve_method(mref, opcode_to_search(insn));
   if (!mdef || mdef == mref) {
     return;
   }
-  if (!resolve_to_external && mdef->is_external()) {
+  // Do not handle external refs in the simple resolve path.
+  if (mdef->is_external()) {
     return;
   }
   auto cls = type_class(mdef->get_class());
@@ -106,7 +105,7 @@ void resolve_field_refs(IRInstruction* insn,
   }
 }
 
-RefStats resolve_refs(DexMethod* method, bool resolve_to_external) {
+RefStats resolve_refs(DexMethod* method) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -119,7 +118,7 @@ RefStats resolve_refs(DexMethod* method, bool resolve_to_external) {
     case OPCODE_INVOKE_SUPER:
     case OPCODE_INVOKE_INTERFACE:
     case OPCODE_INVOKE_STATIC:
-      resolve_method_refs(insn, stats, resolve_to_external);
+      resolve_method_refs(insn, stats);
       break;
     case OPCODE_SGET:
     case OPCODE_SGET_WIDE:
@@ -224,7 +223,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
   // 3. If not an exact match and if it's not referenced in support libraries,
   // we take the resolved target.
   if (resolved->get_class() == inferred_type || !is_support_lib) {
-    TRACE(RESO, 2, "Inferred to %s for type %s\n", SHOW(resolved),
+    TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
           SHOW(inferred_type));
     return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
   }
@@ -233,6 +232,7 @@ boost::optional<DexMethod*> get_inferred_method_def(
 }
 
 RefStats refine_virtual_callsites(
+    const bool resolve_to_external,
     const std::vector<std::string>& excluded_externals,
     DexMethod* method,
     bool desuperify) {
@@ -276,7 +276,14 @@ RefStats refine_virtual_callsites(
       if (!m_def) {
         continue;
       }
-      insn->set_method(*m_def);
+      // Stop if the resolve_to_external config is False.
+      auto def_meth = *m_def;
+      auto def_cls = type_class((def_meth)->get_class());
+      if (def_cls && !resolve_to_external && def_cls->is_external()) {
+        TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
+        continue;
+      }
+      insn->set_method(def_meth);
       if (is_invoke_interface(opcode)) {
         insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
         stats.num_invoke_interface_replaced++;
@@ -294,13 +301,20 @@ RefStats refine_virtual_callsites(
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* conf */,
                                PassManager& mgr) {
+  int32_t min_sdk = mgr.get_redex_options().min_sdk;
+  // Disable resolution to external for API level older than 19.
+  if (min_sdk < 19) {
+    m_resolve_to_external = false;
+    TRACE(RESO, 2, "Disabling resolution to external for min_sdk %d", min_sdk);
+  }
+
   Scope scope = build_class_scope(stores);
   RefStats stats =
       walk::parallel::methods<RefStats>(scope, [&](DexMethod* method) {
-        auto stats = resolve_refs(method, m_resolve_to_external);
-        stats += refine_virtual_callsites(m_excluded_externals, method,
-                                          m_desuperify);
-        return stats;
+        auto local_stats = resolve_refs(method);
+        local_stats += refine_virtual_callsites(
+            m_resolve_to_external, m_excluded_externals, method, m_desuperify);
+        return local_stats;
       });
   stats.print(&mgr);
 }
