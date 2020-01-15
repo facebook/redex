@@ -358,8 +358,8 @@ class ParallelMonotonicFixpointIterator
   using EdgeId = typename GraphInterface::EdgeId;
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
-  using WPOWorkQueue = WorkQueue<uint32_t>;
-  using WPOWorkerState = WorkerState<uint32_t>;
+  using WPOWorkQueue = SpartaWorkQueue<uint32_t>;
+  using WPOWorkerState = SpartaWorkerState<uint32_t>;
 
   ParallelMonotonicFixpointIterator(
       const Graph& graph,
