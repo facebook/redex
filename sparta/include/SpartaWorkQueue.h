@@ -58,14 +58,14 @@ inline std::vector<unsigned int> create_permutation(unsigned int num,
 } // namespace workqueue_impl
 
 template <class Input>
-class WorkerState {
+class SpartaWorkerState {
  public:
-  WorkerState(size_t id) : m_id(id) {}
+  SpartaWorkerState(size_t id) : m_id(id) {}
 
   /*
    * Add more items to the queue of the currently-running worker. When a
-   * WorkQueue is running, this should be used instead of
-   * WorkQueue::add_item() as the latter is not thread-safe.
+   * SpartaWorkQueue is running, this should be used instead of
+   * SpartaWorkQueue::add_item() as the latter is not thread-safe.
    */
   void push_task(Input task) {
     boost::lock_guard<boost::mutex> guard(m_queue_mtx);
@@ -88,7 +88,7 @@ class WorkerState {
   };
 
  private:
-  boost::optional<Input> pop_task(WorkerState<Input>* other) {
+  boost::optional<Input> pop_task(SpartaWorkerState<Input>* other) {
     boost::lock_guard<boost::mutex> guard(m_queue_mtx);
     if (!m_queue.empty()) {
       other->set_running(true);
@@ -109,26 +109,26 @@ class WorkerState {
   boost::mutex m_queue_mtx;
 
   template <class>
-  friend class WorkQueue;
+  friend class SpartaWorkQueue;
 };
 
 template <class Input>
-class WorkQueue {
+class SpartaWorkQueue {
  private:
-  using Executor = std::function<void(WorkerState<Input>*, Input)>;
+  using Executor = std::function<void(SpartaWorkerState<Input>*, Input)>;
   Executor m_executor;
 
-  std::vector<std::unique_ptr<WorkerState<Input>>> m_states;
+  std::vector<std::unique_ptr<SpartaWorkerState<Input>>> m_states;
 
   const size_t m_num_threads{1};
   size_t m_insert_idx{0};
 
-  void consume(WorkerState<Input>* state, Input task) {
+  void consume(SpartaWorkerState<Input>* state, Input task) {
     m_executor(state, task);
   }
 
  public:
-  WorkQueue(Executor, unsigned int num_threads);
+  SpartaWorkQueue(Executor, unsigned int num_threads);
 
   void add_item(Input task);
 
@@ -139,29 +139,29 @@ class WorkQueue {
 };
 
 template <class Input>
-WorkQueue<Input>::WorkQueue(WorkQueue::Executor executor,
+SpartaWorkQueue<Input>::SpartaWorkQueue(SpartaWorkQueue::Executor executor,
                                         unsigned int num_threads)
     : m_executor(executor), m_num_threads(num_threads) {
   assert(num_threads >= 1);
   for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<WorkerState<Input>>(i));
+    m_states.emplace_back(std::make_unique<SpartaWorkerState<Input>>(i));
   }
 }
 
 /**
  * Convenience wrapper for jobs that don't require access to the
- * WorkerState.
+ * SpartaWorkerState.
  */
 template <class Input>
-WorkQueue<Input> WorkQueue_foreach(
+SpartaWorkQueue<Input> WorkQueue_foreach(
     const std::function<void(Input)>& func,
     unsigned int num_threads = parallel::default_num_threads()) {
-  return WorkQueue<Input>(
-      [func](WorkerState<Input>*, Input a) { func(a); }, num_threads);
+  return SpartaWorkQueue<Input>(
+      [func](SpartaWorkerState<Input>*, Input a) { func(a); }, num_threads);
 }
 
 template <class Input>
-void WorkQueue<Input>::add_item(Input task) {
+void SpartaWorkQueue<Input>::add_item(Input task) {
   m_insert_idx = (m_insert_idx + 1) % m_num_threads;
   assert(m_insert_idx < m_states.size());
   m_states[m_insert_idx]->m_queue.push(task);
@@ -172,11 +172,11 @@ void WorkQueue<Input>::add_item(Input task) {
  * looks randomly at other queues to try and steal work.
  */
 template <class Input>
-void WorkQueue<Input>::run_all() {
+void SpartaWorkQueue<Input>::run_all() {
   std::vector<boost::thread> all_threads;
   workqueue_impl::num_non_empty = 0;
   workqueue_impl::num_running = 0;
-  auto worker = [&](WorkerState<Input>* state, size_t state_idx) {
+  auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
     auto attempts =
         workqueue_impl::create_permutation(m_num_threads, state_idx);
     while (true) {
