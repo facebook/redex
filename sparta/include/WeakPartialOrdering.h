@@ -455,8 +455,8 @@ class WpoBuilder final {
         worklist_h.pop_back();
         for (auto p : m_non_back_preds[v]) {
           auto rep_p = rep[dsets.find_set(p)];
-          auto it = nested_SCCs_h.find(rep_p);
-          if (it == nested_SCCs_h.end() && rep_p != h) {
+          auto p_it = nested_SCCs_h.find(rep_p);
+          if (p_it == nested_SCCs_h.end() && rep_p != h) {
             nested_SCCs_h.insert(rep_p);
             worklist_h.push_back(rep_p);
           }
