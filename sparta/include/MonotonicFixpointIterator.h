@@ -362,8 +362,7 @@ class ParallelMonotonicFixpointIterator
   using WPOWorkerState = SpartaWorkerState<uint32_t>;
 
   ParallelMonotonicFixpointIterator(
-      const Graph& graph,
-      size_t num_thread = parallel::default_num_threads())
+      const Graph& graph, size_t num_thread = parallel::default_num_threads())
       : fp_impl::
             MonotonicFixpointIteratorBase<GraphInterface, Domain, NodeHash>(
                 graph, /*cfg_size_hint*/ 4),

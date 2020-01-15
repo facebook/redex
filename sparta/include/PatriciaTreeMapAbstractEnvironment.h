@@ -118,8 +118,7 @@ class PatriciaTreeMapAbstractEnvironment final
     return res;
   }
 
-  bool erase_all_matching(
-      const Variable& variable_mask) {
+  bool erase_all_matching(const Variable& variable_mask) {
     if (this->is_bottom()) {
       return false;
     }
@@ -273,9 +272,7 @@ class MapValue final : public AbstractValue<MapValue<Variable, Domain>> {
     m_map.insert_or_assign(variable, value);
   }
 
-  bool map(std::function<Domain(const Domain&)>& f) {
-    return m_map.map(f);
-  }
+  bool map(std::function<Domain(const Domain&)>& f) { return m_map.map(f); }
 
   bool erase_all_matching(const Variable& variable_mask) {
     return m_map.erase_all_matching(variable_mask);

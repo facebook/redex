@@ -23,8 +23,7 @@ INSTANTIATE_TYPED_TEST_CASE_P(HashedSetAbstractDomain,
                               Domain);
 
 template <>
-std::vector<Domain>
-AbstractDomainPropertyTest<Domain>::non_extremal_values() {
+std::vector<Domain> AbstractDomainPropertyTest<Domain>::non_extremal_values() {
   Domain e1("a");
   Domain e2({"a", "b", "c"});
   Domain e3({"b", "c", "d"});
