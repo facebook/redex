@@ -156,7 +156,9 @@ WholeProgramState::WholeProgramState(
 void WholeProgramState::collect(
     const Scope& scope, const interprocedural::FixpointIterator& fp_iter) {
   initialize_ifields(scope, &m_field_partition);
-  walk::methods(scope, [&](DexMethod* method) {
+  ConcurrentMap<const DexField*, std::vector<ConstantValue>> fields_value_tmp;
+  ConcurrentMap<const DexMethod*, std::vector<ConstantValue>> methods_value_tmp;
+  walk::parallel::methods(scope, [&](DexMethod* method) {
     IRCode* code = method->get_code();
     if (code == nullptr) {
       return;
@@ -170,11 +172,26 @@ void WholeProgramState::collect(
         intra_cp->analyze_instruction(insn, &env);
         collect_field_values(insn, env,
                              method::is_clinit(method) ? method->get_class()
-                                                       : nullptr);
-        collect_return_values(insn, env, method);
+                                                       : nullptr,
+                             &fields_value_tmp);
+        collect_return_values(insn, env, method, &methods_value_tmp);
       }
     }
   });
+  for (const auto& pair : fields_value_tmp) {
+    for (auto& value : pair.second) {
+      m_field_partition.update(pair.first, [&value](auto* current_value) {
+        current_value->join_with(value);
+      });
+    }
+  }
+  for (const auto& pair : methods_value_tmp) {
+    for (auto& value : pair.second) {
+      m_method_partition.update(pair.first, [&value](auto* current_value) {
+        current_value->join_with(value);
+      });
+    }
+  }
 }
 
 /*
@@ -186,9 +203,12 @@ void WholeProgramState::collect(
  * visible to other methods if it remains unchanged up until the end of the
  * <clinit>. In that case, analyze_clinits() will record it.
  */
-void WholeProgramState::collect_field_values(const IRInstruction* insn,
-                                             const ConstantEnvironment& env,
-                                             const DexType* clinit_cls) {
+void WholeProgramState::collect_field_values(
+    const IRInstruction* insn,
+    const ConstantEnvironment& env,
+    const DexType* clinit_cls,
+    ConcurrentMap<const DexField*, std::vector<ConstantValue>>*
+        fields_value_tmp) {
   if (!is_sput(insn->opcode()) && !is_iput(insn->opcode())) {
     return;
   }
@@ -198,9 +218,11 @@ void WholeProgramState::collect_field_values(const IRInstruction* insn,
       return;
     }
     auto value = env.get(insn->src(0));
-    m_field_partition.update(field, [&value](auto* current_value) {
-      current_value->join_with(value);
-    });
+    fields_value_tmp->update(
+        field,
+        [value](const DexField*,
+                std::vector<ConstantValue>& s,
+                bool /* exists */) { s.emplace_back(value); });
   }
 }
 
@@ -210,9 +232,12 @@ void WholeProgramState::collect_field_values(const IRInstruction* insn,
  * If there are no reachable return opcodes in the method, then it never
  * returns. Its return value will be represented by Bottom in our analysis.
  */
-void WholeProgramState::collect_return_values(const IRInstruction* insn,
-                                              const ConstantEnvironment& env,
-                                              const DexMethod* method) {
+void WholeProgramState::collect_return_values(
+    const IRInstruction* insn,
+    const ConstantEnvironment& env,
+    const DexMethod* method,
+    ConcurrentMap<const DexMethod*, std::vector<ConstantValue>>*
+        methods_value_tmp) {
   auto op = insn->opcode();
   if (!is_return(op)) {
     return;
@@ -222,14 +247,19 @@ void WholeProgramState::collect_return_values(const IRInstruction* insn,
     // does indeed return -- even though `void` is not actually a return value,
     // this tells us that the code following any invoke of this method is
     // reachable.
-    m_method_partition.update(
-        method, [](auto* current_value) { current_value->set_to_top(); });
+    methods_value_tmp->update(
+        method,
+        [](const DexMethod*, std::vector<ConstantValue>& s, bool /* exists */) {
+          s.emplace_back(ConstantValue::top());
+        });
     return;
   }
   auto value = env.get(insn->src(0));
-  m_method_partition.update(method, [&value](auto* current_value) {
-    current_value->join_with(value);
-  });
+  methods_value_tmp->update(
+      method,
+      [value](const DexMethod*,
+              std::vector<ConstantValue>& s,
+              bool /* exists */) { s.emplace_back(value); });
 }
 
 void WholeProgramState::collect_static_finals(const DexClass* cls,
