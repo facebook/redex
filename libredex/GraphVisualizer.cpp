@@ -208,8 +208,8 @@ class TaggedBase {
     // See copy constructor. Assignment operators for lint.
     ValueStream& operator=(const ValueStream&) { not_reached(); }
     ValueStream& operator=(ValueStream&& rhs) {
-      oss(std::move(rhs.oss));
-      trg(rhs.trg);
+      oss = std::move(rhs.oss);
+      trg = rhs.trg;
       rhs.disposed = true;
       return *this;
     }
