@@ -158,8 +158,8 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
   s3.clear();
   EXPECT_EQ(0, s3.size());
 
-  std::vector<uint32_t> elements4 = {
-      0, 1, 2, 5, 101, 4096, 8137, 1234567, bigint};
+  std::vector<uint32_t> elements4 = {0,    1,    2,       5,     101,
+                                     4096, 8137, 1234567, bigint};
   pt_set t3(elements3.begin(), elements3.end());
   pt_set t4(elements4.begin(), elements4.end());
   pt_set d34 = t3;
@@ -178,8 +178,8 @@ TEST_F(PatriciaTreeSetTest, basicOperations) {
       return s1.equals(s2);
     }
   };
-  std::unordered_set<pt_set, Hash, Equal> set_of_pt_sets{
-      empty_set, s1, s2, u13, t3, t4};
+  std::unordered_set<pt_set, Hash, Equal> set_of_pt_sets{empty_set, s1, s2,
+                                                         u13,       t3, t4};
   EXPECT_EQ(6, set_of_pt_sets.size());
   EXPECT_EQ(1, set_of_pt_sets.count(empty_set));
   EXPECT_EQ(1, set_of_pt_sets.count(s1));

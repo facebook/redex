@@ -225,7 +225,10 @@ class s_expr_istream final {
   s_expr_istream& operator=(const s_expr_istream&) = delete;
 
   s_expr_istream(std::istream& input)
-      : m_input(input), m_line_number(1), m_status(Status::Good), m_what("OK") {}
+      : m_input(input),
+        m_line_number(1),
+        m_status(Status::Good),
+        m_what("OK") {}
 
   s_expr_istream& operator>>(s_expr& expr);
 

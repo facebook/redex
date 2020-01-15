@@ -127,8 +127,7 @@ TEST(PatriciaTreeMapAbstractPartitionTest, destructiveOperations) {
   EXPECT_EQ(2, p3.size());
   EXPECT_THAT(p3.get(2).elements(),
               ::testing::UnorderedElementsAre("c", "d", "e"));
-  EXPECT_THAT(p3.get(3).elements(),
-              ::testing::UnorderedElementsAre("g", "h"));
+  EXPECT_THAT(p3.get(3).elements(), ::testing::UnorderedElementsAre("g", "h"));
 
   auto make_bottom = [](const Domain&) { return Domain::bottom(); };
   Partition p4 = p2;
@@ -142,8 +141,7 @@ TEST(PatriciaTreeMapAbstractPartitionTest, destructiveOperations) {
   EXPECT_EQ(2, p2.size());
   EXPECT_TRUE(p2.get(1).is_bottom());
   EXPECT_THAT(p2.get(2).elements(), ::testing::ElementsAre("d"));
-  EXPECT_THAT(p2.get(3).elements(),
-              ::testing::UnorderedElementsAre("g", "h"));
+  EXPECT_THAT(p2.get(3).elements(), ::testing::UnorderedElementsAre("g", "h"));
 
   Partition p5({{0, Domain({"c", "d"})},
                 {2, Domain::bottom()},

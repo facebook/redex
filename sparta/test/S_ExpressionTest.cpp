@@ -171,7 +171,9 @@ TEST(S_ExpressionTest, basicOperations) {
       b
       c
     ))
-  )", 2, error);
+  )",
+                  2,
+                  error);
   EXPECT_EQ("On line 6: Extra ')' encountered", error);
   erroneous_parse("(a b #9999999999999)", 1, error);
   EXPECT_EQ("On line 1: Error parsing int32_t literal", error);
@@ -186,11 +188,15 @@ TEST(S_ExpressionTest, basicOperations) {
       (const-string "foo\n\bar")
       123, (a b c)
     )
-  )", 2, error);
+  )",
+                  2,
+                  error);
   EXPECT_EQ("On line 4: Unexpected character encountered: ','", error);
   erroneous_parse(R"(;The error should be on line 2
     (123, (a b c) ; End of line 2
-  )", 2, error);
+  )",
+                  2,
+                  error);
   EXPECT_EQ("On line 2: Unexpected character encountered: ','", error);
 }
 

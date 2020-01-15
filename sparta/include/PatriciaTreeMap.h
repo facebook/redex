@@ -722,10 +722,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> map(
       new_right_tree == branch->right_tree()) {
     return branch;
   }
-  return make_branch(branch->prefix(),
-                     branch->branching_bit(),
-                     new_left_tree,
-                     new_right_tree);
+  return make_branch(
+      branch->prefix(), branch->branching_bit(), new_left_tree, new_right_tree);
 }
 
 // Erases all entries where keys and :key_mask share common bits.
@@ -758,10 +756,8 @@ inline std::shared_ptr<PatriciaTree<IntegerType, Value>> erase_all_matching(
       new_right_tree == branch->right_tree()) {
     return branch;
   }
-  return make_branch(branch->prefix(),
-                     branch->branching_bit(),
-                     new_left_tree,
-                     new_right_tree);
+  return make_branch(
+      branch->prefix(), branch->branching_bit(), new_left_tree, new_right_tree);
 }
 
 // We keep the notations of the paper so as to make the implementation easier

@@ -195,7 +195,8 @@ void SpartaWorkQueue<Input>::run_all() {
       }
       // Let the thread quit if all the threads are not running and there
       // is no task in any queue.
-      if (workqueue_impl::num_running == 0 && workqueue_impl::num_non_empty == 0) {
+      if (workqueue_impl::num_running == 0 &&
+          workqueue_impl::num_non_empty == 0) {
         return;
       }
     }
