@@ -213,22 +213,28 @@ boost::optional<DexMethod*> get_inferred_method_def(
   }
   auto resolved = resolve_method(inferred_cls, callee->get_name(),
                                  callee->get_proto(), MethodSearch::Virtual);
-  // 1. If the resolved target is excluded, we bail.
-  if (!resolved || !resolved->is_def() ||
-      is_excluded_external(excluded_externals, show(resolved))) {
+  if (!resolved || !resolved->is_def()) {
+    return boost::none;
+  }
+  auto resolved_cls = type_class(resolved->get_class());
+  bool is_external = resolved_cls && resolved_cls->is_external();
+  // 1. If the resolved target is an excluded external, we bail.
+  if (is_external && is_excluded_external(excluded_externals, show(resolved))) {
+    TRACE(RESO, 4, "Bailed on excluded external%s", SHOW(resolved));
     return boost::none;
   }
 
-  // 2. If it's an exact match, we take the resolved target.
-  // 3. If not an exact match and if it's not referenced in support libraries,
-  // we take the resolved target.
-  if (resolved->get_class() == inferred_type || !is_support_lib) {
-    TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
-          SHOW(inferred_type));
-    return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
+  // 2. If the resolved target is external and is referenced in support
+  // libraries, we bail.
+  if (is_external && api::is_android_sdk_type(resolved->get_class()) &&
+      is_support_lib) {
+    TRACE(RESO, 4, "Bailed on external in support lib %s", SHOW(resolved));
+    return boost::none;
   }
 
-  return boost::none;
+  TRACE(RESO, 2, "Inferred to %s for type %s", SHOW(resolved),
+        SHOW(inferred_type));
+  return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
 }
 
 RefStats refine_virtual_callsites(
