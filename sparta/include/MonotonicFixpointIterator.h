@@ -234,7 +234,7 @@ class MonotonicFixpointIteratorBase
 template <typename GraphInterface,
           typename Domain,
           typename NodeHash = std::hash<typename GraphInterface::NodeId>>
-class MonotonicFixpointIterator
+class WTOMonotonicFixpointIterator
     : public fp_impl::
           MonotonicFixpointIteratorBase<GraphInterface, Domain, NodeHash> {
  public:
@@ -244,7 +244,7 @@ class MonotonicFixpointIterator
   using Context =
       fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
 
-  MonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
+  WTOMonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
       : fp_impl::MonotonicFixpointIteratorBase<GraphInterface,
                                                Domain,
                                                NodeHash>(graph, cfg_size_hint),
@@ -376,7 +376,7 @@ class ParallelMonotonicFixpointIterator
                                std::bind(&GraphInterface::target,
                                          std::ref(graph),
                                          std::placeholders::_1));
-                // Filter our duplicate succ nodes.
+                // Filter out duplicate succ nodes.
                 std::vector<NodeId> succ_nodes;
                 std::unordered_set<NodeId> succ_nodes_set;
                 for (auto node : succ_nodes_tmp) {
@@ -440,7 +440,7 @@ class ParallelMonotonicFixpointIterator
             return nullptr;
           }
           // Exit node
-          // Check if component of the exit node stablized.
+          // Check if component of the exit node has stablized.
           auto head_idx = m_wpo.get_head_of_exit(wpo_idx);
           NodeId head = m_wpo.get_node(head_idx);
           Domain* current_state = &this->m_entry_states[head];
@@ -499,6 +499,137 @@ class ParallelMonotonicFixpointIterator
   WPOCounter m_wpo_counter;
   size_t m_num_thread;
   std::unordered_set<NodeId> m_all_nodes;
+};
+
+/*
+ * A sequential version of the fixpoint algorithm for Weak Partial Ordering.
+ * Unlike the WTOMonotonicFixpointIterator, this does not rely on a recursive
+ * algorithm to order its nodes, and so is not at risk of stack overflows.
+ */
+template <typename GraphInterface,
+          typename Domain,
+          typename NodeHash = std::hash<typename GraphInterface::NodeId>>
+class MonotonicFixpointIterator
+    : public fp_impl::
+          MonotonicFixpointIteratorBase<GraphInterface, Domain, NodeHash> {
+ public:
+  using Graph = typename GraphInterface::Graph;
+  using NodeId = typename GraphInterface::NodeId;
+  using EdgeId = typename GraphInterface::EdgeId;
+  using Context =
+      fp_impl::MonotonicFixpointIteratorContext<NodeId, Domain, NodeHash>;
+
+  MonotonicFixpointIterator(const Graph& graph, size_t cfg_size_hint = 4)
+      : fp_impl::MonotonicFixpointIteratorBase<GraphInterface,
+                                               Domain,
+                                               NodeHash>(graph, cfg_size_hint),
+        m_wpo(GraphInterface::entry(graph),
+              [=, &graph](const NodeId& x) {
+                const auto& succ_edges = GraphInterface::successors(graph, x);
+                std::vector<NodeId> succ_nodes_tmp;
+                std::transform(succ_edges.begin(),
+                               succ_edges.end(),
+                               std::back_inserter(succ_nodes_tmp),
+                               std::bind(&GraphInterface::target,
+                                         std::ref(graph),
+                                         std::placeholders::_1));
+                // Filter out duplicate succ nodes.
+                std::vector<NodeId> succ_nodes;
+                std::unordered_set<NodeId> succ_nodes_set;
+                for (auto node : succ_nodes_tmp) {
+                  if (!succ_nodes_set.count(node)) {
+                    succ_nodes_set.emplace(node);
+                    succ_nodes.emplace_back(node);
+                  }
+                }
+                return succ_nodes;
+              },
+              false) {}
+
+  /*
+   * Executes the fixpoint iterator given an abstract value describing the
+   * initial program configuration. This method can be invoked multiple times
+   * with different values in order to analyze the program under different
+   * initial conditions.
+   */
+  void run(const Domain& init) {
+    this->clear();
+    Context context(init);
+    std::unordered_map<uint32_t, uint32_t> wpo_counter;
+    std::queue<uint32_t> work_queue;
+    auto entry_idx = m_wpo.get_entry();
+    assert(m_wpo.get_num_preds(entry_idx) == 0);
+    // Prepare work queue.
+    auto process_node = [&](uint32_t wpo_idx) {
+      wpo_counter[wpo_idx] = 0;
+      // NonExit node
+      if (!m_wpo.is_exit(wpo_idx)) {
+        this->analyze_vertex(&context, m_wpo.get_node(wpo_idx));
+        for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
+          // Increase succ node's counter, push succ nodes in work queue if
+          // their counter number matches their NumSchedPreds.
+          if (++wpo_counter[succ_idx] == m_wpo.get_num_preds(succ_idx)) {
+            work_queue.emplace(succ_idx);
+          }
+        }
+        return nullptr;
+      }
+      // Exit node
+      // Check if component of the exit node has stablized.
+      uint32_t head_idx = m_wpo.get_head_of_exit(wpo_idx);
+      NodeId head = m_wpo.get_node(head_idx);
+      Domain* current_state = &this->m_entry_states[head];
+      Domain new_state;
+      this->compute_entry_state(&context, head, &new_state);
+      if (new_state.leq(*current_state)) {
+        // Component stablized.
+        context.reset_local_iteration_count_for(head);
+        *current_state = std::move(new_state);
+        for (auto succ_idx : m_wpo.get_successors(wpo_idx)) {
+          // Increase succ node's counter, push succ nodes in work queue if
+          // their counter number matches their NumSchedPreds.
+          if (++wpo_counter[succ_idx] == m_wpo.get_num_preds(succ_idx)) {
+            work_queue.emplace(succ_idx);
+          }
+        }
+      } else {
+        // Component didn't stablize.
+        this->extrapolate(context, head, current_state, new_state);
+        context.increase_iteration_count_for(head);
+        // Set component nodes v's counter to their
+        // NumOuterSchedPreds(v, wpo_idx)
+        for (auto pred_pair : m_wpo.get_num_outer_preds(wpo_idx)) {
+          auto component_idx = pred_pair.first;
+          assert(component_idx != entry_idx);
+          wpo_counter[component_idx] = pred_pair.second;
+          // Push component nodes in work queue if their counter number
+          // matches their NumSchedPreds.
+          if (pred_pair.second == m_wpo.get_num_preds(component_idx)) {
+            work_queue.emplace(component_idx);
+          }
+        }
+        if (head_idx == entry_idx) {
+          // Handle special case when there is a loop on entry node.
+          // Because entry node have num_preds = 0, and for
+          // get_num_outer_preds the nodes with num_outer_preds are ignored.
+          // So we need to manually add entry node back to work queue if
+          // the component didn't stablize.
+          work_queue.emplace(head_idx);
+        }
+      }
+      return nullptr;
+    };
+    // Start from wpo entry node.
+    work_queue.emplace(entry_idx);
+    while (!work_queue.empty()) {
+      auto item = work_queue.front();
+      work_queue.pop();
+      process_node(item);
+    }
+  }
+
+ private:
+  WeakPartialOrdering<NodeId, NodeHash> m_wpo;
 };
 
 /*
