@@ -10,12 +10,12 @@
 #include <algorithm>
 #include <atomic>
 #include <boost/optional/optional.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
 #include <chrono>
+#include <mutex>
 #include <numeric>
 #include <queue>
 #include <random>
+#include <thread>
 
 namespace sparta {
 
@@ -25,7 +25,7 @@ namespace parallel {
  * Sparta uses the number of physical cores.
  */
 static inline unsigned int default_num_threads() {
-  unsigned int threads = boost::thread::physical_concurrency();
+  unsigned int threads = std::thread::hardware_concurrency();
   return std::max(1u, threads);
 }
 
@@ -68,7 +68,7 @@ class SpartaWorkerState {
    * SpartaWorkQueue::add_item() as the latter is not thread-safe.
    */
   void push_task(Input task) {
-    boost::lock_guard<boost::mutex> guard(m_queue_mtx);
+    std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (m_queue.empty()) {
       ++workqueue_impl::num_non_empty;
     }
@@ -89,7 +89,7 @@ class SpartaWorkerState {
 
  private:
   boost::optional<Input> pop_task(SpartaWorkerState<Input>* other) {
-    boost::lock_guard<boost::mutex> guard(m_queue_mtx);
+    std::lock_guard<std::mutex> guard(m_queue_mtx);
     if (!m_queue.empty()) {
       other->set_running(true);
       if (m_queue.size() == 1) {
@@ -106,7 +106,7 @@ class SpartaWorkerState {
   size_t m_id;
   bool m_running{false};
   std::queue<Input> m_queue;
-  boost::mutex m_queue_mtx;
+  std::mutex m_queue_mtx;
 
   template <class>
   friend class SpartaWorkQueue;
@@ -173,7 +173,7 @@ void SpartaWorkQueue<Input>::add_item(Input task) {
  */
 template <class Input>
 void SpartaWorkQueue<Input>::run_all() {
-  std::vector<boost::thread> all_threads;
+  std::vector<std::thread> all_threads;
   workqueue_impl::num_non_empty = 0;
   workqueue_impl::num_running = 0;
   auto worker = [&](SpartaWorkerState<Input>* state, size_t state_idx) {
@@ -208,10 +208,7 @@ void SpartaWorkQueue<Input>::run_all() {
     }
   }
   for (size_t i = 0; i < m_num_threads; ++i) {
-    boost::thread::attributes attrs;
-    attrs.set_stack_size(8 * 1024 * 1024);
-    all_threads.emplace_back(attrs,
-                             boost::bind<void>(worker, m_states[i].get(), i));
+    all_threads.emplace_back(std::bind<void>(worker, m_states[i].get(), i));
   }
 
   for (auto& thread : all_threads) {
