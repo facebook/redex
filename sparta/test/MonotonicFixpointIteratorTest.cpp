@@ -148,13 +148,13 @@ class ProgramInterface {
 using LivenessDomain = HashedSetAbstractDomain<std::string>;
 
 class FixpointEngine final
-    : public MonotonicFixpointIterator<
+    : public WTOMonotonicFixpointIterator<
           BackwardsFixpointIterationAdaptor<ProgramInterface>,
           LivenessDomain,
           boost::hash<ControlPoint>> {
  public:
   explicit FixpointEngine(const Program& program)
-      : MonotonicFixpointIterator(program), m_program(program) {}
+      : WTOMonotonicFixpointIterator(program), m_program(program) {}
 
   void analyze_node(const ControlPoint& node,
                     LivenessDomain* current_state) const override {
