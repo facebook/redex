@@ -1131,6 +1131,7 @@ void Allocator::allocate(DexMethod* method) {
 
     TRACE(REG, 5, "Transform before range alloc:\n%s", SHOW(reg_transform));
     choose_range_promotions(code, ig, spill_plan, &range_set);
+    range_set.prioritize();
     select_ranges(code, ig, range_set, &reg_transform, &spill_plan);
     // Select registers for symregs that can be addressed using all 16 bits.
     // These symregs are typically generated during the spilling and splitting

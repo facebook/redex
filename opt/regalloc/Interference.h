@@ -53,6 +53,14 @@ class RangeSet {
     return m_range_vec.end();
   }
   size_t size() const { return m_range_vec.size(); }
+  // Changes order, preferring instructions with more src registers
+  void prioritize() {
+    std::stable_sort(m_range_vec.begin(),
+                     m_range_vec.end(),
+                     [](IRInstruction* a, IRInstruction* b) {
+                       return a->srcs_size() > b->srcs_size();
+                     });
+  }
 
  private:
   std::vector<IRInstruction*> m_range_vec;
