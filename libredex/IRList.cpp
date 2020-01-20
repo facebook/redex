@@ -351,24 +351,32 @@ void IRList::insert_after(IRInstruction* position,
    * To handle this case sanely, we'd need to export a interface based on
    * MEI's probably.
    */
-  for (auto const& mei : m_list) {
-    if (mei.type == MFLOW_OPCODE &&
-        (position == nullptr || mei.insn == position)) {
-      auto insert_at = m_list.iterator_to(mei);
-      if (position != nullptr) {
-        insert_at++;
-        if (position->has_move_result_pseudo()) {
-          insert_at++;
-        }
-      }
-      for (auto* opcode : opcodes) {
-        MethodItemEntry* mentry = new MethodItemEntry(opcode);
-        m_list.insert(insert_at, *mentry);
-      }
-      return;
+
+  auto insert_at = m_list.begin();
+  const auto end = m_list.end();
+  for (; insert_at != end; ++insert_at) {
+    if (insert_at->type != MFLOW_OPCODE) {
+      continue;
+    }
+
+    if (position == nullptr || insert_at->insn == position) {
+      break;
     }
   }
-  always_assert_log(false, "No match found");
+
+  if (insert_at == end) {
+    always_assert_log(position == nullptr, "No match found");
+  } else {
+    ++insert_at;
+    if (position->has_move_result_pseudo()) {
+      ++insert_at;
+    }
+  }
+
+  for (auto* opcode : opcodes) {
+    auto* mentry = new MethodItemEntry(opcode);
+    m_list.insert(insert_at, *mentry);
+  }
 }
 
 IRList::iterator IRList::insert_before(const IRList::iterator& position,
