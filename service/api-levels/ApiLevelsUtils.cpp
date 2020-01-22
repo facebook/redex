@@ -182,8 +182,7 @@ bool check_methods(
 
   DexType* current_type = methods.at(0)->get_class();
   for (DexMethod* meth : methods) {
-    if (!is_public(meth) || methods_non_private.count(meth) == 0) {
-      // TODO(emmasevastian): When should we check non-public methods?
+    if (methods_non_private.count(meth) == 0) {
       continue;
     }
 
@@ -235,8 +234,7 @@ bool check_fields(
 
   DexType* current_type = fields.at(0)->get_class();
   for (DexField* field : fields) {
-    if (!is_public(field) || fields_non_private.count(field) == 0) {
-      // TODO(emmasevastian): When should we check non-public fields?
+    if (fields_non_private.count(field) == 0) {
       continue;
     }
 
