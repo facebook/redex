@@ -133,10 +133,10 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
       if (type::is_uninstantiable_class(insn->get_type())) {
         auto src = insn->src(0);
         auto dest = cfg.move_result_of(it)->insn->dest();
-        auto* Void = DexType::make_type("Ljava/lang/Void;");
         m.replace(it,
-                  {ir_check_cast(src, Void), ir_move_result_pseudo_object(dest),
-                   ir_const(src, 0), ir_const(dest, 0)});
+                  {ir_check_cast(src, type::java_lang_Void()),
+                   ir_move_result_pseudo_object(dest), ir_const(src, 0),
+                   ir_const(dest, 0)});
         stats.check_casts++;
       }
       continue;

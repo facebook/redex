@@ -54,6 +54,8 @@ DexType* java_lang_Enum();
 
 DexType* java_lang_Object();
 
+DexType* java_lang_Void();
+
 DexType* java_lang_Throwable();
 
 DexType* java_lang_Boolean();

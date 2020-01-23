@@ -35,6 +35,8 @@ DexType* java_lang_Enum() { return DexType::make_type("Ljava/lang/Enum;"); }
 
 DexType* java_lang_Object() { return DexType::make_type("Ljava/lang/Object;"); }
 
+DexType* java_lang_Void() { return DexType::make_type("Ljava/lang/Void;"); }
+
 DexType* java_lang_Throwable() {
   return DexType::make_type("Ljava/lang/Throwable;");
 }

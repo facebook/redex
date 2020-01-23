@@ -11,6 +11,7 @@
 
 #include "DexClass.h"
 #include "IRInstruction.h"
+#include "TypeUtil.h"
 
 /*
  * This class contains a set of utility functions used to build the points-to
@@ -44,15 +45,11 @@ class PointsToSemanticsUtils final {
 
  private:
   std::unordered_set<DexType*> m_primitive_type_wrappers{
-      {DexType::make_type("Ljava/lang/Boolean;"),
-       DexType::make_type("Ljava/lang/Byte;"),
-       DexType::make_type("Ljava/lang/Character;"),
-       DexType::make_type("Ljava/lang/Double;"),
-       DexType::make_type("Ljava/lang/Float;"),
-       DexType::make_type("Ljava/lang/Integer;"),
-       DexType::make_type("Ljava/lang/Long;"),
-       DexType::make_type("Ljava/lang/Short;"),
-       DexType::make_type("Ljava/lang/Void;")}};
+      type::java_lang_Boolean(),   type::java_lang_Byte(),
+      type::java_lang_Character(), type::java_lang_Double(),
+      type::java_lang_Float(),     type::java_lang_Integer(),
+      type::java_lang_Long(),      type::java_lang_Short(),
+      type::java_lang_Void()};
   DexString* m_wrapper_class_type_field_name{DexString::make_string("TYPE")};
   DexMethodRef* m_java_lang_object_get_class{DexMethod::make_method(
       DexType::make_type("Ljava/lang/Object;"),
