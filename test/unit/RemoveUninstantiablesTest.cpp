@@ -261,6 +261,26 @@ TEST_F(RemoveUninstantiablesTest, CheckCast) {
                   (return-void)
                 ))");
   EXPECT_EQ(1, stats.check_casts);
+
+  // Void is itself uninstantiable, so we can infer that following a check-cast,
+  // the registers involved hold null.
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (check-cast v0 "Ljava/lang/Void;")
+                  (move-result-pseudo-object v1)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (check-cast v0 "Ljava/lang/Void;")
+                  (move-result-pseudo-object v1)
+                  (const v0 0)
+                  (const v1 0)
+                  (return-void)
+                ))");
+  EXPECT_EQ(2, stats.check_casts);
 }
 
 TEST_F(RemoveUninstantiablesTest, GetField) {
