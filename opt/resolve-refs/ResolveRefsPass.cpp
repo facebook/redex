@@ -172,7 +172,7 @@ void try_desuperify(const DexMethod* caller,
   }
   // Skip if the callee is an interface default method (037).
   auto callee_cls = type_class(insn->get_method()->get_class());
-  if (is_interface(callee_cls)) {
+  if (!callee_cls || is_interface(callee_cls)) {
     return;
   }
   // resolve_method_ref will start its search in the superclass of :cls.
