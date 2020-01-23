@@ -400,6 +400,12 @@ void run_inliner(DexStoresVector& stores,
   // delete all methods that can be deleted
   auto inlined = inliner.get_inlined();
   size_t inlined_count = inlined.size();
+  size_t inlined_init_count = 0;
+  for (DexMethod* m : inlined) {
+    if (method::is_init(m)) {
+      inlined_init_count++;
+    }
+  }
 
   // Do not erase true virtual methods that are inlined because we are only
   // inlining callsites that are monomorphic, for polymorphic callsite we
@@ -441,6 +447,7 @@ void run_inliner(DexStoresVector& stores,
   TRACE(INLINE, 3, "not found %ld", (size_t)inliner.get_info().not_found);
   TRACE(INLINE, 3, "caller too large %ld",
         (size_t)inliner.get_info().caller_too_large);
+  TRACE(INLINE, 3, "inlined ctors %zu", inlined_init_count);
   TRACE(INLINE, 1, "%ld inlined calls over %ld methods and %ld methods removed",
         (size_t)inliner.get_info().calls_inlined, inlined_count, deleted);
 
@@ -448,6 +455,7 @@ void run_inliner(DexStoresVector& stores,
   mgr.incr_metric("max_call_stack_depth",
                   inliner.get_info().max_call_stack_depth);
   mgr.incr_metric("caller_too_large", inliner.get_info().caller_too_large);
+  mgr.incr_metric("inlined_init_count", inlined_init_count);
   mgr.incr_metric("calls_inlined", inliner.get_info().calls_inlined);
   mgr.incr_metric("methods_removed", deleted);
   mgr.incr_metric("escaped_virtual", inliner.get_info().escaped_virtual);
