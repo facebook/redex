@@ -1044,23 +1044,6 @@ CseUnorderedLocationSet SharedState::get_relevant_written_locations(
     return general_memory_barrier_locations;
   }
 
-  auto get_relevant_written_locations =
-      [&](const DexMethod* method) -> const CseUnorderedLocationSet& {
-    if (method->is_external() || is_native(method)) {
-      return general_memory_barrier_locations;
-    }
-    if (is_abstract(method)) {
-      // We say abstract methods are not a barrier per se, as we'll inspect all
-      // overriding methods further below.
-      return no_locations;
-    }
-    auto it = m_method_written_locations.find(method);
-    if (it == m_method_written_locations.end()) {
-      return general_memory_barrier_locations;
-    }
-    return it->second;
-  };
-
   auto method_ref = insn->get_method();
   DexMethod* method = resolve_method(method_ref, opcode_to_search(insn));
   CseUnorderedLocationSet written_locations;
