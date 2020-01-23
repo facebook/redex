@@ -220,6 +220,49 @@ TEST_F(RemoveUninstantiablesTest, Invoke) {
   EXPECT_EQ(4, stats.invokes);
 }
 
+TEST_F(RemoveUninstantiablesTest, CheckCast) {
+  def_class("LFoo;");
+  def_class("LBar;", Bar_init);
+
+  ASSERT_TRUE(type::is_uninstantiable_class(DexType::get_type("LFoo;")));
+  ASSERT_FALSE(type::is_uninstantiable_class(DexType::get_type("LBar;")));
+
+  RemoveUninstantiablesPass::Stats stats;
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (check-cast v0 "LFoo;")
+                  (move-result-pseudo-object v1)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (check-cast v0 "Ljava/lang/Void;")
+                  (move-result-pseudo-object v1)
+                  (const v0 0)
+                  (const v1 0)
+                  (return-void)
+                ))");
+  EXPECT_EQ(1, stats.check_casts);
+
+  EXPECT_CHANGE(replace_uninstantiable_refs,
+                stats,
+                /* ACTUAL */ R"((
+                  (const v0 0)
+                  (check-cast v0 "LBar;")
+                  (move-result-pseudo-object v1)
+                  (return-void)
+                ))",
+                /* EXPECTED */ R"((
+                  (const v0 0)
+                  (check-cast v0 "LBar;")
+                  (move-result-pseudo-object v1)
+                  (return-void)
+                ))");
+  EXPECT_EQ(1, stats.check_casts);
+}
+
 TEST_F(RemoveUninstantiablesTest, GetField) {
   def_class("LFoo;");
   def_class("LBar;", Bar_init);

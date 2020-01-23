@@ -19,6 +19,8 @@
 ///  - `invoke-virtual` and `invoke-direct` on methods whose class is
 ///    uninstantiable can be replaced by a `throw null;`, because they can only
 ///    be called on a `null` instance.
+///  - `check-cast` with an uninstantiable type parameter is equivalent to a
+///    a test which throws a `ClassCastException` if the value is not null.
 ///  - Field accesses on an uninstantiable class can be replaced by a `throw
 ///    null;` for the same reason as above.
 ///  - Field accesses returning an uninstantiable class will always return
@@ -34,6 +36,7 @@ class RemoveUninstantiablesPass : public Pass {
     int field_accesses_on_uninstantiable = 0;
     int instance_methods_of_uninstantiable = 0;
     int get_uninstantiables = 0;
+    int check_casts = 0;
 
     Stats& operator+=(const Stats&);
     Stats operator+(const Stats&) const;

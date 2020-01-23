@@ -35,6 +35,23 @@ IRInstruction* ir_throw(uint32_t src) {
   return insn;
 }
 
+/// \return a new \c IRInstruction representing a `check-cast` operation,
+/// verifying that \p src is compatible with \p type.
+IRInstruction* ir_check_cast(uint32_t src, DexType* type) {
+  auto insn = new IRInstruction(OPCODE_CHECK_CAST);
+  insn->set_src(0, src);
+  insn->set_type(type);
+  return insn;
+}
+
+/// \return a new \c IRInstruction representing a `move-result-pseudo-object`
+/// operation.
+IRInstruction* ir_move_result_pseudo_object(uint32_t dest) {
+  auto insn = new IRInstruction(IOPCODE_MOVE_RESULT_PSEUDO_OBJECT);
+  insn->set_dest(dest);
+  return insn;
+}
+
 } // namespace
 
 RemoveUninstantiablesPass::Stats& RemoveUninstantiablesPass::Stats::operator+=(
@@ -46,6 +63,7 @@ RemoveUninstantiablesPass::Stats& RemoveUninstantiablesPass::Stats::operator+=(
   this->instance_methods_of_uninstantiable +=
       that.instance_methods_of_uninstantiable;
   this->get_uninstantiables += that.get_uninstantiables;
+  this->check_casts += that.check_casts;
   return *this;
 }
 
@@ -70,6 +88,7 @@ void RemoveUninstantiablesPass::Stats::report(PassManager& mgr) const {
   REPORT(field_accesses_on_uninstantiable);
   REPORT(instance_methods_of_uninstantiable);
   REPORT(get_uninstantiables);
+  REPORT(check_casts);
 
 #undef REPORT
 }
@@ -107,6 +126,18 @@ RemoveUninstantiablesPass::replace_uninstantiable_refs(
         auto tmp = get_scratch();
         m.replace(it, {ir_const(tmp, 0), ir_throw(tmp)});
         stats.invokes++;
+      }
+      continue;
+
+    case OPCODE_CHECK_CAST:
+      if (type::is_uninstantiable_class(insn->get_type())) {
+        auto src = insn->src(0);
+        auto dest = cfg.move_result_of(it)->insn->dest();
+        auto* Void = DexType::make_type("Ljava/lang/Void;");
+        m.replace(it,
+                  {ir_check_cast(src, Void), ir_move_result_pseudo_object(dest),
+                   ir_const(src, 0), ir_const(dest, 0)});
+        stats.check_casts++;
       }
       continue;
 
