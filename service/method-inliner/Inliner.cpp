@@ -12,6 +12,7 @@
 #include "ConcurrentContainers.h"
 #include "ConstantPropagationAnalysis.h"
 #include "ConstantPropagationWholeProgramState.h"
+#include "ConstructorAnalysis.h"
 #include "ControlFlow.h"
 #include "DexUtil.h"
 #include "EditableCfgAdapter.h"
@@ -88,7 +89,8 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
         method_profile_stats,
     const std::unordered_map<const DexMethod*, size_t>&
-        same_method_implementations)
+        same_method_implementations,
+    bool analyze_and_prune_inits)
     : resolver(resolve_fn),
       xstores(stores),
       m_scope(scope),
@@ -97,7 +99,8 @@ MultiMethodInliner::MultiMethodInliner(
       m_hot_methods(
           inline_for_speed::compute_hot_methods(method_profile_stats)),
       m_same_method_implementations(same_method_implementations),
-      m_pure_methods(get_pure_methods()) {
+      m_pure_methods(get_pure_methods()),
+      m_analyze_and_prune_inits(analyze_and_prune_inits) {
   for (const auto& callee_callers : true_virtual_callers) {
     for (const auto& caller_insns : callee_callers.second) {
       for (auto insn : caller_insns.second) {
@@ -514,6 +517,20 @@ void MultiMethodInliner::inline_callees(
           return editable_cfg_adapter::LOOP_CONTINUE;
         }
         always_assert(callee->is_concrete());
+        if (m_analyze_and_prune_inits && method::is_init(callee)) {
+          if (!callee->get_code()->editable_cfg_built()) {
+            return editable_cfg_adapter::LOOP_CONTINUE;
+          }
+          if (!can_inline_init(callee)) {
+            if (!method::is_init(caller) ||
+                caller->get_class() != callee->get_class() ||
+                !caller->get_code()->editable_cfg_built() ||
+                !constructor_analysis::can_inline_inits_in_same_class(
+                    caller, callee, insn)) {
+              return editable_cfg_adapter::LOOP_CONTINUE;
+            }
+          }
+        }
         found++;
         inlinables.emplace_back(callee, it);
         if (found == callees.size()) {
@@ -1291,6 +1308,26 @@ size_t MultiMethodInliner::get_same_method_implementations(
   return 1;
 }
 
+bool MultiMethodInliner::can_inline_init(const DexMethod* init_method) {
+  auto opt_can_inline_init = m_can_inline_init.get(init_method, boost::none);
+  if (opt_can_inline_init) {
+    return *opt_can_inline_init;
+  }
+
+  bool res = constructor_analysis::can_inline_init(init_method);
+  m_can_inline_init.update(
+      init_method,
+      [&](const DexMethod*, boost::optional<bool>& value, bool exists) {
+        if (exists) {
+          // We wasted some work, and some other thread beat us. Oh well...
+          always_assert(*value == res);
+          return;
+        }
+        value = res;
+      });
+  return res;
+}
+
 bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   const auto& callers = callee_caller.at(callee);
   auto caller_count = callers.size();
@@ -1351,6 +1388,29 @@ bool MultiMethodInliner::too_many_callers(const DexMethod* callee) {
   // Let's just consider this particular inlining opportunity
   if (inlined_cost <= invoke_cost) {
     return false;
+  }
+
+  // Can we inline the init-callee into all callers?
+  // If not, then we can give up, as there's no point in making the case that
+  // we can eliminate the callee method based on pervasive inlining.
+  if (m_analyze_and_prune_inits && method::is_init(callee)) {
+    if (!callee->get_code()->editable_cfg_built()) {
+      return true;
+    }
+    if (!can_inline_init(callee)) {
+      std::unordered_set<DexMethod*> callers_set(callers.begin(),
+                                                 callers.end());
+      for (auto caller : callers_set) {
+        if (!method::is_init(caller) ||
+            caller->get_class() != callee->get_class() ||
+            !caller->get_code()->editable_cfg_built() ||
+            !constructor_analysis::can_inline_inits_in_same_class(
+                caller, callee,
+                /* callsite_insn */ nullptr)) {
+          return true;
+        }
+      }
+    }
   }
 
   if (m_config.multiple_callers) {

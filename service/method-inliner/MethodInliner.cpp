@@ -30,47 +30,6 @@ namespace mog = method_override_graph;
 
 namespace {
 
-static bool can_inline_init(DexMethod* caller, IRCode& code) {
-  always_assert(method::is_init(caller));
-  // Check that there is no call to a super constructor, and no assignments to
-  // (non-inherited) instance fields before constructor call.
-  // (There not being such a super call implies that there must be a call to
-  // another constructor in the same class, unless the method doesn't return;
-  // calls to other constructors in the same class are inlinable.)
-  // The check doesn't take into account data-flow, i.e. whether the super
-  // constructor call and the field assignments are actually on the incoming
-  // receiver object. In that sense, this function is overly conservative, and
-  // there is room for futher improvement.
-  DexType* declaring_type = caller->get_class();
-  DexType* super_type = type_class(declaring_type)->get_super_class();
-  for (auto& mie : InstructionIterable(code)) {
-    IRInstruction* insn = mie.insn;
-    auto opcode = insn->opcode();
-
-    // give up if there's an assignment to a field of the declaring class
-    if (is_iput(opcode) && insn->get_field()->get_class() == declaring_type) {
-      return false;
-    }
-
-    // give up if there's a call to a constructor of the super class
-    if (opcode != OPCODE_INVOKE_DIRECT) {
-      continue;
-    }
-    DexMethod* callee =
-        resolve_method(insn->get_method(), MethodSearch::Direct);
-    if (callee == nullptr) {
-      return false;
-    }
-    if (!method::is_init(callee)) {
-      continue;
-    }
-    if (callee->get_class() == super_type) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /**
  * Collect all non virtual methods and make all small methods candidates
  * for inlining.
@@ -103,7 +62,7 @@ std::unordered_set<DexMethod*> gather_non_virtual_methods(Scope& scope,
     if (code == nullptr) direct_no_code++;
     if (method::is_constructor(method)) {
       (is_static(method)) ? clinit++ : init++;
-      if (method::is_clinit(method) || !can_inline_init(method, *code)) {
+      if (method::is_clinit(method)) {
         dont_inline = true;
       }
     } else {
@@ -368,8 +327,13 @@ void run_inliner(DexStoresVector& stores,
 
   auto methods =
       gather_non_virtual_methods(scope, inliner_config.virtual_inline);
-  std::unordered_map<const DexMethod*, size_t> same_method_implementations;
 
+  // The methods list computed above includes all constructors, regardless of
+  // whether it's safe to inline them or not. We'll let the inliner decide
+  // what to do with constructors.
+  bool analyze_and_prune_inits = true;
+
+  std::unordered_map<const DexMethod*, size_t> same_method_implementations;
   if (inliner_config.virtual_inline && inliner_config.true_virtual_inline) {
     gather_true_virtual_methods(scope, &true_virtual_callers, &methods,
                                 &same_method_implementations);
@@ -389,7 +353,8 @@ void run_inliner(DexStoresVector& stores,
   MultiMethodInliner inliner(scope, stores, methods, resolver, inliner_config,
                              intra_dex ? IntraDex : InterDex,
                              true_virtual_callers, method_profile_stats,
-                             same_method_implementations);
+                             same_method_implementations,
+                             analyze_and_prune_inits);
   inliner.inline_methods();
 
   if (inliner_config.use_cfg_inliner) {

@@ -122,7 +122,8 @@ class MultiMethodInliner {
       const std::unordered_map<const DexMethodRef*, method_profiles::Stats>&
           method_profile_stats = {},
       const std::unordered_map<const DexMethod*, size_t>&
-          same_method_implementations = {});
+          same_method_implementations = {},
+      bool analyze_and_prune_inits = false);
 
   ~MultiMethodInliner() { delayed_invoke_direct_to_static(); }
 
@@ -219,6 +220,9 @@ class MultiMethodInliner {
                              const IRInstruction* invk_insn,
                              std::vector<DexMethod*>* make_static);
 
+  bool noninlinable_same_class_init_invoke(IRInstruction* insn,
+                                           const DexMethod* callee,
+                                           const DexMethod* caller);
   /**
    * Return true if inlining would require a method called from the callee
    * (candidate) to turn into a virtual method (e.g. private to public).
@@ -390,6 +394,14 @@ class MultiMethodInliner {
 
   size_t get_same_method_implementations(const DexMethod* callee);
 
+  // Checks that...
+  // - there are no assignments to (non-inherited) instance fields before
+  //   a constructor call, and
+  // - the constructor refers to a method of the same class, and
+  // - there are no assignments to any final fields.
+  // Under these conditions, a constructor is universally inlinable.
+  bool can_inline_init(const DexMethod* init_method);
+
  private:
   /**
    * Resolver function to map a method reference to a method definition.
@@ -484,6 +496,10 @@ class MultiMethodInliner {
   // Optional cache for get_callee_insn_size function
   std::unique_ptr<ConcurrentMap<const DexMethod*, size_t>> m_callee_insn_sizes;
 
+  // Cache of whether a constructor can be unconditionally inlined.
+  mutable ConcurrentMap<const DexMethod*, boost::optional<bool>>
+      m_can_inline_init;
+
   constant_propagation::Transform::Stats m_const_prop_stats;
   cse_impl::Stats m_cse_stats;
   copy_propagation_impl::Stats m_copy_prop_stats;
@@ -542,6 +558,10 @@ class MultiMethodInliner {
       m_same_method_implementations;
 
   const std::unordered_set<DexMethodRef*> m_pure_methods;
+
+  // Whether to do some deep analysis to determine if constructor candidates
+  // can be safely inlined, and don't inline them otherwise.
+  bool m_analyze_and_prune_inits;
 
   std::unique_ptr<cse_impl::SharedState> m_cse_shared_state;
 

@@ -382,6 +382,7 @@ redex_all_SOURCES = \
 	service/method-dedup/MethodDedup.cpp \
 	service/method-dedup/TypeTags.cpp \
 	service/method-inliner/CFGInliner.cpp \
+	service/method-inliner/ConstructorAnalysis.cpp \
 	service/method-inliner/Deleter.cpp \
 	service/method-inliner/Inliner.cpp \
 	service/method-inliner/MethodInliner.cpp \

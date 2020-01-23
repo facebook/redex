@@ -710,7 +710,7 @@ class ControlFlowGraph {
   void recompute_registers_size();
 
   // by default, start at the entry block
-  boost::sub_range<IRList> get_param_instructions();
+  boost::sub_range<IRList> get_param_instructions() const;
 
   void gather_catch_types(std::vector<DexType*>& types) const;
   void gather_strings(std::vector<DexString*>& strings) const;
