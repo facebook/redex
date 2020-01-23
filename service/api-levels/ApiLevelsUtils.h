@@ -33,6 +33,50 @@ struct FrameworkAPI {
   std::vector<MRefInfo> mrefs_info;
   std::vector<FRefInfo> frefs_info;
   DexAccessFlags access_flags;
+
+  bool has_method(const std::string& simple_deobfuscated_name,
+                  DexProto* meth_proto,
+                  DexAccessFlags meth_access_flags) const {
+    for (const MRefInfo& mref_info : mrefs_info) {
+      auto* mref = mref_info.mref;
+
+      if (mref->get_proto() != meth_proto ||
+          mref->get_name()->str() != simple_deobfuscated_name) {
+        continue;
+      }
+
+      // We also need to check the access flags.
+      // NOTE: We accept cases where the methods are not declared final.
+      if (meth_access_flags == mref_info.access_flags ||
+          (meth_access_flags & ~ACC_FINAL) == mref_info.access_flags) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+class AndroidSDK {
+ public:
+  explicit AndroidSDK(
+      std::unordered_map<DexType*, FrameworkAPI> framework_classes)
+      : m_framework_classes(framework_classes) {}
+
+  bool has_method(DexMethod* meth) {
+    auto type = meth->get_class();
+    const auto& it = m_framework_classes.find(type);
+    if (it == m_framework_classes.end()) {
+      return false;
+    }
+
+    const auto& api = it->second;
+    return api.has_method(meth->get_simple_deobfuscated_name(),
+                          meth->get_proto(),
+                          meth->get_access());
+  }
+
+ private:
+  const std::unordered_map<DexType*, FrameworkAPI> m_framework_classes;
 };
 
 using TypeToFrameworkAPI = std::unordered_map<const DexType*, FrameworkAPI>;
@@ -53,6 +97,12 @@ class ApiLevelsUtils {
   }
 
   std::unordered_map<DexType*, FrameworkAPI> get_framework_classes();
+
+  AndroidSDK get_android_sdk() {
+    auto classes = get_framework_classes();
+    AndroidSDK sdk(std::move(classes));
+    return sdk;
+  }
 
   /**
    * NOTE: Workaround for the fact that real private members can be made public

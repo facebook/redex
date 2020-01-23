@@ -6,4 +6,6 @@ Landroid/util/ArraySet; 1 Ljava/lang/Object; 2 0
   M Landroid/util/ArraySet;.removeIf:(Ljava/util/function/Predicate;)Z 1
 Landroid/util/LongSparseArray; 1 Landroid/util/ArrayMap; 0 0
 Landroid/app/FragmentContainer; 1025 Ljava/lang/Object; 0 0
+Landroid/view/View; 1 Ljava/lang/Object; 1 0
+  M Landroid/view/View;.clearFocus:()V 1
 Ljava/lang/Object; 1 None 0 0

@@ -144,28 +144,6 @@ std::unordered_map<std::string, DexType*> get_simple_cls_name_to_accepted_types(
 
 namespace {
 
-bool find_method(const std::string& simple_deobfuscated_name,
-                 const std::vector<MRefInfo>& mrefs_info,
-                 DexProto* meth_proto,
-                 DexAccessFlags access_flags) {
-  for (const MRefInfo& mref_info : mrefs_info) {
-    auto* mref = mref_info.mref;
-
-    if (mref->get_name()->str() == simple_deobfuscated_name &&
-        mref->get_proto() == meth_proto) {
-
-      // We also need to check the access flags.
-      // NOTE: We accept cases where the methods are not declared final.
-      if (access_flags == mref_info.access_flags ||
-          (access_flags & ~ACC_FINAL) == mref_info.access_flags) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 /**
  * When checking if a method of a release class exists in the framework
  * equivalent, checking directly the replaced version (as in replacing all
@@ -190,8 +168,8 @@ bool check_methods(
         type_reference::get_new_proto(meth->get_proto(), release_to_framework);
     // NOTE: For now, this assumes no obfuscation happened. We need to update
     //       it, if it runs later.
-    if (!find_method(meth->get_simple_deobfuscated_name(),
-                     framework_api.mrefs_info, new_proto, meth->get_access())) {
+    if (!framework_api.has_method(meth->get_simple_deobfuscated_name(),
+                                  new_proto, meth->get_access())) {
       TRACE(API_UTILS, 4,
             "Excluding %s since we couldn't find corresponding method: %s!",
             SHOW(framework_api.cls), show_deobfuscated(meth).c_str());
