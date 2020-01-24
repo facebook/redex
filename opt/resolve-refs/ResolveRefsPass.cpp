@@ -304,16 +304,26 @@ RefStats refine_virtual_callsites(
 
 } // namespace
 
-void ResolveRefsPass::run_pass(DexStoresVector& stores,
-                               ConfigFiles& /* conf */,
-                               PassManager& mgr) {
+void ResolveRefsPass::eval_pass(DexStoresVector&,
+                                ConfigFiles& conf,
+                                PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   // Disable resolution to external for API level older than 19.
-  if (min_sdk < 19) {
+  if (m_resolve_to_external && min_sdk < 19) {
     m_resolve_to_external = false;
     TRACE(RESO, 2, "Disabling resolution to external for min_sdk %d", min_sdk);
   }
 
+  // Load min_sdk API
+  auto min_sdk_api_file = conf.get_android_sdk_api(26);
+  if (min_sdk_api_file) {
+    TRACE(RESO, 2, "min sdk api file %s", min_sdk_api_file->c_str());
+  }
+}
+
+void ResolveRefsPass::run_pass(DexStoresVector& stores,
+                               ConfigFiles& /* conf */,
+                               PassManager& mgr) {
   Scope scope = build_class_scope(stores);
   RefStats stats =
       walk::parallel::methods<RefStats>(scope, [&](DexMethod* method) {

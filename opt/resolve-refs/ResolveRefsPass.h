@@ -9,6 +9,8 @@
 
 #include "Pass.h"
 
+#include "ApiLevelsUtils.h"
+
 /**
  * A field or method being referenced by an instruction could be a pure `ref`.
  * In which, the ref points to a class where the field/method is not actually
@@ -28,8 +30,6 @@ class ResolveRefsPass : public Pass {
  public:
   ResolveRefsPass() : Pass("ResolveRefsPass") {}
 
-  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
-
   void bind_config() override {
     bind("resolve_to_external", false, m_resolve_to_external,
          "Allowing resolving method ref to an external one");
@@ -39,8 +39,13 @@ class ResolveRefsPass : public Pass {
          "Externals types/prefixes excluded from reference resolution");
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
+  void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
  private:
   bool m_resolve_to_external;
   bool m_desuperify;
   std::vector<std::string> m_excluded_externals;
+  std::unique_ptr<api::AndroidSDK> m_min_sdk_api{};
 };

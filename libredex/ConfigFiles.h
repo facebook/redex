@@ -111,6 +111,25 @@ struct ConfigFiles {
     return *m_inliner_config.get();
   }
 
+  boost::optional<std::string> get_android_sdk_api(int32_t api_level) {
+    std::string api_file = "";
+    switch (api_level) {
+    case 25:
+      m_json.get("android_sdk_api_25_file", "", api_file);
+      break;
+    case 26:
+      m_json.get("android_sdk_api_26_file", "", api_file);
+      break;
+    default:
+      break;
+    }
+
+    if (api_file.empty()) {
+      return boost::none;
+    }
+    return boost::optional<std::string>(api_file);
+  }
+
   /**
    * Load configurations with the initial scope.
    */
