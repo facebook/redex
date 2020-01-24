@@ -42,6 +42,10 @@ std::vector<DexClass*> create_scope(bool add_parent) {
     scope.push_back(d_cls);
   }
 
+  auto android_view = DexType::make_type("Landroid/view/View;");
+  auto av_cls = create_internal_class(android_view, obj_t, {});
+  scope.push_back(av_cls);
+
   return scope;
 }
 
@@ -78,7 +82,7 @@ TEST(ApiUtilsTest, testParseInputFormat) {
   api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
                                 21);
   const auto& framework_cls_to_api = api_utils.get_framework_classes();
-  EXPECT_EQ(framework_cls_to_api.size(), 5);
+  EXPECT_EQ(framework_cls_to_api.size(), 6);
 
   auto a_t = DexType::make_type("Landroid/util/ArrayMap;");
   EXPECT_EQ(framework_cls_to_api.at(a_t).mrefs_info.size(), 2);
@@ -200,4 +204,38 @@ TEST(ApiUtilsTest, testEasyInput_MethodMissing) {
   auto b_framework = DexType::make_type("Landroid/util/ArraySet;");
   auto b_release = DexType::make_type("Landroidx/ArraySet;");
   EXPECT_EQ(types_to_framework_api.at(b_release).cls, b_framework);
+}
+
+TEST(ApiUtilsTest, testHasMethod) {
+  g_redex = new RedexContext();
+
+  Scope scope = create_scope(false);
+
+  api::ApiLevelsUtils api_utils(scope, std::getenv("api_utils_easy_input_path"),
+                                21);
+  const auto& framework_cls_to_api = api_utils.get_framework_classes();
+  EXPECT_EQ(framework_cls_to_api.size(), 6);
+
+  auto android_view = DexType::make_type("Landroid/view/View;");
+
+  EXPECT_EQ(framework_cls_to_api.at(android_view).mrefs_info.size(), 1);
+  EXPECT_EQ(framework_cls_to_api.at(android_view).frefs_info.size(), 0);
+
+  const auto& api = framework_cls_to_api.at(android_view);
+  auto void_args = DexTypeList::make_type_list({});
+  auto void_empty = DexProto::make_proto(type::_void(), void_args);
+  EXPECT_TRUE(api.has_method("clearFocus", void_empty, ACC_PUBLIC));
+  EXPECT_FALSE(api.has_method("joJo", void_empty, ACC_PUBLIC));
+
+  auto sdk = api_utils.get_android_sdk();
+  auto method = static_cast<DexMethod*>(DexMethod::make_method(
+      android_view, DexString::make_string("clearFocus"), void_empty));
+  method->set_access(ACC_PUBLIC);
+  method->set_virtual(true);
+  method->set_external();
+  method->set_code(assembler::ircode_from_string("((return-void))"));
+  auto a_cls = type_class(android_view);
+  a_cls->add_method(method);
+
+  EXPECT_TRUE(sdk.has_method(method));
 }
