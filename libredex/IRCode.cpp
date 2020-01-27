@@ -604,6 +604,10 @@ void IRCode::clear_cfg() {
 
   if (m_cfg->editable()) {
     m_registers_size = m_cfg->get_registers_size();
+    if (m_ir_list != nullptr) {
+      m_ir_list->clear_and_dispose();
+      delete m_ir_list;
+    }
     m_ir_list = m_cfg->linearize();
   }
 
