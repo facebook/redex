@@ -99,12 +99,17 @@ size_t next_power_of_two(size_t x) {
 }
 
 namespace {
+
+constexpr bool PRINT_SEED = false;
+
 class MallocDebug {
  public:
   explicit MallocDebug() : m_rand("wharblegarbl") {
     const char* seed_env = getenv("MALLOC_SEED");
     if (seed_env != nullptr) {
-      printf("re-seeding with %s\n", seed_env);
+      if (PRINT_SEED) {
+        printf("re-seeding with %s\n", seed_env);
+      }
       m_rand.seed(seed_env);
     }
   }
