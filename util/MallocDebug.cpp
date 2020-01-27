@@ -123,6 +123,24 @@ class MallocDebug {
   struct Block {
     void* ptr;
     size_t size;
+    Block(void* ptr, size_t size) : ptr(ptr), size(size) {}
+    ~Block() { free(ptr); }
+
+    Block(const Block&) = delete;
+    Block(Block&& other) noexcept : ptr(other.release()), size(other.size) {}
+
+    Block& operator=(const Block&) = delete;
+    Block& operator=(Block&& rhs) {
+      ptr = rhs.release();
+      size = rhs.size;
+      return *this;
+    }
+
+    void* release() {
+      void* tmp = ptr;
+      ptr = nullptr;
+      return tmp;
+    }
   };
 
   bool m_in_malloc = false;
@@ -143,15 +161,16 @@ class MallocDebug {
 
     while (vec.size() < block_count) {
       auto ptr = libc_malloc(next_size);
-      vec.push_back(Block{ptr, next_size});
+      vec.emplace_back(ptr, next_size);
     }
 
     auto idx = m_rand.next_rand() % block_count;
-    auto block = vec[idx];
+    auto block_size = vec[idx].size;
+    auto block_ptr = vec[idx].release();
     vec.erase(vec.begin() + idx);
 
-    always_assert(block.size >= size);
-    return block.ptr;
+    always_assert(block_size >= size);
+    return block_ptr;
   }
 };
 
