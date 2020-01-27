@@ -588,7 +588,9 @@ void DexAnnotationDirectory::calc_internals() {
       }
     }
   }
-  m_viz = (double)cntviz / m_anno_count;
+  if (m_anno_count != 0) {
+    m_viz = (double)cntviz / m_anno_count;
+  }
 }
 
 bool method_annotation_compare(std::pair<DexMethod*, DexAnnotationSet*> a,
