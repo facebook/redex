@@ -97,6 +97,10 @@ class DexInstruction : public Gatherable {
   bool has_field() const { return m_ref_type == REF_FIELD; }
   bool has_method() const { return m_ref_type == REF_METHOD; }
 
+  bool has_range() const { return dex_opcode::has_range(opcode()); }
+  bool has_literal() const { return dex_opcode::has_literal(opcode()); }
+  bool has_offset() const { return dex_opcode::has_offset(opcode()); }
+
   /*
    * Number of registers used.
    */
