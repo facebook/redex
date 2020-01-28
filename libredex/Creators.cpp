@@ -40,20 +40,8 @@ MethodBlock::MethodBlock(IRList::iterator iterator, MethodCreator* creator)
 
 void MethodBlock::invoke(DexMethod* meth, const std::vector<Location>& args) {
   always_assert(meth->is_concrete());
-  IROpcode opcode;
-  if (meth->is_virtual()) {
-    if (is_interface(type_class(meth->get_class()))) {
-      opcode = OPCODE_INVOKE_INTERFACE;
-    } else {
-      opcode = OPCODE_INVOKE_VIRTUAL;
-    }
-  } else {
-    if (is_static(meth)) {
-      opcode = OPCODE_INVOKE_STATIC;
-    } else {
-      opcode = OPCODE_INVOKE_DIRECT;
-    }
-  }
+  IROpcode opcode = opcode::invoke_for_method(meth);
+
   invoke(opcode, meth, args);
 }
 
