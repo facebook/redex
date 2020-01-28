@@ -415,6 +415,7 @@ void translate_dex_to_ir(
 
     insn->normalize_registers();
 
+    delete it->dex_insn;
     it->type = MFLOW_OPCODE;
     it->insn = insn;
     if (move_result_pseudo != nullptr) {

@@ -99,13 +99,18 @@ TEST_F(IRInstructionTest, RoundTrip) {
     method->set_dex_code(std::make_unique<DexCode>());
     method->get_dex_code()->get_instructions().push_back(insn);
     method->get_dex_code()->set_registers_size(0xff);
+
+    // Create a copy of insn because balloon frees the DexInstructions
+    auto copy = insn->clone();
+    insn = nullptr;
+
     method->balloon();
     instruction_lowering::lower(method);
     method->sync();
-    EXPECT_EQ(*method->get_dex_code()->get_instructions().at(0), *insn)
+    EXPECT_EQ(*method->get_dex_code()->get_instructions().at(0), *copy)
         << "at " << show(op);
 
-    delete insn;
+    delete copy;
   }
 }
 
