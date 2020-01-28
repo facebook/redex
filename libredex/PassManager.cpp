@@ -30,6 +30,7 @@
 #include "ProguardPrintConfiguration.h"
 #include "ProguardReporting.h"
 #include "ReachableClasses.h"
+#include "Sanitizers.h"
 #include "Timer.h"
 #include "Walkers.h"
 
@@ -214,6 +215,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   // Load configurations regarding the scope.
   conf.load(scope);
 
+  sanitizers::lsan_do_recoverable_leak_check();
+
   // TODO(fengliu) : Remove Pass::eval_pass API
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
@@ -261,6 +264,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
   constexpr visualizer::Options VISUALIZER_PASS_OPTIONS = (visualizer::Options)(
       visualizer::Options::SKIP_NO_CHANGE | visualizer::Options::FORCE_CFG);
 
+  sanitizers::lsan_do_recoverable_leak_check();
+
   for (size_t i = 0; i < m_activated_passes.size(); ++i) {
     Pass* pass = m_activated_passes[i];
     TRACE(PM, 1, "Running %s...", pass->name().c_str());
@@ -276,6 +281,7 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
       jemalloc_util::ScopedProfiling malloc_prof(m_malloc_profile_pass == pass);
       pass->run_pass(stores, conf, *this);
     }
+    sanitizers::lsan_do_recoverable_leak_check();
     walk::parallel::code(build_class_scope(stores), [](DexMethod* m,
                                                        IRCode& code) {
       // Ensure that pass authors deconstructed the editable CFG at the end of
@@ -323,6 +329,8 @@ void PassManager::run_passes(DexStoresVector& stores, ConfigFiles& conf) {
     std::ofstream outgoing(conf.get_printseeds() + ".outgoing");
     redex::print_classes(outgoing, conf.get_proguard_map(), scope);
   }
+
+  sanitizers::lsan_do_recoverable_leak_check();
 }
 
 void PassManager::activate_pass(const char* name, const Json::Value& conf) {

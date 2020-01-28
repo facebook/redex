@@ -123,15 +123,6 @@ def write_debugger_command(dbg, src_root, args):
 
 
 def add_extra_environment_args(env):
-    # If we're running with ASAN, we'll want these flags, if we're not, they do
-    # nothing
-    if "ASAN_OPTIONS" not in env:  # don't overwrite user specified options
-        # We ignore leaks because they are high volume and low danger (for a
-        # short running program like redex).
-        # We don't detect container overflow because it finds bugs in our
-        # libraries (namely jsoncpp and boost).
-        env["ASAN_OPTIONS"] = "detect_leaks=0:detect_container_overflow=0"
-
     # If we haven't set MALLOC_CONF but we have requested to profile the memory
     # of a specific pass, set some reasonable defaults
     if "MALLOC_PROFILE_PASS" in env and "MALLOC_CONF" not in env:
