@@ -174,9 +174,7 @@ struct Tracer {
 static Tracer tracer;
 } // namespace
 
-#ifdef NDEBUG
-bool traceEnabled(TraceModule, int) { return false; }
-#else
+#ifndef NDEBUG
 bool traceEnabled(TraceModule module, int level) {
   return tracer.traceEnabled(module, level);
 }

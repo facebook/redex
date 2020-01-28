@@ -143,11 +143,15 @@ enum TraceModule : int {
       N_TRACE_MODULES,
 };
 
-bool traceEnabled(TraceModule module, int level);
+// To avoid "-Wunused" warnings, keep the TRACE macros in common so that the
+// compiler sees a "use." However, ensure that it is optimized away through
+// a constexpr condition in NDEBUG mode.
 #ifdef NDEBUG
-#define TRACE(...)
-#define TRACE_NO_LINE(...)
+constexpr bool traceEnabled(TraceModule, int) { return false; }
 #else
+bool traceEnabled(TraceModule module, int level);
+#endif // NDEBUG
+
 void trace(
     TraceModule module, int level, bool suppress_newline, const char* fmt, ...);
 #define TRACE(module, level, fmt, ...)                                        \
@@ -162,7 +166,6 @@ void trace(
       trace(module, level, /* suppress_newline */ true, fmt, ##__VA_ARGS__); \
     }                                                                        \
   } while (0)
-#endif // NDEBUG
 
 struct TraceContext {
   explicit TraceContext(const std::string& current_method) {

@@ -1242,9 +1242,9 @@ IROpcode sget_opcode_for_field(const DexField* field) {
   case DataType::Double:
     return OPCODE_SGET_WIDE;
   case DataType::Void:
-  default:
-    assert(false);
+    break;
   }
+  always_assert(false);
 }
 
 IROpcode invert_conditional_branch(IROpcode op) {

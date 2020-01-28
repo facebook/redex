@@ -66,16 +66,14 @@ constexpr bool debug =
   assert_impl(e, assert_fail_impl(e, type, msg, ##__VA_ARGS__))
 #undef assert
 
-#ifdef NDEBUG
-#define redex_assert(e) static_cast<void>(0)
-#define assert_log(e, msg, ...) static_cast<void>(0)
-#define assert_type_log(e, type, msg, ...) static_cast<void>(0)
-#else
-#define redex_assert(e) always_assert(e)
-#define assert_log(e, msg, ...) always_assert_log(e, msg, ##__VA_ARGS__)
+// A common definition for non-always asserts. Ensures that there won't be
+// "-Wunused" warnings. The `!debug` should be optimized away since it is a
+// constexpr.
+#define redex_assert(e) always_assert(!debug || e)
+#define assert_log(e, msg, ...) \
+  always_assert_log(!debug || e, msg, ##__VA_ARGS__)
 #define assert_type_log(e, type, msg, ...) \
-  always_assert_type_log(e, type, msg, ##__VA_ARGS__)
-#endif // NDEBUG
+  always_assert_type_log(!debug || e, type, msg, ##__VA_ARGS__)
 
 void print_stack_trace(std::ostream& os, const std::exception& e);
 
