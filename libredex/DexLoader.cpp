@@ -133,7 +133,7 @@ void DexLoader::gather_input_stats(dex_stats_t* stats, const dex_header* dh) {
     std::unique_ptr<DexEncodedValueArray> deva(clz->get_static_values());
     if (deva) {
       if (!enc_arrays.count(*deva)) {
-        enc_arrays.emplace(std::move(*deva.release()));
+        enc_arrays.emplace(std::move(*deva.get()));
         stats->num_static_values++;
       }
     }
