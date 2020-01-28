@@ -25,17 +25,22 @@ from symbol_files import SymbolFiles
 
 # A simple symbolicator for line-based input,
 # i.e. a newline separated list of class names to be symbolicated.
+# X.A01 = > com/facebook/XyzClass.class
 class LinesSymbolicator(object):
-    def __init__(self, symbol_maps):
-        self.symbol_maps = symbol_maps
+    def __init__(self, class_map):
+        # We only need class map for this symbolicator.
+        self.class_map = class_map
 
     def symbolicate(self, line):
-        class_name = line[:-7]  # strip '.class' suffix.
+        if line.endswith(".class"):
+            class_name = line[:-7]  # strip '.class' suffix.
+        else:
+            class_name = line[:-1]
         class_name = class_name.replace("/", ".")
 
-        if class_name in self.symbol_maps.class_map:
-            ans = self.symbol_maps.class_map[class_name].origin_class
-            return ans + "\n"
+        if class_name in self.class_map:
+            ans = self.class_map[class_name].origin_class
+            return ans.replace(".", "/") + ".class\n"
         return line
 
 
@@ -160,8 +165,6 @@ def main(arg_desc=None, symbol_file_generator=None):
         )
         sys.exit(1)
 
-    symbol_maps = SymbolMaps(symbol_files)
-
     # I occasionally use ctrl-C to e.g. terminate a text search in `less`; I
     # don't want to kill this script in the process, though
     if not sys.stdout.isatty():
@@ -183,14 +186,18 @@ def main(arg_desc=None, symbol_file_generator=None):
             sys.exit(0)
 
     if args.input_type == "lines":
-        symbolicator = LinesSymbolicator(symbol_maps)
+        class_map = SymbolMaps.get_class_map(symbol_files.extracted_symbols)
+        symbolicator = LinesSymbolicator(class_map)
     elif args.input_type == "logcat" or LogcatSymbolicator.is_likely_logcat(first_line):
+        symbol_maps = SymbolMaps(symbol_files)
         symbolicator = LogcatSymbolicator(symbol_maps)
     elif args.input_type == "dexdump" or DexdumpSymbolicator.is_likely_dexdump(
         first_line
     ):
+        symbol_maps = SymbolMaps(symbol_files)
         symbolicator = DexdumpSymbolicator(symbol_maps)
     else:
+        symbol_maps = SymbolMaps(symbol_files)
         logging.warning("Could not figure out input kind, assuming logcat")
         symbolicator = LogcatSymbolicator(symbol_maps)
 
