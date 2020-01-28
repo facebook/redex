@@ -1098,7 +1098,7 @@ const char* kAsanDefaultOptions =
     ":"
     "detect_invalid_pointer_pairs=1"
     ":"
-    "detect_leaks=1"
+    "detect_leaks=0"
     ":"
     "detect_stack_use_after_return=1"
     ":"
