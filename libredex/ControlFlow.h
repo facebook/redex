@@ -542,6 +542,7 @@ class ControlFlowGraph {
    * moved into the new block (the successor). Return the (new) successor.
    */
   Block* split_block(const cfg::InstructionIterator& it);
+  Block* split_block(Block* block, const IRList::iterator& it);
 
   // Merge `succ` into `pred` and delete `succ`
   //

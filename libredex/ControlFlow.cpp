@@ -1943,15 +1943,13 @@ std::vector<Edge*> ControlFlowGraph::get_succ_edges_of_type(
                            [type](const Edge* e) { return e->type() == type; });
 }
 
-Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
+Block* ControlFlowGraph::split_block(Block* old_block,
+                                     const IRList::iterator& raw_it) {
+  always_assert(raw_it != old_block->end());
   always_assert(editable());
-  always_assert(!it.is_end());
 
-  // old_block will be the predecessor
-  Block* old_block = it.block();
   // new_block will be the successor
   Block* new_block = create_block();
-  const IRList::iterator& raw_it = it.unwrap();
 
   // move the rest of the instructions after the split point into the new block
   new_block->m_entries.splice_selection(new_block->begin(),
@@ -1973,6 +1971,11 @@ Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
   // connect the halves of the block we just split up
   add_edge(old_block, new_block, EDGE_GOTO);
   return new_block;
+}
+
+Block* ControlFlowGraph::split_block(const cfg::InstructionIterator& it) {
+  always_assert(!it.is_end());
+  return split_block(it.block(), it.unwrap());
 }
 
 void ControlFlowGraph::merge_blocks(Block* pred, Block* succ) {
