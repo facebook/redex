@@ -80,15 +80,33 @@ class TinyPRNG {
 typedef void* (*MallocFn)(size_t);
 static auto libc_malloc =
     reinterpret_cast<MallocFn>(dlsym(RTLD_NEXT, "malloc"));
+typedef void* (*CallocFn)(size_t, size_t);
+static auto libc_calloc =
+    reinterpret_cast<CallocFn>(dlsym(RTLD_NEXT, "calloc"));
+typedef void* (*MemalignFn)(size_t, size_t);
+static auto libc_memalign =
+    reinterpret_cast<MemalignFn>(dlsym(RTLD_NEXT, "memalign"));
+typedef int (*PosixMemalignFn)(void**, size_t, size_t);
+static auto libc_posix_memalign =
+    reinterpret_cast<MemalignFn>(dlsym(RTLD_NEXT, "posix_memalign"));
 #endif
 
 #ifdef __linux__
 extern "C" {
 extern void* __libc_malloc(size_t size);
+extern void* __libc_calloc(size_t nelem, size_t elsize);
+extern void* __libc_memalign(size_t alignment, size_t size);
+// This isn't found?
+// extern int __posix_memalign(void** out, size_t alignment, size_t size);
 }
 
 static auto libc_malloc = __libc_malloc;
+static auto libc_calloc = __libc_calloc;
+static auto libc_memalign = __libc_memalign;
+// static auto libc_posix_memalign = __posix_memalign;
 #endif
+
+namespace {
 
 size_t next_power_of_two(size_t x) {
   // Turn off all but msb.
@@ -97,8 +115,6 @@ size_t next_power_of_two(size_t x) {
   }
   return x << 1;
 }
-
-namespace {
 
 constexpr bool PRINT_SEED = false;
 
@@ -119,9 +135,53 @@ class MallocDebug {
       return libc_malloc(size);
     }
     m_in_malloc = true;
-    auto ret = malloc_impl(size);
+    auto ret = malloc_impl<false>(
+        size, m_blocks, [](size_t s) { return libc_malloc(s); });
     m_in_malloc = false;
     return ret;
+  }
+
+  void* calloc(size_t nelem, size_t elsize) noexcept {
+    if (m_in_malloc) {
+      return libc_calloc(nelem, elsize);
+    }
+    m_in_malloc = true;
+    auto ret = malloc_impl<true>(
+        nelem * elsize, m_blocks, [](size_t s) { return libc_malloc(s); });
+    m_in_malloc = false;
+    return ret;
+  }
+
+  void* memalign(size_t alignment, size_t bytes) noexcept {
+    if (m_in_malloc) {
+      return libc_memalign(alignment, bytes);
+    }
+    m_in_malloc = true;
+    auto ret = malloc_impl<false>(
+        bytes,
+        m_aligned_blocks[alignment],
+        [](size_t, size_t a, size_t b) { return libc_memalign(a, b); },
+        alignment,
+        bytes);
+    m_in_malloc = false;
+    return ret;
+  }
+
+  int posix_memalign(void** out, size_t alignment, size_t size) noexcept {
+    if (m_in_malloc) {
+      *out = memalign(alignment, size);
+      return 0;
+    }
+    m_in_malloc = true;
+    auto ret = malloc_impl<false>(
+        size,
+        m_aligned_blocks[alignment],
+        [](size_t, size_t a, size_t b) { return libc_memalign(a, b); },
+        alignment,
+        size);
+    m_in_malloc = false;
+    *out = ret;
+    return 0;
   }
 
  private:
@@ -149,32 +209,43 @@ class MallocDebug {
   };
 
   bool m_in_malloc = false;
-  std::map<size_t, std::vector<Block>> m_blocks;
+  using BlockCache = std::map<size_t, std::vector<Block>>;
+  BlockCache m_blocks;
+  std::map<size_t, BlockCache> m_aligned_blocks;
   TinyPRNG m_rand;
 
-  void* malloc_impl(size_t size) noexcept {
+  template <bool ZERO, typename Fn, typename... Args>
+  void* malloc_impl(size_t size,
+                    BlockCache& blocks,
+                    Fn fn,
+                    Args... args) noexcept {
     constexpr int block_count = 8;
-
     auto next_size = next_power_of_two(size);
 
-    auto it = m_blocks.find(next_size);
-    if (it == m_blocks.end()) {
-      it = m_blocks.emplace(next_size, std::vector<Block>()).first;
+    auto it = blocks.find(next_size);
+    if (it == blocks.end()) {
+      it = blocks.emplace(next_size, std::vector<Block>()).first;
     }
 
     auto& vec = it->second;
 
     while (vec.size() < block_count) {
-      auto ptr = libc_malloc(next_size);
+      auto ptr = fn(next_size, args...);
       vec.emplace_back(ptr, next_size);
     }
 
     auto idx = m_rand.next_rand() % block_count;
     auto block_size = vec[idx].size;
-    auto block_ptr = vec[idx].release();
+    void* block_ptr = vec[idx].release();
     vec.erase(vec.begin() + idx);
 
     always_assert(block_size >= size);
+
+    if (ZERO) {
+      // Zero out.
+      memset(block_ptr, 0, size);
+    }
+
     return block_ptr;
   }
 };
@@ -186,4 +257,16 @@ thread_local MallocDebug malloc_debug;
 extern "C" {
 
 void* malloc(size_t sz) { return malloc_debug.malloc(sz); }
+
+void* calloc(size_t nelem, size_t elsize) {
+  return malloc_debug.calloc(nelem, elsize);
+}
+
+void* memalign(size_t alignment, size_t bytes) {
+  return malloc_debug.memalign(alignment, bytes);
+}
+
+int posix_memalign(void** out, size_t alignment, size_t size) {
+  return malloc_debug.posix_memalign(out, alignment, size);
+}
 }
