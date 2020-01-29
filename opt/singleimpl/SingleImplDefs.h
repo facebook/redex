@@ -125,6 +125,8 @@ struct SingleImplData {
 using SingleImpls = std::unordered_map<DexType*, SingleImplData>;
 
 struct SingleImplAnalysis {
+  virtual ~SingleImplAnalysis() = default;
+
   /**
    * Create a SingleImplAnalysis from a given Scope.
    */

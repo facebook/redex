@@ -12,7 +12,9 @@
 #include <unordered_map>
 #include <vector>
 
-class Plugin {};
+struct Plugin {
+  virtual ~Plugin() = default;
+};
 
 template <class T>
 class PluginEntry : public Plugin {
