@@ -26,7 +26,7 @@ class DedupBlocksPass : public Pass {
 
   struct Config {
     std::unordered_set<DexMethod*> method_black_list;
-    static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 3;
+    static const unsigned int DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT = 2;
     unsigned int block_split_min_opcode_count =
         DEFAULT_BLOCK_SPLIT_MIN_OPCODE_COUNT;
     bool split_postfix = true;
