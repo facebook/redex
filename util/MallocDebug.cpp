@@ -28,6 +28,8 @@
 #include <dlfcn.h>
 #endif
 
+#include <algorithm>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -118,6 +120,7 @@ size_t next_power_of_two(size_t x) {
 
 constexpr bool PRINT_SEED = false;
 
+template <bool ENABLE_RAND>
 class MallocDebug {
  public:
   explicit MallocDebug() : m_rand("wharblegarbl") {
@@ -130,13 +133,13 @@ class MallocDebug {
     }
   }
 
-  void* malloc(size_t size) noexcept {
+  void* malloc(size_t size, bool randomize = true) noexcept {
     if (m_in_malloc) {
       return libc_malloc(size);
     }
     m_in_malloc = true;
     auto ret = malloc_impl<false>(
-        size, m_blocks, [](size_t s) { return libc_malloc(s); });
+        randomize, size, m_blocks, [](size_t s) { return libc_malloc(s); });
     m_in_malloc = false;
     return ret;
   }
@@ -146,18 +149,22 @@ class MallocDebug {
       return libc_calloc(nelem, elsize);
     }
     m_in_malloc = true;
-    auto ret = malloc_impl<true>(
-        nelem * elsize, m_blocks, [](size_t s) { return libc_malloc(s); });
+    auto ret = malloc_impl<true>(false, nelem * elsize, m_blocks, [](size_t s) {
+      return libc_malloc(s);
+    });
     m_in_malloc = false;
     return ret;
   }
 
-  void* memalign(size_t alignment, size_t bytes) noexcept {
+  void* memalign(size_t alignment,
+                 size_t bytes,
+                 bool randomize = true) noexcept {
     if (m_in_malloc) {
       return libc_memalign(alignment, bytes);
     }
     m_in_malloc = true;
     auto ret = malloc_impl<false>(
+        randomize,
         bytes,
         m_aligned_blocks[alignment],
         [](size_t, size_t a, size_t b) { return libc_memalign(a, b); },
@@ -167,13 +174,17 @@ class MallocDebug {
     return ret;
   }
 
-  int posix_memalign(void** out, size_t alignment, size_t size) noexcept {
+  int posix_memalign(void** out,
+                     size_t alignment,
+                     size_t size,
+                     bool randomize = true) noexcept {
     if (m_in_malloc) {
       *out = memalign(alignment, size);
       return 0;
     }
     m_in_malloc = true;
     auto ret = malloc_impl<false>(
+        randomize,
         size,
         m_aligned_blocks[alignment],
         [](size_t, size_t a, size_t b) { return libc_memalign(a, b); },
@@ -215,12 +226,13 @@ class MallocDebug {
   TinyPRNG m_rand;
 
   template <bool ZERO, typename Fn, typename... Args>
-  void* malloc_impl(size_t size,
+  void* malloc_impl(bool randomize,
+                    size_t size,
                     BlockCache& blocks,
                     Fn fn,
                     Args... args) noexcept {
     constexpr int block_count = 8;
-    auto next_size = next_power_of_two(size);
+    auto next_size = std::max(sizeof(uint32_t), next_power_of_two(size));
 
     auto it = blocks.find(next_size);
     if (it == blocks.end()) {
@@ -244,13 +256,20 @@ class MallocDebug {
     if (ZERO) {
       // Zero out.
       memset(block_ptr, 0, size);
+    } else if (ENABLE_RAND && randomize) {
+      // Fill with garbage. Assume we have at least 4-byte alignment, and at
+      // least 4-byte allocation (hence the std::max above).
+      size_t len = (size + sizeof(uint32_t) - 1) / sizeof(uint32_t);
+      for (size_t i = 0; i < len; ++i) {
+        (reinterpret_cast<uint32_t*>(block_ptr))[i] = m_rand.next_rand();
+      }
     }
 
     return block_ptr;
   }
 };
 
-thread_local MallocDebug malloc_debug;
+thread_local MallocDebug<true> malloc_debug;
 
 } // namespace
 
