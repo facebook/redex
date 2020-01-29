@@ -219,6 +219,7 @@ void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   jw.get("run_cse", false, inliner_config->run_cse);
   jw.get("run_copy_prop", false, inliner_config->run_copy_prop);
   jw.get("run_local_dce", false, inliner_config->run_local_dce);
+  jw.get("run_dedup_blocks", false, inliner_config->run_dedup_blocks);
   jw.get("debug", false, inliner_config->debug);
   jw.get("black_list", {}, inliner_config->m_black_list);
   jw.get("caller_black_list", {}, inliner_config->m_caller_black_list);

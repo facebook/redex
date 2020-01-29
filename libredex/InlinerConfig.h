@@ -28,6 +28,7 @@ struct InlinerConfig {
   bool run_cse{false};
   bool run_copy_prop{false};
   bool run_local_dce{false};
+  bool run_dedup_blocks{false};
   bool shrink_other_methods{true};
   bool debug{false};
   std::unordered_set<DexType*> whitelist_no_method_limit;

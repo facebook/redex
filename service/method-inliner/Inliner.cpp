@@ -178,7 +178,8 @@ MultiMethodInliner::MultiMethodInliner(
   }
 
   m_shrinking_enabled = m_config.run_const_prop || m_config.run_cse ||
-                        m_config.run_copy_prop || m_config.run_local_dce;
+                        m_config.run_copy_prop || m_config.run_local_dce ||
+                        m_config.run_dedup_blocks;
 
   if (config.run_cse) {
     m_cse_shared_state =
@@ -700,6 +701,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
   cse_impl::Stats cse_stats;
   copy_propagation_impl::Stats copy_prop_stats;
   LocalDce::Stats local_dce_stats;
+  dedup_blocks_impl::Stats dedup_blocks_stats;
 
   if (m_config.run_const_prop) {
     if (editable_cfg_built) {
@@ -754,6 +756,21 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     local_dce_stats = local_dce.get_stats();
   }
 
+  if (m_config.run_dedup_blocks) {
+    if (!code->editable_cfg_built()) {
+      code->build_cfg(/* editable */ true);
+    }
+
+    dedup_blocks_impl::Config config;
+    dedup_blocks_impl::DedupBlocks dedup_blocks(config, method);
+    dedup_blocks.run();
+    dedup_blocks_stats = dedup_blocks.get_stats();
+    code->clear_cfg();
+    // TODO T61342921: ^^^ this shouldn't be necessary, build dedup-blocks
+    // seems to leave behind the cfg in a somewhat illegal configuration that
+    // linearization fixes.
+  }
+
   if (editable_cfg_built && !code->editable_cfg_built()) {
     code->build_cfg(/* editable */ true);
   } else if (!editable_cfg_built && code->editable_cfg_built()) {
@@ -765,6 +782,7 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
   m_cse_stats += cse_stats;
   m_copy_prop_stats += copy_prop_stats;
   m_local_dce_stats += local_dce_stats;
+  m_dedup_blocks_stats += dedup_blocks_stats;
   m_methods_shrunk++;
 }
 

@@ -18,6 +18,7 @@ void InlinerConfig::bind_config() {
        inline_small_non_deletables);
   bind("run_const_prop", run_const_prop, run_const_prop);
   bind("run_cse", run_cse, run_cse);
+  bind("run_dedup_blocks", run_dedup_blocks, run_dedup_blocks);
   bind("run_copy_prop", run_copy_prop, run_copy_prop);
   bind("run_local_dce", run_local_dce, run_local_dce);
   bind("no_inline_annos", {}, m_no_inline_annos);

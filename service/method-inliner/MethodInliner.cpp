@@ -456,5 +456,7 @@ void run_inliner(DexStoresVector& stores,
       "instructions_eliminated_localdce",
       inliner.get_local_dce_stats().dead_instruction_count +
           inliner.get_local_dce_stats().unreachable_instruction_count);
+  mgr.incr_metric("blocks_eliminated_by_dedup_blocks",
+                  inliner.get_dedup_blocks_stats().blocks_removed);
 }
 } // namespace inliner

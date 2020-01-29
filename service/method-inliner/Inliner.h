@@ -17,6 +17,7 @@
 #include "ConstantEnvironment.h"
 #include "ConstantPropagationTransform.h"
 #include "CopyPropagation.h"
+#include "DedupBlocks.h"
 #include "DexClass.h"
 #include "DexStore.h"
 #include "IPConstantPropagationAnalysis.h"
@@ -362,8 +363,8 @@ class MultiMethodInliner {
   void postprocess_method(DexMethod* method);
 
   /**
-   * Shrink a method (run constant-prop, cse, copy-prop, local-dce)
-   * synchronously.
+   * Shrink a method (run constant-prop, cse, copy-prop, local-dce,
+   * dedup-blocks) synchronously.
    */
   void shrink_method(DexMethod* method);
 
@@ -504,6 +505,7 @@ class MultiMethodInliner {
   cse_impl::Stats m_cse_stats;
   copy_propagation_impl::Stats m_copy_prop_stats;
   LocalDce::Stats m_local_dce_stats;
+  dedup_blocks_impl::Stats m_dedup_blocks_stats;
   size_t m_methods_shrunk{0};
 
   // When mutating service stats while inlining in parallel
@@ -576,6 +578,9 @@ class MultiMethodInliner {
     return m_copy_prop_stats;
   }
   const LocalDce::Stats& get_local_dce_stats() { return m_local_dce_stats; }
+  const dedup_blocks_impl::Stats& get_dedup_blocks_stats() {
+    return m_dedup_blocks_stats;
+  }
   size_t get_methods_shrunk() { return m_methods_shrunk; }
   size_t get_callers() { return m_async_caller_wait_counts.size(); }
   size_t get_delayed_shrinking_callees() {
