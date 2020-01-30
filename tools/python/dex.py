@@ -1577,13 +1577,16 @@ def mangle_classname(demangled):
 class File:
     """Represents a DEX (Dalvik Executable) file"""
 
-    def __init__(self, path, file_like=None, proguard_path=None):
+    def __init__(
+        self, path, file_like=None, proguard_path=None, use_bytecode_format=False
+    ):
         self.path = path
         self.proguard = None
         if proguard_path and os.path.exists(proguard_path):
             self.proguard = Progard(proguard_path)
         if file_like is None:
             file_like = open(path, "rb")
+        self.use_bytecode_format = use_bytecode_format
         self.data = file_extract.FileExtract(file_like, "=", 4)
         self.header = header_item(self.data)
         self.map_list = None
@@ -1686,6 +1689,9 @@ class File:
 
     def get_typename(self, type_id):
         raw_typename = self.get_raw_typename(type_id)
+        if self.use_bytecode_format:
+            return raw_typename
+
         if raw_typename is None:
             return None
         array_level = 0
@@ -4415,6 +4421,13 @@ def main():
         help="Dump the DEX opcode counts",
         default=False,
     )
+    parser.add_option(
+        "--use-bytecode-format",
+        action="store_true",
+        dest="use_bytecode_format",
+        help="When passed, switch from java to bytecode format.",
+        default=False,
+    )
     (options, files) = parser.parse_args()
 
     total_code_bytes_inefficiently_encoded = 0
@@ -4483,7 +4496,7 @@ def main():
     for path, file_size, file_like in generate_dex_objects(files):
         print("Dex file: %s" % (path))
         total_file_size += file_size
-        dex = File(path, file_like, options.proguard)
+        dex = File(path, file_like, options.proguard, options.use_bytecode_format)
         if options.class_filter:
             dex_class = dex.find_class(options.class_filter)
             if dex_class:
