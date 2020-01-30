@@ -40,6 +40,16 @@ def remove_temp_dirs():
         shutil.rmtree(directory)
 
 
+def with_temp_cleanup(fn, always_clean=False):
+    success = always_clean
+    try:
+        fn()
+        success = True
+    finally:
+        if success:
+            remove_temp_dirs()
+
+
 def sign_apk(keystore, keypass, keyalias, apk):
     try:
         subprocess.check_call(

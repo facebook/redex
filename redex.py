@@ -33,8 +33,8 @@ from pyredex.utils import (
     abs_glob,
     make_temp_dir,
     remove_comments,
-    remove_temp_dirs,
     sign_apk,
+    with_temp_cleanup,
 )
 
 
@@ -784,6 +784,13 @@ Given an APK, produce a better APK!
         nargs="?",
         help="Root directory that all references to source files in debug information is given relative to.",
     )
+
+    parser.add_argument(
+        "--always-clean-up",
+        action="store_true",
+        help="Clean up temporaries even under failure",
+    )
+
     return parser
 
 
@@ -1115,7 +1122,6 @@ def run_redex(args):
         sys.exit()
 
     finalize_redex(state)
-    remove_temp_dirs()
 
 
 if __name__ == "__main__":
@@ -1130,4 +1136,4 @@ if __name__ == "__main__":
         pass
     args = arg_parser(**keys).parse_args()
     validate_args(args)
-    run_redex(args)
+    with_temp_cleanup(lambda: run_redex(args), args.always_clean_up)
