@@ -115,8 +115,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   // redirect to callee
   const std::vector<Block*> callee_blocks = callee.blocks();
   steal_contents(caller, inline_site.block(), &callee);
-  connect_cfgs(caller, inline_site.block(), callee_blocks, callee_entry_block,
-               callee_return_blocks, split_on_inline);
+  connect_cfgs(inline_after, caller, inline_site.block(), callee_blocks,
+               callee_entry_block, callee_return_blocks, split_on_inline);
   if (need_reg_size_recompute) {
     caller->recompute_registers_size();
   } else {
@@ -159,6 +159,7 @@ Block* CFGInliner::maybe_split_block(ControlFlowGraph* caller,
   return goto_block;
 }
 
+// Insert a new block if needed to make `it` the first instruction of a block.
 Block* CFGInliner::maybe_split_block_before(ControlFlowGraph* caller,
                                             const InstructionIterator& it) {
   always_assert(caller->editable());
@@ -218,15 +219,18 @@ void CFGInliner::steal_contents(ControlFlowGraph* caller,
 }
 
 /*
- * Add edges from callsite to the entry point and back from the exit points to
- * to the block after the callsite
+ * If `insert_after`, add edges from callsite to the entry point and back from
+ * the exit points to to the block after the callsite. Otherwise add edges
+ * into callsite to the entry point and from the exit points to the block
+ * after.
  */
-void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
+void CFGInliner::connect_cfgs(bool inline_after,
+                              ControlFlowGraph* cfg,
                               Block* callsite,
                               const std::vector<Block*>& callee_blocks,
                               Block* callee_entry,
                               const std::vector<Block*>& callee_exits,
-                              Block* after_callsite) {
+                              Block* callsite_split) {
 
   // Add edges from callee throw sites to caller catch sites
   const auto& caller_throws = callsite->get_outgoing_throws_in_order();
@@ -234,10 +238,6 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
   if (!caller_throws.empty()) {
     add_callee_throws_to_caller(cfg, callee_blocks, caller_throws);
   }
-
-  // Remove the goto between the callsite and its successor
-  cfg->delete_succ_edge_if(
-      callsite, [](const Edge* e) { return e->type() == EDGE_GOTO; });
 
   auto connect = [&cfg](const std::vector<Block*>& preds, Block* succ) {
     for (Block* pred : preds) {
@@ -247,9 +247,22 @@ void CFGInliner::connect_cfgs(ControlFlowGraph* cfg,
     }
   };
 
-  // TODO: tail call optimization (if after_callsite is just a return)
-  connect(callee_exits, after_callsite);
-  connect({callsite}, callee_entry);
+  if (inline_after) {
+    // Remove the goto between the callsite and its successor
+    cfg->delete_succ_edge_if(
+        callsite, [](const Edge* e) { return e->type() == EDGE_GOTO; });
+    connect({callsite}, callee_entry);
+  } else {
+    std::vector<Block*> callsite_split_preds;
+    for (auto e : callsite_split->preds()) {
+      callsite_split_preds.push_back(e->src());
+    }
+    connect(callsite_split_preds, callee_entry);
+    // Remove the preds into callsite, having moved them to entry
+    cfg->delete_pred_edges(callsite_split);
+  }
+  // TODO: tail call optimization (if callsite_split is a return & inline_after)
+  connect(callee_exits, callsite_split);
 }
 
 /*

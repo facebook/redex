@@ -172,6 +172,62 @@ TEST_F(ObjectInlinerTest, simple_class_inline) {
                       expected_str);
 }
 
+TEST_F(ObjectInlinerTest, simple_class_inline_with_cfg) {
+  const auto& caller_str = R"(
+    (
+    (load-param v0)
+    (new-instance "LFoo;")
+    (move-result-pseudo-object v1)
+    (new-instance "LBar;")
+    (move-result-pseudo-object v2)
+    (const v3 0)
+    (if-eq v2 v3 :escape)
+    (.pos:0 "LBar;.fumble:()V" "Bar" "22")
+    (invoke-virtual (v2 v1) "LBar;.child:(LFoo;)LBaz;")
+    (:escape)
+    (return v2)
+    )
+  )";
+  const auto& callee_str = R"(
+    (
+      (load-param v0)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v1)
+      (return v1)
+    )
+  )";
+  const auto& expected_str = R"(
+    (
+      (load-param v0)
+      (new-instance "LFoo;")
+      (move-result-pseudo-object v1)
+      (new-instance "LBar;")
+      (move-result-pseudo-object v2)
+      (const v3 0)
+      (if-eq v2 v3 :L0)
+      (move v4 v0)
+      (new-instance "LBaz;")
+      (move-result-pseudo-object v5)
+      (move v2 v5)
+      (.pos:dbg_0 "LBar;.fumble:()V" "Bar" "22")
+      (invoke-virtual (v2 v1) "LBar;.child:(LFoo;)LBaz;")
+      (:L0)
+      (return v2)
+    )
+  )";
+  test_object_inliner(caller_str,
+                      callee_str,
+                      "LFoo;",
+                      "LBoo;",
+                      "((invoke-virtual (v2 v1) \"LBar;.child:(LFoo;)LBaz;\"))",
+                      2,
+                      0,
+                      {},
+                      {},
+                      {},
+                      expected_str);
+}
+
 TEST_F(ObjectInlinerTest, class_inline_with_fields) {
   const auto& caller_str = R"(
     (
