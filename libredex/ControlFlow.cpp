@@ -351,6 +351,22 @@ bool Block::contains_opcode(IROpcode opcode) {
   return false;
 }
 
+bool Block::begins_with(Block* other) {
+  IRList::iterator self_it = this->begin();
+  IRList::iterator other_it = other->begin();
+
+  while (self_it != this->end() && other_it != other->end()) {
+    if (*self_it != *other_it) {
+      return false;
+    }
+
+    self_it++;
+    other_it++;
+  }
+
+  return other_it == other->end();
+}
+
 Block* Block::goes_to() const {
   const Edge* e = m_parent->get_succ_edge_of_type(this, EDGE_GOTO);
   if (e != nullptr) {

@@ -62,6 +62,12 @@ class DexDebugInstruction : public Gatherable {
   void set_uvalue(uint32_t uv) { m_uvalue = uv; }
 
   void set_value(int32_t v) { m_value = v; }
+
+  bool operator==(const DexDebugInstruction&) const;
+
+  bool operator!=(const DexDebugInstruction& that) const {
+    return !(*this == that);
+  }
 };
 
 class DexDebugOpcodeSetFile : public DexDebugInstruction {

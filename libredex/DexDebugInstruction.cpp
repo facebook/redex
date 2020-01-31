@@ -103,3 +103,8 @@ DexDebugInstruction* DexDebugInstruction::make_instruction(
     return new DexDebugInstruction((DexDebugItemOpcode)opcode);
   };
 }
+
+bool DexDebugInstruction::operator==(const DexDebugInstruction& that) const {
+  return m_opcode == that.m_opcode && m_signed == that.m_signed &&
+         (m_signed ? m_value == that.m_value : m_uvalue == that.m_uvalue);
+};

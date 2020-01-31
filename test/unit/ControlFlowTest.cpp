@@ -2079,3 +2079,33 @@ TEST_F(ControlFlowTest, split_block) {
       cfg.split_block(s_block->to_cfg_instruction_iterator(*s_block->end())),
       RedexException);
 }
+
+TEST_F(ControlFlowTest, block_begins_with) {
+  auto full_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (const-string "one")
+      (move-result-pseudo v0)
+      (return v0)
+    )
+  )");
+
+  auto partial_code = assembler::ircode_from_string(R"(
+    (
+      (load-param v0)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (const-string "one")
+      (move-result-pseudo v0)
+    )
+  )");
+
+  full_code->build_cfg(/* editable */ false);
+  partial_code->build_cfg(/* editable */ false);
+
+  auto& full_cfg = full_code->cfg();
+  auto& partial_cfg = partial_code->cfg();
+
+  EXPECT_TRUE(full_cfg.entry_block()->begins_with(partial_cfg.entry_block()));
+  EXPECT_FALSE(partial_cfg.entry_block()->begins_with(full_cfg.entry_block()));
+}
