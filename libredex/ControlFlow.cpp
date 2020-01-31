@@ -1112,12 +1112,11 @@ uint32_t ControlFlowGraph::sum_opcode_sizes() const {
 boost::sub_range<IRList> ControlFlowGraph::get_param_instructions() const {
   // Find the first block that has instructions
   Block* block = entry_block();
-  while (block->get_first_insn() == block->end()) {
-    const auto& succs = block->succs();
-    always_assert(succs.size() == 1);
-    const auto& out = succs[0];
-    always_assert(out->type() == EDGE_GOTO);
-    block = out->target();
+  while (block != nullptr && block->get_first_insn() == block->end()) {
+    block = block->goes_to();
+  }
+  if (block == nullptr) {
+    return boost::sub_range<IRList>(block->end(), block->end());
   }
   return block->m_entries.get_param_instructions();
 }
