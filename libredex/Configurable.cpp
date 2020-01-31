@@ -225,6 +225,17 @@ std::vector<std::string> Configurable::as<std::vector<std::string>>(
 }
 
 template <>
+std::vector<unsigned int> Configurable::as<std::vector<unsigned int>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  ASSERT_NO_BINDFLAGS(std::vector<unsigned int>);
+  std::vector<unsigned int> result;
+  for (const auto& str : value) {
+    result.push_back(str.asUInt());
+  }
+  return result;
+}
+
+template <>
 std::unordered_set<std::string>
 Configurable::as<std::unordered_set<std::string>>(const Json::Value& value,
                                                   bindflags_t bindflags) {
@@ -464,6 +475,7 @@ IMPLEMENT_REFLECTOR_EX(std::string, "string")
 IMPLEMENT_REFLECTOR_EX(Json::Value, "json")
 IMPLEMENT_REFLECTOR_EX(boost::optional<std::string>, "string")
 IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
+IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<std::string>, "set")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexType*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<const DexType*>, "set")

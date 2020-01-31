@@ -26,6 +26,7 @@ struct Base : public Configurable {
   DexType* m_type_param;
   DexType* m_unresolvable_type_param;
   std::vector<std::string> m_vector_of_string_param;
+  std::vector<uint32_t> m_vector_of_uint_param;
   boost::optional<uint32_t> m_optional_uint32;
   boost::optional<std::string> m_optional_string;
 };
@@ -121,6 +122,7 @@ struct PrimitiveBindings : public Base {
     bind("string_param", "", m_string_param);
     bind("json_param", {}, m_json_param);
     bind("vector_of_string_param", {}, m_vector_of_string_param);
+    bind("vector_of_uint_param", {}, m_vector_of_uint_param);
     bind("type_param", {}, m_type_param);
     bind("unresolvable_type_param", {}, m_unresolvable_type_param,
          Configurable::default_doc(),
@@ -138,6 +140,18 @@ Json::Value getFooBarBazArray() {
 
 std::vector<std::string> getFooBarBazVector() {
   return std::vector<std::string>{"foo", "bar", "baz"};
+}
+
+Json::Value getUintArray() {
+  Json::Value array;
+  array.append(15);
+  array.append(325432);
+  array.append(4234324);
+  return array;
+}
+
+std::vector<uint32_t> getUintsVector() {
+  return std::vector<uint32_t>{15, 325432, 4234324};
 }
 
 Json::Value getFooBarObject() {
@@ -160,6 +174,7 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   json["string_param"] = "a string";
   json["json_param"] = getFooBarObject();
   json["vector_of_string_param"] = getFooBarBazArray();
+  json["vector_of_uint_param"] = getUintArray();
   json["type_param"] = "Ltype1;";
   json["unresolvable_type_param"] = "Ltype2;";
 
@@ -174,6 +189,7 @@ TEST_F(ConfigurableTest, PrimitiveBindings) {
   EXPECT_EQ("a string", c.m_string_param);
   EXPECT_EQ(getFooBarObject(), c.m_json_param);
   EXPECT_EQ(getFooBarBazVector(), c.m_vector_of_string_param);
+  EXPECT_EQ(getUintsVector(), c.m_vector_of_uint_param);
   EXPECT_EQ(DexType::get_type("Ltype1;"), c.m_type_param);
   EXPECT_EQ(nullptr, c.m_unresolvable_type_param);
 }
@@ -190,6 +206,7 @@ struct DefaultBindings : public Base {
     bind("json_param", getFooBarObject(), m_json_param);
     bind("vector_of_string_param", getFooBarBazVector(),
          m_vector_of_string_param);
+    bind("vector_of_uint_param", getUintsVector(), m_vector_of_uint_param);
   }
 };
 
@@ -207,6 +224,7 @@ TEST_F(ConfigurableTest, DefaultBindings) {
   EXPECT_EQ("a string", c.m_string_param);
   EXPECT_EQ(getFooBarObject(), c.m_json_param);
   EXPECT_EQ(getFooBarBazVector(), c.m_vector_of_string_param);
+  EXPECT_EQ(getUintsVector(), c.m_vector_of_uint_param);
 }
 
 struct CompositeBindings : public Configurable {
@@ -233,6 +251,7 @@ TEST_F(ConfigurableTest, CompositeBindings) {
   EXPECT_EQ("a different string", c.m_contained.m_string_param);
   EXPECT_EQ(getFooBarObject(), c.m_contained.m_json_param);
   EXPECT_EQ(getFooBarBazVector(), c.m_contained.m_vector_of_string_param);
+  EXPECT_EQ(getUintsVector(), c.m_contained.m_vector_of_uint_param);
 }
 
 struct TypesBindFlags : public Base {
@@ -391,6 +410,58 @@ TEST_F(ConfigurableTest, AfterConfiguration) {
     AfterConfiguration c(0);
     c.parse_config(JsonWrapper(json));
     EXPECT_EQ(false, c.m_after_config_called);
+  }
+}
+
+struct MapBindings : public Base {
+  void bind_config() override {
+    bind("map_of_vector_of_strings_param", {}, m_map_of_vector_strings);
+    bind("map_of_methods_param", {}, m_map_of_methods);
+  }
+  MapOfVectorOfStrings m_map_of_vector_strings;
+  MapOfMethods m_map_of_methods;
+};
+
+TEST_F(ConfigurableTest, MapBindings) {
+  {
+    Json::Value json;
+    MapBindings m;
+    m.parse_config(JsonWrapper(json));
+    EXPECT_EQ(0, m.m_map_of_vector_strings.size());
+    EXPECT_EQ(0, m.m_map_of_methods.size());
+  }
+  {
+    Json::Value map;
+    Json::Value arr;
+    arr.append("foo");
+    arr.append("bar");
+    arr.append("baz");
+    map["key"] = std::move(arr);
+
+    Json::Value json;
+    json["map_of_vector_of_strings_param"] = std::move(map);
+    MapBindings m;
+    m.parse_config(JsonWrapper(json));
+    EXPECT_EQ(1, m.m_map_of_vector_strings.size());
+  }
+  {
+    auto m1desc = "Ltype1;.foo:()V";
+    auto m3desc = "Ltype3;.foo:()V";
+
+    DexMethod::make_method(m1desc);
+    DexMethod::make_method(m3desc);
+
+    DexMethod::get_method(m1desc)->make_concrete((DexAccessFlags)0, false);
+    DexMethod::get_method(m3desc)->make_concrete((DexAccessFlags)0, false);
+
+    Json::Value map;
+    map["Ltype1;.foo:()V"] = "Ltype3;.foo:()V";
+
+    Json::Value json;
+    json["map_of_methods_param"] = std::move(map);
+    MapBindings m;
+    m.parse_config(JsonWrapper(json));
+    EXPECT_EQ(1, m.m_map_of_methods.size());
   }
 }
 
