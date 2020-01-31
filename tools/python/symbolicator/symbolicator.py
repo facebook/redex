@@ -27,9 +27,10 @@ from symbol_files import SymbolFiles
 # i.e. a newline separated list of class names to be symbolicated.
 # X.A01 = > com/facebook/XyzClass.class
 class LinesSymbolicator(object):
-    def __init__(self, class_map):
+    def __init__(self, class_map, skip_unsymbolicated):
         # We only need class map for this symbolicator.
         self.class_map = class_map
+        self.skip_unsymbolicated = skip_unsymbolicated
 
     def symbolicate(self, line):
         if line.endswith(".class"):
@@ -41,7 +42,7 @@ class LinesSymbolicator(object):
         if class_name in self.class_map:
             ans = self.class_map[class_name].origin_class
             return ans.replace(".", "/") + ".class\n"
-        return line
+        return "" if self.skip_unsymbolicated else line
 
 
 class SymbolMaps(object):
@@ -140,6 +141,7 @@ Examples of usage:
     parser.add_argument(
         "--input-type", type=str, choices=("logcat", "dexdump", "lines")
     )
+    parser.add_argument("--skip-unsymbolicated", action="store_true")
     if args is not None:
         for flag, arg in args:
             parser.add_argument(flag, **arg)
@@ -151,6 +153,11 @@ def main(arg_desc=None, symbol_file_generator=None):
     logging.basicConfig(level=logging.INFO)
 
     args = parse_args(arg_desc)
+
+    if args.skip_unsymbolicated and args.input_type != "lines":
+        logging.warning(
+            "'--skip-unsymbolicated' is not needed, it only works with '--input-type lines'"
+        )
 
     if args.artifacts is not None:
         symbol_files = SymbolFiles.from_buck_artifact_dir(args.artifacts)
@@ -187,7 +194,7 @@ def main(arg_desc=None, symbol_file_generator=None):
 
     if args.input_type == "lines":
         class_map = SymbolMaps.get_class_map(symbol_files.extracted_symbols)
-        symbolicator = LinesSymbolicator(class_map)
+        symbolicator = LinesSymbolicator(class_map, args.skip_unsymbolicated)
     elif args.input_type == "logcat" or LogcatSymbolicator.is_likely_logcat(first_line):
         symbol_maps = SymbolMaps(symbol_files)
         symbolicator = LogcatSymbolicator(symbol_maps)
