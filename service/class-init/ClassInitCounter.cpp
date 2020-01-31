@@ -1162,7 +1162,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
     // the dest register to be cleared when present. Ones that should keep dest
     // must set this to false.
     bool clear_dest = i->has_dest();
-    auto& srcs = i->srcs();
+    const auto& srcs = i->srcs();
 
     if (opcode::is_move_result(opcode) ||
         opcode::is_move_result_pseudo(opcode)) {
