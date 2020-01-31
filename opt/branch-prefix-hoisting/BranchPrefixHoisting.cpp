@@ -150,8 +150,8 @@ int BranchPrefixHoistingPass::process_hoisting_for_block(
     return 0;
   }
   IRInstruction* last_insn = last_insn_it->insn;
-  const auto& srcs = last_insn->srcs();
-  std::unordered_set<reg_t> crit_regs(srcs.begin(), srcs.end());
+  std::unordered_set<reg_t> crit_regs(last_insn->srcs().begin(),
+                                      last_insn->srcs().end());
 
   std::vector<cfg::Block*> succ_blocks = get_succ_blocks(block);
 

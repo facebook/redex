@@ -639,7 +639,7 @@ void Allocator::select_ranges(const IRCode* code,
     }
 
     vreg_t range_base =
-        find_best_range_fit(ig, insn->srcs_vec(), 0, reg_transform->size,
+        find_best_range_fit(ig, insn->srcs(), 0, reg_transform->size,
                             vreg_files, reg_transform->map);
     fit_range_instruction(ig, insn, range_base, vreg_files, reg_transform,
                           spill_plan);
