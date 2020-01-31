@@ -25,6 +25,10 @@
 ///    null;` for the same reason as above.
 ///  - Field accesses returning an uninstantiable class will always return
 ///    `null`.
+///
+/// NOTE: This pass should not be run between invocations of RemoveUnreachable
+/// and TypeErasure as the latter can effectively re-introduce constructors
+/// removed by the former.
 class RemoveUninstantiablesPass : public Pass {
  public:
   RemoveUninstantiablesPass() : Pass("RemoveUninstantiablesPass") {}
