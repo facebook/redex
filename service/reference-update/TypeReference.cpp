@@ -409,8 +409,8 @@ bool TypeRefUpdater::mangling(DexMethodRef* method) {
   }
   DexProto* new_proto = DexProto::make_proto(
       rtype, DexTypeList::make_type_list(std::move(new_args)));
-  if (method::is_init(method)) {
-    always_assert(method->is_def());
+  // TODO(fengliu) : This is not the right fix.
+  if (method::is_init(method) && method->is_def()) {
     // Don't check for init collisions here, since mangling() can execute in a
     // parallel context.
     m_inits.emplace(method->as_def(), new_proto);
