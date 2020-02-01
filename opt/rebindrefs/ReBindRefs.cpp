@@ -98,10 +98,12 @@ struct Rebinder {
 
   Rebinder(Scope& scope,
            bool rebind_to_external,
-           std::vector<std::string>& excluded_externals)
+           std::vector<std::string>& excluded_externals,
+           api::AndroidSDK* min_sdk_sdk)
       : m_scope(scope),
         m_rebind_to_external(rebind_to_external),
-        m_excluded_externals(excluded_externals) {}
+        m_excluded_externals(excluded_externals),
+        m_min_sdk_sdk(min_sdk_sdk) {}
 
   RebinderRefs rewrite_refs() {
     return walk::parallel::methods<RebinderRefs>(
@@ -227,6 +229,13 @@ struct Rebinder {
       TRACE(BIND, 4, "support lib external %s", SHOW(real_ref));
       return;
     }
+    if (is_external && real_ref->is_def() && m_min_sdk_sdk != nullptr) {
+      auto target_def = real_ref->as_def();
+      if (!m_min_sdk_sdk->has_method(target_def)) {
+        TRACE(BIND, 4, "Bailed on mismatch with min_sdk %s", SHOW(target_def));
+        return;
+      }
+    }
     // Bail out if the def is non public external
     if (is_external && !is_public(cls)) {
       TRACE(BIND, 4, "non-public external %s", SHOW(real_ref));
@@ -250,13 +259,14 @@ struct Rebinder {
   Scope& m_scope;
   bool m_rebind_to_external;
   std::vector<std::string> m_excluded_externals;
+  api::AndroidSDK* m_min_sdk_sdk;
 };
 
 } // namespace
 
-void ReBindRefsPass::run_pass(DexStoresVector& stores,
-                              ConfigFiles& /* conf */,
-                              PassManager& mgr) {
+void ReBindRefsPass::eval_pass(DexStoresVector&,
+                               ConfigFiles& conf,
+                               PassManager& mgr) {
   int32_t min_sdk = mgr.get_redex_options().min_sdk;
   // Disable rebind to external for API level older than 19.
   if (min_sdk < 19) {
@@ -264,8 +274,36 @@ void ReBindRefsPass::run_pass(DexStoresVector& stores,
     TRACE(BIND, 2, "Disabling rebind to external for min_sdk %d", min_sdk);
   }
 
+  // Load min_sdk API file
+  auto min_sdk_api_file = conf.get_android_sdk_api(min_sdk);
+  if (!min_sdk_api_file) {
+    TRACE(BIND, 2, "Android SDK API %d file cannot be found.", min_sdk);
+    m_rebind_to_external = false;
+    return;
+  }
+
+  TRACE(BIND, 2, "Android SDK API %d file found: %s", min_sdk,
+        min_sdk_api_file->c_str());
+  m_min_sdk_api_file = *min_sdk_api_file;
+}
+
+void ReBindRefsPass::run_pass(DexStoresVector& stores,
+                              ConfigFiles& /* conf */,
+                              PassManager& mgr) {
+
   Scope scope = build_class_scope(stores);
-  Rebinder rb(scope, m_rebind_to_external, m_excluded_externals);
+
+  // Load min_sdk API
+  if (m_rebind_to_external) {
+    always_assert(!m_min_sdk_api_file.empty());
+    int32_t min_sdk = mgr.get_redex_options().min_sdk;
+    api::ApiLevelsUtils api_util(scope, m_min_sdk_api_file, min_sdk);
+    m_min_sdk_api =
+        std::make_unique<api::AndroidSDK>(api_util.get_android_sdk());
+  }
+
+  Rebinder rb(scope, m_rebind_to_external, m_excluded_externals,
+              m_min_sdk_api.get());
   auto stats = rb.rewrite_refs();
   stats.print(mgr);
 }

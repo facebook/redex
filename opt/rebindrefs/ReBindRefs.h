@@ -9,6 +9,8 @@
 
 #include "Pass.h"
 
+#include "ApiLevelsUtils.h"
+
 /**
  * A method reference encoded in an invoke-virtual/interface instruction can be
  * adjusted or rebound as long as it can be resolved to the correct method
@@ -37,9 +39,13 @@ class ReBindRefsPass : public Pass {
          "Externals types/prefixes excluded from reference rebinding");
   }
 
+  void eval_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
+
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
   bool m_rebind_to_external;
   std::vector<std::string> m_excluded_externals;
+  std::string m_min_sdk_api_file;
+  std::unique_ptr<api::AndroidSDK> m_min_sdk_api{};
 };
