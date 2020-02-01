@@ -36,10 +36,10 @@ struct FrameworkAPI {
 
   bool has_method(const std::string& simple_deobfuscated_name,
                   DexProto* meth_proto,
-                  DexAccessFlags meth_access_flags) const {
+                  DexAccessFlags meth_access_flags,
+                  bool relax_access_flags_matching = false) const {
     for (const MRefInfo& mref_info : mrefs_info) {
       auto* mref = mref_info.mref;
-
       if (mref->get_proto() != meth_proto ||
           mref->get_name()->str() != simple_deobfuscated_name) {
         continue;
@@ -50,6 +50,18 @@ struct FrameworkAPI {
       if (meth_access_flags == mref_info.access_flags ||
           (meth_access_flags & ~ACC_FINAL) == mref_info.access_flags) {
         return true;
+      }
+      // There are mismatches on the higher bits of the access flags on some
+      // methods between the API file generated using dex.py and what we have in
+      // Redex, even if they are the 'same' method.
+      // In the method presence check, we relax the matching to only
+      // the last 4 bits that includes PUBLIC, PRIVATE, PROTECTED and STATIC.
+      if (relax_access_flags_matching) {
+        auto masked_info_access = 0xF & mref_info.access_flags;
+        auto masked_meth_access = 0xF & meth_access_flags;
+        if (masked_info_access == masked_meth_access) {
+          return true;
+        }
       }
     }
     return false;
@@ -62,7 +74,7 @@ class AndroidSDK {
       std::unordered_map<DexType*, FrameworkAPI> framework_classes)
       : m_framework_classes(framework_classes) {}
 
-  bool has_method(DexMethod* meth) {
+  bool has_method(DexMethod* meth) const {
     auto type = meth->get_class();
     const auto& it = m_framework_classes.find(type);
     if (it == m_framework_classes.end()) {
@@ -71,8 +83,8 @@ class AndroidSDK {
 
     const auto& api = it->second;
     return api.has_method(meth->get_simple_deobfuscated_name(),
-                          meth->get_proto(),
-                          meth->get_access());
+                          meth->get_proto(), meth->get_access(),
+                          /* relax_access_flags_matching */ true);
   }
 
  private:

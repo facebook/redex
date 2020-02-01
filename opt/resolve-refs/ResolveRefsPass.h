@@ -26,6 +26,11 @@
  * most accurate one possible to produce an accurate reachability graph of the
  * program. Therefore, the number of unique method references is not a concern.
  */
+
+namespace impl {
+struct RefStats;
+} // namespace impl
+
 class ResolveRefsPass : public Pass {
  public:
   ResolveRefsPass() : Pass("ResolveRefsPass") {}
@@ -44,8 +49,11 @@ class ResolveRefsPass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:
+  impl::RefStats refine_virtual_callsites(DexMethod* method, bool desuperify);
+
   bool m_resolve_to_external;
   bool m_desuperify;
   std::vector<std::string> m_excluded_externals;
+  std::string m_min_sdk_api_file;
   std::unique_ptr<api::AndroidSDK> m_min_sdk_api{};
 };

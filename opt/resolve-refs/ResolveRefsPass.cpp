@@ -18,7 +18,7 @@
 
 namespace mog = method_override_graph;
 
-namespace {
+namespace impl {
 
 struct RefStats {
   size_t num_mref_resolved = 0;
@@ -237,11 +237,12 @@ boost::optional<DexMethod*> get_inferred_method_def(
   return boost::optional<DexMethod*>(const_cast<DexMethod*>(resolved));
 }
 
-RefStats refine_virtual_callsites(
-    const bool resolve_to_external,
-    const std::vector<std::string>& excluded_externals,
-    DexMethod* method,
-    bool desuperify) {
+} // namespace impl
+
+using namespace impl;
+
+RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
+                                                   bool desuperify) {
   RefStats stats;
   if (!method || !method->get_code()) {
     return stats;
@@ -275,34 +276,43 @@ RefStats refine_virtual_callsites(
     auto& env = envs.at(insn);
     auto dex_type = env.get_dex_type(this_reg);
 
-    if (dex_type && callee->get_class() != *dex_type) {
-      // replace it with the actual implementation if any provided.
-      auto m_def = get_inferred_method_def(excluded_externals, is_support_lib,
-                                           callee, *dex_type);
-      if (!m_def) {
-        continue;
-      }
-      // Stop if the resolve_to_external config is False.
-      auto def_meth = *m_def;
-      auto def_cls = type_class((def_meth)->get_class());
-      if (def_cls && !resolve_to_external && def_cls->is_external()) {
-        TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
-        continue;
-      }
-      insn->set_method(def_meth);
-      if (is_invoke_interface(opcode)) {
-        insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
-        stats.num_invoke_interface_replaced++;
-      } else {
-        stats.num_invoke_virtual_refined++;
-      }
+    if (!dex_type || callee->get_class() == *dex_type) {
+      // Unsuccessful inference or inferred to the same type.
+      continue;
+    }
+
+    // replace it with the actual implementation if any provided.
+    auto m_def = get_inferred_method_def(m_excluded_externals, is_support_lib,
+                                         callee, *dex_type);
+    if (!m_def) {
+      continue;
+    }
+    auto def_meth = *m_def;
+    auto def_cls = type_class((def_meth)->get_class());
+    if (!def_cls) {
+      continue;
+    }
+    // Stop if the resolve_to_external config is False.
+    if (!m_resolve_to_external && def_cls->is_external()) {
+      TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
+      continue;
+    } else if (def_cls->is_external() && m_min_sdk_api &&
+               !m_min_sdk_api->has_method(def_meth)) {
+      // Resolving to external and the target is missing in the min_sdk_api.
+      TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(def_meth));
+      continue;
+    }
+    insn->set_method(def_meth);
+    if (is_invoke_interface(opcode)) {
+      insn->set_opcode(OPCODE_INVOKE_VIRTUAL);
+      stats.num_invoke_interface_replaced++;
+    } else {
+      stats.num_invoke_virtual_refined++;
     }
   }
 
   return stats;
 }
-
-} // namespace
 
 void ResolveRefsPass::eval_pass(DexStoresVector&,
                                 ConfigFiles& conf,
@@ -314,22 +324,37 @@ void ResolveRefsPass::eval_pass(DexStoresVector&,
     TRACE(RESO, 2, "Disabling resolution to external for min_sdk %d", min_sdk);
   }
 
-  // Load min_sdk API
-  auto min_sdk_api_file = conf.get_android_sdk_api(26);
-  if (min_sdk_api_file) {
-    TRACE(RESO, 2, "min sdk api file %s", min_sdk_api_file->c_str());
+  // Load min_sdk API file
+  auto min_sdk_api_file = conf.get_android_sdk_api(min_sdk);
+  if (!min_sdk_api_file) {
+    TRACE(RESO, 2, "Android SDK API %d file cannot be found.", min_sdk);
+    m_resolve_to_external = false;
+    return;
   }
+
+  TRACE(RESO, 2, "Android SDK API %d file found: %s", min_sdk,
+        min_sdk_api_file->c_str());
+  m_min_sdk_api_file = *min_sdk_api_file;
 }
 
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* conf */,
                                PassManager& mgr) {
   Scope scope = build_class_scope(stores);
-  RefStats stats =
-      walk::parallel::methods<RefStats>(scope, [&](DexMethod* method) {
-        auto local_stats = resolve_refs(method);
-        local_stats += refine_virtual_callsites(
-            m_resolve_to_external, m_excluded_externals, method, m_desuperify);
+
+  // Load min_sdk API
+  if (m_resolve_to_external) {
+    always_assert(!m_min_sdk_api_file.empty());
+    int32_t min_sdk = mgr.get_redex_options().min_sdk;
+    api::ApiLevelsUtils api_util(scope, m_min_sdk_api_file, min_sdk);
+    m_min_sdk_api =
+        std::make_unique<api::AndroidSDK>(api_util.get_android_sdk());
+  }
+
+  impl::RefStats stats =
+      walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
+        auto local_stats = impl::resolve_refs(method);
+        local_stats += refine_virtual_callsites(method, m_desuperify);
         return local_stats;
       });
   stats.print(&mgr);
