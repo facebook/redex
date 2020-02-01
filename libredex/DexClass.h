@@ -1160,7 +1160,6 @@ class DexClass {
   }
 
   bool has_ctors() const {
-    auto& dmethods = get_dmethods();
     // TODO: There must be a logarithmic approach to this. dmethods are sorted!
     return !!get_ctors().size();
   }
