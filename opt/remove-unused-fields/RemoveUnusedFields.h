@@ -34,6 +34,7 @@ struct Config {
   bool remove_unwritten_fields;
   bool remove_zero_written_fields;
   std::unordered_set<const DexType*> blacklist_types;
+  std::unordered_set<const DexType*> blacklist_classes;
   boost::optional<std::unordered_set<DexField*>> whitelist;
 };
 
@@ -52,6 +53,10 @@ class PassImpl : public Pass {
          m_config.blacklist_types,
          "Fields with these types will never be removed.",
          Configurable::bindflags::types::warn_if_unresolvable);
+    bind("blacklist_classes",
+         {},
+         m_config.blacklist_classes,
+         "Fields in these classes will never be removed.");
 
     // These options make it a bit more convenient to bisect the list of removed
     // fields to isolate one that's causing issues.
