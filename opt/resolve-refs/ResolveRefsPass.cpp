@@ -296,8 +296,7 @@ RefStats ResolveRefsPass::refine_virtual_callsites(DexMethod* method,
     if (!m_resolve_to_external && def_cls->is_external()) {
       TRACE(RESO, 4, "Bailed on external %s", SHOW(def_meth));
       continue;
-    } else if (def_cls->is_external() && m_min_sdk_api &&
-               !m_min_sdk_api->has_method(def_meth)) {
+    } else if (def_cls->is_external() && !m_min_sdk_api->has_method(def_meth)) {
       // Resolving to external and the target is missing in the min_sdk_api.
       TRACE(RESO, 4, "Bailed on mismatch with min_sdk %s", SHOW(def_meth));
       continue;
@@ -325,32 +324,23 @@ void ResolveRefsPass::eval_pass(DexStoresVector&,
   }
 
   // Load min_sdk API file
-  auto min_sdk_api_file = conf.get_android_sdk_api(min_sdk);
+  auto min_sdk_api_file = conf.get_android_sdk_api_file(min_sdk);
   if (!min_sdk_api_file) {
     TRACE(RESO, 2, "Android SDK API %d file cannot be found.", min_sdk);
     m_resolve_to_external = false;
-    return;
+  } else {
+    TRACE(RESO, 2, "Android SDK API %d file found: %s", min_sdk,
+          min_sdk_api_file->c_str());
   }
 
-  TRACE(RESO, 2, "Android SDK API %d file found: %s", min_sdk,
-        min_sdk_api_file->c_str());
-  m_min_sdk_api_file = *min_sdk_api_file;
+  m_min_sdk_api = &conf.get_android_sdk_api(min_sdk);
 }
 
 void ResolveRefsPass::run_pass(DexStoresVector& stores,
                                ConfigFiles& /* conf */,
                                PassManager& mgr) {
+  always_assert(m_min_sdk_api);
   Scope scope = build_class_scope(stores);
-
-  // Load min_sdk API
-  if (m_resolve_to_external) {
-    always_assert(!m_min_sdk_api_file.empty());
-    int32_t min_sdk = mgr.get_redex_options().min_sdk;
-    api::ApiLevelsUtils api_util(scope, m_min_sdk_api_file, min_sdk);
-    m_min_sdk_api =
-        std::make_unique<api::AndroidSDK>(api_util.get_android_sdk());
-  }
-
   impl::RefStats stats =
       walk::parallel::methods<impl::RefStats>(scope, [&](DexMethod* method) {
         auto local_stats = impl::resolve_refs(method);

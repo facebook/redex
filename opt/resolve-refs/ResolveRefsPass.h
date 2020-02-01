@@ -54,6 +54,5 @@ class ResolveRefsPass : public Pass {
   bool m_resolve_to_external;
   bool m_desuperify;
   std::vector<std::string> m_excluded_externals;
-  std::string m_min_sdk_api_file;
-  std::unique_ptr<api::AndroidSDK> m_min_sdk_api{};
+  const api::AndroidSDK* m_min_sdk_api;
 };

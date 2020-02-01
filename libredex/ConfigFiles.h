@@ -15,6 +15,7 @@
 #include <json/json.h>
 
 #include "DexClass.h"
+#include "FrameworkApi.h"
 #include "InlinerConfig.h"
 #include "JsonWrapper.h"
 #include "MethodProfiles.h"
@@ -111,7 +112,7 @@ struct ConfigFiles {
     return *m_inliner_config.get();
   }
 
-  boost::optional<std::string> get_android_sdk_api(int32_t api_level) {
+  boost::optional<std::string> get_android_sdk_api_file(int32_t api_level) {
     std::string api_file = "";
     switch (api_level) {
     case 21:
@@ -134,6 +135,18 @@ struct ConfigFiles {
       return boost::none;
     }
     return boost::optional<std::string>(api_file);
+  }
+
+  const api::AndroidSDK& get_android_sdk_api(int32_t min_sdk_api) {
+    if (m_android_min_sdk_api == nullptr) {
+      always_assert(m_min_sdk_api_level == 0); // not set
+      m_min_sdk_api_level = min_sdk_api;
+      auto api_file = get_android_sdk_api_file(min_sdk_api);
+      m_android_min_sdk_api = std::make_unique<api::AndroidSDK>(api_file);
+    }
+
+    always_assert(min_sdk_api == m_min_sdk_api_level);
+    return *m_android_min_sdk_api.get();
   }
 
   /**
@@ -173,4 +186,7 @@ struct ConfigFiles {
   std::unordered_set<DexMethodRef*> m_pure_methods;
   // Global inliner config.
   std::unique_ptr<inliner::InlinerConfig> m_inliner_config{nullptr};
+  // min_sdk AndroidAPI
+  int32_t m_min_sdk_api_level = 0;
+  std::unique_ptr<api::AndroidSDK> m_android_min_sdk_api{nullptr};
 };

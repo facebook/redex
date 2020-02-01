@@ -153,6 +153,7 @@ libredex_la_SOURCES = \
 	libredex/DuplicateClasses.cpp \
 	libredex/EditableCfgAdapter.cpp \
 	libredex/FieldOpTracker.cpp \
+	libredex/FrameworkApi.cpp \
 	libredex/GlobalConfig.cpp \
 	libredex/GraphVisualizer.cpp \
 	libredex/HierarchyUtil.cpp \

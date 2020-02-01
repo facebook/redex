@@ -227,7 +227,9 @@ TEST(ApiUtilsTest, testHasMethod) {
   EXPECT_TRUE(api.has_method("clearFocus", void_empty, ACC_PUBLIC));
   EXPECT_FALSE(api.has_method("joJo", void_empty, ACC_PUBLIC));
 
-  auto sdk = api_utils.get_android_sdk();
+  auto api_file =
+      boost::optional<std::string>(std::getenv("api_utils_easy_input_path"));
+  api::AndroidSDK sdk(api_file);
   auto method = static_cast<DexMethod*>(DexMethod::make_method(
       android_view, DexString::make_string("clearFocus"), void_empty));
   method->set_access(ACC_PUBLIC);
