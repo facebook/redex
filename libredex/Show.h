@@ -153,3 +153,6 @@ std::string vshow(const DexMethod*, bool include_annotations = true);
 std::string vshow(const DexField*);
 std::string vshow(uint32_t acc, bool is_method = true); // DexAccessFlags
 std::string vshow(const DexType*);
+
+// Format a number as a byte entity.
+std::string pretty_bytes(uint64_t val);

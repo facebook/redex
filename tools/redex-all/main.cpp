@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <memory>
+#include <regex>
 #include <set>
 #include <streambuf>
 #include <string>
@@ -53,6 +54,7 @@
 #include "ReachableClasses.h"
 #include "RedexContext.h"
 #include "RedexResources.h"
+#include "Show.h"
 #include "Timer.h"
 #include "ToolsCommon.h"
 #include "Walkers.h"
@@ -1196,11 +1198,18 @@ int main(int argc, char* argv[]) {
   }
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
+  auto vm_stats = get_mem_stats();
+  stats["output_stats"]["mem_stats"]["vm_peak"] = vm_stats.vm_peak;
+  stats["output_stats"]["mem_stats"]["vm_hwm"] = vm_stats.vm_hwm;
   {
     std::ofstream out(stats_output_path);
     out << stats;
   }
 
   TRACE(MAIN, 1, "Done.");
+  TRACE(MAIN, 1, "Memory stats: VmPeak=%s VmHWM=%s",
+        pretty_bytes(vm_stats.vm_peak).c_str(),
+        pretty_bytes(vm_stats.vm_hwm).c_str());
+
   return 0;
 }

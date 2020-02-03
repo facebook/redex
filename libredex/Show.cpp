@@ -7,6 +7,8 @@
 
 #include "Show.h"
 
+#include <iomanip>
+
 #include <boost/io/detail/quoted_manip.hpp>
 
 #include "ControlFlow.h"
@@ -1304,4 +1306,37 @@ std::string show_deobfuscated(const DexMethodHandle* methodhandle) {
   }
   // TODO(T58570881) - actually deobfuscate
   return SHOW(methodhandle);
+}
+
+std::string pretty_bytes(uint64_t val) {
+  size_t divisions = 0;
+  double d_val = val;
+  while (d_val > 1024 && divisions < 3) {
+    d_val /= 1024;
+    ++divisions;
+  }
+
+  const char* modifier;
+  switch (divisions) {
+  case 0:
+    modifier = "";
+    break;
+  case 1:
+    modifier = "k";
+    break;
+  case 2:
+    modifier = "M";
+    break;
+  case 3:
+    modifier = "G";
+    break;
+  default:
+    modifier = "Error";
+    break;
+  }
+
+  std::ostringstream oss;
+  oss << std::setiosflags(std::ios::fixed) << std::setprecision(2) << d_val
+      << " " << modifier << "B";
+  return oss.str();
 }

@@ -8,7 +8,11 @@
 #include "Debug.h"
 
 #include <exception>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
 #include <memory>
+#include <regex>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -20,6 +24,7 @@
 #include <unistd.h>
 #endif
 
+#include <boost/algorithm/string.hpp>
 #include <boost/exception/all.hpp>
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
@@ -98,4 +103,58 @@ void print_stack_trace(std::ostream& os, const std::exception& e) {
   if (st) {
     os << *st << std::endl;
   }
+}
+
+VmStats get_mem_stats() {
+  VmStats res;
+  std::ifstream ifs("/proc/self/status");
+  if (ifs.fail()) {
+    return res;
+  }
+  std::string line;
+  std::regex re("[^:]*:\\s*([0-9]*)\\s*(.)B");
+  while (std::getline(ifs, line)) {
+    bool is_vm_peak = boost::starts_with(line, "VmPeak:");
+    bool is_vm_hwm = boost::starts_with(line, "VmHWM:");
+    if (is_vm_peak || is_vm_hwm) {
+      std::smatch match;
+      bool matched = std::regex_match(line, match, re);
+      if (!matched) {
+        std::cerr << "Error: could not match " << line << std::endl;
+        continue;
+      }
+      std::string num_str = match.str(1);
+      std::string size_prefix_str = match.str(2);
+
+      uint64_t val;
+      try {
+        size_t idx;
+        val = std::stoull(num_str, &idx);
+      } catch (...) {
+        std::cerr << "Failed to parse numeric value in " << line << std::endl;
+        continue;
+      }
+
+      if (size_prefix_str == "k" or size_prefix_str == "K") {
+        val *= 1024;
+      } else if (size_prefix_str == "M") {
+        val *= 1024 * 1024;
+      } else if (size_prefix_str == "G") {
+        val *= 1024 * 1024 * 1024;
+      } else {
+        std::cerr << "Unknown size modifier in " << line << std::endl;
+        continue;
+      }
+
+      if (is_vm_peak) {
+        res.vm_peak = val;
+      } else {
+        res.vm_hwm = val;
+      }
+      if (res.vm_peak != 0 && res.vm_hwm != 0) {
+        break;
+      }
+    }
+  }
+  return res;
 }
