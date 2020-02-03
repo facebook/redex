@@ -18,7 +18,7 @@ class ApiLevelsUtils {
  public:
   ApiLevelsUtils(const Scope& scope,
                  const std::string& framework_api_info_filename,
-                 int api_level)
+                 uint32_t api_level)
       : m_framework_api_info_filename(framework_api_info_filename),
         m_api_level(api_level),
         m_sdk_api(framework_api_info_filename) {
