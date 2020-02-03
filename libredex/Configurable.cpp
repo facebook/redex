@@ -284,6 +284,21 @@ std::vector<DexType*> Configurable::as<std::vector<DexType*>>(
 }
 
 template <>
+std::vector<DexMethod*> Configurable::as<std::vector<DexMethod*>>(
+    const Json::Value& value, bindflags_t bindflags) {
+  always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
+                    "Only method bindflags may be specified for a "
+                    "std::vector<DexMethod*>");
+  std::vector<DexMethod*> result;
+  for (auto& str : value) {
+    if (auto meth = parse_method(str, bindflags)) {
+      result.emplace_back(meth);
+    }
+  }
+  return result;
+}
+
+template <>
 std::unordered_set<DexType*> Configurable::as<std::unordered_set<DexType*>>(
     const Json::Value& value, bindflags_t bindflags) {
   always_assert_log(!(bindflags & ~Configurable::bindflags::types::mask),
@@ -481,6 +496,7 @@ IMPLEMENT_REFLECTOR_EX(std::vector<std::string>, "list")
 IMPLEMENT_REFLECTOR_EX(std::vector<unsigned int>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<std::string>, "set")
 IMPLEMENT_REFLECTOR_EX(std::vector<DexType*>, "list")
+IMPLEMENT_REFLECTOR_EX(std::vector<DexMethod*>, "list")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<const DexType*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexType*>, "set")
 IMPLEMENT_REFLECTOR_EX(std::unordered_set<DexClass*>, "set")
