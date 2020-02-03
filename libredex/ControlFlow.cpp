@@ -670,8 +670,8 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
     }
 
     auto next = std::next(it);
-    Block* next_b = next->second;
     if (fallthrough && next != m_blocks.end()) {
+      Block* next_b = next->second;
       TRACE(CFG, 6, "adding fallthrough goto %d -> %d", b->id(), next_b->id());
       add_edge(b, next_b, EDGE_GOTO);
     }
