@@ -35,6 +35,13 @@ class CFGInliner {
 
  private:
   /*
+   * A "ghost block" may be added for CFGs that have multiple exit blocks and
+   * EDGE_GHOST edges are added from all exit points to this one (empty) ghost
+   * block. This block gets in the way while inlining. Remove if it's there.
+   */
+  static void remove_ghost_exit_block(ControlFlowGraph* cfg);
+
+  /*
    * If `it` isn't already, make it the last instruction of its block
    */
   static Block* maybe_split_block(ControlFlowGraph* caller,

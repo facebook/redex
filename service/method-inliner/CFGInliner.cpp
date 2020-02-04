@@ -38,6 +38,8 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   ControlFlowGraph callee;
   callee_orig.deep_copy(&callee);
 
+  remove_ghost_exit_block(&callee);
+
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
   TRACE(CFG, 3, "callee %s", SHOW(callee));
 
@@ -135,6 +137,14 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     caller->sanity_check();
   }
   TRACE(CFG, 3, "final %s", SHOW(*caller));
+}
+
+void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {
+  auto ext = cfg->exit_block();
+  if (ext && cfg->get_pred_edge_of_type(ext, EDGE_GHOST)) {
+    cfg->remove_block(ext);
+    cfg->set_exit_block(nullptr);
+  }
 }
 
 /*

@@ -765,10 +765,6 @@ void MultiMethodInliner::shrink_method(DexMethod* method) {
     dedup_blocks_impl::DedupBlocks dedup_blocks(config, method);
     dedup_blocks.run();
     dedup_blocks_stats = dedup_blocks.get_stats();
-    code->clear_cfg();
-    // TODO T61342921: ^^^ this shouldn't be necessary, build dedup-blocks
-    // seems to leave behind the cfg in a somewhat illegal configuration that
-    // linearization fixes.
   }
 
   if (editable_cfg_built && !code->editable_cfg_built()) {
