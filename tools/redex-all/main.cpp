@@ -1199,8 +1199,9 @@ int main(int argc, char* argv[]) {
   // now that all the timers are done running, we can collect the data
   stats["output_stats"]["time_stats"] = get_times();
   auto vm_stats = get_mem_stats();
-  stats["output_stats"]["mem_stats"]["vm_peak"] = vm_stats.vm_peak;
-  stats["output_stats"]["mem_stats"]["vm_hwm"] = vm_stats.vm_hwm;
+  stats["output_stats"]["mem_stats"]["vm_peak"] =
+      (Json::UInt64)vm_stats.vm_peak;
+  stats["output_stats"]["mem_stats"]["vm_hwm"] = (Json::UInt64)vm_stats.vm_peak;
   {
     std::ofstream out(stats_output_path);
     out << stats;
