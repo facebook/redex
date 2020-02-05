@@ -144,6 +144,6 @@ void verify_type_erased(const DexClass* cls, size_t num_dmethods) {
     ASSERT_FALSE(method::is_init(m));
     ASSERT_NE(m->c_str(), "<init>");
   }
-  auto vmethods = cls->get_vmethods();
+  const auto& vmethods = cls->get_vmethods();
   ASSERT_TRUE(vmethods.empty());
 }

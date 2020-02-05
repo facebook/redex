@@ -52,7 +52,7 @@ DexMethod* find_method_named(const Container& methods,
                              const std::string& name) {
   TRACE(PGR, 8, "==> Searching for method %s", name.c_str());
   auto it = std::find_if(methods.begin(), methods.end(), [&name](DexMethod* m) {
-    auto deobfuscated_method = m->get_deobfuscated_name();
+    const auto& deobfuscated_method = m->get_deobfuscated_name();
     TRACE(PGR,
           8,
           "====> Comparing against method %s [%s]",

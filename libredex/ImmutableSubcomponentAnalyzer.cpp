@@ -335,7 +335,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
       const AbstractAccessPathEnvironment& env) {
     BindingSnapshot ret;
     if (env.kind() == AbstractValueKind::Value) {
-      auto bindings = env.bindings();
+      const auto& bindings = env.bindings();
       for (auto it = bindings.begin(); it != bindings.end(); ++it) {
         auto domain = it->second;
         if (domain.access_path()) {

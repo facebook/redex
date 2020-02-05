@@ -212,13 +212,13 @@ bool can_inline_init(const DexMethod* init_method) {
     if (env.is_bottom()) {
       continue;
     }
-    auto uninlinable = env.get_uninlinable();
+    const auto& uninlinable = env.get_uninlinable();
     always_assert(!uninlinable.is_bottom());
     if (uninlinable.is_top() || *uninlinable.get_constant()) {
       return false;
     }
     if (block->branchingness() == opcode::Branchingness::BRANCH_RETURN) {
-      auto initialized = env.get_initialized();
+      const auto& initialized = env.get_initialized();
       always_assert(!initialized.is_bottom());
       if (initialized.is_top()) {
         // Shouldn't happen, but we play it safe.

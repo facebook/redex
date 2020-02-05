@@ -136,7 +136,7 @@ void dump_class(FILE* fdout,
   // TODO: inheritance?
   // TODO: string usage
   // TODO: size estimate
-  auto deobfuscated_name = cls->get_deobfuscated_name();
+  const auto& deobfuscated_name = cls->get_deobfuscated_name();
   fprintf(fdout,
           "INSERT INTO %sclasses VALUES (%d,'%s','%s','%s',%u);\n",
           prefix,
@@ -156,7 +156,7 @@ void dump_field(FILE* fdout,
   // TODO: break down signature
   // TODO: annotations?
   // TODO: string usage (encoded_value for static fields)
-  auto deobfuscated_name = field->get_deobfuscated_name();
+  const auto& deobfuscated_name = field->get_deobfuscated_name();
   auto field_name = strchr(deobfuscated_name.c_str(), ';');
   fprintf(fdout,
           "INSERT INTO %sfields VALUES(%d, %d, '%s', '%s', %u);\n",

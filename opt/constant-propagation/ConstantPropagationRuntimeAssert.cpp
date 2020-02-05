@@ -235,7 +235,7 @@ ir_list::InstructionIterator RuntimeAssertTransform::insert_return_value_assert(
  */
 void RuntimeAssertTransform::insert_param_asserts(
     const ConstantEnvironment& env, DexMethod* method) {
-  auto args = env.get_register_environment();
+  const auto& args = env.get_register_environment();
   if (!args.is_value()) {
     return;
   }

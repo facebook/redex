@@ -283,7 +283,7 @@ size_t exclude_unremovables(const Scope& scope,
   // They are not the focus of this pass. We should address them elsewhere.
   std::vector<const DexType*> intf_list(candidates.begin(), candidates.end());
   for (auto intf : intf_list) {
-    auto impls = type_system.get_implementors(intf);
+    const auto& impls = type_system.get_implementors(intf);
     if (impls.size() <= 1) {
       TRACE(RM_INTF, 5, "Excluding %s with impls of size %d", SHOW(intf),
             impls.size());
@@ -464,7 +464,7 @@ TypeSet RemoveInterfacePass::remove_leaf_interfaces(
   std::unordered_map<DexMethod*, DexMethod*> intf_meth_to_dispatch;
   for (const auto intf : leaf_interfaces) {
     TRACE(RM_INTF, 5, "Found leaf interface %s", SHOW(intf));
-    auto implementors = type_system.get_implementors(intf);
+    const auto& implementors = type_system.get_implementors(intf);
     auto intf_methods = type_class(intf)->get_vmethods();
     for (const auto meth : intf_methods) {
       TRACE(RM_INTF, 5, "Finding virt scope for %s", SHOW(meth));

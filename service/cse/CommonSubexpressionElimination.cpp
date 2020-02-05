@@ -562,7 +562,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
 
   boost::optional<IRValue> get_equivalent_put_value(
       IRInstruction* insn, CseEnvironment* current_state) const {
-    auto ref_env = current_state->get_ref_env();
+    const auto& ref_env = current_state->get_ref_env();
     if (is_sput(insn->opcode())) {
       always_assert(insn->srcs_size() == 1);
       IRValue value;
@@ -632,7 +632,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     auto opcode = insn->opcode();
     always_assert(opcode != IOPCODE_PRE_STATE_SRC);
     value.opcode = opcode;
-    auto ref_env = current_state->get_ref_env();
+    const auto& ref_env = current_state->get_ref_env();
     for (auto reg : insn->srcs()) {
       auto c = ref_env.get(reg).get_constant();
       always_assert(c);

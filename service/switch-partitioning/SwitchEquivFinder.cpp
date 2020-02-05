@@ -307,6 +307,7 @@ bool SwitchEquivFinder::move_edges(
       continue;
     }
     // copy on purpose so we can alter in the loop
+    // NOLINTNEXTLINE(performance-unnecessary-copy-initialization)
     const auto orig_succs = orig->succs();
     for (cfg::Edge* orig_succ : orig_succs) {
       cfg::Edge* copy_succ = new cfg::Edge(*orig_succ);

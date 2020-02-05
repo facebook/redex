@@ -654,7 +654,7 @@ std::unordered_set<std::string> get_files_by_suffix(
   if (exists(dir) && is_directory(dir)) {
     for (auto it = dir_iterator(dir); it != dir_iterator(); ++it) {
       auto const& entry = *it;
-      path_t entry_path = entry.path();
+      const path_t& entry_path = entry.path();
 
       if (is_regular_file(entry_path) &&
           ends_with(entry_path.string().c_str(), suffix.c_str())) {
@@ -960,14 +960,14 @@ std::vector<std::string> find_layout_files(const std::string& apk_directory) {
   if (exists(res) && is_directory(res)) {
     for (auto it = dir_iterator(res); it != dir_iterator(); ++it) {
       auto const& entry = *it;
-      path_t entry_path = entry.path();
+      const path_t& entry_path = entry.path();
 
       if (is_directory(entry_path) &&
           starts_with(entry_path.filename().string().c_str(), "layout")) {
         for (auto lit = dir_iterator(entry_path); lit != dir_iterator();
              ++lit) {
           auto const& layout_entry = *lit;
-          path_t layout_path = layout_entry.path();
+          const path_t& layout_path = layout_entry.path();
           if (is_regular_file(layout_path)) {
             layout_files.push_back(layout_path.string());
           }
@@ -1036,7 +1036,7 @@ std::vector<std::string> find_native_library_files(
   if (exists(lib) && is_directory(lib)) {
     for (auto it = rdir_iterator(lib); it != rdir_iterator(); ++it) {
       auto const& entry = *it;
-      path_t entry_path = entry.path();
+      const path_t& entry_path = entry.path();
       if (is_regular_file(entry_path) &&
           ends_with(entry_path.filename().string().c_str(),
                     library_extension.c_str())) {

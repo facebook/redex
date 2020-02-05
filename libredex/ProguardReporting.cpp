@@ -130,7 +130,7 @@ void redex::print_method(std::ostream& output,
     method_name = extract_suffix(class_name);
     is_constructor = true;
   } else {
-    auto deob = method->get_deobfuscated_name();
+    const auto& deob = method->get_deobfuscated_name();
     if (deob.empty()) {
       std::cerr << "WARNING: method has no deobfu: " << method_name
                 << std::endl;
@@ -165,7 +165,6 @@ void redex::print_field(std::ostream& output,
                         const ProguardMap& pg_map,
                         const std::string& class_name,
                         const DexField* field) {
-  auto field_name = field->get_deobfuscated_name();
   auto field_type = field->get_type()->get_name()->c_str();
   std::string deobfu_field_type =
       deobfuscate_type_descriptor(pg_map, field_type);
