@@ -35,7 +35,7 @@ std::string get_simple_deobfuscated_name(DexType* type) {
     full_name = type->str();
   }
 
-  size_t simple_name_pos = full_name.rfind("/");
+  size_t simple_name_pos = full_name.rfind('/');
   always_assert(simple_name_pos != std::string::npos);
   return full_name.substr(simple_name_pos + 1,
                           full_name.size() - simple_name_pos - 2);

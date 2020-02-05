@@ -21,7 +21,7 @@ namespace {
  */
 std::string only_class_name(const DexType* type) {
   std::string type_str(type->c_str());
-  size_t package_delim = type_str.rfind("/");
+  size_t package_delim = type_str.rfind('/');
   always_assert(package_delim != std::string::npos);
 
   size_t class_start = package_delim + 1;

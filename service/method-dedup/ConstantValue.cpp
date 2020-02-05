@@ -271,7 +271,7 @@ DexMethod* ConstantValues::create_stub_method(DexMethod* callee) {
   auto stub = mc->create();
   // Propogate deobfuscated name
   auto orig_name = callee->get_deobfuscated_name();
-  auto pos = orig_name.find(":");
+  auto pos = orig_name.find(':');
   always_assert(pos != std::string::npos);
   auto new_name =
       orig_name.substr(0, pos) + "$stub" + ":" + show_deobfuscated(stub_proto);

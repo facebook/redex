@@ -55,7 +55,7 @@ std::string convert_method(const std::string& cls,
 }
 
 std::string translate_type(const std::string& type, const ProguardMap& pm) {
-  auto base_start = type.find_first_not_of("[");
+  auto base_start = type.find_first_not_of('[');
   auto array_prefix = type.substr(0, base_start);
   auto base_type = type.substr(base_start);
   array_prefix += pm.translate_class(base_type);
@@ -346,12 +346,12 @@ namespace pg_impl {
 DexString* file_name_from_method_string(const DexString* method) {
   const auto& s = method->str();
   auto end = s.rfind(";.");
-  auto innercls_pos = s.rfind("$", end);
+  auto innercls_pos = s.rfind('$', end);
   if (innercls_pos != std::string::npos) {
     end = innercls_pos;
   }
   always_assert(end != std::string::npos);
-  auto start = s.rfind("/", end);
+  auto start = s.rfind('/', end);
   if (start != std::string::npos) {
     ++start; // Skip over the "/"
   } else {

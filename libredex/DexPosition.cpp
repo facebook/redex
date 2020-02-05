@@ -99,11 +99,11 @@ void RealPositionMapper::write_map_v2() {
     const auto& full_method_name = pos->method->str();
     // strip out the args and return type
     auto qualified_method_name =
-        full_method_name.substr(0, full_method_name.find(":"));
+        full_method_name.substr(0, full_method_name.find(':'));
     auto class_name = java_names::internal_to_external(
-        qualified_method_name.substr(0, qualified_method_name.rfind(".")));
+        qualified_method_name.substr(0, qualified_method_name.rfind('.')));
     auto method_name =
-        qualified_method_name.substr(qualified_method_name.rfind(".") + 1);
+        qualified_method_name.substr(qualified_method_name.rfind('.') + 1);
     auto class_id = id_of_string(class_name);
     auto method_id = id_of_string(method_name);
     auto file_id = id_of_string(pos->file->c_str());

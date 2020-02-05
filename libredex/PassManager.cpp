@@ -338,7 +338,7 @@ void PassManager::activate_pass(const char* name, const Json::Value& conf) {
 
   // Names may or may not have a "#<id>" suffix to indicate their order in the
   // pass list, which needs to be removed for matching.
-  std::string pass_name = name_str.substr(0, name_str.find("#"));
+  std::string pass_name = name_str.substr(0, name_str.find('#'));
   for (auto pass : m_registered_passes) {
     if (pass_name == pass->name()) {
       m_activated_passes.push_back(pass);

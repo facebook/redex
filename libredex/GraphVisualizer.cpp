@@ -235,7 +235,7 @@ class TaggedBase {
   std::ostream& attribute(const std::string& attr) {
     m_output << " ";
     always_assert_log(!attr.empty(), "Attribute must be non-empty");
-    always_assert_log(attr.find(" ") == std::string::npos,
+    always_assert_log(attr.find(' ') == std::string::npos,
                       "Attribute must not have spaces");
     return m_output << attr << ":";
   }

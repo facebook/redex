@@ -1,2 +1,2 @@
-Checks: '-*,modernize-make-shared,performance-unnecessary-copy-initialization,performance-for-range-copy'
+Checks: '-*,modernize-make-shared,performance-unnecessary-copy-initialization,performance-for-range-copy,performance-faster-string-find'
 WarningsAsErrors: '*'

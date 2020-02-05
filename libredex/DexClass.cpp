@@ -483,8 +483,8 @@ std::string DexMethod::get_simple_deobfuscated_name() const {
     // This comes up for redex-created methods.
     return std::string(c_str());
   }
-  auto dot_pos = full_name.find(".");
-  auto colon_pos = full_name.find(":");
+  auto dot_pos = full_name.find('.');
+  auto colon_pos = full_name.find(':');
   if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
     return full_name;
   }

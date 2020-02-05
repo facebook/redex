@@ -892,7 +892,7 @@ class OptimizeEnums {
         return type;
       }
 
-      std::size_t found = class_name.find_last_of("/");
+      std::size_t found = class_name.find_last_of('/');
       if (found == std::string::npos) {
         break;
       }

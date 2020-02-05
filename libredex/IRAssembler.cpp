@@ -741,7 +741,7 @@ std::unique_ptr<IRCode> ircode_from_s_expr(const s_expr& e) {
         // check if keyword also has dbg label
         if (keyword != ".pos") {
           // get dbg label found after colon in keyword string
-          auto key = keyword.substr(keyword.find(":") + 1);
+          auto key = keyword.substr(keyword.find(':') + 1);
           // insert pos into positions map using dbg label as key
           positions[key] = pos.get();
         }

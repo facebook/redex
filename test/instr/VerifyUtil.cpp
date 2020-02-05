@@ -112,7 +112,7 @@ ResourceFiles decode_resource_paths(const char* location, const char* suffix) {
   std::istringstream input;
   input.str(location);
   for (std::string file_path; std::getline(input, file_path, ':');) {
-    auto pos = file_path.rfind("/");
+    auto pos = file_path.rfind('/');
     always_assert(pos >= 0 && pos + 1 < file_path.length());
     auto directory = file_path.substr(0, pos);
     if (boost::algorithm::ends_with(directory, suffix)) {

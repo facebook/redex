@@ -10,7 +10,7 @@
 #include "ReachableClasses.h"
 
 std::string extract_suffix(std::string class_name) {
-  auto i = class_name.find_last_of(".");
+  auto i = class_name.find_last_of('.');
   if (i == std::string::npos) {
     // This is a class name with no package prefix.
     return class_name;
@@ -59,8 +59,8 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
 }
 
 std::string extract_member_name(std::string qualified) {
-  auto dot = qualified.find(".");
-  auto colon = qualified.find(":");
+  auto dot = qualified.find('.');
+  auto colon = qualified.find(':');
   return qualified.substr(dot + 1, colon - dot - 1);
 }
 
@@ -75,7 +75,7 @@ std::string deobfuscate_type_descriptor(const ProguardMap& pg_map,
   size_t i = 0;
   while (i < desc.size()) {
     if (desc[i] == 'L') {
-      auto colon = desc.find(";");
+      auto colon = desc.find(';');
       redex_assert(colon != std::string::npos);
       auto class_type = desc.substr(i, colon + 1);
       auto deob_class = pg_map.deobfuscate_class(class_type);
