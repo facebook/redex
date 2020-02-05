@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <boost/optional.hpp>
 #include <mutex>
 #include <string>
@@ -27,56 +28,86 @@ class KeepState;
 class ReferencedState {
  private:
   struct InnerStruct {
+    int32_t m_api_level{-1};
+
     // Whether this DexMember is referenced by one of the strings in the native
     // libraries. Note that this doesn't allow us to distinguish
     // native -> Java references from Java -> native refs.
-    bool m_by_string{false};
+    bool m_by_string : 1;
     // Whether it is referenced from an XML layout.
-    bool m_by_resources{false};
+    bool m_by_resources : 1;
     // Whether it is a json serializer/deserializer class for a reachable class.
-    bool m_is_serde{false};
+    bool m_is_serde : 1;
 
     // ProGuard keep settings
     //
     // Whether any keep rule has matched this. This applies for both `-keep` and
     // `-keepnames`.
-    bool m_keep{false};
+    bool m_keep : 1;
     // assumenosideeffects allows certain methods to be removed.
-    bool m_assumenosideeffects{false};
+    bool m_assumenosideeffects : 1;
     // If m_whyareyoukeeping is true then report debugging information
     // about why this class or member is being kept.
-    bool m_whyareyoukeeping{false};
+    bool m_whyareyoukeeping : 1;
 
     // For keep modifiers: -keep,allowshrinking and -keep,allowobfuscation.
     //
     // Instead of m_allowshrinking and m_allowobfuscation, we need to have
     // set/unset pairs for easier parallelization. The unset has a high
     // priority. See the comments in apply_keep_modifiers.
-    bool m_set_allowshrinking{false};
-    bool m_unset_allowshrinking{false};
-    bool m_set_allowobfuscation{false};
-    bool m_unset_allowobfuscation{false};
+    bool m_set_allowshrinking : 1;
+    bool m_unset_allowshrinking : 1;
+    bool m_set_allowobfuscation : 1;
+    bool m_unset_allowobfuscation : 1;
 
-    bool m_no_optimizations{false};
+    bool m_no_optimizations : 1;
 
-    bool m_generated{false};
+    bool m_generated : 1;
 
     // For inlining configurations.
-    bool m_dont_inline{false};
-    bool m_force_inline{false};
+    bool m_dont_inline : 1;
+    bool m_force_inline : 1;
 
-    int32_t m_api_level{-1};
+    InnerStruct() {
+      // Initializers in bit fields are C++20...
+      m_by_string = false;
+      m_by_resources = false;
+      m_is_serde = false;
+
+      m_keep = false;
+      m_assumenosideeffects = false;
+      m_whyareyoukeeping = false;
+
+      m_set_allowshrinking = false;
+      m_unset_allowshrinking = false;
+      m_set_allowobfuscation = false;
+      m_unset_allowobfuscation = false;
+
+      m_no_optimizations = false;
+
+      m_generated = false;
+
+      m_dont_inline = false;
+      m_force_inline = false;
+    }
   } inner_struct;
 
   // InterDex subgroup, if any.
   // NOTE: Will be set ONLY for generated classes.
   boost::optional<size_t> m_interdex_subgroup{boost::none};
 
-  std::mutex m_keep_reasons_mtx;
-  keep_reason::ReasonPtrSet m_keep_reasons;
+  // Going through hoops here to reduce the size of ReferencedState while
+  // keeping memory requirements still small in non-default case.
+  struct KeepReasons {
+    std::mutex m_keep_reasons_mtx;
+    keep_reason::ReasonPtrSet m_keep_reasons;
+  };
+  mutable std::atomic<KeepReasons*> m_keep_reasons{nullptr};
 
  public:
   ReferencedState() = default;
+  ReferencedState(const ReferencedState&) = delete;
+  ~ReferencedState() { delete m_keep_reasons.load(); }
 
   ReferencedState& operator=(const ReferencedState& other) {
     if (this != &other) {
@@ -215,7 +246,13 @@ class ReferencedState {
   }
 
   const keep_reason::ReasonPtrSet& keep_reasons() const {
-    return m_keep_reasons;
+    if (!RedexContext::record_keep_reasons()) {
+      // We really should not allow this.
+      static keep_reason::ReasonPtrSet SINGLETON;
+      return SINGLETON;
+    }
+    auto& keep_reasons = ensure_keep_reasons();
+    return keep_reasons.m_keep_reasons;
   }
 
   template <class... Args>
@@ -304,10 +341,27 @@ class ReferencedState {
     inner_struct.m_unset_allowobfuscation = true;
   }
 
+  KeepReasons& ensure_keep_reasons() const {
+    always_assert(RedexContext::record_keep_reasons());
+    // First see whether it's already done to avoid allocating.
+    auto attempt = m_keep_reasons.load();
+    if (attempt != nullptr) {
+      return *attempt;
+    }
+    // OK, allocate and CAS.
+    auto keep_reasons = std::make_unique<KeepReasons>();
+    KeepReasons* expected = nullptr;
+    if (m_keep_reasons.compare_exchange_strong(expected, keep_reasons.get())) {
+      return *keep_reasons.release();
+    }
+    return *expected;
+  }
+
   void add_keep_reason(const keep_reason::Reason* reason) {
     always_assert(RedexContext::record_keep_reasons());
-    std::lock_guard<std::mutex> lock(m_keep_reasons_mtx);
-    m_keep_reasons.emplace(reason);
+    auto& keep_reasons = ensure_keep_reasons();
+    std::lock_guard<std::mutex> lock(keep_reasons.m_keep_reasons_mtx);
+    keep_reasons.m_keep_reasons.emplace(reason);
   }
 
   friend class keep_rules::impl::KeepState;
