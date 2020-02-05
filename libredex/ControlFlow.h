@@ -197,6 +197,9 @@ class Block final {
       : m_id(id), m_parent(parent) {}
 
   ~Block() { m_entries.clear_and_dispose(); }
+  // This is different from the destructor. It also frees MethodItemEntry
+  // payload that is not deleted on MIE deletion.
+  void free();
 
   // copy constructor
   Block(const Block& b, MethodItemEntryCloner* cloner);

@@ -146,6 +146,23 @@ void remove_duplicate_positions(IRList* ir) {
 
 namespace cfg {
 
+void Block::free() {
+  for (auto& mie : *this) {
+    switch (mie.type) {
+    case MFLOW_OPCODE:
+      delete mie.insn;
+      mie.insn = nullptr;
+      break;
+    case MFLOW_DEX_OPCODE:
+      delete mie.dex_insn;
+      mie.dex_insn = nullptr;
+      break;
+    default:
+      break;
+    }
+  }
+}
+
 IRList::iterator Block::begin() {
   if (m_parent->editable()) {
     return m_entries.begin();
@@ -661,6 +678,7 @@ void ControlFlowGraph::connect_blocks(BranchToTargets& branch_to_targets) {
         if (m_editable && is_goto(last_op)) {
           // We don't need the gotos in editable mode because the edges
           // fully encode that information
+          delete last_mie.insn;
           b->m_entries.erase_and_dispose(b->m_entries.iterator_to(last_mie));
         }
 
@@ -812,6 +830,9 @@ uint32_t ControlFlowGraph::remove_unreachable_blocks() {
       num_insns_removed += b->num_opcodes();
       always_assert(b->succs().empty());
       always_assert(b->preds().empty());
+      // Deletion of a block deletes MIEs, but MIEs do not delete instructions.
+      // Gotta do this manually for now.
+      b->free();
       delete b;
       it = m_blocks.erase(it);
     } else {
@@ -904,6 +925,7 @@ void ControlFlowGraph::remove_empty_blocks() {
         deleted_positions.insert(mie.pos.get());
       }
     }
+    b->free();
     delete b;
     it = m_blocks.erase(it);
   }
