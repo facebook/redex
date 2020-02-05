@@ -42,7 +42,7 @@ std::unique_ptr<uv::FixpointIterator> analyze(
 }
 
 void optimize(const uv::FixpointIterator& fp_iter, IRCode* code) {
-  for (auto it : uv::get_dead_instructions(*code, fp_iter)) {
+  for (const auto& it : uv::get_dead_instructions(*code, fp_iter)) {
     code->remove_opcode(it);
   }
 }

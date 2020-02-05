@@ -648,7 +648,7 @@ Json::Value get_detailed_stats(const std::vector<dex_stats_t>& dexes_stats) {
 
 Json::Value get_times() {
   Json::Value list(Json::arrayValue);
-  for (auto t : Timer::get_times()) {
+  for (const auto& t : Timer::get_times()) {
     Json::Value element;
     element[t.first] = std::round(t.second * 10) / 10.0;
     list.append(element);

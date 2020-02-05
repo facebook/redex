@@ -288,7 +288,7 @@ void MultiMethodInliner::inline_methods() {
   std::unordered_map<DexMethod*, size_t> visited;
   CallerNonrecursiveCalleesByStackDepth
       caller_nonrecursive_callees_by_stack_depth;
-  for (auto it : caller_callee) {
+  for (const auto& it : caller_callee) {
     auto caller = it.first;
     TraceContext context(caller->get_deobfuscated_name());
     // if the caller is not a top level keep going, it will be traversed
@@ -615,7 +615,7 @@ void MultiMethodInliner::inline_inlinables(
                    });
 
   std::vector<DexMethod*> inlined_callees;
-  for (auto inlinable : ordered_inlinables) {
+  for (const auto& inlinable : ordered_inlinables) {
     auto callee_method = inlinable.first;
     auto callee = callee_method->get_code();
     auto callsite = inlinable.second;

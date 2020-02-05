@@ -51,10 +51,10 @@ void DexMetadata::parse(const std::string& path) {
   Json::Value store;
   input >> store;
   id = store["id"].asString();
-  for (auto dep : store["requires"]) {
+  for (const auto& dep : store["requires"]) {
     dependencies.push_back(dep.asString());
   }
-  for (auto file : store["files"]) {
+  for (const auto& file : store["files"]) {
     files.push_back(file.asString());
   }
 }

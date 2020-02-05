@@ -397,7 +397,7 @@ size_t compute_locations_closure(
   std::unordered_map<const DexMethod*, std::unordered_set<const DexMethod*>>
       inverse_dependencies;
   std::unordered_set<const DexMethod*> impacted_methods;
-  for (auto p : method_lads) {
+  for (const auto& p : method_lads) {
     auto method = p.first;
     auto& lads = p.second;
     if (lads.dependencies.size()) {

@@ -99,7 +99,7 @@ const std::set<std::string> getAllowedStores(DexStoresVector& stores,
   store_map[store.get_name()].emplace(stores[0].get_name());
   for (auto parent : store.get_dependencies()) {
     store_map[store.get_name()].emplace(parent);
-    for (auto grandparent :
+    for (const auto& grandparent :
          getAllowedStores(stores, findStore(parent, stores), store_map)) {
       store_map[store.get_name()].emplace(grandparent);
     }

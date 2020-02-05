@@ -426,7 +426,7 @@ void Transform::apply_changes(IRCode* code) {
       code->replace_opcode(old_op, new_ops);
     }
   }
-  for (auto it : m_deletes) {
+  for (const auto& it : m_deletes) {
     TRACE(CONSTP, 4, "Removing instruction %s", SHOW(it->insn));
     code->remove_opcode(it);
   }

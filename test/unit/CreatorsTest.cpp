@@ -63,7 +63,7 @@ TEST_F(CreatorsTest, MakeSwitchMultiIndices) {
   auto def_block = mb->switch_op(idx_loc, cases);
   def_block->init_loc(param_loc);
 
-  for (auto it : cases) {
+  for (const auto& it : cases) {
     auto idx = it.first;
     auto case_block = cases[idx];
     ASSERT_TRUE(idx.size());

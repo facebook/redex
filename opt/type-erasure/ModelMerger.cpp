@@ -378,11 +378,11 @@ std::string merger_info(const MergerType& merger) {
      << merger.mergeables.size() << ", dmethods " << merger.dmethods.size()
      << ", non_virt_methods " << merger.non_virt_methods.size()
      << ", virt_methods " << merger.vmethods.size() << "\n";
-  for (const auto imeths : merger.intfs_methods) {
+  for (const auto& imeths : merger.intfs_methods) {
     ss << "  interface methods " << imeths.methods.size() << "\n";
   }
   ss << " Field maps \n";
-  for (auto fmap : merger.field_map) {
+  for (const auto& fmap : merger.field_map) {
     ss << "  type " << SHOW(fmap.first) << "\n";
     size_t num_empty_fields = 0;
     for (const auto field : fmap.second) {

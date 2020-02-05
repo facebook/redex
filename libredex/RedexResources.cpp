@@ -179,7 +179,7 @@ void extract_js_asset_registrations(const std::string& file_contents,
   static boost::regex special_char_regex("[^a-z0-9_]");
   std::unordered_set<std::string> registrations;
   extract_by_pattern(file_contents, register_regex, registrations);
-  for (std::string registration : registrations) {
+  for (const std::string& registration : registrations) {
     boost::smatch m;
     if (!boost::regex_search(registration, m, location_regex) ||
         m.size() == 0) {
@@ -994,7 +994,7 @@ void collect_layout_classes_and_attributes(
     std::unordered_set<std::string>& out_classes,
     std::unordered_multimap<std::string, std::string>& out_attributes) {
   std::vector<std::string> files = find_layout_files(apk_directory);
-  for (auto layout_file : files) {
+  for (const auto& layout_file : files) {
     collect_layout_classes_and_attributes_for_file(
         layout_file, attributes_to_read, out_classes, out_attributes);
   }
@@ -1055,7 +1055,7 @@ std::unordered_set<std::string> get_native_classes(
   std::vector<std::string> native_libs =
       find_native_library_files(apk_directory);
   std::unordered_set<std::string> all_classes;
-  for (auto native_lib : native_libs) {
+  for (const auto& native_lib : native_libs) {
     std::string contents = read_entire_file(native_lib);
     std::unordered_set<std::string> classes_from_layout =
         extract_classes_from_native_lib(contents);

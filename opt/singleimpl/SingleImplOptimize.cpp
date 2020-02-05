@@ -269,7 +269,7 @@ void OptimizationImpl::set_method_defs(const DexType* intf,
  */
 void OptimizationImpl::set_method_refs(const DexType* intf,
                                        const SingleImplData& data) {
-  for (auto mrefit : data.methodrefs) {
+  for (const auto& mrefit : data.methodrefs) {
     auto method = mrefit.first;
     TRACE(INTF, 3, "(MREF) update ref %s", SHOW(method));
     // next 2 lines will generate no new proto or method when the ref matches

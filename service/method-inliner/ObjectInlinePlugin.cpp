@@ -86,7 +86,7 @@ void ObjectInlinePlugin::update_before_reg_remap(ControlFlowGraph* caller,
           move->set_dest(assign_reg);
         } else {
           // There will be only one, so the loop is just to pull out the first
-          for (auto assign_reg : final_field->second.regs) {
+          for (const auto& assign_reg : final_field->second.regs) {
             move->set_dest(assign_reg.first);
             break;
           }
@@ -178,7 +178,7 @@ bool ObjectInlinePlugin::update_after_reg_remap(ControlFlowGraph*,
       }
       awaiting_dest_instr = nullptr;
     }
-    for (auto it : to_remove) {
+    for (const auto& it : to_remove) {
       block->remove_insn(it);
     }
   }

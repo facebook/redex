@@ -1,2 +1,2 @@
-Checks: '-*,modernize-make-shared,performance-unnecessary-copy-initialization'
-WarningsAsErrors: 'performance-unnecessary-copy-initialization'
+Checks: '-*,modernize-make-shared,performance-unnecessary-copy-initialization,performance-for-range-copy'
+WarningsAsErrors: '*'

@@ -71,7 +71,7 @@ void breakup_by_package(SingleImpls& single_impls) {
   };
   std::vector<PackageBreakUp> by_package;
   uint32_t no_package_types = 0;
-  for (auto const intf_it : single_impls) {
+  for (auto const& intf_it : single_impls) {
     const auto intf_name = intf_it.first->get_name()->c_str();
     auto ptr = const_cast<char*>(intf_name);
     if (*ptr != 'L') {

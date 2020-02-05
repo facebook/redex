@@ -2503,7 +2503,7 @@ dex_stats_t write_classes_to_dex(
   if (sort_bytecode_cfg.isString()) {
     code_sort_mode.push_back(make_sort_bytecode(sort_bytecode_cfg.asString()));
   } else if (sort_bytecode_cfg.isArray()) {
-    for (auto val : sort_bytecode_cfg) {
+    for (const auto& val : sort_bytecode_cfg) {
       code_sort_mode.push_back(make_sort_bytecode(val.asString()));
     }
   }

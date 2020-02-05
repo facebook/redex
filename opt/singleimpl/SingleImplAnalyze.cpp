@@ -117,7 +117,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
     return false;
   };
 
-  for (const auto intf_it : single_impls) {
+  for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     const std::string& intf_name = intf_cls->get_deobfuscated_name();
@@ -129,7 +129,7 @@ void AnalysisImpl::filter_list(const std::vector<std::string>& list,
 }
 
 void AnalysisImpl::filter_proguard_special_interface() {
-  for (const auto intf_it : single_impls) {
+  for (const auto& intf_it : single_impls) {
     const auto intf = intf_it.first;
     const auto intf_cls = type_class(intf);
     const std::string& intf_name = intf_cls->get_deobfuscated_name();
@@ -178,7 +178,7 @@ void AnalysisImpl::filter_single_impl(const SingleImplConfig& config) {
  * Do not optimize DoNotStrip interfaces.
  */
 void AnalysisImpl::filter_do_not_strip() {
-  for (const auto intf_it : single_impls) {
+  for (const auto& intf_it : single_impls) {
     if (!can_delete(type_class(intf_it.first))) {
       escape_interface(intf_it.first, DO_NOT_STRIP);
     }

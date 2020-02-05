@@ -229,7 +229,7 @@ void MethodStats::print(const std::string model_name, uint32_t num_mergeables) {
   for (auto& mm : merged_methods) {
     TRACE(TERA, 8, " %4d %s", mm.count, mm.name.c_str());
     if (mm.count > 1) {
-      for (auto sample : mm.samples) {
+      for (const auto& sample : mm.samples) {
         TRACE(TERA, 9, "%s", sample.c_str());
       }
     }
@@ -290,7 +290,7 @@ void ModelMethodMerger::fix_visibility() {
       fix_visibility_helper(m, vmethods_created);
     }
   }
-  for (auto pair : m_merger_non_vmethods) {
+  for (const auto& pair : m_merger_non_vmethods) {
     auto non_vmethods = pair.second;
     for (auto m : non_vmethods) {
       fix_visibility_helper(m, vmethods_created);
@@ -309,7 +309,7 @@ void ModelMethodMerger::fix_visibility() {
     }
   }
   // Promote privatized non-static non-ctor methods back to be public virtual.
-  for (auto pair : m_merger_non_ctors) {
+  for (const auto& pair : m_merger_non_ctors) {
     auto non_ctors = pair.second;
     for (const auto m : non_ctors) {
       if (is_private(m) && !is_static(m)) {
@@ -495,7 +495,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
     }
   }
 
-  for (auto invocation : invocations) {
+  for (const auto& invocation : invocations) {
     param_it = param_insns.begin();
     for (size_t i = 0; i < invocation->insn->srcs_size(); ++i, ++param_it) {
       always_assert(param_it != param_end);

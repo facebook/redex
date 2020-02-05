@@ -61,14 +61,14 @@ void test_object_inliner(
   DexType* caller_type = DexType::make_type(caller_class.c_str());
 
   std::vector<DexFieldRef*> field_refs = {};
-  for (auto field_data : fields) {
+  for (const auto& field_data : fields) {
     auto field_ref = DexField::make_field(callee_class + field_data.first);
     field_ref->make_concrete(ACC_PUBLIC);
     field_refs.emplace_back(field_ref);
   }
 
   std::map<DexFieldRef*, DexFieldRef*, dexfields_comparator> field_swap_refs;
-  for (auto field_swap : swap_fields) {
+  for (const auto& field_swap : swap_fields) {
     auto callee_field = DexField::make_field(callee_class + field_swap.first);
     callee_field->make_concrete(ACC_PUBLIC);
     auto caller_field = DexField::make_field(caller_class + field_swap.second);

@@ -493,7 +493,7 @@ MethodBlock* MethodBlock::switch_op(Location test,
   }
   auto mb = make_switch_block(sw_opcode, indices_cases);
   // Copy initialized case blocks back.
-  for (auto it : indices_cases) {
+  for (const auto& it : indices_cases) {
     SwitchIndices indices = it.first;
     always_assert(indices.size());
     int idx = *indices.begin();
@@ -574,7 +574,7 @@ MethodBlock* MethodBlock::make_switch_block(
     IRInstruction* insn, std::map<SwitchIndices, MethodBlock*>& cases) {
   IRList::iterator default_it;
   std::map<SwitchIndices, IRList::iterator> mt_cases;
-  for (auto cases_it : cases) {
+  for (const auto& cases_it : cases) {
     mt_cases[cases_it.first] = curr;
   }
   curr = mc->make_switch_block(curr, insn, &default_it, mt_cases);

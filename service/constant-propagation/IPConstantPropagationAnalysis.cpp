@@ -39,7 +39,7 @@ void FixpointIterator::analyze_node(const DexMethod* const& method,
   const auto outgoing_edges =
       call_graph::GraphInterface::successors(m_call_graph, method);
   std::unordered_set<IRInstruction*> outgoing_insns;
-  for (const auto edge : outgoing_edges) {
+  for (const auto& edge : outgoing_edges) {
     outgoing_insns.emplace(edge->invoke_iterator()->insn);
   }
   for (auto* block : cfg.blocks()) {

@@ -131,7 +131,7 @@ static void strip_src_strings(DexStoresVector& stores,
     return;
   }
 
-  for (auto it : global_src_strings) {
+  for (const auto& it : global_src_strings) {
     auto desc_vector = it.second;
     sort_unique(desc_vector);
     fprintf(fd, "%s ->", it.first->c_str());

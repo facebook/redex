@@ -82,7 +82,7 @@ AnnoKill::AnnoKill(
 
   // Populate class hierarchy keep map
   auto ch = build_type_hierarchy(m_scope);
-  for (auto it : class_hierarchy_keep_annos) {
+  for (const auto& it : class_hierarchy_keep_annos) {
     auto* type = DexType::get_type(it.first.c_str());
     auto* type_cls = type ? type_class(type) : nullptr;
     if (type_cls == nullptr) {
@@ -98,7 +98,7 @@ AnnoKill::AnnoKill(
       }
     }
   }
-  for (auto it : m_anno_class_hierarchy_keep) {
+  for (const auto& it : m_anno_class_hierarchy_keep) {
     for (auto type : it.second) {
       TRACE(ANNO,
             4,
@@ -108,7 +108,7 @@ AnnoKill::AnnoKill(
     }
   }
   // Populate anno keep map
-  for (auto it : annotated_keep_annos) {
+  for (const auto& it : annotated_keep_annos) {
     auto* type = DexType::get_type(it.first.c_str());
     for (auto& anno : it.second) {
       auto* anno_type = DexType::get_type(anno.c_str());

@@ -1522,7 +1522,7 @@ class EnumTransformer final {
     uv_fpiter.run(used_vars::UsedVarsSet());
     auto dead_instructions = used_vars::get_dead_instructions(*code, uv_fpiter);
     code->clear_cfg();
-    for (auto insn : dead_instructions) {
+    for (const auto& insn : dead_instructions) {
       code->remove_opcode(insn);
     }
   }

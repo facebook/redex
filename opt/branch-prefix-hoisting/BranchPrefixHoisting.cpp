@@ -272,7 +272,7 @@ void BranchPrefixHoistingPass::hoist_insns_for_block(
     auto to_remove =
         ir_list::InstructionIterator(succ_block->begin(), succ_block->end());
 
-    for (auto insn : insns_to_hoist) {
+    for (const auto& insn : insns_to_hoist) {
       if (opcode::is_move_result_any(insn.opcode())) {
         // move result pseudo gets removed along with its associating insn
         continue;

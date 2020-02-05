@@ -418,7 +418,7 @@ Configurable::as<Configurable::MapOfVectorOfStrings>(const Json::Value& value,
     if (!v.isArray()) {
       throw std::runtime_error("expected array, got:" + v.asString());
     }
-    for (auto el : v) {
+    for (const auto& el : v) {
       if (!el.isString()) {
         throw std::runtime_error("expected string, got:" + el.asString());
       }

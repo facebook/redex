@@ -57,7 +57,7 @@ void OriginalNamePass::run_pass(DexStoresVector& stores,
   build_hierarchies(mgr, ch, scope, &to_annotate);
   DexString* field_name = DexString::make_string(redex_field_name);
   DexType* string_type = type::java_lang_String();
-  for (auto it : to_annotate) {
+  for (const auto& it : to_annotate) {
     const DexType* cls_type = it.first;
     if (strncmp("LX/", cls_type->get_name()->c_str(), 2) != 0) {
       continue;

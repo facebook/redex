@@ -261,7 +261,7 @@ class FinalInlineImpl {
             if (!validate_sget(m, insn)) continue;
             rewrites.push_back(it.unwrap());
           }
-          for (auto it : rewrites) {
+          for (const auto& it : rewrites) {
             auto* insn = it->insn;
             auto dest = ir_list::move_result_pseudo_of(it)->dest();
             auto field = resolve_field(insn->get_field(), FieldSearch::Static);

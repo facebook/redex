@@ -122,7 +122,7 @@ void RealPositionMapper::write_map_v2() {
   ofs.write((const char*)&version, sizeof(version));
   uint32_t spool_count = string_pool.size();
   ofs.write((const char*)&spool_count, sizeof(spool_count));
-  for (auto s : string_pool) {
+  for (const auto& s : string_pool) {
     uint32_t ssize = s.size();
     ofs.write((const char*)&ssize, sizeof(ssize));
     ofs << s;

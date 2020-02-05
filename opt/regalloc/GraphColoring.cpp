@@ -265,7 +265,7 @@ std::string show(const SpillPlan& spill_plan) {
     ss << reg << "\n";
   }
   ss << "Range spills:\n";
-  for (auto pair : spill_plan.range_spills) {
+  for (const auto& pair : spill_plan.range_spills) {
     auto* insn = pair.first;
     ss << show(insn) << ": ";
     for (auto idx : pair.second) {
@@ -279,7 +279,7 @@ std::string show(const SpillPlan& spill_plan) {
 std::string show(const SplitPlan& split_plan) {
   std::ostringstream ss;
   ss << "split_around:\n";
-  for (auto pair : split_plan.split_around) {
+  for (const auto& pair : split_plan.split_around) {
     ss << pair.first << ": ";
     for (auto reg : pair.second) {
       ss << reg << " ";
@@ -745,7 +745,7 @@ void Allocator::find_split(const interference::Graph& ig,
     }
     auto max_reg_bound = ig.get_node(reg).max_vreg();
     // For each vreg(color).
-    for (auto vreg_assigned : mapped_neighbors) {
+    for (const auto& vreg_assigned : mapped_neighbors) {
       // We only want to check neighbors that has vreg assigned that
       // can be used by the reg.
       if (vreg_assigned.first > max_reg_bound) {
@@ -915,7 +915,7 @@ void Allocator::split_params(const interference::Graph& ig,
     }
   }
   // Insert the loads
-  for (auto param_pair : load_locations) {
+  for (const auto& param_pair : load_locations) {
     auto dest = param_pair.first;
     auto first_use_it = param_pair.second;
     code->insert_before(

@@ -21,10 +21,10 @@ bool operator==(FieldSet a, FieldSet b) {
   }
   std::set<IRInstruction*> a_instrs;
   std::set<IRInstruction*> b_instrs;
-  for (auto a_reg_instr : a.regs) {
+  for (const auto& a_reg_instr : a.regs) {
     a_instrs.insert(a_reg_instr.second.begin(), a_reg_instr.second.end());
   }
-  for (auto b_reg_instr : b.regs) {
+  for (const auto& b_reg_instr : b.regs) {
     b_instrs.insert(b_reg_instr.second.begin(), b_reg_instr.second.end());
   }
   return a_instrs == b_instrs;
@@ -74,7 +74,7 @@ std::string show(SourceStatus s) {
 std::string show(const FieldSetMap& fields_writes) {
   std::stringstream out;
   out << "[";
-  for (auto field_set : fields_writes) {
+  for (const auto& field_set : fields_writes) {
     out << "{\"field_set\" : \"" << field_set.first->get_name()->str()
         << "\", \"num_src_registers : " << field_set.second.regs.size()
         << ", \"source\" : \"" << show(field_set.second.source)
@@ -98,7 +98,7 @@ std::string show(const FieldReads& field_reads) {
 std::string show(const CallMap& methods) {
   std::stringstream out;
   out << "[";
-  for (auto method_call : methods) {
+  for (const auto& method_call : methods) {
     out << "{\"method\" : \"" << method_call.first->get_name()->str()
         << "\", \"call_count\" : " << method_call.second.call_sites.size()
         << "},";
@@ -144,10 +144,10 @@ std::string show(const InitLocation& init) {
   std::stringstream out;
   out << "{\"Init\" : { \"type\" : " << SHOW(init.m_typ)
       << ", \"count\" : " << init.get_count() << ", \"data\" : [";
-  for (auto class_inits : init.get_inits()) {
-    for (auto method_inits : class_inits.second) {
-      for (auto instr_inits : method_inits.second) {
-        for (auto use : instr_inits.second) {
+  for (const auto& class_inits : init.get_inits()) {
+    for (const auto& method_inits : class_inits.second) {
+      for (const auto& instr_inits : method_inits.second) {
+        for (const auto& use : instr_inits.second) {
           out << "{\"class\" : \"" << class_inits.first->get_name()->c_str()
               << "\", "
               << "\"method\" : \"" << method_inits.first->get_name()->c_str()
@@ -163,7 +163,7 @@ std::string show(const InitLocation& init) {
 }
 
 bool field_subset_eq(FieldSetMap base, FieldSetMap other) {
-  for (auto field : base) {
+  for (const auto& field : base) {
     auto other_field = other.find(field.first);
     if (other_field == other.end()) {
       return false;
@@ -176,7 +176,7 @@ bool field_subset_eq(FieldSetMap base, FieldSetMap other) {
 }
 
 bool calls_subset_eq(CallMap base, CallMap other) {
-  for (auto call : base) {
+  for (const auto& call : base) {
     auto other_call = other.find(call.first);
     if (other_call == other.end()) {
       return false;
@@ -233,7 +233,7 @@ bool FieldWriteRegs::consistent_with(const FieldWriteRegs& other) {
 // Note: templating these causes many errors
 std::vector<DexFieldRef*> get_keys(FieldSetMap m) {
   std::vector<DexFieldRef*> m_keys = {};
-  for (auto f : m) {
+  for (const auto& f : m) {
     m_keys.emplace_back(f.first);
   }
   return m_keys;
@@ -249,7 +249,7 @@ std::vector<DexFieldRef*> get_keys(FieldReadMap m) {
 
 std::vector<DexMethodRef*> get_keys(CallMap m) {
   std::vector<DexMethodRef*> m_keys = {};
-  for (auto f : m) {
+  for (const auto& f : m) {
     m_keys.emplace_back(f.first);
   }
   return m_keys;
@@ -257,7 +257,7 @@ std::vector<DexMethodRef*> get_keys(CallMap m) {
 
 FieldSet path_combine(const FieldSet& main, const FieldSet& other) {
   auto combined_regs = main.regs;
-  for (auto o_reg : other.regs) {
+  for (const auto& o_reg : other.regs) {
     auto& reg = combined_regs[o_reg.first];
     for (auto o_instr : o_reg.second) {
       reg.insert(o_instr);
@@ -271,7 +271,7 @@ FieldSet merge(const FieldSet& main, const FieldSet& other) {
   auto source = main.source;
   auto merged_regs = main.regs;
   if (other.regs != main.regs) {
-    for (auto o_reg : other.regs) {
+    for (const auto& o_reg : other.regs) {
       auto reg = merged_regs[o_reg.first];
       for (auto o_instr : o_reg.second) {
         reg.insert(o_instr);
@@ -309,7 +309,7 @@ void FieldWriteRegs::combine_paths(const FieldWriteRegs& other) {
       m_fields[field] = path_combine(field_data->second, other_field->second);
     }
   }
-  for (auto other_field : other.m_fields) {
+  for (const auto& other_field : other.m_fields) {
     auto field = m_fields.find(other_field.first);
     if (field == m_fields.end()) {
       m_fields[other_field.first] = (FieldSet){
@@ -333,7 +333,7 @@ void FieldWriteRegs::merge(const FieldWriteRegs& other) {
       m_fields[field] = ::merge(field_data->second, other_field->second);
     }
   }
-  for (auto other_field : other.m_fields) {
+  for (const auto& other_field : other.m_fields) {
     if (m_fields.count(other_field.first) == 0) {
       m_fields[other_field.first] = other_field.second;
     }
@@ -436,7 +436,7 @@ void MethodCalls::combine_paths(const MethodCalls& other) {
       m_calls[call] = ::path_combine(call_data->second, other_call->second);
     }
   }
-  for (auto other_call : other.m_calls) {
+  for (const auto& other_call : other.m_calls) {
     auto call = m_calls.find(other_call.first);
     if (call == m_calls.end()) {
       m_calls[other_call.first] =
@@ -462,7 +462,7 @@ void MethodCalls::merge(const MethodCalls& other) {
       }
     }
   }
-  for (auto o_call : other.m_calls) {
+  for (const auto& o_call : other.m_calls) {
     auto m_call = m_calls.find(o_call.first);
     if (m_call == m_calls.end()) {
       m_calls[o_call.first] = o_call.second;
@@ -535,7 +535,7 @@ bool Escapes::consistent_with(const Escapes& other) {
   if (via_return != other.via_return) {
     return false;
   }
-  for (auto field : via_field_set) {
+  for (const auto& field : via_field_set) {
     auto o_field = other.via_field_set.find(field.first);
     if (o_field == other.via_field_set.end()) {
       continue;
@@ -544,7 +544,7 @@ bool Escapes::consistent_with(const Escapes& other) {
       return false;
     }
   }
-  for (auto vmethod : via_vmethod_call) {
+  for (const auto& vmethod : via_vmethod_call) {
     auto o_vmethod = other.via_vmethod_call.find(vmethod.first);
     if (o_vmethod == other.via_vmethod_call.end()) {
       continue;
@@ -553,7 +553,7 @@ bool Escapes::consistent_with(const Escapes& other) {
       return false;
     }
   }
-  for (auto smethod : via_smethod_call) {
+  for (const auto& smethod : via_smethod_call) {
     auto o_smethod = other.via_smethod_call.find(smethod.first);
     if (o_smethod == other.via_smethod_call.end()) {
       continue;
@@ -580,7 +580,7 @@ void Escapes::combine_paths(const Escapes& other) {
       array.second = Conditional;
     }
   }
-  for (auto set : via_field_set) {
+  for (const auto& set : via_field_set) {
     auto o_set = other.via_field_set.find(set.first);
     if (o_set == other.via_field_set.end()) {
       via_field_set[set.first] =
@@ -591,14 +591,14 @@ void Escapes::combine_paths(const Escapes& other) {
       via_field_set[set.first] = ::path_combine(set.second, o_set->second);
     }
   }
-  for (auto o_set : other.via_field_set) {
+  for (const auto& o_set : other.via_field_set) {
     auto set = via_field_set.find(o_set.first);
     if (set == via_field_set.end()) {
       via_field_set[o_set.first] =
           FieldSet{o_set.second.regs, Conditional, o_set.second.source};
     }
   }
-  for (auto call : via_vmethod_call) {
+  for (const auto& call : via_vmethod_call) {
     auto o_call = other.via_vmethod_call.find(call.first);
     if (o_call == other.via_vmethod_call.end()) {
       via_vmethod_call[call.first] =
@@ -611,7 +611,7 @@ void Escapes::combine_paths(const Escapes& other) {
       continue;
     }
   }
-  for (auto o_call : other.via_vmethod_call) {
+  for (const auto& o_call : other.via_vmethod_call) {
     auto call = via_vmethod_call.find(o_call.first);
     if (call == via_vmethod_call.end()) {
       via_vmethod_call[o_call.first] =
@@ -619,7 +619,7 @@ void Escapes::combine_paths(const Escapes& other) {
     }
   }
 
-  for (auto call : via_smethod_call) {
+  for (const auto& call : via_smethod_call) {
     auto o_call = other.via_smethod_call.find(call.first);
     if (o_call == other.via_smethod_call.end()) {
       via_smethod_call[call.first] =
@@ -632,7 +632,7 @@ void Escapes::combine_paths(const Escapes& other) {
       continue;
     }
   }
-  for (auto o_call : other.via_smethod_call) {
+  for (const auto& o_call : other.via_smethod_call) {
     auto call = via_smethod_call.find(o_call.first);
     if (call == via_smethod_call.end()) {
       via_smethod_call[o_call.first] =
@@ -653,19 +653,19 @@ void Escapes::merge(const Escapes& other) {
       via_array_write[i_flow.first] = i_flow.second;
     }
   }
-  for (auto o_set : other.via_field_set) {
+  for (const auto& o_set : other.via_field_set) {
     auto set = via_field_set.find(o_set.first);
     if (set == via_field_set.end()) {
       via_field_set[o_set.first] = o_set.second;
     }
   }
-  for (auto o_call : other.via_vmethod_call) {
+  for (const auto& o_call : other.via_vmethod_call) {
     auto call = via_vmethod_call.find(o_call.first);
     if (call == via_vmethod_call.end()) {
       via_vmethod_call[o_call.first] = o_call.second;
     }
   }
-  for (auto o_call : other.via_smethod_call) {
+  for (const auto& o_call : other.via_smethod_call) {
     auto call = via_smethod_call.find(o_call.first);
     if (call == via_smethod_call.end()) {
       via_smethod_call[o_call.first] = o_call.second;
@@ -692,20 +692,20 @@ Escapes::get_escape_instructions() {
       escapes.emplace_back(std::make_pair(i, i->src(0)));
     }
   }
-  for (auto f_set : via_field_set) {
-    for (auto reg_instrs : f_set.second.regs) {
+  for (const auto& f_set : via_field_set) {
+    for (const auto& reg_instrs : f_set.second.regs) {
       for (auto i : reg_instrs.second) {
         escapes.emplace_back(std::make_pair(i, reg_instrs.first));
       }
     }
   }
 
-  for (auto v_call : via_vmethod_call) {
+  for (const auto& v_call : via_vmethod_call) {
     for (auto i_reg : v_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
   }
-  for (auto s_call : via_smethod_call) {
+  for (const auto& s_call : via_smethod_call) {
     for (auto i_reg : s_call.second.call_sites) {
       escapes.emplace_back(i_reg);
     }
@@ -876,7 +876,7 @@ std::shared_ptr<TrackedUses> copy_helper(std::shared_ptr<TrackedUses> orig) {
 }
 
 RegisterSet::RegisterSet(RegisterSet const& registers) {
-  for (auto entry : registers.m_registers) {
+  for (const auto& entry : registers.m_registers) {
     if (entry.second) {
       std::shared_ptr<TrackedUses> uses;
       if (m_all_uses.count(entry.second)) {
@@ -889,7 +889,7 @@ RegisterSet::RegisterSet(RegisterSet const& registers) {
       m_registers[entry.first] = uses;
     }
   }
-  for (auto entry : registers.m_all_uses) {
+  for (const auto& entry : registers.m_all_uses) {
     if (m_all_uses.count(entry) == 0) {
       auto uses = copy_helper(entry);
       m_all_uses.insert(uses);
@@ -898,7 +898,7 @@ RegisterSet::RegisterSet(RegisterSet const& registers) {
 }
 
 bool RegisterSet::consistent_with(const RegisterSet& other) {
-  for (auto entry : m_registers) {
+  for (const auto& entry : m_registers) {
     auto other_entry = other.get(entry.first);
     if (entry.second && other_entry &&
         entry.second->consistent_with(*other_entry)) {
@@ -909,7 +909,7 @@ bool RegisterSet::consistent_with(const RegisterSet& other) {
     }
     return false;
   }
-  for (auto other_entry : other.m_registers) {
+  for (const auto& other_entry : other.m_registers) {
     if (m_registers.count(other_entry.first) == 0 && other_entry.second) {
       return false;
     }
@@ -918,14 +918,14 @@ bool RegisterSet::consistent_with(const RegisterSet& other) {
 }
 
 bool RegisterSet::same_uses(const RegisterSet& other) {
-  for (auto uses : m_all_uses) {
+  for (const auto& uses : m_all_uses) {
     auto other_uses = other.m_all_uses.find(uses);
     if (other_uses == other.m_all_uses.end() ||
         !(uses->consistent_with(**other_uses))) {
       return false;
     }
   }
-  for (auto other_uses : other.m_all_uses) {
+  for (const auto& other_uses : other.m_all_uses) {
     if (m_all_uses.count(other_uses) == 0) {
       return false;
     }
@@ -946,7 +946,7 @@ void RegisterSet::combine_paths(const RegisterSet& other) {
     // This can't call combine on a Merged and an Object due to set comparison
     (*local_uses)->combine_paths(*uses);
   }
-  for (auto local_use : m_all_uses) {
+  for (const auto& local_use : m_all_uses) {
     if (other.m_all_uses.count(local_use) == 0) {
       if (local_use->m_tracked_kind == Object) {
         static_cast<ObjectUses*>(local_use.get())->created_flow = Conditional;
@@ -971,7 +971,7 @@ void RegisterSet::merge_effects(const RegisterSet& other) {
 void RegisterSet::merge_registers(const RegisterSet& comes_after,
                                   MergedUsedSet& merge_store) {
   std::unordered_map<reg_t, std::shared_ptr<TrackedUses>> merged_registers;
-  for (auto before_reg_value : m_registers) {
+  for (const auto& before_reg_value : m_registers) {
     auto before_tracked = before_reg_value.second;
     auto is_before_merged =
         before_tracked && before_tracked->m_tracked_kind == Merged;
@@ -1034,7 +1034,7 @@ void RegisterSet::merge_registers(const RegisterSet& comes_after,
     m_all_uses.insert(transferred_use);
   }
   // Look for any added register locations in our later register set
-  for (auto after_reg_value : comes_after.m_registers) {
+  for (const auto& after_reg_value : comes_after.m_registers) {
     if (m_registers.count(after_reg_value.first) == 0) {
       if (!after_reg_value.second) {
         continue;
@@ -1054,7 +1054,7 @@ void RegisterSet::merge_registers(const RegisterSet& comes_after,
       merge_store.insert(transferred_use);
     }
   }
-  for (auto reg_update : merged_registers) {
+  for (const auto& reg_update : merged_registers) {
     m_registers[reg_update.first] = reg_update.second;
   }
 }
@@ -1153,7 +1153,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
 
   RegisterSet registers = visited_blocks[block]->input_registers;
 
-  for (auto instr : InstructionIterable(block)) {
+  for (const auto& instr : InstructionIterable(block)) {
     auto i = instr.insn;
 
     auto opcode = i->opcode();
@@ -1349,7 +1349,7 @@ void ClassInitCounter::inits_any_children(DexClass* container,
   // In the future, this may not be necessary with both controlled descent
   // through non-back edges first in the traversal combined with switching to a
   // loop implementation rather than a recursive one.
-  for (auto use :
+  for (const auto& use :
        visited_blocks[block]->final_result_registers.value().m_all_uses) {
     if (use->m_tracked_kind == Object) {
       m_type_to_inits[static_cast<ObjectUses&>(*use).get_represents_typ()]
@@ -1367,7 +1367,7 @@ void ClassInitCounter::inits_any_children(DexClass* container,
 std::string ClassInitCounter::debug_show_table() {
   std::stringstream result;
   result << "[";
-  for (auto type_entry : m_type_to_inits) {
+  for (const auto& type_entry : m_type_to_inits) {
     result << "{\"type\" : \"" << type_entry.first->str() << "\", "
            << "\"init\" : " << show(type_entry.second) << "}";
   }

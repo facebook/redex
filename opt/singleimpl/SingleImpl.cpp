@@ -76,7 +76,7 @@ void build_type_maps(const Scope& scope,
 
 void collect_single_impl(const TypeToTypes& intfs_to_classes,
                          TypeMap& single_impl) {
-  for (const auto intf_it : intfs_to_classes) {
+  for (const auto& intf_it : intfs_to_classes) {
     if (intf_it.second.size() != 1) continue;
     auto intf = intf_it.first;
     auto intf_cls = type_class(intf);

@@ -513,7 +513,7 @@ void analyze_reachable_from_xml_layouts(const Scope& scope,
   std::unordered_multimap<std::string, std::string> attribute_values;
   collect_layout_classes_and_attributes(apk_dir, attrs_to_read, layout_classes,
                                         attribute_values);
-  for (std::string classname : layout_classes) {
+  for (const std::string& classname : layout_classes) {
     TRACE(PGR, 3, "xml_layout: %s", classname.c_str());
     mark_reachable_by_xml(classname);
   }
@@ -652,7 +652,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
     if (analyze_native_lib_reachability) {
       // Classnames present in native libraries (lib/*/*.so)
-      for (std::string classname : get_native_classes(apk_dir)) {
+      for (const std::string& classname : get_native_classes(apk_dir)) {
         auto type = DexType::get_type(classname.c_str());
         if (type == nullptr) continue;
         TRACE(PGR, 3, "native_lib: %s", classname.c_str());
@@ -676,7 +676,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
   std::unordered_set<DexClass*> reflected_package_classes;
   for (auto clazz : scope) {
     const char* cname = clazz->get_type()->get_name()->c_str();
-    for (auto pkg : reflected_package_names) {
+    for (const auto& pkg : reflected_package_names) {
       if (starts_with(cname, pkg.c_str())) {
         reflected_package_classes.insert(clazz);
         continue;

@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
     if (boost::regex_match(line, matches, trace_regex)) {
       auto idx = std::stoi(matches[3]) - 1;
       auto stack = get_stack(*map, idx);
-      for (auto pos : stack) {
+      for (const auto& pos : stack) {
         std::cout << matches[2] << pos.cls << "." << pos.method << "("
                   << pos.filename << ":" << pos.line << ")" << std::endl;
       }
