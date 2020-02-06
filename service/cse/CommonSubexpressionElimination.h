@@ -113,11 +113,11 @@ class CommonSubexpressionElimination {
   // earlier instruction can be forwarded to replace the result of another
   // (later) instruction.
   struct Forward {
-    IRInstruction* earlier_insn;
+    const IRInstruction* earlier_insn;
     IRInstruction* insn;
   };
   std::vector<Forward> m_forward;
-  std::unordered_set<IRInstruction*> m_earlier_insns;
+  std::unordered_set<const IRInstruction*> m_earlier_insns;
   SharedState* m_shared_state;
   cfg::ControlFlowGraph& m_cfg;
   Stats m_stats;
