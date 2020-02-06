@@ -7,6 +7,8 @@
 
 #include "SwitchDispatch.h"
 
+#include <cmath>
+
 #include "Creators.h"
 #include "TypeReference.h"
 
@@ -192,7 +194,8 @@ size_t estimate_num_switch_dispatch_needed(
         max_num_dispatch_target.get_value_or(0));
   if (max_num_dispatch_target != boost::none &&
       num_cases > max_num_dispatch_target.get()) {
-    return ceil(static_cast<float>(num_cases) / max_num_dispatch_target.get());
+    return std::ceil(static_cast<float>(num_cases) /
+                     max_num_dispatch_target.get());
   }
   if (num_cases > MAX_NUM_DISPATCH_TARGET) {
     size_t total_num_insn = 0;
@@ -201,8 +204,8 @@ size_t estimate_num_switch_dispatch_needed(
       total_num_insn += target->get_code()->count_opcodes();
     }
 
-    return ceil(static_cast<float>(total_num_insn) /
-                MAX_NUM_DISPATCH_INSTRUCTION);
+    return std::ceil(static_cast<float>(total_num_insn) /
+                     MAX_NUM_DISPATCH_INSTRUCTION);
   }
 
   return 1;

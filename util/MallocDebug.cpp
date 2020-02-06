@@ -206,7 +206,7 @@ class MallocDebug {
     Block(Block&& other) noexcept : ptr(other.release()), size(other.size) {}
 
     Block& operator=(const Block&) = delete;
-    Block& operator=(Block&& rhs) {
+    Block& operator=(Block&& rhs) noexcept {
       ptr = rhs.release();
       size = rhs.size;
       return *this;

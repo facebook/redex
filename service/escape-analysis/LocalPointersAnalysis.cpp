@@ -538,6 +538,7 @@ sparta::s_expr to_s_expr(const EscapeSummary& summary) {
                                             summary.escaping_parameters.end());
   // Sort in order that the output is deterministic.
   std::sort(escaping_parameters.begin(), escaping_parameters.end());
+  escaping_params_s_exprs.reserve(escaping_parameters.size());
   for (auto idx : escaping_parameters) {
     escaping_params_s_exprs.emplace_back(idx);
   }
@@ -554,6 +555,7 @@ sparta::s_expr to_s_expr(const EscapeSummary& summary) {
     const auto& elems = summary.returned_parameters.elements();
     std::vector<uint16_t> returned_parameters(elems.begin(), elems.end());
     std::sort(returned_parameters.begin(), returned_parameters.end());
+    idx_s_exprs.reserve(returned_parameters.size());
     for (auto idx : returned_parameters) {
       idx_s_exprs.emplace_back(idx);
     }

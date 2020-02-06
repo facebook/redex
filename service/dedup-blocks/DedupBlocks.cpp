@@ -142,6 +142,7 @@ template <class UnorderedMap,
               mimic_const_t<UnorderedMap, typename UnorderedMap::value_type>>
 std::vector<Entry*> get_id_order(UnorderedMap& umap) {
   std::vector<Entry*> order;
+  order.reserve(umap.size());
   for (Entry& entry : umap) {
     order.push_back(&entry);
   }
