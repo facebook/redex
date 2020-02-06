@@ -61,10 +61,10 @@ struct TrackedValue {
     uint32_t length; // for kind == NewArray
   };
   // The following are only used for kind == NewArray
-  IRInstruction* new_array_insn;
+  const IRInstruction* new_array_insn;
   uint32_t aput_insns_size{0};
-  PatriciaTreeMap<uint32_t, IRInstruction*> aput_insns{};
-  PatriciaTreeSet<IRInstruction*> aput_insns_range{};
+  PatriciaTreeMap<uint32_t, const IRInstruction*> aput_insns{};
+  PatriciaTreeSet<const IRInstruction*> aput_insns_range{};
 };
 
 struct TrackedValueHasher {
@@ -104,14 +104,14 @@ TrackedValue make_other() {
   return (TrackedValue){TrackedValueKind::Other, {0}, nullptr};
 }
 
-TrackedValue make_literal(IRInstruction* instr) {
+TrackedValue make_literal(const IRInstruction* instr) {
   always_assert(instr->opcode() == OPCODE_CONST);
   always_assert(instr->has_literal());
   return (TrackedValue){
       TrackedValueKind::Literal, {(int32_t)instr->get_literal()}, nullptr};
 }
 
-TrackedValue make_array(int32_t length, IRInstruction* instr) {
+TrackedValue make_array(int32_t length, const IRInstruction* instr) {
   always_assert(length >= 0);
   always_assert(instr->opcode() == OPCODE_NEW_ARRAY);
   return (TrackedValue){TrackedValueKind::NewArray, {length}, instr};
@@ -139,7 +139,9 @@ bool is_array_literal(const TrackedValue& tv) {
   return is_new_array(tv) && (int64_t)tv.aput_insns_size == tv.length;
 }
 
-bool add_element(TrackedValue& array, int64_t index, IRInstruction* aput_insn) {
+bool add_element(TrackedValue& array,
+                 int64_t index,
+                 const IRInstruction* aput_insn) {
   always_assert(is_new_array(array));
   always_assert(is_next_index(array, index));
   always_assert(!is_array_literal(array));
@@ -153,12 +155,12 @@ bool add_element(TrackedValue& array, int64_t index, IRInstruction* aput_insn) {
   return true;
 }
 
-std::vector<IRInstruction*> get_aput_insns(const TrackedValue& array) {
+std::vector<const IRInstruction*> get_aput_insns(const TrackedValue& array) {
   always_assert(is_array_literal(array));
-  std::vector<IRInstruction*> aput_insns;
+  std::vector<const IRInstruction*> aput_insns;
   aput_insns.reserve(array.length);
   for (uint32_t i = 0; i < array.length; i++) {
-    IRInstruction* aput_insn = array.aput_insns.at(i);
+    const IRInstruction* aput_insn = array.aput_insns.at(i);
     always_assert(aput_insn != nullptr);
     aput_insns.push_back(aput_insn);
   }
@@ -170,7 +172,7 @@ using namespace ir_analyzer;
 using TrackedDomain =
     sparta::HashedSetAbstractDomain<TrackedValue, TrackedValueHasher>;
 using EscapedArrayDomain =
-    sparta::ConstantAbstractDomain<std::vector<IRInstruction*>>;
+    sparta::ConstantAbstractDomain<std::vector<const IRInstruction*>>;
 
 /**
  * For each register that holds a relevant value, keep track of it.
@@ -186,11 +188,9 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
   void analyze_instruction(
-      const IRInstruction* const_insn,
+      const IRInstruction* insn,
       TrackedDomainEnvironment* current_state) const override {
 
-    // TODO: remove const_cast.
-    auto insn = const_cast<IRInstruction*>(const_insn);
     const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           TrackedDomain value) {
       current_state->set(reg, value);
@@ -325,9 +325,10 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
     }
   }
 
-  std::unordered_map<IRInstruction*, std::vector<IRInstruction*>>
+  std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
   get_array_literals() {
-    std::unordered_map<IRInstruction*, std::vector<IRInstruction*>> result;
+    std::unordered_map<const IRInstruction*, std::vector<const IRInstruction*>>
+        result;
     for (auto& p : m_escaped_arrays) {
       auto constant = p.second.get_constant();
       if (constant) {
@@ -338,7 +339,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
  private:
-  mutable std::unordered_map<IRInstruction*, EscapedArrayDomain>
+  mutable std::unordered_map<const IRInstruction*, EscapedArrayDomain>
       m_escaped_arrays;
 };
 
@@ -381,8 +382,8 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
 
 void ReduceArrayLiterals::patch() {
   for (auto& p : m_array_literals) {
-    IRInstruction* new_array_insn = p.first;
-    std::vector<IRInstruction*>& aput_insns = p.second;
+    const IRInstruction* new_array_insn = p.first;
+    std::vector<const IRInstruction*>& aput_insns = p.second;
     if (aput_insns.size() == 0) {
       // Really no point of doing anything with these
       continue;
@@ -463,8 +464,8 @@ void ReduceArrayLiterals::patch() {
 }
 
 void ReduceArrayLiterals::patch_new_array(
-    IRInstruction* new_array_insn,
-    const std::vector<IRInstruction*>& aput_insns) {
+    const IRInstruction* new_array_insn,
+    const std::vector<const IRInstruction*>& aput_insns) {
   auto type = new_array_insn->get_type();
 
   // prepare for chunking, if needed
@@ -483,7 +484,7 @@ void ReduceArrayLiterals::patch_new_array(
 
   // remove new-array instruction
 
-  auto it = m_cfg.find_insn(new_array_insn);
+  auto it = m_cfg.find_insn(const_cast<IRInstruction*>(new_array_insn));
   always_assert(new_array_insn->opcode() == OPCODE_NEW_ARRAY);
   auto move_result_it = m_cfg.move_result_of(it);
   if (move_result_it.is_end()) {
@@ -511,7 +512,7 @@ void ReduceArrayLiterals::patch_new_array(
 size_t ReduceArrayLiterals::patch_new_array_chunk(
     DexType* type,
     size_t chunk_start,
-    const std::vector<IRInstruction*>& aput_insns,
+    const std::vector<const IRInstruction*>& aput_insns,
     boost::optional<reg_t> chunk_dest,
     reg_t overall_dest,
     std::vector<reg_t>* temp_regs) {
@@ -525,7 +526,8 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
   //   filled-new-array t0, ..., tn, type
   //   move-result      c
 
-  IRInstruction* last_aput_insn = aput_insns[chunk_end - 1];
+  IRInstruction* last_aput_insn =
+      const_cast<IRInstruction*>(aput_insns[chunk_end - 1]);
   auto it = m_cfg.find_insn(last_aput_insn);
 
   std::vector<IRInstruction*> new_insns;
@@ -584,9 +586,9 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
 
   // find iterators corresponding to the aput instructions
 
-  std::unordered_set<IRInstruction*> aput_insns_set(aput_insns.begin(),
-                                                    aput_insns.end());
-  std::unordered_map<IRInstruction*, cfg::InstructionIterator>
+  std::unordered_set<const IRInstruction*> aput_insns_set(aput_insns.begin(),
+                                                          aput_insns.end());
+  std::unordered_map<const IRInstruction*, cfg::InstructionIterator>
       aput_insns_iterators;
   auto iterable = cfg::InstructionIterable(m_cfg);
   for (auto insn_it = iterable.begin(); insn_it != iterable.end(); ++insn_it) {
@@ -604,7 +606,7 @@ size_t ReduceArrayLiterals::patch_new_array_chunk(
                      : OPCODE_MOVE_OBJECT;
 
   for (size_t index = chunk_start; index < chunk_end; index++) {
-    IRInstruction* aput_insn = aput_insns[index];
+    const IRInstruction* aput_insn = aput_insns[index];
     always_assert(is_aput(aput_insn->opcode()));
     always_assert(aput_insn->src(1) == overall_dest);
     it = aput_insns_iterators.at(aput_insn);
