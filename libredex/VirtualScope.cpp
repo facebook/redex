@@ -358,10 +358,11 @@ void merge(const BaseSigs& base_sigs,
   // walk all derived signatures
   for (const auto& derived_sig_entry : derived_sig_map) {
     const auto name = derived_sig_entry.first;
+    auto& name_map = base_sig_map[name];
     auto& derived_protos_map = derived_sig_entry.second;
     for (const auto& derived_scopes_it : derived_protos_map) {
       const auto proto = derived_scopes_it.first;
-      auto& virt_scopes = base_sig_map[name][proto];
+      auto& virt_scopes = name_map[proto];
       // the signature in derived does not exists in base
       if (!is_base_sig(name, proto)) {
         TRACE(VIRT,
@@ -370,16 +371,19 @@ void merge(const BaseSigs& base_sigs,
               SHOW(name),
               SHOW(proto));
         // not a known signature in original base, copy over
-        for (const auto& scope : derived_scopes_it.second) {
-          TRACE(VIRT,
-                4,
-                "- copy %s (%s:%s): (%ld) %s",
-                SHOW(scope.type),
-                SHOW(name),
-                SHOW(proto),
-                scope.methods.size(),
-                SHOW(scope.methods[0].first));
-          virt_scopes.push_back(scope);
+        const auto& scopes = derived_scopes_it.second;
+        virt_scopes.insert(virt_scopes.end(), scopes.begin(), scopes.end());
+        if (traceEnabled(VIRT, 4)) {
+          for (const auto& scope : scopes) {
+            TRACE(VIRT,
+                  4,
+                  "- copy %s (%s:%s): (%ld) %s",
+                  SHOW(scope.type),
+                  SHOW(name),
+                  SHOW(proto),
+                  scope.methods.size(),
+                  SHOW(scope.methods[0].first));
+          }
         }
         continue;
       }
