@@ -73,12 +73,12 @@ class ConcurrentContainersTest : public ::testing::Test {
 
   void run_on_samples(
       const std::function<void(const std::vector<uint32_t>&)>& operation) {
-    run_on_samples(m_samples, std::move(operation));
+    run_on_samples(m_samples, operation);
   }
 
   void run_on_subset_samples(
       const std::function<void(const std::vector<uint32_t>&)>& operation) {
-    run_on_samples(m_subset_samples, std::move(operation));
+    run_on_samples(m_subset_samples, operation);
   }
 
   std::random_device m_rd_device;

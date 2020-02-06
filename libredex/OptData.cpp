@@ -327,7 +327,7 @@ void OptDataMapper::serialize_messages_helper(
     const auto& message = reason_msg_pair.second;
     Json::Value msg_pair;
     msg_pair["reason_code"] = reason;
-    msg_pair["message"] = std::move(message);
+    msg_pair["message"] = message;
     arr->append(msg_pair);
   }
 }

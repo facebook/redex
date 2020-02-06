@@ -803,8 +803,7 @@ static bool process_jar(const char* location,
   if (!find_central_directory(mapping, size, pce)) return false;
   if (!validate_pce(pce, size)) return false;
   if (!get_jar_entries(mapping, pce, files)) return false;
-  if (!process_jar_entries(location, files, mapping, classes,
-                           std::move(attr_hook))) {
+  if (!process_jar_entries(location, files, mapping, classes, attr_hook)) {
     return false;
   }
   return true;
@@ -822,8 +821,7 @@ bool load_jar_file(const char* location,
   }
 
   auto mapping = reinterpret_cast<const uint8_t*>(file.const_data());
-  if (!process_jar(location, mapping, file.size(), classes,
-                   std::move(attr_hook))) {
+  if (!process_jar(location, mapping, file.size(), classes, attr_hook)) {
     fprintf(stderr, "error: cannot process jar: %s\n", location);
     return false;
   }

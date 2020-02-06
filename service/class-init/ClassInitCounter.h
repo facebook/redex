@@ -302,8 +302,12 @@ typedef std::
 // to lose track of it for analysis of all potential uses
 class RegisterSet {
  public:
-  RegisterSet(RegisterSet const&);
   RegisterSet() {}
+  RegisterSet(RegisterSet const&);
+  RegisterSet(RegisterSet&&) noexcept = default;
+
+  RegisterSet& operator=(const RegisterSet&) = default;
+  RegisterSet& operator=(RegisterSet&&) = default;
 
   // Place Tracked value into register i, remember use
   void insert(reg_t i, std::shared_ptr<TrackedUses> uses) {

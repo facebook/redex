@@ -32,7 +32,7 @@ bool operator==(const FieldSet& a, const FieldSet& b) {
 }
 
 inline bool operator!=(const FieldSet& a, const FieldSet& b) {
-  return !(std::move(a) == std::move(b));
+  return !(a == b);
 }
 
 inline bool operator==(const MethodCall& a, const MethodCall& b) {
@@ -51,7 +51,7 @@ inline bool operator==(const MethodCall& a, const MethodCall& b) {
 }
 
 inline bool operator!=(const MethodCall& a, const MethodCall& b) {
-  return !(std::move(a) == std::move(b));
+  return !(a == b);
 }
 
 std::string show(FlowStatus f) {

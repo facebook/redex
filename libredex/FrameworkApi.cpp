@@ -87,8 +87,8 @@ void AndroidSDK::load_framework_classes() {
 
       always_assert(tag == "M");
       DexMethodRef* mref = DexMethod::make_method(method_str);
-      MRefInfo mref_info(mref, DexAccessFlags(m_access_flags));
-      framework_api.mrefs_info.push_back(std::move(mref_info));
+      framework_api.mrefs_info.emplace_back(mref,
+                                            DexAccessFlags(m_access_flags));
     }
 
     while (num_fields-- > 0) {
@@ -100,8 +100,8 @@ void AndroidSDK::load_framework_classes() {
 
       always_assert(tag == "F");
       DexFieldRef* fref = DexField::make_field(field_str);
-      FRefInfo fref_info(fref, DexAccessFlags(f_access_flags));
-      framework_api.frefs_info.push_back(std::move(fref_info));
+      framework_api.frefs_info.emplace_back(fref,
+                                            DexAccessFlags(f_access_flags));
     }
 
     auto& map_entry = m_framework_classes[framework_api.cls];

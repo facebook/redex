@@ -494,7 +494,7 @@ AliasedRegisters::all_groups() {
   const auto& end = iters.second;
   for (auto it = begin; it != end; ++it) {
     if (visited.count(*it) == 0) {
-      const auto& group = vertices_in_group(*it);
+      auto group = vertices_in_group(*it);
       for (vertex_t v : group) {
         visited.insert(v);
       }
