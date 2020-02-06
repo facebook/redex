@@ -82,7 +82,7 @@ struct TrackedValueHasher {
   }
 };
 
-bool operator==(const TrackedValue& a, const TrackedValue b) {
+bool operator==(const TrackedValue& a, const TrackedValue& b) {
   if (a.kind != b.kind) {
     return false;
   }
@@ -192,7 +192,7 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
       TrackedDomainEnvironment* current_state) const override {
 
     const auto set_current_state_at = [&](reg_t reg, bool wide,
-                                          TrackedDomain value) {
+                                          const TrackedDomain& value) {
       current_state->set(reg, value);
       if (wide) {
         current_state->set(reg + 1, TrackedDomain::top());

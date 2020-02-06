@@ -7,12 +7,14 @@
 
 #include "AnnoUtils.h"
 
+#include <utility>
+
 namespace {
 
 const DexEncodedValue* parse_anno_value_helper(const DexAnnotationSet* anno_set,
                                                const DexType* target_anno,
                                                DexEncodedValueTypes type,
-                                               std::string elem_str) {
+                                               const std::string& elem_str) {
   auto& annos = anno_set->get_annotations();
   for (auto& anno : annos) {
     if (anno->type() != target_anno) {
@@ -142,28 +144,30 @@ const DexEncodedValue* parse_default_anno_value(
 bool parse_bool_anno_value(const DexMethod* method,
                            const DexType* target_anno,
                            std::string name) {
-  auto val = parse_anno_value(method, target_anno, DEVT_BOOLEAN, name);
+  auto val =
+      parse_anno_value(method, target_anno, DEVT_BOOLEAN, std::move(name));
   return static_cast<bool>(val);
 }
 
 uint32_t parse_int_anno_value(const DexMethod* method,
                               const DexType* target_anno,
                               std::string name) {
-  auto val = parse_anno_value(method, target_anno, DEVT_INT, name);
+  auto val = parse_anno_value(method, target_anno, DEVT_INT, std::move(name));
   return static_cast<uint32_t>(val);
 }
 
 uint32_t parse_int_anno_value(const DexClass* cls,
                               const DexType* target_anno,
                               std::string name) {
-  auto val = parse_anno_value(cls, target_anno, DEVT_INT, name);
+  auto val = parse_anno_value(cls, target_anno, DEVT_INT, std::move(name));
   return static_cast<uint32_t>(val);
 }
 
 std::string parse_str_anno_value(const DexMethod* method,
                                  const DexType* target_anno,
                                  std::string name) {
-  return parse_str_anno_value(method, target_anno, DEVT_STRING, name);
+  return parse_str_anno_value(method, target_anno, DEVT_STRING,
+                              std::move(name));
 }
 
 DexAnnotationSet* create_anno_set(

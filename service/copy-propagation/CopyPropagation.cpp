@@ -272,8 +272,8 @@ class AliasFixpointIterator final
   // ALL destinations must be returned by this method (unlike get_src_value) if
   // we miss a destination register, we'll fail to clobber it and think we know
   // that a register holds a stale value.
-  RegisterPair get_dest_reg(ir_list::InstructionIterator it,
-                            ir_list::InstructionIterator end) const {
+  RegisterPair get_dest_reg(const ir_list::InstructionIterator& it,
+                            const ir_list::InstructionIterator& end) const {
     IRInstruction* insn = it->insn;
     RegisterPair dest;
 

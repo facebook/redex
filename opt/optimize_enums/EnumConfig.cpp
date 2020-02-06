@@ -6,8 +6,10 @@
  */
 
 #include "EnumConfig.h"
+
 #include "LocalPointersAnalysis.h"
 #include "Walkers.h"
+#include <utility>
 
 namespace ptrs = local_pointers;
 
@@ -20,7 +22,9 @@ struct ExternalMethodData {
   ExternalMethodData(std::string name,
                      boost::optional<reg_t> returned,
                      std::initializer_list<reg_t> params)
-      : method_name(name), returned_param(returned), safe_params(params) {}
+      : method_name(std::move(name)),
+        returned_param(returned),
+        safe_params(params) {}
 };
 /**
  * Hardcode some empirical summaries for some external methods.

@@ -55,8 +55,8 @@ TEST_F(LoopInfoTest, visit_depth_first) {
 
   std::ostringstream s;
   for (auto& comp : wto) {
-    loop_impl::visit_depth_first<std::string>(comp,
-                                              [&s](std::string v) { s << v; });
+    loop_impl::visit_depth_first<std::string>(
+        comp, [&s](const std::string& v) { s << v; });
     s << std::endl;
   }
 

@@ -69,7 +69,7 @@ DexMethod* materialized_dispatch(DexType* owner, MethodCreator* mc) {
  * 0011: return v0
  */
 DexMethod* generate_dispatch(const DexType* base_type,
-                             const std::vector<DexMethod*> targets,
+                             const std::vector<DexMethod*>& targets,
                              const DexMethod* intf_method,
                              const bool keep_debug_info,
                              DexType* dispatch_anno) {

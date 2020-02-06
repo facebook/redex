@@ -57,6 +57,8 @@
 
 #include "CommonSubexpressionElimination.h"
 
+#include <utility>
+
 #include "BaseIRAnalyzer.h"
 #include "ConstantAbstractDomain.h"
 #include "ControlFlow.h"
@@ -184,12 +186,12 @@ class CseEnvironment final
   }
 
   CseEnvironment& mutate_def_env(std::function<void(DefEnvironment*)> f) {
-    apply<0>(f);
+    apply<0>(std::move(f));
     return *this;
   }
 
   CseEnvironment& mutate_ref_env(std::function<void(RefEnvironment*)> f) {
-    apply<1>(f);
+    apply<1>(std::move(f));
     return *this;
   }
 };

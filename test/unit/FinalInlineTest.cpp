@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <unordered_map>
+#include <utility>
 
 #include "Creators.h"
 #include "DexAnnotation.h"
@@ -133,7 +134,7 @@ DexField* add_concrete_field(DexClass* cls,
   auto field_name = DexString::make_string(name);
   auto field =
       static_cast<DexField*>(DexField::make_field(container, field_name, type));
-  auto ev = make_ev(type, val);
+  auto ev = make_ev(type, std::move(val));
   field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
   cls->add_field(field);
   return field;

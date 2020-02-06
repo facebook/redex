@@ -1025,7 +1025,7 @@ void redex_backend(const std::string& output_dir,
   }
 }
 
-void dump_class_method_info_map(const std::string file_path,
+void dump_class_method_info_map(const std::string& file_path,
                                 DexStoresVector& stores) {
   std::ofstream ofs(file_path, std::ofstream::out | std::ofstream::trunc);
 

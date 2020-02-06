@@ -40,7 +40,7 @@ InstructionIterator nth_insn(ControlFlowGraph& cfg, size_t nth) {
 ///     as an s-expression.
 /// \p expected The expected state of the IR after the mutation has been
 ///     applied, as an s-expression.
-void EXPECT_MUTATION(std::function<void(ControlFlowGraph&)> m,
+void EXPECT_MUTATION(const std::function<void(ControlFlowGraph&)>& m,
                      const char* actual,
                      const char* expected) {
   auto actual_ir = assembler::ircode_from_string(actual);

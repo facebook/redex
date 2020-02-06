@@ -35,11 +35,11 @@ class FinalInlinePassV2 : public Pass {
          "field read in methods invoked by <init>");
   }
 
-  static size_t run(const Scope&, Config config = Config());
+  static size_t run(const Scope&, const Config& config = Config());
   static size_t run_inline_ifields(
       const Scope&,
       const constant_propagation::EligibleIfields& eligible_ifields,
-      Config config = Config());
+      const Config& config = Config());
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
  private:

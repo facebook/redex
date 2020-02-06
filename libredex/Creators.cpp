@@ -33,7 +33,8 @@ DexProto* make_static_sig(DexMethod* meth) {
 
 } // namespace
 
-MethodBlock::MethodBlock(IRList::iterator iterator, MethodCreator* creator)
+MethodBlock::MethodBlock(const IRList::iterator& iterator,
+                         MethodCreator* creator)
     : mc(creator), curr(iterator) {
   mc->blocks.push_back(this);
 }
@@ -531,7 +532,7 @@ void MethodBlock::push_instruction(IRInstruction* insn) {
   curr = mc->push_instruction(curr, insn);
 }
 
-IRList::iterator MethodCreator::push_instruction(IRList::iterator curr,
+IRList::iterator MethodCreator::push_instruction(const IRList::iterator& curr,
                                                  IRInstruction* insn) {
   if (curr == meth_code->end()) {
     meth_code->push_back(insn);

@@ -22,7 +22,7 @@ std::string find_or_same(
   return it->second;
 }
 
-std::string convert_scalar_type(std::string type) {
+std::string convert_scalar_type(const std::string& type) {
   static const std::unordered_map<std::string, std::string> prim_map = {
       {"void", "V"},  {"boolean", "Z"}, {"byte", "B"},
       {"short", "S"}, {"char", "C"},    {"int", "I"},

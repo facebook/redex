@@ -45,9 +45,9 @@ class JsonWrapper {
       const std::unordered_map<std::string, std::vector<std::string>>& dflt,
       std::unordered_map<std::string, std::vector<std::string>>& param) const;
 
-  void get(const char* name, const Json::Value dflt, Json::Value& param) const;
+  void get(const char* name, const Json::Value& dflt, Json::Value& param) const;
 
-  const Json::Value get(const char* name, const Json::Value dflt) const;
+  const Json::Value get(const char* name, const Json::Value& dflt) const;
 
   const Json::Value& operator[](const char* name) const;
 

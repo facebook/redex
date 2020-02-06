@@ -134,7 +134,8 @@ std::unordered_map<int, DexMethod*> find_and_verify_analysis_method(
 
 // Find if the current insertion point lies within a try_start - try_end block.
 // If it does, return its corresponding catch block.
-MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
+MethodItemEntry* find_try_block(IRCode* code,
+                                const IRList::iterator& insert_point) {
   for (auto mie_try = insert_point; mie_try != code->begin(); --mie_try) {
     if (mie_try->type == MFLOW_TRY && mie_try->tentry->type == TRY_END) {
       return nullptr;
@@ -147,7 +148,7 @@ MethodItemEntry* find_try_block(IRCode* code, IRList::iterator insert_point) {
 }
 
 void insert_try_start_instr(IRCode* code,
-                            IRList::iterator insert_point,
+                            const IRList::iterator& insert_point,
                             MethodItemEntry* catch_block) {
   if (catch_block) {
     auto try_start = new MethodItemEntry(TRY_START, catch_block);
@@ -156,7 +157,7 @@ void insert_try_start_instr(IRCode* code,
 }
 
 void insert_try_end_instr(IRCode* code,
-                          IRList::iterator insert_point,
+                          const IRList::iterator& insert_point,
                           MethodItemEntry* catch_block) {
   if (catch_block) {
     auto try_end = new MethodItemEntry(TRY_END, catch_block);
@@ -165,7 +166,7 @@ void insert_try_end_instr(IRCode* code,
 }
 
 void insert_invoke_instr(IRCode* code,
-                         IRList::iterator insert_point,
+                         const IRList::iterator& insert_point,
                          IRInstruction* method_id_inst,
                          IRInstruction* invoke_inst) {
   // When inserting an INVOKE instruction within a try_catch block, in
@@ -224,7 +225,7 @@ void insert_invoke_static_array_arg(IRCode* code,
                                     size_t method_id,
                                     DexMethod* method_onMethodExit,
                                     const std::vector<reg_t>& reg_bb_vector,
-                                    IRList::iterator insert_point) {
+                                    const IRList::iterator& insert_point) {
   // If num_vectors >5, create array of all bit vectors. Add as argument to
   // invoke call.
   size_t num_vectors = reg_bb_vector.size();

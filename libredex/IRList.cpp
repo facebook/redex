@@ -328,7 +328,7 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
 }
 
 void IRList::replace_opcode(IRInstruction* to_delete,
-                            std::vector<IRInstruction*> replacements) {
+                            const std::vector<IRInstruction*>& replacements) {
   auto it = m_list.begin();
   for (; it != m_list.end(); it++) {
     if (it->type == MFLOW_OPCODE && it->insn == to_delete) {
@@ -664,7 +664,7 @@ IRList::iterator IRList::main_block() {
   return std::prev(get_param_instructions().end());
 }
 
-IRList::iterator IRList::make_if_block(IRList::iterator cur,
+IRList::iterator IRList::make_if_block(const IRList::iterator& cur,
                                        IRInstruction* insn,
                                        IRList::iterator* false_block) {
   auto if_entry = new MethodItemEntry(insn);
@@ -674,7 +674,7 @@ IRList::iterator IRList::make_if_block(IRList::iterator cur,
   return m_list.insert(m_list.end(), *bentry);
 }
 
-IRList::iterator IRList::make_if_else_block(IRList::iterator cur,
+IRList::iterator IRList::make_if_else_block(const IRList::iterator& cur,
                                             IRInstruction* insn,
                                             IRList::iterator* false_block,
                                             IRList::iterator* true_block) {
@@ -700,7 +700,7 @@ IRList::iterator IRList::make_if_else_block(IRList::iterator cur,
 }
 
 IRList::iterator IRList::make_switch_block(
-    IRList::iterator cur,
+    const IRList::iterator& cur,
     IRInstruction* insn,
     IRList::iterator* default_block,
     std::map<SwitchIndices, IRList::iterator>& cases) {

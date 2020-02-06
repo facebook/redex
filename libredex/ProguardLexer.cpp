@@ -30,7 +30,7 @@ bool is_identifier_character(char ch) {
          ch == '!' || ch == '?' || ch == '%';
 }
 
-bool is_identifier(string ident) {
+bool is_identifier(const string& ident) {
   for (const char& ch : ident) {
     if (!is_identifier_character(ch)) {
       return false;

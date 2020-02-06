@@ -53,13 +53,17 @@ void inline_tail_call(DexMethod* caller,
  * Inline `callee` into `caller` at `pos` but not check if the caller method has
  * the permit to call the inlined code.
  */
-void inline_method_unsafe(IRCode* caller, IRCode* callee, IRList::iterator pos);
+void inline_method_unsafe(IRCode* caller,
+                          IRCode* callee,
+                          const IRList::iterator& pos);
 
 /**
  * Inline `callee` into `caller` at `pos` and try to change the visibility of
  * accessed members. See comment of `change_visibility` for details.
  */
-void inline_method(DexMethod* caller, IRCode* callee, IRList::iterator pos);
+void inline_method(DexMethod* caller,
+                   IRCode* callee,
+                   const IRList::iterator& pos);
 
 /*
  * Use the editable CFG instead of IRCode to do the inlining. Return true on
@@ -391,7 +395,7 @@ class MultiMethodInliner {
    * Execute asynchronously using a method's priority.
    */
   void async_prioritized_method_execute(DexMethod* method,
-                                        std::function<void()> f);
+                                        const std::function<void()>& f);
 
   size_t get_same_method_implementations(const DexMethod* callee);
 

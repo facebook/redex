@@ -31,7 +31,7 @@ class RemoveUnreachablePass : public Pass {
   void run_pass(DexStoresVector&, ConfigFiles&, PassManager&) override;
 
   void write_out_removed_symbols(
-      const std::string filepath,
+      const std::string& filepath,
       const ConcurrentSet<std::string>& removed_symbols);
 
  private:

@@ -72,7 +72,7 @@ DexMethod* make_a_method(DexClass* cls, const char* name, int val) {
  */
 DexMethod* make_a_method_calls_others(DexClass* cls,
                                       const char* name,
-                                      std::vector<DexMethod*> methods) {
+                                      const std::vector<DexMethod*>& methods) {
   auto proto =
       DexProto::make_proto(type::_void(), DexTypeList::make_type_list({}));
   auto ref = DexMethod::make_method(

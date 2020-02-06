@@ -124,7 +124,7 @@ bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
     bool ignore_methods_with_assumenosideeffects,
-    std::function<bool(DexMethod*)> handler_func);
+    const std::function<bool(DexMethod*)>& handler_func);
 
 // Given initial locations and dependencies for each method, compute the closure
 // (union) of all such locations over all the stated dependencies, taking into

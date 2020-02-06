@@ -128,13 +128,13 @@ void JsonWrapper::get(
 }
 
 void JsonWrapper::get(const char* name,
-                      const Json::Value dflt,
+                      const Json::Value& dflt,
                       Json::Value& param) const {
   param = m_config.get(name, dflt);
 }
 
 const Json::Value JsonWrapper::get(const char* name,
-                                   const Json::Value dflt) const {
+                                   const Json::Value& dflt) const {
   return m_config.get(name, dflt);
 }
 

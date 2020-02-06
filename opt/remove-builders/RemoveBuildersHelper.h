@@ -108,10 +108,11 @@ class BuilderTransform {
         scope, stores, no_default_inlinables, resolver, m_inliner_config));
   }
 
-  bool inline_methods(DexMethod* method,
-                      DexType* type,
-                      std::function<std::vector<DexMethod*>(IRCode*, DexType*)>
-                          get_methods_to_inline);
+  bool inline_methods(
+      DexMethod* method,
+      DexType* type,
+      const std::function<std::vector<DexMethod*>(IRCode*, DexType*)>&
+          get_methods_to_inline);
 
  private:
   std::unique_ptr<MultiMethodInliner> m_inliner;

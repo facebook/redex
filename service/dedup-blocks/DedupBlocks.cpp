@@ -949,7 +949,7 @@ class DedupBlocksImpl {
     return result;
   }
 
-  static void print_dups(Duplicates dups) {
+  static void print_dups(const Duplicates& dups) {
     TRACE(DEDUP_BLOCKS, 4, "duplicate blocks set: {");
     for (const auto& entry : dups) {
       TRACE(DEDUP_BLOCKS, 4, "  hash = %lu", BlockHasher{}(entry.first));

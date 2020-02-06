@@ -60,16 +60,17 @@ class Transform final {
 
   void simplify_instruction(const ConstantEnvironment&,
                             const WholeProgramState& wps,
-                            IRList::iterator);
+                            const IRList::iterator&);
 
-  void replace_with_const(const ConstantEnvironment&, IRList::iterator);
-  void generate_const_param(const ConstantEnvironment&, IRList::iterator);
+  void replace_with_const(const ConstantEnvironment&, const IRList::iterator&);
+  void generate_const_param(const ConstantEnvironment&,
+                            const IRList::iterator&);
 
   bool eliminate_redundant_put(const ConstantEnvironment&,
                                const WholeProgramState& wps,
-                               IRList::iterator);
+                               const IRList::iterator&);
   bool replace_with_throw(const ConstantEnvironment&,
-                          IRList::iterator,
+                          const IRList::iterator&,
                           IRCode* code,
                           boost::optional<int32_t>* temp_reg);
 

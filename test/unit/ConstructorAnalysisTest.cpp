@@ -42,7 +42,7 @@ DexMethod* create_an_init_method(
     DexClass* cls,
     DexMethodRef* init_to_call,
     size_t num_param_types,
-    std::vector<DexField*> fields_to_assign_null = {},
+    const std::vector<DexField*>& fields_to_assign_null = {},
     bool before_init_call = false,
     bool spurious_init_call = false) {
   std::deque<DexType*> param_types;

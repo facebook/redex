@@ -47,9 +47,9 @@ class SwitchEquivFinder final {
 
  private:
   std::vector<cfg::Edge*> find_leaves();
-  void normalize_extra_loads(std::unordered_set<cfg::Block*> non_leaves);
+  void normalize_extra_loads(const std::unordered_set<cfg::Block*>& non_leaves);
   bool move_edges(
-      const std::vector<std::pair<cfg::Edge*, cfg::Block*>> edges_to_move);
+      const std::vector<std::pair<cfg::Edge*, cfg::Block*>>& edges_to_move);
   void find_case_keys(const std::vector<cfg::Edge*>& leaves);
 
   cfg::ControlFlowGraph* m_cfg;

@@ -134,7 +134,7 @@ void Graph::remove_node(reg_t u) {
   u_node.m_props.reset(Node::ACTIVE);
 }
 
-size_t dest_bit_width(IRList::iterator it) {
+size_t dest_bit_width(const IRList::iterator& it) {
   auto insn = it->insn;
   auto op = insn->opcode();
   if (opcode::is_move_result_pseudo(op)) {
@@ -183,7 +183,7 @@ vreg_t max_value_for_src(const IRInstruction* insn,
   return max_value;
 }
 
-void GraphBuilder::update_node_constraints(IRList::iterator it,
+void GraphBuilder::update_node_constraints(const IRList::iterator& it,
                                            const RangeSet& range_set,
                                            Graph* graph) {
   auto insn = it->insn;

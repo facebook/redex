@@ -56,10 +56,11 @@ static IROpcode opcode_for_interval(const sign_domain::Interval intv) {
  *
  * Returns an iterator to the if-* opcode.
  */
-static IRList::iterator insert_if_opcode_check(IRCode* code,
-                                               IRList::iterator it,
-                                               reg_t reg_to_check,
-                                               SignedConstantDomain scd) {
+static IRList::iterator insert_if_opcode_check(
+    IRCode* code,
+    IRList::iterator it,
+    reg_t reg_to_check,
+    const SignedConstantDomain& scd) {
   always_assert(!scd.is_top() && !scd.is_bottom());
   const auto& cst = scd.get_constant();
   if (cst) {

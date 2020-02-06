@@ -420,7 +420,7 @@ std::unique_ptr<DexPosition> position_from_s_expr(
  */
 void handle_labels(IRCode* code,
                    const LabelDefs& label_defs,
-                   const LabelRefs label_refs) {
+                   const LabelRefs& label_refs) {
   for (auto& mie : InstructionIterable(code)) {
     auto* insn = mie.insn;
     if (label_refs.count(insn)) {

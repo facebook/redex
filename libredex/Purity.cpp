@@ -342,7 +342,7 @@ bool process_base_and_overriding_methods(
     const method_override_graph::Graph* method_override_graph,
     const DexMethod* method,
     bool ignore_methods_with_assumenosideeffects,
-    std::function<bool(DexMethod*)> handler_func) {
+    const std::function<bool(DexMethod*)>& handler_func) {
   auto action = get_base_or_overriding_method_action(
       method, ignore_methods_with_assumenosideeffects);
   if (action == MethodOverrideAction::UNKNOWN ||
@@ -584,7 +584,7 @@ static size_t analyze_read_locations(
 
         bool unknown = false;
         editable_cfg_adapter::iterate_with_iterator(
-            method->get_code(), [&](IRList::iterator it) {
+            method->get_code(), [&](const IRList::iterator& it) {
               auto insn = it->insn;
               auto opcode = insn->opcode();
               switch (opcode) {

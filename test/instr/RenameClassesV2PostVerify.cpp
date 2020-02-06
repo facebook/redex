@@ -18,7 +18,7 @@
 #include "VerifyUtil.h"
 #include "androidfw/ResourceTypes.h"
 
-void verify_layout(std::string filename) {
+void verify_layout(const std::string& filename) {
   std::unordered_set<std::string> classes;
   std::unordered_set<std::string> unused_attrs;
   std::unordered_multimap<std::string, std::string> unused_attr_values;

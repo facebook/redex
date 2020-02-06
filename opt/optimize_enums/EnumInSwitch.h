@@ -95,7 +95,7 @@ class Iterator final
   std::vector<Info> collect() const;
 
  private:
-  void analyze_insn(cfg::InstructionIterator it, Environment* env) const;
+  void analyze_insn(const cfg::InstructionIterator& it, Environment* env) const;
   cfg::ControlFlowGraph* m_cfg;
 };
 

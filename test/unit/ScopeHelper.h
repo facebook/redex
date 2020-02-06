@@ -23,7 +23,7 @@ Scope create_empty_scope();
  */
 DexClass* create_class(DexType* type,
                        DexType* super,
-                       std::vector<DexType*> interfaces,
+                       const std::vector<DexType*>& interfaces,
                        DexAccessFlags access,
                        bool external = false);
 /**
@@ -32,7 +32,7 @@ DexClass* create_class(DexType* type,
  */
 DexClass* create_internal_class(DexType* type,
                                 DexType* super,
-                                std::vector<DexType*> interfaces,
+                                const std::vector<DexType*>& interfaces,
                                 DexAccessFlags access = ACC_PUBLIC);
 
 /**
@@ -42,7 +42,7 @@ DexClass* create_internal_class(DexType* type,
  */
 DexClass* create_external_class(DexType* type,
                                 DexType* super,
-                                std::vector<DexType*> interfaces,
+                                const std::vector<DexType*>& interfaces,
                                 DexAccessFlags access = ACC_PUBLIC);
 
 /**

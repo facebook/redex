@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <utility>
 #include <vector>
 
 #include "BaseIRAnalyzer.h"
@@ -68,7 +69,7 @@ class ConstructorAnalysisEnvironment final
 
   ConstructorAnalysisEnvironment& mutate_params(
       std::function<void(ParamDomainEnvironment*)> f) {
-    apply<0>(f);
+    apply<0>(std::move(f));
     return *this;
   }
 

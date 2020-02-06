@@ -34,7 +34,7 @@ DexField* make_field_def(DexType* cls,
 
 DexClass* create_class(DexType* type,
                        DexType* super,
-                       std::vector<DexField*> fields,
+                       const std::vector<DexField*>& fields,
                        DexAccessFlags access = ACC_PUBLIC,
                        bool external = false) {
   ClassCreator creator(type);

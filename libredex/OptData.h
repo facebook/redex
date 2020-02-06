@@ -212,7 +212,7 @@ class OptDataMapper {
    * For the table 'classes', append class info to arr. Append cls opt info to
    * opt/nopt arrs.
    */
-  void serialize_class(std::shared_ptr<ClassOptData> cls_opt_data,
+  void serialize_class(const std::shared_ptr<ClassOptData>& cls_opt_data,
                        size_t cls_id,
                        Json::Value* arr,
                        Json::Value* opt_arr,
@@ -222,7 +222,7 @@ class OptDataMapper {
    * For the table 'methods', append method info to arr. Append meth opt info to
    * opt/nopt arrs.
    */
-  void serialize_method(std::shared_ptr<MethodOptData> meth_opt_data,
+  void serialize_method(const std::shared_ptr<MethodOptData>& meth_opt_data,
                         size_t cls_id,
                         size_t meth_id,
                         Json::Value* arr,
@@ -233,7 +233,7 @@ class OptDataMapper {
    * For the table 'instructions', append instruction info to arr. Append insn
    * opt info to opt/nopt arrs.
    */
-  void serialize_insn(std::shared_ptr<InsnOptData> insn_opt_data,
+  void serialize_insn(const std::shared_ptr<InsnOptData>& insn_opt_data,
                       size_t meth_id,
                       size_t insn_id,
                       Json::Value* arr,

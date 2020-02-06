@@ -15,7 +15,7 @@ namespace proguard_parser {
 
 // Convert a ProGuard member regex to a boost::regex
 // Example: "alpha*beta?gamma" -> "alpha.*beta.gamma"
-std::string form_member_regex(std::string proguard_regex) {
+std::string form_member_regex(const std::string& proguard_regex) {
   // An empty string matches against any member name.
   if (proguard_regex.empty()) {
     return ".*";
@@ -158,7 +158,7 @@ bool has_special_char(const std::string& proguard_regex) {
 
 // Convert a ProGuard Java type type which may use wildcards to
 // an internal JVM type descriptor with the wildcards preserved.
-std::string convert_wildcard_type(std::string typ) {
+std::string convert_wildcard_type(const std::string& typ) {
   redex_assert(!typ.empty());
   const std::string& desc = convert_type(typ);
   // Fix up the descriptor to move Ls that occur before wildcards.

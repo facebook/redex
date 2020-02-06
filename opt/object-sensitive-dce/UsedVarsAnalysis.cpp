@@ -7,6 +7,8 @@
 
 #include "UsedVarsAnalysis.h"
 
+#include <utility>
+
 #include "ReachableClasses.h"
 
 namespace ptrs = local_pointers;
@@ -44,7 +46,7 @@ FixpointIterator::FixpointIterator(
     const cfg::ControlFlowGraph& cfg)
     : BaseBackwardsIRAnalyzer<UsedVarsSet>(cfg),
       m_insn_env_map(gen_instruction_environment_map(cfg, pointers_fp_iter)),
-      m_invoke_to_summary_map(invoke_to_summary_map) {}
+      m_invoke_to_summary_map(std::move(invoke_to_summary_map)) {}
 
 void FixpointIterator::analyze_instruction(IRInstruction* insn,
                                            UsedVarsSet* used_vars) const {

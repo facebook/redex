@@ -472,7 +472,8 @@ TEST_F(ControlFlowTest, remove_non_branch) {
   EXPECT_CODE_EQ(expected_code.get(), code.get());
 }
 
-void delete_if(ControlFlowGraph& cfg, std::function<bool(IROpcode)> predicate) {
+void delete_if(ControlFlowGraph& cfg,
+               const std::function<bool(IROpcode)>& predicate) {
   auto iterable = cfg::InstructionIterable(cfg);
   std::vector<cfg::InstructionIterator> to_delete;
   for (auto it = iterable.begin(); it != iterable.end(); ++it) {

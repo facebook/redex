@@ -19,7 +19,8 @@ constexpr unsigned int NUM_INTS = 1000;
 //==========
 
 TEST(WorkQueueTest, EmptyQueue) {
-  auto wq = workqueue_foreach<std::string>([](std::string a) { return 0; });
+  auto wq =
+      workqueue_foreach<std::string>([](const std::string& a) { return 0; });
   wq.run_all();
 }
 

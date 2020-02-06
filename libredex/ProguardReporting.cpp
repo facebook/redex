@@ -58,7 +58,7 @@ std::string type_descriptor_to_java(const std::string& descriptor) {
   exit(2);
 }
 
-std::string extract_member_name(std::string qualified) {
+std::string extract_member_name(const std::string& qualified) {
   auto dot = qualified.find('.');
   auto colon = qualified.find(':');
   return qualified.substr(dot + 1, colon - dot - 1);

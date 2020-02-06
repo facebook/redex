@@ -51,7 +51,7 @@ class ModelMerger {
   MergerFields m_merger_fields;
 
   void update_merger_fields(const MergerType& merger);
-  void update_stats(const std::string name,
+  void update_stats(const std::string& name,
                     const std::vector<const MergerType*>& mergers,
                     ModelMethodMerger& mm);
 };

@@ -16,7 +16,8 @@ namespace {
 
 constexpr uint64_t MAX_NUM_CONST_VALUE = 10;
 
-std::vector<IRInstruction*> make_string_const(reg_t dest, std::string val) {
+std::vector<IRInstruction*> make_string_const(reg_t dest,
+                                              const std::string& val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -31,8 +32,8 @@ std::vector<IRInstruction*> make_string_const(reg_t dest, std::string val) {
 } // namespace
 
 ConstantValue::ConstantValue(const TypeTags* type_tags,
-                             const std::string kind_str,
-                             const std::string val_str,
+                             const std::string& kind_str,
+                             const std::string& val_str,
                              reg_t param_reg)
     : m_param_reg(param_reg) {
   if (kind_str == "I") {
@@ -116,8 +117,8 @@ std::vector<IRInstruction*> ConstantValue::make_load_const(reg_t const_reg) {
 }
 
 ConstantValues::ConstantValues(const TypeTags* type_tags,
-                               const std::string kinds_str,
-                               const std::string vals_str,
+                               const std::string& kinds_str,
+                               const std::string& vals_str,
                                const size_t stud_method_threshold,
                                IRCode* code)
     : m_stub_method_threshold(stud_method_threshold) {

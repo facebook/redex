@@ -7,6 +7,7 @@
 
 #include "ClassInitCounter.h"
 
+#include <utility>
 #include <vector>
 
 #include "BaseIRAnalyzer.h"
@@ -15,7 +16,7 @@
 
 using namespace cic;
 
-bool operator==(FieldSet a, FieldSet b) {
+bool operator==(const FieldSet& a, const FieldSet& b) {
   if (a.set != b.set || a.source != b.source) {
     return false;
   }
@@ -30,9 +31,11 @@ bool operator==(FieldSet a, FieldSet b) {
   return a_instrs == b_instrs;
 }
 
-inline bool operator!=(FieldSet a, FieldSet b) { return !(a == b); }
+inline bool operator!=(const FieldSet& a, const FieldSet& b) {
+  return !(std::move(a) == std::move(b));
+}
 
-inline bool operator==(MethodCall a, MethodCall b) {
+inline bool operator==(const MethodCall& a, const MethodCall& b) {
   if (a.call != b.call) {
     return false;
   }
@@ -47,7 +50,9 @@ inline bool operator==(MethodCall a, MethodCall b) {
   return a_instrs == b_instrs;
 }
 
-inline bool operator!=(MethodCall a, MethodCall b) { return !(a == b); }
+inline bool operator!=(const MethodCall& a, const MethodCall& b) {
+  return !(std::move(a) == std::move(b));
+}
 
 std::string show(FlowStatus f) {
   switch (f) {
@@ -162,7 +167,7 @@ std::string show(const InitLocation& init) {
   return out.str();
 }
 
-bool field_subset_eq(FieldSetMap base, FieldSetMap other) {
+bool field_subset_eq(const FieldSetMap& base, FieldSetMap other) {
   for (const auto& field : base) {
     auto other_field = other.find(field.first);
     if (other_field == other.end()) {
@@ -175,7 +180,7 @@ bool field_subset_eq(FieldSetMap base, FieldSetMap other) {
   return true;
 }
 
-bool calls_subset_eq(CallMap base, CallMap other) {
+bool calls_subset_eq(const CallMap& base, CallMap other) {
   for (const auto& call : base) {
     auto other_call = other.find(call.first);
     if (other_call == other.end()) {
@@ -231,7 +236,7 @@ bool FieldWriteRegs::consistent_with(const FieldWriteRegs& other) {
 }
 
 // Note: templating these causes many errors
-std::vector<DexFieldRef*> get_keys(FieldSetMap m) {
+std::vector<DexFieldRef*> get_keys(const FieldSetMap& m) {
   std::vector<DexFieldRef*> m_keys = {};
   for (const auto& f : m) {
     m_keys.emplace_back(f.first);
@@ -239,7 +244,7 @@ std::vector<DexFieldRef*> get_keys(FieldSetMap m) {
   return m_keys;
 }
 
-std::vector<DexFieldRef*> get_keys(FieldReadMap m) {
+std::vector<DexFieldRef*> get_keys(const FieldReadMap& m) {
   std::vector<DexFieldRef*> m_keys = {};
   for (auto f : m) {
     m_keys.emplace_back(f.first);
@@ -247,7 +252,7 @@ std::vector<DexFieldRef*> get_keys(FieldReadMap m) {
   return m_keys;
 }
 
-std::vector<DexMethodRef*> get_keys(CallMap m) {
+std::vector<DexMethodRef*> get_keys(const CallMap& m) {
   std::vector<DexMethodRef*> m_keys = {};
   for (const auto& f : m) {
     m_keys.emplace_back(f.first);
@@ -868,7 +873,8 @@ size_t MergedUses::hash() const {
   return result;
 }
 
-std::shared_ptr<TrackedUses> copy_helper(std::shared_ptr<TrackedUses> orig) {
+std::shared_ptr<TrackedUses> copy_helper(
+    const std::shared_ptr<TrackedUses>& orig) {
   if (orig->m_tracked_kind == Object) {
     return std::make_shared<ObjectUses>(static_cast<ObjectUses&>(*orig));
   }

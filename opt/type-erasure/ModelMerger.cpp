@@ -497,7 +497,7 @@ void ModelMerger::update_merger_fields(const MergerType& merger) {
   m_merger_fields[merger.type] = merger_fields;
 }
 
-void ModelMerger::update_stats(const std::string model_name,
+void ModelMerger::update_stats(const std::string& model_name,
                                const std::vector<const MergerType*>& mergers,
                                ModelMethodMerger& mm) {
   for (auto merger : mergers) {

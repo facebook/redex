@@ -192,7 +192,7 @@ struct Rebinder {
     rebind_method_opcode(is_support_lib, mop, mref, real_ref, rebinder_refs);
   }
 
-  bool is_excluded_external(std::string name) {
+  bool is_excluded_external(const std::string& name) {
     for (auto& excluded : m_excluded_externals) {
       if (boost::starts_with(name, excluded)) {
         return true;

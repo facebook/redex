@@ -7,6 +7,8 @@
 
 #include "Inliner.h"
 
+#include <utility>
+
 #include "ApiLevelChecker.h"
 #include "CFGInliner.h"
 #include "ConcurrentContainers.h"
@@ -91,7 +93,7 @@ MultiMethodInliner::MultiMethodInliner(
     const std::unordered_map<const DexMethod*, size_t>&
         same_method_implementations,
     bool analyze_and_prune_inits)
-    : resolver(resolve_fn),
+    : resolver(std::move(resolve_fn)),
       xstores(stores),
       m_scope(scope),
       m_config(config),
@@ -191,7 +193,7 @@ MultiMethodInliner::MultiMethodInliner(
  * The key of a constant-arguments data structure is a string representation
  * that approximates the constant arguments.
  */
-static std::string get_key(ConstantArguments constant_arguments) {
+static std::string get_key(const ConstantArguments& constant_arguments) {
   always_assert(!constant_arguments.is_bottom());
   if (constant_arguments.is_top()) {
     return "";
@@ -499,7 +501,7 @@ void MultiMethodInliner::inline_callees(
   // Build a callee to opcode map
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
   editable_cfg_adapter::iterate_with_iterator(
-      caller->get_code(), [&](IRList::iterator it) {
+      caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (!is_invoke(insn->opcode())) {
           return editable_cfg_adapter::LOOP_CONTINUE;
@@ -553,7 +555,7 @@ void MultiMethodInliner::inline_callees(
     DexMethod* caller, const std::unordered_set<IRInstruction*>& insns) {
   std::vector<std::pair<DexMethod*, IRList::iterator>> inlinables;
   editable_cfg_adapter::iterate_with_iterator(
-      caller->get_code(), [&](IRList::iterator it) {
+      caller->get_code(), [&](const IRList::iterator& it) {
         auto insn = it->insn;
         if (insns.count(insn)) {
           auto callee = resolver(insn->get_method(), opcode_to_search(insn));
@@ -674,7 +676,7 @@ void MultiMethodInliner::inline_inlinables(
 }
 
 void MultiMethodInliner::async_prioritized_method_execute(
-    DexMethod* method, std::function<void()> f) {
+    DexMethod* method, const std::function<void()>& f) {
   int priority = std::numeric_limits<int>::min();
   auto it = m_async_callee_priorities.find(method);
   if (it != m_async_callee_priorities.end()) {
@@ -1135,7 +1137,7 @@ static size_t get_inlined_cost(IRInstruction* insn) {
  * metadata) that exists for this block; this doesn't include the cost of
  * the instructions in the block, which are accounted for elsewhere.
  */
-static size_t get_inlined_cost(const std::vector<cfg::Block*> blocks,
+static size_t get_inlined_cost(const std::vector<cfg::Block*>& blocks,
                                size_t index) {
   auto block = blocks.at(index);
   switch (block->branchingness()) {
@@ -1250,7 +1252,7 @@ size_t MultiMethodInliner::get_inlined_cost(const DexMethod* callee) {
       inlined_cost <= MAX_COST_FOR_CONSTANT_PROPAGATION) {
     const auto& callee_constant_arguments =
         callee_constant_arguments_it->second;
-    auto process_key = [&](ConstantArgumentsOccurrences cao) {
+    auto process_key = [&](const ConstantArgumentsOccurrences& cao) {
       const auto& constant_arguments = cao.first;
       const auto count = cao.second;
       TRACE(INLINE, 5, "[too_many_callers] get_inlined_cost %s", SHOW(callee));
@@ -1803,7 +1805,7 @@ using RegMap = transform::RegMap;
  */
 std::unique_ptr<RegMap> gen_callee_reg_map(IRCode* caller_code,
                                            const IRCode* callee_code,
-                                           IRList::iterator invoke_it) {
+                                           const IRList::iterator& invoke_it) {
   auto callee_reg_start = caller_code->get_registers_size();
   auto insn = invoke_it->insn;
   auto reg_map = std::make_unique<RegMap>();
@@ -1850,7 +1852,7 @@ IRInstruction* move_result(IRInstruction* res, IRInstruction* move_res) {
  */
 void remap_callee_for_tail_call(const IRCode* caller_code,
                                 IRCode* callee_code,
-                                IRList::iterator invoke_it) {
+                                const IRList::iterator& invoke_it) {
   RegMap reg_map;
   auto insn = invoke_it->insn;
   auto callee_reg_start = caller_code->get_registers_size();
@@ -1933,9 +1935,9 @@ class MethodSplicer {
     return result;
   }
 
-  void operator()(IRList::iterator insert_pos,
-                  IRList::iterator fcallee_start,
-                  IRList::iterator fcallee_end) {
+  void operator()(const IRList::iterator& insert_pos,
+                  const IRList::iterator& fcallee_start,
+                  const IRList::iterator& fcallee_end) {
     std::vector<DexPosition*> positions_to_fix;
     for (auto it = fcallee_start; it != fcallee_end; ++it) {
       if (should_skip_debug(&*it)) {
@@ -2039,14 +2041,14 @@ DexPosition* last_position_before(const IRList::const_iterator& it,
 
 void inline_method(DexMethod* caller,
                    IRCode* callee_code,
-                   IRList::iterator pos) {
+                   const IRList::iterator& pos) {
   change_visibility(callee_code, caller->get_class());
   inline_method_unsafe(caller->get_code(), callee_code, pos);
 }
 
 void inline_method_unsafe(IRCode* caller_code,
                           IRCode* callee_code,
-                          IRList::iterator pos) {
+                          const IRList::iterator& pos) {
   TRACE(INL, 5, "caller code:\n%s", SHOW(caller_code));
   TRACE(INL, 5, "callee code:\n%s", SHOW(callee_code));
 

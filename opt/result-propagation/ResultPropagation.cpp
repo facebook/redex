@@ -63,12 +63,12 @@ using ParamDomainEnvironment =
 // We use this special register to denote the value that is being returned.
 reg_t RETURN_VALUE = RESULT_REGISTER - 1;
 
-bool isNotHigh(ParamDomain domain) {
+bool isNotHigh(const ParamDomain& domain) {
   auto const constant = domain.get_constant();
   return !constant || (((*constant) & WIDE_HIGH) == 0);
 }
 
-ParamDomain makeHigh(ParamDomain domain) {
+ParamDomain makeHigh(const ParamDomain& domain) {
   always_assert(isNotHigh(domain));
   auto const constant = domain.get_constant();
   return constant ? ParamDomain((*constant) | WIDE_HIGH) : domain;
@@ -108,7 +108,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
     };
 
     const auto set_current_state_at = [&](reg_t reg, bool wide,
-                                          ParamDomain value) {
+                                          const ParamDomain& value) {
       always_assert(isNotHigh(value));
       current_state->set(reg, value);
       if (wide) {

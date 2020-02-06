@@ -7,6 +7,8 @@
 
 #include "ScopeHelper.h"
 
+#include <utility>
+
 #include "Creators.h"
 
 namespace {
@@ -196,7 +198,7 @@ DexClass* create_java_lang_object() {
 
 DexClass* create_class(DexType* type,
                        DexType* super,
-                       std::vector<DexType*> interfaces,
+                       const std::vector<DexType*>& interfaces,
                        DexAccessFlags access,
                        bool external) {
   ClassCreator creator(type);
@@ -218,16 +220,16 @@ Scope create_empty_scope() {
 
 DexClass* create_internal_class(DexType* type,
                                 DexType* super,
-                                std::vector<DexType*> interfaces,
+                                const std::vector<DexType*>& interfaces,
                                 DexAccessFlags access /*= ACC_PUBLIC*/) {
-  return create_class(type, super, interfaces, access, false);
+  return create_class(type, super, std::move(interfaces), access, false);
 }
 
 DexClass* create_external_class(DexType* type,
                                 DexType* super,
-                                std::vector<DexType*> interfaces,
+                                const std::vector<DexType*>& interfaces,
                                 DexAccessFlags access /*= ACC_PUBLIC*/) {
-  return create_class(type, super, interfaces, access, true);
+  return create_class(type, super, std::move(interfaces), access, true);
 }
 
 DexMethod* create_abstract_method(DexClass* cls,

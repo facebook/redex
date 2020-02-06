@@ -43,8 +43,8 @@ class ConstantValue {
   using ConstantLoad = std::pair<IRInstruction*, reg_t>;
 
   ConstantValue(const TypeTags* type_tags,
-                const std::string kind_str,
-                const std::string val_str,
+                const std::string& kind_str,
+                const std::string& val_str,
                 reg_t param_reg);
 
   bool is_int_value() const {
@@ -103,8 +103,8 @@ class ConstantValues {
 
  public:
   ConstantValues(const TypeTags* type_tags,
-                 const std::string kinds_str,
-                 const std::string vals_str,
+                 const std::string& kinds_str,
+                 const std::string& vals_str,
                  const size_t stud_method_threshold,
                  IRCode* code);
 

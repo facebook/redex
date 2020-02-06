@@ -26,7 +26,7 @@ struct MethodMergerTest : RedexTest {
     scope.push_back(m_cls);
   }
 
-  DexMethod* create_a_simple_method(std::string full_descriptor,
+  DexMethod* create_a_simple_method(const std::string& full_descriptor,
                                     DexAccessFlags access,
                                     int ret_value) {
     auto ref = DexMethod::make_method(full_descriptor);

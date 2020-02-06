@@ -297,7 +297,7 @@ DexInstruction* create_dex_instruction(const IRInstruction* insn) {
 // instructions in isolation -- it only removes them when the caller calls it
 // with the associated 'primary' prefix instruction -- so we use this function
 // specifically for this purpose.
-void remove_move_result_pseudo(IRList::iterator it) {
+void remove_move_result_pseudo(const IRList::iterator& it) {
   always_assert(opcode::is_move_result_pseudo(it->insn->opcode()));
   delete it->insn;
   it->insn = nullptr;

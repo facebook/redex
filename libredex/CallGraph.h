@@ -66,7 +66,7 @@ class Edge {
  public:
   Edge(const DexMethod* caller,
        const DexMethod* callee,
-       IRList::iterator invoke_it);
+       const IRList::iterator& invoke_it);
   IRList::iterator invoke_iterator() const { return m_invoke_it; }
   const DexMethod* caller() const { return m_caller; }
   const DexMethod* callee() const { return m_callee; }
@@ -126,7 +126,7 @@ class Graph final {
 
   void add_edge(const DexMethod* caller,
                 const DexMethod* callee,
-                IRList::iterator invoke_it);
+                const IRList::iterator& invoke_it);
 
   Node m_entry = Node(nullptr);
   std::unordered_map<const DexMethod*, Node, boost::hash<Node>> m_nodes;

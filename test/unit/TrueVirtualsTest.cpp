@@ -409,7 +409,7 @@ std::vector<DexClass*> create_scope_10() {
 //
 
 std::unordered_set<std::string> get_method_names(
-    std::unordered_set<DexMethod*> methods) {
+    const std::unordered_set<DexMethod*>& methods) {
   std::unordered_set<std::string> result;
   for (auto* method : methods) {
     result.emplace(show(method));

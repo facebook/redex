@@ -325,7 +325,7 @@ TEST_F(InterproceduralConstantPropagationTest, unreachableInvoke) {
       cg,
       [](const DexMethod* method,
          const WholeProgramState&,
-         ArgumentDomain args) {
+         const ArgumentDomain& args) {
         auto& code = *method->get_code();
         auto env = env_with_params(&code, args);
         auto intra_cp = std::make_unique<intraprocedural::FixpointIterator>(

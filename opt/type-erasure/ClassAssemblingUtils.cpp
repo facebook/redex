@@ -17,7 +17,7 @@
 namespace {
 
 void patch_iget_for_int_like_types(DexMethod* meth,
-                                   IRList::iterator it,
+                                   const IRList::iterator& it,
                                    IRInstruction* convert) {
   auto insn = it->insn;
   auto move_result_it = std::next(it);
@@ -147,7 +147,7 @@ DexType* create_empty_base_type(const ModelSpec& spec,
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
                        const std::string& pkg_name,
-                       std::vector<DexField*> fields,
+                       const std::vector<DexField*>& fields,
                        const TypeSet& interfaces,
                        bool with_default_ctor,
                        DexAccessFlags access) {
@@ -288,7 +288,7 @@ DexClass* create_merger_class(const DexType* type,
   return cls;
 }
 
-void patch_iput(IRList::iterator it) {
+void patch_iput(const IRList::iterator& it) {
   auto insn = it->insn;
   const auto op = insn->opcode();
   always_assert(is_iput(op));
@@ -304,7 +304,7 @@ void patch_iput(IRList::iterator it) {
 };
 
 void patch_iget(DexMethod* meth,
-                IRList::iterator it,
+                const IRList::iterator& it,
                 DexType* original_field_type) {
   auto insn = it->insn;
   const auto op = insn->opcode();

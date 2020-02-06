@@ -9,6 +9,7 @@
 
 #include <gtest/gtest.h>
 #include <iterator>
+#include <utility>
 
 #include "ControlFlow.h"
 #include "DexAsm.h"
@@ -22,12 +23,13 @@ namespace {
 
 using namespace check_casts;
 
-void run_passes(std::vector<Pass*> passes, std::vector<DexClass*> classes) {
+void run_passes(const std::vector<Pass*>& passes,
+                std::vector<DexClass*> classes) {
   std::vector<DexStore> stores;
   DexMetadata dm;
   dm.set_id("classes");
   DexStore store(dm);
-  store.add_classes(classes);
+  store.add_classes(std::move(classes));
   stores.emplace_back(std::move(store));
   PassManager manager(passes);
   manager.set_testing_mode();

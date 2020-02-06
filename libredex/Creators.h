@@ -344,7 +344,7 @@ struct MethodBlock {
                          std::map<SwitchIndices, MethodBlock*>& cases);
 
  private:
-  MethodBlock(IRList::iterator iterator, MethodCreator* creator);
+  MethodBlock(const IRList::iterator& iterator, MethodCreator* creator);
 
   //
   // Helpers
@@ -463,7 +463,8 @@ struct MethodCreator {
     return locals.back();
   }
 
-  IRList::iterator push_instruction(IRList::iterator curr, IRInstruction* insn);
+  IRList::iterator push_instruction(const IRList::iterator& curr,
+                                    IRInstruction* insn);
   IRList::iterator make_if_block(IRList::iterator curr,
                                  IRInstruction* insn,
                                  IRList::iterator* false_block);

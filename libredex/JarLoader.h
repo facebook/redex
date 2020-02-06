@@ -28,6 +28,6 @@ using attribute_hook_t =
 
 bool load_jar_file(const char* location,
                    Scope* classes = nullptr,
-                   attribute_hook_t = nullptr);
+                   const attribute_hook_t& = nullptr);
 
 bool load_class_file(const std::string& filename, Scope* classes = nullptr);

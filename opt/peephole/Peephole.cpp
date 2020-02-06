@@ -12,6 +12,7 @@
 #include <numeric>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "CFGMutation.h"
@@ -1695,7 +1696,7 @@ class alignas(CACHE_LINE_SIZE) PeepholeOptimizer {
     ReplacementItem(cfg::Block* block,
                     IRInstruction* insn,
                     std::vector<IRInstruction*> replacement)
-        : block(block), insn(insn), replacement(replacement) {}
+        : block(block), insn(insn), replacement(std::move(replacement)) {}
   };
 
  public:

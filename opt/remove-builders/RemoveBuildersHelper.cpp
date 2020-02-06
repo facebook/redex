@@ -20,7 +20,9 @@ namespace {
 
 const IRInstruction* NULL_INSN = nullptr;
 
-void fields_mapping(IRList::iterator it, FieldsRegs* fregs, DexClass* builder) {
+void fields_mapping(const IRList::iterator& it,
+                    FieldsRegs* fregs,
+                    DexClass* builder) {
   always_assert(fregs != nullptr);
   always_assert(builder != nullptr);
   always_assert(it->type == MFLOW_OPCODE);
@@ -72,7 +74,7 @@ std::unique_ptr<std::unordered_map<IRInstruction*, FieldsRegs>> fields_setters(
     const std::vector<cfg::Block*>& blocks, DexClass* builder) {
 
   std::function<void(IRList::iterator, FieldsRegs*)> trans =
-      [&](IRList::iterator it, FieldsRegs* fregs) {
+      [&](const IRList::iterator& it, FieldsRegs* fregs) {
         fields_mapping(it, fregs, builder);
       };
 
@@ -632,7 +634,7 @@ bool params_change_regs(DexMethod* method) {
 
   for (DexType* arg : args) {
     std::function<void(IRList::iterator, TaintedRegs*)> trans =
-        [&](IRList::iterator it, TaintedRegs* tregs) {
+        [&](const IRList::iterator& it, TaintedRegs* tregs) {
           if (!opcode::is_load_param(it->insn->opcode())) {
             transfer_object_reach(arg, regs_size, it->insn, tregs->m_reg_set);
           }
@@ -1067,7 +1069,7 @@ get_tainted_regs(uint32_t regs_size,
                  DexType* type) {
 
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
-      [&](IRList::iterator it, TaintedRegs* tregs) {
+      [&](const IRList::iterator& it, TaintedRegs* tregs) {
         auto insn = it->insn;
         auto& regs = tregs->m_reg_set;
         auto op = insn->opcode();
@@ -1145,7 +1147,7 @@ std::vector<DexMethod*> get_non_init_methods(IRCode* code, DexType* type) {
 bool BuilderTransform::inline_methods(
     DexMethod* method,
     DexType* type,
-    std::function<std::vector<DexMethod*>(IRCode*, DexType*)>
+    const std::function<std::vector<DexMethod*>(IRCode*, DexType*)>&
         get_methods_to_inline) {
   always_assert(method != nullptr);
   always_assert(type != nullptr);

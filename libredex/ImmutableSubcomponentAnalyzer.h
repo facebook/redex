@@ -165,7 +165,7 @@ class ImmutableSubcomponentAnalyzer final {
    */
   ImmutableSubcomponentAnalyzer(
       DexMethod* dex_method,
-      std::function<bool(DexMethodRef*)> is_immutable_getter);
+      const std::function<bool(DexMethodRef*)>& is_immutable_getter);
 
   /*
    * Returns the access path to a subcomponent of an immutable structure (if

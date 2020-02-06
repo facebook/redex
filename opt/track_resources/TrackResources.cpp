@@ -37,7 +37,7 @@ std::unordered_set<std::string> build_cls_set(
   return cls_set;
 }
 
-void write_found_fields(std::string path,
+void write_found_fields(const std::string& path,
                         std::unordered_set<DexField*>& recorded_fields) {
   if (!path.empty()) {
     TRACE(TRACKRESOURCES, 1, "Writing tracked fields to %s", path.c_str());

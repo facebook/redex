@@ -229,15 +229,15 @@ class IRList {
   using difference_type = IntrusiveList::difference_type;
 
   IRList::iterator main_block();
-  IRList::iterator make_if_block(IRList::iterator cur,
+  IRList::iterator make_if_block(const IRList::iterator& cur,
                                  IRInstruction* insn,
                                  IRList::iterator* if_block);
-  IRList::iterator make_if_else_block(IRList::iterator cur,
+  IRList::iterator make_if_else_block(const IRList::iterator& cur,
                                       IRInstruction* insn,
                                       IRList::iterator* if_block,
                                       IRList::iterator* else_block);
   IRList::iterator make_switch_block(
-      IRList::iterator cur,
+      const IRList::iterator& cur,
       IRInstruction* insn,
       IRList::iterator* default_block,
       std::map<SwitchIndices, IRList::iterator>& cases);
@@ -250,7 +250,7 @@ class IRList {
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
-                      std::vector<IRInstruction*> replacements);
+                      const std::vector<IRInstruction*>& replacements);
 
   /*
    * Does exactly what it says and you SHOULD be afraid. This is mainly useful

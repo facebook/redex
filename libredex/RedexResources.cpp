@@ -146,7 +146,7 @@ std::string dotname_to_dexname(const std::string& classname) {
 }
 
 void extract_by_pattern(const std::string& string_to_search,
-                        boost::regex regex,
+                        const boost::regex& regex,
                         std::unordered_set<std::string>& result) {
   boost::smatch m;
   std::string s = string_to_search;

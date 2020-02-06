@@ -72,7 +72,7 @@ class StripDebugInfo {
   explicit StripDebugInfo(const StripDebugInfoPass::Config& config)
       : m_config(config) {}
 
-  Stats run(Scope scope);
+  Stats run(const Scope& scope);
 
   Stats run(IRCode&, bool should_drop_synth = false);
 

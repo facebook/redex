@@ -67,7 +67,7 @@ std::ostream& operator<<(std::ostream& os, Interval interval) {
   }
 }
 
-std::ostream& operator<<(std::ostream& os, Domain domain) {
+std::ostream& operator<<(std::ostream& os, const Domain& domain) {
   os << domain.element();
   return os;
 }

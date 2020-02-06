@@ -18,7 +18,7 @@ namespace constant_propagation {
  * register.
  */
 void Transform::replace_with_const(const ConstantEnvironment& env,
-                                   IRList::iterator it) {
+                                   const IRList::iterator& it) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
   auto replacement =
@@ -40,7 +40,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
  * removing not used arguments.
  */
 void Transform::generate_const_param(const ConstantEnvironment& env,
-                                     IRList::iterator it) {
+                                     const IRList::iterator& it) {
   auto* insn = it->insn;
   auto value = env.get(insn->dest());
   auto replacement =
@@ -55,7 +55,7 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
 
 bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
                                         const WholeProgramState& wps,
-                                        IRList::iterator it) {
+                                        const IRList::iterator& it) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
   case OPCODE_SPUT:
@@ -103,7 +103,7 @@ bool Transform::eliminate_redundant_put(const ConstantEnvironment& env,
 
 void Transform::simplify_instruction(const ConstantEnvironment& env,
                                      const WholeProgramState& wps,
-                                     IRList::iterator it) {
+                                     const IRList::iterator& it) {
   auto* insn = it->insn;
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
@@ -327,7 +327,7 @@ void Transform::eliminate_dead_branch(
 }
 
 bool Transform::replace_with_throw(const ConstantEnvironment& env,
-                                   IRList::iterator it,
+                                   const IRList::iterator& it,
                                    IRCode* code,
                                    boost::optional<int32_t>* temp_reg) {
   auto* insn = it->insn;

@@ -42,7 +42,7 @@ struct MergedMethod {
 struct MethodStats {
   std::vector<MergedMethod> merged_methods;
   void add(const MethodOrderedSet& methods);
-  void print(const std::string model_name, uint32_t num_mergeables);
+  void print(const std::string& model_name, uint32_t num_mergeables);
 };
 
 class ModelMethodMerger {
@@ -73,17 +73,17 @@ class ModelMethodMerger {
 
   // Helpers
   dispatch::DispatchMethod create_dispatch_method(
-      const dispatch::Spec spec, const std::vector<DexMethod*>& targets);
+      const dispatch::Spec& spec, const std::vector<DexMethod*>& targets);
 
   static DexMethod* create_instantiation_factory(DexType* owner_type,
-                                                 std::string name,
+                                                 const std::string& name,
                                                  DexProto* proto,
                                                  const DexAccessFlags access,
                                                  DexMethod* ctor);
   static void inline_dispatch_entries(DexMethod* dispatch);
   static void sink_common_ctor_to_return_block(DexMethod* dispatch);
   static std::vector<IRInstruction*> make_string_const(reg_t dest,
-                                                       std::string val);
+                                                       const std::string& val);
   static std::vector<IRInstruction*> make_check_cast(DexType* type,
                                                      reg_t src_dest);
 

@@ -415,7 +415,7 @@ class EnumUpcastDetector {
   }
 
   void reject(const IRInstruction* insn,
-              std::unordered_set<DexType*> types,
+              const std::unordered_set<DexType*>& types,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
     for (DexType* type : types) {
@@ -424,7 +424,7 @@ class EnumUpcastDetector {
   }
 
   void reject(const IRInstruction* insn,
-              EnumTypes types,
+              const EnumTypes& types,
               ConcurrentSet<DexType*>* rejected_enums,
               Reason reason = UNKNOWN) const {
     for (DexType* type : types.elements()) {

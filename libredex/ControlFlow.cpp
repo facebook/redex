@@ -21,7 +21,7 @@
 namespace {
 
 // return true if `it` should be the last instruction of this block
-bool end_of_block(const IRList* ir, IRList::iterator it, bool in_try) {
+bool end_of_block(const IRList* ir, const IRList::iterator& it, bool in_try) {
   auto next = std::next(it);
   if (next == ir->end()) {
     return true;

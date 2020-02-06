@@ -402,7 +402,8 @@ std::string extract_field_name(std::string qualified_fieldname) {
   return qualified_fieldname.substr(p + 2);
 }
 
-std::string extract_method_name_and_type(std::string qualified_fieldname) {
+std::string extract_method_name_and_type(
+    const std::string& qualified_fieldname) {
   auto p = qualified_fieldname.find(";.");
   return qualified_fieldname.substr(p + 2);
 }

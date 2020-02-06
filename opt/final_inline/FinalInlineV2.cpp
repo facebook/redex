@@ -220,7 +220,7 @@ std::unordered_set<const DexFieldRef*> gather_read_static_fields(
 }
 
 void encode_values(DexClass* cls,
-                   FieldEnvironment field_env,
+                   const FieldEnvironment& field_env,
                    const std::unordered_set<const DexFieldRef*>& blacklist) {
   for (auto* field : cls->get_sfields()) {
     if (blacklist.count(field)) {
@@ -750,7 +750,7 @@ size_t inline_final_gets(
 
 } // namespace
 
-size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
+size_t FinalInlinePassV2::run(const Scope& scope, const Config& config) {
   try {
     auto wps = final_inline::analyze_and_simplify_clinits(scope);
     return inline_final_gets(scope, wps, config.black_list_types,
@@ -764,7 +764,7 @@ size_t FinalInlinePassV2::run(const Scope& scope, Config config) {
 size_t FinalInlinePassV2::run_inline_ifields(
     const Scope& scope,
     const cp::EligibleIfields& eligible_ifields,
-    Config config) {
+    const Config& config) {
   auto wps = final_inline::analyze_and_simplify_inits(scope, eligible_ifields);
   return inline_final_gets(scope, wps, config.black_list_types,
                            cp::FieldType::INSTANCE);

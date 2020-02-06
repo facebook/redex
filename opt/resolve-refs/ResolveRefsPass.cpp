@@ -191,7 +191,7 @@ void try_desuperify(const DexMethod* caller,
 }
 
 bool is_excluded_external(const std::vector<std::string>& excluded_externals,
-                          std::string name) {
+                          const std::string& name) {
   for (auto& excluded : excluded_externals) {
     if (boost::starts_with(name, excluded)) {
       return true;

@@ -30,7 +30,7 @@ void cook_merger_fields_lookup(
 DexClass* create_class(const DexType* type,
                        const DexType* super_type,
                        const std::string& pkg_name,
-                       std::vector<DexField*> fields,
+                       const std::vector<DexField*>& fields,
                        const TypeSet& interfaces,
                        bool with_default_ctor = false,
                        DexAccessFlags access = ACC_PUBLIC);
@@ -42,10 +42,10 @@ DexClass* create_merger_class(const DexType* type,
                               const bool add_type_tag_field,
                               bool with_default_ctor = false);
 
-void patch_iput(IRList::iterator it);
+void patch_iput(const IRList::iterator& it);
 
 void patch_iget(DexMethod* meth,
-                IRList::iterator it,
+                const IRList::iterator& it,
                 DexType* original_field_type);
 
 void add_class(DexClass* new_cls, Scope& scope, DexStoresVector& stores);

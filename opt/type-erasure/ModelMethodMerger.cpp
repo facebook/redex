@@ -217,7 +217,8 @@ void MethodStats::add(const MethodOrderedSet& methods) {
   }
 }
 
-void MethodStats::print(const std::string model_name, uint32_t num_mergeables) {
+void MethodStats::print(const std::string& model_name,
+                        uint32_t num_mergeables) {
   if (!traceEnabled(TERA, 8)) {
     return;
   }
@@ -333,7 +334,7 @@ void ModelMethodMerger::fix_visibility() {
 }
 
 std::vector<IRInstruction*> ModelMethodMerger::make_string_const(
-    reg_t dest, std::string val) {
+    reg_t dest, const std::string& val) {
   std::vector<IRInstruction*> res;
   IRInstruction* load = new IRInstruction(OPCODE_CONST_STRING);
   load->set_string(DexString::make_string(val));
@@ -356,7 +357,7 @@ std::vector<IRInstruction*> ModelMethodMerger::make_check_cast(DexType* type,
 }
 
 dispatch::DispatchMethod ModelMethodMerger::create_dispatch_method(
-    const dispatch::Spec spec, const std::vector<DexMethod*>& targets) {
+    const dispatch::Spec& spec, const std::vector<DexMethod*>& targets) {
   always_assert(targets.size());
   TRACE(TERA,
         5,
@@ -405,7 +406,7 @@ DexType* ModelMethodMerger::get_merger_type(DexType* mergeable) {
 
 DexMethod* ModelMethodMerger::create_instantiation_factory(
     DexType* owner_type,
-    std::string name,
+    const std::string& name,
     DexProto* proto,
     const DexAccessFlags access,
     DexMethod* ctor) {

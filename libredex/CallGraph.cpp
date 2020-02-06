@@ -77,7 +77,7 @@ Graph single_callee_graph(const Scope& scope) {
 
 Edge::Edge(const DexMethod* caller,
            const DexMethod* callee,
-           IRList::iterator invoke_it)
+           const IRList::iterator& invoke_it)
     : m_caller(caller), m_callee(callee), m_invoke_it(invoke_it) {}
 
 Graph::Graph(const BuildStrategy& strat) {
@@ -123,7 +123,7 @@ Node& Graph::make_node(const DexMethod* m) {
 
 void Graph::add_edge(const DexMethod* caller,
                      const DexMethod* callee,
-                     IRList::iterator invoke_it) {
+                     const IRList::iterator& invoke_it) {
   auto edge = std::make_shared<Edge>(caller, callee, invoke_it);
   make_node(caller).m_successors.emplace_back(edge);
   make_node(callee).m_predecessors.emplace_back(edge);

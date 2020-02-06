@@ -49,7 +49,7 @@ bool this_arg_escapes(DexMethod* method, bool enable_buildee_constr_change) {
   code->build_cfg(/* editable */ false);
   const auto& blocks = code->cfg().blocks_reverse_post_deprecated();
   std::function<void(IRList::iterator, TaintedRegs*)> trans =
-      [&](IRList::iterator it, TaintedRegs* tregs) {
+      [&](const IRList::iterator& it, TaintedRegs* tregs) {
         auto* insn = it->insn;
         if (insn == this_insn) {
           tregs->m_reg_set[insn->dest()] = 1;

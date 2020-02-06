@@ -48,7 +48,7 @@ boost::optional<Info> get_enum_reg(const Environment& env,
   return boost::none;
 }
 
-void analyze_default(cfg::InstructionIterator it, Environment* env) {
+void analyze_default(const cfg::InstructionIterator& it, Environment* env) {
   auto insn = it->insn;
   if (insn->has_dest()) {
     env->set(insn->dest(), Domain::top());
@@ -61,7 +61,7 @@ void analyze_default(cfg::InstructionIterator it, Environment* env) {
   }
 }
 
-void analyze_sget(cfg::InstructionIterator it, Environment* env) {
+void analyze_sget(const cfg::InstructionIterator& it, Environment* env) {
   auto insn = it->insn;
   auto op = insn->opcode();
   if (op == OPCODE_SGET_OBJECT) {
@@ -117,7 +117,7 @@ void analyze_aget(cfg::InstructionIterator it, Environment* env) {
   }
 }
 
-void analyze_move_result(cfg::InstructionIterator it, Environment* env) {
+void analyze_move_result(const cfg::InstructionIterator& it, Environment* env) {
   auto insn = it->insn;
   if (!insn->dest_is_wide()) {
     env->set(insn->dest(), env->get(RESULT_REGISTER));
@@ -126,7 +126,7 @@ void analyze_move_result(cfg::InstructionIterator it, Environment* env) {
   }
 }
 
-void analyze_move(cfg::InstructionIterator it, Environment* env) {
+void analyze_move(const cfg::InstructionIterator& it, Environment* env) {
   auto insn = it->insn;
   auto op = insn->opcode();
   if (op == OPCODE_MOVE) {
@@ -168,7 +168,7 @@ std::vector<Info> Iterator::collect() const {
   return result;
 }
 
-void Iterator::analyze_insn(cfg::InstructionIterator it,
+void Iterator::analyze_insn(const cfg::InstructionIterator& it,
                             Environment* env) const {
   auto op = it->insn->opcode();
   switch (op) {
