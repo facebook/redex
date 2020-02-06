@@ -9,6 +9,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 
+#include <algorithm>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -176,6 +177,38 @@ void print_stats(interdex::DexesStructure* dexes_structure) {
   TRACE(IDEX, 2, "\t %lu dmethods", dexes_structure->get_num_dmethods());
   TRACE(IDEX, 2, "\t %lu vmethods", dexes_structure->get_num_vmethods());
   TRACE(IDEX, 2, "\t %lu mrefs", dexes_structure->get_num_mrefs());
+}
+
+/**
+ * Order the classes in `scope` according to the`coldstart_class_names`.
+ */
+void do_order_classes(const std::vector<std::string>& coldstart_class_names,
+                      Scope* scope) {
+  std::unordered_map<const DexClass*, uint32_t> class_to_priority;
+  uint32_t priority = 0;
+  for (const auto& class_name : coldstart_class_names) {
+    if (DexType* type = DexType::get_type(class_name.c_str())) {
+      if (auto cls = type_class(type)) {
+        class_to_priority[cls] = priority++;
+      }
+    }
+  }
+  TRACE(IDEX, 3, "IDEX: Ordered around %d classes at the beginning", priority);
+  std::stable_sort(
+      scope->begin(), scope->end(),
+      [&class_to_priority](const DexClass* left, const DexClass* right) {
+        uint32_t left_priority = std::numeric_limits<uint32_t>::max();
+        uint32_t right_priority = std::numeric_limits<uint32_t>::max();
+        auto it = class_to_priority.find(left);
+        if (it != class_to_priority.end()) {
+          left_priority = it->second;
+        }
+        it = class_to_priority.find(right);
+        if (it != class_to_priority.end()) {
+          right_priority = it->second;
+        }
+        return left_priority < right_priority;
+      });
 }
 
 } // namespace
@@ -709,6 +742,17 @@ void InterDex::cleanup(const Scope& final_scope) {
 void InterDex::run_in_force_single_dex_mode() {
   auto scope = build_class_scope(m_dexen);
 
+  const std::vector<std::string>& coldstart_class_names =
+      m_conf.get_coldstart_classes();
+  DexInfo dex_info;
+  dex_info.primary = true;
+  if (coldstart_class_names.empty()) {
+    TRACE(IDEX, 3, "IDEX single dex mode: No coldstart_classes");
+  } else {
+    dex_info.coldstart = true;
+    do_order_classes(coldstart_class_names, &scope);
+  }
+
   // Add all classes into m_dexes_structure without further checking when
   // force_single_dex is on. The overflow checking will be done later on at
   // the end of the pipeline (e.g. write_classes_to_dex).
@@ -718,7 +762,7 @@ void InterDex::run_in_force_single_dex_mode() {
     TypeRefs clazz_trefs;
     std::vector<DexClass*> erased_classes;
 
-    gather_refs(m_plugins, EMPTY_DEX_INFO, cls, &clazz_mrefs, &clazz_frefs,
+    gather_refs(m_plugins, dex_info, cls, &clazz_mrefs, &clazz_frefs,
                 &clazz_trefs, &erased_classes,
                 should_not_relocate_methods_of_class(cls));
 
@@ -728,7 +772,7 @@ void InterDex::run_in_force_single_dex_mode() {
 
   // Emit all no matter what it is.
   if (m_dexes_structure.get_current_dex_classes().size()) {
-    flush_out_dex(EMPTY_DEX_INFO);
+    flush_out_dex(dex_info);
   }
 
   TRACE(IDEX, 7, "IDEX: force_single_dex dex number: %d",
