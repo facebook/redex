@@ -167,7 +167,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractAccessPathEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       AbstractAccessPathEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT:

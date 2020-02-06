@@ -337,7 +337,7 @@ done:
 //
 // Similarly, the various refine_* functions are used to refine the
 // type of a register depending on the context (e.g., from SCALAR to INT).
-void TypeInference::analyze_instruction(IRInstruction* insn,
+void TypeInference::analyze_instruction(const IRInstruction* insn,
                                         TypeEnvironment* current_state) const {
   switch (insn->opcode()) {
   case IOPCODE_LOAD_PARAM:
@@ -725,7 +725,9 @@ void TypeInference::analyze_instruction(IRInstruction* insn,
   case OPCODE_INVOKE_CUSTOM:
   case OPCODE_INVOKE_POLYMORPHIC: {
     // TODO(T59277083)
-    always_assert_log(false, "TypeInference::analyze_instruction does not support invoke-custom and invoke-polymorphic yet");
+    always_assert_log(false,
+                      "TypeInference::analyze_instruction does not support "
+                      "invoke-custom and invoke-polymorphic yet");
     break;
   }
   case OPCODE_INVOKE_VIRTUAL:

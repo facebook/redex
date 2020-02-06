@@ -52,7 +52,7 @@ class ReturnParamResolver {
    * it will always return one of its incoming sources.
    */
   const boost::optional<ParamIndex> get_return_param_index(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       const std::unordered_map<const DexMethod*, ParamIndex>&
           methods_which_return_parameter,
       MethodRefCache& resolved_refs) const;

@@ -102,7 +102,7 @@ class Analyzer final : public BaseIRAnalyzer<ConstructorAnalysisEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       ConstructorAnalysisEnvironment* current_state) const override {
     // Once `this` has been initialized, or we came across something problematic
     // that prevents inlining (before the instance got initialized), then

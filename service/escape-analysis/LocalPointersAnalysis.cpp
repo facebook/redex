@@ -349,7 +349,7 @@ void default_instruction_handler(const IRInstruction* insn,
   }
 }
 
-void FixpointIterator::analyze_instruction(IRInstruction* insn,
+void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            Environment* env) const {
   escape_heap_referenced_objects(insn, env);
 

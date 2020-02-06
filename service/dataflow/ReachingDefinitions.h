@@ -26,7 +26,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
   explicit FixpointIterator(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
     if (insn->has_dest()) {
       current_state->set(insn->dest(),
@@ -41,7 +41,7 @@ class MoveAwareFixpointIterator final
   explicit MoveAwareFixpointIterator(const cfg::ControlFlowGraph& cfg)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            Environment* current_state) const override {
     constexpr reg_t RESULT = ir_analyzer::RESULT_REGISTER;
     if (is_move(insn->opcode())) {

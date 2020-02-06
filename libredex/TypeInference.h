@@ -182,7 +182,7 @@ class TypeInference final
 
   void run(bool is_static, DexType* declaring_type, DexTypeList* args);
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            TypeEnvironment* current_state) const override;
 
   void print(std::ostream& output) const;

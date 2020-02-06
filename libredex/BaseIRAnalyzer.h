@@ -39,7 +39,7 @@ class BaseIRAnalyzer
     return exit_state_at_source;
   }
 
-  virtual void analyze_instruction(IRInstruction* insn,
+  virtual void analyze_instruction(const IRInstruction* insn,
                                    Domain* current_state) const = 0;
 };
 

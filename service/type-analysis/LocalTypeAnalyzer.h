@@ -31,7 +31,7 @@ class LocalTypeAnalyzer final
       : ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment>(cfg),
         m_insn_analyzer(insn_analyer) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            DexTypeEnvironment* current_state) const override;
 
  private:

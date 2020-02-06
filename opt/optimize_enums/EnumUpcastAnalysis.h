@@ -42,7 +42,7 @@ class EnumFixpointIterator final
       : ir_analyzer::BaseIRAnalyzer<EnumTypeEnvironment>(cfg),
         m_config(config) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            EnumTypeEnvironment* env) const override;
 
   static EnumTypeEnvironment gen_env(const DexMethod* method);

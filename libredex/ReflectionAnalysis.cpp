@@ -421,7 +421,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       AbstractObjectEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM:
@@ -728,7 +728,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   std::unordered_map<IRInstruction*, AbstractObjectEnvironment> m_environments;
 
   void update_non_string_input(AbstractObjectEnvironment* current_state,
-                               IRInstruction* insn,
+                               const IRInstruction* insn,
                                DexType* type) const {
     auto dest_reg =
         insn->has_move_result_any() ? RESULT_REGISTER : insn->dest();
@@ -775,7 +775,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void update_return_object_and_invalidate_heap_args(
-      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+      AbstractObjectEnvironment* current_state,
+      const IRInstruction* insn) const {
 
     invalidate_argument_heap_objects(current_state, insn);
     DexMethodRef* callee = insn->get_method();
@@ -786,7 +787,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     update_non_string_input(current_state, insn, return_type);
   }
 
-  void default_semantics(IRInstruction* insn,
+  void default_semantics(const IRInstruction* insn,
                          AbstractObjectEnvironment* current_state) const {
     // For instructions that are transparent for this analysis, we just need
     // to clobber the destination registers in the abstract environment. Note
@@ -811,7 +812,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   DexString* get_dex_string_from_insn(AbstractObjectEnvironment* current_state,
-                                      IRInstruction* insn,
+                                      const IRInstruction* insn,
                                       reg_t reg) const {
     auto element_name =
         current_state->get_abstract_obj(insn->src(reg)).get_object();
@@ -831,7 +832,8 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
   }
 
   void invalidate_argument_heap_objects(
-      AbstractObjectEnvironment* current_state, IRInstruction* insn) const {
+      AbstractObjectEnvironment* current_state,
+      const IRInstruction* insn) const {
 
     if (!insn->has_method() ||
         is_method_known_to_preserve_args(insn->get_method())) {
@@ -851,7 +853,7 @@ class Analyzer final : public BaseIRAnalyzer<AbstractObjectEnvironment> {
     }
   }
 
-  void process_virtual_call(IRInstruction* insn,
+  void process_virtual_call(const IRInstruction* insn,
                             const AbstractObject& receiver,
                             AbstractObjectEnvironment* current_state) const {
     DexMethodRef* callee = insn->get_method();

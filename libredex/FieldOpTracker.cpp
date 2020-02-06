@@ -40,7 +40,7 @@ class IsZeroAnalyzer final : public BaseIRAnalyzer<IsZeroEnvironment> {
     MonotonicFixpointIterator::run(IsZeroEnvironment::top());
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            IsZeroEnvironment* current_state) const override {
 
     auto op = insn->opcode();

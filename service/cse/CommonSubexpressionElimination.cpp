@@ -364,7 +364,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     MonotonicFixpointIterator::run(CseEnvironment::top());
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* const_insn,
                            CseEnvironment* current_state) const override {
     const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           ValueIdDomain value) {
@@ -376,6 +376,8 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
       });
     };
 
+    // TODO: remove const_cast.
+    auto insn = const_cast<IRInstruction*>(const_insn);
     init_pre_state(insn, current_state);
     auto clobbered_locations = get_clobbered_locations(insn, current_state);
     auto opcode = insn->opcode();

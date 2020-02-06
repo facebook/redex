@@ -731,7 +731,7 @@ using namespace ir_analyzer;
 
 // We represent an anchor by a pointer to the corresponding instruction. An
 // empty anchor set is semantically equivalent to the `null` reference.
-using AnchorDomain = PatriciaTreeSetAbstractDomain<IRInstruction*>;
+using AnchorDomain = PatriciaTreeSetAbstractDomain<const IRInstruction*>;
 
 using AnchorEnvironment =
     PatriciaTreeMapAbstractEnvironment<reg_t, AnchorDomain>;
@@ -746,7 +746,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
         m_code(code),
         m_this_anchor(nullptr) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            AnchorEnvironment* current_state) const override {
     switch (insn->opcode()) {
     case IOPCODE_LOAD_PARAM_OBJECT: {
@@ -811,7 +811,7 @@ class AnchorPropagation final : public BaseIRAnalyzer<AnchorEnvironment> {
 
   void run() { MonotonicFixpointIterator::run(initial_environment()); }
 
-  bool is_this_anchor(IRInstruction* insn) const {
+  bool is_this_anchor(const IRInstruction* insn) const {
     return insn == m_this_anchor;
   }
 
@@ -1216,7 +1216,7 @@ class PointsToActionGenerator final {
         args));
   }
 
-  PointsToVariable get_variable_from_anchor(IRInstruction* insn) {
+  PointsToVariable get_variable_from_anchor(const IRInstruction* insn) {
     if (m_analysis->is_this_anchor(insn)) {
       return PointsToVariable::this_variable();
     }
@@ -1248,7 +1248,7 @@ class PointsToActionGenerator final {
     }
     // Otherwise, we need a disjunction.
     PointsToVariableSet ptv_set;
-    for (IRInstruction* insn : anchors) {
+    for (const IRInstruction* insn : anchors) {
       ptv_set.insert(get_variable_from_anchor(insn));
     }
     auto it = m_anchor_sets.find(ptv_set);
@@ -1272,7 +1272,7 @@ class PointsToActionGenerator final {
   std::unique_ptr<AnchorPropagation> m_analysis;
   // We assign each anchor a points-to variable. This map keeps track of the
   // naming.
-  std::unordered_map<IRInstruction*, PointsToVariable> m_anchors;
+  std::unordered_map<const IRInstruction*, PointsToVariable> m_anchors;
   // A table that keeps track of all disjunctions already created, so that we
   // only generate one disjuction per anchor set.
   std::unordered_map<PointsToVariableSet,

@@ -170,7 +170,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
  public:
   FixpointIterator(const cfg::ControlFlowGraph& cfg);
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
 
  private:

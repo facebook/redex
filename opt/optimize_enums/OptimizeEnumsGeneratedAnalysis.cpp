@@ -61,7 +61,7 @@ class FieldAnalyzer final
     setup_ordinal_method();
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            DexFieldConstantEnvironment* env) const override {
     auto op = insn->opcode();
 

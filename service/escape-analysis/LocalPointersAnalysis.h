@@ -244,7 +244,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
         m_invoke_to_summary_map(invoke_to_summary_map),
         m_escape_check_cast(escape_check_cast) {}
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            Environment* env) const override;
 
  private:

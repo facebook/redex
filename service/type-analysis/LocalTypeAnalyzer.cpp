@@ -27,7 +27,7 @@ boost::optional<const DexType*> get_dex_type(DexTypeEnvironment* state,
   return state->get(reg).get_dex_type();
 }
 
-void LocalTypeAnalyzer::analyze_instruction(IRInstruction* insn,
+void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
                                             DexTypeEnvironment* env) const {
   TRACE(TYPE, 5, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);

@@ -89,7 +89,7 @@ class Analyzer final : public BaseIRAnalyzer<ParamDomainEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       ParamDomainEnvironment* current_state) const override {
 
     // While the special registers RESULT_REGISTER and RETURN_VALUE do not
@@ -243,7 +243,7 @@ const std::unordered_map<const IRInstruction*, ParamIndex> get_load_param_map(
 }
 
 const boost::optional<ParamIndex> ReturnParamResolver::get_return_param_index(
-    IRInstruction* insn,
+    const IRInstruction* insn,
     const std::unordered_map<const DexMethod*, ParamIndex>&
         methods_which_return_parameter,
     MethodRefCache& resolved_refs) const {

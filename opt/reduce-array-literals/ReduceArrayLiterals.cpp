@@ -186,9 +186,11 @@ class Analyzer final : public BaseIRAnalyzer<TrackedDomainEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* const_insn,
       TrackedDomainEnvironment* current_state) const override {
 
+    // TODO: remove const_cast.
+    auto insn = const_cast<IRInstruction*>(const_insn);
     const auto set_current_state_at = [&](reg_t reg, bool wide,
                                           TrackedDomain value) {
       current_state->set(reg, value);

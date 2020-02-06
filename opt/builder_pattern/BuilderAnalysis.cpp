@@ -94,7 +94,7 @@ class Analyzer final : public BaseIRAnalyzer<IRInstructionConstantEnvironment> {
   }
 
   void analyze_instruction(
-      IRInstruction* insn,
+      const IRInstruction* insn,
       IRInstructionConstantEnvironment* current_state) const override {
 
     auto default_case = [&]() {

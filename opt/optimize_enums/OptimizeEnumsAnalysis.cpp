@@ -49,7 +49,7 @@ class Analyzer final : public ir_analyzer::BaseIRAnalyzer<ConstantEnvironment> {
     MonotonicFixpointIterator::run(ConstantEnvironment::top());
   }
 
-  void analyze_instruction(IRInstruction* insn,
+  void analyze_instruction(const IRInstruction* insn,
                            ConstantEnvironment* env) const override {
     auto op = insn->opcode();
 

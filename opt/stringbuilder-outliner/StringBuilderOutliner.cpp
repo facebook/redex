@@ -69,7 +69,7 @@ bool FixpointIterator::is_eligible_append(const DexMethodRef* method) const {
          m_immutable_types.count(type_list->at(0));
 }
 
-void FixpointIterator::analyze_instruction(IRInstruction* insn,
+void FixpointIterator::analyze_instruction(const IRInstruction* insn,
                                            Environment* env) const {
   namespace ptrs = local_pointers;
 
