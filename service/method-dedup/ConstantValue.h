@@ -36,7 +36,9 @@ class ConstantValue {
   // INVALID:
   //        Whenever the annotated value cannot be processed. For instance, the
   //        emitted Type cannot be found or is not merged.
-  enum ConstantKind { INT, TYPE, STRING, INVALID };
+  //
+  // Note: must be an enum class to not shadow TYPE used in Trace.
+  enum class ConstantKind { INT, TYPE, STRING, INVALID };
 
  public:
   // The insn and the dest. OPCODE_CONST_STRING does not have a dest in itself.

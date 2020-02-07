@@ -7,6 +7,11 @@
 
 #pragma once
 
+#include <cstdint>
+#include <unordered_set>
+
+class DexType;
+
 /**
  * This struct is populated by information from the config file.
  * "SynthPass" : {

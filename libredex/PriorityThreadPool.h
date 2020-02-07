@@ -22,6 +22,7 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/mutex.hpp>
 
+#include "Debug.h"
 #include "Thread.h"
 
 /*
