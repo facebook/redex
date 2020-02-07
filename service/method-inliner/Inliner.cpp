@@ -476,7 +476,7 @@ MultiMethodInliner::get_invoke_constant_arguments(
         auto callee = resolver(insn->get_method(), opcode_to_search(insn));
         if (callees_set.count(callee)) {
           ConstantArguments constant_arguments;
-          auto& srcs = insn->srcs();
+          const auto& srcs = insn->srcs();
           for (size_t i = 0; i < srcs.size(); ++i) {
             auto val = env.get(srcs[i]);
             always_assert(!val.is_bottom());

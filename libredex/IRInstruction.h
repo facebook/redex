@@ -12,6 +12,8 @@
 #include "DexMethodHandle.h"
 #include "Show.h"
 
+#include <boost/range/any_range.hpp>
+
 /*
  * Our IR is very similar to the Dalvik instruction set, but with a few tweaks
  * to make it easier to analyze and manipulate. Key differences are:
@@ -116,6 +118,8 @@ using reg_t = uint32_t;
 class IRInstruction final {
  public:
   explicit IRInstruction(IROpcode op);
+  IRInstruction(const IRInstruction&);
+  ~IRInstruction();
 
   /*
    * Ensures that wide registers only have their first register referenced
@@ -168,7 +172,7 @@ class IRInstruction final {
    */
   bool has_dest() const { return opcode_impl::has_dest(m_opcode); }
 
-  size_t srcs_size() const { return m_srcs.size(); }
+  size_t srcs_size() const;
 
   bool has_move_result_pseudo() const {
     return opcode_impl::has_move_result_pseudo(m_opcode);
@@ -218,8 +222,22 @@ class IRInstruction final {
     always_assert_log(has_dest(), "No dest for %s", SHOW(m_opcode));
     return m_dest;
   }
-  reg_t src(size_t i) const { return m_srcs.at(i); }
-  const std::vector<reg_t>& srcs() const { return m_srcs; }
+  reg_t src(size_t i) const;
+
+ private:
+  using reg_range_super = boost::iterator_range<const reg_t*>;
+
+ public:
+  class reg_range : public reg_range_super {
+    // Remove the bool conversion operator. It's too surprising and error-prone.
+    operator bool() const = delete;
+    // inherit the constructors
+    using reg_range_super::reg_range_super;
+  };
+  // Provides a read-only view into the source registers
+  reg_range srcs() const;
+  // Provides a copy of the source registers
+  std::vector<reg_t> srcs_vec() const;
 
   /*
    * Setters for logical parts of the instruction.
@@ -233,14 +251,8 @@ class IRInstruction final {
     m_dest = reg;
     return this;
   }
-  IRInstruction* set_src(size_t i, reg_t reg) {
-    m_srcs.at(i) = reg;
-    return this;
-  }
-  IRInstruction* set_srcs_size(uint16_t count) {
-    m_srcs.resize(count);
-    return this;
-  }
+  IRInstruction* set_src(size_t i, reg_t reg);
+  IRInstruction* set_srcs_size(uint16_t count);
 
   int64_t get_literal() const {
     always_assert(has_literal());
@@ -382,8 +394,26 @@ class IRInstruction final {
   uint64_t hash() const;
 
  private:
-  IROpcode m_opcode;
-  reg_t m_dest{0};
+  // 2 is chosen because it's the maximum number of registers (32 bits each) we
+  // can fit in the size of a pointer (on a 64bit system).
+  // In practice, most IRInstructions have 2 or fewer source registers, so we
+  // can avoid a vector allocation most of the time.
+  static constexpr uint8_t MAX_NUM_INLINE_SRCS = 2;
+
+  // The fields of IRInstruction are carefully selected and ordered to avoid
+  // empty packing bytes and minimize total size. This is optimized for 8 byte
+  // alignment on a 64bit system.
+
+  IROpcode m_opcode; // 2 bytes
+  // m_num_inline_srcs can take a small set of possible values:
+  //   * 0, ..., MAX_NUM_INLINE_SRCS: the size of the valid section of
+  //     m_inline_srcs
+  //   * MAX_NUM_INLINE_SRCS + 1: indicates that m_srcs should be used, not
+  //     m_inline_srcs
+  uint16_t m_num_inline_srcs{0}; // 2 bytes. Could be 1 byte
+                                 // but extra byte would just be padding
+  reg_t m_dest{0}; // 4 bytes
+  // 8 bytes so far
   union {
     // Zero-initialize this union with the uint64_t member instead of a
     // pointer-type member so that it works properly even on 32-bit machines
@@ -396,8 +426,15 @@ class IRInstruction final {
     DexCallSite* m_callsite;
     DexMethodHandle* m_methodhandle;
   };
-  // Put m_srcs at the end for dense packing
-  std::vector<reg_t> m_srcs;
+  // 16 bytes so far
+  union {
+    // m_num_inline_srcs indicates how to interpret the union. See comment above
+    reg_t m_inline_srcs[MAX_NUM_INLINE_SRCS] = {0};
+    // Use a pointer here because it's 8 bytes instead of ~24.
+    // Be careful to new and delete it correctly!
+    std::vector<reg_t>* m_srcs;
+  };
+  // 24 bytes total
 };
 
 /*

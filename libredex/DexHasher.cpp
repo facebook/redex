@@ -84,7 +84,7 @@ void DexClassHasher::hash(const IRInstruction* insn) {
 
   auto old_hash = m_hash;
   m_hash = 0;
-  hash(insn->srcs());
+  hash(insn->srcs_vec());
   if (insn->has_dest()) {
     hash(insn->dest());
   }

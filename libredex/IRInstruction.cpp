@@ -10,16 +10,138 @@
 #include "DexClass.h"
 #include "DexUtil.h"
 
+#include <boost/range/any_range.hpp>
+#include <cstring>
+#include <iterator>
+
 IRInstruction::IRInstruction(IROpcode op) : m_opcode(op) {
-  m_srcs.resize(opcode_impl::min_srcs_size(op));
+  auto count = opcode_impl::min_srcs_size(op);
+  if (count <= MAX_NUM_INLINE_SRCS) {
+    m_num_inline_srcs = count;
+  } else {
+    m_num_inline_srcs = MAX_NUM_INLINE_SRCS + 1;
+    m_srcs = new std::vector<reg_t>(count);
+  }
+}
+
+IRInstruction::IRInstruction(const IRInstruction& other)
+    : m_opcode(other.m_opcode),
+      m_num_inline_srcs(other.m_num_inline_srcs),
+      m_dest(other.m_dest),
+      m_literal(other.m_literal) {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    for (auto i = 0; i < m_num_inline_srcs; ++i) {
+      m_inline_srcs[i] = other.m_inline_srcs[i];
+    }
+  } else {
+    m_srcs = new std::vector<reg_t>(*other.m_srcs);
+  }
+}
+
+IRInstruction::~IRInstruction() {
+  if (m_num_inline_srcs > MAX_NUM_INLINE_SRCS) {
+    delete m_srcs;
+  }
 }
 
 // Structural equality of opcodes except branches offsets are ignored
 // because they are unknown until we sync back to DexInstructions.
 bool IRInstruction::operator==(const IRInstruction& that) const {
-  return m_opcode == that.m_opcode &&
-         m_literal == that.m_literal && // just test one member of the union
-         m_srcs == that.m_srcs && m_dest == that.m_dest;
+  bool simple_fields_match =
+      m_opcode == that.m_opcode &&
+      m_num_inline_srcs == that.m_num_inline_srcs && m_dest == that.m_dest &&
+      m_literal == that.m_literal; // just test one member of the union
+  if (!simple_fields_match) {
+    return false;
+  }
+  // Check the source registers union
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    for (auto i = 0; i < m_num_inline_srcs; ++i) {
+      if (m_inline_srcs[i] != that.m_inline_srcs[i]) {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    return *m_srcs == *that.m_srcs;
+  }
+}
+
+reg_t IRInstruction::src(size_t i) const {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    always_assert(i < m_num_inline_srcs);
+    return m_inline_srcs[i];
+  }
+  return m_srcs->at(i);
+}
+
+IRInstruction::reg_range IRInstruction::srcs() const {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    const reg_t* begin = std::begin(m_inline_srcs);
+    const reg_t* end = begin + m_num_inline_srcs;
+    return reg_range(begin, end);
+  }
+  const reg_t* begin = m_srcs->data();
+  const reg_t* end = begin + m_srcs->size();
+  return reg_range(begin, end);
+}
+
+std::vector<reg_t> IRInstruction::srcs_vec() const {
+  std::vector<reg_t> result;
+  result.reserve(srcs_size());
+  for (reg_t src : srcs()) {
+    result.push_back(src);
+  }
+  return result;
+}
+
+IRInstruction* IRInstruction::set_src(size_t i, reg_t reg) {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    always_assert(i < m_num_inline_srcs);
+    m_inline_srcs[i] = reg;
+  } else {
+    m_srcs->at(i) = reg;
+  }
+  return this;
+}
+
+size_t IRInstruction::srcs_size() const {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    return m_num_inline_srcs;
+  }
+  return m_srcs->size();
+}
+
+IRInstruction* IRInstruction::set_srcs_size(uint16_t count) {
+  if (m_num_inline_srcs <= MAX_NUM_INLINE_SRCS) {
+    if (count <= MAX_NUM_INLINE_SRCS) {
+      // staying in the inline state
+      m_num_inline_srcs = count;
+    } else {
+      // inline regs -> vector
+      auto srcs = new std::vector<reg_t>();
+      srcs->reserve(count);
+      for (auto i = 0; i < m_num_inline_srcs; ++i) {
+        srcs->push_back(m_inline_srcs[i]);
+      }
+      srcs->resize(count);
+      m_num_inline_srcs = MAX_NUM_INLINE_SRCS + 1;
+      m_srcs = srcs;
+    }
+  } else {
+    if (count <= MAX_NUM_INLINE_SRCS) {
+      // vector -> inline regs
+      auto old_srcs_ptr = m_srcs;
+      m_num_inline_srcs = count;
+      always_assert(count <= old_srcs_ptr->size());
+      std::memcpy(m_inline_srcs, old_srcs_ptr->data(), count * sizeof(reg_t));
+      delete old_srcs_ptr;
+    } else {
+      // staying in the vector state
+      m_srcs->resize(count);
+    }
+  }
+  return this;
 }
 
 uint16_t IRInstruction::size() const {
@@ -180,22 +302,42 @@ void IRInstruction::normalize_registers() {
 void IRInstruction::denormalize_registers() {
   if (is_invoke(m_opcode)) {
     auto& args = get_method()->get_proto()->get_args()->get_type_list();
+    bool has_wide = false;
+    for (const auto& arg : args) {
+      if (type::is_wide_type(arg)) {
+        has_wide = true;
+        break;
+      }
+    }
+    if (!has_wide) {
+      return;
+    }
+
     std::vector<reg_t> srcs;
     size_t args_idx{0};
     size_t srcs_idx{0};
     if (m_opcode != OPCODE_INVOKE_STATIC) {
       srcs.push_back(src(srcs_idx++));
     }
-    bool has_wide{false};
     for (; args_idx < args.size(); ++args_idx, ++srcs_idx) {
       srcs.push_back(src(srcs_idx));
       if (type::is_wide_type(args.at(args_idx))) {
         srcs.push_back(src(srcs_idx) + 1);
-        has_wide = true;
       }
     }
-    if (has_wide) {
-      m_srcs = srcs;
+
+    // update m_inline_srcs or m_srcs
+    if (m_num_inline_srcs > MAX_NUM_INLINE_SRCS) {
+      delete m_srcs;
+    }
+    if (srcs.size() <= MAX_NUM_INLINE_SRCS) {
+      m_num_inline_srcs = srcs.size();
+      for (size_t i = 0; i < srcs.size(); ++i) {
+        m_inline_srcs[i] = srcs.at(i);
+      }
+    } else {
+      m_num_inline_srcs = MAX_NUM_INLINE_SRCS + 1;
+      m_srcs = new std::vector<reg_t>(std::move(srcs));
     }
   }
 }
