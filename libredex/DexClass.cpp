@@ -726,9 +726,10 @@ void DexClass::load_class_data_item(DexIdx* idx,
   }
 
   std::unordered_set<DexMethod*> method_pointer_cache;
+  method_pointer_cache.reserve(dmethod_count + vmethod_count);
 
-  ndex = 0;
-  for (uint32_t i = 0; i < dmethod_count; i++) {
+  auto process_method = [this, &encd, &idx, &method_pointer_cache](
+                            uint32_t& ndex, bool is_virtual) {
     ndex += read_uleb128(&encd);
     auto access_flags = (DexAccessFlags)read_uleb128(&encd);
     uint32_t code_off = read_uleb128(&encd);
@@ -738,33 +739,27 @@ void DexClass::load_class_data_item(DexIdx* idx,
     if (dc && dc->get_debug_item()) {
       dc->get_debug_item()->bind_positions(dm, m_source_file);
     }
-    dm->make_concrete(access_flags, std::move(dc), false);
+    dm->make_concrete(access_flags, std::move(dc), is_virtual);
 
-    assert_or_throw(
-        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
-        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
+    const auto& pair = method_pointer_cache.insert(dm);
+    bool insertion_happened = pair.second;
+    always_assert_type_log(insertion_happened, RedexError::DUPLICATE_METHODS,
+                           "Found duplicate methods in the same class. %s",
+                           SHOW(dm));
 
-    method_pointer_cache.insert(dm);
+    return dm;
+  };
+
+  m_dmethods.reserve(dmethod_count);
+  ndex = 0;
+  for (uint32_t i = 0; i < dmethod_count; i++) {
+    DexMethod* dm = process_method(ndex, false);
     m_dmethods.push_back(dm);
   }
+  m_vmethods.reserve(vmethod_count);
   ndex = 0;
   for (uint32_t i = 0; i < vmethod_count; i++) {
-    ndex += read_uleb128(&encd);
-    auto access_flags = (DexAccessFlags)read_uleb128(&encd);
-    uint32_t code_off = read_uleb128(&encd);
-    // Find method in method index, returns same pointer for same method.
-    DexMethod* dm = static_cast<DexMethod*>(idx->get_methodidx(ndex));
-    auto dc = DexCode::get_dex_code(idx, code_off);
-    if (dc && dc->get_debug_item()) {
-      dc->get_debug_item()->bind_positions(dm, m_source_file);
-    }
-    dm->make_concrete(access_flags, std::move(dc), true);
-
-    assert_or_throw(
-        method_pointer_cache.count(dm) == 0, RedexError::DUPLICATE_METHODS,
-        "Found duplicate methods in the same class.", {{"method", SHOW(dm)}});
-
-    method_pointer_cache.insert(dm);
+    DexMethod* dm = process_method(ndex, true);
     m_vmethods.push_back(dm);
   }
 }
