@@ -13,6 +13,8 @@
 
 namespace {
 
+static const TypeSet empty_set{};
+
 inline bool match(const DexString* name,
                   const DexProto* proto,
                   const DexMethod* cls_meth) {
@@ -128,6 +130,12 @@ InterfaceMap build_interface_map(const ClassHierarchy& hierarchy) {
     build_interface_map(interfaces, hierarchy, cls, implementors);
   }
   return interfaces;
+}
+
+const TypeSet& get_children(const ClassHierarchy& hierarchy,
+                            const DexType* type) {
+  const auto& it = hierarchy.find(type);
+  return it != hierarchy.end() ? it->second : empty_set;
 }
 
 void get_all_children(const ClassHierarchy& hierarchy,

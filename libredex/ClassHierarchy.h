@@ -30,11 +30,8 @@ ClassHierarchy build_type_hierarchy(const Scope& scope);
 /**
  * Return the direct children of a type.
  */
-inline const TypeSet get_children(const ClassHierarchy& hierarchy,
-                                  const DexType* type) {
-  const auto& it = hierarchy.find(type);
-  return it != hierarchy.end() ? it->second : TypeSet();
-}
+const TypeSet& get_children(const ClassHierarchy& hierarchy,
+                            const DexType* type);
 
 /**
  * Return all children down the hierarchy of a given type.
