@@ -412,17 +412,9 @@ class ClassInitCounter final {
 
   ClassInitCounter(
       DexType* common_parent,
-      DexString* optional_method_name,
       const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
-      const std::unordered_set<DexClass*>& classes)
-      : m_optional_method({optional_method_name}) {
-    ClassInitCounter(common_parent, safe_escapes, classes);
-  }
-
-  ClassInitCounter(
-      DexType* common_parent,
-      const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
-      const std::unordered_set<DexClass*>& classes);
+      const std::unordered_set<DexClass*>& classes,
+      boost::optional<DexString*> optional_method_name = boost::none);
 
   const TypeToInit& type_to_inits() const { return m_type_to_inits; }
   const MergedUsesMap& merged_uses() const { return m_stored_mergeds; }

@@ -1090,8 +1090,10 @@ void InitLocation::update_object(DexClass* container,
 ClassInitCounter::ClassInitCounter(
     DexType* parent_class,
     const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
-    const std::unordered_set<DexClass*>& classes)
-    : m_safe_escapes{safe_escapes} {
+    const std::unordered_set<DexClass*>& classes,
+    boost::optional<DexString*> optional_method_name)
+    : m_optional_method(std::move(optional_method_name)),
+      m_safe_escapes{safe_escapes} {
   find_children(parent_class, classes);
   TRACE(CIC,
         3,
