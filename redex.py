@@ -994,7 +994,7 @@ def prepare_redex(args):
     # Move each dex to a separate temporary directory to be operated by
     # redex.
     dexen = move_dexen_to_directories(dex_dir, dex_glob(dex_dir))
-    for store in store_files:
+    for store in sorted(store_files):
         dexen.append(store)
     log("Unpacking APK finished in {:.2f} seconds".format(timer() - unpack_start_time))
 
