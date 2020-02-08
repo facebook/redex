@@ -48,17 +48,21 @@ std::string form_member_regex(const std::string& proguard_regex) {
 // Example: "Lalpha?beta;" -> "Lalpha[^\\/\\[]beta;"
 // Example: "Lalpha/*/beta;" -> "Lalpha\\/(?:[^\\/\\[]*)\\/beta;"
 // Example: "Lalpha/**/beta;" ->  "Lalpha\\/(?:[^\\[]*)\\/beta;"
-std::string form_type_regex(std::string proguard_regex) {
+
+namespace {
+const std::string L_STAR_REGEX = "L**;";
+} // namespace
+
+std::string form_type_regex(const std::string& proguard_regex) {
   if (proguard_regex.empty()) {
     return ".*";
   }
-  if (proguard_regex == "L*;") {
-    proguard_regex = "L**;";
-  }
+  const std::string& regex =
+      proguard_regex == "L*;" ? L_STAR_REGEX : proguard_regex;
   std::string r;
-  r.reserve(2 * proguard_regex.size());
-  for (size_t i = 0; i < proguard_regex.size(); i++) {
-    const char ch = proguard_regex[i];
+  r.reserve(2 * regex.size());
+  for (size_t i = 0; i < regex.size(); i++) {
+    const char ch = regex[i];
     // Convert % to a match against primvitive types without
     // creating a capture group.
     if (ch == '%') {
@@ -95,9 +99,8 @@ std::string form_type_regex(std::string proguard_regex) {
       continue;
     }
     if (ch == '*') {
-      if ((i != proguard_regex.size() - 1) && (proguard_regex[i + 1] == '*')) {
-        if ((i != proguard_regex.size() - 2) &&
-            (proguard_regex[i + 2] == '*')) {
+      if ((i != regex.size() - 1) && (regex[i + 1] == '*')) {
+        if ((i != regex.size() - 2) && (regex[i + 2] == '*')) {
           // ***: Match any single type i.e. a primitive type or a class type.
           r += "\\[*(?:(?:B|S|I|J|Z|F|D|C|V)|L.*;)";
           i = i + 2;
@@ -115,9 +118,8 @@ std::string form_type_regex(std::string proguard_regex) {
       continue;
     }
     if (ch == '.') {
-      if ((i != proguard_regex.size() - 1) && (proguard_regex[i + 1] == '.')) {
-        if ((i != proguard_regex.size() - 2) &&
-            (proguard_regex[i + 2] == '.')) {
+      if ((i != regex.size() - 1) && (regex[i + 1] == '.')) {
+        if ((i != regex.size() - 2) && (regex[i + 2] == '.')) {
           // ...: Match any sequence of types.
           r += "(?:\\[*(?:(?:B|S|I|J|Z|F|D|C)|L.*;))*";
           i = i + 2;
