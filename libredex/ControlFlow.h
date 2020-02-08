@@ -817,16 +817,6 @@ class ControlFlowGraph {
   // Used while turning back into a linear representation.
   void insert_try_catch_markers(const std::vector<Block*>& ordering);
 
-  // Follow the catch entry linked list starting at `first_mie` and
-  // make sure the throw edges (pointed to by `it`) agree with the linked list.
-  // Used while turning back into a linear representation.
-  bool catch_entries_equivalent_to_throw_edges(
-      MethodItemEntry* first_mie,
-      std::vector<Edge*>::iterator it,
-      std::vector<Edge*>::iterator end,
-      const std::unordered_map<MethodItemEntry*, Block*>&
-          catch_to_containing_block);
-
   // remove blocks with no entries
   void remove_empty_blocks();
 

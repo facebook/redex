@@ -142,6 +142,44 @@ void remove_duplicate_positions(IRList* ir) {
   }
 }
 
+// Follow the catch entry linked list starting at `first_mie` and check if the
+// throw edges (pointed to by `it`) are equivalent to the linked list. The throw
+// edges should be sorted by their indices.
+//
+// This function is useful in avoiding generating multiple identical catch
+// entries.
+//
+// Used while turning back into a linear representation.
+bool catch_entries_equivalent_to_throw_edges(
+    cfg::ControlFlowGraph* cfg,
+    MethodItemEntry* first_mie,
+    std::vector<cfg::Edge*>::iterator it,
+    std::vector<cfg::Edge*>::iterator end,
+    const std::unordered_map<MethodItemEntry*, cfg::Block*>&
+        catch_to_containing_block) {
+  for (auto mie = first_mie; mie != nullptr; mie = mie->centry->next) {
+    always_assert(mie->type == MFLOW_CATCH);
+    if (it == end) {
+      return false;
+    }
+    auto edge = *it;
+
+    if (mie->centry->catch_type != edge->throw_info()->catch_type) {
+      return false;
+    }
+
+    const auto& search = catch_to_containing_block.find(mie);
+    always_assert_log(search != catch_to_containing_block.end(),
+                      "%s not found in %s", SHOW(*mie), SHOW(*cfg));
+    if (search->second != edge->target()) {
+      return false;
+    }
+
+    ++it;
+  }
+  return it == end;
+}
+
 } // namespace
 
 namespace cfg {
@@ -1637,7 +1675,7 @@ MethodItemEntry* ControlFlowGraph::create_catch(
         // create?
         if (mie.type == MFLOW_CATCH &&
             catch_entries_equivalent_to_throw_edges(
-                &mie, it, throws_end, *catch_to_containing_block)) {
+                this, &mie, it, throws_end, *catch_to_containing_block)) {
           // The linked list of catch entries starting at `mie` is equivalent to
           // the rest of `throws` from `it` to `end`. So we don't need to create
           // another one, use the existing list.
@@ -1658,42 +1696,6 @@ MethodItemEntry* ControlFlowGraph::create_catch(
     return add_catch_impl(it, add_catch_impl);
   };
   return add_catch(throws.begin());
-}
-
-// Follow the catch entry linked list starting at `first_mie` and check if the
-// throw edges (pointed to by `it`) are equivalent to the linked list. The throw
-// edges should be sorted by their indices.
-//
-// This function is useful in avoiding generating multiple identical catch
-// entries
-bool ControlFlowGraph::catch_entries_equivalent_to_throw_edges(
-    MethodItemEntry* first_mie,
-    std::vector<Edge*>::iterator it,
-    std::vector<Edge*>::iterator end,
-    const std::unordered_map<MethodItemEntry*, Block*>&
-        catch_to_containing_block) {
-
-  for (auto mie = first_mie; mie != nullptr; mie = mie->centry->next) {
-    always_assert(mie->type == MFLOW_CATCH);
-    if (it == end) {
-      return false;
-    }
-    auto edge = *it;
-
-    if (mie->centry->catch_type != edge->m_throw_info->catch_type) {
-      return false;
-    }
-
-    const auto& search = catch_to_containing_block.find(mie);
-    always_assert_log(search != catch_to_containing_block.end(),
-                      "%s not found in %s", SHOW(*mie), SHOW(*this));
-    if (search->second != edge->target()) {
-      return false;
-    }
-
-    ++it;
-  }
-  return it == end;
 }
 
 std::vector<Block*> ControlFlowGraph::blocks() const {
