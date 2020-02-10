@@ -512,7 +512,8 @@ class DexElemManager {
         ref_getter_fn(ref_ctr),
         elemCtr(elem_ctr),
         mark_all_unrenamable(false) {}
-  DexElemManager(DexElemManager&& other) noexcept = default;
+  // NOLINTNEXTLINE(performance-noexcept-move-constructor)
+  DexElemManager(DexElemManager&& other) = default;
   virtual ~DexElemManager() {}
 
   // void lock_elements() { mark_all_unrenamable = true; }
