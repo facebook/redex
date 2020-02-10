@@ -42,9 +42,6 @@ class InstructionTypeAnalyzer final
     : public InstructionAnalyzerBase<InstructionTypeAnalyzer,
                                      DexTypeEnvironment> {
  public:
-  static bool analyze_load_param(const IRInstruction* insn,
-                                 DexTypeEnvironment* env);
-
   static bool analyze_move(const IRInstruction* insn, DexTypeEnvironment* env);
 
   static bool analyze_move_result(const IRInstruction* insn,

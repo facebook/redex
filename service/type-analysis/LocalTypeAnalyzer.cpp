@@ -27,19 +27,19 @@ boost::optional<const DexType*> get_dex_type(DexTypeEnvironment* state,
   return state->get(reg).get_dex_type();
 }
 
+void traceEnvironment(DexTypeEnvironment* env) {
+  std::ostringstream out;
+  out << *env;
+  TRACE(TYPE, 9, "%s", out.str().c_str());
+}
+
 void LocalTypeAnalyzer::analyze_instruction(const IRInstruction* insn,
                                             DexTypeEnvironment* env) const {
   TRACE(TYPE, 5, "Analyzing instruction: %s", SHOW(insn));
   m_insn_analyzer(insn, env);
-}
-
-bool InstructionTypeAnalyzer::analyze_load_param(
-    const IRInstruction* insn, DexTypeEnvironment* /* unused */) {
-  if (insn->opcode() != IOPCODE_LOAD_PARAM_OBJECT) {
-    return false;
+  if (traceEnabled(TYPE, 9)) {
+    traceEnvironment(env);
   }
-  // TODO: Do stuff?
-  return true;
 }
 
 bool InstructionTypeAnalyzer::analyze_move(const IRInstruction* insn,
@@ -54,7 +54,7 @@ bool InstructionTypeAnalyzer::analyze_move(const IRInstruction* insn,
 
 bool InstructionTypeAnalyzer::analyze_move_result(const IRInstruction* insn,
                                                   DexTypeEnvironment* env) {
-  if (insn->opcode() != OPCODE_MOVE_RESULT_OBJECT ||
+  if (insn->opcode() != OPCODE_MOVE_RESULT_OBJECT &&
       insn->opcode() != IOPCODE_MOVE_RESULT_PSEUDO_OBJECT) {
     return false;
   }
