@@ -21,7 +21,7 @@ struct TaintedRegs {
   RegSet m_reg_set;
 
   explicit TaintedRegs(int nregs) : m_reg_set(nregs) {}
-  explicit TaintedRegs(const RegSet&& reg_set)
+  explicit TaintedRegs(RegSet&& reg_set) noexcept
       : m_reg_set(std::move(reg_set)) {}
 
   const RegSet& bits() { return m_reg_set; }

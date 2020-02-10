@@ -304,7 +304,7 @@ class ClassScopes {
                      const TypeSet&)>
   void walk_all_intf_scopes(AllInterfaceScopesWalkerFn walker) const {
     for (const auto& names_it : m_sig_map) {
-      for (const auto sig_it : names_it.second) {
+      for (const auto& sig_it : names_it.second) {
         std::vector<const VirtualScope*> intf_scopes;
         TypeSet intfs;
         for (auto& scope : sig_it.second) {

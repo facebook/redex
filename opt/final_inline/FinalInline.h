@@ -17,8 +17,8 @@ struct FieldDependency {
   DexField* field;
 
   FieldDependency(DexMethod* clinit,
-                  IRList::iterator sget,
-                  IRList::iterator sput,
+                  const IRList::iterator& sget,
+                  const IRList::iterator& sput,
                   DexField* field)
       : clinit(clinit), sget(sget), sput(sput), field(field) {}
 };

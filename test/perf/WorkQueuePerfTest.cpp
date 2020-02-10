@@ -44,6 +44,7 @@ double calculate_speedup(std::vector<int>& wait_times, int num_threads) {
 
 void profileBusyLoop() {
   std::vector<int> times;
+  times.reserve(1000);
   for (int i = 0; i < 1000; ++i) {
     times.push_back(20);
   }
@@ -64,6 +65,7 @@ void variableLengthTasks() {
 
 void smallLengthTasks() {
   std::vector<int> times;
+  times.reserve(1000);
   for (int i = 0; i < 1000; ++i) {
     times.push_back(10);
   }

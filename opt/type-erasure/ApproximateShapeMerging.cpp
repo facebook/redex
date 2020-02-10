@@ -351,6 +351,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
 
   // Get a list of target shapes that has predecessors
   std::vector<Shape> target_list;
+  target_list.reserve(pred_map.size());
   for (const auto& s_pair : pred_map) {
     target_list.push_back(s_pair.first);
   }

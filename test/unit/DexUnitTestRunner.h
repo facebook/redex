@@ -7,14 +7,17 @@
 
 #pragma once
 
-#include <boost/any.hpp>
+#include <boost/variant.hpp>
 #include <mutex>
+#include <utility>
 
 #include "Creators.h"
 #include "Debug.h"
 #include "DexClass.h"
 #include "PassManager.h"
 #include "RedexContext.h"
+
+using EvType = boost::variant<uint64_t, DexString*>;
 
 class DexUnitTestRunner {
   static std::mutex g_setup_lock;
@@ -30,7 +33,7 @@ class DexUnitTestRunner {
     m_stores.emplace_back(dm);
   }
 
-  DexClass* create_class(std::string name) {
+  DexClass* create_class(const std::string& name) {
     auto type = DexType::make_type(DexString::make_string(name));
     ClassCreator creator(type);
     creator.set_super(type::java_lang_Object());
@@ -47,21 +50,20 @@ class DexUnitTestRunner {
     return cls;
   }
 
-  DexEncodedValue* make_ev(DexType* type, boost::any val) {
-    if (val.type() == typeid(uint64_t)) {
+  static DexEncodedValue* make_ev(DexType* type, const EvType& val) {
+    if (val.which() == 0) {
       auto ev = DexEncodedValue::zero_for_type(type);
-      ev->value(boost::any_cast<uint64_t>(val));
+      ev->value(boost::get<uint64_t>(val));
       return ev;
     } else {
-      always_assert(val.type() == typeid(DexString*));
-      return new DexEncodedValueString(boost::any_cast<DexString*>(val));
+      return new DexEncodedValueString(boost::get<DexString*>(val));
     }
   }
 
-  DexField* add_concrete_field(DexClass* cls,
-                               const std::string& name,
-                               DexType* type,
-                               boost::any val) {
+  static DexField* add_concrete_field(DexClass* cls,
+                                      const std::string& name,
+                                      DexType* type,
+                                      const EvType& val) {
     auto container = cls->get_type();
     auto field_name = DexString::make_string(name);
     auto field = static_cast<DexField*>(

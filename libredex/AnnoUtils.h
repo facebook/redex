@@ -56,7 +56,7 @@ std::string parse_str_anno_value(const DexMethod* method,
 template <class DexMember>
 bool has_attribute(DexMember* member,
                    const DexType* target_anno,
-                   std::string attr_name) {
+                   const std::string& attr_name) {
   auto& annos = member->get_anno_set()->get_annotations();
   for (auto& anno : annos) {
     if (anno->type() != target_anno) {
@@ -88,7 +88,7 @@ DexAnnotation* get_annotation(const DexMember* member, DexType* anno_type) {
 
 template <class DexMember>
 bool has_any_annotation(DexMember* member,
-                        std::unordered_set<DexType*> anno_types) {
+                        const std::unordered_set<DexType*>& anno_types) {
   const auto& annos = member->get_anno_set();
   if (annos == nullptr) {
     return false;

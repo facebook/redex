@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "DexClass.h"
@@ -24,7 +25,7 @@ class DexMetadata {
 
  public:
   const std::string get_id() const { return id; }
-  void set_id(std::string name) { id = name; }
+  void set_id(std::string name) { id = std::move(name); }
   void set_files(const std::vector<std::string>& f) { files = f; }
   const std::vector<std::string> get_files() const { return files; }
   const std::vector<std::string> get_dependencies() const {
@@ -42,7 +43,7 @@ class DexStore {
   bool m_generated = false;
 
  public:
-  DexStore(const DexMetadata metadata) : m_metadata(metadata){};
+  DexStore(const DexMetadata& metadata) : m_metadata(metadata){};
   DexStore(const std::string& name);
 
   std::string get_name() const;

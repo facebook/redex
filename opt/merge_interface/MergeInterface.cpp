@@ -616,6 +616,7 @@ void MergeInterfacePass::run_pass(DexStoresVector& stores,
       auto& dexes = dex_store.get_dexen();
       auto& primary_dex = dexes[0];
       std::vector<DexClass*> primary_dex_classes;
+      primary_dex_classes.reserve(primary_dex.size());
       for (auto& cls : primary_dex) {
         primary_dex_classes.emplace_back(cls);
       }

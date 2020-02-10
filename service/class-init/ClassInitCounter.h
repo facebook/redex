@@ -258,13 +258,15 @@ class MergedUses : public TrackedUses {
 
 class TrackedHasher {
  public:
-  size_t operator()(std::shared_ptr<TrackedUses> o) const { return o->hash(); }
+  size_t operator()(const std::shared_ptr<TrackedUses>& o) const {
+    return o->hash();
+  }
 };
 
 class TrackedComparer {
  public:
-  bool operator()(std::shared_ptr<TrackedUses> l,
-                  std::shared_ptr<TrackedUses> r) const {
+  bool operator()(const std::shared_ptr<TrackedUses>& l,
+                  const std::shared_ptr<TrackedUses>& r) const {
     if (!l && !r) {
       return true;
     }
@@ -310,7 +312,7 @@ class RegisterSet {
   RegisterSet& operator=(RegisterSet&&) = default;
 
   // Place Tracked value into register i, remember use
-  void insert(reg_t i, std::shared_ptr<TrackedUses> uses) {
+  void insert(reg_t i, const std::shared_ptr<TrackedUses>& uses) {
     m_all_uses.insert(uses);
     m_registers[i] = uses;
   }

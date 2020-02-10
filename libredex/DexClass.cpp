@@ -79,7 +79,7 @@ DexFieldRef* DexField::make_field(const std::string& full_descriptor) {
   return DexField::make_field(cls, name, type);
 }
 
-DexDebugEntry::DexDebugEntry(DexDebugEntry&& that)
+DexDebugEntry::DexDebugEntry(DexDebugEntry&& that) noexcept
     : type(that.type), addr(that.addr) {
   switch (type) {
   case DexDebugEntryType::Position:

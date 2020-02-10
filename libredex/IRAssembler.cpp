@@ -109,6 +109,7 @@ s_expr to_s_expr(const IRInstruction* insn, const LabelRefs& label_refs) {
     if (is_switch(op)) {
       // (switch v0 (:a :b :c))
       std::vector<s_expr> label_exprs;
+      label_exprs.reserve(label_strs.size());
       for (const auto& label_str : label_strs) {
         label_exprs.emplace_back(label_str);
       }

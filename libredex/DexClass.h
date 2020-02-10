@@ -17,6 +17,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "DexAccess.h"
 #include "DexAnnotation.h"
@@ -386,15 +387,17 @@ class DexField : public DexFieldRef {
       // This comes up for redex-created fields
       return std::string(c_str());
     }
-    auto dot_pos = full_name.find(".");
-    auto colon_pos = full_name.find(":");
+    auto dot_pos = full_name.find('.');
+    auto colon_pos = full_name.find(':');
     if (dot_pos == std::string::npos || colon_pos == std::string::npos) {
       return full_name;
     }
     return full_name.substr(dot_pos + 1, colon_pos - dot_pos - 1);
   }
 
-  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  void set_deobfuscated_name(std::string name) {
+    m_deobfuscated_name = std::move(name);
+  }
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }
@@ -620,7 +623,7 @@ struct DexDebugEntry final {
   // should only be copied via DexDebugItem's copy ctor, which is responsible
   // for remapping DexPositions' parent pointer
   DexDebugEntry(const DexDebugEntry&) = delete;
-  DexDebugEntry(DexDebugEntry&& other);
+  DexDebugEntry(DexDebugEntry&& other) noexcept;
   ~DexDebugEntry();
   void gather_strings(std::vector<DexString*>& lstring) const {
     if (type == DexDebugEntryType::Instruction) {
@@ -901,7 +904,7 @@ class DexMethod : public DexMethodRef {
   static DexMethodRef* make_method(const char* cls_name,
                                    const char* meth_name,
                                    const char* rtype_str,
-                                   std::vector<const char*> arg_strs) {
+                                   const std::vector<const char*>& arg_strs) {
     DexType* cls = DexType::make_type(cls_name);
     DexString* name = DexString::make_string(meth_name);
     DexType* rtype = DexType::make_type(rtype_str);
@@ -978,7 +981,9 @@ class DexMethod : public DexMethodRef {
 
   // Note: be careful to maintain 1:1 mapping between name (possibily
   // obfuscated) and deobfuscated name, when you mutate the method.
-  void set_deobfuscated_name(std::string name) { m_deobfuscated_name = name; }
+  void set_deobfuscated_name(std::string name) {
+    m_deobfuscated_name = std::move(name);
+  }
   const std::string& get_deobfuscated_name() const {
     return m_deobfuscated_name;
   }

@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "ConstantEnvironment.h"
 #include "IRCode.h"
 #include "InstructionAnalyzer.h"
@@ -27,7 +29,8 @@ class FixpointIterator final
   explicit FixpointIterator(
       const cfg::ControlFlowGraph& cfg,
       InstructionAnalyzer<ConstantEnvironment> insn_analyzer)
-      : MonotonicFixpointIterator(cfg), m_insn_analyzer(insn_analyzer) {}
+      : MonotonicFixpointIterator(cfg),
+        m_insn_analyzer(std::move(insn_analyzer)) {}
 
   ConstantEnvironment analyze_edge(
       const EdgeId&,

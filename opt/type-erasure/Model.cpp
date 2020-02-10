@@ -674,6 +674,7 @@ void Model::shape_model() {
     merger_types.emplace(merger_it.first);
   }
 
+  mergers.reserve(merger_types.size());
   for (const auto& type : merger_types) {
     mergers.emplace_back(&m_mergers[type]);
   }

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <boost/optional.hpp>
+#include <utility>
 
 #include "DexClass.h"
 
@@ -48,7 +49,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string name,
+       const std::string& name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -68,7 +69,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string name,
+       const std::string& name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -89,7 +90,7 @@ struct Spec {
 
   Spec(DexType* owner_type,
        Type type,
-       const std::string name,
+       const std::string& name,
        DexProto* proto,
        DexAccessFlags access_flags,
        DexField* type_tag_field,
@@ -115,7 +116,7 @@ struct DispatchMethod {
 
   explicit DispatchMethod(DexMethod* main) : main_dispatch(main) {}
   DispatchMethod(DexMethod* main, std::vector<DexMethod*> subs)
-      : main_dispatch(main), sub_dispatches(subs) {}
+      : main_dispatch(main), sub_dispatches(std::move(subs)) {}
 };
 
 /**

@@ -22,7 +22,7 @@ class TypeErasureInterDexPlugin : public interdex::InterDexPassPlugin {
       : m_mgr(mgr) {
     for (auto& spec : model_spec) {
       for (const auto root : spec.roots) {
-        m_root_to_model_spec.emplace(root, std::move(spec));
+        m_root_to_model_spec.emplace(root, spec);
       }
       always_assert_log(spec.enabled, "Only accepting enabled models!\n");
     }

@@ -29,7 +29,7 @@ class LocalTypeAnalyzer final
   LocalTypeAnalyzer(const cfg::ControlFlowGraph& cfg,
                     InstructionAnalyzer<DexTypeEnvironment> insn_analyer)
       : ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment>(cfg),
-        m_insn_analyzer(insn_analyer) {}
+        m_insn_analyzer(std::move(insn_analyer)) {}
 
   void analyze_instruction(const IRInstruction* insn,
                            DexTypeEnvironment* current_state) const override;

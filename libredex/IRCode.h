@@ -48,19 +48,19 @@ class IRCode {
   std::unique_ptr<DexDebugItem> m_dbg;
 
   IRList::iterator main_block() { return m_ir_list->main_block(); }
-  IRList::iterator make_if_block(IRList::iterator cur,
+  IRList::iterator make_if_block(const IRList::iterator& cur,
                                  IRInstruction* insn,
                                  IRList::iterator* if_block) {
     return m_ir_list->make_if_block(cur, insn, if_block);
   }
-  IRList::iterator make_if_else_block(IRList::iterator cur,
+  IRList::iterator make_if_else_block(const IRList::iterator& cur,
                                       IRInstruction* insn,
                                       IRList::iterator* if_block,
                                       IRList::iterator* else_block) {
     return m_ir_list->make_if_else_block(cur, insn, if_block, else_block);
   }
   IRList::iterator make_switch_block(
-      IRList::iterator cur,
+      const IRList::iterator& cur,
       IRInstruction* insn,
       IRList::iterator* default_block,
       std::map<SwitchIndices, IRList::iterator>& cases) {
@@ -169,7 +169,7 @@ class IRCode {
 
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* to_delete,
-                      std::vector<IRInstruction*> replacements) {
+                      const std::vector<IRInstruction*>& replacements) {
     m_ir_list->replace_opcode(to_delete, replacements);
   }
 
@@ -272,8 +272,10 @@ class IRCode {
   IRList::const_reverse_iterator rbegin() const { return m_ir_list->rbegin(); }
   IRList::const_reverse_iterator rend() const { return m_ir_list->rend(); }
 
-  IRList::iterator erase(IRList::iterator it) { return m_ir_list->erase(it); }
-  IRList::iterator erase_and_dispose(IRList::iterator it) {
+  IRList::iterator erase(const IRList::iterator& it) {
+    return m_ir_list->erase(it);
+  }
+  IRList::iterator erase_and_dispose(const IRList::iterator& it) {
     return m_ir_list->erase_and_dispose(it);
   }
 

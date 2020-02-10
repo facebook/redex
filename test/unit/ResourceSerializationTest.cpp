@@ -18,7 +18,8 @@ std::string make_big_string(size_t len) {
   return result;
 }
 
-void assert_u16_string(const std::u16string& actual_str, std::string expected) {
+void assert_u16_string(const std::u16string& actual_str,
+                       const std::string& expected) {
   std::u16string expected_str(expected.begin(), expected.end());
   ASSERT_EQ(actual_str, expected_str);
 }

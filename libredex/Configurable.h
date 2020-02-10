@@ -14,6 +14,7 @@
 #include <string>
 #include <type_traits>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <boost/optional.hpp>
@@ -119,7 +120,7 @@ class Configurable {
         const bool is_required,
         const bindflags_t bindflags,
         const std::string& primitive,
-        const Json::Value default_value = Json::nullValue) {
+        const Json::Value& default_value = Json::nullValue) {
       this->name = name;
       this->doc = doc;
       this->is_required = is_required;
@@ -225,7 +226,7 @@ class Configurable {
   void after_configuration(std::function<void()> after_configuration_fn) {
     always_assert_log(!m_after_configuration,
                       "after_configuration may only be called once");
-    m_after_configuration = after_configuration_fn;
+    m_after_configuration = std::move(after_configuration_fn);
   }
 
   /**

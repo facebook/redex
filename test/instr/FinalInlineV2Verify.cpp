@@ -6,7 +6,6 @@
  */
 
 #include <algorithm>
-#include <boost/any.hpp>
 #include <gtest/gtest.h>
 
 #include "DexClass.h"
@@ -15,12 +14,6 @@
 #include "Resolver.h"
 #include "Show.h"
 #include "VerifyUtil.h"
-
-struct StaticValueTestCase {
-  const char* name;
-  const char* type;
-  const boost::any value;
-};
 
 bool class_clinit_exist(const DexClasses& classes, const char* name) {
   auto cls = find_class_named(classes, name);

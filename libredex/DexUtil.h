@@ -195,7 +195,7 @@ inline std::string external_to_internal(const std::string& external_name) {
 
 inline std::string package_name(const std::string& type_name) {
   std::string nice_name = internal_to_external(type_name);
-  std::size_t last_dot = nice_name.rfind(".");
+  std::size_t last_dot = nice_name.rfind('.');
   if (last_dot != std::string::npos) {
     return nice_name.substr(0, last_dot);
   } else {

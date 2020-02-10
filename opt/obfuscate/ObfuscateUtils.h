@@ -59,14 +59,14 @@ class DexNameWrapper {
   // we have added asserts to make sure there are no nullptrs returned.
   DexNameWrapper() = default;
   virtual ~DexNameWrapper() {}
-  DexNameWrapper(DexNameWrapper&& other) = default;
+  DexNameWrapper(DexNameWrapper&& other) noexcept = default;
   DexNameWrapper(DexNameWrapper const& other) = default;
   // This is the constructor that should be used, creates a new wrapper on
   // the pointer it is passed
   explicit DexNameWrapper(T dex_elem) : dex_elem(dex_elem) {}
 
   DexNameWrapper& operator=(DexNameWrapper const& other) = default;
-  DexNameWrapper& operator=(DexNameWrapper&& other) = default;
+  DexNameWrapper& operator=(DexNameWrapper&& other) noexcept = default;
 
   inline T get() {
     always_assert(dex_elem != nullptr);
@@ -512,7 +512,7 @@ class DexElemManager {
         ref_getter_fn(ref_ctr),
         elemCtr(elem_ctr),
         mark_all_unrenamable(false) {}
-  DexElemManager(DexElemManager&& other) = default;
+  DexElemManager(DexElemManager&& other) noexcept = default;
   virtual ~DexElemManager() {}
 
   // void lock_elements() { mark_all_unrenamable = true; }

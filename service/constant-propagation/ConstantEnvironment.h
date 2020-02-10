@@ -8,6 +8,7 @@
 #pragma once
 
 #include <limits>
+#include <utility>
 
 #include "ConstantAbstractDomain.h"
 #include "ConstantArrayDomain.h"
@@ -170,18 +171,18 @@ class ConstantEnvironment final
 
   ConstantEnvironment& mutate_register_environment(
       std::function<void(ConstantRegisterEnvironment*)> f) {
-    apply<0>(f);
+    apply<0>(std::move(f));
     return *this;
   }
 
   ConstantEnvironment& mutate_field_environment(
       std::function<void(FieldEnvironment*)> f) {
-    apply<1>(f);
+    apply<1>(std::move(f));
     return *this;
   }
 
   ConstantEnvironment& mutate_heap(std::function<void(ConstantHeap*)> f) {
-    apply<2>(f);
+    apply<2>(std::move(f));
     return *this;
   }
 

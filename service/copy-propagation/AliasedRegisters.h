@@ -249,7 +249,7 @@ class AliasDomain final
       sparta::AbstractValueKind kind = sparta::AbstractValueKind::Top)
       : AbstractDomainScaffolding(kind) {}
 
-  void update(std::function<void(AliasedRegisters&)> operation) {
+  void update(const std::function<void(AliasedRegisters&)>& operation) {
     if (is_bottom()) {
       return;
     }

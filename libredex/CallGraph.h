@@ -40,7 +40,7 @@ struct CallSite {
   const DexMethod* callee;
   IRList::iterator invoke;
 
-  CallSite(const DexMethod* callee, IRList::iterator invoke)
+  CallSite(const DexMethod* callee, const IRList::iterator& invoke)
       : callee(callee), invoke(invoke) {}
 };
 

@@ -8,6 +8,7 @@
 #pragma once
 
 #include <ostream>
+#include <utility>
 
 #include "BaseIRAnalyzer.h"
 #include "CallGraph.h"
@@ -190,7 +191,7 @@ struct EscapeSummary {
   EscapeSummary(std::initializer_list<uint16_t> l) : escaping_parameters(l) {}
 
   EscapeSummary(ParamSet ps, std::initializer_list<uint16_t> l)
-      : escaping_parameters(l), returned_parameters(ps) {}
+      : escaping_parameters(l), returned_parameters(std::move(ps)) {}
 
   static EscapeSummary from_s_expr(const sparta::s_expr&);
 };
@@ -241,7 +242,7 @@ class FixpointIterator final : public ir_analyzer::BaseIRAnalyzer<Environment> {
       InvokeToSummaryMap invoke_to_summary_map = InvokeToSummaryMap(),
       bool escape_check_cast = false)
       : ir_analyzer::BaseIRAnalyzer<Environment>(cfg),
-        m_invoke_to_summary_map(invoke_to_summary_map),
+        m_invoke_to_summary_map(std::move(invoke_to_summary_map)),
         m_escape_check_cast(escape_check_cast) {}
 
   void analyze_instruction(const IRInstruction* insn,

@@ -534,7 +534,7 @@ void instrument_onMethodBegin(DexMethod* method,
 
 // Find a sequence of opcode that creates a static array. Patch the array size.
 void patch_array_size(DexClass* analysis_cls,
-                      const std::string array_name,
+                      const std::string& array_name,
                       const int array_size) {
   DexMethod* clinit = analysis_cls->get_clinit();
   always_assert(clinit != nullptr);

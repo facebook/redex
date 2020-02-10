@@ -11,6 +11,7 @@
 #include <ostream>
 
 #include <boost/optional.hpp>
+#include <utility>
 
 #include "AbstractDomain.h"
 #include "ConstantAbstractDomain.h"
@@ -120,7 +121,10 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
   AbstractObject(AbstractObjectKind k,
                  DexType* t,
                  std::unordered_set<DexType*> p)
-      : obj_kind(k), dex_type(t), dex_string(nullptr), potential_dex_types(p) {
+      : obj_kind(k),
+        dex_type(t),
+        dex_string(nullptr),
+        potential_dex_types(std::move(p)) {
     always_assert(k == OBJECT || k == CLASS);
   }
 
@@ -133,7 +137,10 @@ struct AbstractObject final : public sparta::AbstractValue<AbstractObject> {
                  DexType* t,
                  DexString* s,
                  std::unordered_set<DexType*> p)
-      : obj_kind(k), dex_type(t), dex_string(s), potential_dex_types(p) {
+      : obj_kind(k),
+        dex_type(t),
+        dex_string(s),
+        potential_dex_types(std::move(p)) {
     always_assert(k == FIELD || k == METHOD);
   }
 

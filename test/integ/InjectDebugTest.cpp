@@ -54,7 +54,7 @@ class InjectDebugTest : public ::testing::Test {
     g_redex = new RedexContext(true);
   }
 
-  DexClasses load_classes(std::string path) {
+  DexClasses load_classes(const std::string& path) {
     reset_redex();
     DexStore store("classes");
     store.add_classes(load_classes_from_dex(path.c_str(), /* balloon */ false));
@@ -65,7 +65,7 @@ class InjectDebugTest : public ::testing::Test {
   // Helper to reduce duplicate code - runs a given function to fetch
   // information from classes and then checks equality
   void test_dex_equality_helper(
-      std::function<std::vector<std::string>(DexClasses)> get_info) {
+      const std::function<std::vector<std::string>(DexClasses)>& get_info) {
     std::vector<std::string> original_names, modified_names;
     original_names = get_info(load_classes(m_dex_path));
     modified_names = get_info(load_classes(m_modified_dex_path));
@@ -82,27 +82,29 @@ class InjectDebugTest : public ::testing::Test {
 
 // Check that general class data is unmodified by comparing class names
 TEST_F(InjectDebugTest, TestClasses) {
-  test_dex_equality_helper([](DexClasses classes) -> std::vector<std::string> {
-    std::vector<std::string> class_names;
-    for (DexClass* dex_class : classes) {
-      class_names.push_back(dex_class->str());
-    }
-    return class_names;
-  });
+  test_dex_equality_helper(
+      [](const DexClasses& classes) -> std::vector<std::string> {
+        std::vector<std::string> class_names;
+        for (DexClass* dex_class : classes) {
+          class_names.push_back(dex_class->str());
+        }
+        return class_names;
+      });
 }
 
 // Check that general method data is unmodified by comparing method names
 TEST_F(InjectDebugTest, TestMethods) {
-  test_dex_equality_helper([](DexClasses classes) -> std::vector<std::string> {
-    std::vector<std::string> method_names;
-    for (DexClass* dex_class : classes) {
-      for (DexMethod* dex_method : dex_class->get_dmethods())
-        method_names.push_back(dex_method->str());
-      for (DexMethod* dex_method : dex_class->get_vmethods())
-        method_names.push_back(dex_method->str());
-    }
-    return method_names;
-  });
+  test_dex_equality_helper(
+      [](const DexClasses& classes) -> std::vector<std::string> {
+        std::vector<std::string> method_names;
+        for (DexClass* dex_class : classes) {
+          for (DexMethod* dex_method : dex_class->get_dmethods())
+            method_names.push_back(dex_method->str());
+          for (DexMethod* dex_method : dex_class->get_vmethods())
+            method_names.push_back(dex_method->str());
+        }
+        return method_names;
+      });
 }
 
 // Check that general code data is unmodified by comparing instructions

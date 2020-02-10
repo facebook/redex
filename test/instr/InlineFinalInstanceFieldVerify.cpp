@@ -6,7 +6,6 @@
  */
 
 #include <algorithm>
-#include <boost/any.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 

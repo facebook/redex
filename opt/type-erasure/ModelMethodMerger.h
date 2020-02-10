@@ -66,7 +66,7 @@ class ModelMethodMerger {
 
   const ModelStats& get_stats() const { return m_stats; }
   TypeToMethod& get_mergeable_ctor_map() { return m_mergeable_to_merger_ctor; }
-  void print_method_stats(const std::string model_name,
+  void print_method_stats(const std::string& model_name,
                           uint32_t num_mergeables) {
     m_method_stats.print(model_name, num_mergeables);
   }

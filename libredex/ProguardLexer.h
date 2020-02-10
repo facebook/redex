@@ -21,6 +21,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace keep_rules {
@@ -328,7 +329,7 @@ class Command : public Token {
  public:
   string command_name;
   Command(unsigned int line_number, string cmd)
-      : Token(token::command, line_number), command_name{cmd} {}
+      : Token(token::command, line_number), command_name{std::move(cmd)} {}
   string show() const override { return "-" + command_name; }
   bool is_command() const override { return true; }
   const std::string& name() const { return command_name; }
@@ -338,7 +339,7 @@ class Identifier : public Token {
  public:
   string ident;
   Identifier(unsigned int line_number, string idenifier)
-      : Token(token::identifier, line_number), ident{idenifier} {}
+      : Token(token::identifier, line_number), ident{std::move(idenifier)} {}
   string show() const override { return "identifier: " + ident; }
 };
 
@@ -352,7 +353,7 @@ class Filepath : public Token {
  public:
   string path;
   Filepath(unsigned int line_number, string file)
-      : Token(token::filepath, line_number), path{file} {}
+      : Token(token::filepath, line_number), path{std::move(file)} {}
   bool is_command() const override { return false; }
   string show() const override { return "filepath " + path; }
 };
@@ -491,7 +492,7 @@ class TargetVersion : public Token {
   string target_version;
   TargetVersion(unsigned int line_number, string version)
       : Token(token::target_version_token, line_number),
-        target_version{version} {};
+        target_version{std::move(version)} {};
   string show() const override { return target_version; }
 };
 
@@ -584,7 +585,7 @@ class Filter : public Token {
  public:
   string filter;
   Filter(unsigned int line_number, string pattern)
-      : Token(token::filter_pattern, line_number), filter{pattern} {}
+      : Token(token::filter_pattern, line_number), filter{std::move(pattern)} {}
   string show() const override { return "filter: " + filter; }
 };
 
@@ -674,7 +675,8 @@ class UnknownToken : public Token {
     return "unknown token at line " + to_string(line) + " : " + token_string;
   }
   UnknownToken(string token_text, unsigned int line_number)
-      : Token(token::unknownToken, line_number), token_string{token_text} {}
+      : Token(token::unknownToken, line_number),
+        token_string{std::move(token_text)} {}
 };
 
 class EndOfFile : public Token {

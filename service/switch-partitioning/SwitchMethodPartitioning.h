@@ -51,7 +51,7 @@ class SwitchMethodPartitioning final {
   // once, so we don't want to have multiple copies of it.
   SwitchMethodPartitioning(const SwitchMethodPartitioning&) = delete;
 
-  SwitchMethodPartitioning(SwitchMethodPartitioning&& other) {
+  SwitchMethodPartitioning(SwitchMethodPartitioning&& other) noexcept {
     m_prologue_blocks = std::move(other.m_prologue_blocks);
     m_key_to_block = std::move(other.m_key_to_block);
     m_code = other.m_code;

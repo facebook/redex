@@ -159,7 +159,7 @@ class ConcurrentContainer {
     }
   }
 
-  ConcurrentContainer(ConcurrentContainer&& container) {
+  ConcurrentContainer(ConcurrentContainer&& container) noexcept {
     for (size_t i = 0; i < n_slots; ++i) {
       m_slots[i] = std::move(container.m_slots[i]);
     }
@@ -189,7 +189,7 @@ class ConcurrentMapContainer
   ConcurrentMapContainer(const ConcurrentMapContainer& container)
       : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(container) {}
 
-  ConcurrentMapContainer(ConcurrentMapContainer&& container)
+  ConcurrentMapContainer(ConcurrentMapContainer&& container) noexcept
       : ConcurrentContainer<MapContainer, Key, Hash, n_slots>(
             std::move(container)) {}
 
@@ -333,7 +333,7 @@ class ConcurrentSet final
                             Hash,
                             n_slots>(set) {}
 
-  ConcurrentSet(ConcurrentSet&& set)
+  ConcurrentSet(ConcurrentSet&& set) noexcept
       : ConcurrentContainer<std::unordered_set<Key, Hash, Equal>,
                             Key,
                             Hash,

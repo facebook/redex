@@ -103,6 +103,7 @@ std::deque<DexType*> ReorderInterfacesImpl::sort_interfaces(
   std::deque<DexType*> sorted_list;
   // Create list of interfaces and store frequencies
   std::vector<std::pair<DexType*, int>> list_with_frequencies;
+  list_with_frequencies.reserve(unsorted_list.size());
   for (auto interface : unsorted_list) {
     list_with_frequencies.emplace_back(interface,
                                        m_call_frequency_map[interface]);

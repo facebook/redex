@@ -8,6 +8,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 struct SimpleGraph {
   void add_edge(uint32_t pred, uint32_t succ) {

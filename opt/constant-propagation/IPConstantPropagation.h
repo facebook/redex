@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "ConstantPropagationRuntimeAssert.h"
 #include "ConstantPropagationTransform.h"
 #include "ConstantPropagationWholeProgramState.h"
@@ -32,7 +34,8 @@ class PassImpl : public Pass {
   };
 
   PassImpl(Config config)
-      : Pass("InterproceduralConstantPropagationPass"), m_config(config) {}
+      : Pass("InterproceduralConstantPropagationPass"),
+        m_config(std::move(config)) {}
 
   PassImpl() : PassImpl(Config()) {}
 

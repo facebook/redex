@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <boost/any.hpp>
 #include <gtest/gtest.h>
 
 #include <unordered_map>
@@ -14,6 +13,7 @@
 #include "Creators.h"
 #include "DexAnnotation.h"
 #include "DexInstruction.h"
+#include "DexUnitTestRunner.h"
 #include "DexUtil.h"
 #include "FinalInline.h"
 #include "IRAssembler.h"
@@ -70,7 +70,7 @@ struct ConstPropTest : public RedexTest {
   void expect_field_eq(DexClass* clazz,
                        const std::string& name,
                        DexType* type,
-                       boost::any expected) {
+                       const EvType& expected) {
     auto field_name = DexString::make_string(name);
     auto field =
         resolve_field(clazz->get_type(), field_name, type, FieldSearch::Static);
@@ -79,34 +79,19 @@ struct ConstPropTest : public RedexTest {
     auto val = field->get_static_value();
     ASSERT_NE(val, nullptr) << "Failed getting static value for field "
                             << field->c_str() << " in class " << clazz->c_str();
-    if (expected.type() == typeid(uint64_t)) {
-      ASSERT_EQ(val->value(), boost::any_cast<uint64_t>(expected))
+    if (expected.which() == 0) {
+      ASSERT_EQ(val->value(), boost::get<uint64_t>(expected))
           << "Incorrect value for field " << field->c_str() << " in class "
           << clazz->c_str();
     } else {
-      always_assert(expected.type() == typeid(DexString*));
       ASSERT_EQ(static_cast<DexEncodedValueString*>(val)->string(),
-                boost::any_cast<DexString*>(expected))
+                boost::get<DexString*>(expected))
           << "Incorrect value for field " << field->c_str() << "(\""
           << show(field->get_static_value()) << "\") in class "
           << clazz->c_str();
     }
   }
 };
-
-DexEncodedValue* make_ev(DexType* type, boost::any val) {
-  if (val.type() == typeid(uint64_t)) {
-    auto ev = DexEncodedValue::zero_for_type(type);
-    ev->value(boost::any_cast<uint64_t>(val));
-    return ev;
-  } else {
-    // [&]() {
-    //   ASSERT_EQ(val.type() == typeid(DexString*), true) << val.type().name();
-    // }();
-    always_assert(val.type() == typeid(DexString*));
-    return new DexEncodedValueString(boost::any_cast<DexString*>(val));
-  }
-}
 
 // Create the named class with an empty clinit
 DexClass* create_class(const std::string& name) {
@@ -129,12 +114,12 @@ DexClass* create_class(const std::string& name) {
 DexField* add_concrete_field(DexClass* cls,
                              const std::string& name,
                              DexType* type,
-                             boost::any val) {
+                             const EvType& val) {
   auto container = cls->get_type();
   auto field_name = DexString::make_string(name);
   auto field =
       static_cast<DexField*>(DexField::make_field(container, field_name, type));
-  auto ev = make_ev(type, std::move(val));
+  auto ev = DexUnitTestRunner::make_ev(type, val);
   field->make_concrete(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, ev);
   cls->add_field(field);
   return field;
@@ -172,7 +157,7 @@ DexField* add_dependent_field(DexClass* cls,
 struct FieldDescriptor {
   std::string name;
   DexType* type;
-  boost::any value;
+  EvType value;
 };
 
 // Check that we can do a simple, single level propagation. As source, this
