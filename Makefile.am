@@ -38,7 +38,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/opt/final_inline \
 	-I$(top_srcdir)/opt/instrument \
 	-I$(top_srcdir)/opt/interdex \
-	-I$(top_srcdir)/opt/introduce_switch \
 	-I$(top_srcdir)/opt/local-dce \
 	-I$(top_srcdir)/opt/layout-reachability \
 	-I$(top_srcdir)/opt/merge_interface \
@@ -282,7 +281,6 @@ redex_all_SOURCES = \
 	opt/interdex/DexStructure.cpp \
 	opt/interdex/InterDex.cpp \
 	opt/interdex/InterDexPass.cpp \
-	opt/introduce_switch/IntroduceSwitch.cpp \
 	opt/layout-reachability/LayoutReachabilityPass.cpp \
 	opt/local-dce/LocalDcePass.cpp \
 	opt/merge_interface/MergeInterface.cpp \
