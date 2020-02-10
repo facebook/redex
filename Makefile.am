@@ -396,6 +396,7 @@ redex_all_SOURCES = \
 	service/switch-partitioning/SwitchEquivFinder.cpp \
 	service/switch-partitioning/SwitchMethodPartitioning.cpp \
 	service/type-analysis/LocalTypeAnalyzer.cpp \
+	service/type-analysis/WholeProgramState.cpp \
 	service/type-string-rewriter/TypeStringRewriter.cpp \
 	tools/common/ToolsCommon.cpp \
 	tools/redex-all/main.cpp
