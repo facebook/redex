@@ -546,8 +546,13 @@ def create_output_apk(
 
     # Create new zip file
     with zipfile.ZipFile(unaligned_apk_path, "w") as unaligned_apk:
-        for dirpath, _dirnames, filenames in os.walk(extracted_apk_dir):
-            for filename in filenames:
+        # Need sorted output for deterministic zip file. Sorting `dirnames` will
+        # ensure the tree walk order. Sorting `filenames` will ensure the files
+        # inside the tree.
+        # This scheme uses less memory than collecting all files first.
+        for dirpath, dirnames, filenames in os.walk(extracted_apk_dir):
+            dirnames.sort()
+            for filename in sorted(filenames):
                 filepath = join(dirpath, filename)
                 archivepath = filepath[len(extracted_apk_dir) + 1 :]
                 try:
