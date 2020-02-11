@@ -98,64 +98,64 @@ int main(int argc, char* argv[]) {
   while ((c = getopt_long(argc, argv, "asStpfmcCxeAdDh", &options[0],
                           nullptr)) != -1) {
     switch (c) {
-      case 'a':
-        all = true;
-        break;
-      case 's':
-        string = true;
-        break;
-      case 'S':
-        stringdata = true;
-        break;
-      case 't':
-        type = true;
-        break;
-      case 'p':
-        proto = true;
-        break;
-      case 'f':
-        field = true;
-        break;
-      case 'm':
-        meth = true;
-        break;
-      case 'H':
-        methodhandle = true;
-        break;
-      case 'k':
-        callsite = true;
-        break;
-      case 'c':
-        clsdef = true;
-        break;
-      case 'C':
-        clsdata = true;
-        break;
-      case 'x':
-        code = true;
-        break;
-      case 'e':
-        enarr = true;
-        break;
-      case 'A':
-        anno = true;
-        break;
-      case 'd':
-        redexdump_debug = true;
-        break;
-      case 'D':
-        sscanf(optarg, "%x", &ddebug_offset);
-        break;
-      case 'h':
-        puts(ddump_usage_string);
-        return 0;
-      case '?':
-        return 1; // getopt_long has printed an error
-      case 0:
-        // we're handling a long-only option
-        break;
-      default:
-        abort();
+    case 'a':
+      all = true;
+      break;
+    case 's':
+      string = true;
+      break;
+    case 'S':
+      stringdata = true;
+      break;
+    case 't':
+      type = true;
+      break;
+    case 'p':
+      proto = true;
+      break;
+    case 'f':
+      field = true;
+      break;
+    case 'm':
+      meth = true;
+      break;
+    case 'H':
+      methodhandle = true;
+      break;
+    case 'k':
+      callsite = true;
+      break;
+    case 'c':
+      clsdef = true;
+      break;
+    case 'C':
+      clsdata = true;
+      break;
+    case 'x':
+      code = true;
+      break;
+    case 'e':
+      enarr = true;
+      break;
+    case 'A':
+      anno = true;
+      break;
+    case 'd':
+      redexdump_debug = true;
+      break;
+    case 'D':
+      sscanf(optarg, "%x", &ddebug_offset);
+      break;
+    case 'h':
+      puts(ddump_usage_string);
+      return 0;
+    case '?':
+      return 1; // getopt_long has printed an error
+    case 0:
+      // we're handling a long-only option
+      break;
+    default:
+      abort();
     }
   }
 

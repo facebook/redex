@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include "DexLoader.h"
 #include "DexAccess.h"
 #include "DexCallSite.h"
 #include "DexDefs.h"
-#include "DexLoader.h"
 #include "DexMethodHandle.h"
 #include "IRCode.h"
 #include "Trace.h"

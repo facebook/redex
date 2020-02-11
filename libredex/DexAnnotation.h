@@ -264,10 +264,8 @@ class DexEncodedValueMethodHandle : public DexEncodedValue {
     m_methodhandle = methodhandle;
   }
 
-  void gather_fields(
-      std::vector<DexFieldRef*>& lfield) const override;
-  void gather_methods(
-      std::vector<DexMethodRef*>& lmethod) const override;
+  void gather_fields(std::vector<DexFieldRef*>& lfield) const override;
+  void gather_methods(std::vector<DexMethodRef*>& lmethod) const override;
   void gather_methodhandles(
       std::vector<DexMethodHandle*>& lhandles) const override;
   void encode(DexOutputIdx* dodx, uint8_t*& encdata) override;

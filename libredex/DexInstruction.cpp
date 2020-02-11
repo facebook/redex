@@ -15,6 +15,7 @@
 #include "Warning.h"
 
 unsigned DexInstruction::count_from_opcode() const {
+  // clang-format off
   static int args[] = {
       0, /* FMT_f00x   */
       0, /* FMT_f10x   */
@@ -62,6 +63,7 @@ unsigned DexInstruction::count_from_opcode() const {
       2, /* FMT_f57c */
       0, /* FMT_fopcode   */
   };
+  // clang-format on
   return args[dex_opcode::format(opcode())];
 };
 
