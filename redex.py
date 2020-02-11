@@ -329,6 +329,10 @@ def run_redex_binary(state):
         "--outdir",
         state.dex_dir,
     ]
+
+    if state.args.cmd_prefix is not None:
+        args = state.args.cmd_prefix.split() + args
+
     if state.args.config:
         args += ["--config", state.args.config]
 
@@ -782,7 +786,6 @@ Given an APK, produce a better APK!
         default="",
         help="Stop before stop_pass and dump intermediate dex and IR meta data to output_ir folder",
     )
-
     parser.add_argument(
         "--debug-source-root",
         default=None,
@@ -795,6 +798,8 @@ Given an APK, produce a better APK!
         action="store_true",
         help="Clean up temporaries even under failure",
     )
+
+    parser.add_argument("--cmd-prefix", type=str, help="Prefix redex-all with")
 
     return parser
 
