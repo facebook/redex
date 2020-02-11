@@ -52,6 +52,7 @@ class ApplicationModule(object):
                             extracted_apk_dir, name, canary_prefix, dependencies
                         )
                     )
+        modules.sort(key=lambda m: m.path)
         return modules
 
     def get_name(self):
