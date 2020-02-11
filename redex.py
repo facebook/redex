@@ -384,7 +384,7 @@ def run_redex_binary(state):
     start = timer()
 
     if state.args.debug:
-        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + map(quote, args))))
+        print("cd %s && %s" % (os.getcwd(), " ".join(prefix + list(map(quote, args)))))
         sys.exit()
 
     env = logger.setup_trace_for_child(os.environ)
