@@ -28,7 +28,7 @@
 
 namespace {
 
-const std::string USAGE_HEADER = "usage: inject_debug [out-dir] dex-files";
+const std::string USAGE_HEADER = "usage: inject_debug [-o out-dir] -d dexes";
 
 void print_usage() {
   std::cout << USAGE_HEADER << std::endl;
@@ -48,13 +48,17 @@ Arguments parse_args(int argc, char* argv[]) {
   po::options_description od(USAGE_HEADER);
   od.add_options()("help,h", "print this help message");
   od.add_options()("outdir,o", po::value<std::string>(),
-                   "output directory for dexes");
-  od.add_options()("dex-files", po::value<std::vector<std::string>>(),
-                   "dex files");
+                   "output directory for processed dex file");
+  od.add_options()("dex-files,d", po::value<std::vector<std::string>>(),
+                   "paths to dex files or dex metadata files");
+  po::positional_options_description pod;
+  pod.add("dex-files", -1);
   po::variables_map vm;
 
   try {
-    po::store(po::command_line_parser(argc, argv).options(od).run(), vm);
+    po::store(
+        po::command_line_parser(argc, argv).options(od).positional(pod).run(),
+        vm);
     po::notify(vm);
   } catch (std::exception& e) {
     std::cerr << e.what() << std::endl << std::endl;
