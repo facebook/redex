@@ -1770,6 +1770,12 @@ uint32_t emit_instruction_offset_debug_info(
       continue;
     }
     dex_code_item* dci = it.code_item;
+    auto code_size = dc->size();
+    if (code_size == 0) {
+      // If there are no instructions then we don't need any debug info!
+      dci->debug_info_off = 0;
+      continue;
+    }
     // If a method is too big then it's been marked as so internally, so this
     // will return false.
     DexMethod* method = it.method;
@@ -1780,7 +1786,6 @@ uint32_t emit_instruction_offset_debug_info(
       auto size_offset_it = param_size_to_oset.find(param_size);
       always_assert_log(size_offset_it != size_offset_end,
                         "Expected to find param to offset: %s", SHOW(method));
-      auto code_size = dc->size();
       auto& size_to_offset = size_offset_it->second;
       // Returns first key >= code_size or end if such an entry doesn't exist.
       // Aka first debug program long enough to represent a method of size
