@@ -138,9 +138,6 @@ using namespace ir_analyzer;
 using BasicTypeEnvironment =
     sparta::PatriciaTreeMapAbstractEnvironment<reg_t, TypeDomain>;
 
-using DexTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
-
 class TypeEnvironment final
     : public sparta::ReducedProductAbstractDomain<TypeEnvironment,
                                                   BasicTypeEnvironment,

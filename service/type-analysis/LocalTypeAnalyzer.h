@@ -12,16 +12,12 @@
 #include "BaseIRAnalyzer.h"
 #include "DexTypeDomain.h"
 #include "InstructionAnalyzer.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace type_analyzer {
 
 namespace local {
 
 using namespace ir_analyzer;
-
-using DexTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
 
 class LocalTypeAnalyzer final
     : public ir_analyzer::BaseIRAnalyzer<DexTypeEnvironment> {

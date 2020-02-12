@@ -13,6 +13,7 @@
 
 #include "AbstractDomain.h"
 #include "DexUtil.h"
+#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace dtv_impl {
 
@@ -118,3 +119,6 @@ class DexTypeDomain final
 };
 
 std::ostream& operator<<(std::ostream& output, const DexType* dex_type);
+
+using DexTypeEnvironment =
+    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;

@@ -12,7 +12,6 @@
 #include "DexTypeDomain.h"
 #include "HashedAbstractPartition.h"
 #include "InstructionAnalyzer.h"
-#include "PatriciaTreeMapAbstractEnvironment.h"
 
 namespace type_analyzer {
 
@@ -21,9 +20,6 @@ namespace global {
 class GlobalTypeAnalyzer;
 
 } // namespace global
-
-using DexTypeEnvironment =
-    sparta::PatriciaTreeMapAbstractEnvironment<reg_t, DexTypeDomain>;
 
 using DexTypeFieldPartition =
     sparta::HashedAbstractPartition<const DexField*, DexTypeDomain>;
