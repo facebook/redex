@@ -502,17 +502,18 @@ std::vector<std::vector<DexType*>> get_extra_classes_per_interdex_group(
 
 } // namespace
 
-std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
+void InterDex::load_interdex_types() {
+  always_assert(m_interdex_types.empty());
+
   const std::vector<std::string>& interdexorder =
       m_conf.get_coldstart_classes();
 
   // Find generated classes that should be in the interdex order.
   std::vector<std::vector<DexType*>> interdex_group_classes =
-      get_extra_classes_per_interdex_group(scope);
+      get_extra_classes_per_interdex_group(m_scope);
   size_t curr_interdex_group = 0;
 
-  std::unordered_set<DexClass*> classes(scope.begin(), scope.end());
-  std::vector<DexType*> interdex_types;
+  std::unordered_set<DexClass*> classes(m_scope.begin(), m_scope.end());
 
   for (const auto& entry : interdexorder) {
     DexType* type = DexType::get_type(entry.c_str());
@@ -524,7 +525,7 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
         if (interdex_group_classes.size() > curr_interdex_group) {
           for (DexType* extra_type :
                interdex_group_classes.at(curr_interdex_group)) {
-            interdex_types.emplace_back(extra_type);
+            m_interdex_types.emplace_back(extra_type);
           }
           curr_interdex_group++;
         }
@@ -565,7 +566,7 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
       }
     }
 
-    interdex_types.emplace_back(type);
+    m_interdex_types.emplace_back(type);
   }
 
   // We still want to add the ones in the last interdex group, if any.
@@ -573,11 +574,9 @@ std::vector<DexType*> InterDex::get_interdex_types(const Scope& scope) {
                     "Too many interdex subgroups!\n");
   if (interdex_group_classes.size() > curr_interdex_group) {
     for (DexType* type : interdex_group_classes.at(curr_interdex_group)) {
-      interdex_types.push_back(type);
+      m_interdex_types.push_back(type);
     }
   }
-
-  return interdex_types;
 }
 
 void InterDex::update_interdexorder(const DexClasses& dex,
@@ -593,8 +592,7 @@ void InterDex::update_interdexorder(const DexClasses& dex,
                          primary_dex.end());
 }
 
-void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
-    const Scope& scope) {
+void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods() {
   TRACE(IDEX, 2,
         "[dex ordering] Cross-dex-ref-minimizer active with method ref weight "
         "%d, field ref weight %d, type ref weight %d, string ref weight %d, "
@@ -630,7 +628,7 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
   std::vector<DexClass*> classes_to_insert;
   // Emit classes using some algorithm to group together classes which
   // tend to share the same refs.
-  for (DexClass* cls : scope) {
+  for (DexClass* cls : m_scope) {
     // Don't bother with classes that emit_class will skip anyway.
     // (Postpone checking should_skip_class until after we have possibly
     // extracted relocatable methods.)
@@ -681,16 +679,16 @@ void InterDex::init_cross_dex_ref_minimizer_and_relocate_methods(
   }
 }
 
-void InterDex::emit_remaining_classes(DexInfo& dex_info, const Scope& scope) {
+void InterDex::emit_remaining_classes(DexInfo& dex_info) {
   if (!m_minimize_cross_dex_refs) {
-    for (DexClass* cls : scope) {
+    for (DexClass* cls : m_scope) {
       emit_class(dex_info, cls, /* check_if_skip */ true,
                  /* perf_sensitive */ false);
     }
     return;
   }
 
-  init_cross_dex_ref_minimizer_and_relocate_methods(scope);
+  init_cross_dex_ref_minimizer_and_relocate_methods();
 
   int dexnum = m_dexes_structure.get_num_dexes();
   // Strategy for picking the next class to emit:
@@ -787,33 +785,30 @@ void InterDex::run() {
     run_in_force_single_dex_mode();
     return;
   }
-  auto scope = build_class_scope(m_dexen);
-
-  std::vector<DexType*> interdex_types = get_interdex_types(scope);
 
   auto unreferenced_classes = find_unrefenced_coldstart_classes(
-      scope, interdex_types, m_static_prune_classes);
+      m_scope, m_interdex_types, m_static_prune_classes);
 
   const auto& primary_dex = m_dexen[0];
   // We have a bunch of special logic for the primary dex which we only use if
   // we can't touch the primary dex.
   if (!m_normal_primary_dex) {
-    emit_primary_dex(primary_dex, interdex_types, unreferenced_classes);
+    emit_primary_dex(primary_dex, m_interdex_types, unreferenced_classes);
   }
 
   // NOTE: If primary dex is treated as a normal dex, we are going to modify
   //       it too, based on coldstart classes. Because of that, we need to
   //       update the coldstart list to respect the primary dex.
-  if (m_normal_primary_dex && interdex_types.size() > 0) {
-    update_interdexorder(primary_dex, &interdex_types);
+  if (m_normal_primary_dex && m_interdex_types.size() > 0) {
+    update_interdexorder(primary_dex, &m_interdex_types);
   }
 
   // Emit interdex classes, if any.
   DexInfo dex_info;
-  emit_interdex_classes(dex_info, interdex_types, unreferenced_classes);
+  emit_interdex_classes(dex_info, m_interdex_types, unreferenced_classes);
 
   // Now emit the classes that weren't specified in the head or primary list.
-  emit_remaining_classes(dex_info, scope);
+  emit_remaining_classes(dex_info);
 
   // Add whatever leftovers there are from plugins.
   for (const auto& plugin : m_plugins) {

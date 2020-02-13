@@ -82,6 +82,7 @@ void InterDexPass::bind_config() {
   bind("can_touch_coldstart_cls", false, m_can_touch_coldstart_cls);
   bind("can_touch_coldstart_extended_cls", false,
        m_can_touch_coldstart_extended_cls);
+  bind("expect_order_list", false, m_expect_order_list);
 }
 
 void InterDexPass::run_pass(DexStoresVector& stores,
@@ -107,6 +108,12 @@ void InterDexPass::run_pass(DexStoresVector& stores,
                     m_emit_scroll_set_marker, m_emit_canaries,
                     m_minimize_cross_dex_refs, m_minimize_cross_dex_refs_config,
                     m_cross_dex_relocator_config, reserve_mrefs);
+
+  if (m_expect_order_list) {
+    always_assert_log(
+        !interdex.get_interdex_types().empty(),
+        "Either no betamap was provided, or an empty list was passed in. FIX!");
+  }
 
   interdex.run();
   treat_generated_stores(stores, &interdex);

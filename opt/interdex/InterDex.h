@@ -52,10 +52,13 @@ class InterDex {
         m_emitting_extended(false),
         m_cross_dex_ref_minimizer(cross_dex_refs_config),
         m_cross_dex_relocator_config(cross_dex_relocator_config),
-        m_original_scope(original_scope) {
+        m_original_scope(original_scope),
+        m_scope(build_class_scope(m_dexen)) {
     m_dexes_structure.set_linear_alloc_limit(linear_alloc_limit);
     m_dexes_structure.set_type_refs_limit(type_refs_limit);
     m_dexes_structure.set_reserve_mrefs(reserve_mrefs);
+
+    load_interdex_types();
   }
 
   ~InterDex() { delete m_cross_dex_relocator; }
@@ -90,6 +93,9 @@ class InterDex {
   void run_on_nonroot_store();
   void add_dexes_from_store(const DexStore& store);
   void cleanup(const Scope& final_scope);
+  const std::vector<DexType*>& get_interdex_types() const {
+    return m_interdex_types;
+  }
 
  private:
   void run_in_force_single_dex_mode();
@@ -109,16 +115,16 @@ class InterDex {
       DexInfo& dex_info,
       const std::vector<DexType*>& interdex_types,
       const std::unordered_set<DexClass*>& unreferenced_classes);
-  void init_cross_dex_ref_minimizer_and_relocate_methods(const Scope& scope);
-  void emit_remaining_classes(DexInfo& dex_info, const Scope& scope);
+  void init_cross_dex_ref_minimizer_and_relocate_methods();
+  void emit_remaining_classes(DexInfo& dex_info);
   void flush_out_dex(DexInfo& dex_info);
 
   /**
-   * Returns a list of coldstart types. It will only contain:
+   * Stores in m_interdex_order a list of coldstart types. It will only contain:
    * * classes that still exist in the current scope
    * * + a "fake" type for each of the class markers (ex: DexEndMarker etc)
    */
-  std::vector<DexType*> get_interdex_types(const Scope& scope);
+  void load_interdex_types();
 
   /**
    * Makes sure that classes in the dex end up in the interdex list.
@@ -154,6 +160,8 @@ class InterDex {
   const CrossDexRelocatorConfig m_cross_dex_relocator_config;
   const Scope& m_original_scope;
   CrossDexRelocator* m_cross_dex_relocator{nullptr};
+  Scope m_scope;
+  std::vector<DexType*> m_interdex_types;
 };
 
 } // namespace interdex
