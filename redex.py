@@ -30,6 +30,7 @@ import pyredex.unpacker as unpacker
 from pyredex.logger import log
 from pyredex.utils import (
     abs_glob,
+    argparse_yes_no_flag,
     find_android_build_tools,
     make_temp_dir,
     remove_comments,
@@ -634,9 +635,7 @@ Given an APK, produce a better APK!
 
     parser.add_argument("-c", "--config", default=config, help="Configuration file")
 
-    parser.add_argument(
-        "--sign", action="store_true", help="Sign the apk after optimizing it"
-    )
+    argparse_yes_no_flag(parser, "sign", help="Sign the apk after optimizing it")
     parser.add_argument("-s", "--keystore", nargs="?", default=keystore)
     parser.add_argument("-a", "--keyalias", nargs="?", default=keyalias)
     parser.add_argument("-p", "--keypass", nargs="?", default=keypass)
