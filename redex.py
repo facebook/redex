@@ -5,7 +5,6 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
-import distutils.version
 import enum
 import errno
 import fnmatch
@@ -31,6 +30,7 @@ import pyredex.unpacker as unpacker
 from pyredex.logger import log
 from pyredex.utils import (
     abs_glob,
+    find_android_build_tools,
     make_temp_dir,
     remove_comments,
     sign_apk,
@@ -56,17 +56,6 @@ patch_zip_file()
 timer = timeit.default_timer
 
 per_file_compression = {}
-
-
-def find_android_build_tools():
-    VERSION_REGEXP = r"\d+\.\d+(\.\d+)$"
-    android_home = os.environ["ANDROID_SDK"]
-    build_tools = join(android_home, "build-tools")
-    version = max(
-        (d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)),
-        key=distutils.version.StrictVersion,
-    )
-    return join(build_tools, version)
 
 
 def pgize(name):
@@ -565,10 +554,6 @@ def create_output_apk(
                     compress = zipfile.ZIP_DEFLATED
                 unaligned_apk.write(filepath, archivepath, compress_type=compress)
 
-    # Add new signature
-    if sign:
-        sign_apk(keystore, key_password, key_alias, unaligned_apk_path)
-
     if isfile(output_apk_path):
         os.remove(output_apk_path)
 
@@ -579,6 +564,10 @@ def create_output_apk(
             raise
 
     zipalign(unaligned_apk_path, output_apk_path, ignore_zipalign, page_align)
+
+    # Add new signature
+    if sign:
+        sign_apk(keystore, key_password, key_alias, output_apk_path)
 
 
 def copy_file_to_out_dir(tmp, apk_output_path, name, human_name, out_name):

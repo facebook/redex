@@ -4,8 +4,11 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
+import distutils.version
 import errno
 import glob
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -50,38 +53,34 @@ def with_temp_cleanup(fn, always_clean=False):
             remove_temp_dirs()
 
 
+def find_android_build_tools():
+    VERSION_REGEXP = r"\d+\.\d+\.\d+$"
+    android_home = os.environ["ANDROID_SDK"]
+    build_tools = join(android_home, "build-tools")
+    version = max(
+        (d for d in os.listdir(build_tools) if re.match(VERSION_REGEXP, d)),
+        key=distutils.version.StrictVersion,
+    )
+    return join(build_tools, version)
+
+
 def sign_apk(keystore, keypass, keyalias, apk):
-    try:
-        subprocess.check_call(
-            [
-                "jarsigner",
-                "-sigalg",
-                "SHA1withRSA",
-                "-digestalg",
-                "SHA1",
-                "-keystore",
-                keystore,
-                "-storepass",
-                keypass,
-                apk,
-                keyalias,
-            ],
-            stdout=sys.stderr,
-        )
-    except OSError as e:
-        # Future migration note: In Python 3, this will throw a
-        # FileNotFoundError instead. We could also use shutil.which().
-        if e.errno == errno.ENOENT:
-            FAIL_COLOR = "\033[91m"
-            END_COLOR = "\033[0m"
-            print(
-                (
-                    "{}Failed to execute jarsigner: please check if jarsigner "
-                    "is on your $PATH.{}"
-                ).format(FAIL_COLOR, END_COLOR),
-                file=sys.stderr,
-            )
-        raise
+    subprocess.check_call(
+        [
+            join(find_android_build_tools(), "apksigner"),
+            "sign",
+            "--v1-signing-enabled",
+            "--v2-signing-enabled",
+            "--ks",
+            keystore,
+            "--ks-pass",
+            "pass:" + keypass,
+            "--ks-key-alias",
+            keyalias,
+            apk,
+        ],
+        stdout=sys.stderr,
+    )
 
 
 def remove_comments_from_line(l):
