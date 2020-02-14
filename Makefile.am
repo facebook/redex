@@ -95,6 +95,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/service/dedup-blocks \
 	-I$(top_srcdir)/service/escape-analysis \
 	-I$(top_srcdir)/service/local-dce \
+	-I$(top_srcdir)/service/max-depth \
 	-I$(top_srcdir)/service/method-dedup \
 	-I$(top_srcdir)/service/method-inliner \
 	-I$(top_srcdir)/service/method-merger \
@@ -379,6 +380,7 @@ redex_all_SOURCES = \
 	service/escape-analysis/LocalPointersAnalysis.cpp \
 	service/local-dce/LocalDce.cpp \
 	service/loop-info/LoopInfo.cpp \
+	service/max-depth/MaxDepthAnalysis.cpp \
 	service/method-dedup/ConstantLifting.cpp \
 	service/method-dedup/ConstantValue.cpp \
 	service/method-dedup/MethodDedup.cpp \
