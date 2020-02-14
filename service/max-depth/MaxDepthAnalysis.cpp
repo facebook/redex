@@ -105,7 +105,7 @@ struct DepthDomain : public AbstractDomain<DepthDomain> {
 // Callsite is mostly used to describe calling context. It can be partitioned
 // based on call edges. In this analysis, the call depth is irrelevant to the
 // calling context, so we leave it unused.
-struct Callsite {
+struct Caller {
   using Domain = HashedSetAbstractDomain<DexMethod*>;
 };
 
@@ -115,7 +115,7 @@ struct Callsite {
 template <typename FunctionSummaries>
 class MaxDepthFunctionAnalyzer : public Intraprocedural {
  private:
-  using CallerContext = typename Callsite::Domain;
+  using CallerContext = typename Caller::Domain;
   const DexMethod* m_method;
   FunctionSummaries* m_summaries;
   CallerContext* m_context;
@@ -186,7 +186,7 @@ struct MaxDepthAnalysisAdaptor : public AnalysisAdaptorBase {
 
   template <typename Summaries>
   using FunctionAnalyzer = MaxDepthFunctionAnalyzer<Summaries>;
-  using Callsite = Callsite;
+  using Callsite = Caller;
 };
 
 using Analysis = InterproceduralAnalyzer<MaxDepthAnalysisAdaptor>;
