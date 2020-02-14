@@ -64,8 +64,8 @@ ConcurrentSet<DexMethod*> get_no_implementor_abstract_methods(
       return;
     }
     DexType* cls_type = cls->get_type();
-    if (ts.get_implementors(cls_type).size() == 0 &&
-        ts.get_interface_children(cls_type).size() == 0) {
+    if (ts.get_implementors(cls_type).empty() &&
+        ts.get_interface_children(cls_type).empty()) {
       for (auto method : cls->get_vmethods()) {
         if (is_abstract(method)) {
           method_set.emplace(method);

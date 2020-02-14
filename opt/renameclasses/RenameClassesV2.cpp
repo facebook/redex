@@ -157,7 +157,7 @@ RenameClassesPassV2::build_dont_rename_for_types_with_reflection(
           "%s got translated to %s",
           refl_type_str.c_str(),
           deobf_cls_string.c_str());
-    if (deobf_cls_string == "") {
+    if (deobf_cls_string.empty()) {
       deobf_cls_string = refl_type_str;
     }
     DexType* type_with_refl = DexType::get_type(deobf_cls_string.c_str());
@@ -528,7 +528,7 @@ void RenameClassesPassV2::eval_classes(Scope& scope,
 
     if (!can_rename_if_also_renaming_xml(clazz)) {
       const auto& keep_reasons = clazz->rstate.keep_reasons();
-      auto rule = keep_reasons.size() > 0 ? show(*keep_reasons.begin()) : "";
+      auto rule = !keep_reasons.empty() ? show(*keep_reasons.begin()) : "";
       m_dont_rename_reasons[clazz] = {DontRenameReasonCode::ProguardCantRename,
                                       get_keep_rule(clazz)};
       continue;
@@ -759,7 +759,7 @@ void RenameClassesPassV2::run_pass(DexStoresVector& stores,
     return;
   }
 
-  if (m_package_prefix != "") {
+  if (!m_package_prefix.empty()) {
     always_assert_log(
         !(conf.get_json_config().get("emit_locator_strings", false)),
         "Rename classes package_prefix doesn't work together with "

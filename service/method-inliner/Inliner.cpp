@@ -324,7 +324,7 @@ void MultiMethodInliner::inline_methods() {
     for (auto& p : caller_nonrecursive_callees) {
       auto caller = p.first;
       auto& callees = p.second;
-      always_assert(callees.size() > 0);
+      always_assert(!callees.empty());
       int caller_priority = 0;
       auto method_priorities_it = m_async_callee_priorities.find(caller);
       if (method_priorities_it != m_async_callee_priorities.end()) {
@@ -383,7 +383,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
     std::unordered_map<DexMethod*, size_t>* visited,
     CallerNonrecursiveCalleesByStackDepth*
         caller_nonrecursive_callees_by_stack_depth) {
-  always_assert(callees.size() > 0);
+  always_assert(!callees.empty());
 
   auto visited_it = visited->find(caller);
   if (visited_it != visited->end()) {
@@ -426,7 +426,7 @@ size_t MultiMethodInliner::compute_caller_nonrecursive_callees_by_stack_depth(
   }
 
   (*visited)[caller] = stack_depth;
-  if (nonrecursive_callees.size() > 0) {
+  if (!nonrecursive_callees.empty()) {
     (*caller_nonrecursive_callees_by_stack_depth)[stack_depth].push_back(
         std::make_pair(caller, nonrecursive_callees));
   }
@@ -444,7 +444,7 @@ void MultiMethodInliner::caller_inline(
     }
   }
 
-  if (selected_callees.size() > 0) {
+  if (!selected_callees.empty()) {
     inline_callees(caller, selected_callees);
   }
 }
@@ -546,7 +546,7 @@ void MultiMethodInliner::inline_callees(
     info.not_found += callees.size() - found;
   }
 
-  if (inlinables.size() > 0) {
+  if (!inlinables.empty()) {
     inline_inlinables(caller, inlinables);
   }
 }
@@ -651,7 +651,7 @@ void MultiMethodInliner::inline_inlinables(
     inlined_callees.push_back(callee_method);
   }
 
-  if (inlined_callees.size() > 0) {
+  if (!inlined_callees.empty()) {
     for (auto callee_method : inlined_callees) {
       if (m_delayed_change_visibilities) {
         m_delayed_change_visibilities->update(
@@ -939,7 +939,7 @@ bool MultiMethodInliner::is_inlinable(DexMethod* caller,
     }
   }
 
-  if (make_static.size()) {
+  if (!make_static.empty()) {
     // Only now, when we'll indicate that the method inlinable, we'll record
     // the fact that we'll have to make some methods static.
     for (auto method : make_static) {

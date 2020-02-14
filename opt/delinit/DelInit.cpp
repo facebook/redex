@@ -58,7 +58,7 @@ DexType* get_dextype_from_dotname(const char* dotname) {
 // match
 bool find_package(const char* name) {
   // If there's no whitelisted package, optimize every package by default
-  if (package_filter.size() == 0) {
+  if (package_filter.empty()) {
     return true;
   }
   for (auto& el_str : package_filter) {
@@ -116,7 +116,7 @@ void find_referenced_classes(const Scope& scope) {
         auto evalue = dae.encoded_value;
         std::vector<DexType*> ltype;
         evalue->gather_types(ltype);
-        if (ltype.size()) {
+        if (!ltype.empty()) {
           for (auto dextype : ltype) {
             referenced_classes.insert(type_class(dextype));
           }
@@ -405,7 +405,7 @@ void DeadRefs::collect_dmethods(Scope& scope) {
       }
     }
 
-    if (ci.initmethods.size() || ci.dmethods.size()) {
+    if (!ci.initmethods.empty() || !ci.dmethods.empty()) {
       local_stats.emplace(
           clazz, (LocalStats){ci.initmethods.size(), ci.dmethods.size()});
     }

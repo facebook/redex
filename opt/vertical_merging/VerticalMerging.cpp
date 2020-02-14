@@ -234,7 +234,7 @@ void collect_can_merge(
         continue;
       }
       const DexType* child_type = *children_types.begin();
-      if (get_children(ch, child_type).size() != 0) {
+      if (!get_children(ch, child_type).empty()) {
         // TODO(suree404): we are skipping pairs that child class still have
         // their subclasses, but we might still be able to optimize this case.
         continue;
@@ -409,7 +409,7 @@ void record_black_list(
     const Scope& scope,
     std::unordered_map<const DexType*, DontMergeState>* dont_merge_status,
     const std::vector<std::string>& blacklist) {
-  if (blacklist.size() == 0) {
+  if (blacklist.empty()) {
     return;
   }
   walk::classes(scope, [&](DexClass* cls) {

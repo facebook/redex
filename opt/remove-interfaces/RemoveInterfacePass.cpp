@@ -505,7 +505,7 @@ void RemoveInterfacePass::remove_interfaces_for_root(
   TypeSet removed =
       remove_leaf_interfaces(scope, root, interfaces, type_system);
 
-  while (removed.size() > 0) {
+  while (!removed.empty()) {
     for (const auto intf : removed) {
       interfaces.erase(intf);
       m_removed_interfaces.insert(intf);

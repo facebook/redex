@@ -787,7 +787,7 @@ void DexOutput::generate_typelist_data() {
   uint32_t tl_start = m_offset;
   size_t num_tls = 0;
   for (DexTypeList* tl : typel) {
-    if (tl->get_type_list().size() == 0) {
+    if (tl->get_type_list().empty()) {
       m_tl_emit_offsets[tl] = 0;
       continue;
     }
@@ -1090,7 +1090,7 @@ void DexOutput::generate_static_values() {
       }
     }
   }
-  if (m_static_values.size() || m_call_site_items.size()) {
+  if (!m_static_values.empty() || !m_call_site_items.empty()) {
     insert_map_item(TYPE_ENCODED_ARRAY_ITEM, (uint32_t)enc_arrays.size(),
                     sv_start, m_offset - sv_start);
   }
@@ -1438,7 +1438,7 @@ uint32_t emit_instruction_offset_debug_info(
     //   2.1.2) Filter out methods who increase uncompressed APK size
 
     auto& sizes = pts.second;
-    always_assert(sizes.size() > 0);
+    always_assert(!sizes.empty());
 
     // 2.1.1) In Android 8+ there's a background optimizer service that
     // automatically runs dex2oat with a profile collected by the runtime JIT.

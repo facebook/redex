@@ -231,7 +231,7 @@ void BuilderAnalysis::print_usage() {
   }
 
   always_assert(m_analyzer);
-  if (m_usage.size() == 0) {
+  if (m_usage.empty()) {
     return;
   }
 

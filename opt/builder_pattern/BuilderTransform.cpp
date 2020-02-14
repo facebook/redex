@@ -76,7 +76,7 @@ bool BuilderTransform::inline_super_calls_and_ctors(const DexType* type) {
       }
     }
 
-    if (inlinable_insns.size() > 0) {
+    if (!inlinable_insns.empty()) {
       TRACE(BLD_PATTERN, 8, "Creating a copy of %s", SHOW(method));
 
       const std::string& name_str = method->get_name()->str();

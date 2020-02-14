@@ -29,7 +29,7 @@ bool is_throw_block(const DexMethod* meth, cfg::Block* block) {
     if (insn->insn->opcode() == OPCODE_THROW) {
       // debug only, a block ending with a throw should
       // only have catch successors
-      if (block->succs().size() > 0) {
+      if (!block->succs().empty()) {
         for (const auto& succ : block->succs()) {
           if (!succ->target()->is_catch()) {
             always_assert_log(false, "throw block with successors in %s",

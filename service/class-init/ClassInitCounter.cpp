@@ -120,11 +120,11 @@ std::string show(const Escapes& escapes) {
                              : "\"NoReturn\"")
       << "\", "
       << "\"via_array_write\" : "
-      << (escapes.via_array_write.size() == 0 ? "\"none\"," : "[");
+      << (escapes.via_array_write.empty() ? "\"none\"," : "[");
   for (auto i_flow : escapes.via_array_write) {
     out << "\"" << show(i_flow.second) << "\",";
   }
-  out << (escapes.via_array_write.size() == 0 ? "" : "],")
+  out << (escapes.via_array_write.empty() ? "" : "],")
       << "\"via_field\" : " << show(escapes.via_field_set) << ", "
       << "\"via_static_method\" : " << show(escapes.via_smethod_call) << ", "
       << "\"via_virtual_method\" : " << show(escapes.via_vmethod_call) << "}}";
@@ -324,7 +324,7 @@ void FieldWriteRegs::combine_paths(const FieldWriteRegs& other) {
 }
 
 void FieldWriteRegs::merge(const FieldWriteRegs& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   std::vector<DexFieldRef*> m_keys = get_keys(m_fields);
@@ -389,7 +389,7 @@ bool FieldReads::consistent_with(const FieldReads& other) {
 }
 
 void FieldReads::combine_paths(const FieldReads& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   auto keys = get_keys(m_fields);
@@ -407,7 +407,7 @@ void FieldReads::combine_paths(const FieldReads& other) {
 }
 
 void FieldReads::merge(const FieldReads& other) {
-  if (other.m_fields.size() == 0) {
+  if (other.m_fields.empty()) {
     return;
   }
   // Outer path flow holds over inner path flow, so just don't lose any
@@ -424,7 +424,7 @@ bool MethodCalls::consistent_with(const MethodCalls& other) {
 }
 
 void MethodCalls::combine_paths(const MethodCalls& other) {
-  if (other.m_calls.size() == 0) {
+  if (other.m_calls.empty()) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
@@ -451,7 +451,7 @@ void MethodCalls::combine_paths(const MethodCalls& other) {
 }
 
 void MethodCalls::merge(const MethodCalls& other) {
-  if (other.m_calls.size() == 0) {
+  if (other.m_calls.empty()) {
     return;
   }
   std::vector<DexMethodRef*> m_keys = get_keys(m_calls);
@@ -571,7 +571,7 @@ bool Escapes::consistent_with(const Escapes& other) {
 }
 
 void Escapes::combine_paths(const Escapes& other) {
-  if (return_instrs.size() >= 1 || other.return_instrs.size() >= 1) {
+  if (!return_instrs.empty() || !other.return_instrs.empty()) {
     via_return =
         path_combine(via_return ? via_return.value() : Conditional,
                      other.via_return ? other.via_return.value() : Conditional);
@@ -818,7 +818,7 @@ void MergedUses::merge(const TrackedUses& other) {
         m_instrs.begin(), m_instrs.end(), merged_use_other.get_instrs().begin(),
         merged_use_other.get_instrs().end(), std::back_inserter(intersection));
 
-    if (intersection.size() > 0) {
+    if (!intersection.empty()) {
       // We have come from some of the same instructions, so merge without paths
       TrackedUses::merge(other);
     } else {
@@ -847,7 +847,7 @@ bool MergedUses::consistent_with(const TrackedUses& other_tracked) {
         other_merged.get_instrs().end(), std::back_inserter(intersection));
 
     // If our instructions are overlapping, we're consistent
-    return intersection.size() > 0;
+    return !intersection.empty();
   }
 }
 
@@ -1092,8 +1092,7 @@ ClassInitCounter::ClassInitCounter(
     const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
     const std::unordered_set<DexClass*>& classes,
     boost::optional<DexString*> optional_method_name)
-    : m_optional_method(std::move(optional_method_name)),
-      m_safe_escapes{safe_escapes} {
+    : m_optional_method(optional_method_name), m_safe_escapes{safe_escapes} {
   find_children(parent_class, classes);
   TRACE(CIC,
         3,
@@ -1290,7 +1289,7 @@ void ClassInitCounter::analyze_block(DexClass* container,
     visited_blocks[block]->basic_block_registers = std::move(registers);
   }
 
-  if (block->succs().size() == 0) {
+  if (block->succs().empty()) {
     TRACE(CIC, 8, "Termination of block %zu", block->id());
     visited_blocks[block]->final_result_registers =
         visited_blocks[block]->basic_block_registers;

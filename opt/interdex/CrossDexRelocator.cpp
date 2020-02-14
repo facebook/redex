@@ -66,12 +66,12 @@ bool CrossDexRelocator::handle_invoked_direct_methods_that_prevent_relocation(
   std::unordered_set<DexMethodRef*> methods_preventing_relocation;
   if (gather_invoked_methods_that_prevent_relocation(
           meth, &methods_preventing_relocation)) {
-    always_assert(methods_preventing_relocation.size() == 0);
+    always_assert(methods_preventing_relocation.empty());
     // No issues with direct methods.
     return true;
   }
 
-  always_assert(methods_preventing_relocation.size() > 0);
+  always_assert(!methods_preventing_relocation.empty());
   if (std::any_of(methods_preventing_relocation.begin(),
                   methods_preventing_relocation.end(),
                   [&relocated_methods](DexMethodRef* mref) {
@@ -124,7 +124,7 @@ void CrossDexRelocator::relocate_methods(
   std::vector<DexMethod*> possibly_relocatable_methods;
   gather_possibly_relocatable_methods(cls, possibly_relocatable_methods);
 
-  if (possibly_relocatable_methods.size() > 0) {
+  if (!possibly_relocatable_methods.empty()) {
     // Before we actually relocate methods, we need to make sure that any
     // direct methods that they invoke are getting relocated themselves.
     // We do this by relocating one frontier of possibly relocatable methods

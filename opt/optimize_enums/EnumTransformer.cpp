@@ -1426,7 +1426,7 @@ class EnumTransformer final {
       }
     }
     // Arbitrarily choose the first case block as the default case.
-    always_assert(cases.size() > 0);
+    always_assert(!cases.empty());
     cfg.create_branch(entry, dasm(OPCODE_SWITCH, {0_v}), cases.front().second,
                       cases);
     cfg.recompute_registers_size();

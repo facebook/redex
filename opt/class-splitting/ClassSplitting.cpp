@@ -88,7 +88,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
     always_assert(!cls->rstate.is_generated());
 
     SplitClass& sc = m_split_classes[cls];
-    always_assert(sc.relocatable_methods.size() == 0);
+    always_assert(sc.relocatable_methods.empty());
     for (DexMethod* method : cls->get_dmethods()) {
       if (!can_relocate(method)) {
         continue;
@@ -152,7 +152,7 @@ class ClassSplittingInterDexPlugin : public interdex::InterDexPassPlugin {
         continue;
       }
       const SplitClass& sc = split_classes_it->second;
-      if (sc.relocatable_methods.size() == 0) {
+      if (sc.relocatable_methods.empty()) {
         continue;
       }
       if (!can_relocate(cls)) {

@@ -284,7 +284,7 @@ void purge_wrapped_wrappers(WrapperMethods& ssms) {
     TRACE(SYNT, 5, "Removing wrapper: %s", SHOW(meth));
     ssms.wrappers.erase(meth);
   }
-  ssms.next_pass = ssms.next_pass || remove.size() > 0;
+  ssms.next_pass = ssms.next_pass || !remove.empty();
 }
 
 WrapperMethods analyze(const ClassHierarchy& ch,

@@ -79,7 +79,7 @@ std::vector<DexMethod*> ConstantLifting::lift_constants_from(
                               stud_method_threshold,
                               method->get_code());
     auto const_loads = const_vals.collect_constant_loads(method->get_code());
-    if (const_loads.size() == 0) {
+    if (const_loads.empty()) {
       // No matching constant found.
       TRACE(METH_DEDUP,
             5,

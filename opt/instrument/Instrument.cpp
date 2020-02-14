@@ -310,7 +310,7 @@ void insert_invoke_static_call_bb(IRCode* code,
       auto reg_method_id = code->allocate_temp();
       method_id_inst->set_dest(reg_method_id);
 
-      assert(reg_bb_vector.size() != 0);
+      assert(!reg_bb_vector.empty());
       if (reg_bb_vector.size() <= 5) {
         IRInstruction* invoke_inst = new IRInstruction(OPCODE_INVOKE_STATIC);
         // Method to be invoked depends on the number of vectors in current

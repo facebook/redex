@@ -12,7 +12,8 @@
 #include <boost/optional.hpp>
 #include <unordered_set>
 
-struct ModelSpec;
+#include "Model.h"
+
 class ModelMerger;
 
 class TypeErasurePass : public Pass {

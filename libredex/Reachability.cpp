@@ -341,7 +341,7 @@ void TransitiveClosureMarker::gather_and_push(DexMethod* meth) {
   auto* cls = type_class(type);
   auto refs = gather(meth);
   bool check_strings = m_ignore_sets.keep_class_in_string;
-  if (!check_strings && refs.strings.size() > 0 && has_class_forname(meth)) {
+  if (!check_strings && !refs.strings.empty() && has_class_forname(meth)) {
     check_strings = true;
   }
   if (m_ignore_sets.string_literals.count(type)) {
@@ -395,7 +395,7 @@ void TransitiveClosureMarker::visit_cls(const DexClass* cls) {
     } else if (method::is_init(m)) {
       // Push the parameterless constructor, in case it's constructed via
       // .class or Class.forName()
-      if (m->get_proto()->get_args()->get_type_list().size() == 0) {
+      if (m->get_proto()->get_args()->get_type_list().empty()) {
         push(cls, m);
       }
     }

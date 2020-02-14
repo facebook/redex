@@ -416,7 +416,7 @@ int DexCode::encode(DexOutputIdx* dodx, uint32_t* output) {
     opc->encode(dodx, insns);
   }
   code->insns_size = (uint32_t)(insns - ((uint16_t*)(code + 1)));
-  if (m_tries.size() == 0)
+  if (m_tries.empty())
     return ((code->insns_size * sizeof(uint16_t)) + sizeof(dex_code_item));
   /*
    * Now the tries..., obscenely messy encoding :(
@@ -836,8 +836,8 @@ bool DexClass::has_class_data() const {
 int DexClass::encode(DexOutputIdx* dodx,
                      dexcode_to_offset& dco,
                      uint8_t* output) {
-  if (m_sfields.size() == 0 && m_ifields.size() == 0 &&
-      m_dmethods.size() == 0 && m_vmethods.size() == 0) {
+  if (m_sfields.empty() && m_ifields.empty() && m_dmethods.empty() &&
+      m_vmethods.empty()) {
     opt_warn(PURE_ABSTRACT_CLASS,
              "'%s' super '%s' flags 0x%08x\n",
              m_self->get_name()->c_str(),

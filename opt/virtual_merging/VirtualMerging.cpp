@@ -277,7 +277,7 @@ void VirtualMerging::compute_mergeable_pairs_by_virtual_scopes() {
           }
           always_assert(found_potentially_mergeable_pair);
         }
-        if (!mergeable_pairs_map.size()) {
+        if (mergeable_pairs_map.empty()) {
           always_assert(stats.overriding_methods ==
                         stats.cross_store_refs + stats.cross_dex_refs +
                             stats.inconcrete_overridden_methods);

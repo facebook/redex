@@ -79,7 +79,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
                [](cfg::Block* b) {
                  return b->branchingness() == opcode::BRANCH_SWITCH;
                });
-  if (switch_blocks.size() == 0) {
+  if (switch_blocks.empty()) {
     // Let's skip computing the liveness
     return;
   }
@@ -230,7 +230,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
       stats.remaining_trivial_switches++;
     }
 
-    if (fallthrough_edges.size() == 0) {
+    if (fallthrough_edges.empty()) {
       // Nothing to optimize here
       continue;
     }
@@ -243,7 +243,7 @@ void ReduceGotosPass::process_code_switches(cfg::ControlFlowGraph& cfg,
         cases.emplace_back(*branch_edge->case_key(), branch_edge->target());
       }
     }
-    always_assert(cases.size() > 0);
+    always_assert(!cases.empty());
 
     // Sort, to make things tidy and deterministic, and ensure we can rely on
     // the front and back case keys being ordered properly

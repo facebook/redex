@@ -364,7 +364,7 @@ void InterDex::emit_interdex_classes(
     DexInfo& dex_info,
     const std::vector<DexType*>& interdex_types,
     const std::unordered_set<DexClass*>& unreferenced_classes) {
-  if (interdex_types.size() == 0) {
+  if (interdex_types.empty()) {
     TRACE(IDEX, 2, "No interdex classes passed.");
     return;
   }
@@ -421,7 +421,7 @@ void InterDex::emit_interdex_classes(
         auto end_marker =
             std::find(m_end_markers.begin(), m_end_markers.end(), type);
         // Cold start end marker is the last dex end marker
-        auto cold_start_end_marker = m_end_markers.size()
+        auto cold_start_end_marker = !m_end_markers.empty()
                                          ? m_end_markers.end() - 1
                                          : m_end_markers.end();
         if (end_marker != m_end_markers.end()) {
@@ -769,7 +769,7 @@ void InterDex::run_in_force_single_dex_mode() {
   }
 
   // Emit all no matter what it is.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info);
   }
 
@@ -799,7 +799,7 @@ void InterDex::run() {
   // NOTE: If primary dex is treated as a normal dex, we are going to modify
   //       it too, based on coldstart classes. Because of that, we need to
   //       update the coldstart list to respect the primary dex.
-  if (m_normal_primary_dex && m_interdex_types.size() > 0) {
+  if (m_normal_primary_dex && !m_interdex_types.empty()) {
     update_interdexorder(primary_dex, &m_interdex_types);
   }
 
@@ -823,7 +823,7 @@ void InterDex::run() {
   }
 
   // Emit what is left, if any.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(dex_info);
   }
 
@@ -861,7 +861,7 @@ void InterDex::run_on_nonroot_store() {
   }
 
   // Emit what is left, if any.
-  if (m_dexes_structure.get_current_dex_classes().size()) {
+  if (!m_dexes_structure.get_current_dex_classes().empty()) {
     flush_out_dex(EMPTY_DEX_INFO);
   }
 

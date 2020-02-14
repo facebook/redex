@@ -110,7 +110,8 @@ class DexTypeDomain final
       break;
     }
     case AbstractValueKind::Value: {
-      out << show(x.get_dex_type());
+      auto type = x.get_dex_type();
+      out << (type ? show(*type) : std::string("<NONE>"));
       break;
     }
     }

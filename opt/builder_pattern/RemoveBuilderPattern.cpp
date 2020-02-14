@@ -108,7 +108,7 @@ class RemoveClasses {
 
     // We are only tackling leaf classes.
     for (const DexType* type : subclasses) {
-      if (m_type_system.get_children(type).size() == 0) {
+      if (m_type_system.get_children(type).empty()) {
         if (m_root != object_type || boost::regex_search(type->c_str(), re)) {
           m_classes.emplace(type);
         }
@@ -206,14 +206,14 @@ class RemoveClasses {
       // or take the builder as an argument, except for the ctors.
       std::unordered_set<IRInstruction*> to_inline =
           analysis->get_all_inlinable_insns();
-      if (to_inline.size() == 0) {
+      if (to_inline.empty()) {
         TRACE(BLD_PATTERN, 3,
               "Everything that could be inlined was inlined for %s",
               SHOW(method));
 
         // Check if any of the instance builder types cannot be removed.
         auto non_removable_types = analysis->non_removable_types();
-        if (non_removable_types.size() > 0) {
+        if (!non_removable_types.empty()) {
           for (DexType* type : non_removable_types) {
             if (m_excluded_types.count(type) == 0 &&
                 !m_propagate_escape_results) {
@@ -241,7 +241,7 @@ class RemoveClasses {
       auto not_inlined_insns =
           m_transform.get_not_inlined_insns(method, to_inline);
 
-      if (not_inlined_insns.size() > 0) {
+      if (!not_inlined_insns.empty()) {
         auto to_eliminate =
             analysis->get_instantiated_types(&not_inlined_insns);
         for (const DexType* type : to_eliminate) {

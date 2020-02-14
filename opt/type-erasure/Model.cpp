@@ -338,7 +338,7 @@ void Model::build_interdex_groups(ConfigFiles* conf) {
   }
 
   const auto& interdex_order = conf->get_coldstart_classes();
-  if (interdex_order.size() == 0) {
+  if (interdex_order.empty()) {
     // No grouping based on interdex.
     s_num_interdex_groups = 0;
     return;
@@ -796,7 +796,7 @@ void Model::approximate_shapes(MergerType::ShapeCollector& shapes) {
     return;
   }
 
-  always_assert(s_outdir != "");
+  always_assert(!s_outdir.empty());
   TRACE(TERA, 3, "[approx] output dir is: %s", s_outdir.c_str());
 
   // Select an approximation algorithm
@@ -993,7 +993,7 @@ void Model::flatten_shapes(const MergerType& merger,
         auto new_groups = group_per_interdex_set(group_values);
 
         for (size_t gindex = 0; gindex < new_groups.size(); gindex++) {
-          if (new_groups[gindex].size() < 1 ||
+          if (new_groups[gindex].empty() ||
               new_groups[gindex].size() < m_spec.min_count) {
             continue;
           }
@@ -1188,7 +1188,7 @@ void Model::add_interface_scope(MergerType& merger,
     }
   };
 
-  always_assert(intf_scope.methods.size() > 0);
+  always_assert(!intf_scope.methods.empty());
   const auto& vmethod = intf_scope.methods[0];
   for (auto& intf_meths : merger.intfs_methods) {
     if (method::signatures_match(intf_meths.methods[0], vmethod.first)) {

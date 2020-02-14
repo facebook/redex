@@ -459,7 +459,7 @@ void ModelMethodMerger::sink_common_ctor_to_return_block(DexMethod* dispatch) {
   DexMethod* common_ctor = nullptr;
   find_common_ctor_invocations(switch_block, return_block, common_ctor,
                                invocations);
-  if (invocations.size() == 0) {
+  if (invocations.empty()) {
     dispatch_code->clear_cfg();
     return;
   }

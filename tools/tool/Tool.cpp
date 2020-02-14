@@ -120,7 +120,7 @@ DexStoresVector Tool::init(const std::string& system_jar_paths,
   }
 
   // Load jars
-  if (system_jar_paths != "") {
+  if (!system_jar_paths.empty()) {
     auto delim = boost::is_any_of(":,");
     std::vector<std::string> system_jars;
     boost::split(system_jars, system_jar_paths, delim);

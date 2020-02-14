@@ -112,9 +112,9 @@ void Breadcrumbs::report_deleted_types(bool report_only, PassManager& mgr) {
   size_t bad_type_insns_count = 0;
   size_t bad_field_insns_count = 0;
   size_t bad_meths_insns_count = 0;
-  if (m_bad_fields.size() > 0 || m_bad_methods.size() > 0 ||
-      m_bad_type_insns.size() > 0 || m_bad_field_insns.size() > 0 ||
-      m_bad_meth_insns.size() > 0) {
+  if (!m_bad_fields.empty() || !m_bad_methods.empty() ||
+      !m_bad_type_insns.empty() || !m_bad_field_insns.empty() ||
+      !m_bad_meth_insns.empty()) {
     std::ostringstream ss;
     for (const auto& bad_field : m_bad_fields) {
       for (const auto& field : bad_field.second) {

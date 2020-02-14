@@ -354,7 +354,7 @@ bool matches_onclick_method(const DexMethod* dmethod,
 // android.content.Context that accept 1 argument (an android.view.View).
 void mark_onclick_attributes_reachable(
     const Scope& scope, const std::set<std::string>& onclick_attribute_values) {
-  if (onclick_attribute_values.size() == 0) {
+  if (onclick_attribute_values.empty()) {
     return;
   }
   auto type_context = DexType::get_type("Landroid/content/Context;");
@@ -533,7 +533,7 @@ void initialize_reachable_for_json_serde(
       serde_superclses.emplace(supercls);
     }
   }
-  if (serde_superclses.size() == 0) {
+  if (serde_superclses.empty()) {
     return;
   }
   ClassHierarchy ch = build_type_hierarchy(scope);
@@ -642,7 +642,7 @@ void init_reachable_classes(const Scope& scope, const JsonWrapper& config) {
 
   keep_methods(scope, methods);
 
-  if (apk_dir.size()) {
+  if (!apk_dir.empty()) {
     if (compute_xml_reachability) {
       // Classes present in manifest
       analyze_reachable_from_manifest(apk_dir, prune_unexported_components);

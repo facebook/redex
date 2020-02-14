@@ -23,7 +23,7 @@ constexpr double MINIMUM_APPEAR_PERCENT = 80.0;
 
 bool MethodProfiles::parse_stats_file(const std::string& csv_filename) {
   TRACE(METH_PROF, 3, "input csv filename: %s", csv_filename.c_str());
-  if (csv_filename == "") {
+  if (csv_filename.empty()) {
     TRACE(METH_PROF, 2, "No csv file given");
     return false;
   }

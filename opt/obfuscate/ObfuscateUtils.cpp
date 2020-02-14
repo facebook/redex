@@ -33,7 +33,7 @@ static inline char get_ident_62(int num) {
 
 void compute_identifier(int value, std::string* res) {
   always_assert(res);
-  always_assert(res->size() == 0);
+  always_assert(res->empty());
 
   // We don't want leading digits, as that causes sorting issues with
   // <clinit> and <init>.

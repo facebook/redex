@@ -756,7 +756,7 @@ void ProguardMatcher::process_keep(const KeepSpecSet& keep_rules,
 
     // This is also very fast. Process it in the main thread, too.
     const auto& extendsClassName = keep_rule.class_spec.extendsClassName;
-    if (extendsClassName != "" &&
+    if (!extendsClassName.empty() &&
         !classname_contains_wildcard(extendsClassName)) {
       DexClass* super = find_single_class(extendsClassName);
       if (super != nullptr) {

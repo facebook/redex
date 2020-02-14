@@ -68,7 +68,7 @@ void emit_check_cast(const dispatch::Spec& spec,
                      std::vector<Location>& args,
                      DexMethod* callee,
                      MethodBlock* block) {
-  if (args.size() && spec.proto->get_args()->size()) {
+  if (!args.empty() && spec.proto->get_args()->size()) {
     auto dispatch_head_arg_type =
         spec.proto->get_args()->get_type_list().front();
     auto callee_head_arg_type =
@@ -541,7 +541,7 @@ DispatchMethod create_virtual_dispatch(
 DexMethod* create_ctor_or_static_dispatch(
     const Spec& spec,
     const std::map<SwitchIndices, DexMethod*>& indices_to_callee) {
-  always_assert(indices_to_callee.size() && spec.overridden_meth == nullptr);
+  always_assert(!indices_to_callee.empty() && spec.overridden_meth == nullptr);
   TRACE(SDIS,
         5,
         "creating dispatch %s.%s for targets of size %d",

@@ -196,7 +196,7 @@ DexClasses TypeErasureInterDexPlugin::additional_classes(
     const DexClassesVector& outdex, const DexClasses& classes) {
   DexClasses additional_classes;
 
-  if (m_current_mergeables.size() == 0) {
+  if (m_current_mergeables.empty()) {
     // No mergeables here.
     return additional_classes;
   }

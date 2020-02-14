@@ -173,7 +173,7 @@ bool UpCodeMotionPass::gather_instructions_to_insert(
         std::max(ordered_instructions_in_goto_block_index_end, it->second);
   }
 
-  if (destroyed_dests.size() == 0) {
+  if (destroyed_dests.empty()) {
     return false;
   }
 

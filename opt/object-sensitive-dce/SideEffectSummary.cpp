@@ -212,7 +212,7 @@ void analyze_method_recursive(const DexMethod* method,
     TRACE(OSDCE, 3, "%s %s unknown side effects (%u)", SHOW(method),
           summary.effects != EFF_NONE ? "has" : "does not have",
           summary.effects);
-    if (summary.modified_params.size() != 0) {
+    if (!summary.modified_params.empty()) {
       TRACE_NO_LINE(OSDCE, 3, "Modified params: ");
       for (auto idx : summary.modified_params) {
         TRACE_NO_LINE(OSDCE, 3, "%u ", idx);

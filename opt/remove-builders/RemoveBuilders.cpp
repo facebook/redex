@@ -130,9 +130,9 @@ std::unordered_set<DexClass*> get_trivial_builders(
 
     // Filter out builders that do "extra work".
     bool has_static_methods =
-        get_static_methods(builder_class->get_dmethods()).size() != 0;
+        !get_static_methods(builder_class->get_dmethods()).empty();
 
-    if (has_static_methods || builder_class->get_sfields().size()) {
+    if (has_static_methods || !builder_class->get_sfields().empty()) {
       continue;
     }
 

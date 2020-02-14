@@ -296,7 +296,7 @@ bool is_true_virtual(const Graph& graph, const DexMethod* method) {
     return true;
   }
   const auto& node = graph.get_node(method);
-  return node.parents.size() != 0 || node.children.size() != 0;
+  return !node.parents.empty() || !node.children.empty();
 }
 
 std::unordered_set<DexMethod*> get_non_true_virtuals(const Graph& graph,

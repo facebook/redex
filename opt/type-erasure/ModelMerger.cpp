@@ -561,7 +561,7 @@ std::vector<DexClass*> ModelMerger::merge_model(
     // Bail out if we should not generate type tags and there are vmethods
     // or intfs_methods.
     if (model_spec.no_type_tag()) {
-      if (merger.vmethods.size() || merger.intfs_methods.size()) {
+      if (!merger.vmethods.empty() || !merger.intfs_methods.empty()) {
         TRACE(TERA,
               5,
               "Bailing out: no type tag merger %s w/ true virtuals",

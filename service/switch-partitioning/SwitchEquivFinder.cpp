@@ -379,7 +379,7 @@ void SwitchEquivFinder::normalize_extra_loads(
 
   // Remove empty instruction lists from `m_extra_loads` (possibly emptying it)
   for (auto it = m_extra_loads.begin(); it != m_extra_loads.end();) {
-    if (it->second.size() == 0) {
+    if (it->second.empty()) {
       it = m_extra_loads.erase(it);
     } else {
       ++it;

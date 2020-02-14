@@ -181,13 +181,12 @@ void extract_js_asset_registrations(const std::string& file_contents,
   extract_by_pattern(file_contents, register_regex, registrations);
   for (const std::string& registration : registrations) {
     boost::smatch m;
-    if (!boost::regex_search(registration, m, location_regex) ||
-        m.size() == 0) {
+    if (!boost::regex_search(registration, m, location_regex) || m.empty()) {
       continue;
     }
     std::ostringstream asset_path;
     asset_path << m[1].str() << '/'; // location
-    if (!boost::regex_search(registration, m, name_regex) || m.size() == 0) {
+    if (!boost::regex_search(registration, m, name_regex) || m.empty()) {
       continue;
     }
     asset_path << m[1].str(); // name
@@ -383,7 +382,7 @@ ManifestClassInfo extract_classes_from_manifest(
       if (tag == application) {
         std::string classname = get_string_attribute_value(parser, name);
         // android:name is an optional attribute for <application>
-        if (classname.size()) {
+        if (!classname.empty()) {
           manifest_classes.application_classes.emplace(
               dotname_to_dexname(classname));
         }
@@ -597,7 +596,7 @@ void write_entire_file(const std::string& filename,
 boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
   const std::string& manifest = read_entire_file(manifest_filename);
 
-  if (manifest.size() == 0) {
+  if (manifest.empty()) {
     fprintf(stderr, "WARNING: Cannot find/read the manifest file %s\n",
             manifest_filename.c_str());
     return boost::none;
@@ -638,7 +637,7 @@ boost::optional<int32_t> get_min_sdk(const std::string& manifest_filename) {
 ManifestClassInfo get_manifest_class_info(const std::string& filename) {
   std::string manifest = read_entire_file(filename);
   ManifestClassInfo classes;
-  if (manifest.size()) {
+  if (!manifest.empty()) {
     classes = extract_classes_from_manifest(manifest);
   } else {
     fprintf(stderr, "Unable to read manifest file: %s\n", filename.data());
@@ -684,7 +683,7 @@ std::unordered_set<std::string> get_candidate_js_resources_from_bundle(
     const std::string& filename) {
   std::string file_contents = read_entire_file(filename);
   std::unordered_set<std::string> js_candidate_resources;
-  if (file_contents.size()) {
+  if (!file_contents.empty()) {
     js_candidate_resources = extract_js_resources(file_contents);
   } else {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
@@ -793,7 +792,7 @@ std::unordered_set<uint32_t> get_resources_by_name_prefix(
 
 void ensure_file_contents(const std::string& file_contents,
                           const std::string& filename) {
-  if (!file_contents.size()) {
+  if (file_contents.empty()) {
     fprintf(stderr, "Unable to read file: %s\n", filename.data());
     throw std::runtime_error("Unable to read file: " + filename);
   }

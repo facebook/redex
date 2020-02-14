@@ -163,7 +163,7 @@ class DedupBlocksImpl {
   // Dedup blocks that are exactly the same
   bool dedup(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     Duplicates dups = collect_duplicates(method, cfg);
-    if (dups.size() > 0) {
+    if (!dups.empty()) {
       if (m_config.debug) {
         check_inits(cfg);
       }
@@ -190,7 +190,7 @@ class DedupBlocksImpl {
    */
   void split_postfix(DexMethod* method, cfg::ControlFlowGraph& cfg) {
     PostfixSplitGroupMap dups = collect_postfix_duplicates(method, cfg);
-    if (dups.size() > 0) {
+    if (!dups.empty()) {
       if (m_config.debug) {
         check_inits(cfg);
       }

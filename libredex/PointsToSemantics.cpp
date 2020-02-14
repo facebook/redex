@@ -1236,7 +1236,7 @@ class PointsToActionGenerator final {
       return PointsToVariable();
     }
     auto anchors = s.elements();
-    if (anchors.size() == 0) {
+    if (anchors.empty()) {
       // The denotation of the anchor set is just the `null` reference. This is
       // represented by a special points-to variable.
       return PointsToVariable::null_variable();

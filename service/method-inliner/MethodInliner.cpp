@@ -130,7 +130,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
     }
     const auto& overriding_methods =
         mog::get_overriding_methods(method_override_graph, method);
-    if (overriding_methods.size() == 0) {
+    if (overriding_methods.empty()) {
       return;
     }
     // Filter out methods without IRCode.
@@ -146,7 +146,7 @@ std::unordered_map<const DexMethod*, DexMethod*> get_same_implementation_map(
       }
       filtered_methods.emplace(overriding_method);
     }
-    if (filtered_methods.size() == 0) {
+    if (filtered_methods.empty()) {
       return;
     }
     if (method->get_code()) {
@@ -252,7 +252,7 @@ void gather_true_virtual_methods(
       const auto& overriding_methods =
           mog::get_overriding_methods(*method_override_graph, callee);
       if (!callee->is_external()) {
-        if (overriding_methods.size() == 0) {
+        if (overriding_methods.empty()) {
           // There is no override for this method
           update_monomorphic_callsite(
               method, insn, static_cast<DexMethod*>(callee), &meth_caller);

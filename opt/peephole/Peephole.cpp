@@ -343,7 +343,7 @@ struct Matcher {
         return false;
       }
 
-      if (dex_pattern.dests.size() != 0) {
+      if (!dex_pattern.dests.empty()) {
         redex_assert(dex_pattern.dests.size() == 1);
         if (!match_reg(dex_pattern.dests[0], insn->dest())) {
           return false;
@@ -526,7 +526,7 @@ struct Matcher {
       replacements.push_back(replace);
 
       // Fill the arguments appropriately.
-      if (replace_info.dests.size() > 0) {
+      if (!replace_info.dests.empty()) {
         redex_assert(replace_info.dests.size() == 1);
         const Register dest = replace_info.dests[0];
         always_assert(matched_regs.find(dest) != end(matched_regs));

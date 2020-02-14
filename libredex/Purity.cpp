@@ -400,7 +400,7 @@ size_t compute_locations_closure(
   for (const auto& p : method_lads) {
     auto method = p.first;
     auto& lads = p.second;
-    if (lads.dependencies.size()) {
+    if (!lads.dependencies.empty()) {
       for (auto d : lads.dependencies) {
         inverse_dependencies[d].insert(method);
       }
@@ -418,7 +418,7 @@ size_t compute_locations_closure(
   // dependencies, and have the Locations as the abstract domain.
 
   size_t iterations = 0;
-  while (impacted_methods.size()) {
+  while (!impacted_methods.empty()) {
     iterations++;
     // We order the impacted methods in a deterministic way that's likely
     // helping to reduce the number of needed iterations.
@@ -496,7 +496,7 @@ size_t compute_locations_closure(
         }
       }
 
-      if (!entries.size()) {
+      if (entries.empty()) {
         // remove inverse dependency
         inverse_dependencies.erase(changed_method);
       } else {

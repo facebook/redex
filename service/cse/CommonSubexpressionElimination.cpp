@@ -426,7 +426,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     }
     }
 
-    if (clobbered_locations.size()) {
+    if (!clobbered_locations.empty()) {
       value_id_t mask = (value_id_t)0;
       for (const auto& l : clobbered_locations) {
         mask |= get_location_value_id_mask(l);
@@ -619,7 +619,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
         }
       }
     }
-    if (new_pre_state_src_values.size()) {
+    if (!new_pre_state_src_values.empty()) {
       current_state->mutate_ref_env([&](RefEnvironment* env) {
         for (auto& p : new_pre_state_src_values) {
           env->set(p.first, ValueIdDomain(p.second));
@@ -669,7 +669,7 @@ class Analyzer final : public BaseIRAnalyzer<CseEnvironment> {
     default:
       // there might be an impacted field, array element, general memory barrier
       always_assert(clobbered_locations.size() <= 1);
-      is_positional = !!clobbered_locations.size();
+      is_positional = !clobbered_locations.empty();
       break;
     }
     if (is_positional) {
@@ -1232,7 +1232,7 @@ bool CommonSubexpressionElimination::patch(bool is_static,
                                            DexTypeList* args,
                                            unsigned int max_estimated_registers,
                                            bool runtime_assertions) {
-  if (m_forward.size() == 0) {
+  if (m_forward.empty()) {
     return false;
   }
 

@@ -296,7 +296,7 @@ void TypeErasurePass::run_pass(DexStoresVector& stores,
   Model::s_outdir = conf.get_outdir();
 
   // Setup Interdex plugin if any models.
-  if (m_dex_sharding_model_specs.size() > 0) {
+  if (!m_dex_sharding_model_specs.empty()) {
     interdex::InterDexRegistry* registry =
         static_cast<interdex::InterDexRegistry*>(
             PluginRegistry::get().pass_registry(interdex::INTERDEX_PASS_NAME));

@@ -88,7 +88,7 @@ bool check_methods(
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexMethodRef*>& methods_non_private) {
-  if (methods.size() == 0) {
+  if (methods.empty()) {
     return true;
   }
 
@@ -140,7 +140,7 @@ bool check_fields(
     const api::FrameworkAPI& framework_api,
     const std::unordered_map<const DexType*, DexType*>& release_to_framework,
     const std::unordered_set<DexFieldRef*>& fields_non_private) {
-  if (fields.size() == 0) {
+  if (fields.empty()) {
     return true;
   }
 
@@ -405,7 +405,7 @@ void ApiLevelsUtils::load_framework_api(const Scope& scope) {
 
   std::unordered_map<std::string, DexType*> simple_cls_name_to_type =
       get_simple_cls_name_to_accepted_types(framework_cls_to_api);
-  if (simple_cls_name_to_type.size() == 0) {
+  if (simple_cls_name_to_type.empty()) {
     // Nothing to do here :|
     TRACE(
         API_UTILS, 1,

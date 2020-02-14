@@ -293,7 +293,7 @@ std::unordered_set<IRInstruction*> get_super_class_initializations(
 }
 
 bool has_super_class_initializations(DexMethod* method, DexType* parent_type) {
-  return get_super_class_initializations(method, parent_type).size() != 0;
+  return !get_super_class_initializations(method, parent_type).empty();
 }
 
 void remove_super_class_calls(DexMethod* method, DexType* parent_type) {
@@ -464,7 +464,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
                   FieldOrRegStatus::OVERWRITTEN) {
 
             const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
-            always_assert(iput_insns.size() > 0);
+            always_assert(!iput_insns.empty());
 
             int64_t new_reg =
                 get_new_reg_if_already_allocated(iput_insns, move_replacements);
@@ -518,7 +518,7 @@ bool remove_builder(DexMethod* method, DexClass* builder) {
 
             // Get instruction that sets the field.
             const auto& iput_insns = fields_in_insn.field_to_iput_insns[field];
-            if (iput_insns.size() == 0) {
+            if (iput_insns.empty()) {
               return false;
             }
 
@@ -863,7 +863,7 @@ bool update_buildee_constructor(DexMethod* method, DexClass* builder) {
   auto code = method->get_code();
   std::vector<IRList::iterator> buildee_constr_calls =
       get_invokes_for_method(code, buildee_constr);
-  if (buildee_constr_calls.size()) {
+  if (!buildee_constr_calls.empty()) {
 
     DexMethod* fields_constr = get_fields_constr(buildee_constr, builder);
     if (!fields_constr) {
@@ -1162,7 +1162,7 @@ bool BuilderTransform::inline_methods(
   // TODO: This is a temporary fix, we should fix inliner T52618040
   std::sort(to_inline.begin(), to_inline.end(), compare_dexmethods);
 
-  while (to_inline.size() != 0) {
+  while (!to_inline.empty()) {
 
     for (const auto& inlinable : to_inline) {
       if (!inlinable->get_code()) {
@@ -1211,8 +1211,8 @@ bool remove_builder_from(DexMethod* method,
   }
 
   bool tried_constructor_inlining = false;
-  while (get_non_trivial_init_methods(method->get_code(), builder->get_type())
-             .size() > 0) {
+  while (!get_non_trivial_init_methods(method->get_code(), builder->get_type())
+              .empty()) {
     tried_constructor_inlining = true;
 
     // Filter out builders for which the method contains super class invokes.

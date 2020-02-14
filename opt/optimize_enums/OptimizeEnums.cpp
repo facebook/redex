@@ -532,8 +532,8 @@ class OptimizeEnums {
 
       // We expect the generated classes to ONLY contain the lookup tables
       // and the static initializer (<clinit>)
-      if (sfields.size() > 0 && cls->get_dmethods().size() == 1 &&
-          cls->get_vmethods().size() == 0 && cls->get_ifields().size() == 0) {
+      if (!sfields.empty() && cls->get_dmethods().size() == 1 &&
+          cls->get_vmethods().empty() && cls->get_ifields().empty()) {
 
         bool accept_cls = true;
         for (auto sfield : sfields) {

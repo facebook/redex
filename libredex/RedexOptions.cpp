@@ -65,7 +65,7 @@ const char* architecture_to_string(Architecture arch) {
 }
 
 DebugInfoKind parse_debug_info_kind(const std::string& raw_kind) {
-  if (raw_kind == "no_custom_symbolication" || raw_kind == "") {
+  if (raw_kind == "no_custom_symbolication" || raw_kind.empty()) {
     return DebugInfoKind::NoCustomSymbolication;
   } else if (raw_kind == "per_method_debug") {
     return DebugInfoKind::PerMethodDebug;

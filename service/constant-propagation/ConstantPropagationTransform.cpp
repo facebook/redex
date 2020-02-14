@@ -23,7 +23,7 @@ void Transform::replace_with_const(const ConstantEnvironment& env,
   auto value = env.get(insn->dest());
   auto replacement =
       ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
-  if (replacement.size() == 0) {
+  if (replacement.empty()) {
     return;
   }
   if (opcode::is_move_result_pseudo(insn->opcode())) {
@@ -45,7 +45,7 @@ void Transform::generate_const_param(const ConstantEnvironment& env,
   auto value = env.get(insn->dest());
   auto replacement =
       ConstantValue::apply_visitor(value_to_instruction_visitor(insn), value);
-  if (replacement.size() == 0) {
+  if (replacement.empty()) {
     return;
   }
   m_added_param_values.insert(m_added_param_values.end(), replacement.begin(),

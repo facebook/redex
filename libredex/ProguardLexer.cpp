@@ -253,7 +253,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "include") {
         tokens.push_back(unique_ptr<Token>(new Include(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -261,7 +261,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "basedirectory") {
         tokens.push_back(unique_ptr<Token>(new BaseDirectory(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -296,7 +296,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "printmapping") {
         tokens.push_back(unique_ptr<Token>(new PrintMapping(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -304,7 +304,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "printconfiguration") {
         tokens.push_back(unique_ptr<Token>(new PrintConfiguration(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -312,7 +312,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "printseeds") {
         tokens.push_back(unique_ptr<Token>(new PrintSeeds(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -320,7 +320,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "target") {
         tokens.push_back(unique_ptr<Token>(new Target(line)));
         string version = read_target_version(config, &line);
-        if (version != "") {
+        if (!version.empty()) {
           tokens.push_back(unique_ptr<Token>(new TargetVersion(line, version)));
         }
         continue;
@@ -370,7 +370,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "printusage") {
         tokens.push_back(unique_ptr<Token>(new PrintUsage(line)));
         string path = read_path(config, &line);
-        if (path != "") {
+        if (!path.empty()) {
           tokens.push_back(unique_ptr<Token>(new Filepath(line, path)));
         }
         continue;
@@ -418,7 +418,7 @@ vector<unique_ptr<Token>> lex(istream& config) {
       if (command == "repackageclasses") {
         tokens.push_back(unique_ptr<Token>(new RepackageClasses(line)));
         string package_name = parse_package_name(config, &line);
-        if (package_name != "") {
+        if (!package_name.empty()) {
           tokens.push_back(
               unique_ptr<Token>(new Identifier(line, package_name)));
         }

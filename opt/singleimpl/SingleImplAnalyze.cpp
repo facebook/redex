@@ -242,7 +242,7 @@ void AnalysisImpl::escape_with_clinit() {
     // same. Interfaces should not have static methods and even if so we
     // just escape them. From our analysis it turns out there are few with
     // clinit only and as expected none with static methods.
-    if (type_class(intf_it.first)->get_dmethods().size() > 0) {
+    if (!type_class(intf_it.first)->get_dmethods().empty()) {
       escape_interface(intf_it.first, CLINIT);
     }
   }
@@ -259,10 +259,10 @@ void AnalysisImpl::escape_with_clinit() {
 void AnalysisImpl::escape_with_sfields() {
   for (auto const& intf_it : single_impls) {
     auto intf_cls = type_class(intf_it.first);
-    redex_assert(intf_cls->get_ifields().size() == 0);
+    redex_assert(intf_cls->get_ifields().empty());
     always_assert(!intf_cls->is_external());
     const auto& sfields = intf_cls->get_sfields();
-    if (sfields.size() == 0) continue;
+    if (sfields.empty()) continue;
     escape_interface(intf_it.first, HAS_SFIELDS);
     for (auto sfield : sfields) {
       auto ftype = sfield->get_class();

@@ -593,7 +593,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
       return;
     }
     auto ctors = cls->get_ctors();
-    if (ctors.size() != 1 || cls->get_ifields().size() == 0) {
+    if (ctors.size() != 1 || cls->get_ifields().empty()) {
       // We are not inlining ifields in multi-ctors class so can also ignore
       // them here.
       // Also no need to proceed if there is no ifields for a class.
@@ -617,7 +617,7 @@ ConcurrentSet<DexField*> get_ifields_read_in_callees(
         }
         return;
       }
-      if (check_methods->size() > 0) {
+      if (!check_methods->empty()) {
         std::unordered_set<const DexMethod*> visited;
         const auto& parent_chain = ts.parent_chain(cls->get_type());
         std::unordered_set<const DexType*> parent_intf_set{parent_chain.begin(),
@@ -734,7 +734,7 @@ size_t inline_final_gets(
             cp::value_to_instruction_visitor(
                 ir_list::move_result_pseudo_of(it)),
             wps.get_field_value(field));
-        if (replacement.size() == 0) {
+        if (replacement.empty()) {
           continue;
         }
         replacements.emplace_back(insn, replacement);

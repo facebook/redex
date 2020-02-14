@@ -106,7 +106,7 @@ std::vector<DexClassSet> collect_can_merge(
 
     // Collect interfaces that we need to merge.
     for (const auto& pair : interface_class_map) {
-      if (pair.first.size() > 0 && pair.second.size() > 1) {
+      if (!pair.first.empty() && pair.second.size() > 1) {
         // Consider interfaces with same set of implementors as mergeable.
         interface_set.emplace_back(pair.second);
       }
@@ -276,7 +276,7 @@ void strip_out_dmethod_relo_problem_intf(const Scope& scope,
     for (auto set_it = intf_set.begin(); set_it != intf_set.end(); ++set_it) {
       DexClass* interface_cls = (*set_it);
       const auto& dmethods = interface_cls->get_dmethods();
-      if (dmethods.size() == 0) {
+      if (dmethods.empty()) {
         continue;
       }
       for (const auto& dmethod : dmethods) {

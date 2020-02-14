@@ -45,8 +45,8 @@ void merge_shapes(const Shape& from_shape,
 
   if (from_it != shapes.end() && to_it != shapes.end()) {
     // Make sure shapes have not been broken into groups yet.
-    always_assert(from_it->second.groups.size() == 0);
-    always_assert(to_it->second.groups.size() == 0);
+    always_assert(from_it->second.groups.empty());
+    always_assert(to_it->second.groups.empty());
     TRACE(TERA, 9, "            - Merge shape %s into %s",
           from_it->first.to_string().c_str(), to_it->first.to_string().c_str());
     to_it->second.types.insert(from_it->second.types.begin(),
@@ -196,7 +196,7 @@ void drop_shape_with_many_mergeables(
         always_assert(pred_map.at(succ).find(shape_it.first) !=
                       pred_map.at(succ).end());
         pred_map.at(succ).erase(shape_it.first);
-        if (pred_map.at(succ).size() == 0) {
+        if (pred_map.at(succ).empty()) {
           pred_map.erase(succ);
         }
       }
@@ -276,7 +276,7 @@ void simple_greedy_approximation(const JsonWrapper& specs,
 
   TRACE(TERA, 3, "[approx] Finding approximation:");
   // From the beginining of the list, try all pairs of shapes.
-  while (shapes_list.size() > 0) {
+  while (!shapes_list.empty()) {
     Shape s0 = shapes_list.front();
     shapes_list.erase(shapes_list.begin());
 
@@ -344,7 +344,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
                                     succ_map);
   }
 
-  if (shape_graph_file != "") {
+  if (!shape_graph_file.empty()) {
     shape_graph_file = outdir + "/" + shape_graph_file;
     write_shape_graph(shape_graph_file, pred_map, num_mergeables);
   }
@@ -410,7 +410,7 @@ void max_mergeable_greedy(const JsonWrapper& specs,
     remove_from_DAG(to_shape, pred_map, succ_map);
   }
 
-  if (shape_merge_graph_file != "") {
+  if (!shape_merge_graph_file.empty()) {
     shape_merge_graph_file = outdir + "/" + shape_merge_graph_file;
     write_shape_graph(shape_merge_graph_file, merge_map, num_mergeables);
   }
@@ -455,7 +455,7 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
                                     succ_map);
   }
 
-  if (shape_graph_file != "") {
+  if (!shape_graph_file.empty()) {
     shape_graph_file = outdir + "/" + shape_graph_file;
     write_shape_graph(shape_graph_file, pred_map, num_mergeables);
   }
@@ -513,7 +513,7 @@ void max_shape_merged_greedy(const JsonWrapper& specs,
     }
   }
 
-  if (shape_merge_graph_file != "") {
+  if (!shape_merge_graph_file.empty()) {
     shape_merge_graph_file = outdir + "/" + shape_merge_graph_file;
     write_shape_graph(shape_merge_graph_file, merge_map, num_mergeables);
   }

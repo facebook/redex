@@ -48,7 +48,7 @@ size_t mark_methods_final(const Scope& scope,
       if (!can_rename(method) || is_abstract(method) || is_final(method)) {
         continue;
       }
-      if (override_graph.get_node(method).children.size() == 0) {
+      if (override_graph.get_node(method).children.empty()) {
         TRACE(ACCESS, 2, "Finalizing method: %s", SHOW(method));
         set_final(method);
         ++n_methods_finalized;

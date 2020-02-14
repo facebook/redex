@@ -570,7 +570,7 @@ ControlFlowGraph::ControlFlowGraph(IRList* ir,
                                    reg_t registers_size,
                                    bool editable)
     : m_registers_size(registers_size), m_editable(editable) {
-  always_assert_log(ir->size() > 0, "IRList contains no instructions");
+  always_assert_log(!ir->empty(), "IRList contains no instructions");
 
   BranchToTargets branch_to_targets;
   TryEnds try_ends;
@@ -921,7 +921,7 @@ void ControlFlowGraph::remove_empty_blocks() {
 
     const auto& succs = get_succ_edges_if(
         b, [](const Edge* e) { return e->type() != EDGE_GHOST; });
-    if (succs.size() > 0) {
+    if (!succs.empty()) {
       always_assert_log(succs.size() == 1,
                         "too many successors for empty block %d:\n%s",
                         it->first, SHOW(*this));

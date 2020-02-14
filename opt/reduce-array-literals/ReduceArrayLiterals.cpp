@@ -364,7 +364,7 @@ ReduceArrayLiterals::ReduceArrayLiterals(cfg::ControlFlowGraph& cfg,
     }
   }
 
-  if (!new_array_insns.size()) {
+  if (new_array_insns.empty()) {
     return;
   }
 
@@ -384,7 +384,7 @@ void ReduceArrayLiterals::patch() {
   for (auto& p : m_array_literals) {
     const IRInstruction* new_array_insn = p.first;
     std::vector<const IRInstruction*>& aput_insns = p.second;
-    if (aput_insns.size() == 0) {
+    if (aput_insns.empty()) {
       // Really no point of doing anything with these
       continue;
     }

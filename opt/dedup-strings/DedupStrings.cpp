@@ -105,7 +105,7 @@ std::vector<DexClass*> DedupStrings::get_host_classes(DexClassesVector& dexen) {
         continue;
       }
       if (cls->get_super_class() != type::java_lang_Object() ||
-          cls->get_interfaces()->get_type_list().size() > 0) {
+          !cls->get_interfaces()->get_type_list().empty()) {
         // Classes that derived from another class, or implement interfaces,
         // may trigger additional class loads, which is undesirable, or even
         // fatal when any of the (framework) classes do not exist on a
@@ -214,7 +214,7 @@ std::unordered_map<const DexMethod*, size_t> DedupStrings::get_methods_to_dex(
 DexMethod* DedupStrings::make_const_string_loader_method(
     DexClass* host_cls, const std::vector<DexString*>& strings) {
   // Here we build the string factory method with a big switch statement.
-  always_assert(strings.size() > 0);
+  always_assert(!strings.empty());
   const auto string_type = type::java_lang_String();
   const auto proto = DexProto::make_proto(
       string_type, DexTypeList::make_type_list({type::_int()}));
@@ -222,7 +222,7 @@ DexMethod* DedupStrings::make_const_string_loader_method(
                                DexString::make_string("$const$string"),
                                proto,
                                ACC_PUBLIC | ACC_STATIC);
-  redex_assert(strings.size() > 0);
+  redex_assert(!strings.empty());
   auto id_arg = method_creator.get_local(0);
   auto res_var = method_creator.make_local(type::java_lang_String());
   auto main_block = method_creator.get_main_block();
@@ -346,7 +346,7 @@ DedupStrings::get_strings_to_dedup(
   ordered_strings.reserve(occurrences.size());
   for (auto& p : occurrences) {
     const auto& m = p.second;
-    always_assert(m.size() >= 1);
+    always_assert(!m.empty());
     if (m.size() == 1) continue;
     ordered_strings.push_back(p.first);
   }
@@ -522,7 +522,7 @@ DedupStrings::get_strings_to_dedup(
   // generate factory methods; remember details in dedup-info data structure
   for (size_t dexnr = 0; dexnr < dexen.size(); ++dexnr) {
     std::vector<DexString*>& strings = strings_in_dexes[dexnr];
-    if (strings.size() == 0) {
+    if (strings.empty()) {
       continue;
     }
     std::sort(strings.begin(), strings.end(),

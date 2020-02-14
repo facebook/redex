@@ -29,7 +29,7 @@ ConfigFiles::ConfigFiles(const Json::Value& config, const std::string& outdir)
         config.get("default_coldstart_classes", "").asString();
   }
 
-  if (m_profiled_methods_filename != "") {
+  if (!m_profiled_methods_filename.empty()) {
     load_method_to_weight();
   }
   load_method_sorting_whitelisted_substrings();
@@ -52,7 +52,7 @@ const std::unordered_set<DexType*>& ConfigFiles::get_no_optimizations_annos() {
     Json::Value no_optimizations_anno;
     m_json.get("no_optimizations_annotations", Json::nullValue,
                no_optimizations_anno);
-    if (no_optimizations_anno != Json::nullValue) {
+    if (!no_optimizations_anno.empty()) {
       for (auto const& config_anno_name : no_optimizations_anno) {
         std::string anno_name = config_anno_name.asString();
         DexType* anno = DexType::get_type(anno_name.c_str());
@@ -70,7 +70,7 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
   if (m_pure_methods.empty()) {
     Json::Value pure_methods;
     m_json.get("pure_methods", Json::nullValue, pure_methods);
-    if (pure_methods != Json::nullValue) {
+    if (!pure_methods.empty()) {
       for (auto const& method_name : pure_methods) {
         std::string name = method_name.asString();
         DexMethodRef* method = DexMethod::get_method(name);
@@ -171,7 +171,7 @@ void ConfigFiles::load_method_sorting_whitelisted_substrings() {
   Json::Value json_result;
   json_cfg.get("method_sorting_whitelisted_substrings", Json::nullValue,
                json_result);
-  if (json_result != Json::nullValue) {
+  if (!json_result.empty()) {
     for (auto const& json_element : json_result) {
       m_method_sorting_whitelisted_substrings.insert(json_element.asString());
     }
@@ -194,10 +194,10 @@ void ConfigFiles::ensure_agg_method_stats_loaded() {
 void ConfigFiles::load_inliner_config(inliner::InlinerConfig* inliner_config) {
   Json::Value config;
   m_json.get("inliner", Json::nullValue, config);
-  if (config == Json::nullValue) {
+  if (config.empty()) {
     m_json.get("MethodInlinePass", Json::nullValue, config);
   }
-  if (config == Json::nullValue) {
+  if (config.empty()) {
     fprintf(stderr, "WARNING: No inliner config\n");
     return;
   }

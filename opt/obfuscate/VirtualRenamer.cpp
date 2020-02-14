@@ -113,7 +113,7 @@ const std::string prefix = "";
 DexString* get_name(int seed) {
   std::string name;
   obfuscate_utils::compute_identifier(seed, &name);
-  if (prefix.size()) {
+  if (!prefix.empty()) {
     name = prefix + name;
   }
   return DexString::make_string(name);
@@ -258,7 +258,7 @@ int VirtualRenamer::rename_scope(const VirtualScope* scope, DexString* name) {
       TRACE(OBFUSCATE, 2, "not concrete %s", SHOW(vmeth.first));
     }
   }
-  redex_assert(scope->methods.size() > 0);
+  redex_assert(!scope->methods.empty());
   rename_scope_ref(scope->methods[0].first, name);
   return renamed;
 }

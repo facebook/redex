@@ -22,7 +22,7 @@ std::unordered_set<const DexMethod*> find_non_overridden_virtuals(
       for (auto* method : cls->get_vmethods()) {
         const auto& overrides =
             mog::get_overriding_methods(*override_graph, method);
-        if (overrides.size() == 0) {
+        if (overrides.empty()) {
           non_overridden_virtuals.emplace(method);
         }
       }

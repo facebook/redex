@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
   redex::load_all_intermediate(args.input_ir_dir, stores, &entry_data);
 
   // Set input dex magic to the first DexStore from the first dex file
-  if (stores.size() > 0) {
+  if (!stores.empty()) {
     auto first_dex_path = boost::filesystem::path(args.input_ir_dir) /
                           entry_data["dex_list"][0]["list"][0].asString();
     stores[0].set_dex_magic(load_dex_magic_from_dex(first_dex_path.c_str()));
