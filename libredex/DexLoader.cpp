@@ -533,10 +533,9 @@ DexClasses DexLoader::load_dex(const dex_header* dh, dex_stats_t* stats) {
   return classes;
 }
 
-static void mt_balloon(DexMethod* method) { method->balloon(); }
-
 static void balloon_all(const Scope& scope) {
-  auto wq = workqueue_foreach<DexMethod*>(mt_balloon);
+  auto wq = workqueue_foreach<DexMethod*>(
+      [](DexMethod* method) { method->balloon(); });
   walk::methods(scope, [&](DexMethod* m) {
     if (m->get_dex_code()) {
       wq.add_item(m);

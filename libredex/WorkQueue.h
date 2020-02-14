@@ -91,14 +91,13 @@ class WorkerState {
   std::queue<Input> m_queue;
   boost::mutex m_queue_mtx;
 
-  template <class>
-  friend class WorkQueue;
+  template <class, typename>
+  friend class WorkQueueBase;
 };
 
-template <class Input>
-class WorkQueue {
- private:
-  using Executor = std::function<void(WorkerState<Input>*, Input)>;
+template <class Input, typename Executor>
+class WorkQueueBase {
+ protected:
   Executor m_executor;
 
   std::vector<std::unique_ptr<WorkerState<Input>>> m_states;
@@ -111,80 +110,79 @@ class WorkQueue {
   }
 
  public:
-  WorkQueue(Executor, unsigned int num_threads);
+  WorkQueueBase(Executor executor, unsigned int num_threads)
+      : m_executor(executor), m_num_threads(num_threads) {
+    always_assert(num_threads >= 1);
+    for (unsigned int i = 0; i < m_num_threads; ++i) {
+      m_states.emplace_back(std::make_unique<WorkerState<Input>>(i));
+    }
+  }
 
-  void add_item(Input task);
+  void add_item(Input task) {
+    m_insert_idx = (m_insert_idx + 1) % m_num_threads;
+    m_states[m_insert_idx]->m_queue.push(task);
+  }
 
   /**
    * Spawn threads and evaluate function.  This method blocks.
    */
-  void run_all();
-};
-
-template <class Input>
-WorkQueue<Input>::WorkQueue(WorkQueue::Executor executor,
-                            unsigned int num_threads)
-    : m_executor(executor), m_num_threads(num_threads) {
-  always_assert(num_threads >= 1);
-  for (unsigned int i = 0; i < m_num_threads; ++i) {
-    m_states.emplace_back(std::make_unique<WorkerState<Input>>(i));
-  }
-}
-
-/**
- * Convenience wrapper for jobs that don't require access to the WorkerState.
- */
-template <class Input>
-WorkQueue<Input> workqueue_foreach(
-    const std::function<void(Input)>& func,
-    unsigned int num_threads = redex_parallel::default_num_threads()) {
-  return WorkQueue<Input>([func](WorkerState<Input>*, Input a) { func(a); },
-                          num_threads);
-}
-
-template <class Input>
-void WorkQueue<Input>::add_item(Input task) {
-  m_insert_idx = (m_insert_idx + 1) % m_num_threads;
-  m_states[m_insert_idx]->m_queue.push(task);
-}
-
-/*
- * Each worker thread pulls from its own queue first, and then once finished
- * looks randomly at other queues to try and steal work.
- */
-template <class Input>
-void WorkQueue<Input>::run_all() {
-  std::vector<boost::thread> all_threads;
-  auto worker = [&](WorkerState<Input>* state, size_t state_idx) {
-    workqueue_impl::set_worker_id(state_idx);
-    auto attempts =
-        workqueue_impl::create_permutation(m_num_threads, state_idx);
-    while (true) {
-      auto have_task = false;
-      for (auto idx : attempts) {
-        auto other_state = m_states[idx].get();
-        auto task = other_state->pop_task();
-        if (task) {
-          have_task = true;
-          consume(state, *task);
-          break;
+  void run_all() {
+    std::vector<boost::thread> all_threads;
+    auto worker = [&](WorkerState<Input>* state, size_t state_idx) {
+      workqueue_impl::set_worker_id(state_idx);
+      auto attempts =
+          workqueue_impl::create_permutation(m_num_threads, state_idx);
+      while (true) {
+        auto have_task = false;
+        for (auto idx : attempts) {
+          auto other_state = m_states[idx].get();
+          auto task = other_state->pop_task();
+          if (task) {
+            have_task = true;
+            consume(state, *task);
+            break;
+          }
+        }
+        if (!have_task) {
+          workqueue_impl::set_worker_id(redex_parallel::INVALID_ID);
+          return;
         }
       }
-      if (!have_task) {
-        workqueue_impl::set_worker_id(redex_parallel::INVALID_ID);
-        return;
-      }
+    };
+
+    for (size_t i = 0; i < m_num_threads; ++i) {
+      boost::thread::attributes attrs;
+      attrs.set_stack_size(8 * 1024 * 1024);
+      all_threads.emplace_back(attrs,
+                               boost::bind<void>(worker, m_states[i].get(), i));
     }
-  };
 
-  for (size_t i = 0; i < m_num_threads; ++i) {
-    boost::thread::attributes attrs;
-    attrs.set_stack_size(8 * 1024 * 1024);
-    all_threads.emplace_back(attrs,
-                             boost::bind<void>(worker, m_states[i].get(), i));
+    for (auto& thread : all_threads) {
+      thread.join();
+    }
   }
+};
 
-  for (auto& thread : all_threads) {
-    thread.join();
-  }
+// Standard legacy definition.
+template <class Input>
+using WorkQueue =
+    WorkQueueBase<Input, std::function<void(WorkerState<Input>*, Input)>>;
+
+//
+// Convenience wrapper for jobs that don't require access to the WorkerState.
+//
+
+// This struct is necessary to be able to type the result of workqueue_foreach.
+template <typename Input, typename Fn>
+struct WorkQueueHelper {
+  Fn fn;
+  void operator()(WorkerState<Input>* state, Input a) { fn(a); }
+};
+
+template <class Input, typename Fn>
+WorkQueueBase<Input, WorkQueueHelper<Input, Fn>> workqueue_foreach(
+    const Fn& fn,
+    unsigned int num_threads = redex_parallel::default_num_threads()) {
+  return WorkQueueBase<Input, WorkQueueHelper<Input, Fn>>(
+      WorkQueueHelper<Input, Fn>{fn}, num_threads);
 }
