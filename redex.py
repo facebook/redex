@@ -208,6 +208,41 @@ def maybe_addr2line(lines):
     sys.stderr.write("\n")
 
 
+def maybe_reprint_error(lines):
+    terminate_lines = []
+    for line in lines:
+        stripped_line = line.strip()
+
+        if stripped_line.startswith("terminate called"):
+            terminate_lines.append(stripped_line)
+            continue
+
+        if len(terminate_lines) > 0:
+            terminate_lines.append(stripped_line)
+
+            # Stop on ten lines.
+            if len(terminate_lines) >= 10:
+                break
+            continue
+
+    if not terminate_lines:
+        return
+
+    if len(terminate_lines) >= 3:
+        # See if we have an empty line.
+        try:
+            empty_index = terminate_lines.index("")
+            terminate_lines = terminate_lines[0:empty_index]
+        except ValueError:
+            # Probably not one of ours, or with a very detailed error, just
+            # print two lines.
+            terminate_lines = terminate_lines[0:2]
+
+    for line in terminate_lines:
+        print(f"{line}")
+    print()  # An empty line to separate.
+
+
 def run_and_stream_stderr(args, env, pass_fds):
     proc = subprocess.Popen(args, env=env, pass_fds=pass_fds, stderr=subprocess.PIPE)
 
@@ -404,6 +439,9 @@ def run_redex_binary(state):
             if returncode != 0:
                 # Check for crash traces.
                 maybe_addr2line(err_out)
+
+                if returncode == -6:  # SIGABRT
+                    maybe_reprint_error(err_out)
 
                 gdb_script_name = write_debugger_command(
                     "gdb", state.args.debug_source_root, args
