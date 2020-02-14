@@ -40,6 +40,11 @@
  */
 struct ProguardMap {
   /**
+   * Construct an empty ProGuard map.
+   */
+  explicit ProguardMap() = default;
+
+  /**
    * Construct map from the given file.
    */
   explicit ProguardMap(const std::string& filename);
