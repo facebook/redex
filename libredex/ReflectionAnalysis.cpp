@@ -321,7 +321,7 @@ class AbstractObjectEnvironment final
                  ClassObjectSourceEnvironment,
                  HeapClassArrayEnvironment>& /* product */) {}
 
-  const AbstractObjectDomain get_abstract_obj(reg_t reg) const {
+  AbstractObjectDomain get_abstract_obj(reg_t reg) const {
     return get<0>().get(reg);
   }
 
@@ -336,7 +336,7 @@ class AbstractObjectEnvironment final
     apply<0>([=](auto env) { env->update(reg, operation); }, true);
   }
 
-  const ClassObjectSourceDomain get_class_source(reg_t reg) const {
+  ClassObjectSourceDomain get_class_source(reg_t reg) const {
     return get<1>().get(reg);
   }
 
@@ -344,7 +344,7 @@ class AbstractObjectEnvironment final
     apply<1>([=](auto env) { env->set(reg, cls_src); }, true);
   }
 
-  const ConstantAbstractDomain<std::vector<DexType*>> get_heap_class_array(
+  ConstantAbstractDomain<std::vector<DexType*>> get_heap_class_array(
       AbstractHeapAddress addr) const {
     return get<2>().get(addr);
   }
@@ -1098,7 +1098,7 @@ void ReflectionAnalysis::get_reflection_site(
   (*abstract_objects)[reg] = ReflectionAbstractObject(*aobj, cls_src);
 }
 
-const ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
+ReflectionSites ReflectionAnalysis::get_reflection_sites() const {
   ReflectionSites reflection_sites;
   auto code = m_dex_method->get_code();
   if (code == nullptr) {

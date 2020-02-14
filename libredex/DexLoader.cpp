@@ -576,7 +576,7 @@ DexClasses load_classes_from_dex(const dex_header* dh,
   return classes;
 }
 
-const std::string load_dex_magic_from_dex(const char* location) {
+std::string load_dex_magic_from_dex(const char* location) {
   DexLoader dl(location);
   auto dh = dl.get_dex_header(location);
   return dh->magic;

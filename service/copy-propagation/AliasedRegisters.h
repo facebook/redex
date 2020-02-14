@@ -203,8 +203,7 @@ class AliasedRegisters final : public sparta::AbstractValue<AliasedRegisters> {
   using InsertionOrder = std::unordered_map<vertex_t, size_t>;
   InsertionOrder m_insert_order;
 
-  const boost::range_detail::integer_iterator<vertex_t> find(
-      const Value& r) const;
+  boost::range_detail::integer_iterator<vertex_t> find(const Value& r) const;
 
   vertex_t find_or_create(const Value& r);
 

@@ -210,7 +210,7 @@ class ReflectionAnalysis final {
 
   explicit ReflectionAnalysis(DexMethod* dex_method);
 
-  const ReflectionSites get_reflection_sites() const;
+  ReflectionSites get_reflection_sites() const;
 
   /**
    * Return a parameter type array for this invoke method instruction.

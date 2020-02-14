@@ -1246,8 +1246,8 @@ IRType IRTypeChecker::get_type(IRInstruction* insn, reg_t reg) const {
   return it->second.get_type(reg).element();
 }
 
-const boost::optional<const DexType*> IRTypeChecker::get_dex_type(
-    IRInstruction* insn, reg_t reg) const {
+boost::optional<const DexType*> IRTypeChecker::get_dex_type(IRInstruction* insn,
+                                                            reg_t reg) const {
   check_completion();
   auto& type_envs = m_type_inference->get_type_environments();
   auto it = type_envs.find(insn);

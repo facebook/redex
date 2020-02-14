@@ -88,9 +88,9 @@ DexStore& findStore(std::string& name, DexStoresVector& stores) {
   return stores[0];
 }
 
-const std::set<std::string> getAllowedStores(DexStoresVector& stores,
-                                             DexStore& store,
-                                             allowed_store_map_t store_map) {
+std::set<std::string> getAllowedStores(DexStoresVector& stores,
+                                       DexStore& store,
+                                       allowed_store_map_t store_map) {
   auto search = store_map.find(store.get_name());
   if (search != store_map.end()) {
     return search->second;

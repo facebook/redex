@@ -202,8 +202,8 @@ class Model {
 
   static void update_model(Model& model);
 
-  const std::string get_name() const { return m_spec.name; }
-  const std::vector<const DexType*> get_roots() const {
+  const std::string& get_name() const { return m_spec.name; }
+  std::vector<const DexType*> get_roots() const {
     std::vector<const DexType*> res;
     for (const auto root_merger : m_roots) {
       res.push_back(root_merger->type);
@@ -244,7 +244,7 @@ class Model {
     return m_spec.merge_per_interdex_set != InterDexGroupingType::DISABLED;
   }
 
-  const ModelSpec get_model_spec() const { return m_spec; }
+  const ModelSpec& get_model_spec() const { return m_spec; }
 
   bool process_method_meta() const { return m_spec.process_method_meta; }
   bool keep_debug_info() const { return m_spec.keep_debug_info; }

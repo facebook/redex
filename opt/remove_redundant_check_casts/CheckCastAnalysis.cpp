@@ -14,7 +14,7 @@ namespace check_casts {
 
 namespace impl {
 
-const CheckCastReplacements
+CheckCastReplacements
 CheckCastAnalysis::collect_redundant_checks_replacement() {
   CheckCastReplacements redundant_check_casts;
 

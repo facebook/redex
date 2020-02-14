@@ -31,9 +31,8 @@ ObjectInlinePlugin::ObjectInlinePlugin(
       m_callee_this_reg(callee_this),
       m_callee_class(callee_type) {}
 
-const boost::optional<std::reference_wrapper<std::vector<reg_t>>>
-ObjectInlinePlugin::inline_srcs() {
-  return std::reference_wrapper<std::vector<reg_t>>(m_srcs);
+boost::optional<const std::vector<reg_t>&> ObjectInlinePlugin::inline_srcs() {
+  return m_srcs;
 }
 
 boost::optional<reg_t> ObjectInlinePlugin::reg_for_return() {

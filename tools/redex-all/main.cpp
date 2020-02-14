@@ -745,8 +745,8 @@ void write_debug_line_mapping(
   ofs << line_out.str();
 }
 
-const std::string get_dex_magic(std::vector<std::string>& dex_files) {
-  always_assert_log(dex_files.size() > 0, "APK contains no dex file\n");
+std::string get_dex_magic(std::vector<std::string>& dex_files) {
+  always_assert_log(!dex_files.empty(), "APK contains no dex file\n");
   // Get dex magic from the first dex file since all dex magic
   // should be consistent within one APK.
   return load_dex_magic_from_dex(dex_files[0].c_str());

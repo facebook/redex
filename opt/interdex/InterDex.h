@@ -75,7 +75,7 @@ class InterDex {
     return m_cross_dex_ref_minimizer.stats();
   }
 
-  const CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
+  CrossDexRelocatorStats get_cross_dex_relocator_stats() const {
     if (m_cross_dex_relocator != nullptr) {
       return m_cross_dex_relocator->stats();
     }

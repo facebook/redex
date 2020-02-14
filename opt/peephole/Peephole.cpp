@@ -236,7 +236,7 @@ struct DexPattern {
         kind(DexPattern::Kind::field),
         field(field) {}
 
-  static const DexPattern copy_matched_instruction(int index) {
+  static DexPattern copy_matched_instruction(int index) {
     return DexPattern(index);
   }
 
@@ -1590,7 +1590,7 @@ std::vector<Pattern> get_arith_patterns() {
 
 // clang-format off
 
-const DexPattern invoke_class_get_simple_name() {
+DexPattern invoke_class_get_simple_name() {
   return {{OPCODE_INVOKE_VIRTUAL,
            OPCODE_INVOKE_SUPER,
            OPCODE_INVOKE_DIRECT,
@@ -1620,11 +1620,11 @@ std::vector<Pattern> get_func_patterns() {
   };
 }
 
-const DexPattern new_instance(Type type) {
+DexPattern new_instance(Type type) {
   return {{OPCODE_NEW_INSTANCE}, {}, {}, type};
 };
 
-const DexPattern invoke_npe_init(Register r) {
+DexPattern invoke_npe_init(Register r) {
   return {{OPCODE_INVOKE_DIRECT},
           {r},
           {},
@@ -1632,7 +1632,7 @@ const DexPattern invoke_npe_init(Register r) {
               "Ljava/lang/NullPointerException;", "<init>", "V", {})};
 }
 
-const DexPattern throw_exception(Register r) {
+DexPattern throw_exception(Register r) {
   return {{OPCODE_THROW},
           {r},
           {}};
@@ -1660,7 +1660,7 @@ std::vector<Pattern> get_throw_empty_npe_patterns() {
 
 // clang-format on
 
-const std::vector<std::vector<Pattern>> get_all_patterns() {
+std::vector<std::vector<Pattern>> get_all_patterns() {
   return {get_string_patterns(),
           get_arith_patterns(),
           get_func_patterns(),

@@ -33,7 +33,7 @@ class CheckCastAnalysis {
 
  public:
   explicit CheckCastAnalysis(DexMethod* method) : m_method(method){};
-  const CheckCastReplacements collect_redundant_checks_replacement();
+  CheckCastReplacements collect_redundant_checks_replacement();
 
  private:
   DexMethod* m_method;

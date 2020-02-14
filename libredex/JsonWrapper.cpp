@@ -24,8 +24,7 @@ void JsonWrapper::get(const char* name,
   param = m_config.get(name, dflt).asString();
 }
 
-const std::string JsonWrapper::get(const char* name,
-                                   const std::string& dflt) const {
+std::string JsonWrapper::get(const char* name, const std::string& dflt) const {
   return m_config.get(name, dflt).asString();
 }
 
@@ -133,8 +132,7 @@ void JsonWrapper::get(const char* name,
   param = m_config.get(name, dflt);
 }
 
-const Json::Value JsonWrapper::get(const char* name,
-                                   const Json::Value& dflt) const {
+Json::Value JsonWrapper::get(const char* name, const Json::Value& dflt) const {
   return m_config.get(name, dflt);
 }
 

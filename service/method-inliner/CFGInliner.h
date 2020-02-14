@@ -161,8 +161,7 @@ class CFGInlinerPlugin {
   // Optionally provide a set of registers for the sources of callee's
   // parameters If none is returned, inliner extracts registers from the sources
   // of the instruction within the instruction iterator
-  virtual const boost::optional<std::reference_wrapper<std::vector<reg_t>>>
-  inline_srcs() {
+  virtual boost::optional<const std::vector<reg_t>&> inline_srcs() {
     return boost::none;
   }
 

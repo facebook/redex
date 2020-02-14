@@ -24,11 +24,11 @@ class DexMetadata {
   std::vector<std::string> files;
 
  public:
-  const std::string get_id() const { return id; }
+  const std::string& get_id() const { return id; }
   void set_id(std::string name) { id = std::move(name); }
   void set_files(const std::vector<std::string>& f) { files = f; }
-  const std::vector<std::string> get_files() const { return files; }
-  const std::vector<std::string> get_dependencies() const {
+  const std::vector<std::string>& get_files() const { return files; }
+  const std::vector<std::string>& get_dependencies() const {
     return dependencies;
   }
   std::vector<std::string>& get_dependencies() { return dependencies; }

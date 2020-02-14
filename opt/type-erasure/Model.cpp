@@ -155,7 +155,7 @@ size_t trim_groups(MergerType::ShapeCollector& shapes, size_t min_count) {
   return num_trimmed_types;
 }
 
-const std::vector<std::string> get_acceptible_prefixes(const JsonWrapper& jw) {
+std::vector<std::string> get_acceptible_prefixes(const JsonWrapper& jw) {
   std::vector<std::string> acceptible_prefixes;
   jw.get("acceptible_prefixes", {}, acceptible_prefixes);
   return acceptible_prefixes;

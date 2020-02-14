@@ -67,7 +67,7 @@ class FinalInlinePass : public Pass {
 
   static void inline_fields(const Scope& scope);
   static void inline_fields(const Scope& scope, Config& config);
-  static const std::unordered_map<DexField*, std::vector<FieldDependency>>
+  static std::unordered_map<DexField*, std::vector<FieldDependency>>
   find_dependencies(const Scope& scope,
                     DexMethod* method,
                     FinalInlinePass::Config& config);

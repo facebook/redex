@@ -683,7 +683,7 @@ void FinalInlinePass::inline_fields(const Scope& scope,
   impl.inline_field_values();
 }
 
-const std::unordered_map<DexField*, std::vector<FieldDependency>>
+std::unordered_map<DexField*, std::vector<FieldDependency>>
 FinalInlinePass::find_dependencies(const Scope& scope,
                                    DexMethod* method,
                                    FinalInlinePass::Config& config) {

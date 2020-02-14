@@ -191,7 +191,7 @@ Register AliasedRegisters::get_representative(
 
 // if `r` is in the graph, return the vertex holding it.
 // if not, return the `end` iterator of the vertices
-const boost::range_detail::integer_iterator<AliasedRegisters::vertex_t>
+boost::range_detail::integer_iterator<AliasedRegisters::vertex_t>
 AliasedRegisters::find(const Value& r) const {
   const auto& iters = boost::vertices(m_graph);
   const auto& begin = iters.first;
