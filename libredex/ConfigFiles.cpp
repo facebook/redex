@@ -86,6 +86,9 @@ const std::unordered_set<DexMethodRef*>& ConfigFiles::get_pure_methods() {
  * classname strings.
  */
 std::vector<std::string> ConfigFiles::load_coldstart_classes() {
+  if (m_coldstart_class_filename.empty()) {
+    return {};
+  }
   const char* kClassTail = ".class";
   const size_t lentail = strlen(kClassTail);
   auto file = m_coldstart_class_filename.c_str();
@@ -94,7 +97,10 @@ std::vector<std::string> ConfigFiles::load_coldstart_classes() {
 
   std::ifstream input(file);
   if (!input) {
-    return std::vector<std::string>();
+    fprintf(stderr,
+            "[error] Can not open <coldstart_classes> file, path is %s\n",
+            file);
+    exit(EXIT_FAILURE);
   }
   std::string clzname;
   while (input >> clzname) {
