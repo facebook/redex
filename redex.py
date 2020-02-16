@@ -208,7 +208,7 @@ def maybe_addr2line(lines):
     sys.stderr.write("\n")
 
 
-def maybe_reprint_error(lines):
+def maybe_reprint_error(lines, term_handler):
     terminate_lines = []
     for line in lines:
         stripped_line = line.strip()
@@ -237,6 +237,10 @@ def maybe_reprint_error(lines):
             # Probably not one of ours, or with a very detailed error, just
             # print two lines.
             terminate_lines = terminate_lines[0:2]
+
+    if term_handler is not None:
+        term_handler(terminate_lines)
+        return
 
     for line in terminate_lines:
         print(f"{line}")
@@ -330,7 +334,7 @@ class SigIntHandler:
         signal.alarm(3)
 
 
-def run_redex_binary(state):
+def run_redex_binary(state, term_handler):
     if state.args.redex_binary is None:
         state.args.redex_binary = shutil.which("redex-all")
 
@@ -441,7 +445,7 @@ def run_redex_binary(state):
                 maybe_addr2line(err_out)
 
                 if returncode == -6:  # SIGABRT
-                    maybe_reprint_error(err_out)
+                    maybe_reprint_error(err_out, term_handler)
 
                 gdb_script_name = write_debugger_command(
                     "gdb", state.args.debug_source_root, args
@@ -1149,9 +1153,9 @@ def finalize_redex(state):
     )
 
 
-def run_redex(args):
+def run_redex(args, term_handler=None):
     state = prepare_redex(args)
-    run_redex_binary(state)
+    run_redex_binary(state, term_handler)
 
     if args.stop_pass:
         # Do not remove temp dirs
