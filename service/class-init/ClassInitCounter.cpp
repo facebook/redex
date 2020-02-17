@@ -1087,6 +1087,23 @@ void InitLocation::update_object(DexClass* container,
       std::make_shared<ObjectUses>(obj)};
 }
 
+void InitLocation::all_uses_from(DexType* cls,
+                                 DexMethod* method,
+                                 ObjectUsedSet& set) const {
+  DexClass* cls_impl = type_class(cls);
+  const auto methods = m_inits.find(cls_impl);
+  if (methods == m_inits.end()) {
+    return;
+  }
+  const auto instructions_uses = methods->second.find(method);
+  if (instructions_uses == methods->second.end()) {
+    return;
+  }
+  for (const auto& inst_uses : instructions_uses->second) {
+    set.insert(inst_uses.second.begin(), inst_uses.second.end());
+  }
+}
+
 ClassInitCounter::ClassInitCounter(
     DexType* parent_class,
     const std::set<DexMethodRef*, dexmethods_comparator>& safe_escapes,
@@ -1368,6 +1385,26 @@ void ClassInitCounter::inits_any_children(DexClass* container,
   }
 
   instructions->clear_cfg();
+}
+
+std::pair<ObjectUsedSet, MergedUsedSet> ClassInitCounter::all_uses_from(
+    DexType* container, DexMethod* method) {
+  MergedUsedSet merged_set;
+  const auto container_methods = m_stored_mergeds.find(container);
+  if (container_methods != m_stored_mergeds.end()) {
+    const auto methods_uses = container_methods->second.find(method);
+    if (methods_uses != container_methods->second.end()) {
+      merged_set.insert(methods_uses->second.begin(),
+                        methods_uses->second.end());
+    }
+  }
+
+  ObjectUsedSet object_set;
+  for (auto& typ_init : m_type_to_inits) {
+    typ_init.second.all_uses_from(container, method, object_set);
+  }
+
+  return std::make_pair(object_set, merged_set);
 }
 
 // This is generating an almost json representation, but may have extra ,s

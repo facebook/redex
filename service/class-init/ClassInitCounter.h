@@ -391,6 +391,9 @@ class InitLocation final {
                      const ObjectUses& obj);
   const InitMap& get_inits() const { return m_inits; }
 
+  // Puts all uses from cls.method into provided set
+  void all_uses_from(DexType* cls, DexMethod* method, ObjectUsedSet& set) const;
+
   DexType* m_typ = nullptr;
 
  private:
@@ -420,6 +423,9 @@ class ClassInitCounter final {
 
   const TypeToInit& type_to_inits() const { return m_type_to_inits; }
   const MergedUsesMap& merged_uses() const { return m_stored_mergeds; }
+
+  // Reports all object uses and merged uses within the specified method.
+  std::pair<ObjectUsedSet, MergedUsedSet> all_uses_from(DexType*, DexMethod*);
 
   // For debugging
   std::string debug_show_table();
