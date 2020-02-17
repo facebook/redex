@@ -17,7 +17,7 @@ class NoopPostLowering : public PostLowering {
                          std::vector<DexMethodHandle*>&,
                          std::vector<DexTypeList*>&,
                          const std::vector<DexClass*>&) const override {}
-  void run(const DexClasses& dex) override {}
+  void run(const DexStoresVector& stores) override {}
   void finalize(ApkManager& mgr) override {}
 };
 

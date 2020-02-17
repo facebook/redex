@@ -979,17 +979,13 @@ void redex_backend(const std::string& output_dir,
                                stores[0].get_dex_magic(),
                                post_lowering.get());
 
-      // Excluding primary from post lowering processing.
-      if (post_lowering && !(store.is_root_store() && i == 0)) {
-        post_lowering->run(store.get_dexen()[i]);
-      }
-
       output_totals += this_dex_stats;
       output_dexes_stats.push_back(this_dex_stats);
     }
   }
 
   if (post_lowering) {
+    post_lowering->run(stores);
     post_lowering->finalize(manager.apk_manager());
   }
 

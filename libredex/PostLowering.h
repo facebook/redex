@@ -12,6 +12,7 @@
 
 #include "ApkManager.h"
 #include "DexClass.h"
+#include "DexStore.h"
 
 class PostLowering {
  public:
@@ -25,7 +26,7 @@ class PostLowering {
                                  std::vector<DexMethodHandle*>&,
                                  std::vector<DexTypeList*>&,
                                  const std::vector<DexClass*>&) const = 0;
-  virtual void run(const DexClasses& dex) = 0;
+  virtual void run(const DexStoresVector& stores) = 0;
   virtual void finalize(ApkManager& mgr) = 0;
 
   virtual ~PostLowering(){};
