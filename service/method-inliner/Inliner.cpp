@@ -1874,36 +1874,6 @@ void remap_callee_for_tail_call(const IRCode* caller_code,
   transform::remap_registers(callee_code, reg_map);
 }
 
-void cleanup_callee_debug(IRCode* callee_code) {
-  std::unordered_set<reg_t> valid_regs;
-  auto it = callee_code->begin();
-  while (it != callee_code->end()) {
-    auto& mei = *it++;
-    if (mei.type == MFLOW_DEBUG) {
-      switch (mei.dbgop->opcode()) {
-      case DBG_SET_PROLOGUE_END:
-        callee_code->erase(callee_code->iterator_to(mei));
-        break;
-      case DBG_START_LOCAL:
-      case DBG_START_LOCAL_EXTENDED: {
-        auto reg = mei.dbgop->uvalue();
-        valid_regs.insert(reg);
-        break;
-      }
-      case DBG_END_LOCAL:
-      case DBG_RESTART_LOCAL: {
-        auto reg = mei.dbgop->uvalue();
-        if (valid_regs.find(reg) == valid_regs.end()) {
-          callee_code->erase(callee_code->iterator_to(mei));
-        }
-        break;
-      }
-      default:
-        break;
-      }
-    }
-  }
-}
 } // namespace
 
 /*
@@ -2162,7 +2132,7 @@ void inline_tail_call(DexMethod* caller,
   caller_code->set_registers_size(caller_code->get_registers_size() +
                                   callee_code->get_registers_size());
 
-  cleanup_callee_debug(callee_code);
+  callee_code->cleanup_debug();
   auto it = callee_code->begin();
   while (it != callee_code->end()) {
     auto& mei = *it++;

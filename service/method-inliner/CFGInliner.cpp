@@ -39,6 +39,7 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
   callee_orig.deep_copy(&callee);
 
   remove_ghost_exit_block(&callee);
+  cleanup_callee_debug(&callee);
 
   TRACE(CFG, 3, "caller %s", SHOW(*caller));
   TRACE(CFG, 3, "callee %s", SHOW(callee));
@@ -136,6 +137,13 @@ void CFGInliner::inline_cfg(ControlFlowGraph* caller,
     caller->sanity_check();
   }
   TRACE(CFG, 3, "final %s", SHOW(*caller));
+}
+
+void CFGInliner::cleanup_callee_debug(ControlFlowGraph* cfg) {
+  std::unordered_set<reg_t> valid_regs;
+  for (auto* block_it : cfg->order()) {
+    block_it->cleanup_debug(valid_regs);
+  }
 }
 
 void CFGInliner::remove_ghost_exit_block(ControlFlowGraph* cfg) {

@@ -327,6 +327,43 @@ bool MethodItemEntry::operator==(const MethodItemEntry& that) const {
   not_reached();
 }
 
+// TODO: T62185151 - better way of applying this on CFGs
+void IRList::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+  auto it = m_list.begin();
+  while (it != m_list.end()) {
+    auto next = std::next(it);
+    if (it->type == MFLOW_DEBUG) {
+      switch (it->dbgop->opcode()) {
+      case DBG_SET_PROLOGUE_END:
+        this->erase_and_dispose(it);
+        break;
+      case DBG_START_LOCAL:
+      case DBG_START_LOCAL_EXTENDED: {
+        auto reg = it->dbgop->uvalue();
+        valid_regs.insert(reg);
+        break;
+      }
+      case DBG_END_LOCAL:
+      case DBG_RESTART_LOCAL: {
+        auto reg = it->dbgop->uvalue();
+        if (valid_regs.find(reg) == valid_regs.end()) {
+          this->erase_and_dispose(it);
+        }
+        break;
+      }
+      default:
+        break;
+      }
+    }
+    it = next;
+  }
+}
+
+void IRList::cleanup_debug() {
+  std::unordered_set<reg_t> valid_regs;
+  cleanup_debug(valid_regs);
+}
+
 void IRList::replace_opcode(IRInstruction* to_delete,
                             const std::vector<IRInstruction*>& replacements) {
   auto it = m_list.begin();

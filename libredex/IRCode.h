@@ -102,6 +102,8 @@ class IRCode {
     return m_ir_list->structural_equals(*other.m_ir_list, instruction_equals);
   }
 
+  void cleanup_debug();
+
   reg_t get_registers_size() const { return m_registers_size; }
 
   void set_registers_size(reg_t sz) { m_registers_size = sz; }

@@ -788,3 +788,38 @@ TEST_F(CFGInlinerTest, inf_loop) {
   )";
   test_inliner(caller_str, callee_str, expected_str);
 }
+
+TEST_F(CFGInlinerTest, cleanup_debug) {
+  const auto caller_str = R"(
+    (
+      (const v0 0)
+      (invoke-static (v0) "LCls;.foo:(I)V")
+      (return-void)
+    )
+  )";
+  const auto callee_str = R"(
+    (
+      (load-param v0)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (.dbg DBG_START_LOCAL 5 "will_not_be_removed" "Ljava/lang/Objects;")
+      (const v1 1)
+      (.dbg DBG_END_LOCAL 3)
+      (.dbg DBG_END_LOCAL 4)
+      (.dbg DBG_RESTART_LOCAL 6)
+      (return-void)
+    )
+  )";
+  const auto expected_str = R"(
+    (
+      (const v0 0)
+      (move v1 v0)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (.dbg DBG_START_LOCAL 5 "will_not_be_removed" "Ljava/lang/Objects;")
+      (const v2 1)
+      (.dbg DBG_END_LOCAL 4)
+      (return-void)
+    )
+  )";
+  test_inliner(caller_str, callee_str, expected_str);
+}

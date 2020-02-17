@@ -245,6 +245,19 @@ class IRList {
   size_t size() const { return m_list.size(); }
   bool empty() const { return m_list.empty(); }
 
+  /*
+   * Removes a subset of MFLOW_DEBUG instructions.
+   */
+  void cleanup_debug();
+
+  /*
+   * Removes a subset of MFLOW_DEBUG instructions. valid_regs
+   * is an accumulator set of registers used by either DBG_START_LOCAL
+   * or DBG_START_LOCAL_EXTENDED. The DBG_END_LOCAL and DBG_RESTART_LOCAL
+   * instructions are erased, unless valid_regs contains the registers they use.
+   */
+  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
+
   /* Passes memory ownership of "from" to callee.  It will delete it. */
   void replace_opcode(IRInstruction* from, IRInstruction* to);
 

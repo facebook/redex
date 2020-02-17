@@ -592,6 +592,8 @@ IRCode::IRCode(const IRCode& code) {
   }
 }
 
+void IRCode::cleanup_debug() { m_ir_list->cleanup_debug(); }
+
 void IRCode::build_cfg(bool editable) {
   clear_cfg();
   m_cfg = std::make_unique<cfg::ControlFlowGraph>(

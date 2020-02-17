@@ -233,7 +233,25 @@ class Block final {
 
   void remove_insn(const InstructionIterator& it);
   void remove_insn(const ir_list::InstructionIterator& it);
+
+  // Will remove the first entry after it containing an MFLOW_OPCODE,
+  // leaving the intervening instructions unmodified. If a non-MFLOW_OPCODE
+  // instruction is to be removed, remove_mie should be used instead.
   void remove_insn(const IRList::iterator& it);
+
+  void remove_mie(const IRList::iterator& it);
+
+  // Removes a subset of MFLOW_DEBUG instructions from the block. valid_regs
+  // is an accumulator set of registers used by either DBG_START_LOCAL
+  // or DBG_START_LOCAL_EXTENDED. The DBG_END_LOCAL and DBG_RESTART_LOCAL
+  // instructions are erased, unless valid_regs contains the registers they use.
+  // Note: When iterating (WTO order) over the blocks of a CFG, if this method
+  // is to be applied for each block, then the valid_regs accumulator should be
+  // sequentially passed to each of the blocks to incorporate the "global"
+  // information of the CFG. That is, if a block is an ancestor of another,
+  // then the valid registers that the ancestor block defines should be
+  // acknowledged by the descendant block.
+  void cleanup_debug(std::unordered_set<reg_t>& valid_regs);
 
   opcode::Branchingness branchingness();
 

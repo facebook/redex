@@ -35,6 +35,12 @@ class CFGInliner {
 
  private:
   /*
+   * Prepares the CFG for inlining by removing a subset of MFLOW_DEBUG
+   * instructions that would make no sense to be duplicated.
+   */
+  static void cleanup_callee_debug(ControlFlowGraph* cfg);
+
+  /*
    * A "ghost block" may be added for CFGs that have multiple exit blocks and
    * EDGE_GHOST edges are added from all exit points to this one (empty) ghost
    * block. This block gets in the way while inlining. Remove if it's there.

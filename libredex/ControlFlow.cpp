@@ -201,6 +201,10 @@ void Block::free() {
   }
 }
 
+void Block::cleanup_debug(std::unordered_set<reg_t>& valid_regs) {
+  this->m_entries.cleanup_debug(valid_regs);
+}
+
 IRList::iterator Block::begin() {
   if (m_parent->editable()) {
     return m_entries.begin();
@@ -255,6 +259,10 @@ void Block::remove_insn(const ir_list::InstructionIterator& it) {
 void Block::remove_insn(const IRList::iterator& it) {
   always_assert(m_parent->editable());
   remove_insn(to_cfg_instruction_iterator(it));
+}
+
+void Block::remove_mie(const IRList::iterator& it) {
+  m_entries.erase_and_dispose(it);
 }
 
 opcode::Branchingness Block::branchingness() {

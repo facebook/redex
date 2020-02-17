@@ -52,3 +52,85 @@ TEST_F(IRListTest, method_item_entry_equality) {
 
   always_assert(code_it == code->end() && clone_it == code_clone->end());
 }
+
+TEST_F(IRListTest, remove_prologue) {
+  const auto s_insns = R"(
+    (
+      (load-param v0)
+      (.dbg DBG_SET_PROLOGUE_END)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+  const auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+
+  auto code = assembler::ircode_from_string(s_insns);
+  auto expected_code = assembler::ircode_from_string(expected_str);
+
+  code->cleanup_debug();
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST_F(IRListTest, remove_when_register_not_used) {
+  const auto s_insns = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (.dbg DBG_END_LOCAL 3)
+      (.dbg DBG_RESTART_LOCAL 6)
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(s_insns);
+
+  const auto expected_str = R"(
+    (
+      (load-param v0)
+      (const v1 1)
+      (return-void)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+
+  code->cleanup_debug();
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code.get()));
+}
+
+TEST_F(IRListTest, keep_valid_regs) {
+  const auto s_insns = R"(
+    (
+      (load-param v0)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (const v1 1)
+      (.dbg DBG_END_LOCAL 4)
+      (return-void)
+    )
+  )";
+  auto code = assembler::ircode_from_string(s_insns);
+
+  const auto expected_str = R"(
+    (
+      (load-param v0)
+      (.dbg DBG_START_LOCAL_EXTENDED 4 "will_not_be_removed" "Ljava/lang/Objects;" "sig")
+      (const v1 1)
+      (.dbg DBG_END_LOCAL 4)
+      (return-void)
+    )
+  )";
+  auto expected_code = assembler::ircode_from_string(expected_str);
+
+  code->cleanup_debug();
+
+  EXPECT_EQ(assembler::to_string(expected_code.get()),
+            assembler::to_string(code.get()));
+}
