@@ -60,3 +60,11 @@ DexMethod* create_empty_method(DexClass* cls,
                                const char* name,
                                DexProto* proto,
                                DexAccessFlags access = ACC_PUBLIC);
+
+/**
+ * Add a concrete method that throws an exception to the given class.
+ */
+DexMethod* create_throwing_method(DexClass* cls,
+                                  const char* name,
+                                  DexProto* proto,
+                                  DexAccessFlags access = ACC_PUBLIC);
