@@ -76,17 +76,10 @@ class WpoNode final {
   uint32_t m_size;
   // Number of outer predecessors w.r.t. the component (for exits only).
   std::unordered_map<WpoIdx, uint32_t> m_num_outer_preds;
-  // Whether this is a widening point.
-  // Only the heads of the innermost components require widening.
-  // See Section 2, Note 1 in the following paper:
-  //   Halbwachs N., Henry J. (2012) When the Decreasing Sequence Fails.
-  //   In: Miné A., Schmidt D. (eds) Static Analysis. SAS 2012.
-  //   Lecture Notes in Computer Science, vol 7460. Springer, Berlin, Heidelberg
-  bool m_widen;
 
  public:
-  WpoNode(const NodeId& node, Type type, uint32_t size, bool widen)
-      : m_node(node), m_type(type), m_size(size), m_widen(widen) {}
+  WpoNode(const NodeId& node, Type type, uint32_t size)
+      : m_node(node), m_type(type), m_size(size) {}
 
  public:
   // Return the NodeId for this node
@@ -114,9 +107,6 @@ class WpoNode final {
 
   // Get size of the SCC.
   uint32_t get_size() const { return m_size; }
-
-  // Check whether this is a widening point.
-  bool is_widening_point() const { return m_widen; }
 
  private:
   // Add successor.
@@ -194,7 +184,7 @@ class WeakPartialOrdering final {
       bool lift)
       : m_lifted(lift) {
     if (successors(root).empty()) {
-      m_nodes.emplace_back(root, Type::Plain, /*size=*/1, /*widen=*/false);
+      m_nodes.emplace_back(root, Type::Plain, /*size=*/1);
       m_toplevel.push_back(0);
       m_post_dfn[root] = 1;
       return;
@@ -244,11 +234,6 @@ class WeakPartialOrdering final {
   bool is_plain(WpoIdx idx) const { return m_nodes[idx].is_plain(); }
   bool is_head(WpoIdx idx) const { return m_nodes[idx].is_head(); }
   bool is_exit(WpoIdx idx) const { return m_nodes[idx].is_exit(); }
-
-  // Check whether a node is a widening point.
-  bool is_widening_point(WpoIdx idx) const {
-    return m_nodes[idx].is_widening_point();
-  }
 
   // Check whether a predecessor is outside of the component of the head.
   // This can be used to detect whether an edge is a back edge:
@@ -467,7 +452,7 @@ class WpoBuilder final {
       // h is a Trivial SCC.
       if (!is_SCC) {
         size[h] = 1;
-        add_node(h, get_ref(h), Type::Plain, /*size=*/1, /*widen=*/false);
+        add_node(h, get_ref(h), Type::Plain, /*size=*/1);
         // Invariant: wpo_space = ...::h
         continue;
       }
@@ -483,17 +468,8 @@ class WpoBuilder final {
 
       // Add new exit x_h.
       auto x_h = dfn++;
-      add_node(x_h, get_ref(h), Type::Exit, size_h, false);
-      bool widen = true;
-      for (auto v : nested_SCCs_h) {
-        if (node_of(v).is_head()) {
-          // Only the heads of the innermost components should be the widening
-          // points.
-          widen = false;
-          break;
-        }
-      }
-      add_node(h, get_ref(h), Type::Head, size_h, widen);
+      add_node(x_h, get_ref(h), Type::Exit, size_h);
+      add_node(h, get_ref(h), Type::Head, size_h);
       // Invariant: wpo_space = ...::x_h::h
       if (backpreds_h.empty()) {
         // Add scheduling constraints from h to x_h
@@ -600,9 +576,9 @@ class WpoBuilder final {
   }
 
   void add_node(
-      uint32_t dfn, NodeId ref, Type type, uint32_t size, bool widen) {
+      uint32_t dfn, NodeId ref, Type type, uint32_t size) {
     m_d2i[dfn] = m_next_idx++;
-    m_wpo_space.emplace_back(ref, type, size, widen);
+    m_wpo_space.emplace_back(ref, type, size);
   }
 
   WpoNodeT& node_of(uint32_t dfn) { return m_wpo_space[index_of(dfn)]; }

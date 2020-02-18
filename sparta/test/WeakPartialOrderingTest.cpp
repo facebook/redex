@@ -59,7 +59,6 @@ struct Answer {
   uint32_t num_succs;
   uint32_t num_preds;
   uint32_t num_outer_preds;
-  bool widen;
 };
 
 /*
@@ -108,19 +107,19 @@ TEST(WeakPartialOrderingTest, exampleFromWtoPaper) {
 
   EXPECT_EQ(10, wpo.size());
 
-  // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+  // node, plain, head, exit, num_succs, num_preds, num_outer_preds
   // Notice that forward edges are not considered.
   Answer lst[] = {
-      {"1", true, false, false, 1, 0, 0, false},
-      {"2", true, false, false, 1, 1, 0, false},
-      {"3", false, true, false, 1, 1, 0, false},
-      {"4", true, false, false, 1, 1, 0, false},
-      {"5", false, true, false, 1, 1, 0, true},
-      {"6", true, false, false, 1, 1, 0, false},
-      {"5", false, false, true, 1, 1, 1, false},
-      {"7", true, false, false, 1, 1, 0, false},
-      {"3", false, false, true, 1, 1, 1, false},
-      {"8", true, false, false, 0, 1, 0, false},
+      {"1", true, false, false, 1, 0, 0},
+      {"2", true, false, false, 1, 1, 0},
+      {"3", false, true, false, 1, 1, 0},
+      {"4", true, false, false, 1, 1, 0},
+      {"5", false, true, false, 1, 1, 0},
+      {"6", true, false, false, 1, 1, 0},
+      {"5", false, false, true, 1, 1, 1},
+      {"7", true, false, false, 1, 1, 0},
+      {"3", false, false, true, 1, 1, 1},
+      {"8", true, false, false, 0, 1, 0},
   };
 
   std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -147,7 +146,6 @@ TEST(WeakPartialOrderingTest, exampleFromWtoPaper) {
     EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
         << wpo.get_node(v);
     EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-    EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
     if (wpo.is_head(v)) {
       EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
           << wpo.get_node(v);
@@ -199,11 +197,11 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
 
     EXPECT_EQ(3, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 1, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, true},
-        {"2", false, false, true, 0, 1, 1, false},
+        {"1", true, false, false, 1, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"2", false, false, true, 0, 1, 1},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -230,7 +228,6 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -280,13 +277,13 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
 
     EXPECT_EQ(5, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 1, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, true},
-        {"2", false, false, true, 1, 1, 1, false},
-        {"1", false, false, true, 1, 1, 0, false},
-        {"3", true, false, false, 0, 1, 0, false},
+        {"1", false, true, false, 1, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 1},
+        {"1", false, false, true, 1, 1, 0},
+        {"3", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -313,7 +310,6 @@ TEST(WeakPartialOrderingTest, SingletonSccAtEnd) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -367,12 +363,12 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
 
     EXPECT_EQ(4, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 1, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, true},
-        {"3", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 0, 1, 1, false},
+        {"1", true, false, false, 1, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 0, 1, 1},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -399,7 +395,6 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -451,14 +446,14 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
 
     EXPECT_EQ(6, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 1, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, true},
-        {"3", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 1, 1, 1, false},
-        {"1", false, false, true, 1, 1, 0, false},
-        {"4", true, false, false, 0, 1, 0, false},
+        {"1", false, true, false, 1, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 1},
+        {"1", false, false, true, 1, 1, 0},
+        {"4", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -485,7 +480,6 @@ TEST(WeakPartialOrderingTest, SccAtEnd) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -525,9 +519,9 @@ TEST(WeakPartialOrderingTest, SingleNode) {
 
     EXPECT_EQ(1, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 0, 0, 0, false},
+        {"1", true, false, false, 0, 0, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -554,7 +548,6 @@ TEST(WeakPartialOrderingTest, SingleNode) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -606,21 +599,21 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaper) {
 
     EXPECT_EQ(13, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 1, 0, 0, false},
-        {"2", false, true, false, 2, 1, 0, false},
-        {"3", false, true, false, 1, 1, 0, true},
-        {"4", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 1, false},
-        {"6", false, true, false, 2, 1, 0, true},
-        {"7", true, false, false, 1, 1, 0, false},
-        {"9", true, false, false, 1, 1, 0, false},
-        {"8", true, false, false, 1, 2, 0, false},
-        {"6", false, false, true, 1, 1, 1, false},
-        {"5", true, false, false, 1, 2, 0, false},
-        {"2", false, false, true, 1, 1, 1, false},
-        {"10", true, false, false, 0, 1, 0, false},
+        {"1", true, false, false, 1, 0, 0},
+        {"2", false, true, false, 2, 1, 0},
+        {"3", false, true, false, 1, 1, 0},
+        {"4", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1},
+        {"6", false, true, false, 2, 1, 0},
+        {"7", true, false, false, 1, 1, 0},
+        {"9", true, false, false, 1, 1, 0},
+        {"8", true, false, false, 1, 2, 0},
+        {"6", false, false, true, 1, 1, 1},
+        {"5", true, false, false, 1, 2, 0},
+        {"2", false, false, true, 1, 1, 1},
+        {"10", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -647,7 +640,6 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaper) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -707,16 +699,16 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
 
     EXPECT_EQ(8, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0, false},
-        {"2", false, true, false, 2, 1, 0, false},
-        {"3", false, true, false, 1, 1, 0, true},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"4", true, false, false, 1, 3, 0, false},
-        {"3", false, false, true, 1, 1, 2, false},
-        {"2", false, false, true, 0, 1, 2, false},
+        {"1", true, false, false, 2, 0, 0},
+        {"2", false, true, false, 2, 1, 0},
+        {"3", false, true, false, 1, 1, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"6", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 3, 0},
+        {"3", false, false, true, 1, 1, 2},
+        {"2", false, false, true, 0, 1, 2},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -743,7 +735,6 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -794,16 +785,16 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
 
     EXPECT_EQ(8, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"2", false, true, false, 2, 2, 0, false},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"3", false, true, false, 1, 2, 0, true},
-        {"4", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 1, false},
-        {"2", false, false, true, 0, 1, 1, false},
+        {"1", true, false, false, 2, 0, 0},
+        {"6", true, false, false, 1, 1, 0},
+        {"2", false, true, false, 2, 2, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"3", false, true, false, 1, 2, 0},
+        {"4", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1},
+        {"2", false, false, true, 0, 1, 1},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -830,7 +821,6 @@ TEST(WeakPartialOrderingTest, exampleFromWpoPaperIrreducible) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -893,24 +883,24 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     EXPECT_EQ(16, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 4, 0, 0, false},
-        {"12", true, false, false, 1, 1, 0, false},
-        {"16", true, false, false, 2, 1, 0, false},
-        {"18", true, false, false, 1, 1, 0, false},
-        {"92", true, false, false, 1, 1, 0, false},
-        {"26", true, false, false, 1, 1, 0, false},
-        {"93", true, false, false, 2, 2, 0, false},
-        {"45", false, true, false, 1, 2, 0, false},
-        {"46", false, true, false, 1, 2, 0, false},
-        {"47", true, false, false, 1, 1, 0, false},
-        {"73", false, true, false, 1, 1, 0, true},
-        {"73", false, false, true, 1, 1, 1, false},
-        {"74", true, false, false, 1, 2, 0, false},
-        {"46", false, false, true, 1, 1, 2, false},
-        {"75", true, false, false, 1, 2, 0, false},
-        {"45", false, false, true, 0, 1, 4, false},
+        {"1", true, false, false, 4, 0, 0},
+        {"12", true, false, false, 1, 1, 0},
+        {"16", true, false, false, 2, 1, 0},
+        {"18", true, false, false, 1, 1, 0},
+        {"92", true, false, false, 1, 1, 0},
+        {"26", true, false, false, 1, 1, 0},
+        {"93", true, false, false, 2, 2, 0},
+        {"45", false, true, false, 1, 2, 0},
+        {"46", false, true, false, 1, 2, 0},
+        {"47", true, false, false, 1, 1, 0},
+        {"73", false, true, false, 1, 1, 0},
+        {"73", false, false, true, 1, 1, 1},
+        {"74", true, false, false, 1, 2, 0},
+        {"46", false, false, true, 1, 1, 2},
+        {"75", true, false, false, 1, 2, 0},
+        {"45", false, false, true, 0, 1, 4},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -937,7 +927,6 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -999,18 +988,18 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     EXPECT_EQ(10, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, false},
-        {"3", false, true, false, 1, 1, 0, true},
-        {"8", true, false, false, 1, 1, 0, false},
-        {"4", true, false, false, 1, 2, 0, false},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 2, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 1, 1, 2, false},
-        {"7", true, false, false, 0, 1, 0, false},
+        {"1", true, false, false, 2, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 2, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 2},
+        {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2},
+        {"7", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1037,7 +1026,6 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -1081,18 +1069,18 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     EXPECT_EQ(10, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", true, false, false, 2, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, false},
-        {"8", true, false, false, 1, 1, 0, false},
-        {"3", false, true, false, 1, 2, 0, true},
-        {"4", true, false, false, 1, 1, 0, false},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 1, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 1, 1, 2, false},
-        {"7", true, false, false, 0, 1, 0, false},
+        {"1", true, false, false, 2, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0},
+        {"3", false, true, false, 1, 2, 0},
+        {"4", true, false, false, 1, 1, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 1},
+        {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2},
+        {"7", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1119,7 +1107,6 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -1164,19 +1151,19 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     EXPECT_EQ(11, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"1", false, true, false, 2, 0, 0, false},
-        {"2", false, true, false, 1, 1, 0, false},
-        {"3", false, true, false, 1, 1, 0, true},
-        {"8", true, false, false, 1, 1, 0, false},
-        {"4", true, false, false, 1, 2, 0, false},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 2, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 1, 1, 2, false},
-        {"7", true, false, false, 1, 1, 0, false},
-        {"1", false, false, true, 0, 1, 0, false},
+        {"1", false, true, false, 2, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 2, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 2},
+        {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2},
+        {"7", true, false, false, 1, 1, 0},
+        {"1", false, false, true, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1203,7 +1190,6 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -1250,21 +1236,21 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
 
     EXPECT_EQ(13, wpo.size());
 
-    // node, plain, head, exit, num_succs, num_preds, num_outer_preds, widen
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
     Answer lst[] = {
-        {"0", true, false, false, 1, 0, 0, false},
-        {"1", false, true, false, 2, 1, 0, false},
-        {"2", false, true, false, 1, 1, 0, false},
-        {"3", false, true, false, 1, 1, 0, true},
-        {"8", true, false, false, 1, 1, 0, false},
-        {"4", true, false, false, 1, 2, 0, false},
-        {"5", true, false, false, 1, 1, 0, false},
-        {"3", false, false, true, 1, 1, 2, false},
-        {"6", true, false, false, 1, 1, 0, false},
-        {"2", false, false, true, 1, 1, 2, false},
-        {"7", true, false, false, 1, 1, 0, false},
-        {"1", false, false, true, 1, 1, 1, false},
-        {"9", true, false, false, 0, 1, 0, false},
+        {"0", true, false, false, 1, 0, 0},
+        {"1", false, true, false, 2, 1, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", false, true, false, 1, 1, 0},
+        {"8", true, false, false, 1, 1, 0},
+        {"4", true, false, false, 1, 2, 0},
+        {"5", true, false, false, 1, 1, 0},
+        {"3", false, false, true, 1, 1, 2},
+        {"6", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 2},
+        {"7", true, false, false, 1, 1, 0},
+        {"1", false, false, true, 1, 1, 1},
+        {"9", true, false, false, 0, 1, 0},
     };
 
     std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
@@ -1291,7 +1277,6 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
           << wpo.get_node(v);
       EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
-      EXPECT_EQ(answer.widen, wpo.is_widening_point(v)) << wpo.get_node(v);
       if (wpo.is_head(v)) {
         EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
             << wpo.get_node(v);
@@ -1316,5 +1301,83 @@ TEST(WeakPartialOrderingTest, handlingOuterPreds) {
       }
     }
     EXPECT_EQ(wto.str(), "0 (1 (2 (3 8 4 5) 6) 7) 9");
+  }
+}
+
+TEST(WeakPartialOrderingTest, handleNestedLoopsWithBranch) {
+  {
+    SimpleGraph2 g;
+    g.add_edge("1", "2");
+    g.add_edge("1", "4");
+    g.add_edge("2", "3");
+    g.add_edge("3", "2");
+    g.add_edge("3", "5");
+    g.add_edge("4", "5");
+    g.add_edge("5", "1");
+
+    WeakPartialOrdering<std::string> wpo(
+        "1", [&g](const std::string& n) { return g.successors(n); }, false);
+
+    EXPECT_EQ(7, wpo.size());
+
+    // node, plain, head, exit, num_succs, num_preds, num_outer_preds
+    Answer lst[] = {
+        {"1", false, true, false, 2, 0, 0},
+        {"2", false, true, false, 1, 1, 0},
+        {"3", true, false, false, 1, 1, 0},
+        {"2", false, false, true, 1, 1, 1},
+        {"4", true, false, false, 1, 1, 0},
+        {"5", true, false, false, 1, 2, 0},
+        {"1", false, false, true, 0, 1, 0},
+    };
+
+    std::unordered_map<WpoIdx, uint32_t> count(wpo.size());
+    std::stack<WpoIdx> wl;
+    wl.push(wpo.get_entry());
+    int i = 0;
+    std::ostringstream wto;
+    bool first = true;
+    while (!wl.empty()) {
+      auto v = wl.top();
+      wl.pop();
+      for (auto w : wpo.get_successors(v)) {
+        count[w]++;
+        if (count[w] == wpo.get_num_preds(w)) {
+          wl.push(w);
+        }
+      }
+
+      auto& answer = lst[i++];
+      EXPECT_EQ(answer.node, wpo.get_node(v)) << wpo.get_node(v);
+      EXPECT_EQ(answer.plain, wpo.is_plain(v)) << wpo.get_node(v);
+      EXPECT_EQ(answer.head, wpo.is_head(v)) << wpo.get_node(v);
+      EXPECT_EQ(answer.exit, wpo.is_exit(v)) << wpo.get_node(v);
+      EXPECT_EQ(answer.num_succs, wpo.get_successors(v).size())
+          << wpo.get_node(v);
+      EXPECT_EQ(answer.num_preds, wpo.get_num_preds(v)) << wpo.get_node(v);
+      if (wpo.is_head(v)) {
+        EXPECT_EQ(wpo.get_node(wpo.get_exit_of_head(v)), wpo.get_node(v))
+            << wpo.get_node(v);
+        if (!first) {
+          wto << ' ';
+        }
+        wto << '(' << wpo.get_node(v);
+      } else if (wpo.is_exit(v)) {
+        EXPECT_EQ(answer.num_outer_preds, wpo.get_num_outer_preds(v).size())
+            << wpo.get_node(v);
+        EXPECT_EQ(wpo.get_node(wpo.get_head_of_exit(v)), wpo.get_node(v))
+            << wpo.get_node(v);
+        wto << ')';
+      } else {
+        if (!first) {
+          wto << ' ';
+        }
+        wto << wpo.get_node(v);
+      }
+      if (first) {
+        first = false;
+      }
+    }
+    EXPECT_EQ(wto.str(), "(1 (2 3) 4 5)");
   }
 }
