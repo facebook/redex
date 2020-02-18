@@ -122,6 +122,7 @@
   TM(VMERGE)         \
   TM(VIRT)           \
   TM(TERA)           \
+  TM(TP)             \
   TM(BRCR)           \
   TM(SWIN)           \
   TM(SWCL)           \
