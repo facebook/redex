@@ -44,7 +44,7 @@ struct GlobalTypeAnalysisTest : public RedexTest {
   DexClass* m_cls_o;
 };
 
-TEST_F(GlobalTypeAnalysisTest, SimpleTest) {
+TEST_F(GlobalTypeAnalysisTest, SimpleArgumentPassingTest) {
   Scope scope;
   prepare_scope(scope);
 
@@ -52,7 +52,7 @@ TEST_F(GlobalTypeAnalysisTest, SimpleTest) {
   ClassCreator creator(cls_a);
   creator.set_super(type::java_lang_Object());
 
-  auto m_bar = assembler::method_from_string(R"(
+  auto meth_bar = assembler::method_from_string(R"(
     (method (public static) "LA;.bar:(LO;)V"
      (
       (load-param-object v0)
@@ -60,9 +60,9 @@ TEST_F(GlobalTypeAnalysisTest, SimpleTest) {
      )
     )
   )");
-  creator.add_method(m_bar);
+  creator.add_method(meth_bar);
 
-  auto m_foo = assembler::method_from_string(R"(
+  auto meth_foo = assembler::method_from_string(R"(
     (method (public static) "LA;.foo:()V"
      (
       (new-instance "LO;")
@@ -73,8 +73,8 @@ TEST_F(GlobalTypeAnalysisTest, SimpleTest) {
      )
     )
   )");
-  m_foo->rstate.set_root();
-  creator.add_method(m_foo);
+  meth_foo->rstate.set_root();
+  creator.add_method(meth_foo);
   scope.push_back(creator.create());
 
   call_graph::Graph cg = call_graph::single_callee_graph(scope);
@@ -83,9 +83,71 @@ TEST_F(GlobalTypeAnalysisTest, SimpleTest) {
   });
   GlobalTypeAnalyzer gta(cg);
   gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
-  auto foo_arg_env = gta.get_entry_state_at(m_foo).get(CURRENT_PARTITION_LABEL);
+  auto foo_arg_env =
+      gta.get_entry_state_at(meth_foo).get(CURRENT_PARTITION_LABEL);
   EXPECT_TRUE(foo_arg_env.is_top());
-  auto bar_arg_env = gta.get_entry_state_at(m_bar).get(CURRENT_PARTITION_LABEL);
+  auto bar_arg_env =
+      gta.get_entry_state_at(meth_bar).get(CURRENT_PARTITION_LABEL);
   EXPECT_EQ(bar_arg_env,
             ArgumentTypeEnvironment({{0, get_type_domain("LO;")}}));
+}
+
+TEST_F(GlobalTypeAnalysisTest, ArgumentPassingJoinWithNullTest) {
+  Scope scope;
+  prepare_scope(scope);
+
+  auto cls_a = DexType::make_type("LA;");
+  ClassCreator creator(cls_a);
+  creator.set_super(type::java_lang_Object());
+
+  auto meth_bar = assembler::method_from_string(R"(
+    (method (public static) "LA;.bar:(LO;LO;)V"
+     (
+      (load-param-object v0)
+      (load-param-object v1)
+      (return-void)
+     )
+    )
+  )");
+  creator.add_method(meth_bar);
+
+  auto meth_foo = assembler::method_from_string(R"(
+    (method (public static) "LA;.foo:()V"
+     (
+      (const v0 0)
+      (const v1 0)
+      (new-instance "LO;")
+      (move-result-pseudo-object v2)
+      (invoke-direct (v2) "LO;.<init>:()V")
+
+      (if-eqz v0 :lb0)
+      (new-instance "LO;")
+      (move-result-pseudo-object v1)
+      (invoke-direct (v1) "LO;.<init>:()V")
+      (goto :lb0)
+
+      (:lb0)
+      (invoke-static (v1 v2) "LA;.bar:(LO;LO;)V")
+      (return-void)
+     )
+    )
+  )");
+  meth_foo->rstate.set_root();
+  creator.add_method(meth_foo);
+  scope.push_back(creator.create());
+
+  call_graph::Graph cg = call_graph::single_callee_graph(scope);
+  walk::code(scope, [](DexMethod*, IRCode& code) {
+    code.build_cfg(/* editable */ false);
+  });
+  GlobalTypeAnalyzer gta(cg);
+  gta.run({{CURRENT_PARTITION_LABEL, ArgumentTypeEnvironment()}});
+  auto foo_arg_env =
+      gta.get_entry_state_at(meth_foo).get(CURRENT_PARTITION_LABEL);
+  EXPECT_TRUE(foo_arg_env.is_top());
+  auto bar_arg_env =
+      gta.get_entry_state_at(meth_bar).get(CURRENT_PARTITION_LABEL);
+  EXPECT_TRUE(bar_arg_env.get(0).is_top());
+  EXPECT_EQ(bar_arg_env,
+            ArgumentTypeEnvironment({{1, get_type_domain("LO;")}}));
 }
