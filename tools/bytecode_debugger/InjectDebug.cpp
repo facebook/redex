@@ -12,6 +12,7 @@
 #include "DexOutput.h"
 #include "InstructionLowering.h"
 #include "RedexContext.h"
+#include "ToolsCommon.h"
 
 InjectDebug::InjectDebug(const std::string& outdir,
                          const std::vector<std::string>& dex_files)
@@ -36,20 +37,10 @@ void InjectDebug::load_dex() {
   root_store.set_dex_magic(load_dex_magic_from_dex(m_dex_files[0].c_str()));
   m_stores.emplace_back(std::move(root_store));
 
-  for (const std::string& filename : m_dex_files) {
-    if (filename.size() >= 5 &&
-        filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-      m_stores[0].add_classes(load_classes_from_dex(filename.c_str()));
-    } else {
-      DexMetadata store_metadata;
-      store_metadata.parse(filename);
-      DexStore store(store_metadata);
-      for (const auto& file_path : store_metadata.get_files()) {
-        store.add_classes(load_classes_from_dex(file_path.c_str()));
-      }
-      m_stores.emplace_back(std::move(store));
-    }
-  }
+  dex_stats_t input_totals;
+  std::vector<dex_stats_t> input_dexes_stats;
+  redex::load_classes_from_dexes_and_metadata(m_dex_files, m_stores,
+                                              input_totals, input_dexes_stats);
 }
 
 void InjectDebug::write_dex() {
@@ -59,22 +50,8 @@ void InjectDebug::write_dex() {
   for (size_t store_num = 0; store_num < m_stores.size(); ++store_num) {
     DexStore& store = m_stores[store_num];
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
-      std::ostringstream ss;
-      ss << m_conf.get_outdir() << "/" << store.get_name();
-      if (store.get_name().compare("classes") == 0) {
-        // primary/secondary dex store, primary has no numeral and secondaries
-        // start at 2
-        if (i > 0) {
-          ss << (i + 1);
-        }
-      } else {
-        // other dex stores do not have a primary,
-        // so it makes sense to start at 2
-        ss << (i + 2);
-      }
-      ss << ".dex";
-
-      std::string filename = ss.str();
+      std::string filename =
+          redex::get_dex_output_name(m_conf.get_outdir(), store, i);
       DexOutput dout = DexOutput(filename.c_str(), // filename
                                  &store.get_dexen()[i], // classes
                                  nullptr, // locator_index

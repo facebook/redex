@@ -752,13 +752,6 @@ std::string get_dex_magic(std::vector<std::string>& dex_files) {
   return load_dex_magic_from_dex(dex_files[0].c_str());
 }
 
-static void assert_dex_magic_consistency(const std::string& source,
-                                         const std::string& target) {
-  always_assert_log(source.compare(target) == 0,
-                    "APK contains dex file of different versions: %s vs %s\n",
-                    source.c_str(), target.c_str());
-}
-
 /**
  * Pre processing steps: load dex and configurations
  */
@@ -803,36 +796,8 @@ void redex_frontend(ConfigFiles& conf, /* input */
     Timer t("Load classes from dexes");
     dex_stats_t input_totals;
     std::vector<dex_stats_t> input_dexes_stats;
-    for (const auto& filename : args.dex_files) {
-      if (filename.size() >= 5 &&
-          filename.compare(filename.size() - 4, 4, ".dex") == 0) {
-        assert_dex_magic_consistency(stores[0].get_dex_magic(),
-                                     load_dex_magic_from_dex(filename.c_str()));
-        dex_stats_t dex_stats;
-        DexClasses classes =
-            load_classes_from_dex(filename.c_str(), &dex_stats);
-        input_totals += dex_stats;
-        input_dexes_stats.push_back(dex_stats);
-        stores[0].add_classes(std::move(classes));
-      } else {
-        DexMetadata store_metadata;
-        store_metadata.parse(filename);
-        DexStore store(store_metadata);
-        for (const auto& file_path : store_metadata.get_files()) {
-          assert_dex_magic_consistency(
-              stores[0].get_dex_magic(),
-              load_dex_magic_from_dex(file_path.c_str()));
-          dex_stats_t dex_stats;
-          DexClasses classes =
-              load_classes_from_dex(file_path.c_str(), &dex_stats);
-
-          input_totals += dex_stats;
-          input_dexes_stats.push_back(dex_stats);
-          store.add_classes(std::move(classes));
-        }
-        stores.emplace_back(std::move(store));
-      }
-    }
+    redex::load_classes_from_dexes_and_metadata(
+        args.dex_files, stores, input_totals, input_dexes_stats);
     stats["input_stats"] = get_input_stats(input_totals, input_dexes_stats);
   }
 
@@ -949,24 +914,9 @@ void redex_backend(const std::string& output_dir,
     auto& store = stores[store_number];
     Timer t("Writing optimized dexes");
     for (size_t i = 0; i < store.get_dexen().size(); i++) {
-      std::ostringstream ss;
-      ss << output_dir << "/" << store.get_name();
-      if (store.get_name().compare("classes") == 0) {
-        // primary/secondary dex store, primary has no numeral and secondaries
-        // start at 2
-        if (i > 0) {
-          ss << (i + 1);
-        }
-      } else {
-        // other dex stores do not have a primary,
-        // so it makes sense to start at 2
-        ss << (i + 2);
-      }
-      ss << ".dex";
-
       auto this_dex_stats =
           write_classes_to_dex(redex_options,
-                               ss.str(),
+                               redex::get_dex_output_name(output_dir, store, i),
                                &store.get_dexen()[i],
                                locator_index,
                                store_number,
