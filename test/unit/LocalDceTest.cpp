@@ -461,3 +461,41 @@ TEST_F(LocalDceEnhanceTest, HaveImplementorIntfWithoutSideEffectsTest) {
   ldce.dce(ircode);
   EXPECT_CODE_EQ(ircode, expected_code.get());
 }
+
+TEST_F(LocalDceEnhanceTest, NoImplementorMayAllocateRegistersTest) {
+  Scope scope = create_empty_scope();
+  auto void_t = type::_void();
+  auto void_void =
+      DexProto::make_proto(void_t, DexTypeList::make_type_list({}));
+  DexType* a_type = DexType::make_type("LA;");
+  DexClass* a_cls = create_internal_class(a_type, type::java_lang_Object(), {},
+                                          ACC_PUBLIC | ACC_ABSTRACT);
+  create_abstract_method(a_cls, "m", void_void);
+
+  DexType* b_type = DexType::make_type("LB;");
+  DexClass* b_cls = create_internal_class(b_type, a_type, {});
+
+  scope.push_back(a_cls);
+  scope.push_back(b_cls);
+
+  auto code = assembler::ircode_from_string(R"(
+    (
+      (invoke-virtual (v0) "LA;.m:()V")
+      (return-void)
+    )
+  )");
+
+  auto expected_code = assembler::ircode_from_string(R"(
+    (
+      (const v0 0)
+      (throw v0)
+    )
+  )");
+  const auto& pure_methods = get_no_side_effect_methods(scope);
+  auto override_graph = method_override_graph::build_graph(scope);
+  LocalDce ldce(pure_methods, override_graph.get(),
+                /* may_allocate_registers */ true);
+  IRCode* ircode = code.get();
+  ldce.dce(ircode);
+  EXPECT_CODE_EQ(ircode, expected_code.get());
+}

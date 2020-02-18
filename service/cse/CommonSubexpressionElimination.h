@@ -73,6 +73,7 @@ class SharedState {
   const std::unordered_set<DexMethodRef*>& get_pure_methods() const {
     return m_pure_methods;
   }
+  const method_override_graph::Graph* get_method_override_graph() const;
 
  private:
   void init_method_barriers(const Scope& scope);

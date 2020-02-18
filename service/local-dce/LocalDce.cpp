@@ -197,19 +197,52 @@ void LocalDce::dce(IRCode* code) {
 
   // Remove dead instructions.
   std::unordered_set<IRInstruction*> seen;
+  std::vector<std::pair<IRInstruction*, cfg::Block*>> npe_instructions;
   for (const auto& pair : dead_instructions) {
     cfg::Block* b = pair.first;
     IRList::iterator it = pair.second;
-    if (seen.count(it->insn)) {
+    auto insn = it->insn;
+    if (seen.count(insn)) {
       continue;
     }
-    TRACE(DCE, 2, "DEAD: %s", SHOW(it->insn));
-    seen.emplace(it->insn);
-    b->remove_insn(it);
+    seen.emplace(insn);
+    DexMethod* method;
+    if (m_may_allocate_registers && m_method_override_graph &&
+        (insn->opcode() == OPCODE_INVOKE_VIRTUAL ||
+         insn->opcode() == OPCODE_INVOKE_INTERFACE) &&
+        (method = resolve_method(insn->get_method(), opcode_to_search(insn))) !=
+            nullptr &&
+        !has_implementor(m_method_override_graph, method)) {
+      TRACE(DCE, 2, "DEAD NPE: %s", SHOW(insn));
+      npe_instructions.emplace_back(insn, b);
+    } else {
+      TRACE(DCE, 2, "DEAD: %s", SHOW(insn));
+      seen.emplace(insn);
+      b->remove_insn(it);
+    }
+  }
+  if (!npe_instructions.empty()) {
+    auto null_reg = cfg.allocate_temp();
+    for (auto pair : npe_instructions) {
+      auto it = cfg.find_insn(pair.first, pair.second);
+      if (it.is_end()) {
+        // can happen if we replaced an earlier invocation with throw null.
+        continue;
+      }
+      std::vector<IRInstruction*> insns;
+      auto const_insn = new IRInstruction(OPCODE_CONST);
+      const_insn->set_dest(null_reg)->set_literal(0);
+      insns.push_back(const_insn);
+      auto throw_insn = new IRInstruction(OPCODE_THROW);
+      throw_insn->set_src(0, null_reg);
+      insns.push_back(throw_insn);
+      cfg.replace_insns(it, insns);
+    }
   }
   auto unreachable_insn_count = cfg.remove_unreachable_blocks();
   cfg.recompute_registers_size();
 
+  m_stats.npe_instruction_count += npe_instructions.size();
   m_stats.dead_instruction_count += dead_instructions.size();
   m_stats.unreachable_instruction_count += unreachable_insn_count;
 

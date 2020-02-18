@@ -109,7 +109,9 @@ void CommonSubexpressionEliminationPass::run_pass(DexStoresVector& stores,
 
           code->build_cfg(/* editable */ true);
 
-          auto local_dce = LocalDce(shared_state.get_pure_methods());
+          auto local_dce = LocalDce(shared_state.get_pure_methods(),
+                                    shared_state.get_method_override_graph(),
+                                    /* may_allocate_registers */ true);
           local_dce.dce(code);
 
           if (traceEnabled(CSE, 5)) {

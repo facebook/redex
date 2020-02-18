@@ -8,16 +8,19 @@
 #pragma once
 
 #include "IRCode.h"
+#include "MethodOverrideGraph.h"
 
 #include <boost/dynamic_bitset.hpp>
 
 class LocalDce {
  public:
   struct Stats {
+    size_t npe_instruction_count{0};
     size_t dead_instruction_count{0};
     size_t unreachable_instruction_count{0};
 
     Stats& operator+=(const Stats& that) {
+      npe_instruction_count += that.npe_instruction_count;
       dead_instruction_count += that.dead_instruction_count;
       unreachable_instruction_count += that.unreachable_instruction_count;
       return *this;
@@ -50,8 +53,13 @@ class LocalDce {
    *   potentially-excepting instructions can jump to a catch.)
    */
 
-  LocalDce(const std::unordered_set<DexMethodRef*>& pure_methods)
-      : m_pure_methods(pure_methods) {}
+  explicit LocalDce(
+      const std::unordered_set<DexMethodRef*>& pure_methods,
+      const method_override_graph::Graph* method_override_graph = nullptr,
+      bool may_allocate_registers = false)
+      : m_pure_methods(pure_methods),
+        m_method_override_graph(method_override_graph),
+        m_may_allocate_registers(may_allocate_registers) {}
 
   const Stats& get_stats() const { return m_stats; }
 
@@ -59,6 +67,8 @@ class LocalDce {
 
  private:
   const std::unordered_set<DexMethodRef*>& m_pure_methods;
+  const method_override_graph::Graph* m_method_override_graph;
+  const bool m_may_allocate_registers;
   Stats m_stats;
 
   bool is_required(cfg::ControlFlowGraph& cfg,

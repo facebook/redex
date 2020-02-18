@@ -163,3 +163,9 @@ size_t compute_no_side_effects_methods(
     const method_override_graph::Graph* method_override_graph,
     const std::unordered_set<DexMethodRef*>& pure_methods,
     std::unordered_set<const DexMethod*>* result);
+
+// Determines whether for a given (possibly abstract) method, there may be a
+// method that effectively implements it. (If not, then that implies that no
+// non-null instance of the method's class can ever exist.)
+bool has_implementor(const method_override_graph::Graph* method_override_graph,
+                     const DexMethod* method);

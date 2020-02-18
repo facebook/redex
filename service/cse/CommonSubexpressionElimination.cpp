@@ -880,6 +880,11 @@ SharedState::SharedState(const std::unordered_set<DexMethodRef*>& pure_methods)
   }
 }
 
+const method_override_graph::Graph* SharedState::get_method_override_graph()
+    const {
+  return m_method_override_graph.get();
+}
+
 void SharedState::init_method_barriers(const Scope& scope) {
   Timer t("init_method_barriers");
   auto iterations = compute_locations_closure(
