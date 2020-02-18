@@ -36,7 +36,10 @@
 #ifdef __APPLE__
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED
 #endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"
 #include <boost/stacktrace.hpp>
+#pragma GCC diagnostic pop
 
 namespace {
 void crash_backtrace() {
